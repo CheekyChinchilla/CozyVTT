@@ -40,6 +40,7 @@ import {
   mfaLoginLimiter,
   mfaAccountLimiter,
 } from '../auth';
+import { passwordCheckLimiter, accountLoginLimiter } from '../../middleware/authLimiters';
 import { uploadLimiter } from '../assets';
 import {
   campaignPreviewLimiter,
@@ -51,6 +52,8 @@ jest.setTimeout(60000);
 
 const LIMITERS = new Map<RequestHandler, string>([
   [credentialLimiter, 'credentialLimiter'],
+  [accountLoginLimiter, 'accountLoginLimiter'],
+  [passwordCheckLimiter, 'passwordCheckLimiter'],
   [emailDispatchLimiter, 'emailDispatchLimiter'],
   [accountCreationLimiter, 'accountCreationLimiter'],
   [mfaSetupLimiter, 'mfaSetupLimiter'],
@@ -69,6 +72,8 @@ interface Context {
   client: { get(url: string): request.Test; post(url: string): request.Test };
   /** Signed in as `user`, from `address`. */
   agent: request.Agent;
+  /** A second sign-in of `user` left at the two-factor code step, from `address`; only with `mfa`. */
+  pending: request.Agent;
   user: { id: string; email: string };
   /** A campaign `user` is the DM of. */
   campaignId: string;
@@ -92,14 +97,18 @@ const WRONG = 'wrong-password';
 const ROWS: Row[] = [
   { route: 'POST /api/auth/register', limiter: 'accountCreationLimiter', limit: 10, send: (c) => c.client.post('/api/auth/register').send({}) },
   { route: 'POST /api/auth/login', limiter: 'credentialLimiter', limit: 5, send: (c) => c.client.post('/api/auth/login').send({ email: c.user.email, password: WRONG }) },
+  { route: 'POST /api/auth/login', limiter: 'accountLoginLimiter', limit: 10, testedIn: 'routes/__tests__/accountSignInLimiter.e2e.test.ts' },
   { route: 'POST /api/auth/forgot-password', limiter: 'emailDispatchLimiter', limit: 5, send: (c) => c.client.post('/api/auth/forgot-password').send({ email: 'nobody@test.invalid' }) },
   { route: 'POST /api/auth/reset-password', limiter: 'credentialLimiter', limit: 5, send: (c) => c.client.post('/api/auth/reset-password').send({ token: 'not-a-link', newPassword: 'Another1!Cozy' }) },
   { route: 'POST /api/auth/mfa/setup', limiter: 'credentialLimiter', limit: 5, send: (c) => c.agent.post('/api/auth/mfa/setup').send({ password: WRONG }) },
   { route: 'POST /api/auth/mfa/verify', limiter: 'mfaSetupLimiter', limit: 5, send: (c) => c.agent.post('/api/auth/mfa/verify').send({ token: '000000' }) },
-  { route: 'POST /api/auth/mfa/verify-login', limiter: 'mfaLoginLimiter', limit: 5, send: (c) => c.client.post('/api/auth/mfa/verify-login').send({ token: '000000' }) },
+  { route: 'POST /api/auth/mfa/verify-login', limiter: 'mfaLoginLimiter', limit: 5, mfa: true, send: (c) => c.pending.post('/api/auth/mfa/verify-login').send({ token: '000000' }) },
   { route: 'POST /api/auth/mfa/verify-login', limiter: 'mfaAccountLimiter', limit: 5, testedIn: 'routes/__tests__/mfaRateLimit.e2e.test.ts' },
   { route: 'POST /api/auth/mfa/disable', limiter: 'credentialLimiter', limit: 5, mfa: true, send: (c) => c.agent.post('/api/auth/mfa/disable').send({ password: WRONG, token: '000000' }) },
   { route: 'POST /api/auth/mfa/backup-codes', limiter: 'credentialLimiter', limit: 5, mfa: true, send: (c) => c.agent.post('/api/auth/mfa/backup-codes').send({ password: WRONG }) },
+  { route: 'POST /api/auth/change-password', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.post('/api/auth/change-password').send({ currentPassword: WRONG, newPassword: 'Another1!Cozy' }) },
+  { route: 'DELETE /api/auth/account', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.delete('/api/auth/account').send({ password: WRONG }) },
+  { route: 'PUT /api/users/:id', limiter: 'passwordCheckLimiter', limit: 10, send: (c) => c.agent.put(`/api/users/${c.user.id}`).send({ email: 'moved@test.invalid', currentPassword: WRONG }) },
   { route: 'POST /api/assets/upload', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post('/api/assets/upload') },
   { route: 'POST /api/assets/documents', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post('/api/assets/documents').send({}) },
   { route: 'POST /api/campaigns/:campaignId/maps/import-uvtt', limiter: 'uploadLimiter', limit: 30, send: (c) => c.agent.post(`/api/campaigns/${c.campaignId}/maps/import-uvtt`) },
@@ -178,8 +187,13 @@ describe('each limited route', () => {
     const agent = request.agent(proxied).set('X-Forwarded-For', address);
     const login = await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
     expect(login.status).toBe(200);
+    // With MFA on, a second sign-in stops at the code step; the row's user
+    // stays signed in on `agent`.
+    const pending = request.agent(proxied).set('X-Forwarded-For', address);
     if (row.mfa) {
       await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaSecret: 'JBSWY3DPEHPK3PXP' } });
+      const second = await pending.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
+      expect(second.body.mfaRequired).toBe(true);
     }
 
     const client = {
@@ -187,7 +201,7 @@ describe('each limited route', () => {
       post: (url: string) => request(proxied).post(url).set('X-Forwarded-For', address),
     };
 
-    return { address, client, agent, user: { id: user.id, email: user.email }, campaignId: campaign.id };
+    return { address, client, agent, pending, user: { id: user.id, email: user.email }, campaignId: campaign.id };
   }
 
   it.each(ROWS.filter((row) => row.send).map((row) => [row.route, row.limiter, row]))(

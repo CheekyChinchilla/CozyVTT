@@ -2,6 +2,7 @@ import { Socket } from 'socket.io';
 import type { SessionData, Store } from 'express-session';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { sessionIsSignedIn, sessionHasAgedOut } from '../services/signedIn';
 
 /**
  * WebSocket Authentication Middleware
@@ -51,7 +52,7 @@ export async function socketSessionIsLive(socket: AuthenticatedSocket): Promise<
   const stored = await new Promise<Partial<SessionData> | null>((resolve) => {
     sessionStore.get(sessionId, (err, found) => resolve(err ? null : (found ?? null)));
   });
-  return stored?.userId === socket.userId;
+  return sessionIsSignedIn(stored) && !sessionHasAgedOut(stored) && stored.userId === socket.userId;
 }
 
 /**
@@ -70,7 +71,9 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     // while the REST routes failed loudly at build time.
     const { session, sessionID } = socket.request as { session?: Partial<SessionData>; sessionID?: string };
 
-    if (!session || !session.userId) {
+    // The same question the REST guards ask (services/signedIn): a session
+    // still at the two-factor step is not signed in, user id or not.
+    if (!sessionIsSignedIn(session) || sessionHasAgedOut(session)) {
       return false;
     }
 

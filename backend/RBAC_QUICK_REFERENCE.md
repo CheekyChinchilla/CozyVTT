@@ -485,6 +485,22 @@ then on also asks for the current password:
 | Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
+An `ADMIN` account must have MFA on: past a 7-day deadline, counted from the
+latest of the policy start, the account's creation, its promotion and a Reset
+MFA by another admin, each an activity-log row (`services/adminMfaPolicy.ts`),
+`middleware/adminMfa.ts` answers 403
+`MFA_ENROLMENT_REQUIRED` to everything but enrolment, and on every admin
+request it re-reads the role from the database into the session.
+
+The admin reset routes, `POST /api/users/:id/reset-password` and
+`POST /api/admin/users/:id/reset-mfa`, ask for no password because the admin
+does not have the target's. They refuse the caller's own id (400), so a stolen
+admin session cannot use them to get round the two rows above for its own
+account. Wrong passwords on `POST /api/auth/change-password`, `DELETE /api/auth/account` and the own-email change are limited to 10 per 15 minutes per
+account (`passwordCheckLimiter`); the two-factor routes in the table keep their
+per-address limiters (`credentialLimiter` on disable and backup codes, the MFA
+setup limiter on enrolment), with no per-account count.
+
 An admin changing someone else's email gives no password, since they do not
 have it. The email check runs before the new address is looked up, so a
 session without the password cannot use it to learn which addresses have

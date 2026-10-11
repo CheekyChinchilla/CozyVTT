@@ -20,7 +20,8 @@ info:
     come with is a promise: a script authenticates **as a specific user** and can
     do only what that user could do in the browser, the session expires after an
     hour of inactivity by default (`SESSION_MAX_AGE`; 30 days when signing in
-    with `rememberMe`), an account with MFA enabled needs
+    with `rememberMe`) and in any case `REMEMBER_ME_MAX_AGE` (30 days) after it
+    was made, however active, an account with MFA enabled needs
     the second step, and any route here may change shape in a point release
     without notice. Treat this document as a map of the current code rather than
     a contract.
@@ -71,6 +72,24 @@ info:
       unknown email counts and answers exactly as a wrong password does. The 429
       carries `Retry-After`, the seconds until the oldest counted failure leaves
       the window
+    - `POST /api/auth/login`, per account as well: 10 wrong passwords per hour
+      for one email (trimmed and lowercased), from every address together, then
+      429 `Too many failed sign-ins for this account, please try again later`
+      for that email from any address until the oldest counted failure is an
+      hour old. Only a 401 counts, exactly as above, and an email with no
+      account is counted and answered the same, so this reveals nothing. When
+      an account locks, a WARNING line goes to the admins' activity log. The
+      `RateLimit-*` headers on a sign-in answer are this limit's (`10;w=3600`).
+      A new password forgets the email's count at once, whether set through
+      `POST /api/auth/reset-password`, `POST /api/auth/change-password` or
+      `POST /api/users/{id}/reset-password`
+    - Password checks from a signed-in session (`POST /api/auth/change-password`,
+      `DELETE /api/auth/account`, and `PUT /api/users/{id}` when it carries
+      `currentPassword`): one shared allowance of 10 wrong passwords per 15
+      minutes for the account, from every address, then 429 `Too many wrong
+      passwords, please try again later`. A correct password never counts, and
+      a request that sends no password (a profile edit) is neither held to it
+      nor counted
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
       they succeed, since creating the account is what is being limited
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
@@ -79,10 +98,12 @@ info:
       on the mail it sends
     - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
     - MFA login verification (`POST /api/auth/mfa/verify-login`), the two-factor
-      code step of a sign-in: 5 failed codes per 15 minutes per address, and
-      separately 5 failed codes per 15 minutes for the account, from any address.
-      Each request counts as it arrives and a correct code is taken off the count
-      once it has been answered, so codes sent together count until then
+      code step of a sign-in: 5 wrong codes per 15 minutes per address, and
+      separately 5 wrong codes per 15 minutes for the account, from any address.
+      Only a wrong code or backup code counts (a 401 `Invalid Code`), recorded
+      once the route has checked it, as the password step does: correct codes
+      sent together from one address all pass, and a request with no sign-in
+      pending, an expired one or a malformed body is neither held nor counted
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`).
@@ -106,12 +127,11 @@ info:
       ceiling too, listed in the WebSocket guide (`WEBSOCKET_DOCUMENTATION.md`)
 
     Rate-limited responses return HTTP 429 with `RateLimit-*` standard headers
-    and `Retry-After`. The body is JSON `{ error, message }` for the global
-    limit, uploads, the campaign archive limits and the MFA limits. The
-    credential, registration and forgot-password limits answer with a
-    plain-text message instead. The one-at-a-time refusals (a second Universal
-    VTT import, or a second campaign archive operation, while one is running)
-    answer 429 with JSON `{ error, message }` and neither header.
+    and `Retry-After`. The body is always JSON `{ error, message }`; the
+    limiters on the sign-in routes answer `{ error: "Rate Limited", message }`.
+    The one-at-a-time refusals (a second Universal VTT import, or a second
+    campaign archive operation, while one is running) answer 429 with JSON
+    `{ error, message }` and neither header.
 
     ## Responses every route can give
     These are not repeated on each operation:
@@ -122,8 +142,8 @@ info:
       from any `/api/campaigns/{campaignId}/...` route that needs membership,
       including for a campaign id that does not exist. Such routes never answer
       404 for an unknown campaign.
-    - **403** with `code: PASSWORD_CHANGE_REQUIRED`, and the setup-gate 403, as
-      described above.
+    - **403** with `code: PASSWORD_CHANGE_REQUIRED` or `code: MFA_ENROLMENT_REQUIRED`,
+      and the setup-gate 403, as described above and below.
     - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
     - **500** `{ error, message }` on an unexpected error. In production the
@@ -136,6 +156,24 @@ info:
     `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config` returns
     HTTP 403 with `code: PASSWORD_CHANGE_REQUIRED`. WebSocket connections are refused
     on the same basis. Clients should route on `code` rather than the message.
+
+    ## Administrator two-factor policy
+    An `ADMIN` account must have MFA on. One without it carries
+    `adminMfaDeadline` (an ISO date) on the `user` object `/api/auth/login`,
+    `/api/auth/mfa/verify-login`, `/api/setup/init` and `/api/auth/me` return:
+    7 days from the latest of: when the policy started on the instance, the
+    account's creation, its promotion to `ADMIN` through `PUT /api/users/{id}`,
+    and a `POST /api/admin/users/{id}/reset-mfa` on it. For everyone else the
+    field is `null`. Past
+    the deadline every endpoint except `POST /api/auth/mfa/setup`,
+    `POST /api/auth/mfa/verify`, `POST /api/auth/change-password`,
+    `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
+    `GET /api/auth/appearance` and `GET /api/config` returns HTTP 403
+    `{ error: 'MFA Required', code: 'MFA_ENROLMENT_REQUIRED', message }`. The
+    same check refreshes the session's copy of the platform role from the
+    database on every administrator request, so a demoted administrator loses
+    the admin routes on their next request, and a session whose account no
+    longer exists is ended with 401.
 
     ## Real-time Events
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
@@ -311,7 +349,12 @@ paths:
       tags:
         - Setup
       summary: Check setup status
-      description: Check if the system setup wizard needs to be run. Accessible before setup.
+      description: >-
+        Whether the setup wizard still has to run. Accessible before setup.
+        `needsSetup` is true until the wizard has completed. An instance an
+        older version left with its administrator created but setup never
+        marked complete is marked complete by this call (and by any other
+        request), so that administrator can sign in.
       operationId: getSetupStatus
       security: []
       responses:
@@ -328,6 +371,7 @@ paths:
                     type: boolean
                   needsSetup:
                     type: boolean
+                    description: The same as `setupCompleted` being false.
 
   /api/setup/init:
     post:
@@ -335,13 +379,19 @@ paths:
         - Setup
       summary: Initialize system
       description: >-
-        Create the first admin account, apply the wizard's instance settings,
-        mark setup complete, and sign the new admin in (the response sets a
-        fresh session cookie). Only works while setup is not yet complete and
-        no account exists; both are checked before the body is read. The
-        password must be at least 12 characters with an uppercase letter, a
-        lowercase letter, a number and a special character, the same rule
-        enforced on register, reset-password and change-password.
+        Create the first admin account, apply the wizard's instance settings
+        and mark setup complete, in one transaction, then sign the new admin
+        in (the response sets a fresh session cookie). Of two wizards
+        submitted together exactly one succeeds; the other is told setup is
+        already complete and nothing of it is kept.
+
+        The route is public, so it asks for the setup token first: the value
+        the backend printed in its log at start while setup was incomplete, or
+        the `SETUP_TOKEN` environment variable when set. A missing or wrong
+        token answers 403 before anything else is checked. The password must
+        be at least 12 characters with an uppercase letter, a lowercase
+        letter, a number and a special character, the same rule enforced on
+        register, reset-password and change-password.
       operationId: initializeSystem
       security: []
       requestBody:
@@ -351,10 +401,16 @@ paths:
             schema:
               type: object
               required:
+                - setupToken
                 - email
                 - password
                 - displayName
               properties:
+                setupToken:
+                  type: string
+                  description: >-
+                    The setup token from the backend log, or `SETUP_TOKEN`.
+                    Compared exactly, as text.
                 email:
                   type: string
                   format: email
@@ -362,14 +418,14 @@ paths:
                 password:
                   type: string
                   minLength: 12
+                  maxLength: 1024
                 displayName:
                   type: string
                   minLength: 1
                   maxLength: 50
                   description: >-
                     Trimmed, and angle brackets removed, before the length is
-                    checked. Anything else, including a value that is not a
-                    string, is refused with 400 `Setup Failed`.
+                    checked.
                 instanceName:
                   type: string
                   default: CozyVTT
@@ -407,21 +463,37 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           description: >-
-            `Setup Already Completed`; `Users Exist` when any account exists;
-            `Validation Error` for a missing field, an invalid email, or a
-            password that does not meet the strength rule (that case alone
-            carries an `errors` array listing each rule not met); or
-            `Setup Failed` with the reason, for a display name that is refused.
+            `Setup Already Completed` once the wizard has run, or when another
+            wizard submitted at the same moment got there first; `Validation
+            Error` with a message naming the problem: a field that is missing
+            or not text, an invalid email, a password that does not meet the
+            strength rule, or a display name that is refused.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: Password does not meet requirements
-                errors:
-                  - Password must contain at least one uppercase letter
-                  - Password must contain at least one special character
+                message: Password must contain at least one uppercase letter, Password must contain at least one special character
+        '403':
+          description: >-
+            `Forbidden`: the setup token is missing, not text, or wrong. The
+            body is not read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Setup token is missing or wrong. Copy it from the backend log (docker compose logs backend), or from SETUP_TOKEN in .env if you set one.
+        '500':
+          description: >-
+            `Internal Server Error` with a fixed message; the detail is in the
+            backend log. Nothing is kept, so the wizard can be run again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ============================================
   # AUTHENTICATION
@@ -491,12 +563,16 @@ paths:
                         example: true
         '400':
           description: >-
-            `Validation Error` when a field is missing. Otherwise
-            `Registration Failed`, with the reason as `message`: an invalid
-            email, a password that does not meet the strength rule (the unmet
-            rules joined with ", ", with no `errors` array), a refused display
-            name, or `Email already registered`. The missing-field check runs
-            before the 403; the others after it.
+            `Validation Error` when a field is missing or is not text, or
+            the email is over 254 or the password over 1,024 characters
+            (`message` names the field: `Email is required`, `Password must
+            be text`). Otherwise `Registration Failed`, with the reason as
+            `message`: an invalid email, a password that does not meet the
+            strength rule (the unmet rules joined with ", ", with no `errors`
+            array), a refused display name, or `Email already registered`.
+            The `Validation Error` check runs before the 403; the others
+            after it. A failure inside the server answers 500 with a fixed
+            message, never the error's own text.
           content:
             application/json:
               schema:
@@ -515,6 +591,15 @@ paths:
                 message: Registration is currently disabled. Please contact an administrator.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          description: A failure inside the server. The body never carries the error's own text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: An unexpected error occurred
 
   /api/auth/login:
     post:
@@ -522,8 +607,8 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints. Only a 401 counts; a 400, a 403, a correct sign-in and a 429 do not.
-        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login`; the session is not signed in until then.
+        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts, answers and takes as long as a wrong password (it is checked against a dummy hash).
+        If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login` within 5 minutes; the session is not signed in until then, and after 5 minutes the pending sign-in ends and the password step starts again. A pending sign-in also ends when the account's password is changed or reset, or its sessions are ended for any other reason.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
       security: []
@@ -540,9 +625,11 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
                 password:
                   type: string
                   format: password
+                  maxLength: 1024
                 rememberMe:
                   type: boolean
                   default: false
@@ -550,6 +637,11 @@ paths:
                     Keeps the session for `REMEMBER_ME_MAX_AGE` of inactivity
                     (30 days by default) instead of `SESSION_MAX_AGE`. With MFA,
                     it takes effect when `/api/auth/mfa/verify-login` succeeds.
+                    Must be a boolean when sent. Either way the session ends
+                    `REMEMBER_ME_MAX_AGE` after it was made, however active, with
+                    401 "Your sign-in has reached its 30-day limit. Sign in
+                    again.", and each sign-in removes the account's oldest
+                    sessions beyond 20.
             example:
               email: dm@example.com
               password: hunter2-correct-horse-battery
@@ -578,16 +670,19 @@ paths:
                         type: string
         '400':
           description: >-
-            `Validation Error` when the email or password is missing. An email
-            that is not a string answers `Login Failed`, with the internal
-            error text as `message`.
+            `Validation Error` when the email or password is missing, empty or
+            not text, the email is over 254 or the password over 1,024
+            characters, or `rememberMe` is not a boolean. `message` names the
+            field (`Email is required`, `Password must be text`). Checked
+            before the limiter counts anything, so a refused body is never a
+            failed attempt.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: Email and password are required
+                message: Email is required
         '401':
           description: >-
             No account has that email, or the password is wrong. The answer is
@@ -612,6 +707,15 @@ paths:
                 message: Your account is pending admin approval. Please contact an administrator.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '500':
+          description: A failure inside the server. The body never carries the error's own text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: An unexpected error occurred
 
   /api/auth/logout:
     post:
@@ -688,8 +792,9 @@ paths:
         Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged.
         The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
-        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does. This happens even when SMTP is not configured and no email is sent.
-        Rate limited to 5 requests per 15 minutes; every request counts, successful or not.
+        For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does, and its used and expired link rows are removed. This happens even when SMTP is not configured and no email is sent.
+        One link per account every 5 minutes: a request within 5 minutes of the account's last unused, unexpired link answers exactly the same, sends nothing and leaves that link working, so one inbox cannot be flooded or have its link voided over and over.
+        Rate limited to 5 requests per 15 minutes per address; every request counts, successful or not.
       operationId: forgotPassword
       security: []
       requestBody:
@@ -722,7 +827,7 @@ paths:
                   value:
                     message: Password reset is not available. Contact your administrator.
         '400':
-          description: The email is missing or is not text.
+          description: The email is missing, empty, not text, or over 254 characters.
           content:
             application/json:
               schema:
@@ -749,12 +854,16 @@ paths:
       summary: Reset password with token
       description: >-
         Reset password using a valid token from a password reset email or
-        invitation. Token must not be expired or used. A token sets the
+        invitation. Token must not be expired or used. Tokens are 64 hex
+        characters and are stored as their SHA-256 hash, so a database read
+        or a backup yields no working link; a link issued before tokens were
+        hashed (a UUID) keeps working until it expires. A token sets the
         password once, even when two requests carry it at the same moment,
         and using it voids the account's other unused tokens. Clears
-        `mustChangePassword`, and ends every login session and live WebSocket
-        connection of the account; the request itself does not sign anyone
-        in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        `mustChangePassword`, forgets the wrong passwords counted against the
+        account by the per-account sign-in limit, and ends every login session
+        and live WebSocket connection of the account; the request itself does
+        not sign anyone in. Rate limited: 5 wrong answers per 15 minutes per address, shared
         with the other credential endpoints, where a link that does not exist,
         has been used or has expired is a wrong answer and a password too weak
         to take is not.
@@ -772,10 +881,12 @@ paths:
               properties:
                 token:
                   type: string
-                  format: uuid
+                  maxLength: 256
+                  description: The token from the emailed link.
                 newPassword:
                   type: string
                   minLength: 12
+                  maxLength: 1024
       responses:
         '200':
           description: Password reset successfully
@@ -788,9 +899,11 @@ paths:
                     type: string
         '400':
           description: >-
-            `Validation Error` when the token or new password is missing or
-            is not text, or the password does not meet the strength rule (the unmet rules
-            joined with ", " as `message`); `Invalid Token` when the token is
+            `Validation Error` when the token or new password is missing,
+            empty, not text or over its ceiling (`Token is required`, `New
+            password must be text`), or the password does not meet the
+            strength rule (the unmet rules joined with ", " as `message`);
+            `Invalid Token` when the token is
             unknown, used or expired, including when another request used it
             first. The token is checked before the password.
           content:
@@ -817,7 +930,7 @@ paths:
       tags:
         - Authentication
       summary: Change own password
-      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user's unused password-reset and invitation links. Wrong current passwords count only towards the general API rate limit.
+      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user's unused password-reset and invitation links, and forgets the wrong passwords counted against the account by the per-account sign-in limit. Rate limited: 10 wrong current passwords per 15 minutes for the account, from every address, shared with `DELETE /api/auth/account` and an email change through `PUT /api/users/{id}`; then 429 `Too many wrong passwords, please try again later`. A correct password never counts.
       operationId: changePassword
       security:
         - cookieAuth: []
@@ -833,9 +946,11 @@ paths:
               properties:
                 currentPassword:
                   type: string
+                  maxLength: 1024
                 newPassword:
                   type: string
                   minLength: 12
+                  maxLength: 1024
       responses:
         '200':
           description: Password changed successfully
@@ -848,9 +963,11 @@ paths:
                     type: string
         '400':
           description: >-
-            A field is missing, or the new password does not meet the strength
-            rule (the unmet rules joined with ", " as `message`). The current
-            password is checked before the strength rule.
+            A field is missing, empty, not text or over 1,024 characters
+            (`Current password is required`, `New password must be text`), or
+            the new password does not meet the strength rule (the unmet rules
+            joined with ", " as `message`). The current password is checked
+            before the strength rule.
           content:
             application/json:
               schema:
@@ -1028,7 +1145,7 @@ paths:
         At least one of `token` and `backupCode` is required; sending both is not refused: a non-empty `token` is checked and the backup code is ignored. Backup codes are compared ignoring hyphens, spaces and letter case. They are consumed on use, exactly once even when two requests carry the same code; the second is answered 401.
         A TOTP code is accepted once: one from the same 30-second step as a code already accepted for the account, or an earlier step, is refused.
         On success the session is signed in on a fresh session id, with the `rememberMe` choice made at `/api/auth/login`.
-        Rate limited (5 failures/15min per address, separate from setup verification, and 5 failures/15min per account from any address).
+        Rate limited (5 wrong codes/15min per address, separate from setup verification, and 5 wrong codes/15min per account from any address). Only a wrong code or backup code counts; correct codes sent together all pass, and a request refused for having no sign-in pending or a malformed body is not counted.
       operationId: mfaVerifyLogin
       security: []
       requestBody:
@@ -1080,10 +1197,12 @@ paths:
                 message: Either a TOTP token or backup code is required
         '401':
           description: >-
-            No MFA sign-in is pending in this session (`Unauthorized`), the
-            account no longer has MFA on (`Unauthorized`, `Invalid MFA state`),
-            or the token or backup code is invalid or already used
-            (`Invalid Code`).
+            No MFA sign-in is pending in this session (`Unauthorized`); more
+            than 5 minutes have passed since the password step, which ends the
+            pending sign-in (`Sign-In Expired`, "Your sign-in timed out at the
+            code step. Sign in again with your password."); the account no
+            longer has MFA on (`Unauthorized`, `Invalid MFA state`); or the
+            token or backup code is invalid or already used (`Invalid Code`).
           content:
             application/json:
               schema:
@@ -1244,7 +1363,9 @@ paths:
       summary: Delete own account
       description: |
         Self-service permanent account deletion. Requires the current
-        password as confirmation. Deletes the user's memberships, pending
+        password as confirmation; a wrong one counts against the shared
+        allowance of 10 wrong passwords per 15 minutes for the account (see
+        `POST /api/auth/change-password`), then 429. Deletes the user's memberships, pending
         invitations, characters, personal notes and dice macros. Their
         personal (`USER` scope) assets are deleted, row and file: every
         `AVATAR`, and any other that nothing names (no map, token, character,
@@ -1297,14 +1418,14 @@ paths:
                 properties:
                   message: { type: string, example: Account deleted successfully }
         '400':
-          description: The password is missing.
+          description: The password is missing, empty, not text or over 1,024 characters.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: Password is required to delete your account
+                message: Password is required
         '401':
           description: |
             Either not authenticated, or password did not match
@@ -1407,7 +1528,9 @@ paths:
       description: |
         Extends the rolling session cookie without fetching user data.
         Called periodically by the frontend during active gameplay so a long
-        session doesn't expire mid-roll. Cheap — just touches the session.
+        session doesn't expire mid-roll. Cheap — just touches the session. It
+        cannot carry a sign-in past `REMEMBER_ME_MAX_AGE` after it was made;
+        then it answers 401 like every other guarded route.
       operationId: pingSession
       security:
         - cookieAuth: []
@@ -1498,9 +1621,9 @@ paths:
         - Users
       summary: Update user
       description: |
-        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. A role change is written to the admins' activity log as a WARNING, and a promotion to `ADMIN` gives the account 7 days to set up MFA (see the administrator two-factor policy in the introduction). The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
 
-        Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
+        Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. A wrong password counts against the shared allowance of 10 wrong passwords per 15 minutes for the account (see `POST /api/auth/change-password`); past it a request carrying `currentPassword` answers 429, while one without a password is not held to it. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
       security:
         - cookieAuth: []
@@ -1712,7 +1835,7 @@ paths:
       tags:
         - Users
       summary: Admin reset user password
-      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, and ends every login session and live connection the user already has open. There is no self check, so an admin naming their own id signs themselves out everywhere. MFA on the account is left as it is.
+      description: Generate temporary password for user (Admin only). Sets mustChangePassword flag so user is forced to change on next login. Voids the user's unused password-reset and invitation links, forgets the wrong passwords counted against the account by the per-account sign-in limit, and ends every login session and live connection the user already has open. Refused with 400 for the caller's own id, since changing one's own password asks for the current one; a session alone must not get a new password for its own account here. Written to the admins' activity log as a WARNING. MFA on the account is left as it is.
       operationId: adminResetUserPassword
       security:
         - cookieAuth: []
@@ -8803,7 +8926,8 @@ paths:
       description: |
         Creates an account with **no usable password** and emails the new user a link to
         choose one. The link expires in 7 days and is the only way into the account, so
-        no credential is ever returned or shown to the inviting admin.
+        no credential is ever returned or shown to the inviting admin; its token is
+        stored as a SHA-256 hash, so it cannot be read from the database or a backup.
 
         Requires SMTP. If the invitation cannot be delivered the account is rolled back
         rather than left unreachable.
@@ -8939,9 +9063,13 @@ paths:
       summary: Reset MFA for a locked-out user
       description: >-
         Disables TOTP and clears backup codes for a user who is locked out, turning MFA
-        off for the account. This does not force the user to re-enroll: they sign in
-        with just their password next time, and MFA stays off until they set it up
-        again themselves.
+        off for the account. The user signs in with their password alone next time,
+        and MFA stays off until they set it up again themselves. An administrator is
+        held to the administrator two-factor policy (see the introduction): the reset
+        gives them 7 days, then every endpoint but enrolment answers 403
+        `MFA_ENROLMENT_REQUIRED`. Refused with 400 for the caller's own id, since
+        turning off one's own MFA asks for the password. Written to the admins'
+        activity log as a WARNING.
       operationId: adminResetUserMfa
       security:
         - cookieAuth: []
@@ -8962,7 +9090,7 @@ paths:
                   message:
                     type: string
         '400':
-          description: MFA is not enabled for this user
+          description: MFA is not enabled for this user, or the id is the caller's own
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -10298,6 +10426,14 @@ components:
           description: May edit and delete anyone's character template.
         mustChangePassword:
           type: boolean
+        adminMfaDeadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            For an administrator without MFA, when it becomes required; null
+            for everyone else. Present on the `user` of /api/auth/login,
+            /api/auth/mfa/verify-login, /api/setup/init and /api/auth/me.
           description: Set when an admin created the account or reset its password; see Forced password changes.
         isApproved:
           type: boolean
@@ -11784,8 +11920,8 @@ components:
       description: |
         Too Many Requests - Rate limit exceeded. Response includes
         `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers.
-        The sign-in, registration and password-reset limiters answer with a
-        plain-text body; the others answer with JSON.
+        Every limiter answers with JSON, `{ error: "Rate Limited", message }`,
+        where `message` says what was limited and to try again later.
       headers:
         RateLimit-Limit:
           schema: { type: integer }

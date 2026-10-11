@@ -18,7 +18,14 @@ jest.mock('express-rate-limit', () => {
 // wrong answers from one address than it allows. It is tested in
 // signInLimiter.e2e.test.ts.
 jest.mock('../../middleware/failureLimiter', () => ({
-  failureLimiter: () => Object.assign((_req: Request, _res: Response, next: NextFunction) => next(), { recordFailure: () => undefined }),
+  failureLimiter: () => Object.assign((_req: Request, _res: Response, next: NextFunction) => next(), { recordFailure: () => undefined, forget: () => undefined }),
+}));
+// The token is stored hashed, so the only way to hold a link is to be sent it.
+const sentReset = jest.fn(() => Promise.resolve());
+jest.mock('../../services/email', () => ({
+  ...jest.requireActual('../../services/email'),
+  isSmtpConfigured: () => true,
+  sendPasswordResetEmail: (...args: unknown[]) => sentReset(...(args as [])),
 }));
 
 import crypto from 'crypto';
@@ -58,13 +65,17 @@ afterAll(async () => {
 it('voids the older link when a new one is requested from the sign-in page', async () => {
   const u = await user('forgot');
   expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
+  // A second request within five minutes issues nothing (see
+  // forgotPasswordCooldown.e2e); age the first link past that.
+  await prisma.passwordResetToken.updateMany({ where: { userId: u.id }, data: { createdAt: new Date(Date.now() - 6 * 60 * 1000) } });
   expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
 
-  const tokens = await prisma.passwordResetToken.findMany({ where: { userId: u.id }, orderBy: { createdAt: 'asc' } });
-  expect(tokens).toHaveLength(2);
+  expect(sentReset).toHaveBeenCalledTimes(2);
+  const tokens = (sentReset.mock.calls as unknown as unknown[][]).map((call) => call[1] as string);
+  expect(await prisma.passwordResetToken.count({ where: { userId: u.id } })).toBe(2);
 
-  expect((await resetWith(tokens[0].token)).status).toBe(400);
-  expect((await resetWith(tokens[1].token)).status).toBe(200);
+  expect((await resetWith(tokens[0])).status).toBe(400);
+  expect((await resetWith(tokens[1])).status).toBe(200);
 });
 
 it('voids the other links when one of them is used', async () => {

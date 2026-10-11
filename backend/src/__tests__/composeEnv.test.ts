@@ -37,7 +37,10 @@ function keysTheBackendReads(): Set<string> {
       } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
         // process.env.NAME, and env.NAME where a module is handed the
         // environment as a parameter (resolveBackupDir, getProxyLimitWarnings).
-        for (const m of fs.readFileSync(full, 'utf8').matchAll(/\b(?:process\.)?env\.([A-Z][A-Z0-9_]*)/g)) keys.add(m[1]);
+        const source = fs.readFileSync(full, 'utf8');
+        for (const m of source.matchAll(/\b(?:process\.)?env\.([A-Z][A-Z0-9_]*)/g)) keys.add(m[1]);
+        // positiveIntegerFromEnv('NAME', ...), which reads the variable by name (config/env.ts).
+        for (const m of source.matchAll(/FromEnv\(\s*'([A-Z][A-Z0-9_]*)'/g)) keys.add(m[1]);
       }
     }
   };
@@ -99,7 +102,7 @@ describe('the settings the backend reads', () => {
   // listing them here would check the helper against itself.
   it('include those read through an injected environment object', () => {
     const backend = keysTheBackendReads();
-    for (const key of ['NGINX_MAX_BODY_SIZE', 'BACKUP_DIR']) {
+    for (const key of ['NGINX_MAX_BODY_SIZE', 'BACKUP_DIR', 'SESSION_MAX_AGE', 'REMEMBER_ME_MAX_AGE', 'RATE_LIMIT_MAX_REQUESTS']) {
       expect(backend).toContain(key);
     }
   });

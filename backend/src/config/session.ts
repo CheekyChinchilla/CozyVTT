@@ -2,6 +2,10 @@ import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { Pool } from 'pg';
 import logger from '../utils/logger';
+import { sessionMaxAge, rememberMeMaxAge } from './sessionDurations';
+import { sessionSecretProblem, INSECURE_SESSION_SECRETS } from './sessionSecret';
+
+export { rememberMeMaxAge };
 
 const PgSession = connectPgSimple(session);
 
@@ -19,25 +23,24 @@ sessionPool.on('error', (err) => {
   logger.error('Session store lost a database connection', { err });
 });
 
-// Validate SESSION_SECRET — fail loudly in production rather than silently run insecure
+// SESSION_SECRET signs the session cookie. A production server stops here on
+// a value anyone could guess: unset, an example value the example files or
+// the guides show, or one too short to have been generated. The list and the
+// rule are in config/sessionSecret.ts, where a test holds the guides to them.
 const SESSION_SECRET = process.env.SESSION_SECRET;
-const INSECURE_PLACEHOLDERS = [
-  'CHANGE_ME_TO_RANDOM_STRING_32_CHARS_MIN',
-  'development-secret-change-in-production',
-  'CHANGE_ME_TO_RANDOM_STRING',
-];
+const secretProblem = sessionSecretProblem(SESSION_SECRET);
 
-if (!SESSION_SECRET || INSECURE_PLACEHOLDERS.includes(SESSION_SECRET)) {
+if (secretProblem) {
   if (process.env.NODE_ENV === 'production') {
     logger.error(
-      '[FATAL] SESSION_SECRET is not set or is using a placeholder value. ' +
+      `[FATAL] SESSION_SECRET ${secretProblem}. ` +
         'Generate a strong secret with: openssl rand -hex 32'
     );
     process.exit(1);
   } else {
     logger.warn(
-      '[WARN] SESSION_SECRET is not configured — using an insecure development default. ' +
-        'Set a real secret in backend/.env before deploying.'
+      `[WARN] SESSION_SECRET ${secretProblem}. ` +
+        'Set a real secret in backend/.env before deploying; generate one with: openssl rand -hex 32'
     );
   }
 }
@@ -49,7 +52,9 @@ export const sessionConfig: session.SessionOptions = {
     tableName: 'session',
     createTableIfMissing: true,
   }),
-  secret: SESSION_SECRET || 'dev-only-insecure-secret-do-not-use-in-production',
+  secret: SESSION_SECRET && !INSECURE_SESSION_SECRETS.includes(SESSION_SECRET)
+    ? SESSION_SECRET
+    : 'dev-only-insecure-secret-do-not-use-in-production',
   resave: false,
   saveUninitialized: false,
   rolling: true, // Reset maxAge on every response — session only expires after inactivity
@@ -62,11 +67,6 @@ export const sessionConfig: session.SessionOptions = {
     sameSite: 'lax', // Allows cookie on same-site requests and top-level GET navigations
                      // from external links (email, Discord, etc.). 'strict' would redirect
                      // logged-in users to login whenever they follow any external link.
-    maxAge: parseInt(process.env.SESSION_MAX_AGE || '3600000'), // 1 hour of inactivity
+    maxAge: sessionMaxAge, // 1 hour of inactivity unless SESSION_MAX_AGE says otherwise
   },
 };
-
-// Extended session duration for "Remember Me"
-export const rememberMeMaxAge = parseInt(
-  process.env.REMEMBER_ME_MAX_AGE || '2592000000' // 30 days default
-);

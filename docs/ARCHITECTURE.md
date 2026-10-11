@@ -62,6 +62,8 @@ src/
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
+│   ├── adminMfa.ts        Gates an administrator without MFA past their deadline (services/adminMfaPolicy.ts);
+│   │                      re-reads the admin's role on every request
 │   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
 │   │                  and exporting campaign archives, one archive at a time
@@ -81,7 +83,8 @@ src/
 │   ├── creatures.ts   Creature template CRUD, SRD seeding, favorites
 │   ├── assets.ts      File upload and retrieval
 │   ├── invitations.ts Campaign invitation lifecycle
-│   ├── setup.ts       First-run setup wizard
+│   ├── setup.ts       First-run setup wizard; asks for the setup token (services/setupToken.ts)
+│   │                  and runs services/setup.ts, one transaction for the first admin and the settings
 │   ├── config.ts      Public client config (upload limits)
 │   └── admin.ts       Admin: stats, settings, users, backups, logs
 ├── services/          Business logic (called by routes and WebSocket handlers)
@@ -449,7 +452,7 @@ sequenceDiagram
     S-->>C: 200 response
 ```
 
-A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and a character sheet editor while it holds unsaved changes (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
+A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. It also ends `REMEMBER_ME_MAX_AGE` (30 days) after it was made, however active: `signedInAt` is set at sign-in and checked by the guards and the socket handshake (`services/signedIn.ts`), and a session from before the field existed is stamped when next seen. Each sign-in removes the account's oldest sessions beyond 20 (`capLoginSessions`), and the session row holds the user id and role, `signedInAt`, `mustChangePassword` and the MFA pending fields. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and a character sheet editor while it holds unsaved changes (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
 
 ### Role-Based Authorization
 

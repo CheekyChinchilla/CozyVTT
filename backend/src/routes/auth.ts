@@ -1,14 +1,13 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
-import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
-import { rememberMeMaxAge } from '../config/session';
+import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError } from '../services/auth';
+import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
-import { destroyUserLoginSessions } from '../services/sessionStore';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { destroyUserLoginSessions, capLoginSessions } from '../services/sessionStore';
+import { voidOutstandingResetLinks, issueResetToken, findResetTokenRow, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
@@ -19,8 +18,69 @@ import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
+import { adminMfaDeadline } from '../services/adminMfaPolicy';
+import {
+  parseBody,
+  LoginBodySchema,
+  RegisterBodySchema,
+  ForgotPasswordBodySchema,
+  ResetPasswordBodySchema,
+  ChangePasswordBodySchema,
+  PasswordBodySchema,
+  MfaVerifyBodySchema,
+  MfaDisableBodySchema,
+  MfaVerifyLoginBodySchema,
+} from '../validators/auth';
+
+/** 400 for a body `parseBody` refused. */
+const invalid = (res: Response, message: string) => res.status(400).json({ error: 'Validation Error', message });
+
+/**
+ * The bookkeeping every completed sign-in does, after the session has been
+ * regenerated and the user set: stamp when it was made, so the guards can end
+ * it after the remember-me window however active it stays, and remove the
+ * account's oldest sessions beyond the cap. The cap is housekeeping and must
+ * not stop a sign-in, so its failure is logged and the sign-in goes on.
+ */
+function recordSignIn(req: Request, userId: string): void {
+  req.session.signedInAt = Date.now();
+  capLoginSessions(userId, req.sessionID).catch((err: unknown) => {
+    logger.error('Failed to cap login sessions', { err, userId });
+  });
+}
+
+/**
+ * The signed-in user as the client sees them: sanitised, plus the date by
+ * which an administrator without MFA must set it up (services/adminMfaPolicy),
+ * null for everyone else. The pages show it as a banner.
+ */
+export async function clientUser(user: Parameters<typeof sanitizeUser>[0]) {
+  const deadline = await adminMfaDeadline(user);
+  return { ...sanitizeUser(user), adminMfaDeadline: deadline ? deadline.toISOString() : null };
+}
+
+/**
+ * How long the code step may follow the password step. A pending sign-in sat
+ * on the ordinary rolling cookie, so any request carrying it kept it alive and
+ * a password proved once could be turned into a sign-in whenever a code came
+ * to hand. Five minutes is many times what typing a code takes; after it the
+ * person starts again with their password.
+ */
+export const MFA_PENDING_MAX_AGE_MS = 5 * 60 * 1000;
+
+/**
+ * How long after issuing a reset link forgot-password issues no other for the
+ * same account. The route is limited per requesting address, so anyone with a
+ * few addresses could ask for a reset for one victim every few seconds: each
+ * request voided the link before it and sent another email. Within this time
+ * the answer is the same, nothing is sent and the link already sent keeps
+ * working. Five minutes is well past a slow mail server, and a person who
+ * asks twice has a link that works in their inbox.
+ */
+export const RESET_LINK_COOLDOWN_MS = 5 * 60 * 1000;
 
 // ============================================
 // MFA Helpers
@@ -60,7 +120,7 @@ export const credentialLimiter = failureLimiter({
 export const emailDispatchLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 requests per window, successful or not
-  message: 'Too many authentication attempts, please try again later',
+  message: { error: 'Rate Limited', message: 'Too many password reset requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -82,7 +142,7 @@ export const emailDispatchLimiter = rateLimit({
 export const accountCreationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
   max: 10, // 10 accounts per hour per address, successful or not
-  message: 'Too many accounts created from this address, please try again later',
+  message: { error: 'Rate Limited', message: 'Too many accounts created from this address, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -102,35 +162,30 @@ export const mfaSetupLimiter = rateLimit({
 });
 
 /**
- * MFA login verification: 5 failed codes per 15 minutes, on its own window.
- * Same reasoning: a correct code is not an attack and does not spend the budget.
+ * The code step of a sign-in: 5 wrong codes per 15 minutes per address, on
+ * its own window. Only a wrong code or backup code counts, recorded by the
+ * route, as the password step does: counting on arrival refused the sixth of
+ * six correct codes sent together from one address, and left it counted.
  */
-export const mfaLoginLimiter = rateLimit({
+export const mfaLoginLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: { error: 'Rate Limited', message: 'Too many MFA login attempts, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
+  message: 'Too many MFA login attempts, please try again later',
 });
 
 /**
- * MFA login verification, per account: 5 failed codes per 15 minutes for one
- * account, from wherever they come. The limiter above counts per address, so
- * someone who already has the password could otherwise spread their guesses
- * at the code across many addresses. Keyed on the account the pending sign-in
+ * The code step, per account: 5 wrong codes per 15 minutes for one account,
+ * from wherever they come. The limiter above counts per address, so someone
+ * who already has the password could otherwise spread their guesses at the
+ * code across many addresses. Keyed on the account the pending sign-in
  * belongs to, which the password step put in the session; a request with no
- * sign-in pending is refused by the handler and not counted here.
+ * sign-in pending is refused by the handler and neither held nor counted here.
  */
-export const mfaAccountLimiter = rateLimit({
+export const mfaAccountLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: { error: 'Rate Limited', message: 'Too many MFA login attempts for this account, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  skip: (req) => !req.session?.mfaPendingUserId,
-  keyGenerator: (req) => `mfa-account:${req.session.mfaPendingUserId}`,
+  message: 'Too many MFA login attempts for this account, please try again later',
+  key: (req) => (req.session?.mfaPendingUserId ? `mfa-account:${req.session.mfaPendingUserId}` : null),
 });
 
 /**
@@ -139,16 +194,11 @@ export const mfaAccountLimiter = rateLimit({
  * First user automatically becomes ADMIN
  */
 router.post('/register', accountCreationLimiter, async (req: Request, res: Response) => {
-  try {
-    const { email, password, displayName } = req.body;
+  const body = parseBody(RegisterBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { email, password, displayName } = body.data;
 
-    // Validate required fields
-    if (!email || !password || !displayName) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email, password, and display name are required',
-      });
-    }
+  try {
 
     // Check if this is the very first user (first admin setup bypasses all restrictions)
     const userCount = await prisma.user.count();
@@ -184,9 +234,8 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       // Auto-approved registration — create session and log in, on a fresh id.
       await regenerateSession(req);
       req.session.userId = user.id;
-      req.session.email = user.email;
-      req.session.displayName = user.displayName;
       req.session.platformRole = user.platformRole;
+      recordSignIn(req, user.id);
 
       return res.status(201).json({
         message: 'User registered successfully',
@@ -199,26 +248,27 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
 
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
+    recordSignIn(req, user.id);
 
     return res.status(201).json({
       message: 'User registered successfully',
       user: sanitizeUser(user),
     });
   } catch (error) {
-    if (error instanceof Error) {
+    // Only a refusal of what was sent is explained; anything else is the
+    // server's, and its text stays in the log.
+    if (error instanceof RegistrationError) {
       return res.status(400).json({
         error: 'Registration Failed',
         message: error.message,
       });
-    } else {
-      return res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      });
     }
+    logger.error('Error in register', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'An unexpected error occurred',
+    });
   }
 });
 
@@ -226,18 +276,12 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
  * POST /api/auth/login
  * Authenticate user and create session
  */
-router.post('/login', credentialLimiter, async (req: Request, res: Response) => {
+router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(LoginBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { email, password, rememberMe } = body.data;
+
   try {
-    const { email, password, rememberMe } = req.body;
-
-    // Validate required fields
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email and password are required',
-      });
-    }
-
     // Authenticate user
     const user = await authenticateUser({
       email,
@@ -245,9 +289,10 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       rememberMe,
     });
 
-    // The same answer, and the same count, whether or not the address has an account.
+    // The same answer, and the same counts, whether or not the address has an account.
     if (!user) {
       credentialLimiter.recordFailure(req);
+      accountLoginLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Invalid email or password',
@@ -270,6 +315,7 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       req.session.mfaPending = true;
       req.session.mfaPendingUserId = user.id;
       req.session.mfaRememberMe = !!rememberMe;
+      req.session.mfaPendingAt = Date.now();
 
       return res.status(200).json({
         mfaRequired: true,
@@ -280,11 +326,10 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
     // No MFA - create full session on a fresh id (session fixation).
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
     // Gates every other API call until the password is replaced
     req.session.mustChangePassword = user.mustChangePassword;
+    recordSignIn(req, user.id);
 
     // Extend session if "Remember Me" is checked
     if (rememberMe && req.session.cookie) {
@@ -294,21 +339,15 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
     // Return sanitized user with mustChangePassword flag
     return res.status(200).json({
       message: 'Login successful',
-      user: sanitizeUser(user),
+      user: await clientUser(user),
       mustChangePassword: user.mustChangePassword,
     });
   } catch (error) {
-    if (error instanceof Error) {
-      return res.status(400).json({
-        error: 'Login Failed',
-        message: error.message,
-      });
-    } else {
-      return res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred',
-      });
-    }
+    logger.error('Error in login', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'An unexpected error occurred',
+    });
   }
 });
 
@@ -363,7 +402,7 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     return res.status(200).json({
-      user: sanitizeUser(user),
+      user: await clientUser(user),
     });
   } catch (error) {
     logger.error('Error in GET /me', { err: error });
@@ -380,40 +419,43 @@ router.get('/me', async (req: Request, res: Response) => {
  * Always returns 200 to prevent email enumeration
  */
 router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(ForgotPasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { email } = body.data;
+
   try {
-    const { email } = req.body;
-
-    if (typeof email !== 'string' || !email) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email is required',
-      });
-    }
-
     const user = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
 
     if (user) {
-      const token = crypto.randomUUID();
-
-      // Only the newest link works. This also voids a pending invitation,
-      // whose replacement goes to the same address.
-      await voidOutstandingResetLinks(user.id);
-      await prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          token,
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-        },
+      // A link issued within the cooldown is left as it is: nothing new is
+      // sent and nothing is voided, so one inbox cannot be flooded or have
+      // its link pulled from under it by repeated requests.
+      const recent = await prisma.passwordResetToken.findFirst({
+        where: { userId: user.id, used: false, expiresAt: { gt: new Date() }, createdAt: { gt: new Date(Date.now() - RESET_LINK_COOLDOWN_MS) } },
+        select: { id: true },
       });
 
-      // Not awaited: waiting for the mail server only for a known address
-      // would let the response time tell which addresses have accounts.
-      if (isSmtpConfigured()) {
-        sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
-          logger.error('Failed to send password reset email', { err: emailError });
+      if (!recent) {
+        // Rows that can never be used again go, so the table does not grow by
+        // one row per request for ever.
+        await prisma.passwordResetToken.deleteMany({
+          where: { userId: user.id, OR: [{ used: true }, { expiresAt: { lt: new Date() } }] },
         });
+        // Only the newest link works. This also voids a pending invitation,
+        // whose replacement goes to the same address. The row holds the
+        // token's hash; the token itself goes only into the email.
+        await voidOutstandingResetLinks(user.id);
+        const token = await issueResetToken(user.id, RESET_LINK_TTL_MS);
+
+        // Not awaited: waiting for the mail server only for a known address
+        // would let the response time tell which addresses have accounts.
+        if (isSmtpConfigured()) {
+          sendPasswordResetEmail(user.email, token, user.displayName).catch((emailError) => {
+            logger.error('Failed to send password reset email', { err: emailError });
+          });
+        }
       }
     }
 
@@ -441,20 +483,14 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
  * Reset password using a valid token
  */
 router.post('/reset-password', credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(ResetPasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { token, newPassword } = body.data;
+
   try {
-    const { token, newPassword } = req.body;
-
-    if (typeof token !== 'string' || !token || typeof newPassword !== 'string' || !newPassword) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Token and new password are required',
-      });
-    }
-
-    // Find valid token
-    const resetToken = await prisma.passwordResetToken.findUnique({
-      where: { token },
-    });
+    // Find valid token: by its hash, or as sent for a link issued before
+    // tokens were hashed (services/passwordResetTokens).
+    const resetToken = await findResetTokenRow(token);
 
     if (!resetToken || resetToken.used || resetToken.expiresAt < new Date()) {
       credentialLimiter.recordFailure(req);
@@ -479,31 +515,37 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     // conditional write, so of two requests carrying the same link only one
     // finds it unused; the other changes nothing. The account's other links
     // are voided in the same step, since the password they would set is
-    // settled now.
-    const claimed = await prisma.$transaction(async (tx) => {
+    // settled now. Yields the account's email, or false when the link had
+    // been claimed.
+    const accountEmail = await prisma.$transaction(async (tx) => {
       const claim = await tx.passwordResetToken.updateMany({
         where: { id: resetToken.id, used: false, expiresAt: { gt: new Date() } },
         data: { used: true },
       });
       if (claim.count === 0) return false;
 
-      await tx.user.update({
+      const { email } = await tx.user.update({
         where: { id: resetToken.userId },
         data: {
           passwordHash,
           mustChangePassword: false,
         },
+        select: { email: true },
       });
       await voidOutstandingResetLinks(resetToken.userId, tx);
-      return true;
+      return email;
     });
 
-    if (!claimed) {
+    if (accountEmail === false) {
       return res.status(400).json({
         error: 'Invalid Token',
         message: 'This password reset link is invalid or has expired',
       });
     }
+
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with its new password.
+    accountLoginLimiter.forget(accountLoginKey(accountEmail));
 
     // A reset by link is how someone recovers an account they cannot or will
     // not sign in to, so every sign-in opened with the old password ends,
@@ -525,24 +567,16 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
 
 /**
  * POST /api/auth/change-password
- * Change password for authenticated user
+ * Change password for authenticated user. Wrong current passwords count
+ * against passwordCheckLimiter, shared with DELETE /account and an email
+ * change: 10 per 15 minutes for the account.
  */
-// TODO(accounts): this route, DELETE /account below and the current-password
-// check on an email change in users.ts have no attempt limit of their own, only
-// the general API limit of 300 requests a minute by default, so a stolen
-// session could guess the password through them. Limit failed password checks
-// on all three, as credentialLimiter does for /mfa/disable.
-router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
+router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(ChangePasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { currentPassword, newPassword } = body.data;
+
   try {
-    const { currentPassword, newPassword } = req.body;
-
-    if (!currentPassword || !newPassword) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Current password and new password are required',
-      });
-    }
-
     // Get user
     const user = await prisma.user.findUnique({
       where: { id: req.session.userId },
@@ -558,6 +592,7 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
     // Verify current password
     const isValid = await verifyPassword(user.passwordHash, currentPassword);
     if (!isValid) {
+      passwordCheckLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Current password is incorrect',
@@ -586,6 +621,10 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
     // Lift the gate for this session immediately (see middleware/passwordChange.ts)
     req.session.mustChangePassword = false;
 
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with its new password.
+    accountLoginLimiter.forget(accountLoginKey(user.email));
+
     // A reset link issued before the change would undo it.
     await voidOutstandingResetLinks(user.id);
 
@@ -610,21 +649,16 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
 
 /**
  * DELETE /api/auth/account
- * Self-service account deletion. Requires password confirmation.
+ * Self-service account deletion. Requires password confirmation; a wrong
+ * password counts against passwordCheckLimiter.
  */
-// Same TODO(accounts) as POST /change-password above: failed password checks
-// here have no attempt limit of their own.
-router.delete('/account', requireAuth, async (req: Request, res: Response) => {
+router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(PasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Password is required to delete your account',
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -634,6 +668,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
     // Verify password
     const passwordValid = await verifyPassword(user.passwordHash, password);
     if (!passwordValid) {
+      passwordCheckLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Incorrect password',
@@ -653,9 +688,8 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
     if (!deletion.deleted) {
       return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'you') });
     }
-    // The account's other sign-ins outlive the row, and the guards read the
-    // session, so a deleted admin would keep the role on another device.
-    await destroyUserLoginSessions(userId);
+    // The deletion ended the account's other sign-ins in its own transaction
+    // (services/accountDeletion); the live connections end here.
     await endLiveSockets(userId, 'Your account was deleted.');
     announceRosterChange(userId, deletion.campaignIds, 'member.left');
     await removePersonalFiles(deletion.personal);
@@ -685,16 +719,12 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
  * with turning MFA off.
  */
 router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(PasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password } = req.body;
-
-    if (typeof password !== 'string' || password === '') {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Enter your current password to set up MFA',
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -752,13 +782,12 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
  * Requires: Authentication + mfaSecret stored on user
  */
 router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(MfaVerifyBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { token } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ error: 'Validation Error', message: 'Verification code is required' });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -777,7 +806,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
     }
 
     // Verify TOTP token (once: see utils/totp)
-    const isValid = verifyTotpOnce(userId, user.mfaSecret, String(token));
+    const isValid = verifyTotpOnce(userId, user.mfaSecret, token);
 
     if (!isValid) {
       return res.status(401).json({
@@ -829,20 +858,24 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       });
     }
 
-    const { token, backupCode } = req.body;
+    // Too long since the password step: the pending sign-in ends here, and
+    // the person proves the password again. A pending session from before
+    // this check existed has no time and counts as expired.
+    const since = req.session.mfaPendingAt;
+    if (since === undefined || Date.now() - since > MFA_PENDING_MAX_AGE_MS) {
+      req.session.mfaPending = undefined;
+      req.session.mfaPendingUserId = undefined;
+      req.session.mfaRememberMe = undefined;
+      req.session.mfaPendingAt = undefined;
+      return res.status(401).json({
+        error: 'Sign-In Expired',
+        message: 'Your sign-in timed out at the code step. Sign in again with your password.',
+      });
+    }
 
-    if (!token && !backupCode) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Either a TOTP token or backup code is required',
-      });
-    }
-    if ((token !== undefined && typeof token !== 'string') || (backupCode !== undefined && typeof backupCode !== 'string')) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'The TOTP token and backup code must be strings',
-      });
-    }
+    const body = parseBody(MfaVerifyLoginBodySchema, req.body);
+    if (!body.ok) return invalid(res, body.message);
+    const { token, backupCode } = body.data;
 
     const user = await prisma.user.findUnique({
       where: { id: req.session.mfaPendingUserId },
@@ -861,6 +894,8 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       const isValid = verifyTotpOnce(user.id, user.mfaSecret, token);
 
       if (!isValid) {
+        mfaLoginLimiter.recordFailure(req);
+        mfaAccountLimiter.recordFailure(req);
         return res.status(401).json({
           error: 'Invalid Code',
           message: 'Invalid authentication code. Please try again.',
@@ -868,8 +903,10 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       }
     } else {
       // Verify backup code against the Argon2 hashes on record.
-      const matchIndex = await verifyBackupCode(backupCode, user.mfaBackupCodes);
+      const matchIndex = await verifyBackupCode(backupCode ?? '', user.mfaBackupCodes);
       if (matchIndex === -1) {
+        mfaLoginLimiter.recordFailure(req);
+        mfaAccountLimiter.recordFailure(req);
         return res.status(401).json({
           error: 'Invalid Code',
           message: 'Invalid backup code. Please try again.',
@@ -890,6 +927,8 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
         RETURNING cardinality("mfaBackupCodes") AS remaining
       `;
       if (spent.length === 0) {
+        mfaLoginLimiter.recordFailure(req);
+        mfaAccountLimiter.recordFailure(req);
         return res.status(401).json({
           error: 'Invalid Code',
           message: 'Invalid backup code. Please try again.',
@@ -905,12 +944,12 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
     const rememberMe = req.session.mfaRememberMe;
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
+    recordSignIn(req, user.id);
     req.session.mfaPending = undefined;
     req.session.mfaPendingUserId = undefined;
     req.session.mfaRememberMe = undefined;
+    req.session.mfaPendingAt = undefined;
 
     if (rememberMe && req.session.cookie) {
       req.session.cookie.maxAge = rememberMeMaxAge;
@@ -921,14 +960,14 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
     // and silently dropped the warning a user needs to see.
     const response: {
       message: string;
-      user: ReturnType<typeof sanitizeUser>;
+      user: Awaited<ReturnType<typeof clientUser>>;
       mustChangePassword: boolean;
       backupCodeUsed?: boolean;
       remainingBackupCodes?: number;
       warning?: string;
     } = {
       message: 'Login successful',
-      user: sanitizeUser(user),
+      user: await clientUser(user),
       mustChangePassword: user.mustChangePassword,
     };
 
@@ -954,16 +993,12 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
  * Requires: Authentication
  */
 router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(MfaDisableBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password, token } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password, token } = req.body;
-
-    if (!password || !token) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Password and authentication code are required',
-      });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
@@ -990,7 +1025,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
     }
 
     // Verify TOTP token (once: see utils/totp)
-    const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, String(token));
+    const tokenValid = verifyTotpOnce(user.id, user.mfaSecret, token);
 
     if (!tokenValid) {
       credentialLimiter.recordFailure(req);
@@ -1027,13 +1062,12 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
  * Requires: Authentication + MFA enabled
  */
 router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+  const body = parseBody(PasswordBodySchema, req.body);
+  if (!body.ok) return invalid(res, body.message);
+  const { password } = body.data;
+
   try {
     const userId = req.session.userId!;
-    const { password } = req.body;
-
-    if (!password) {
-      return res.status(400).json({ error: 'Validation Error', message: 'Password is required' });
-    }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {

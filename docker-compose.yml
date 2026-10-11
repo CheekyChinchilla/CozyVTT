@@ -74,6 +74,8 @@ services:
       NODE_ENV: production
       PORT: 4000
       SESSION_SECRET: ${SESSION_SECRET}
+      # Optional: the setup wizard's token; unset, the backend prints one in its log
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
       CORS_ORIGIN: ${CORS_ORIGIN}
       # SMTP
       SMTP_HOST: ${SMTP_HOST:-}

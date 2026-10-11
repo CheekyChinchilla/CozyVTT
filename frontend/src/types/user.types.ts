@@ -29,6 +29,12 @@ export interface User {
   lastLoginAt: string | null;
   mustChangePassword?: boolean;
   preferences?: UserPreferences | null;
+  /**
+   * For an administrator without two-factor authentication: when it becomes
+   * required, after which the server refuses everything but enrolment. Null
+   * or absent for everyone else.
+   */
+  adminMfaDeadline?: string | null;
 }
 
 // ============================================

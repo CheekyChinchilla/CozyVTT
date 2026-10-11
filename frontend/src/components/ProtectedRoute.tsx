@@ -4,7 +4,7 @@
 // Supports role-based access control (RBAC)
 // ============================================
 
-import { Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { PlatformRole } from '@/types/user.types';
 import Button from '@/components/ui/Button';
@@ -88,5 +88,27 @@ export default function ProtectedRoute({
   }
 
   // User is authenticated and has required role
-  return <>{children}</>;
+  return (
+    <>
+      {user.adminMfaDeadline && <AdminMfaBanner deadline={user.adminMfaDeadline} />}
+      {children}
+    </>
+  );
+}
+
+/**
+ * Administrator accounts must use two-factor authentication. Until the
+ * deadline the server gives, every signed-in page carries this; after it the
+ * server refuses everything but enrolment and the API client sends the
+ * administrator to the setup page.
+ */
+function AdminMfaBanner({ deadline }: { deadline: string }) {
+  const when = new Date(deadline);
+  const date = Number.isNaN(when.getTime()) ? deadline : when.toLocaleDateString();
+  return (
+    <div role="status" className="bg-warning/15 border-b border-warning/40 text-warning-ink text-sm px-4 py-2 text-center">
+      Administrator accounts must use two-factor authentication. Yours has none; set it up by {date} or you will be asked to before you can continue.{' '}
+      <Link to="/auth/mfa-setup" className="font-semibold underline">Set it up now</Link>
+    </div>
+  );
 }

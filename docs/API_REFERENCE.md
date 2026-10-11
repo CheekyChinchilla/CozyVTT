@@ -36,7 +36,7 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 - **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
 - **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it
-- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days)
+- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again."; an account keeps at most 20 live sessions, the oldest ending at the next sign-in
 
 ### Error Responses for Unauthenticated Requests
 
@@ -1263,7 +1263,8 @@ Update a user. Anyone may change their own `displayName`, `email`, `avatarUrl`
 and `bio`; an admin may change anyone's, and only an admin may set
 `platformRole`, `globalAssetManager` and `templateEditor` (403 otherwise).
 Changing `platformRole` signs the user out everywhere, because the role is
-carried in the session. Setting it to `USER` for the instance's only admin is
+carried in the session; it is written to the admins' activity log, and a user
+made an admin has 7 days to set up two-factor authentication. Setting it to `USER` for the instance's only admin is
 refused with `409`. There is no approval field to set here.
 
 `displayName` is trimmed and must then be 1 to 50 characters of text; anything
@@ -1442,16 +1443,20 @@ Sizes are in bytes. `maxUploadBytes` is the largest configured limit — the cap
 
 ---
 
-## Setup Endpoint
+## Setup Endpoints
 
 ### `GET /api/setup/status`
 
-Check whether the setup wizard has been completed.
+Check whether the setup wizard has been completed. Public.
 
 **Response:**
 ```json
-{ "setupComplete": false }
+{ "setupCompleted": false, "hasUsers": false, "needsSetup": true }
 ```
+
+### `POST /api/setup/init`
+
+Run the wizard: create the first administrator, apply the instance settings and mark setup complete, in one step, then sign the administrator in. Public, but it needs the setup token the backend printed in its log at start (or `SETUP_TOKEN`), as `setupToken` in the body; without it, or with the wrong one, the answer is `403 Forbidden` before the rest of the body is read. Once setup is complete, a call with the right token answers `400 Setup Already Completed`; without a token it still answers `403` first. The full request and every answer are in the OpenAPI document.
 
 ---
 
@@ -1517,6 +1522,9 @@ when it sees it.
 | Endpoint Group | Limit | Window | Counts |
 |----------------|-------|--------|--------|
 | Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
+| Login, per account (from every address) | 10 wrong passwords | 1 hour | Wrong passwords only; each lock is noted in the admins' activity log |
+| Two-factor code at sign-in | 5 wrong codes per address, and 5 per account | 15 minutes | Wrong codes and backup codes only |
+| Change password, delete account, change own email (per account) | 10 wrong passwords | 15 minutes | Wrong current passwords only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
@@ -1531,9 +1539,14 @@ The **Counts** column matters. Where only wrong answers count, signing in
 correctly never uses up the allowance, and neither does being refused: a
 household sharing one address could otherwise lock itself out by logging in
 normally. Correct passwords arriving together from one address all pass this
-limit. That covers the password step of a sign-in only: the two-factor code step
-(`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 failed codes per 15
-minutes per address, and 5 per 15 minutes per account from any address. Where every request counts, the success
+limit. Wrong passwords are also counted per account: 10 in an hour for one email,
+from every address together, then that email is refused with 429 for an hour and
+the admins' activity log gets a line; an email with no account is counted and
+answered the same, and a new password (a reset link, an administrator's temporary
+password or a password change) clears the account's count at once. That covers the password step of a sign-in only: the two-factor code step
+(`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 wrong codes per 15
+minutes per address, and 5 per 15 minutes per account from any address, and it
+too counts only wrong codes. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 

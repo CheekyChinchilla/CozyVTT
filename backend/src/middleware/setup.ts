@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { isSetupCompleted } from '../services/systemSettings';
+import { setupState } from '../services/systemSettings';
 import logger from '../utils/logger';
 
 /**
@@ -29,9 +29,11 @@ export async function requireSetupComplete(
   }
 
   try {
-    const setupComplete = await isSetupCompleted();
+    // setupState also finishes a setup an older version left with its
+    // administrator created but unmarked, so that administrator can sign in.
+    const { setupCompleted } = await setupState();
 
-    if (!setupComplete) {
+    if (!setupCompleted) {
       return res.status(403).json({
         error: 'Setup Required',
         message: 'System setup must be completed before accessing this resource',

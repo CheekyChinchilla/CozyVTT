@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
@@ -7,7 +8,7 @@ import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
@@ -15,6 +16,8 @@ import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
+import { writeSystemLog } from '../services/systemLog';
+import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
 /**
  * User Management Routes
@@ -96,7 +99,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
  */
-router.put('/:id', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -183,11 +186,10 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
               message: 'Enter your current password to change your email address',
             });
           }
-          // TODO(accounts): a wrong password here counts only against the
-          // general API limit, so a stolen session can guess the password
-          // through this check. Limit failed checks as credentialLimiter does;
-          // see the matching TODO on POST /change-password in auth.ts.
+          // A wrong one counts against passwordCheckLimiter, shared with the
+          // password change and account deletion.
           if (!(await verifyPassword(existingUser.passwordHash, currentPassword))) {
+            passwordCheckLimiter.recordFailure(req);
             return res.status(401).json({
               error: 'Authentication Failed',
               message: 'Current password is incorrect',
@@ -318,6 +320,23 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     // and are read from the database where they are used, so changing one
     // already takes effect on the next request and needs no sign-out.
     if (updateData.platformRole !== undefined && updateData.platformRole !== existingUser.platformRole) {
+      // A role change goes to the admins' activity log. A promotion's line
+      // also starts the account's 7 days to set up MFA (services/adminMfaPolicy).
+      if (updateData.platformRole === 'ADMIN') {
+        await restartAdminMfaGrace({
+          targetUserId: id,
+          byUserId: requestingUserId!,
+          level: 'WARNING',
+          message: `Made ${updatedUser.email} an administrator`,
+        });
+      } else {
+        await writeSystemLog({
+          level: 'WARNING',
+          message: `Removed the administrator role from ${updatedUser.email}`,
+          userId: requestingUserId,
+          context: { targetUserId: id },
+        });
+      }
       await destroyUserLoginSessions(id);
       await endLiveSockets(id, 'Your platform role changed. Sign in again.');
     }
@@ -492,9 +511,8 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
     const campaignIds = deletion.campaignIds;
 
-    // The session outlives the row it refers to, and the guards read the
-    // session, so it has to go too.
-    await destroyUserLoginSessions(id);
+    // The deletion ended the account's sign-ins in its own transaction
+    // (services/accountDeletion); the live connections end here.
     await endLiveSockets(id, 'Your account was deleted.');
     announceRosterChange(id, campaignIds, 'member.left');
     await removePersonalFiles(deletion.personal);
@@ -521,6 +539,16 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
 router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // Changing one's own password asks for the current one (POST
+    // /api/auth/change-password); a stolen session must not read a new
+    // temporary password for its own account here instead.
+    if (id === req.session.userId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.',
+      });
+    }
 
     // Check if user exists
     const user = await prisma.user.findUnique({
@@ -552,11 +580,22 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
     // A reset link issued before this would replace the temporary password.
     await voidOutstandingResetLinks(id);
 
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with the temporary password.
+    accountLoginLimiter.forget(accountLoginKey(user.email));
+
     // End any sessions the user already has open — otherwise they keep full
     // access on the old session and the forced-change gate would only take
     // effect at their next login
     await destroyUserLoginSessions(id);
     await endLiveSockets(id, 'An administrator reset your password. Sign in again.');
+
+    await writeSystemLog({
+      level: 'WARNING',
+      message: `Reset the password of ${user.email} to a temporary one`,
+      userId: req.session.userId,
+      context: { targetUserId: id },
+    });
 
     return res.status(200).json({
       message: 'Password reset successfully',
@@ -599,14 +638,8 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     // Invalidate any existing unused tokens for this user
     await voidOutstandingResetLinks(id);
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: id,
-        token,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-      },
-    });
+    // Stored as its hash; the token itself goes only into the email.
+    const token = await issueResetToken(id, RESET_LINK_TTL_MS);
 
     await sendPasswordResetEmail(user.email, token, user.displayName);
 

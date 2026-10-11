@@ -24,6 +24,7 @@ import { prisma } from '../config/database';
 import { isAssetInUse } from './assetUsage';
 import { deleteFile } from '../utils/fileUtils';
 import logger from '../utils/logger';
+import { destroyUserLoginSessions } from './sessionStore';
 
 /**
  * A campaign that stops a deletion, with the other members its DM seat could
@@ -104,6 +105,10 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       .map((m) => m.campaignId);
     // Their personal uploads, read while the rows still name them.
     const personal = await tx.asset.findMany({ where: { uploadedById: userId, scope: 'USER' }, select: { id: true, type: true } });
+    // Their sign-ins end with the row, in the same transaction: the guards
+    // read the session, so a deleted admin's other device would otherwise
+    // keep the role until the session expired.
+    await destroyUserLoginSessions(userId, undefined, tx);
     await tx.user.delete({ where: { id: userId } });
     return { deleted: true, campaignIds, personal };
   });

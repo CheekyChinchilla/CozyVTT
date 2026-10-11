@@ -26,9 +26,12 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
+import { writeSystemLog } from '../services/systemLog';
+import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
+import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
@@ -88,18 +91,7 @@ export async function writeAdminLog(
   level: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO',
   context?: Prisma.InputJsonObject
 ): Promise<void> {
-  try {
-    await prisma.systemLog.create({
-      data: {
-        level,
-        message,
-        userId: adminUserId,
-        context: context ?? Prisma.JsonNull,
-      },
-    });
-  } catch (e) {
-    logger.error('Failed to write system log', { err: e });
-  }
+  await writeSystemLog({ level, message, userId: adminUserId, context });
 }
 
 /**
@@ -386,14 +378,8 @@ router.post('/users/invite', async (req, res) => {
       },
     });
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-      },
-    });
+    // Stored as its hash; the token itself goes only into the email.
+    const token = await issueResetToken(user.id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     const inviter = await prisma.user.findUnique({
       where: { id: req.session.userId! },
@@ -461,14 +447,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
     // Invalidate outstanding links so only the newest one works
     await voidOutstandingResetLinks(id);
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: id,
-        token,
-        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-      },
-    });
+    const token = await issueResetToken(id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     const inviter = await prisma.user.findUnique({
       where: { id: req.session.userId! },
@@ -547,6 +526,15 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Turning off one's own MFA asks for the current password and a code
+    // (POST /api/auth/mfa/disable); a session alone must not get round that.
+    if (id === req.session.userId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You cannot reset your own MFA from here. Use the two-factor settings on your profile, which ask for your password.',
+      });
+    }
+
     const target = await prisma.user.findUnique({
       where: { id },
       select: { id: true, email: true, mfaEnabled: true },
@@ -568,14 +556,16 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
       },
     });
 
-    await writeAdminLog(
-      req.session.userId!,
-      `Reset MFA for user ${target.email}`,
-      'WARNING',
-      { targetUserId: id }
-    );
+    // The activity-log line for the reset; its time also starts the account's
+    // 7 days to set MFA up again, should it be an administrator.
+    await restartAdminMfaGrace({
+      targetUserId: id,
+      byUserId: req.session.userId!,
+      level: 'WARNING',
+      message: `Reset MFA for user ${target.email}`,
+    });
 
-    return res.json({ message: 'MFA has been reset. The user must re-enroll on next login.' });
+    return res.json({ message: 'MFA has been reset. The user signs in with their password alone until they turn it on again; an administrator is asked to set it up again within 7 days.' });
   } catch (error) {
     logger.error('Error resetting MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to reset MFA' });
@@ -591,15 +581,18 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
 // ============================================
 router.get('/activity', async (_req, res) => {
   try {
-    // Query the connect-pg-simple session table for active sessions.
-    // Only userId and expiry are extracted — no tokens or sensitive session data.
+    // Who is signed in, from the connect-pg-simple session table: one row per
+    // user with their latest expiry, worked out by the database. Loading every
+    // live session into Node and searching them per user grew with the table,
+    // which a sign-in script could make very large.
     const rawSessions = await prisma.$queryRaw<{ userId: string; expire: Date }[]>`
-      SELECT sess->>'userId' AS "userId", expire
+      SELECT DISTINCT ON (sess->>'userId') sess->>'userId' AS "userId", expire
       FROM session
       WHERE expire > NOW() AND sess->>'userId' IS NOT NULL
+      ORDER BY sess->>'userId', expire DESC
     `;
-
-    const onlineUserIds = [...new Set(rawSessions.map((s) => s.userId))];
+    const latestExpiry = new Map(rawSessions.map((s) => [s.userId, s.expire]));
+    const onlineUserIds = [...latestExpiry.keys()];
 
     const [recentUsers, recentSessions, onlineUsersData, recentLogs] = await Promise.all([
       prisma.user.findMany({
@@ -652,7 +645,7 @@ router.get('/activity', async (_req, res) => {
 
     const onlineUsers = onlineUsersData.map((u) => ({
       ...u,
-      sessionExpiry: rawSessions.find((s) => s.userId === u.id)?.expire ?? null,
+      sessionExpiry: latestExpiry.get(u.id) ?? null,
     }));
 
     return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs });
@@ -670,8 +663,8 @@ router.get('/activity', async (_req, res) => {
 router.get('/config', (_req, res) => {
   return res.json({
     uploadLimits: { ...UPLOAD_LIMITS },
-    sessionTimeoutMs: parseInt(process.env.SESSION_MAX_AGE || '3600000'),
-    rememberMeTimeoutMs: parseInt(process.env.REMEMBER_ME_MAX_AGE || '2592000000'),
+    sessionTimeoutMs: sessionMaxAge,
+    rememberMeTimeoutMs: rememberMeMaxAge,
     smtp: {
       configured: isSmtpConfigured(),
       host: process.env.SMTP_HOST || null,

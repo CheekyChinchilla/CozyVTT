@@ -62,9 +62,11 @@ Once setup is complete, you'll be logged in as the administrator and taken to yo
 
 Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password.
 
+**Too many wrong passwords locks sign-in for a while.** Five wrong passwords in fifteen minutes from your device, or ten in an hour for your account from anywhere, and the sign-in page says "Too many failed sign-ins for this account, please try again later" (or "Too many authentication attempts"). Wait, or set a new password: a new password opens the account at once, whether you set it with **Forgot password** (if your instance sends email) or an administrator gives you a temporary one. A correct password never counts, so signing in normally cannot lock you out. The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three ask you to wait.
+
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once.
+**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
 
 **First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 
@@ -675,7 +677,11 @@ For extra account security, enable **MFA** in the Security section. You'll be as
 
 **Each code works once.** If you sign in on two devices within the same half-minute, the second one will refuse the code you just used; wait for your app to show the next one. After five wrong codes in 15 minutes, the code step is locked for your account for a while, from every device.
 
+**You have five minutes to enter the code** after your password is accepted. After that the page says "Your sign-in timed out at the code step. Sign in again with your password.", and you start again from the sign-in page. Changing or resetting your password also ends any sign-in that was waiting at the code step, on every device.
+
 You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
+
+**Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule: the upgrade that introduced it, your account's creation or the moment you were made an administrator, whichever is latest) and links to the setup page. After that date the app takes you to the setup page and nothing else works until MFA is on. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
 
 ### Themes & Fonts
 

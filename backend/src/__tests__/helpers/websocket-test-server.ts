@@ -17,7 +17,7 @@
 
 import express from 'express';
 import type { Request, Response } from 'express';
-import session from 'express-session';
+import session, { type SessionData } from 'express-session';
 import { createServer, Server as HTTPServer, IncomingMessage, ServerResponse } from 'http';
 import { Server as IOServer } from 'socket.io';
 import { AddressInfo } from 'net';
@@ -33,6 +33,11 @@ export interface WsTestServer {
   url: string;
   /** Create a session for the given user id and return its cookie header value. */
   loginAs(userId: string): Promise<string>;
+  /**
+   * Create a session holding exactly these fields and return its cookie, for
+   * the states a sign-in passes through (MFA pending, a password change due).
+   */
+  sessionWith(fields: Partial<SessionData>): Promise<string>;
   /** Connect a socket.io client carrying the given session cookie. Resolves on the server's 'connected' ack. */
   connectClient(cookie: string): Promise<ClientSocket>;
   /** End the sign-in the given cookie belongs to, in the server's session store. */
@@ -57,6 +62,10 @@ export async function createWsTestServer(): Promise<WsTestServer> {
   // Test-only session bootstrap — see file header.
   app.post('/test/login-as', (req, res) => {
     req.session.userId = req.body.userId;
+    res.json({ ok: true });
+  });
+  app.post('/test/session-with', (req, res) => {
+    Object.assign(req.session, req.body as Partial<SessionData>);
     res.json({ ok: true });
   });
   // Ends the sign-in the cookie names, as signing out or expiring does.
@@ -90,6 +99,15 @@ export async function createWsTestServer(): Promise<WsTestServer> {
     const setCookie = res.headers['set-cookie'];
     if (!setCookie || setCookie.length === 0) {
       throw new Error('login-as did not set a session cookie');
+    }
+    return setCookie[0].split(';')[0];
+  }
+
+  async function sessionWith(fields: Partial<SessionData>): Promise<string> {
+    const res = await request(app).post('/test/session-with').send(fields);
+    const setCookie = res.headers['set-cookie'];
+    if (!setCookie || setCookie.length === 0) {
+      throw new Error('session-with did not set a session cookie');
     }
     return setCookie[0].split(';')[0];
   }
@@ -145,7 +163,7 @@ export async function createWsTestServer(): Promise<WsTestServer> {
     await new Promise<void>((resolve) => httpServer.close(() => resolve()));
   }
 
-  return { httpServer, io, url, loginAs, logout, connectClient, connectAndAuth, close };
+  return { httpServer, io, url, loginAs, sessionWith, logout, connectClient, connectAndAuth, close };
 }
 
 /** Wait for a single occurrence of an event, with timeout. */

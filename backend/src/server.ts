@@ -12,6 +12,7 @@ import { sessionConfig, sessionPool } from './config/session';
 import { enforceDatabaseCredential } from './config/databaseGuard';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
+import { requireAdminMfa } from './middleware/adminMfa';
 import { bodyParsers } from './middleware/bodyParsers';
 import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
@@ -38,6 +39,9 @@ import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
 import { applyRequestTimeouts } from './config/httpServer';
 import { createShutdown, onShutdownSignals } from './utils/shutdown';
+import { positiveIntegerFromEnv } from './config/env';
+import { setupState } from './services/systemSettings';
+import { setupToken } from './services/setupToken';
 
 // A production instance on the placeholder database password stops here.
 enforceDatabaseCredential();
@@ -100,7 +104,7 @@ app.use(originCheck);
 // Stricter per-endpoint limiters (auth, file uploads) are applied inside each router
 const generalApiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '300'),
+  max: positiveIntegerFromEnv('RATE_LIMIT_MAX_REQUESTS', 300),
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too Many Requests', message: 'Rate limit exceeded. Please slow down.' },
@@ -158,6 +162,10 @@ app.use('/api', generalApiLimiter);
 // Accounts flagged `mustChangePassword` (admin-created, or admin-reset) can do
 // nothing but change it until they do — see middleware/passwordChange.ts
 app.use('/api', requirePasswordChanged);
+
+// Administrators must use two-factor authentication: past the deadline an
+// admin without it can do nothing but set it up (middleware/adminMfa.ts).
+app.use('/api', requireAdminMfa);
 
 // Setup wizard (accessible before setup is complete)
 app.use('/api/setup', setupRoutes);
@@ -249,6 +257,21 @@ httpServer.listen(PORT, () => {
   for (const warning of getProxyLimitWarnings()) {
     logger.warn(warning);
   }
+
+  // Until setup has run, the wizard asks for a token only the owner can
+  // read, so a stranger who finds the instance first cannot become its
+  // administrator. Printed here, where the owner reads the log, unless they
+  // set one themselves in .env.
+  setupState()
+    .then(({ setupCompleted }) => {
+      if (setupCompleted) return;
+      if (process.env.SETUP_TOKEN?.trim()) {
+        logger.warn('Setup is not complete. The setup wizard asks for the setup token: the SETUP_TOKEN value in .env.');
+      } else {
+        logger.warn(`Setup is not complete. The setup wizard asks for this setup token: ${setupToken()}`);
+      }
+    })
+    .catch((err: unknown) => logger.error('Could not read the setup state at start', { err }));
 });
 
 export default app;

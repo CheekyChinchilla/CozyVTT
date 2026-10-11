@@ -50,14 +50,14 @@ cd CozyVTT
 cp .env.example .env
 ```
 
-Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while either `DATABASE_PASSWORD` or `SESSION_SECRET` is still the placeholder from `.env.example`):
+Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, and while `SESSION_SECRET` is a placeholder, is the example value shown here, or is shorter than 32 characters):
 
 ```env
 # Database
 DATABASE_PASSWORD=choose-a-strong-password-here
 
-# Security — generate with: openssl rand -hex 32
-SESSION_SECRET=your-64-char-random-string
+# Security — paste the output of: openssl rand -hex 32
+SESSION_SECRET=<paste the 64 characters that command prints>
 
 # Your public URL (used for CORS and email links)
 CORS_ORIGIN=https://your-domain.com
@@ -103,7 +103,25 @@ Database migrations run automatically when the backend starts.
 
 ### 4. Complete the setup wizard
 
-Navigate to `http://your-server` (or `http://localhost` if testing locally) and complete the setup wizard to create your admin account.
+Until the wizard has run, whoever submits it becomes the instance's administrator. So the wizard asks for a **setup token** that only you can read: the backend prints one in its log when it starts and setup is not yet complete.
+
+1. Get the token from the backend log:
+
+   ```bash
+   docker compose logs backend | grep "setup token"
+   ```
+
+   You should see one line containing a 32-character code, such as (in production the line is JSON, with the timestamp after the message)
+   `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
+   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line.
+
+2. Navigate to `http://your-server` (or `http://localhost` if testing locally). The wizard opens by itself on a fresh install.
+
+3. On the **Create Admin Account** step, paste the token into **Setup token**, fill in your administrator account, and finish the wizard.
+
+If you would rather choose the token yourself, set `SETUP_TOKEN=your-value` in `.env` before starting the stack; the log then says to use that value instead of printing one. The token has no use once setup is complete.
+
+> **Finish setup before you share the address.** A fresh instance reachable from the internet is found by scanners within minutes. The token stops a stranger from taking the administrator account, but the sooner the wizard is done the better.
 
 ### 5. Verify the stack
 
@@ -311,7 +329,9 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment.
 
-The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. A right code does not count against it, but this limit has no allowance for people signing in together: if more than five people behind one address enter their codes at the very same moment, the ones past five are refused and have to enter their code again.
+Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with **Forgot password**, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in; the counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
+
+The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. Only a wrong code counts, so people signing in together behind one address are all let through, exactly as with passwords.
 
 Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's.
 
@@ -697,6 +717,10 @@ sudo systemctl reload nginx
 openssl rand -hex 32
 ```
 
+### Setup token (optional)
+
+`SETUP_TOKEN` is the token the setup wizard asks for on a fresh install. It is optional: left unset, the backend makes one at start and prints it in its log (see [Complete the setup wizard](#4-complete-the-setup-wizard)). Set it only if you want to choose the value yourself, for example in an automated install. Once setup has run it is never read again, so you can remove it from `.env`.
+
 ### SMTP Setup (Optional)
 
 Email is required for password resets and invitations. Configure in `.env`:
@@ -1029,7 +1053,7 @@ you changed them):
   | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz)
 ```
 
-The `umask 077` in brackets makes the file readable by you alone, as the script's are: it holds every password hash and MFA secret on the instance.
+The `umask 077` in brackets makes the file readable by you alone, as the script's are: it holds every password hash and MFA secret on the instance. (Password reset and invitation links are stored hashed, so a backup holds no working link.)
 
 `--exclude-table-data=public.session` leaves the login sessions out, as the
 dashboard and the script do, so restoring the file cannot sign back in someone
@@ -1171,6 +1195,10 @@ Look at the last line it prints:
 | A web page, then `200 text/html` | `/api` is being answered by the web pages instead of the backend | Add the `/api/...` → backend route to your proxy |
 | `502 …`, or `000` (no connection at all) | Nothing is listening where your proxy points | Open the backend port — see [Option A](#option-a--remove-the-nginx-service-most-common) step 2 |
 
+### The wizard says "Setup token is missing or wrong"
+
+The token the wizard asks for is printed in the backend log each time the backend starts while setup is not complete. Run `docker compose logs backend | grep "setup token"` and copy the code from the **last** such line: an earlier start printed a different one. If `.env` sets `SETUP_TOKEN`, enter exactly that value instead.
+
 ### Setup fails with "An error occurred during setup" (502)
 
 Same root cause as above: the browser reached the wizard (served by the frontend), but the request that creates your admin account goes to the backend, which your proxy can't reach. Run the same check.
@@ -1281,20 +1309,21 @@ sudo -u postgres psql -d cozyvtt -c "ALTER SCHEMA public OWNER TO cozyvtt;"
 
 Before going live:
 
-- [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`
+- [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`. A production instance refuses to start on a placeholder or on anything shorter than 32 characters
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
+- [ ] **Setup finished** — The setup wizard has been completed, so `curl -s https://your-domain.com/api/setup/status` prints `"setupCompleted":true`. Until then the wizard, protected by the setup token, is the only thing the instance offers
 - [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
-- [ ] **Admin MFA** — Admin account has MFA enabled
+- [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
 - [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS block — see the commented line in `nginx/nginx.conf`
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
-- [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limit is 5 failed sign-ins per 15 minutes per visitor address, but a host-level ban catches scanners earlier
+- [ ] **Brute-force protection** — `fail2ban` (or equivalent) is configured to block IPs hammering `/api/auth/login` and SSH; CozyVTT's own limits are 5 failed sign-ins per 15 minutes per visitor address and 10 per hour per account from everywhere (each lock is noted in **Admin → Activity**), but a host-level ban catches scanners earlier
 - [ ] **Visitor addresses** — CozyVTT sees each visitor's own address, not your tunnel's or proxy's. Check it as described in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)
 - [ ] **Stable update plan** — You watch the [CozyVTT repo](https://github.com/CheekyChinchilla/CozyVTT) for releases and apply security patches promptly (no auto-update is bundled — that's your choice)
 - [ ] **Vulnerability reporting path** — You've read [SECURITY.md](../SECURITY.md) and know how to report issues responsibly

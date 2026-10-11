@@ -1333,7 +1333,7 @@ export default function AdminPage() {
                                           }
                                         }}
                                         disabled={isSelf}
-                                        title={isSelf ? 'Cannot reset your own MFA here' : 'Reset MFA — forces re-enrollment'}
+                                        title={isSelf ? 'Cannot reset your own MFA here' : 'Reset MFA'}
                                         className={`text-xs py-1 px-2 flex items-center gap-1 rounded border transition-colors ${
                                           isSelf
                                             ? 'opacity-40 cursor-not-allowed border-warm-gray/20 text-warm-gray'
@@ -1399,7 +1399,7 @@ export default function AdminPage() {
                                         Reset MFA for <strong>{u.displayName}</strong>?
                                       </p>
                                       <p className="text-xs text-warning-ink mb-3">
-                                        This clears their authenticator app enrollment. They will need to re-enroll on next login.
+                                        This clears their authenticator app enrollment. They sign in with their password alone until they set it up again; an administrator is asked to set it up within 7 days.
                                       </p>
                                       {resetMfaError && (
                                         <p className="text-xs text-danger-ink mb-2">{resetMfaError}</p>
@@ -2858,7 +2858,7 @@ export default function AdminPage() {
         message={
           roleChangeTarget?.platformRole === PlatformRole.ADMIN
             ? `Remove ${roleChangeTarget.displayName}'s administrator rights? They become a regular user and can no longer open the Admin Panel.`
-            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups.`
+            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups. They will have 7 days to set up two-factor authentication.`
         }
         confirmLabel={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove admin rights' : 'Make administrator'}
         variant="warning"

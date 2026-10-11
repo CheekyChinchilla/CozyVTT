@@ -20,6 +20,9 @@ jest.mock('express-rate-limit', () => {
 
 jest.mock('../../services/sessionStore', () => ({
   destroyUserLoginSessions: jest.fn(async () => 1),
+  // Sign-in bookkeeping, not under test here; the real one is tested in
+  // services/__tests__/sessionStoreCap.test.ts.
+  capLoginSessions: jest.fn(async () => 0),
 }));
 
 import request from 'supertest';

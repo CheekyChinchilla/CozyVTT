@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import authService from '@/services/auth.service';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
 
 export default function ForgotPasswordPage() {
   const { authenticated } = useAuth();
@@ -20,6 +20,8 @@ export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
   const [emailError, setEmailError] = useState('');
   const [serverMessage, setServerMessage] = useState('');
+  /** A refusal for too many requests: shown on the form, since no email was sent. */
+  const [refusal, setRefusal] = useState('');
 
   if (authenticated) {
     return <Navigate to="/dashboard" replace />;
@@ -43,10 +45,18 @@ export default function ForgotPasswordPage() {
     if (!validate()) return;
 
     setLoading(true);
+    setRefusal('');
     try {
       await authService.forgotPassword(email.trim().toLowerCase());
       setSubmitted(true);
     } catch (err) {
+      // Too many requests from this address: nothing was sent, so say so and
+      // keep the form. The limit is per address, not per account, so this
+      // reveals nothing about whether the address has one.
+      if (apiErrorStatus(err) === 429) {
+        setRefusal(apiErrorMessage(err) || 'Too many requests. Please try again later.');
+        return;
+      }
       // The backend always returns 200 for this endpoint to prevent
       // email enumeration — but surface any unexpected errors.
       const msg = apiErrorMessage(err);
@@ -95,6 +105,12 @@ export default function ForgotPasswordPage() {
                 Enter your email address and we'll send you a link to reset your password.
               </p>
             </div>
+
+            {refusal && (
+              <div role="alert" className="bg-danger/10 border border-danger/30 rounded-lg p-3">
+                <p className="text-sm text-danger-ink">{refusal}</p>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               <div>

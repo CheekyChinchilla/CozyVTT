@@ -63,6 +63,11 @@ export default function SetupWizardPage() {
     enableRegistration: false,
   });
 
+  // The one-time token the backend printed in its log at start (or the
+  // SETUP_TOKEN value in .env). The server refuses the wizard without it, so
+  // a stranger who reaches a fresh instance first cannot become its admin.
+  const [setupToken, setSetupToken] = useState('');
+
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -102,6 +107,11 @@ export default function SetupWizardPage() {
 
   const validateStep2 = (): boolean => {
     const errors: Record<string, string> = {};
+
+    // Setup token
+    if (!setupToken.trim()) {
+      errors.setupToken = 'Setup token is required';
+    }
 
     // Display name
     if (!adminData.displayName) {
@@ -194,6 +204,7 @@ export default function SetupWizardPage() {
       // collected and shown back on the review screen but never sent, so every
       // instance came up with the defaults no matter what was chosen.
       const { user } = await setupService.initializeSetup({
+        setupToken: setupToken.trim(),
         email: adminData.email,
         password: adminData.password,
         displayName: adminData.displayName,
@@ -239,6 +250,8 @@ export default function SetupWizardPage() {
           <Step2AdminAccount
             data={adminData}
             setData={setAdminData}
+            setupToken={setupToken}
+            setSetupToken={setSetupToken}
             fieldErrors={fieldErrors}
             passwordStrength={passwordStrength}
           />
@@ -451,11 +464,13 @@ function Step1Welcome() {
 interface Step2Props {
   data: AdminAccountData;
   setData: (data: AdminAccountData) => void;
+  setupToken: string;
+  setSetupToken: (token: string) => void;
   fieldErrors: Record<string, string>;
   passwordStrength: { score: number; label: string; color: string } | null;
 }
 
-function Step2AdminAccount({ data, setData, fieldErrors, passwordStrength }: Step2Props) {
+function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErrors, passwordStrength }: Step2Props) {
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -468,6 +483,33 @@ function Step2AdminAccount({ data, setData, fieldErrors, passwordStrength }: Ste
       </div>
 
       <div className="space-y-4">
+        {/* Setup token */}
+        <div className="glass-panel p-4 bg-warm-amber/5">
+          <label htmlFor="setupToken" className="block text-sm font-medium text-brand-ink mb-1">
+            Setup token
+          </label>
+          <input
+            id="setupToken"
+            type="text"
+            value={setupToken}
+            onChange={(e) => setSetupToken(e.target.value)}
+            className={`input-cozy w-full font-mono ${
+              fieldErrors.setupToken ? 'border-spirit-red' : ''
+            }`}
+            placeholder="Paste the token from the backend log"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <p className="mt-1 text-xs text-stone-gray">
+            Proves you run this server. Find it in the backend log, in a line that starts
+            &quot;Setup is not complete&quot;: run <code className="font-mono">docker compose logs backend</code> on
+            the server. If you set SETUP_TOKEN in your .env file, enter that value instead.
+          </p>
+          {fieldErrors.setupToken && (
+            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.setupToken}</p>
+          )}
+        </div>
+
         {/* Display Name */}
         <div>
           <label htmlFor="displayName" className="block text-sm font-medium text-brand-ink mb-1">
@@ -756,6 +798,10 @@ function Step4Review({ adminData, systemConfig }: Step4Props) {
             <div className="flex justify-between">
               <dt className="text-warm-gray">Password:</dt>
               <dd className="text-stone-gray">••••••••••••</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-warm-gray">Setup token:</dt>
+              <dd className="text-stone-gray">Entered</dd>
             </div>
           </dl>
         </div>
