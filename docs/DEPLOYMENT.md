@@ -616,6 +616,8 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
 
    The last line is what sends each request to the right container. It reads CozyVTT's own list of rules, so an upgrade that changes them reaches your HTTPS server as well.
 
+   The first server sends to HTTPS only requests for your domain: a plain-HTTP request by your server's IP address, or under another name that leads to it, is still answered by CozyVTT's own server without HTTPS. To send those to your domain over HTTPS too, write `listen 80 default_server;` in place of `listen 80;`, and `return 301 https://your-domain.com$request_uri;` in place of the `return` line.
+
 3. Restart Nginx and check it started:
    ```bash
    docker compose restart nginx
