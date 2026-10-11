@@ -14,6 +14,12 @@
  * published on 127.0.0.1 only, where the guide said they were (Docker binds a
  * port with no address to every interface, past the firewall), and it runs
  * in development mode whatever NODE_ENV the copied .env.example sets.
+ *
+ * The images. nginx:alpine named whatever nginx was newest on the day of the
+ * pull, so two installs of one CozyVTT version could run different nginx
+ * releases under the same configuration. Both nginx images are pinned to one
+ * stable line, the same in each. `npm ci --only=production` is a deprecated
+ * spelling of `--omit=dev`.
  */
 
 import fs from 'fs';
@@ -70,5 +76,31 @@ describe('the development stack', () => {
     const frontend = service('docker-compose.dev.yml', 'frontend');
     expect(frontend).not.toMatch(/VITE_API_URL|VITE_SOCKET_URL/);
     expect(frontend).toMatch(/\n {6}VITE_PROXY_TARGET: http:\/\/backend:4000\n/);
+  });
+});
+
+/** Every image a file names, in FROM lines or image: keys. */
+function images(rel: string): string[] {
+  return [...read(rel).matchAll(/^(?:FROM\s+|\s+image:\s+)(\S+)/gm)].map((m) => m[1]);
+}
+
+describe('the images', () => {
+  it('pin nginx to one stable line, the same for the proxy and the frontend', () => {
+    const nginx = [...images('docker-compose.yml'), ...images('frontend/Dockerfile.prod')].filter((i) => /^nginx[:@]/.test(i));
+    expect(nginx).toHaveLength(2);
+    for (const image of nginx) expect(image).toMatch(/^nginx:1\.\d*[02468]-alpine$/);
+    expect(new Set(nginx).size).toBe(1);
+  });
+
+  it.each(['backend/Dockerfile.prod', 'backend/Dockerfile', 'frontend/Dockerfile.prod', 'frontend/Dockerfile'])(
+    '%s installs without the deprecated --only=production',
+    (file) => {
+      expect(read(file)).not.toContain('--only=production');
+    }
+  );
+
+  it('leave the development tools out of the backend image that runs', () => {
+    const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
+    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev$/m);
   });
 });

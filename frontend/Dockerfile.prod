@@ -15,8 +15,9 @@ ARG VITE_SOCKET_URL
 
 RUN npm run build
 
-# Serve via Nginx (lightweight serving of built static files)
-FROM nginx:alpine AS production
+# Serve via Nginx (lightweight serving of built static files). nginx's stable
+# line, the same as the proxy's in docker-compose.yml; move both together.
+FROM nginx:1.30-alpine AS production
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 

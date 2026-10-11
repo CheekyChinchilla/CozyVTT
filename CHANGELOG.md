@@ -52,6 +52,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A player removed from a campaign can still read their notes and saved rolls from it.** Removing a player kept their personal notes and saved rolls, but they could no longer open them, since the campaign page is closed to them. They now appear on that player's dashboard under **Notes From Campaigns You Have Left**, where **Open** shows each note and the saved rolls and **Download** saves them all as one Markdown file. They cannot be changed there, and nobody else can see them. They are back in the campaign if the player is invited again, and deleting the campaign still deletes them. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
+- **The bundled nginx, and the web server inside the frontend image, now use nginx's stable 1.30 releases.** Both used to take whatever nginx release was newest the day your server first downloaded it, so two installs of the same CozyVTT version could run different nginx versions. The next `docker compose up -d --build` downloads the 1.30 image once; there is nothing else to do.
+
 ### Removed
 
 - **The Timezone setting is gone from the setup wizard and from Admin Panel → Settings.** It was stored and nothing ever used it, though the guides said it set the time shown on timestamps; times are shown in each viewer's own time zone, as they always were. A value saved before stays in the database, unused, and nothing else changes.

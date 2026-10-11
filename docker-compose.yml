@@ -163,7 +163,9 @@ services:
           memory: 128M
 
   nginx:
-    image: nginx:alpine
+    # nginx's stable line, the same as the frontend image's (frontend/Dockerfile.prod).
+    # A test keeps the two in step; move both together.
+    image: nginx:1.30-alpine
     container_name: cozyvtt-nginx
     logging: *logging
     restart: unless-stopped
