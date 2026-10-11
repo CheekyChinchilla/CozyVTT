@@ -540,9 +540,12 @@ class ApiClient {
   }
 
   /**
-   * Search the people who can be invited to a campaign by part of their
-   * display name. The server answers nobody for fewer than two characters,
-   * and at most 20 matches, with `hasMore` when there were more.
+   * Search the people who can be invited to a campaign by display name. A
+   * search of INVITE_SEARCH_MIN_LENGTH (in constants/inviteSearchLimits.ts)
+   * or more characters finds names that contain it, and a shorter one finds
+   * only names that are exactly it. The server answers nobody for an empty
+   * search, and at most INVITE_SEARCH_MAX_RESULTS matches, with `hasMore`
+   * when there were more.
    */
   async listInvitableUsers(campaignId: string, search: string): Promise<InvitableUserSearch> {
     const response = await this.client.get<InvitableUserSearch>(`/api/campaigns/${campaignId}/invitable-users`, {

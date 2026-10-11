@@ -451,7 +451,11 @@ Two of those deserve a note:
   the two, when the character sheet limits file
   (`backend/src/validators/game-systems/sheetLimits.ts`, copied as
   `frontend/src/constants/sheetLimits.ts` for the sheet editors) differs
-  between the two, and when a flood ceiling in the WebSocket guide's table
+  between the two, when the Invite Player search limits file
+  (`backend/src/validators/inviteSearchLimits.ts`, copied as
+  `frontend/src/constants/inviteSearchLimits.ts` for the Invite Player
+  dialog) differs between the two or the dialog writes either number itself,
+  and when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
 - **Every route has a test, or is listed as not having one.**

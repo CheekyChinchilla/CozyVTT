@@ -31,6 +31,7 @@ import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
 import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
+import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validators/inviteSearchLimits';
 import { escapeLikePattern } from '../utils/likePattern';
 import {
   campaignPreviewLimiter,
@@ -674,11 +675,6 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
     });
   }
 });
-
-/** The shortest search that matches part of a name; a shorter one matches only whole names. */
-export const INVITE_SEARCH_MIN_LENGTH = 2;
-/** The most matches the invite picker returns. */
-export const INVITE_SEARCH_MAX_RESULTS = 20;
 
 /**
  * GET /api/campaigns/:campaignId/invitable-users?search=<part of a name>

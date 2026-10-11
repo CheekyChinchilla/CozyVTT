@@ -2,11 +2,11 @@
  * Invite Player Modal
  *
  * Finds the person to invite by searching for their display name. The server
- * answers at most 20 matches: two or more characters find names that contain
- * them, and one character finds only names that are exactly it, so running a
- * campaign is not a way to list everyone on the instance and a one-letter name
- * can still be found. Renders through the shared Modal's portal, so the
- * sidebar does not clip it.
+ * answers at most INVITE_SEARCH_MAX_RESULTS matches: INVITE_SEARCH_MIN_LENGTH
+ * or more characters find names that contain them, and fewer find only names
+ * that are exactly them, so running a campaign is not a way to list everyone
+ * on the instance and a one-letter name can still be found. Renders through
+ * the shared Modal's portal, so the sidebar does not clip it.
  */
 
 import { useState, useEffect } from 'react';
@@ -17,9 +17,8 @@ import { useToast } from '@/contexts/ToastContext';
 import type { InvitableUser } from '@/types';
 import { Button, Modal, Field, Input } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '@/constants/inviteSearchLimits';
 
-/** The shortest search the server matches against part of a name; kept in step with the route. */
-const PART_SEARCH_MIN_LENGTH = 2;
 /** How long typing has to pause before a search goes out. */
 const SEARCH_DELAY_MS = 300;
 
@@ -120,7 +119,7 @@ export default function InvitePlayerModal({
   };
 
   const showNoMatches = !searching && answered === term && users.length === 0;
-  const wholeNameOnly = term.length < PART_SEARCH_MIN_LENGTH;
+  const wholeNameOnly = term.length < INVITE_SEARCH_MIN_LENGTH;
 
   return (
     <Modal
@@ -215,13 +214,13 @@ export default function InvitePlayerModal({
 
         {!searching && hasMore && (
           <p className="text-xs text-warm-gray">
-            Showing the first 20 matches. Type more of the name to narrow it down.
+            Showing the first {INVITE_SEARCH_MAX_RESULTS} matches. Type more of the name to narrow it down.
           </p>
         )}
 
         {showNoMatches && wholeNameOnly && (
           <p className="text-sm text-ink-muted text-center py-2">
-            No one called “{term}” can be invited. Type 2 or more letters to search for part of a name.
+            No one called “{term}” can be invited. Type {INVITE_SEARCH_MIN_LENGTH} or more letters to search for part of a name.
           </p>
         )}
 
