@@ -170,3 +170,39 @@ describe('the Admin Panel status card, in the deployment guide', () => {
     expect(guide).toContain('does not tell you that a proxy in front lets live connections through');
   });
 });
+
+describe('the game systems named in the guides', () => {
+  const constants = read('frontend/src/constants/game-systems.ts');
+  const options = constants.slice(constants.indexOf('export const GAME_SYSTEM_OPTIONS'));
+  /** The systems the creation lists offer: a commented-out entry starts with //, not with value. */
+  const selectable = [...options.slice(0, options.indexOf('];')).matchAll(/^\s*value: GameSystem\.(\w+)/gm)].map((m) => m[1]);
+  const words = ['no', 'one', 'two', 'three', 'four', 'five', 'six'];
+
+  // Shadowrun 6e is in the code but not in the lists a game system is chosen
+  // from. The guides called it shipped, planned and on the roadmap, and the
+  // number of systems counted it.
+  it('are counted in GAME_SYSTEMS.md as the ones that can be chosen', () => {
+    expect(selectable).not.toContain('SHADOWRUN_6E');
+    expect(read('docs/GAME_SYSTEMS.md')).toContain(`CozyVTT currently ships ${words[selectable.length]} systems you can choose`);
+  });
+});
+
+describe('the commands the guides tell a reader to run', () => {
+  const guides = ['README.md', 'frontend/README.md', 'backend/docs/README.md', 'docs/GAME_SYSTEMS.md', 'docs/DEVELOPMENT.md', 'docs/CONTRIBUTING.md'];
+
+  // `npm test` in the frontend is vitest in watch mode, which waits for a key
+  // press and never exits in a terminal; the gates are `npx vitest run`.
+  it('never include npm test unless the line says it is watch mode', () => {
+    const offenders = guides.flatMap((rel) => {
+      let inFence = false;
+      return read(rel)
+        .split('\n')
+        .filter((line) => {
+          if (line.trimStart().startsWith('```')) inFence = !inFence;
+          return inFence && /\bnpm test\b/.test(line) && !/watch/i.test(line);
+        })
+        .map((line) => `${rel}: ${line.trim()}`);
+    });
+    expect(offenders).toEqual([]);
+  });
+});
