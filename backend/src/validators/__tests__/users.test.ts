@@ -5,8 +5,10 @@
  * so a name cannot look blank or pass for someone else's. The joiners and tag
  * characters some text needs are kept where that text uses them: emoji
  * sequences (families, professions, skin tones), the Scotland, Wales and
- * England flags, and Persian, Urdu and Indic names. Anywhere else they are
- * removed too, so they cannot hide inside a Latin name.
+ * England flags, and Persian, Urdu and Indic names. A joiner is kept between
+ * any two characters that are neither ASCII nor space, which takes in two
+ * accented letters, and removed anywhere else, so it cannot hide inside a
+ * name typed in ASCII; a tag is removed anywhere outside a flag.
  */
 
 import { cleanDisplayName } from '../users';
@@ -47,6 +49,11 @@ describe('cleanDisplayName keeps what real names and emoji need', () => {
 
   it('keeps the joiner in a Devanagari conjunct', () => {
     expect(cleanDisplayName(DEVANAGARI)).toBe(DEVANAGARI);
+  });
+
+  it('keeps a joiner between two characters outside ASCII, accented letters included', () => {
+    expect(cleanDisplayName(`Ren\u00E9${ZWNJ}\u00E9e`)).toBe(`Ren\u00E9${ZWNJ}\u00E9e`);
+    expect(cleanDisplayName(`Ren${ZWNJ}\u00E9e`)).toBe('Ren\u00E9e');
   });
 });
 

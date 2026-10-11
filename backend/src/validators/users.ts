@@ -40,9 +40,11 @@ function joinable(ch: string | undefined): boolean {
 /**
  * The zero-width non-joiner and joiner, kept only between two characters that
  * are neither ASCII nor space: that is where emoji sequences (a family, a
- * profession, a skin tone) and Persian, Urdu and Indic names use them. At
- * either end, repeated, or beside a Latin letter or a space they are removed,
- * so they cannot hide inside a name and make it look like another.
+ * profession, a skin tone) and Persian, Urdu and Indic names use them. Two
+ * accented letters are neither, so one between them is kept too. At either
+ * end, repeated, or beside an ASCII character or a space they are removed,
+ * so they cannot hide inside a name typed in ASCII and make it look like
+ * another.
  */
 function keptJoiners(name: string): string {
   const chars = Array.from(name);
