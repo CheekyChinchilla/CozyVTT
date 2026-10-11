@@ -40,6 +40,7 @@ import userRoutes from '../../routes/users';
 import mapRoutes from '../../routes/maps';
 import configRoutes from '../../routes/config';
 import adminRoutes from '../../routes/admin';
+import adminStorageRoutes from '../../routes/adminStorage';
 import invitationRoutes from '../../routes/invitations';
 
 export function createTestApp(): express.Express {
@@ -69,6 +70,7 @@ export function createTestApp(): express.Express {
   app.use('/api/config', configRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/admin', adminStorageRoutes);
   app.use('/api/campaigns', campaignRoutes);
   app.use('/api/campaigns', campaignMacroRoutes);
   app.use('/api/campaigns', campaignDocumentRoutes);

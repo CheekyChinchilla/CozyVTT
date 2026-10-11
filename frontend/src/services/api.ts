@@ -47,6 +47,10 @@ import type {
   AdminActivityData,
   AdminServerConfig,
   AdminBackup,
+  OrphanedFilesReport,
+  OrphanedFilesDeletion,
+  LeftCampaignSummary,
+  LeftCampaignDetail,
   AppearanceSettings,
   UserPreferences,
   ServerConfig,
@@ -418,6 +422,16 @@ class ApiClient {
     return response.data;
   }
 
+  async listOrphanedFiles(): Promise<OrphanedFilesReport> {
+    const response = await this.client.get<OrphanedFilesReport>('/api/admin/orphaned-files');
+    return response.data;
+  }
+
+  async deleteOrphanedFiles(paths: string[]): Promise<OrphanedFilesDeletion> {
+    const response = await this.client.delete<OrphanedFilesDeletion>('/api/admin/orphaned-files', { data: { paths } });
+    return response.data;
+  }
+
   async restoreAdminBackup(file: File): Promise<RestoreReply> {
     const formData = new FormData();
     formData.append('backup', file);
@@ -680,6 +694,24 @@ class ApiClient {
 
   async deleteNote(campaignId: string, noteId: string): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/campaigns/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
+
+  /** Campaigns the caller has left that still hold their notes or dice macros. */
+  async listLeftCampaigns(): Promise<{ campaigns: LeftCampaignSummary[] }> {
+    const response = await this.client.get('/api/campaigns/left');
+    return response.data;
+  }
+
+  /** The caller's note titles and dice macros in one campaign they have left. */
+  async getLeftCampaign(campaignId: string): Promise<LeftCampaignDetail> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}`);
+    return response.data;
+  }
+
+  /** One of the caller's notes, with its text, from a campaign they have left. */
+  async getLeftCampaignNote(campaignId: string, noteId: string): Promise<{ note: PersonalNote }> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes/${noteId}`);
     return response.data;
   }
 

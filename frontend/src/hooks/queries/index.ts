@@ -15,11 +15,11 @@
 // CampaignContext `useCampaign()` hook.
 // ============================================
 
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
 import campaignService from '@/services/campaign.service';
 import characterService from '@/services/character.service';
 import { api } from '@/services/api';
-import type { AssetScope, AssetType, Character } from '@/types';
+import type { AssetScope, AssetType, Character, PersonalNoteSummary } from '@/types';
 
 export const queryKeys = {
   campaigns: ['campaigns'] as const,
@@ -29,6 +29,9 @@ export const queryKeys = {
   characterTemplates: (params: CharacterTemplateListParams) =>
     ['character-templates', params] as const,
   serverConfig: ['server-config'] as const,
+  leftCampaigns: ['left-campaigns'] as const,
+  leftCampaignNote: (campaignId: string, noteId: string, updatedAt: string) =>
+    ['left-campaign-note', campaignId, noteId, updatedAt] as const,
 };
 
 /**
@@ -50,6 +53,29 @@ export function useCampaignsQuery() {
   return useQuery({
     queryKey: queryKeys.campaigns,
     queryFn: () => campaignService.getCampaigns(),
+  });
+}
+
+/** Campaigns the user has left that still hold their notes or dice macros. */
+export function useLeftCampaignsQuery() {
+  return useQuery({
+    queryKey: queryKeys.leftCampaigns,
+    queryFn: async () => (await api.listLeftCampaigns()).campaigns,
+  });
+}
+
+/**
+ * One note, with its text, from a campaign the user has left. Nobody can edit
+ * it while they are out of the campaign, and the key carries its last edit, so
+ * a fetched note is kept and a Download reuses it. No retry: a refusal for too
+ * many requests is shown, and a retry would only add to them.
+ */
+export function leftCampaignNoteQuery(campaignId: string, note: Pick<PersonalNoteSummary, 'id' | 'updatedAt'>) {
+  return queryOptions({
+    queryKey: queryKeys.leftCampaignNote(campaignId, note.id, note.updatedAt),
+    queryFn: async () => (await api.getLeftCampaignNote(campaignId, note.id)).note,
+    staleTime: Infinity,
+    retry: false,
   });
 }
 

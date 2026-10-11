@@ -424,6 +424,23 @@ Two things to get right when adding a check of this kind:
   a machine-readable `code`; clients route on that, and changing the wording must
   not change behaviour.
 
+### What only an admin can reach
+
+- **Assets with no uploader.** `uploadedById` is set to null when the uploader's
+  account is deleted, and a null uploader grants no one anything through
+  `assetUsedInUserCampaign`. A `USER` asset in that state is readable, movable
+  and deletable by platform admins alone. `GET /api/assets?uploadedBy=none`
+  lists them; like any `uploadedBy` value it is honoured for admins only and
+  ignored for everyone else.
+- **Leftover files.** `GET /api/admin/orphaned-files` lists files in the
+  uploads folder's asset folders that no asset row names, and
+  `DELETE /api/admin/orphaned-files` deletes the ones named in its body that
+  still are, at that moment (`services/orphanedFiles.ts`). Both sit in
+  `routes/adminStorage.ts`, mounted under `/api/admin` and guarded by
+  `requireAuth` and `requireAdmin`, as every `/api/admin` route is. A player
+  gets `403`, someone signed out `401`. The delete looks each name up in a
+  fresh scan, so a name outside the asset folders reaches nothing.
+
 ### Platform role is the one thing the session carries
 
 `requireAdmin` reads `req.session.platformRole`, which is written at login and
@@ -569,6 +586,24 @@ is not sent the old campaign's view under its new role.
 
 REST needs no equivalent for campaign roles; its middleware reads the membership
 per request. Platform role is a different matter, see below.
+
+### A removed member's own notes and macros
+
+Removing a member deletes none of their `PersonalNote` or `DiceMacro` rows, and
+every notes and macros route asks for membership. Three read-only routes,
+guarded by `authenticated` alone, let the author still read their own
+(`routes/leftCampaigns.ts`): `GET /api/campaigns/left` lists the campaigns the
+caller has no membership in and still has notes or macros in,
+`GET /api/campaigns/left/:campaignId` returns their note titles and macros in
+one such campaign, and `GET /api/campaigns/left/:campaignId/notes/:noteId`
+returns one note with its text. Every query is scoped to the session's user id
+and to a campaign the caller has no membership in, so a member is answered
+`404` and uses the member routes. The second and third answer `404` where the
+caller has nothing, so they reveal nothing about a campaign they were never in.
+Note text goes out one note at a time, as it does for a member: a campaign can
+hold 200 notes of 100,000 characters each. Nothing lets a non-member change
+them. Rejoining puts them back behind the member routes, and deleting the
+campaign cascades them away.
 
 ---
 

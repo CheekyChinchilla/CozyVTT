@@ -624,6 +624,12 @@ or edit its sheet, and nothing they change on it reaches your table except its
 picture. A token on the map that was bound to one of those characters stays
 where it is, still shows the character's picture, and follows it if they change it.
 
+**Their personal notes and saved rolls stay theirs.** Nothing they wrote in the
+**Notes** tab or saved under **Saved** is deleted. They can still read it, and
+download it, from their dashboard, and it is back in the campaign if you invite
+them again. You still cannot see any of it. If you delete the campaign, their
+notes and saved rolls for it are deleted with it, along with everyone else's.
+
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
 a player and you cannot remove them. Hand the seat back if you want to step away

@@ -14,7 +14,7 @@ import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators
 import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
-import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
+import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
 
 /**
  * User Management Routes
@@ -474,8 +474,9 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
       });
     }
 
-    // Count USER-scoped assets before deletion so the frontend can warn admins.
-    // They stay, owned by no one, which leaves them readable by admins alone.
+    // Count the user's personal assets before deletion. The avatar and those
+    // nothing uses go with the account; the rest stay, owned by no one, which
+    // leaves them readable by admins alone.
     const userAssetCount = await prisma.asset.count({
       where: { uploadedById: id, scope: 'USER' },
     });
@@ -496,6 +497,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     await destroyUserLoginSessions(id);
     await endLiveSockets(id, 'Your account was deleted.');
     announceRosterChange(id, campaignIds, 'member.left');
+    await removePersonalFiles(deletion.personal);
 
     return res.status(200).json({
       message: 'User deleted successfully',

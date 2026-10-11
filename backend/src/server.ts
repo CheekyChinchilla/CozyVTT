@@ -29,6 +29,7 @@ import mapRoutes from './routes/maps';
 import creatureRoutes from './routes/creatures';
 import tokenTemplateRoutes from './routes/tokenTemplates';
 import adminRoutes from './routes/admin';
+import adminStorageRoutes from './routes/adminStorage';
 import configRoutes from './routes/config';
 import { initializeWebSocket } from './websocket';
 import logger from './utils/logger';
@@ -172,6 +173,7 @@ app.use('/api/users', userRoutes);
 
 // Admin panel (requires ADMIN platform role)
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin', adminStorageRoutes);
 
 // Campaigns
 app.use('/api/campaigns', campaignRoutes);

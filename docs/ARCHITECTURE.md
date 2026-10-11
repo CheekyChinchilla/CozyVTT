@@ -74,6 +74,7 @@ src/
 │   ├── users.ts       User CRUD (admin only)
 │   ├── campaigns.ts   Campaign CRUD + membership
 │   ├── campaignMacros.ts Saved dice macros per campaign
+│   ├── leftCampaigns.ts A removed member's own notes and macros, read only
 │   ├── campaignDocuments.ts Documents shared with a campaign
 │   ├── characters.ts  Character CRUD + assignment
 │   ├── maps.ts        Map and token management
@@ -416,7 +417,7 @@ erDiagram
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
 - **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
-- **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included.
+- **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included. Removing a member keeps both kinds of row; `GET /api/campaigns/left`, `/left/:campaignId` and `/left/:campaignId/notes/:noteId` let the author read their own afterwards, only while they are not a member and with note text one note at a time, and deleting the campaign deletes them.
 - **`CreatureFavorite` is a per-campaign, per-user join table** — with a unique constraint on `(campaignId, userId, creatureId)` to prevent duplicate favorites. Cascade deletes ensure cleanup when creatures, users, or campaigns are removed.
 - **`CampaignDocument` shares a document with a campaign without copying it.** A document is an ordinary `Asset` of type `DOCUMENT`; the join row, unique on `(campaignId, assetId)`, is what lets a `USER`-scoped rulebook be read by the members of every campaign it is linked to. It is the one place the asset read rule looks beyond scope: `canReadAsset` is the single function both the serving route and the linking route consult, so a DM cannot link a file they could not read themselves; and linking further requires the document to be the DM's own or `GLOBAL`, so a share into one campaign cannot be forwarded by a member of it who runs another. Unlinking revokes access; deleting the asset removes its links, and deleting the campaign leaves the document intact.
 
@@ -566,15 +567,18 @@ Uploaded files are stored on the local filesystem under `backend/uploads/`:
 
 ```
 uploads/
-  maps/         {id}.{ext}           Original map image
-                {id}_thumb.webp      300px thumbnail
-  tokens/       {id}.{ext}
-                {id}_thumb.webp
-  audio/        {id}.{ext}
-  avatars/       {userId}_avatar.{ext}
-  documents/    global/{id}.{ext}             Global and personal documents
-                campaigns/{campaignId}/{id}.{ext}
+  maps/         global/{uuid}.{ext}                  Global and personal maps
+                global/thumb_{uuid}.{ext}            Thumbnail, longest edge 512 px
+                campaigns/{campaignId}/{uuid}.{ext}  A campaign's own, thumbnails beside them
+  tokens/       global/…, campaigns/{campaignId}/…   As maps
+  audio/        global/…, campaigns/{campaignId}/…   No thumbnails
+  avatars/      {uuid}.{ext}
+  documents/    global/…, campaigns/{campaignId}/…   No thumbnails
+  temp/         Campaign imports still in progress
 ```
+
+`Asset.filePath` and `Asset.thumbnailPath` record where each file is. Nothing
+else refers to a file on disk.
 
 Instance backups (`backup-{timestamp}.zip`) are kept outside this tree, in
 `backend/backups/` or `BACKUP_DIR`, which may not point inside the uploads
@@ -587,6 +591,29 @@ directory (`backend/src/utils/backupDir.ts`).
 3. **Size limit check** — configurable per asset type via environment variables
 4. **Sharp** generates a WebP thumbnail (for maps and tokens)
 5. File is moved to its final location; the `Asset` record is created in the database
+
+Editing a text or Markdown document never writes over the file. The new text
+goes to a temporary file in the same folder, which is flushed to disk and then
+renamed over the original (`writeFileAtomically` in
+`backend/src/utils/fileUtils.ts`), so a crash leaves the old text or the new.
+A save that finds the row deleted once it has written removes its file.
+
+### Leftover files
+
+A file can still end up with no row: an asset delete removes the row first and
+the file second, so a file that cannot be removed is left; a restore copies the
+backup's files over the uploads folder whatever the restored database names;
+a crash can fall between a file being written and its row. `services/orphanedFiles.ts`
+finds them for the Admin Panel (`GET /api/admin/orphaned-files`). It walks the
+five asset folders (not `temp/`, nor anything else in the uploads folder) and
+lists each regular file whose name is not the file name of any row's
+`filePath` or `thumbnailPath`. Stored names are generated UUIDs, and matching on
+the name alone keeps a file whose row was written under another uploads path,
+as a restored backup's rows can be. Files changed in the last hour are left
+out: an upload lands in `maps/global/` before its type is known and is moved
+and recorded after, and an import writes its files before its rows commit. Listing changes
+nothing; `DELETE /api/admin/orphaned-files` takes the paths the admin saw and
+deletes each one only if a fresh scan still lists it.
 
 ### Security Headers
 

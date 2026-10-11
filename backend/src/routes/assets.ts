@@ -15,6 +15,7 @@ import {
   getFilePath,
   ensureDirectory,
   generateUniqueFilename,
+  writeFileAtomically,
 } from '../utils/fileUtils';
 import {
   CreateDocumentSchema,
@@ -28,6 +29,7 @@ import fs from 'fs';
 import { pipeline } from 'stream';
 import { generateThumbnail } from '../utils/thumbnails';
 import logger from '../utils/logger';
+import { errorCode } from '../utils/errors';
 import { readEnumQuery } from '../utils/queryEnum';
 import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
@@ -154,6 +156,7 @@ function handleAssetCaching(
  *   - type: Filter by AssetType; an unknown value answers 400
  *   - scope: Filter by AssetScope (GLOBAL, USER, CAMPAIGN); an unknown value answers 400
  *   - campaignId: Filter by campaign (requires CAMPAIGN scope or returns campaign-specific assets)
+ *   - uploadedBy: admin only; a user id, or `none` for assets with no uploader
  *   - usable: 'true' applies the member scope rules to an admin too (the pickers)
  */
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
@@ -203,9 +206,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     // Campaign filter
     const isAdmin = req.session.platformRole === 'ADMIN';
 
-    // Admin-only: filter by uploader
+    // Admin-only: filter by uploader. `none` lists the assets whose uploader's
+    // account was deleted, which with no campaign are readable by admins alone.
     if (uploadedBy && isAdmin) {
-      where.uploadedById = uploadedBy as string;
+      where.uploadedById = uploadedBy === 'none' ? null : (uploadedBy as string);
     }
 
     if (campaignId) {
@@ -403,6 +407,8 @@ router.post(
   validateFileType,
   validateFileSize,
   async (req: UploadRequest, res: Response) => {
+    // Outside the try, so a failed insert can remove the thumbnail as well.
+    let thumbnailPath: string | null = null;
     try {
       const userId = req.session.userId!;
 
@@ -431,7 +437,7 @@ router.post(
         : [];
 
       // Generate thumbnail for images (MAP and TOKEN types)
-      const thumbnailPath =
+      thumbnailPath =
         (req.assetType === 'MAP' || req.assetType === 'TOKEN') && mimeType.startsWith('image/')
           ? await generateThumbnail(file.path)
           : null;
@@ -465,10 +471,11 @@ router.post(
     } catch (error) {
       logger.error('Error creating asset record', { err: error });
 
-      // Clean up uploaded file if database insert fails
-      if (req.file?.path) {
+      // Clean up the uploaded file, and its thumbnail, if the insert fails
+      for (const leftover of [req.file?.path, thumbnailPath]) {
+        if (!leftover) continue;
         try {
-          await deleteFile(req.file.path);
+          await deleteFile(leftover);
         } catch (deleteError) {
           logger.error('Error deleting file after database failure', { err: deleteError });
         }
@@ -781,23 +788,31 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
     const filePath = path.join(dir, filename).replace(/\\/g, '/');
     await fs.promises.writeFile(filePath, bytes);
 
-    const asset = await prisma.asset.create({
-      data: {
-        type: 'DOCUMENT',
-        scope,
-        uploadedById: userId,
-        campaignId: decision.campaignId,
-        filename,
-        originalName: `${name}.${format}`,
-        mimeType: TYPED_DOCUMENT_MIME[format],
-        fileSize: bytes.length,
-        filePath,
-        name,
-        description: description || null,
-        tags: [],
-      },
-      select: ASSET_PUBLIC_SELECT,
-    });
+    const asset = await prisma.asset
+      .create({
+        data: {
+          type: 'DOCUMENT',
+          scope,
+          uploadedById: userId,
+          campaignId: decision.campaignId,
+          filename,
+          originalName: `${name}.${format}`,
+          mimeType: TYPED_DOCUMENT_MIME[format],
+          fileSize: bytes.length,
+          filePath,
+          name,
+          description: description || null,
+          tags: [],
+        },
+        select: ASSET_PUBLIC_SELECT,
+      })
+      .catch(async (error: unknown) => {
+        // No row names the file just written, so it goes too.
+        await deleteFile(filePath).catch((deleteError) =>
+          logger.error('Error deleting document after database failure', { err: deleteError })
+        );
+        throw error;
+      });
 
     return res.status(201).json({ asset });
   } catch (error) {
@@ -846,13 +861,26 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
 
     const documentPath = normalizePath(asset.filePath);
     const bytes = Buffer.from(parsed.data.content, 'utf8');
-    await fs.promises.writeFile(documentPath, bytes);
+    await writeFileAtomically(documentPath, bytes);
 
-    const updated = await prisma.asset.update({
-      where: { id: asset.id },
-      data: { fileSize: bytes.length },
-      select: ASSET_PUBLIC_SELECT,
-    });
+    let updated: Prisma.AssetGetPayload<{ select: typeof ASSET_PUBLIC_SELECT }>;
+    try {
+      updated = await prisma.asset.update({
+        where: { id: asset.id },
+        data: { fileSize: bytes.length },
+        select: ASSET_PUBLIC_SELECT,
+      });
+    } catch (error) {
+      // Deleted while this save was writing: the delete has already removed
+      // the file, so the one written here is named by no row and is removed too.
+      if (errorCode(error) === 'P2025') {
+        await deleteFile(documentPath).catch((unlinkError) =>
+          logger.error('Error removing a document saved after it was deleted', { err: unlinkError })
+        );
+        return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
+      }
+      throw error;
+    }
 
     return res.status(200).json({ asset: updated });
   } catch (error) {

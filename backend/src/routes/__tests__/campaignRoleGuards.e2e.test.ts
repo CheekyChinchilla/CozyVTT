@@ -184,6 +184,11 @@ it('has every campaign route guarded, or listed as deciding in its own handler',
   const ownChecks: Record<string, string> = {
     'DELETE /api/campaigns/:campaignId': 'this file, below',
     'PUT /api/campaigns/:campaignId/dm': 'dmTransfer.e2e.test.ts',
+    // A removed member reading their own notes and macros: no membership by
+    // design, and every query is scoped to the caller and to a campaign they
+    // are not a member of.
+    'GET /api/campaigns/left/:campaignId': 'leftCampaignNotes.e2e.test.ts',
+    'GET /api/campaigns/left/:campaignId/notes/:noteId': 'leftCampaignNotes.e2e.test.ts',
   };
   const unguarded = routes
     .filter((r) => r.path.includes(':campaignId') && !runs(r, requireDM) && !runs(r, requireCampaignMember))

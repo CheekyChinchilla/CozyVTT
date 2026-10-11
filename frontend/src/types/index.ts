@@ -420,6 +420,31 @@ export interface AdminBackup {
   createdAt: string;
 }
 
+/** A file in the uploads folder that no asset names (GET /api/admin/orphaned-files). */
+export interface OrphanedFile {
+  /** Relative to the uploads folder. */
+  path: string;
+  size: number;
+  modifiedAt: string;
+}
+
+export interface OrphanedFilesReport {
+  /** At most 5,000, sorted by path; `total` counts them all. */
+  files: OrphanedFile[];
+  total: number;
+  totalBytes: number;
+  /** Files no asset names that changed too recently to judge, and are not listed. */
+  recent: number;
+  minimumAgeMinutes: number;
+}
+
+export interface OrphanedFilesDeletion {
+  deleted: string[];
+  /** Named, but not a leftover file by the time of the delete. */
+  skipped: string[];
+  failed: string[];
+}
+
 export interface AuthResponse {
   message: string;
   user: User;
@@ -624,6 +649,28 @@ export interface PersonalNote extends PersonalNoteSummary {
 }
 
 /**
+ * A campaign the caller is no longer in and still has notes or dice macros
+ * in (GET /api/campaigns/left). Notes are titles only, newest edit first.
+ */
+export interface LeftCampaignSummary {
+  id: string;
+  name: string;
+  notes: PersonalNoteSummary[];
+  macros: DiceMacro[];
+}
+
+/**
+ * One campaign the caller has left (GET /api/campaigns/left/:campaignId):
+ * note titles, newest edit first, and macros. A note's text comes from
+ * GET /api/campaigns/left/:campaignId/notes/:noteId, one note at a time.
+ */
+export interface LeftCampaignDetail {
+  campaign: { id: string; name: string };
+  notes: PersonalNoteSummary[];
+  macros: DiceMacro[];
+}
+
+/**
  * A past session as the history list returns it.
  *
  * Deliberately without `savedState`: that is a large blob of token positions
@@ -807,7 +854,11 @@ export interface Asset {
   id: string;
   type: AssetType;
   scope: AssetScope;
-  /** Null once the uploader's account is deleted: the file stays, owned by no one. */
+  /**
+   * Null once the uploader's account is deleted, on the files that outlive it:
+   * campaign and global uploads, and personal files something still uses. The
+   * avatar and the personal files nothing uses are deleted with the account.
+   */
   uploadedById: string | null;
   campaignId: string | null;
   filename: string;

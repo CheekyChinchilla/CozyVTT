@@ -111,6 +111,8 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 *Screenshot pending — Campaign card grid with status indicators.*
 
+**Notes From Campaigns You Have Left** — Shown only if a DM has removed you from a campaign in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
+
 **Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
 ### Creating a New Campaign
@@ -262,7 +264,7 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 - while creating a character, if you want to keep the character and share it at the same time
 - **Import** on the templates page, which publishes a character JSON file as a template
 
-Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time.
+Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you.
 
 **Editing one.** The pencil on one of your templates opens **Edit Template**, with the name and description at the top and the sheet below. **Save Details** saves the name and description and closes the dialog; the sheet's own **Save** saves the sheet, and the dialog stays open showing it. If the sheet has changes you haven't saved, closing the dialog asks first, and **Save Details** keeps it open so you can save them. A token picture chosen on the sheet is not used for a template, because a template's picture has to be a global asset (see the note below).
 
@@ -392,6 +394,19 @@ Click any asset card to open its **detail panel** on the right. From there you c
 
 *Screenshot pending — Asset detail panel.*
 
+### Files with no owner, and leftover files (admins)
+
+Two kinds of file can end up reachable by administrators alone. Both are found on the **Assets** tab of the Admin Panel.
+
+**Files with no owner.** When an account is deleted, its avatar and the personal files nothing uses are deleted with it, and the files it uploaded that a campaign still uses stay, with no owner. A campaign's own files that outlive their uploader and then their campaign end up the same way. To list them, set the **Uploader** filter to **No Uploader (account deleted)**. Documents are listed only when the **Type** filter is set to **Document**. From there each one can be moved to Global or into a campaign, so people can use it again, or deleted.
+
+**Leftover files.** These are files in the uploads folder that no asset names at all: for example a file that could not be removed when its asset was deleted, or one that a restored backup brought back although the restored database does not know it. Nothing in CozyVTT shows or uses them; they only take up disk space.
+
+1. Under **Leftover Files**, press **Check for Leftover Files**. You see the list, each file's size and when it last changed, and the total. Checking deletes nothing.
+2. If you want them gone, press **Delete *N* Files** and confirm. Each file is checked again first and kept if an asset names it by then. You are told how many were deleted and how many were kept.
+
+A file changed in the last hour is not listed, since an upload may still be finishing; the check tells you how many it left out, and checking again later lists them. A deleted file cannot be brought back without a backup of the uploads folder. Only the folders CozyVTT writes uploads to are looked at; anything else you keep in the uploads folder is left alone. Do not run the check while a backup is being restored.
+
 ---
 
 ## Documents
@@ -428,7 +443,7 @@ Click a document's name or its **Read** button to open it in a full-screen reade
 
 ### Editing
 
-Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
+Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
 
 ### Safety
 
@@ -713,7 +728,11 @@ Email addresses cannot be changed from the app. Contact your platform administra
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, and documents you shared into a campaign stay shared, so the table's history, its handouts and the art on its maps are not lost. Every other browser or device signed in to the account is signed out at the same moment.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server.
+
+Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner, but the campaign can no longer show it until an administrator moves it into the campaign. To keep it showing, move it into the campaign from your asset library before you delete your account, if your role there allows it.
+
+Every other browser or device signed in to the account is signed out at the same moment.
 
 > **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
 

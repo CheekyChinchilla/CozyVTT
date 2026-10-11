@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Administrators can find and delete files that nothing uses.** The **Assets** tab of the Admin Panel has a new **Leftover Files** check. It lists the files in the uploads folder that no asset names, such as a file that could not be removed when its asset was deleted, or one a restored backup brought back. Checking deletes nothing; **Delete *N* Files** asks first, and keeps any file that an asset names by then. A file changed in the last hour is not listed, since an upload may still be finishing. The asset table can now also show only the files whose uploader's account was deleted, which only administrators can reach (**Uploader**: **No Uploader (account deleted)**), and documents (**Type**: **Document**), which it did not list before. See [Files with no owner, and leftover files](docs/USER_GUIDE.md#files-with-no-owner-and-leftover-files-admins).
+
+### Changed
+
+- **Deleting an account now deletes its avatar and the personal files nothing uses.** Every file a person had uploaded used to stay on the server after their account was deleted, their avatar and private files included, readable by administrators alone. Now the avatar, and every personal file that no map, token, character, template, creature or campaign sound uses and that is not shared into a campaign, are deleted with the account. Files uploaded into a campaign, shared documents and personal files a campaign still uses stay, with no owner. The **Delete Account** confirmation on the Profile page, and the warning an administrator sees before deleting a user, say so. The confirmation also says that character templates the person published, and token templates and creatures they made, stay with no author, so they can delete any they want gone first. Accounts deleted before this release keep their files on the server; an administrator can find them with the new **No Uploader (account deleted)** filter on the **Assets** tab of the Admin Panel.
+
+- **A player removed from a campaign can still read their notes and saved rolls from it.** Removing a player kept their personal notes and saved rolls, but they could no longer open them, since the campaign page is closed to them. They now appear on that player's dashboard under **Notes From Campaigns You Have Left**, where **Open** shows each note and the saved rolls and **Download** saves them all as one Markdown file. They cannot be changed there, and nobody else can see them. They are back in the campaign if the player is invited again, and deleting the campaign still deletes them. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
+
 ### Fixed
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.
@@ -31,6 +41,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **The Import Campaign window works with a screen reader and the keyboard.** It was not marked as a dialog, so a screen reader was not told it had opened, Tab moved out of it onto the dashboard behind, and the drop area could not be reached from the keyboard. It now opens as a dialog named **Import Campaign**, keeps the keyboard inside it, closes with Escape, and its drop area opens the file picker with Enter or Space. It looks like the app's other windows.
 
 - **A screen reader names the D&D 5e editor's Alignment and Background boxes.** Their labels were not tied to the boxes, so each was announced by its example text alone. The same goes for the **Total** and **Used** spell slot boxes and the initiative and passive Perception **Other bonus** boxes.
+
+- **Saving a text or Markdown document can no longer leave it empty or cut off.** A save wrote the new text over the old file, so a save the server could not finish, for example during a restart, could leave the document empty or partly written. The new text is now written beside the old and swapped in once it is complete, so the document holds either the old text or the new. A document deleted while it was being saved no longer leaves its file behind on the server.
+
+- **An upload that cannot be saved no longer leaves files behind on the server.** When the database could not record a new upload, the preview image made from a map or token picture stayed in the uploads folder, and so did a document written in CozyVTT. Both are now removed with the rest of the failed upload.
 
 ## [1.5.1] - 2026-10-10
 

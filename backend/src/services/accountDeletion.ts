@@ -1,18 +1,29 @@
 /**
  * Deleting an account, from the account itself or by an admin.
  *
- * What the person leaves behind: their dice rolls and uploaded files stay,
- * owned by no one (the database sets those columns to null), as their chat
- * messages already do, so a campaign's history and the art on its maps
- * survive them, and documents they shared into a campaign stay shared.
- * Their memberships, characters, notes and the rest go with them.
+ * What the person leaves behind: their dice rolls stay, owned by no one (the
+ * database sets the column to null), as their chat messages already do, and
+ * so do the files they uploaded into a campaign, so a campaign's history and
+ * its own art survive them. Documents they shared into a campaign stay
+ * shared. Their memberships, characters, notes and the rest go with them.
+ *
+ * Their personal files go too: the avatar always, and any other personal
+ * upload that nothing uses and no campaign has shared, row and file. A
+ * personal file a map, token, template, creature or campaign setting still
+ * names stays, owned by no one, like a campaign's files. The rows are
+ * deleted with the account; the files are removed by removePersonalFiles,
+ * which the routes call once the account's sessions have ended.
  *
  * A campaign needs an owner. One they own while someone else sits as its DM
  * passes to that DM. One they run themselves stops the deletion until they
  * hand the DM seat over or delete the campaign; nothing is changed then.
  */
 
+import type { AssetType } from '@prisma/client';
 import { prisma } from '../config/database';
+import { isAssetInUse } from './assetUsage';
+import { deleteFile } from '../utils/fileUtils';
+import logger from '../utils/logger';
 
 /**
  * A campaign that stops a deletion, with the other members its DM seat could
@@ -26,8 +37,18 @@ export interface BlockingCampaign {
   members: { userId: string; displayName: string; role: string }[];
 }
 
+/** A personal upload of the person being deleted, read before the row goes. */
+export interface PersonalAsset {
+  id: string;
+  type: AssetType;
+}
+
+/**
+ * `personal` lists the account's personal uploads, for removePersonalFiles
+ * to delete the ones nothing uses once the account's sessions have ended.
+ */
 export type AccountDeletion =
-  | { deleted: true; campaignIds: string[] }
+  | { deleted: true; campaignIds: string[]; personal: PersonalAsset[] }
   | { deleted: false; runs: BlockingCampaign[] };
 
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
@@ -81,9 +102,51 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
     // The campaigns they were in, read before the cascade removes the rows.
     const campaignIds = (await tx.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
       .map((m) => m.campaignId);
+    // Their personal uploads, read while the rows still name them.
+    const personal = await tx.asset.findMany({ where: { uploadedById: userId, scope: 'USER' }, select: { id: true, type: true } });
     await tx.user.delete({ where: { id: userId } });
-    return { deleted: true, campaignIds };
+    return { deleted: true, campaignIds, personal };
   });
+}
+
+/**
+ * Delete the personal uploads of an account just deleted: the avatar, and
+ * every other one nothing uses and no campaign has shared. Run after the
+ * deletion, so a character that went with the account no longer counts as a
+ * use, and after its sessions have ended, so the time this takes is not time
+ * a deleted account can still act. The rows go first and the files after; a
+ * file that cannot be removed is left for the Admin Panel's leftover files
+ * check. The account is already gone, so nothing here fails the request: a
+ * failure is logged.
+ */
+export async function removePersonalFiles(personal: PersonalAsset[]): Promise<void> {
+  try {
+    const doomed: string[] = [];
+    for (const asset of personal) {
+      if (asset.type !== 'AVATAR') {
+        // TODO(accounts): a personal file kept here because a campaign uses it
+        // can no longer be read by that campaign's members, since a null
+        // uploader grants nothing in assetUsedInUserCampaign, so their maps and
+        // tokens show it as missing. Either move such a file into the campaign
+        // that uses it, or let the use rule accept a file with no uploader.
+        // Both change who may read it, so it waits for a decision.
+        if (await isAssetInUse(asset.id)) continue;
+        if ((await prisma.campaignDocument.count({ where: { assetId: asset.id } })) > 0) continue;
+      }
+      doomed.push(asset.id);
+    }
+    if (doomed.length === 0) return;
+    // Owned by no one now; nobody but an admin could have claimed one since.
+    const where = { id: { in: doomed }, uploadedById: null };
+    const files = await prisma.asset.findMany({ where, select: { filePath: true, thumbnailPath: true } });
+    await prisma.asset.deleteMany({ where });
+    for (const file of files.flatMap((f) => [f.filePath, f.thumbnailPath])) {
+      if (!file) continue;
+      await deleteFile(file).catch((error) => logger.error("Could not delete a deleted account's file", { err: error }));
+    }
+  } catch (error) {
+    logger.error("Account deleted, but its personal files could not all be removed", { err: error });
+  }
 }
 
 /** The reason a deletion was refused, for the person or an admin. */

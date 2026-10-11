@@ -897,7 +897,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-danger-ink">Delete Account</h3>
                 <p className="text-xs text-warm-gray">
-                  Permanently delete your account, characters and personal notes. This cannot be undone.
+                  Permanently delete your account, characters, personal notes and personal files. This cannot be undone.
                 </p>
               </div>
               {!deleteConfirmOpen && (
@@ -919,9 +919,15 @@ export default function ProfilePage() {
                     <ul className="list-disc list-inside text-xs space-y-0.5">
                       <li>Your account and profile</li>
                       <li>Your characters, personal notes and saved rolls</li>
+                      <li>Your avatar, and the personal files you uploaded that nothing uses</li>
                     </ul>
                     <p className="text-xs">
-                      Your chat messages, dice rolls and uploaded files stay where they are, no longer linked to you.
+                      Your chat messages and dice rolls stay where they are, and the files you uploaded into a campaign
+                      and documents you shared into one stay there, no longer linked to you. A personal file a campaign
+                      still uses stays on the server with no owner, and the campaign cannot show it again until an
+                      administrator moves it there.
+                      Character templates you published stay in the shared library, and token templates and creatures
+                      you made stay in their campaigns, no longer linked to you; delete any you want gone first.
                       A campaign you own passes to whoever is running it as DM; one you run yourself has to be handed
                       to another DM, or deleted, first.
                     </p>

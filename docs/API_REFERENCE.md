@@ -215,7 +215,12 @@ once even when two requests carry it at the same moment.
 
 ### `DELETE /api/auth/account`
 
-Permanently delete the authenticated user's account and all associated data.
+Permanently delete the authenticated user's account, with their memberships,
+characters, notes and dice macros, their avatar, and every personal (`USER`
+scope) upload that nothing names and no campaign shares, row and file. Chat
+messages, dice rolls, campaign uploads, shared documents and personal uploads
+something still names stay, with no owner, as do the character templates they
+published and the token templates and creatures they made.
 Every sign-in of the account ends, on every device, and any open game connection
 of the account is dropped. The instance's only admin is
 refused with `409` until another user has been promoted to admin.
@@ -362,6 +367,23 @@ Read, edit or delete one of your own. `PUT` accepts `name`, `expression` or both
 a body changing neither is refused so a mistake is visible. A new expression is
 checked exactly as it was on creation, so an edit cannot leave a macro
 unrollable.
+
+
+### `GET /api/campaigns/left`, `GET /api/campaigns/left/:campaignId` and `GET /api/campaigns/left/:campaignId/notes/:noteId`
+
+Removing a member keeps their personal notes and dice macros, but the notes and
+macros routes above answer only members. `GET /api/campaigns/left` lists the
+campaigns you are no longer in and still have notes or macros in, by name, each
+with your note titles (newest edit first, no text) and your macros.
+`GET /api/campaigns/left/:campaignId` returns `campaign` (`id`, `name`), your
+note titles and your `macros` in one such campaign, and answers `404` ("You
+have not left that campaign, or have no notes or dice macros in it") for a
+campaign you are a member of or have nothing in.
+`GET /api/campaigns/left/:campaignId/notes/:noteId` returns one `note` with its
+`content`, and answers `404` ("Note not found") for a note that is not yours or
+is in a campaign you are a member of. Note text comes one note at a time, as it
+does for a member. All three are read only and return nothing of anyone
+else's. Deleting the campaign deletes the notes and macros.
 
 ### `GET|POST /api/campaigns/:campaignId/documents`
 
@@ -1278,7 +1300,7 @@ link the user has not used stops working.
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account. Their memberships, characters, notes and dice macros go with it; their chat messages, dice rolls and uploads stay with no owner. A campaign they own passes to its sitting DM.
+Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares; their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A campaign they own passes to its sitting DM.
 
 **409** while they are the DM of a campaign they own. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again:
 
