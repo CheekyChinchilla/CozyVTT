@@ -1137,12 +1137,13 @@ class ApiClient {
     return response.data;
   }
 
-  async getSeedStatus(campaignId: string): Promise<{ srdCount: number; customCount: number; seedInProgress: boolean }> {
+  /** `canSeed`: whether the caller may run the SRD import, which only an administrator may. */
+  async getSeedStatus(campaignId: string): Promise<{ srdCount: number; customCount: number; seedInProgress: boolean; canSeed: boolean }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/seed/status`);
     return response.data;
   }
 
-  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number }> {
+  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number; rejected: number }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/seed`);
     return response.data;
   }

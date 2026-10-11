@@ -298,13 +298,6 @@ _Nothing at present._
   creation is a product decision — it would affect legitimate users — so it was
   left alone when notes were added.
 
-- **The SRD creature import answers 504 when Open5e is unreachable.** The seed
-  endpoint fetches from `api.open5e.com` with no timeout of its own, so when that
-  host is down or blocked the request hangs until the reverse proxy gives up and
-  the DM sees a bare gateway error rather than "could not reach the creature
-  source". Reproduced on 2026-09-03 with the host unreachable. Wants a timeout on
-  the fetch and an error the UI can explain.
-
 - **A lit map is black for a player in the spirit realm.** Dynamic lighting draws
   vision from the player's own tokens, and a player in the spirit realm receives
   none unless they control a spirit-layer token — so the map renders fully dark

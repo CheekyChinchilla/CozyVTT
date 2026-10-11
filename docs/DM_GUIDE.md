@@ -346,10 +346,12 @@ Click **Creature Library** (the skull icon) in the campaign header's DM toolbar 
 
 ### SRD Creature Seeding
 
-The first time you open the Creature Library in a new campaign, it may be empty. Click **Import D&D 5e SRD** to fetch the full D&D 5e SRD bestiary from Open5e. This is a one-time operation that populates the library with hundreds of ready-to-use creatures.
+The first time you open the Creature Library on a new server, it may be empty. An administrator clicks **Import D&D 5e SRD** to fetch the full D&D 5e SRD bestiary from Open5e. This is a one-time operation that populates the library with hundreds of ready-to-use creatures, for every campaign on the server.
+
+**Only an administrator can run the import**, because every campaign on the server shares what it adds. If you are a DM but not an administrator, the empty library says so instead of offering the button: ask your server's administrator to open the Creature Library in any campaign of theirs and import the creatures, and they appear in yours too.
 
 - The button names the system it imports because it always seeds **D&D 5e** content, whatever system your campaign uses. It stays available in any campaign — a D&D stat block is a reasonable starting point for homebrew — but you'll be importing D&D monsters
-- Seeding takes a few seconds — a progress indicator shows while it runs
+- Seeding takes a few seconds — a progress indicator shows while it runs. If Open5e cannot be reached, or takes more than 15 seconds over a page, the import stops, says why, and adds nothing; try again later
 - SRD creatures are **global** (shared across all campaigns on the instance) and **read-only**
 - You can duplicate any SRD creature to create an editable custom version
 - Running it again is safe: existing creatures are not duplicated. If your library was seeded before CozyVTT 1.1.1, re-running it fills in each SRD creature's hit points; custom creatures are never modified

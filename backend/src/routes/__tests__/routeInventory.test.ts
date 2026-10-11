@@ -53,6 +53,7 @@ const TESTED: Record<string, string> = {
   'GET /api/campaigns/:campaignId/invitable-users': 'routes/__tests__/invitableUsers.e2e.test.ts',
   'GET /api/character-templates/:id': 'routes/__tests__/characterTemplates.e2e.test.ts',
   'GET /api/assets/avatars/:userId': 'routes/__tests__/avatarReplace.e2e.test.ts',
+  'POST /api/campaigns/:campaignId/creatures/seed': 'routes/__tests__/srdSeedRoute.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/members/:userId': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/members/:userId/role': 'websocket/__tests__/initiativeResend.integration.test.ts',
   'PUT /api/campaigns/:campaignId/dm': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
@@ -178,7 +179,6 @@ const TESTED: Record<string, string> = {
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
   'PUT /api/campaigns/:campaignId/sessions/:sessionId/end',
-  'POST /api/campaigns/:campaignId/creatures/seed',
   'PUT /api/campaigns/:campaignId/token-templates/:id',
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
   'POST /api/campaigns/:campaignId/token-templates/from-token',

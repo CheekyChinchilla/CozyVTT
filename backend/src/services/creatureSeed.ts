@@ -7,9 +7,11 @@
  * See SRD_ATTRIBUTION.md for the notice and why that licence rather than the OGL.
  */
 
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient, Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { normalizeSkillKey } from '../utils/rules/dnd5e';
+import { NpcStatBlockSchema } from '../validators/statBlock';
+import { toJson } from '../utils/prisma-json';
 import logger from '../utils/logger';
 
 // ─── Open5e API Types ───────────────────────────────────────────
@@ -58,12 +60,6 @@ interface Open5eMonster {
   document__title: string;
 }
 
-interface Open5eResponse {
-  count: number;
-  next: string | null;
-  results: Open5eMonster[];
-}
-
 // ─── Size mapping ───────────────────────────────────────────────
 
 const SIZE_MAP: Record<string, { width: number; height: number }> = {
@@ -90,7 +86,8 @@ const CR_XP: Record<string, number> = {
 // ─── Transform Open5e monster to our stat block ─────────────────
 
 export function transformMonster(m: Open5eMonster) {
-  const speedParts = Object.entries(m.speed)
+  // A creature with no speed listed moves at 0 ft., rather than stopping the seed.
+  const speedParts = Object.entries(m.speed ?? {})
     .map(([type, val]) => (type === 'walk' ? `${val} ft.` : `${type} ${val} ft.`));
   const speedStr = speedParts.join(', ') || '0 ft.';
 
@@ -166,20 +163,99 @@ export function transformMonster(m: Open5eMonster) {
 
 // ─── Fetch all SRD monsters from Open5e (paginated) ─────────────
 
-async function fetchAllSrdMonsters(): Promise<Open5eMonster[]> {
-  const all: Open5eMonster[] = [];
-  let url: string | null = 'https://api.open5e.com/v1/monsters/?format=json&limit=50&document__slug=wotc-srd';
+/** The only host the seed fetches from, and the page it starts at. */
+const OPEN5E_ORIGIN = 'https://api.open5e.com';
+const FIRST_PAGE = `${OPEN5E_ORIGIN}/v1/monsters/?format=json&limit=50&document__slug=wotc-srd`;
 
-  while (url) {
-    const response = await fetch(url);
+/**
+ * How long one page may take, from asking to the last byte. The SRD comes in
+ * about seven pages of 50; a stalled upstream used to hold the seed, and
+ * every other DM's, until the network gave up minutes later.
+ */
+export const SEED_PAGE_TIMEOUT_MS = 15_000;
+/** The most pages followed. The SRD's 300-odd creatures are about seven. */
+export const MAX_SEED_PAGES = 40;
+/** A polite pause between pages. */
+const PAGE_DELAY_MS = 200;
+
+/** Open5e could not be read, or answered something the seed will not follow. Nothing was written. */
+export class SeedSourceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SeedSourceError';
+  }
+}
+
+export interface SeedOptions {
+  /** The pause between pages; tests set 0. */
+  pageDelayMs?: number;
+}
+
+function isTimeout(error: unknown): boolean {
+  return error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
+}
+
+/** One page of the monster list, read with a time limit, its shape checked. */
+async function fetchPage(url: string): Promise<{ results: Open5eMonster[]; next: string | null }> {
+  let data: unknown;
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(SEED_PAGE_TIMEOUT_MS) });
     if (!response.ok) {
-      throw new Error(`Open5e API error: ${response.status} ${response.statusText}`);
+      throw new SeedSourceError(
+        `api.open5e.com answered ${response.status} ${response.statusText}. Nothing was imported; try again later.`
+      );
     }
-    const data = (await response.json()) as Open5eResponse;
-    all.push(...data.results);
-    url = data.next;
-    // Polite delay between pages
-    await new Promise((r) => setTimeout(r, 200));
+    data = await response.json();
+  } catch (error) {
+    if (error instanceof SeedSourceError) throw error;
+    throw new SeedSourceError(
+      isTimeout(error)
+        ? `api.open5e.com did not answer within ${SEED_PAGE_TIMEOUT_MS / 1000} seconds. Nothing was imported; check that this server can reach it, then try again.`
+        : 'Could not reach api.open5e.com. Nothing was imported; check that this server can reach it, then try again.'
+    );
+  }
+  const page = data as { results?: unknown; next?: unknown } | null;
+  if (typeof page !== 'object' || page === null || !Array.isArray(page.results)) {
+    throw new SeedSourceError('api.open5e.com answered with something that is not a list of creatures. Nothing was imported.');
+  }
+  const next = typeof page.next === 'string' && page.next !== '' ? page.next : null;
+  return { results: page.results as Open5eMonster[], next };
+}
+
+/**
+ * Every SRD monster Open5e lists, page by page. Only pages on Open5e's own
+ * host are followed: the next page's address comes from the answer, and the
+ * seed must not fetch whatever another host or a proxy put there.
+ */
+export async function fetchAllSrdMonsters(options: SeedOptions = {}): Promise<Open5eMonster[]> {
+  const delay = options.pageDelayMs ?? PAGE_DELAY_MS;
+  const all: Open5eMonster[] = [];
+  let url: string | null = FIRST_PAGE;
+
+  for (let pages = 0; url; pages++) {
+    if (pages >= MAX_SEED_PAGES) {
+      throw new SeedSourceError(
+        `api.open5e.com listed more than ${MAX_SEED_PAGES} pages of SRD creatures, far more than the SRD holds, so nothing was imported.`
+      );
+    }
+    const { results, next } = await fetchPage(url);
+    all.push(...results);
+    url = null;
+    if (next) {
+      let nextUrl: URL;
+      try {
+        nextUrl = new URL(next);
+      } catch {
+        throw new SeedSourceError('api.open5e.com gave a next page that is not an address. Nothing was imported.');
+      }
+      if (nextUrl.origin !== OPEN5E_ORIGIN) {
+        throw new SeedSourceError(
+          `api.open5e.com sent the next page to another site (${nextUrl.host}), which the import does not follow. Nothing was imported.`
+        );
+      }
+      url = nextUrl.toString();
+      if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    }
   }
 
   return all;
@@ -193,7 +269,19 @@ export interface SeedResult {
   updated: number;
   skipped: number;
   alreadyExisted: number;
+  /** Creatures whose stat block the Creature Library would refuse, so not stored. */
+  rejected: number;
 }
+
+/**
+ * One lock for every seed, the command-line script's and each backend
+ * process's: held while the existing SRD creatures are read and the missing
+ * ones written, so two seeds at once cannot both add the same creature. The
+ * fetch from Open5e happens before it, so the lock is held for a moment.
+ */
+const SEED_LOCK_KEY = 703_118_2026;
+/** Long enough for a second seed to wait out the first one's writes. */
+const SEED_WRITE_TIMEOUT_MS = 120_000;
 
 /**
  * Fill in hit points on a stat block that predates HP tracking.
@@ -227,79 +315,92 @@ export function backfillStatBlockHp(
  * Seed the CreatureTemplate table with D&D 5e SRD monsters from Open5e.
  * Safe to call multiple times — existing SRD creatures are skipped, except that
  * ones stored before hit points were tracked get their HP backfilled.
- * Custom creatures are never touched.
+ * Custom creatures are never touched. Each creature's stat block is checked as
+ * the Creature Library checks one it is given, and one that fails is left out.
+ * Throws SeedSourceError, having written nothing, when Open5e cannot be read.
  */
-export async function seedSrdCreatures(prisma: PrismaClient): Promise<SeedResult> {
-  // Check which SRD creatures already exist (and whether they carry HP)
-  const existing = await prisma.creatureTemplate.findMany({
-    where: { source: 'srd' },
-    select: { id: true, name: true, statBlock: true },
-  });
-  const existingByName = new Map(existing.map((e) => [e.name, e]));
+export async function seedSrdCreatures(prisma: PrismaClient, options: SeedOptions = {}): Promise<SeedResult> {
+  const monsters = await fetchAllSrdMonsters(options);
 
-  // Fetch from Open5e
-  const monsters = await fetchAllSrdMonsters();
-
-  let created = 0;
-  let updated = 0;
-  let skipped = 0;
-
+  // Made ready, and checked, before the lock is taken.
+  let rejected = 0;
+  const ready = new Map<string, { monster: Open5eMonster; data: ReturnType<typeof transformMonster> }>();
   for (const monster of monsters) {
-    const existingRow = existingByName.get(monster.name);
-    if (existingRow) {
-      // Pre-HP row: add the missing hit points, leaving the rest as it was
-      const patched = backfillStatBlockHp(existingRow.statBlock, monster.hit_points, monster.hit_dice);
-      if (patched) {
-        try {
-          await prisma.creatureTemplate.update({
-            where: { id: existingRow.id },
-            // `as object` matches how statBlock JSON is written elsewhere (routes/creatures.ts)
-            data: { statBlock: patched as object },
-          });
-          updated++;
-          continue;
-        } catch (err) {
-          logger.error(`Failed to backfill HP for "${monster.name}"`, { err: err });
-        }
-      }
-      skipped++;
-      continue;
-    }
-
-    const data = transformMonster(monster);
     try {
-      await prisma.creatureTemplate.create({
-        data: {
-          id: randomUUID(),
-          name: data.name,
-          gameSystem: data.gameSystem,
-          source: data.source,
-          challengeRating: data.challengeRating,
-          creatureType: data.creatureType,
-          alignment: data.alignment,
-          imageUrl: null,
-          statBlock: data.statBlock,
-          size: data.size,
-          disposition: data.disposition,
-          displayMode: data.displayMode,
-          createdById: null,
-          campaignId: null,
-        },
-      });
-      created++;
+      const data = transformMonster(monster);
+      const checked = NpcStatBlockSchema.safeParse(data.statBlock);
+      if (!checked.success) {
+        rejected++;
+        logger.warn(`Left out SRD creature "${monster.name}": ${checked.error.issues[0]?.message ?? 'invalid stat block'}`);
+        continue;
+      }
+      if (!ready.has(data.name)) ready.set(data.name, { monster, data: { ...data, statBlock: checked.data } });
     } catch (err) {
-      // Log but don't abort — skip problematic entries
-      logger.error(`Failed to insert "${monster.name}"`, { err: err });
+      rejected++;
+      logger.warn(`Left out SRD creature "${String(monster?.name)}": it could not be read`, { err });
     }
   }
 
-  return {
-    fetched: monsters.length,
-    created,
-    updated,
-    skipped,
-    alreadyExisted: existingByName.size,
-  };
+  return prisma.$transaction(async (tx: Prisma.TransactionClient): Promise<SeedResult> => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${SEED_LOCK_KEY})`;
+
+    // Which SRD creatures already exist (and whether they carry HP)
+    const existing = await tx.creatureTemplate.findMany({
+      where: { source: 'srd' },
+      select: { id: true, name: true, statBlock: true },
+    });
+    const existingByName = new Map(existing.map((e) => [e.name, e]));
+
+    let updated = 0;
+    let skipped = 0;
+    const toCreate: Prisma.CreatureTemplateCreateManyInput[] = [];
+
+    for (const { monster, data } of ready.values()) {
+      const existingRow = existingByName.get(data.name);
+      if (existingRow) {
+        // Pre-HP row: add the missing hit points, leaving the rest as it was
+        const patched = backfillStatBlockHp(existingRow.statBlock, monster.hit_points, monster.hit_dice);
+        if (patched) {
+          await tx.creatureTemplate.update({
+            where: { id: existingRow.id },
+            data: { statBlock: toJson(patched) },
+          });
+          updated++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
+
+      toCreate.push({
+        id: randomUUID(),
+        name: data.name,
+        gameSystem: data.gameSystem,
+        source: data.source,
+        challengeRating: data.challengeRating,
+        creatureType: data.creatureType,
+        alignment: data.alignment,
+        imageUrl: null,
+        statBlock: toJson(data.statBlock),
+        size: toJson(data.size),
+        disposition: data.disposition,
+        displayMode: data.displayMode,
+        createdById: null,
+        campaignId: null,
+      });
+    }
+
+    if (toCreate.length > 0) await tx.creatureTemplate.createMany({ data: toCreate });
+
+    return {
+      fetched: monsters.length,
+      created: toCreate.length,
+      updated,
+      skipped,
+      alreadyExisted: existingByName.size,
+      rejected,
+    };
+  }, { timeout: SEED_WRITE_TIMEOUT_MS, maxWait: SEED_WRITE_TIMEOUT_MS });
 }
 
 /**

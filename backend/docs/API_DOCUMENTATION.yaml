@@ -7861,9 +7861,10 @@ paths:
       summary: Check SRD seed status
       description: >-
         Returns how many SRD and custom creatures are stored, from which a
-        client tells whether SRD creatures have been seeded, and whether a
-        seed is running on this server. Any campaign member can check (not
-        DM-only, unlike the rest of this library).
+        client tells whether SRD creatures have been seeded, whether a
+        seed is running on this server, and whether the caller may run one.
+        Any campaign member can check (not DM-only, unlike the rest of this
+        library).
       operationId: getSrdSeedStatus
       security:
         - cookieAuth: []
@@ -7888,6 +7889,9 @@ paths:
                       this campaign's own.
                   seedInProgress:
                     type: boolean
+                  canSeed:
+                    type: boolean
+                    description: Whether the caller may run `POST …/creatures/seed`, which only a platform admin may.
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -7896,19 +7900,32 @@ paths:
       tags: [Creatures]
       summary: Seed SRD creatures
       description: |
-        Fetch SRD creatures from Open5e and populate the library (DM only).
+        Fetch SRD creatures from Open5e and populate the library. **Platform
+        admins only** (it was any campaign DM, which is any user): anyone else
+        gets 403 with the message `Only an administrator can import the SRD
+        creatures, because every campaign on this server shares them. Ask an
+        administrator to import them.` The admin need not be a member of the
+        campaign in the address; it plays no part.
         Safe to call multiple times — existing SRD creatures, matched by name,
-        are not duplicated. SRD creatures belong to no campaign, so seeding
-        from one campaign fills the library of every campaign on the
-        instance. They are stored with `gameSystem: DND_5E`. The request
-        waits until seeding finishes.
+        are not duplicated, even when the command-line seed script or another
+        backend process seeds at the same moment. SRD creatures belong to no
+        campaign, so seeding from one campaign fills the library of every
+        campaign on the instance. They are stored with `gameSystem: DND_5E`.
+        The request waits until seeding finishes.
+
+        Pages are fetched from `https://api.open5e.com` only, with 15 seconds
+        allowed for each and at most 40 pages; a next page on any other host,
+        a page that does not answer in time, an error answer or a body that
+        is not a list of creatures stops the run before anything is written,
+        with 502. Each creature's stat block is checked as the Creature
+        Library checks one sent to it, and one that fails is left out and
+        counted in `rejected`.
 
         Existing SRD creatures stored before hit points were tracked are updated
         in place with `hpMax` / `hitDice`; only those missing keys are added, and
         custom creatures are never modified.
 
-        Returns 409 if seeding is already in progress on this server. A
-        creature that fails to insert is logged and left out of every count.
+        Returns 409 if seeding is already in progress on this server.
       operationId: seedSrdCreatures
       security:
         - cookieAuth: []
@@ -7939,8 +7956,18 @@ paths:
                   alreadyExisted:
                     type: integer
                     description: SRD creatures already stored before this run
+                  rejected:
+                    type: integer
+                    description: Creatures left out because their stat block failed the Creature Library's check, or could not be read
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller is not a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only an administrator can import the SRD creatures, because every campaign on this server shares them. Ask an administrator to import them.
         '409':
           description: Seeding already in progress
           content:
@@ -7951,7 +7978,7 @@ paths:
                 error: Conflict
                 message: SRD seeding is already in progress. Please wait.
         '500':
-          description: The fetch from Open5e failed, or another error stopped the run.
+          description: Another error stopped the run.
           content:
             application/json:
               schema:
@@ -7959,6 +7986,20 @@ paths:
               example:
                 error: Internal Server Error
                 message: Failed to seed SRD creatures. Check that the server can reach api.open5e.com.
+        '502':
+          description: >-
+            Open5e could not be read, did not answer a page within 15 seconds,
+            answered an error, sent something that is not a list of creatures,
+            pointed the next page at another host, or listed more than 40
+            pages. Nothing was written. The message says which. Before 1.5.2
+            a failed fetch answered 500, and a stalled one did not answer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Gateway
+                message: api.open5e.com did not answer within 15 seconds. Nothing was imported; check that this server can reach it, then try again.
 
   # ============================================
   # TOKEN TEMPLATE ENDPOINTS
