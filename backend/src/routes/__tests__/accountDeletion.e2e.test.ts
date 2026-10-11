@@ -209,6 +209,19 @@ it('refuses while the person runs a campaign of their own, and changes nothing',
   expect(await prisma.user.findUnique({ where: { id: owner.user.id } })).not.toBeNull();
 });
 
+it('refuses while the person sits in the DM seat of a campaign they do not own, and changes nothing', async () => {
+  const owner = await member('Deletion Former Owner');
+  const dm = await member('Deletion Seated DM');
+  const campaignId = await campaignRunBy(owner.user.id, dm.user.id);
+  const name = (await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } })).name;
+
+  const res = await dm.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD });
+  expect(res.status).toBe(409);
+  expect(res.body.message).toContain(name);
+  expect(await prisma.user.findUnique({ where: { id: dm.user.id } })).not.toBeNull();
+  expect((await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } })).ownerId).toBe(owner.user.id);
+});
+
 // An admin has to be able to remove an account that will not step down: a
 // user who runs their own campaigns cannot otherwise keep their account by
 // refusing to hand them over. The refusal lists each campaign in the way and

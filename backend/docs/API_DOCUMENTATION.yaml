@@ -1419,14 +1419,18 @@ paths:
         not change the answer; a shutdown waits up to 4 seconds for the
         removal to finish.
 
-        Only campaigns the user owns are checked. One whose DM seat another
-        member holds passes to that DM. One where the user holds the DM seat,
-        or where nobody does, refuses the deletion with 409 and nothing
-        changes. A campaign the user is DM of but does not own (after a DM
-        handover) is not checked: the deletion goes ahead and leaves that
-        campaign with no DM.
+        The user's campaigns are checked before anything is written. A campaign
+        the user owns whose DM seat another member holds passes to that DM.
+        The deletion is refused with 409, and nothing changes, when the user
+        sits in the DM seat of any campaign, whether or not they own it (the
+        seat can be held by a member who is not the owner), or owns a campaign
+        whose DM seat is empty. A campaign the user is only a player or
+        spectator in is not checked.
 
-        Wrong passwords count only towards the general API rate limit.
+        Rate limits: the wrong-password allowance above is checked before the
+        password is, so past it the answer is 429 whatever password is sent.
+        The general API limit (300 requests per minute per address, set by
+        `RATE_LIMIT_MAX_REQUESTS`) applies as well.
       operationId: deleteOwnAccount
       security:
         - cookieAuth: []
@@ -1498,6 +1502,22 @@ paths:
               example:
                 error: Conflict
                 message: You run "Curse of the Lantern". Hand the DM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.
+        '429':
+          description: >-
+            The account has had 10 wrong passwords in 15 minutes from every
+            address together (`Too many wrong passwords, please try again
+            later`, with `Retry-After`), or the request waited 15 seconds
+            behind other password checks for the account that were still
+            running (`Other attempts are still being checked. Please try again
+            in a moment.`, with `Retry-After: 5`; not counted). The general
+            API limit answers 429 too. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Rate Limited
+                message: Too many wrong passwords, please try again later
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1810,10 +1830,11 @@ paths:
         every login session and live WebSocket connection the deleted user
         had, and broadcasts `roster.updated` (`member.left`) to each campaign
         they were a member of. What stays and what goes, which campaigns are
-        checked, and the 409 for a user who sits as DM of a campaign or owns
-        one whose DM seat is empty, are as for `DELETE /api/auth/account`, and
-        so is the removal of the personal files just after the answer. No
-        password is asked for.
+        checked, and the 409 for a user who sits as DM of any campaign, owned
+        or not, or owns one whose DM seat is empty, are as for
+        `DELETE /api/auth/account`, and so is the removal of the personal files
+        just after the answer. No password is asked for, so the wrong-password
+        allowance does not apply; only the general API limit can answer 429.
       operationId: deleteUser
       security:
         - cookieAuth: []
