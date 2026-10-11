@@ -10,6 +10,7 @@ import {
   sheetShortTextSchema as shortText,
   sheetLongTextSchema as longText,
 } from './sheetText';
+import { sheetList } from './sheetLists';
 
 /**
  * Characteristic
@@ -120,7 +121,7 @@ const fightingSkillSchema = z.object({
  */
 const fightingSkillsSchema = z.object({
   brawl: fightingSkillSchema,
-  custom: z.array(fightingSkillSchema),
+  custom: sheetList(fightingSkillSchema),
 });
 
 /**
@@ -139,7 +140,7 @@ const firearmsSkillsSchema = z.object({
   handgun: firearmsSkillSchema,
   rifle: firearmsSkillSchema,
   shotgun: firearmsSkillSchema,
-  custom: z.array(firearmsSkillSchema),
+  custom: sheetList(firearmsSkillSchema),
 });
 
 /**
@@ -187,7 +188,7 @@ const skillsSchema = z.object({
   intimidate: skillSchema,
   jump: skillSchema,
   languageOwn: skillSchema.extend({ language: shortText.min(1) }),
-  languageOther: z.array(languageSkillSchema),
+  languageOther: sheetList(languageSkillSchema),
   law: skillSchema,
   libraryUse: skillSchema,
   listen: skillSchema,
@@ -203,7 +204,7 @@ const skillsSchema = z.object({
   psychoanalysis: skillSchema,
   psychology: skillSchema,
   ride: skillSchema,
-  science: z.array(scienceSkillSchema),
+  science: sheetList(scienceSkillSchema),
   sleightOfHand: skillSchema,
   spotHidden: skillSchema,
   stealth: skillSchema,
@@ -213,7 +214,7 @@ const skillsSchema = z.object({
   track: skillSchema,
   // A custom skill is named by the player, and the sheet and the roll list
   // show that name.
-  customSkills: z.array(skillSchema.extend({ name: shortText.optional() })),
+  customSkills: sheetList(skillSchema.extend({ name: shortText.optional() })),
 });
 
 /**
@@ -237,7 +238,7 @@ const weaponSchema = z.object({
  * Combat
  */
 const combatSchema = z.object({
-  weapons: z.array(weaponSchema),
+  weapons: sheetList(weaponSchema),
 });
 
 /**
@@ -256,7 +257,7 @@ const conditionsSchema = z.object({
  */
 const spellsAndMythosSchema = z.object({
   cthulhuMythos: z.number().int().min(0).max(100),
-  spells: z.array(shortText),
+  spells: sheetList(shortText),
 });
 
 /**
@@ -349,12 +350,12 @@ export const callOfCthulhu7eCharacterDataSchema = z.object({
   skills: skillsSchema.optional(),
   combat: combatSchema.optional(),
   conditions: conditionsSchema.optional(),
-  pulpTalents: z.array(shortText).optional(),
+  pulpTalents: sheetList(shortText).optional(),
   spellsAndMythos: spellsAndMythosSchema.optional(),
-  possessions: z.array(possessionSchema).optional(),
+  possessions: sheetList(possessionSchema).optional(),
   wealth: wealthSchema.optional(),
   backstory: backstorySchema.optional(),
-  contacts: z.array(contactSchema).optional(),
+  contacts: sheetList(contactSchema).optional(),
   appearance: appearanceSchema.optional(),
   notes: longText.optional(),
 });

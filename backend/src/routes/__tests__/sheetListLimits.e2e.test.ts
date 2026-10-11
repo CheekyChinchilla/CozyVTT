@@ -148,3 +148,33 @@ describe('a Pathfinder 2e sheet', () => {
     expect(named(unchanged.body)).toEqual(['skills.stealth.itemBonus: Must be from -30 to 30']);
   });
 });
+
+describe('a Call of Cthulhu sheet', () => {
+  const gameSystem = GameSystem.CALL_OF_CTHULHU_7E;
+  const blank = () => getBlankCharacterTemplate(gameSystem) as Record<string, unknown>;
+
+  async function create(): Promise<string> {
+    const res = await agent.post('/api/characters').send({ name: 'Armitage', gameSystem, data: blank() });
+    expect(res.status).toBe(201);
+    return res.body.character.id as string;
+  }
+
+  it('refuses too many possessions and weapons, naming each list', async () => {
+    const id = await create();
+    const many = (count: number) => Array.from({ length: count }, (_unused, i) => ({ name: `Thing ${i}` }));
+    const res = await agent.put(`/api/characters/${id}`).send({
+      data: { ...blank(), possessions: many(SHEET_LIST_MAX + 1), combat: { weapons: many(SHEET_LIST_MAX + 1) } },
+    });
+
+    expect(res.status).toBe(400);
+    expect(named(res.body).sort()).toEqual([...refusal('combat.weapons'), ...refusal('possessions')].sort());
+  });
+
+  it(`takes ${SHEET_LIST_MAX} possessions`, async () => {
+    const id = await create();
+    const possessions = Array.from({ length: SHEET_LIST_MAX }, (_unused, i) => ({ name: `Thing ${i}` }));
+    const res = await agent.put(`/api/characters/${id}`).send({ data: { ...blank(), possessions } });
+    expect(res.status).toBe(200);
+    expect(res.body.character.data.possessions).toHaveLength(SHEET_LIST_MAX);
+  });
+});

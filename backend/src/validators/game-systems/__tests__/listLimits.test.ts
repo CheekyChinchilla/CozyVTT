@@ -16,6 +16,7 @@ import {
   validateCharacterData,
   dnd5eCharacterDataSchema,
   pathfinder2eCharacterDataSchema,
+  callOfCthulhu7eCharacterDataSchema,
   flexibleCharacterDataSchema,
 } from '../index';
 import { unboundedLists } from '../../../__tests__/helpers/sheetSchemaWalk';
@@ -31,6 +32,7 @@ describe('every list on a sheet', () => {
   it.each([
     ['DND_5E', dnd5eCharacterDataSchema],
     ['PATHFINDER_2E', pathfinder2eCharacterDataSchema],
+    ['CALL_OF_CTHULHU_7E', callOfCthulhu7eCharacterDataSchema],
     ['Flexible', flexibleCharacterDataSchema],
   ] as Array<[string, z.ZodType]>)('has a count limit in %s', (_system, schema) => {
     expect(unboundedLists(schema)).toEqual([]);
@@ -228,5 +230,39 @@ describe('the Pathfinder 2e spell slots', () => {
   it(`take ${SPELL_SLOTS_MAX} slots, all used, and no slots`, () => {
     expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: SPELL_SLOTS_MAX, expended: SPELL_SLOTS_MAX }))).toEqual([]);
     expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: 0, expended: 0 }))).toEqual([]);
+  });
+});
+
+describe('the Call of Cthulhu lists', () => {
+  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.CALL_OF_CTHULHU_7E), path, value);
+  const skill = { baseValue: 20, currentValue: 20, improvementChecked: false };
+  const named = { name: 'Revolver' };
+
+  /** Every list on a Call of Cthulhu sheet, with an entry that is valid in it. */
+  const lists: Array<[string, unknown]> = [
+    ['skills.fighting.custom', skill],
+    ['skills.firearms.custom', skill],
+    ['skills.languageOther', { ...skill, language: 'Latin' }],
+    ['skills.science', { ...skill, specialization: 'Botany' }],
+    ['skills.customSkills', { ...skill, name: 'Spelunking' }],
+    ['combat.weapons', named],
+    ['spellsAndMythos.spells', 'Contact Nyarlathotep'],
+    ['pulpTalents', 'Hardy'],
+    ['possessions', named],
+    ['contacts', { name: 'Dr Armitage' }],
+  ];
+
+  it('are all of them tried here', () => {
+    expect(lists).toHaveLength(10);
+  });
+
+  it.each(lists)('refuse %s past the limit, naming the list', (path, entry) => {
+    expect(refusals(GameSystem.CALL_OF_CTHULHU_7E, sheet(path, rows(SHEET_LIST_MAX + 1, entry)))).toEqual([
+      `${path}: Can hold at most ${SHEET_LIST_MAX} entries`,
+    ]);
+  });
+
+  it.each(lists)('take %s at the limit', (path, entry) => {
+    expect(refusals(GameSystem.CALL_OF_CTHULHU_7E, sheet(path, rows(SHEET_LIST_MAX, entry)))).toEqual([]);
   });
 });

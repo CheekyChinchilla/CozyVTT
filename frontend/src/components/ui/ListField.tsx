@@ -35,6 +35,8 @@ interface ListFieldProps<T> {
    * taken, and a note says why. A list already past it may still be shortened.
    */
   max?: number;
+  /** The limit note's classes, when the sheet's palette is not the default. */
+  noteClassName?: string;
 }
 
 /** Whether a text still says exactly this list. */
@@ -54,6 +56,7 @@ export default function ListField<T>({
   id,
   'aria-label': ariaLabel,
   max,
+  noteClassName,
 }: ListFieldProps<T>) {
   // What was typed, while the box is in use. Null shows the list as written.
   const [draft, setDraft] = useState<string | null>(null);
@@ -91,7 +94,7 @@ export default function ListField<T>({
   return (
     <>
       {box}
-      <ListLimitNote full={turnedAway || value.length >= max} max={max} />
+      <ListLimitNote full={turnedAway || value.length >= max} max={max} className={noteClassName} />
     </>
   );
 }

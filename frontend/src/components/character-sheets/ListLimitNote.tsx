@@ -27,10 +27,19 @@ export function listFullMessage(max: number): string {
  * The note under an add button or a list box that has stopped taking entries.
  * Draws nothing while the list has room.
  */
-export default function ListLimitNote({ full, max = SHEET_LIST_MAX }: { full: boolean; max?: number }) {
+export default function ListLimitNote({
+  full,
+  max = SHEET_LIST_MAX,
+  className = 'mt-1 text-xs italic text-stone-600',
+}: {
+  full: boolean;
+  max?: number;
+  /** The note's classes, for a sheet with a palette of its own. */
+  className?: string;
+}) {
   if (!full) return null;
   return (
-    <p role="status" className="mt-1 text-xs italic text-stone-600">
+    <p role="status" className={className}>
       {listFullMessage(max)}
     </p>
   );
