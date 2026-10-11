@@ -470,3 +470,10 @@ describe('backend/DATABASE_MIGRATIONS.md', () => {
     expect(scripts.filter((name) => !doc.includes(`dist/scripts/${name}.js`))).toEqual([]);
   });
 });
+
+describe('what a reader is asked to send, and where', () => {
+  // The Won't Do list kept the template's "explain why" line under a real entry.
+  it('FUTURE_FEATURES.md keeps no template placeholder', () => {
+    expect(read('docs/FUTURE_FEATURES.md')).not.toMatch(/_\(items intentionally dropped/);
+  });
+});
