@@ -9185,6 +9185,15 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Unexpected server error, such as an uploads folder the server cannot read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to check the uploads folder
     delete:
       tags: [Admin]
       summary: Delete leftover files
@@ -9243,6 +9252,15 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to delete the files
 
 # WebSocket events are not described here. Their reference is
 # backend/docs/WEBSOCKET_DOCUMENTATION.md, whose event table is generated from
