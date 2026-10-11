@@ -127,7 +127,8 @@ jobs:
   # Known advisories, from both lockfiles. A high or critical advisory in the
   # packages an instance runs (--omit=dev) fails the job. The developer
   # tools, which never reach an instance, are listed after it and fail
-  # nothing: their advisories wait for the tools' next major versions.
+  # nothing: their advisories wait for the tools' next major versions. Each
+  # audit runs whatever the ones before it found, so every result is shown.
   audit:
     name: Dependency advisories
     runs-on: ubuntu-latest
@@ -141,6 +142,7 @@ jobs:
         working-directory: backend
         run: npm audit --omit=dev --audit-level=high
       - name: Frontend, what an instance runs
+        if: always()
         working-directory: frontend
         run: npm audit --omit=dev --audit-level=high
       - name: Both projects with their developer tools (report only)

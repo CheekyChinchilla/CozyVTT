@@ -686,6 +686,13 @@ describe('the dependency check SECURITY.md describes', () => {
     expect(read('SECURITY.md')).toMatch(/high or critical advisory .*fails/);
   });
 
+  // A failing backend audit skipped the frontend's, so its result was never seen.
+  it('runs every audit whatever the audits before it found', () => {
+    const audits = jobSteps('audit').filter((step) => /npm audit\b/.test(step));
+    expect(audits.length).toBeGreaterThan(1);
+    for (const step of audits.slice(1)) expect(step).toMatch(/^\s*if: always\(\)\s*$/m);
+  });
+
   it('reports the developer tools without failing on them', () => {
     const tools = jobSteps('audit').filter((step) => /npm audit\b/.test(step) && !/--omit=dev/.test(step));
     expect(tools.length).toBeGreaterThan(0);
