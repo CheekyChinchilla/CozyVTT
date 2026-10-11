@@ -284,7 +284,7 @@ ingress:
   - service: http_status:404
 ```
 
-This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`) working without extra configuration. So that nginx believes the tunnel about each visitor's address and about HTTPS, add `NGINX_TRUSTED_PROXIES=172.16.0.0/12` to `.env`, and keep nginx's ports to this server with `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains.
+This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`) working without extra configuration. So that nginx believes the tunnel about each visitor's address and about HTTPS, add `NGINX_TRUSTED_PROXIES=172.16.0.0/12` to `.env` (the range on most servers; [check yours](#the-range-for-a-proxy-on-the-same-server)), and keep nginx's ports to this server with `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains.
 
 **2. Run `cloudflared` as a container** on CozyVTT's own Docker network. Nothing is published to the host at all — the tunnel reaches the containers by name:
 
@@ -383,7 +383,7 @@ You want the phone's public address there. **If it starts with `172.`, `10.` or 
 
 - **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`, or the range you listed does not hold the address shown. Add its line from the table above, or the range [your server uses](#the-range-for-a-proxy-on-the-same-server).
 - **Docker hands visitors to nginx from its own address** and there is no proxy in front: Docker Desktop and rootless Docker do this for every visitor, and a server reached over IPv6 does it for those visitors. Listing Docker's range would let them choose their address, so put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front instead, set up as above.
-- **nginx never read the setting**, because `nginx/trusted-proxies.envsh` lost its permission to run (a ZIP download, or a copy through some Windows or NAS file systems, can do this): `docker compose logs nginx | grep "not executable"` then prints a line ending in `Ignoring /docker-entrypoint.d/19-cozyvtt-trusted-proxies.envsh, not executable`, and `chmod +x nginx/trusted-proxies.envsh` (in a git clone, `git checkout nginx/trusted-proxies.envsh` also works) followed by `docker compose restart nginx` fixes it.
+- **nginx never read the setting**, because `nginx/trusted-proxies.envsh` lost its permission to run (a ZIP download, or a copy through some Windows or NAS file systems, can do this): `docker compose logs nginx | grep "not executable"` then prints a line ending in `Ignoring /docker-entrypoint.d/19-cozyvtt-trusted-proxies.envsh, not executable`, and `chmod +x nginx/trusted-proxies.envsh` followed by `docker compose restart nginx` fixes it.
 
 If the address is one of Cloudflare's own (the ranges on [cloudflare.com/ips](https://www.cloudflare.com/ips/)), Cloudflare's proxy is in front of your server's public address: add those ranges as in the table.
 
@@ -1558,7 +1558,7 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    HTTP_PORT=127.0.0.1:80
    HTTPS_PORT=127.0.0.1:443
    ```
-   then run `docker compose up -d`. Without the first line, every visitor is counted as the tunnel's one address, so a few wrong passwords from anyone lock everybody out of signing in, and everyone shares one limit of 300 requests a minute, which a table opening a map together can reach. Without the other two, a visitor reaching your server over IPv6 could choose the address CozyVTT counts them as. [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains both.
+   then run `docker compose up -d`. `172.16.0.0/12` is the range on most servers; [check yours](#the-range-for-a-proxy-on-the-same-server). Without the first line, every visitor is counted as the tunnel's one address, so a few wrong passwords from anyone lock everybody out of signing in, and everyone shares one limit of 300 requests a minute, which a table opening a map together can reach. Without the other two, a visitor reaching your server over IPv6 could choose the address CozyVTT counts them as. [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains both.
 9. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
 Once running, ports 80 and 443 are open to the server itself and nothing else, so only SSH (port 22, or your chosen alternative) needs to be reachable from the internet, and even that you can put behind Cloudflare Access if you want.
