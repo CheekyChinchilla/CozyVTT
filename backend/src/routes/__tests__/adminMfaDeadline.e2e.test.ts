@@ -17,7 +17,7 @@
 
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
-import { prisma, createTestUser, cleanupUsers, ensureLoginSessionTable, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { ADMIN_MFA_POLICY_MESSAGE, resetAdminMfaPolicyCache } from '../../services/adminMfaPolicy';
 
 const app = createTestApp();
@@ -43,11 +43,6 @@ async function signedIn(role: 'ADMIN' | 'USER', mfa: boolean) {
   const login = await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD });
   return { user, agent, login };
 }
-
-beforeAll(async () => {
-  // A promotion ends the account's sessions, which needs the session table.
-  await ensureLoginSessionTable();
-});
 
 afterAll(async () => {
   await prisma.systemLog.deleteMany({ where: { userId: { in: created } } });

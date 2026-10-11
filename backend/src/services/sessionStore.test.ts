@@ -1,18 +1,17 @@
 /**
  * Ending a user's login sessions, and the one case that keeps one.
  *
- * These rows belong to connect-pg-simple, not to Prisma, so the table is
- * created here to exercise the real SQL. The production app creates it at
- * startup; the test app keeps sessions in memory and never makes it. Other
+ * These rows belong to connect-pg-simple, not to Prisma. The production app
+ * creates the table at startup, and the test run's global setup does the
+ * same (helpers/loginSessionTable.ts), so the real SQL runs here. Other
  * suites read the table at the same time, so this one touches only its own
- * rows and leaves the table in place.
+ * rows.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
 import { prisma } from '../config/database';
 import { destroyUserLoginSessions } from './sessionStore';
-import { ensureLoginSessionTable } from '../__tests__/helpers/db';
 
 const ALICE = 'user-alice';
 const BOB = 'user-bob';
@@ -33,10 +32,6 @@ const sidsFor = async (userId: string): Promise<string[]> => {
 
 const removeOwnRows = () =>
   prisma.$executeRaw`DELETE FROM session WHERE sess->>'userId' IN (${ALICE}, ${BOB})`;
-
-beforeAll(async () => {
-  await ensureLoginSessionTable();
-});
 
 beforeEach(async () => {
   await removeOwnRows();

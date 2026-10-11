@@ -22,6 +22,7 @@ import request from 'supertest';
 import type express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
+import { loginSessionTableSql } from '../../__tests__/helpers/loginSessionTable';
 
 jest.setTimeout(60000);
 
@@ -40,9 +41,8 @@ beforeAll(async () => {
   process.env.DATABASE_URL = schema.url;
   db = new PrismaClient({ datasources: { db: { url: schema.url } } });
   // connect-pg-simple's table, which ending an account's sign-ins writes to.
-  await db.$executeRawUnsafe(
-    'CREATE TABLE IF NOT EXISTS "session" ("sid" varchar NOT NULL PRIMARY KEY, "sess" json NOT NULL, "expire" timestamp(6) NOT NULL)'
-  );
+  // The run's global setup makes it in the shared schema only.
+  await db.$executeRawUnsafe(loginSessionTableSql('last_admin_race_test'));
 
   // The app's client, which config/database.ts takes from here when it is set.
   (global as unknown as { prisma?: unknown }).prisma = db.$extends({

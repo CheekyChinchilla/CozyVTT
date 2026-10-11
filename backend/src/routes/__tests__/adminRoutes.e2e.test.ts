@@ -32,7 +32,6 @@ import {
   createTestUser,
   cleanupUsers,
   testEmail,
-  ensureLoginSessionTable,
   TEST_PASSWORD,
 } from '../../__tests__/helpers/db';
 import { hashResetToken } from '../../services/passwordResetTokens';
@@ -171,7 +170,6 @@ describe('GET /api/admin/stats', () => {
 
 describe('GET /api/admin/activity', () => {
   it('shows who is signed in and what admins have done', async () => {
-    await ensureLoginSessionTable();
     const sid = `admin-routes-${adminId}`;
     sessionIds.push(sid);
     await prisma.$executeRaw`

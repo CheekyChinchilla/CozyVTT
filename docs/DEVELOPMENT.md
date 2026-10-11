@@ -379,6 +379,13 @@ Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration test
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
+> **The run makes the sign-in table itself.** The backend keeps sign-ins in a
+> table named `session`, which the session store creates when the server
+> starts. The Prisma schema does not describe it, so `prisma db push` drops
+> it. Before any suite starts, jest makes it again from the session store's
+> own definition (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
+> that end an account's sign-ins pass straight after a push.
+
 ### Frontend Tests (Vitest)
 
 ```bash
