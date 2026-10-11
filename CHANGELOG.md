@@ -326,7 +326,7 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **Any environment file in the `backend` or `frontend` folder is now kept out of the Docker images.** The build left out `.env` and a few other named files, so a file with another name, such as `.env.staging`, went into the image with the code. Every file whose name starts with `.env.` is now left out, except `.env.example`. A standard install is unchanged: its settings are in the `.env` beside `docker-compose.yml`, which these builds never copied.
 
-- **The backend's libraries are updated to their newest releases within the versions it already used.** Two of them had published security advisories: the image library, and the library that reads a visitor's address from the proxy in front of the backend. Neither could be reached in CozyVTT as it is set up. The next `docker compose up -d --build` installs the new versions, and there is nothing else to do.
+- **The libraries the backend and the app are built on are updated to their newest releases within the versions they already used.** Two of the backend's had published security advisories: the image library, and the library that reads a visitor's address from the proxy in front of the backend. Neither could be reached in CozyVTT as it is set up. The next `docker compose up -d --build` installs the new versions, and there is nothing else to do.
 
 ## [1.5.1] - 2026-10-10
 
