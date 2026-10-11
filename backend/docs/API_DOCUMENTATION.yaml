@@ -1446,9 +1446,9 @@ paths:
         '409':
           description: >-
             The caller is the instance's only admin (another user has to be
-            promoted to admin first), or owns a campaign whose DM seat is
-            theirs or empty (the message names each one). Checked after the
-            password. Nothing was changed. The body is `{ error, message }`
+            promoted to admin first), or sits as DM of a campaign, whether or
+            not they own it, or owns a campaign whose DM seat is empty (the
+            message names each one). Checked after the password. Nothing was changed. The body is `{ error, message }`
             only; unlike `DELETE /api/users/{id}` it carries no `campaigns`
             list.
           content:
@@ -1754,8 +1754,8 @@ paths:
         every login session and live WebSocket connection the deleted user
         had, and broadcasts `roster.updated` (`member.left`) to each campaign
         they were a member of. What stays and what goes, which campaigns are
-        checked, and the 409 for a user who owns a campaign whose DM seat is
-        theirs or empty, are as for `DELETE /api/auth/account`. No
+        checked, and the 409 for a user who sits as DM of a campaign or owns
+        one whose DM seat is empty, are as for `DELETE /api/auth/account`. No
         password is asked for.
       operationId: deleteUser
       security:
@@ -1804,8 +1804,9 @@ paths:
           description: >-
             The user is the instance's only admin (which can happen only when
             the calling admin lost the role at the same moment), with no
-            `campaigns`; or the user owns a campaign whose DM seat is theirs
-            or empty. `campaigns` lists each such campaign with its other members,
+            `campaigns`; or the user sits as DM of a campaign, whether or not
+            they own it, or owns a campaign whose DM seat is empty. `campaigns`
+            lists each such campaign with its other members,
             so the admin can hand the DM seat over (`PUT
             /api/campaigns/{campaignId}/dm`) or delete the campaign and try
             again. Nothing was changed.
@@ -2680,6 +2681,12 @@ paths:
         order and the map on screen are sent again as each new role sees it.
         The caller need not be a member, so an unknown campaign is a 404 here,
         as is a `userId` that is not a member; naming the sitting DM is a 400.
+        Who may hand the seat over, who holds it and the change are read and
+        made as one serializable transaction, so of two hand-overs at the same
+        moment the second sees the first: a sitting DM whose seat was handed
+        on meanwhile is refused with 403. Every DM row is stepped down, so a
+        campaign left with two DMs by an older version comes out with one;
+        `previousDmId` names the first of them.
         The response lists every membership with its `user`.
       operationId: transferDM
       security:

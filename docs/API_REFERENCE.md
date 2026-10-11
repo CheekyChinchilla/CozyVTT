@@ -223,7 +223,9 @@ something still names stay, with no owner, as do the character templates they
 published and the token templates and creatures they made.
 Every sign-in of the account ends, on every device, and any open game connection
 of the account is dropped. The instance's only admin is
-refused with `409` until another user has been promoted to admin.
+refused with `409` until another user has been promoted to admin, and so is
+anyone who sits as DM of a campaign, whether or not they own it, or owns one
+with nobody in the DM seat, until they hand the seat on or delete it.
 
 **Request:**
 ```json
@@ -438,7 +440,9 @@ sitting DM, the campaign owner, or a platform admin.**
 
 The named member becomes `DM` and the sitting DM becomes `PLAYER`, in a single
 transaction: a campaign is never observable with two DMs or none. A campaign
-still has exactly one DM — the seat moves rather than being shared.
+still has exactly one DM — the seat moves rather than being shared. Of two
+hand-overs at the same moment, the second sees the first, and a role change or
+removal of a member who has just been handed the seat is refused as for any DM.
 
 **The campaign's owner does not change.** Ownership and the DM role are separate
 facts, which is what allows an owner to hand the game to a co-DM or to an

@@ -23,6 +23,7 @@ import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote } from './leftCampaigns';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
+import { inSerializableTransaction } from '../utils/serializable';
 import { toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
@@ -922,62 +923,47 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
   try {
     const { campaignId, userId } = req.params;
 
-    // Find the membership
-    const membership = await prisma.campaignMembership.findUnique({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
-        },
-      },
+    // Who the member is, and the removal, in one serializable transaction
+    // (utils/serializable.ts): a DM hand-over landing in between could
+    // otherwise give this member the seat just before they were removed,
+    // leaving the campaign with no DM.
+    const refusal = await inSerializableTransaction(async (tx): Promise<{ status: number; message: string } | null> => {
+      const membership = await tx.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId } },
+        select: { role: true },
+      });
+      if (!membership) {
+        return { status: 404, message: 'User is not a member of this campaign' };
+      }
+
+      // CRITICAL: Cannot remove the DM
+      if (membership.role === 'DM') {
+        return { status: 400, message: 'Cannot remove the Dungeon Master from the campaign' };
+      }
+
+      // Nor the owner, who is often sitting as a player after handing the seat
+      // over. Taking the seat back needs a membership, and only the DM can add
+      // one, so removing the owner would shut them out of their own campaign with
+      // no way in except deleting it.
+      const campaign = await tx.campaign.findUnique({ where: { id: campaignId }, select: { ownerId: true } });
+      if (campaign?.ownerId === userId) {
+        return { status: 400, message: 'Cannot remove the campaign owner from their own campaign' };
+      }
+
+      // Delete the membership, and take their characters out of the campaign
+      // with it: a character that still named the campaign stayed readable by
+      // every member and editable by the DM, and each save the owner made was
+      // still sent to the table they had left.
+      await tx.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } });
+      await tx.campaignMembership.delete({ where: { userId_campaignId: { userId, campaignId } } });
+      return null;
     });
-
-    if (!membership) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'User is not a member of this campaign',
+    if (refusal) {
+      return res.status(refusal.status).json({
+        error: refusal.status === 404 ? 'Not Found' : 'Bad Request',
+        message: refusal.message,
       });
     }
-
-    // CRITICAL: Cannot remove the DM
-    if (membership.role === 'DM') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot remove the Dungeon Master from the campaign',
-      });
-    }
-
-    // Nor the owner, who is often sitting as a player after handing the seat
-    // over. Taking the seat back needs a membership, and only the DM can add
-    // one, so removing the owner would shut them out of their own campaign with
-    // no way in except deleting it.
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { ownerId: true },
-    });
-
-    if (campaign?.ownerId === userId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot remove the campaign owner from their own campaign',
-      });
-    }
-
-    // Delete the membership, and take their characters out of the campaign
-    // with it: a character that still named the campaign stayed readable by
-    // every member and editable by the DM, and each save the owner made was
-    // still sent to the table they had left.
-    await prisma.$transaction([
-      prisma.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } }),
-      prisma.campaignMembership.delete({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId,
-          },
-        },
-      }),
-    ]);
 
     // A socket caches the campaign from when it authenticated, so without this
     // the person carries on playing until they close the tab. Best-effort: the
@@ -1037,70 +1023,57 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       });
     }
 
-    // Find the membership
-    const membership = await prisma.campaignMembership.findUnique({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
-        },
-      },
-    });
-
-    if (!membership) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'User is not a member of this campaign',
+    // The member's role now, and the change, in one serializable transaction
+    // (utils/serializable.ts): a DM hand-over landing in between could
+    // otherwise give this member the seat just before this took it away,
+    // leaving the campaign with no DM, or a second DM could be made.
+    const outcome = await inSerializableTransaction(async (tx) => {
+      const membership = await tx.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId } },
+        select: { role: true },
       });
-    }
-
-    // CRITICAL: Cannot change the DM's role
-    if (membership.role === 'DM') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot change the Dungeon Master\'s role',
-      });
-    }
-
-    // CRITICAL: Cannot promote to DM (only one DM allowed per campaign)
-    if (role === 'DM') {
-      // Check if a DM already exists
-      const existingDM = await prisma.campaignMembership.findFirst({
-        where: {
-          campaignId,
-          role: 'DM',
-        },
-      });
-
-      if (existingDM) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Campaign already has a Dungeon Master. Only one DM per campaign is allowed.',
-        });
+      if (!membership) {
+        return { ok: false, refused: { status: 404, error: 'Not Found', message: 'User is not a member of this campaign' } } as const;
       }
-    }
 
-    // Update the role
-    const updatedMembership = await prisma.campaignMembership.update({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
-        },
-      },
-      data: { role },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            // SECURITY: never embed `email` — this payload is returned to
-            // DM-role users who shouldn't be able to harvest member emails.
+      // CRITICAL: Cannot change the DM's role
+      if (membership.role === 'DM') {
+        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'Cannot change the Dungeon Master\'s role' } } as const;
+      }
+
+      // CRITICAL: Cannot promote to DM while the campaign has one (only one DM per campaign)
+      if (role === 'DM' && (await tx.campaignMembership.findFirst({ where: { campaignId, role: 'DM' }, select: { userId: true } }))) {
+        return {
+          ok: false,
+          refused: {
+            status: 400,
+            error: 'Bad Request',
+            message: 'Campaign already has a Dungeon Master. Only one DM per campaign is allowed.',
+          },
+        } as const;
+      }
+
+      const updated = await tx.campaignMembership.update({
+        where: { userId_campaignId: { userId, campaignId } },
+        data: { role },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+              // SECURITY: never embed `email` — this payload is returned to
+              // DM-role users who shouldn't be able to harvest member emails.
+            },
           },
         },
-      },
+      });
+      return { ok: true, updated } as const;
     });
+    if (!outcome.ok) {
+      return res.status(outcome.refused.status).json({ error: outcome.refused.error, message: outcome.refused.message });
+    }
+    const updatedMembership = outcome.updated;
 
     // Same reason as the DM transfer below: a socket caches its role from when
     // it authenticated, so a demotion has to reach any open connection or the
@@ -1170,55 +1143,52 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
       });
     }
 
-    if (!(await canTransferDM(callerId, campaignId, platformRole))) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only the DM, the campaign owner, or an admin can transfer the DM role',
+    // Who may hand the seat over, who holds it, and the hand-over itself, in
+    // one serializable transaction (utils/serializable.ts), so the one-DM rule
+    // cannot be caught half-applied. Two hand-overs at once each read the same
+    // sitting DM and each seated their own member, leaving two DMs; now the
+    // second one runs again and sees the first.
+    const transfer = await inSerializableTransaction(async (tx) => {
+      if (!(await canTransferDM(callerId, campaignId, platformRole, tx))) {
+        return {
+          ok: false,
+          refused: { status: 403, error: 'Forbidden', message: 'Only the DM, the campaign owner, or an admin can transfer the DM role' },
+        } as const;
+      }
+
+      const incoming = await tx.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId: incomingId, campaignId } },
+        select: { role: true },
       });
-    }
+      if (!incoming) {
+        return { ok: false, refused: { status: 404, error: 'Not Found', message: 'That user is not a member of this campaign' } } as const;
+      }
+      if (incoming.role === 'DM') {
+        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'That member is already the Dungeon Master' } } as const;
+      }
 
-    const incoming = await prisma.campaignMembership.findUnique({
-      where: { userId_campaignId: { userId: incomingId, campaignId } },
-      select: { role: true },
-    });
-
-    if (!incoming) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'That user is not a member of this campaign',
+      // Every DM row is stepped down, so a campaign an older version left with
+      // two DMs comes out of this with one. A campaign with no DM row is not
+      // supposed to happen, but it is recoverable and this route is how you
+      // would recover it, so it is seated rather than the transfer refused.
+      const sitting = await tx.campaignMembership.findMany({
+        where: { campaignId, role: 'DM' },
+        select: { userId: true },
       });
-    }
-
-    if (incoming.role === 'DM') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'That member is already the Dungeon Master',
-      });
-    }
-
-    const outgoing = await prisma.campaignMembership.findFirst({
-      where: { campaignId, role: 'DM' },
-      select: { userId: true },
-    });
-
-    // Both writes or neither, so the one-DM rule cannot be caught half-applied.
-    await prisma.$transaction([
-      // A campaign with no DM row is not supposed to happen, but it is
-      // recoverable and this route is how you would recover it, so the demotion
-      // is skipped rather than the whole transfer refused.
-      ...(outgoing
-        ? [
-            prisma.campaignMembership.update({
-              where: { userId_campaignId: { userId: outgoing.userId, campaignId } },
-              data: { role: 'PLAYER' },
-            }),
-          ]
-        : []),
-      prisma.campaignMembership.update({
+      if (sitting.length > 0) {
+        await tx.campaignMembership.updateMany({ where: { campaignId, role: 'DM' }, data: { role: 'PLAYER' } });
+      }
+      await tx.campaignMembership.update({
         where: { userId_campaignId: { userId: incomingId, campaignId } },
         data: { role: 'DM' },
-      }),
-    ]);
+      });
+      return { ok: true, steppedDown: sitting.map((m) => m.userId) } as const;
+    });
+    if (!transfer.ok) {
+      return res.status(transfer.refused.status).json({ error: transfer.refused.error, message: transfer.refused.message });
+    }
+    const steppedDown = transfer.steppedDown;
+    const outgoing = steppedDown.length > 0 ? { userId: steppedDown[0] } : null;
 
     const memberships = await prisma.campaignMembership.findMany({
       where: { campaignId },
@@ -1240,8 +1210,8 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     // incoming one cannot use theirs. Best-effort: a socket layer that is not up
     // must not fail a transfer that is already committed.
     try {
-      if (outgoing) {
-        await applyRoleToLiveSockets(outgoing.userId, campaignId, 'PLAYER');
+      for (const previous of steppedDown) {
+        await applyRoleToLiveSockets(previous, campaignId, 'PLAYER');
       }
       await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
 
@@ -1250,7 +1220,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         previousDmId: outgoing?.userId ?? null,
         newDmId: incomingId,
       });
-      await followNewRoles(campaignId, outgoing ? [outgoing.userId, incomingId] : [incomingId]);
+      await followNewRoles(campaignId, [...steppedDown, incomingId]);
     } catch (error) {
       logger.error('DM transfer committed but live sockets were not updated', {
         err: error,

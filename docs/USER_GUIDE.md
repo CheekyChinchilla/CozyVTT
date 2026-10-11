@@ -756,7 +756,7 @@ Your chat messages and the dice rolls you made stay in their campaigns, no longe
 
 Every other browser or device signed in to the account is signed out at the same moment.
 
-> **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
+> **If you run a campaign,** whether you created it or were handed the DM seat, hand the seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
 
 If you are the instance's only admin, the deletion is refused with a message saying so: an instance must always have an admin. Promote another user to admin from the Admin Panel first, then delete your account.
 
