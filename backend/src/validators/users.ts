@@ -15,13 +15,33 @@ import { sanitizeInput } from '../utils/validation';
 export const MAX_DISPLAY_NAME_LENGTH = 50;
 
 /**
- * Text only, stripped of angle brackets and surrounding space, then 1 to 50
- * characters. The length is checked after stripping, so a name that is only
- * spaces or brackets counts as empty.
+ * Characters a name never keeps: controls (Cc), invisible formatting (Cf:
+ * zero-width spaces and joiners, bidirectional overrides, isolates and marks,
+ * the byte-order mark) and the line and paragraph separators. A right-to-left
+ * override turns the rest of a name round wherever it is shown, and a name of
+ * zero-width characters alone looks blank, so either lets one member pass for
+ * another in the roster, chat and dice log.
+ */
+const INVISIBLE_IN_NAMES = /[\p{Cc}\p{Cf}\u2028\u2029]/gu;
+
+/**
+ * A display name as it is stored: invisible characters removed, then in
+ * Unicode's composed form (NFC), so an accented letter typed as a letter and
+ * an accent is the same name as the single accented letter, then stripped of
+ * angle brackets and surrounding space.
+ */
+export function cleanDisplayName(name: string): string {
+  return sanitizeInput(name.replace(INVISIBLE_IN_NAMES, '').normalize('NFC')).trim();
+}
+
+/**
+ * Text only, cleaned as above, then 1 to 50 characters. The length is checked
+ * after cleaning, so a name that is only spaces, brackets or invisible
+ * characters counts as empty. Names are not unique: two people may share one.
  */
 export const displayNameSchema = z
   .string({ error: 'Display name must be text' })
-  .transform((name) => sanitizeInput(name).trim())
+  .transform(cleanDisplayName)
   .pipe(
     z
       .string()

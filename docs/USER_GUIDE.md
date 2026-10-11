@@ -675,6 +675,8 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 Click **Edit** next to your display name or bio to change them. Click **Save Changes** when you're done.
 
+A display name is 1 to 50 characters. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. Display names are not unique: someone else on your instance can have the same one.
+
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder) to open the avatar uploader. Choose an image file, then use the crop tool to frame it perfectly. The zoom slider lets you dial in exactly the right framing. Click **Upload** to save.
 

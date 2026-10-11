@@ -183,6 +183,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The Invite Player dialog searches by name, and no longer lists everyone on the instance.** The dialog loaded every account on the instance into one list, and since any account can create a campaign, any account could read the whole user list, accounts still waiting for an administrator's approval included. **Invite Player** now has a **Search by display name** box: type at least 2 letters and it lists up to 20 people whose name contains them, with their profile pictures, which tell two people with the same name apart. If more match, it says "Showing the first 20 matches. Type more of the name to narrow it down." Accounts waiting for approval are not listed and cannot be invited. See [Inviting Players](docs/DM_GUIDE.md#inviting-players).
 
+- **Display names no longer keep invisible characters.** A display name kept zero-width spaces, control characters and the marks that turn text round to read right to left, so a name could look blank, or show one thing while saying another, in the roster, chat, dice log and invite search. These characters are now removed when a name is set at sign-up, on the Profile page and when an administrator creates or invites an account, and accented letters are stored in one form however they were typed. A name left empty once they are removed is refused with "Display name is required". Names already saved are unchanged until their owner next edits them. Display names are still not unique.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

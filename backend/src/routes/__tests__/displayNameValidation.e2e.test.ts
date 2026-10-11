@@ -85,6 +85,26 @@ describe('registration', () => {
     expect(res.status).toBe(201);
     expect(res.body.user.displayName).toBe('Merric');
   });
+
+  it('stores a name without bidirectional overrides, zero-width or control characters', async () => {
+    // U+202E turns the rest of the line round when it is shown.
+    const res = await register('bidi', 'Mal\u202Elory\u200B\u2066\u0007');
+    expect(res.status).toBe(201);
+    expect(res.body.user.displayName).toBe('Mallory');
+  });
+
+  it('refuses a name made only of invisible characters', async () => {
+    const res = await register('invisible', '\u200B\u200C\u200D\u2060\uFEFF');
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe('Display name is required');
+  });
+
+  it('stores an accented name in one form, however it was typed', async () => {
+    // "e" followed by a combining acute accent, and the single character for e-acute.
+    const res = await register('nfc', 'Rene\u0301e');
+    expect(res.status).toBe(201);
+    expect(res.body.user.displayName).toBe('Ren\u00E9e');
+  });
 });
 
 describe('PUT /api/users/:id', () => {
@@ -107,6 +127,12 @@ describe('PUT /api/users/:id', () => {
   it('leaves the stored name alone when it refuses', async () => {
     const row = await prisma.user.findUnique({ where: { id: userId } });
     expect(row?.displayName).toBe('Owner');
+  });
+
+  it('strips a right-to-left override from a new name', async () => {
+    const res = await agent.put(`/api/users/${userId}`).send({ displayName: 'Dungeon\u202E Master' });
+    expect(res.status).toBe(200);
+    expect(res.body.user.displayName).toBe('Dungeon Master');
   });
 
   it('accepts a 50-character name and stores it trimmed', async () => {
