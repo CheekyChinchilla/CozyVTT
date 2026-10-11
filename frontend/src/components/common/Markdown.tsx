@@ -21,6 +21,14 @@
  *   fetch it, telling that host who opened the document and when. Only images
  *   served by this instance are shown; any other image is replaced by its alt
  *   text.
+ * - **Load anything on this instance but a picture.** Each reader's browser
+ *   fetches an image with their own sign-in, so an image pointing at any other
+ *   address here (a campaign export, an admin page) would be a request made in
+ *   the reader's name. Only a map, token or avatar picture's own address,
+ *   `/api/assets/{maps|tokens|avatars}/{id}`, is shown.
+ * - **Navigate away from the page.** Notes and documents are read at the live
+ *   table, so every link opens in a new tab, with `noopener noreferrer` so the
+ *   page it opens can neither reach back into this one nor learn its address.
  *
  * Adding a plugin here changes every place Markdown is shown. That is the
  * point; check both when you do.
@@ -33,10 +41,20 @@ import remarkBreaks from 'remark-breaks';
 
 const plugins = [remarkGfm, remarkBreaks];
 
-/** True for a relative path or an absolute address on this instance. */
-function isOwnImage(src: string): boolean {
+/** A picture's own address: exactly `/api/assets/{maps|tokens|avatars}/{id}`. */
+const PICTURE_PATH = /^\/api\/assets\/(?:maps|tokens|avatars)\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * True for a map, token or avatar picture on this instance, given as a path
+ * or as this instance's full address, with nothing after the id. As written,
+ * so a `..` that the browser would resolve elsewhere is refused.
+ */
+function isOwnPicture(src: string): boolean {
   try {
-    return new URL(src, window.location.origin).origin === window.location.origin;
+    const url = new URL(src, window.location.origin);
+    if (url.origin !== window.location.origin || url.search !== '' || url.hash !== '') return false;
+    const path = src.startsWith(window.location.origin) ? src.slice(window.location.origin.length) : src;
+    return PICTURE_PATH.test(path);
   } catch {
     return false;
   }
@@ -44,11 +62,16 @@ function isOwnImage(src: string): boolean {
 
 const components: Components = {
   img: ({ src, alt }) =>
-    src && isOwnImage(src) ? (
+    src && isOwnPicture(src) ? (
       <img src={src} alt={alt ?? ''} />
     ) : (
       <span className="italic text-warm-gray">{alt || 'image not shown'}</span>
     ),
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  ),
 };
 
 interface MarkdownProps {

@@ -197,6 +197,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Players' browsers are no longer told which doors are locked or where the lights that are off are.** Every member was sent each door's real state and every light on the map, including locked doors and lights the DM had switched off. A player is now sent a locked door as a closed door, and no light that is off until it is switched on; a player who tries a locked door is still told it is locked. The [DM Guide](docs/DM_GUIDE.md#what-players-browsers-receive) now lists exactly what a player's browser receives for the map on screen, and corrects what it said about fog: fog hides things on the screen, but the map picture, the walls and the tokens under it still reach the browser.
 
+- **Pictures in a document or note load only from the asset library, and links open in a new tab.** A picture in a Markdown document or note could point at any address on your CozyVTT, and every reader's browser asked for it as that reader, so a document could make its readers' browsers ask the server for things in their name each time it was read. Only a map, token or avatar picture's own address is shown now; any other picture shows its description, as one from another website already did. Links in documents and notes opened in the same tab, replacing the campaign page during play; they now open in a new tab. See [Documents](docs/USER_GUIDE.md#safety) for how to show a picture.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
