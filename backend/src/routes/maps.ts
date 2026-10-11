@@ -13,7 +13,7 @@ import {
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
-import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
+import { canReadAssetById, canReferenceAsset, isMapPicture, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE } from '../validators/walls';
 import { validateTokenShapes, TokenMetadataSchema, MoveTokensSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from '../validators/tokens';
 import { withMapsLocked, clampTokenPosition } from '../utils/mapTokens';
@@ -34,7 +34,7 @@ import { oneAtATime } from '../utils/oneAtATime';
 import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../utils/serialQueue';
 import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { uploadLimiter } from './assets';
-import sharp from 'sharp';
+import { openPicture, NotAPictureError } from '../utils/sharpInput';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
@@ -42,7 +42,7 @@ import { sendInitiativeState, resendInitiative } from '../websocket/handlers/ini
 import { readTokens, toJson } from '../utils/prisma-json';
 import type { Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
-import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
+import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
 /**
  * The largest UVTT file accepted. The picture travels as base64 text, about
@@ -51,6 +51,11 @@ import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAM
  */
 const UVTT_GEOMETRY_ALLOWANCE_BYTES = 8 * 1024 * 1024;
 const UVTT_MAX_FILE_BYTES = Math.ceil((getFileSizeLimit('MAP') * 4) / 3) + UVTT_GEOMETRY_ALLOWANCE_BYTES;
+
+/** What the UVTT export answers for a map whose picture is not one the image library may read. */
+const UVTT_EXPORT_NOT_A_PICTURE_MESSAGE =
+  "This map's picture is not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a Universal VTT file. " +
+  'Choose a map picture for it in Edit Map, then export it again.';
 
 /** What a map picture inside a UVTT may be. A PDF cannot be drawn as a map. */
 const UVTT_IMAGE_TYPES: readonly string[] = ['image/png', 'image/jpeg', 'image/webp'];
@@ -308,6 +313,14 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
           message: 'You do not have access to that image',
         });
       }
+    }
+    // And only a map picture: the asset's type is read, since an address
+    // under the maps folder can name any asset (isMapPicture).
+    if (!(await isMapPicture(normalizedImageUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE });
+    }
+    if (!(await isMapPicture(normalizedSpiritLayerUrl))) {
+      return res.status(400).json({ error: 'Validation Error', message: SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE });
     }
 
     // Create the map
@@ -750,15 +763,16 @@ router.get(
         return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image file not found on disk' });
       }
 
-      // Get image dimensions for pixels_per_grid calculation
-      // TODO(maps): these bytes reach sharp unidentified, and a map's picture
-      // may name an asset that is not a picture (canReferenceAsset does not
-      // check the asset's type), such as a typed document holding SVG text,
-      // which sharp then parses with librsvg. Identify the bytes as PNG, JPEG,
-      // WebP or GIF before sharp, and/or accept only MAP assets as a map's
-      // picture.
-      const meta = await sharp(imageBuffer).metadata();
-      const imageWidthPx = meta.width;
+      // Get image dimensions for pixels_per_grid calculation. A map stored
+      // before its picture had to be a map picture can name any file, so the
+      // bytes are identified first, and only a picture is read.
+      let imageWidthPx: number | undefined;
+      try {
+        imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+      } catch (error) {
+        if (!(error instanceof NotAPictureError)) throw error;
+        return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });
+      }
 
       const wallSegments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
       const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
@@ -970,6 +984,9 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       if (!(await canReferenceAsset(normalizedImageUrl, req.session.userId!, existingMap.imageUrl, campaignId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
       }
+      if (!(await isMapPicture(normalizedImageUrl, existingMap.imageUrl))) {
+        return res.status(400).json({ error: 'Validation Error', message: MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE });
+      }
       updateData.imageUrl = normalizedImageUrl;
       updateData.baseLayerUrl = normalizedImageUrl; // Keep both in sync
     }
@@ -986,6 +1003,9 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       const normalizedSpiritLayerUrl = spiritLayerUrl ? normalizeAssetUrl(spiritLayerUrl, 'maps') : null;
       if (!(await canReferenceAsset(normalizedSpiritLayerUrl, req.session.userId!, existingMap.spiritLayerUrl, campaignId))) {
         return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
+      }
+      if (!(await isMapPicture(normalizedSpiritLayerUrl, existingMap.spiritLayerUrl))) {
+        return res.status(400).json({ error: 'Validation Error', message: SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE });
       }
       updateData.spiritLayerUrl = normalizedSpiritLayerUrl;
     }

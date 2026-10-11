@@ -48,6 +48,10 @@ export const FeetPerSquareSchema = z
  */
 export const MAP_NAME_TOO_LONG_MESSAGE = `A map name can be at most ${MAP_LIMITS.maxNameLength} characters.`;
 
+/** What the map routes answer for a picture or spirit layer that is not an asset uploaded as a map picture. */
+export const MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE = 'The map image must be a map picture from the asset library.';
+export const SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE = 'The spirit layer image must be a map picture from the asset library.';
+
 /** Width, height and grid size together, as every path that stores a map has them. */
 export const MapDimensionsSchema = z.object({
   width: MapSideSchema('Map width'),

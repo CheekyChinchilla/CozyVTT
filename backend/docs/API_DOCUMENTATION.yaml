@@ -6090,11 +6090,20 @@ paths:
         longer exists is accepted.
 
 
+        Both must name an asset uploaded as a map picture (type MAP). The
+        asset's own type is read, whatever folder the address gives, so
+        `/api/assets/maps/<id>` of any other asset answers 400 too: `The map
+        image must be a map picture from the asset library.` for `imageUrl`,
+        `The spirit layer image must be a map picture from the asset
+        library.` for `spiritLayerUrl`. A request that is refused 403 for
+        either is not asked this.
+
+
         `gridSize`, `feetPerSquare` and `diagonalRule` are never rejected: a
         missing or out-of-range value is replaced with its default (50, 5,
         `flat`). `gridSize` is in range as a whole number from 10 to 500,
         `feetPerSquare` as a whole number from 1 to 100. Only `name`,
-        `imageUrl`, `width` and `height` can make this route answer 400;
+        `imageUrl`, `spiritLayerUrl`, `width` and `height` can make this route answer 400;
         `width` and `height` must be whole numbers from 1 to 500, and `name`
         at most 200 characters once trimmed (`A map name can be at most 200
         characters.`).
@@ -6269,6 +6278,13 @@ paths:
         asset that no longer exists is accepted, and so is the address
         already stored, sent back unchanged. `spiritLayerUrl` null or empty
         removes the spirit layer.
+
+        Either must also name an asset uploaded as a map picture (type MAP),
+        as on create, or the request answers 400 (`The map image must be a
+        map picture from the asset library.`, `The spirit layer image must be
+        a map picture from the asset library.`). The address already stored,
+        sent back unchanged, is accepted whatever it names, so a map stored
+        earlier with another kind of asset as its picture keeps it.
       operationId: updateMap
       security:
         - cookieAuth: []
@@ -8591,6 +8607,11 @@ paths:
         under the detected MIME type and extension; its `originalName` is
         kept unless that name's extension is not allowed for the type, when
         the detected extension replaces it. Any other asset is skipped.
+        A map's picture and spirit layer keep only an asset imported as MAP:
+        one naming a TOKEN or AUDIO asset is dropped from the map, the asset
+        is still imported, and `warnings` says so (`Map "<name>": left out
+        its picture, which was not uploaded as a map picture.`, and the same
+        for its spirit layer picture).
 
         The campaign starts in PREPARATION with the first imported map as its
         current map. Maps and assets are created in the archive's order, each
@@ -10612,8 +10633,13 @@ paths:
 
         Answers 422 when the picture cannot be put in the file: the map's
         image address names no asset, an asset that no longer exists, or one
-        the caller may not read (`Map image asset not found`), or the file is
-        missing from disk (`Map image file not found on disk`).
+        the caller may not read (`Map image asset not found`), the file is
+        missing from disk (`Map image file not found on disk`), or its
+        content is not a PNG, JPEG, WebP or GIF image (`This map's picture is
+        not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a
+        Universal VTT file. Choose a map picture for it in Edit Map, then
+        export it again.`). The picture's bytes are identified before the
+        image library reads them.
       operationId: exportUvttMap
       security:
         - cookieAuth: []

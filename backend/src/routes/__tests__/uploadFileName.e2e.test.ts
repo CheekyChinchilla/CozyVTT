@@ -17,13 +17,6 @@ import request from 'supertest';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-upload-name-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// Magic-byte sniffing is stubbed, as in the other upload suites. What is under
-// test is the recorded name, not whether the bytes really are a PNG.
-jest.mock('file-type', () => ({
-  fileTypeFromFile: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-  fileTypeFromBuffer: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 

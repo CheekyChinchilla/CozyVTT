@@ -1,3 +1,24 @@
+/**
+ * Packages published as ES modules only, which Jest loads as CommonJS only
+ * once they are compiled to it (below). Node loads them itself; Jest does so
+ * only when run with --experimental-vm-modules.
+ *
+ * otplib (authenticator codes) is CommonJS, and loads @noble/hashes for
+ * HMAC-SHA1 and @scure/base for base32. file-type, which identifies an
+ * upload or a stored picture by its bytes, is an ES module, and so are the
+ * four packages it reads with and the one they decode text with.
+ */
+const ESM_ONLY = [
+  '@noble/hashes',
+  '@scure/base',
+  'file-type',
+  'strtok3',
+  'token-types',
+  '@tokenizer/inflate',
+  'uint8array-extras',
+  '@borewit/text-codec',
+].join('|');
+
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -16,27 +37,24 @@ module.exports = {
   // worker once it holds more than this keeps a full run well inside it.
   workerIdleMemoryLimit: '1GB',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  // file-type is ESM-only (no CJS build) and cannot be resolved by ts-jest's
-  // CommonJS transform. Map it to a loud-failing stub — no automated test
-  // exercises real magic-byte sniffing; see the mock for details.
+  // file-type's package.json offers its code only to an ES module import, so
+  // Jest, which resolves as a CommonJS require, is pointed at the file Node
+  // would load. Tests use the real library unless they mock it.
   moduleNameMapper: {
-    '^file-type$': '<rootDir>/src/__tests__/helpers/file-type-mock.ts',
+    '^file-type$': '<rootDir>/node_modules/file-type/index.js',
   },
-  // otplib (authenticator codes) is CommonJS, and loads two packages that are
-  // ES modules only: @noble/hashes for HMAC-SHA1 and @scure/base for base32.
-  // Node loads those itself, and Jest does only when run with
-  // --experimental-vm-modules, so these two are compiled to CommonJS for the
-  // tests, and the tests check codes with the real library.
+  // The packages in ESM_ONLY are compiled to CommonJS for the tests, so the
+  // tests check codes and identify files with the real libraries.
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
-    '/node_modules/(@noble/hashes|@scure/base)/.+\\.js$': [
+    [`/node_modules/(${ESM_ONLY})/.+\\.js$`]: [
       'ts-jest',
       { tsconfig: { allowJs: true, module: 'commonjs', target: 'ES2022' }, diagnostics: false },
     ],
   },
   // A package is judged by the innermost node_modules it sits in: npm nests
   // otplib's copy of @noble/hashes inside the plugin that uses it.
-  transformIgnorePatterns: ['/node_modules/(?!(@noble/hashes|@scure/base)/)(?!.*/node_modules/)'],
+  transformIgnorePatterns: [`/node_modules/(?!(${ESM_ONLY})/)(?!.*/node_modules/)`],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

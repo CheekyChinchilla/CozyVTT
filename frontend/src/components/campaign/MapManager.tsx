@@ -373,6 +373,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     }
   };
 
+  // TODO(ui): a refused export (422, such as a map whose picture is not a
+  // PNG, JPEG, WebP or GIF image) is never shown: the link below downloads
+  // whatever the server answers, and the catch cannot see an HTTP status.
+  // Fetch the file first, save it only when it arrives, and show the
+  // server's message with setError when it is refused.
   const handleExport = async (map: Map) => {
     if (!campaign?.id) return;
     try {

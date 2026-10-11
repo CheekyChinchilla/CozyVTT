@@ -816,6 +816,29 @@ export async function canReferenceAsset(
   return campaignId !== undefined && (await addressUsedInCampaign(address, campaignId));
 }
 
+/**
+ * May this address be stored as a map's picture or spirit layer, as far as
+ * the kind of asset goes: only an asset uploaded as a map picture. Create
+ * Map and Edit Map offer nothing else, and a Universal VTT import stores its
+ * picture as one. Asked after canReferenceAsset, which decides whether the
+ * caller may use the asset at all.
+ *
+ * An address names its asset by id whatever folder it gives, and a bare id
+ * is given the maps folder, so the asset's own type is read. The address
+ * already stored on the map (`stored`) is taken back as it is, so a map made
+ * before this rule keeps its picture through every edit that leaves it
+ * alone. An address naming no asset, or one that does not exist, is left to
+ * canReferenceAsset, as it shows nothing and grants nothing.
+ */
+export async function isMapPicture(address: string | null | undefined, stored?: string | null): Promise<boolean> {
+  if (!address) return true;
+  if (stored !== undefined && address === stored) return true;
+  const assetId = extractAssetId(address);
+  if (!assetId) return true;
+  const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { type: true } });
+  return !asset || asset.type === 'MAP';
+}
+
 /** Whether a record of the campaign already stores exactly this picture address. */
 async function addressUsedInCampaign(address: string, campaignId: string): Promise<boolean> {
   const [templates, creatures, characters] = await Promise.all([

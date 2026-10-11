@@ -144,6 +144,8 @@ export interface MapContext {
   importTokens: boolean;
   /** The new address of an asset the archive names, or null. */
   remapAsset: (ref: string | null | undefined) => string | null;
+  /** Whether the asset the archive names `ref` was imported as a map picture. */
+  isMapPicture: (ref: string) => boolean;
   report: ImportReport;
 }
 
@@ -210,14 +212,26 @@ export function prepareMap(raw: unknown, ctx: MapContext): PreparedMap | null {
     else say('left out its annotations, which could not be read.');
   }
 
-  const imageUrl = ctx.remapAsset(map.imageAssetRef) || '';
+  // A map's picture and spirit layer can only be map pictures, as on Create
+  // Map. One the archive names that came in as a token picture or a sound
+  // stays in the campaign's library as that, and the map arrives without it.
+  const picture = (ref: string | null | undefined, what: string): string | null => {
+    const address = ctx.remapAsset(ref);
+    if (address && ref && !ctx.isMapPicture(ref)) {
+      say(`left out its ${what}, which was not uploaded as a map picture.`);
+      return null;
+    }
+    return address;
+  };
+  const imageUrl = picture(map.imageAssetRef, 'picture') || '';
+  const spiritLayerUrl = picture(map.spiritLayerAssetRef, 'spirit layer picture');
   return {
     tokenCount: tokens.length,
     data: {
       name,
       imageUrl,
       baseLayerUrl: imageUrl,
-      spiritLayerUrl: ctx.remapAsset(map.spiritLayerAssetRef),
+      spiritLayerUrl,
       width: map.width,
       height: map.height,
       gridSize: map.gridSize,

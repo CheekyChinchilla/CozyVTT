@@ -18,20 +18,6 @@ import request from 'supertest';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-upload-mime-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// The real file-type is ESM-only; this knows a PNG, and nothing else, as the
-// real one does not know an MP3 without a tag or a text file.
-jest.mock('file-type', () => {
-  const sniff = (head: Buffer) =>
-    head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? { ext: 'png', mime: 'image/png' } : undefined;
-  return {
-    fileTypeFromBuffer: async (buf: Buffer) => sniff(buf),
-    fileTypeFromFile: async (file: string) => {
-      const { readFileSync } = jest.requireActual<typeof import('fs')>('fs');
-      return sniff(readFileSync(file).subarray(0, 16));
-    },
-  };
-});
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 

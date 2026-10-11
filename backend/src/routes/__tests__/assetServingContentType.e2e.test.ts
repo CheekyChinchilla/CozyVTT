@@ -29,23 +29,6 @@ import request from 'supertest';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-serve-ct-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// A real PNG is identified by its signature; a GIF by its; anything else is
-// unidentified, matching what the real library answers.
-jest.mock('file-type', () => {
-  const realFs = jest.requireActual('fs') as typeof import('fs');
-  const detect = (buffer: Buffer) => {
-    if (buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) {
-      return { ext: 'png', mime: 'image/png' };
-    }
-    if (buffer.subarray(0, 6).toString('latin1') === 'GIF89a') return { ext: 'gif', mime: 'image/gif' };
-    return undefined;
-  };
-  return {
-    fileTypeFromBuffer: jest.fn(async (buffer: Buffer) => detect(buffer)),
-    fileTypeFromFile: jest.fn(async (filePath: string) => detect(realFs.readFileSync(filePath))),
-  };
-});
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,

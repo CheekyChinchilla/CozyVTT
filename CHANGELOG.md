@@ -338,6 +338,10 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **Two-factor codes are checked by a maintained library, and a code is accepted only as exactly six digits.** The library that checked authenticator codes had had no update since 2017, and it read a code with a stray character in it, such as a letter after five digits, as a number. Authenticator apps already set up keep working: there is nothing to scan again. New set-ups get a secret of 160 random bits, the strength authenticator apps are built for; the secrets made before were slightly weaker and keep working as they are.
 
+- **A map's picture and spirit layer picture can only be map pictures from the asset library.** **Create Map** and **Edit Map** only ever offered map pictures, but a program using the API could give a map any file the DM could open as its picture. The server now refuses anything else with "The map image must be a map picture from the asset library.", or the same sentence for the spirit layer image. A campaign import still brings in a picture of another kind, as what it was uploaded as, and a map that used it as its picture arrives without one, listed under **Changed to fit** when the import finishes. A map that already uses another kind of file keeps it, and **Edit Map** still saves changes that leave its picture alone.
+
+- **The server reads a stored picture only once it has checked that the file is a PNG, JPEG, WebP or GIF image.** Making the preview of an uploaded map or token picture, and **Export as .uvtt file**, handed the stored file to the image library as it was, and the image library reads many more formats than a picture in CozyVTT can be. Both now check the file's content first and give the image library nothing else, and the image library's readers for every other format are switched off. **Export as .uvtt file** refuses a map whose picture is anything else, such as a map picture an older version stored as a PDF; choose a map picture for it in **Edit Map** and export it again.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

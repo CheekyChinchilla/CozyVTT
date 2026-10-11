@@ -26,11 +26,6 @@ import request from 'supertest';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-uvtt-queue-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-  fileTypeFromFile: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-}));
-
 /**
  * The thumbnail step, which every import passes through while it holds its
  * picture: how many imports are inside it at once, at most, and how many

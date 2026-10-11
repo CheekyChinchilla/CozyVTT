@@ -126,6 +126,13 @@ export const MAX_UPLOAD_BYTES: number = Math.max(...Object.values(UPLOAD_LIMITS)
 export const ALLOWED_MIME_TYPES = {
   MAP: ['image/png', 'image/jpeg', 'image/webp'],
   TOKEN: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+  // TODO(assets): file-type reports an Ogg file carrying Opus sound as
+  // 'audio/ogg; codecs=opus' (extension .opus), which is not on this list, so
+  // an .ogg track recorded in Opus is refused as an upload and left out of a
+  // campaign import, though the upload window offers .ogg and browsers play
+  // Opus. Accept it as an Ogg track, stored with a name and content type the
+  // audio route serves, or say in the upload window that only Ogg Vorbis is
+  // taken.
   AUDIO: ['audio/mpeg', 'audio/ogg', 'audio/wav'],
   AVATAR: ['image/png', 'image/jpeg', 'image/webp'],
   DOCUMENT: ['application/pdf', 'text/plain', 'text/markdown'],

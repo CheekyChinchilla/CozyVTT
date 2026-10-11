@@ -17,13 +17,6 @@
 
 import request from 'supertest';
 
-// file-type is ESM-only and Jest cannot load it; the upload path validates
-// every file through it.
-jest.mock('file-type', () => ({
-  fileTypeFromFile: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-  fileTypeFromBuffer: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,

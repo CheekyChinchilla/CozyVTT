@@ -25,20 +25,6 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import request from 'supertest';
 
-// file-type is ESM-only and Jest cannot load it; the upload route identifies
-// a real PNG by its signature, as the library would.
-jest.mock('file-type', () => {
-  const realFs = jest.requireActual('fs') as typeof import('fs');
-  const detect = (buffer: Buffer) =>
-    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-      ? { ext: 'png', mime: 'image/png' }
-      : undefined;
-  return {
-    fileTypeFromBuffer: jest.fn(async (buffer: Buffer) => detect(buffer)),
-    fileTypeFromFile: jest.fn(async (filePath: string) => detect(realFs.readFileSync(filePath))),
-  };
-});
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {
   prisma,

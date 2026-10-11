@@ -176,17 +176,16 @@ _Nothing at present._
   exists — the reason it has not been done yet. **Revisit** when a second thing
   needs shared logic, or if the checks disagree in a way a user notices.
 
-- **`file-type` has no automated coverage.** The upload validator's first line
-  of defence is what that library says a file is, and it is ESM-only, which the
-  Jest setup here cannot load; every test that reaches it swaps in a stub
-  (`backend/src/__tests__/helpers/file-type-mock.ts`, or a per-suite mock). The
-  stubs were written to match what the real library was observed to do for the
-  same bytes, and the real library was exercised by hand against a running
-  instance, but nothing in CI would notice if an upgrade changed a verdict. The
-  fix is either a Jest ESM configuration that can load it, or one small
-  integration test that runs under `node --test` outside Jest. **Revisit** when
-  `file-type` is next upgraded, and before adding any format whose acceptance
-  depends on it.
+- **Two backend suites still stub `file-type`.** The backend tests load the
+  real library (`backend/jest.config.js` compiles it to CommonJS), and
+  `backend/src/middleware/__tests__/fileTypeVerdicts.test.ts` checks its
+  verdict on a file of every format an upload accepts, so an upgrade that
+  changes one fails there. `campaignImportAllowlist.e2e.test.ts` and
+  `campaignArchiveAudio.test.ts` still stub it, because their fixtures are a
+  format's first bytes and not whole files; `uploadUnidentifiedBytes.e2e.test.ts`
+  stubs it on purpose, to reach the branch for a file it cannot identify.
+  **Do** when either of the first two is next changed: give it whole files and
+  drop its stub.
 
 - **Dice macros shared by the DM.** #47 asked for personal saved rolls and got
   them. A DM may well want a table-wide one — "Wild Magic Surge, d100" — that

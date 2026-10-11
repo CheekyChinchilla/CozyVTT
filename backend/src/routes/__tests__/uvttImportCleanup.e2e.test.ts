@@ -19,11 +19,6 @@ import request from 'supertest';
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-uvtt-cleanup-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-  fileTypeFromFile: jest.fn(async () => ({ ext: 'png', mime: 'image/png' })),
-}));
-
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma as appPrisma } from '../../config/database';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';

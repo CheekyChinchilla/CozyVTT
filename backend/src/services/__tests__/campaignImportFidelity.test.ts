@@ -24,19 +24,6 @@ const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-fidelity-'
 const UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
-// The real file-type is ESM-only; this knows a PNG.
-jest.mock('file-type', () => {
-  const sniff = (head: Buffer) =>
-    head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')) ? { ext: 'png', mime: 'image/png' } : undefined;
-  return {
-    fileTypeFromBuffer: async (buf: Buffer) => sniff(buf),
-    fileTypeFromFile: async (file: string) => {
-      const { readFileSync } = jest.requireActual<typeof import('fs')>('fs');
-      return sniff(readFileSync(file).subarray(0, 16));
-    },
-  };
-});
-
 import { importCampaign } from '../campaignImporter';
 import { prepareCampaignExport } from '../campaignExporter';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
@@ -348,6 +335,37 @@ describe('an asset the import leaves out', () => {
       { kind: 'asset', name: 'gone.png', reason: 'Its file is missing from the archive.' },
       { kind: 'asset', name: 'rules.pdf', reason: 'A campaign archive carries map pictures, token pictures and audio, and this is none of them.' },
     ]);
+  });
+});
+
+describe('a map whose picture is not a map picture', () => {
+  // A map's picture and spirit layer can only be map pictures. An archive
+  // naming a token picture or a sound for either keeps the picture as a
+  // token picture or sound in the campaign's library, and the map arrives
+  // without it.
+  it('arrives without it, and says so', async () => {
+    const TOKEN_ID = '99999999-9999-4999-8999-999999999999';
+    const result = await importCampaign(
+      await archive([map({ imageAssetRef: TOKEN_ID, spiritLayerAssetRef: TOKEN_ID })], {
+        [TOKEN_ID]: {
+          info: { originalName: 'goblin.png', mimeType: 'image/png', type: 'TOKEN', fileSize: PNG.length },
+          entry: { name: `assets/${TOKEN_ID}.png`, data: PNG },
+        },
+      }),
+      userId
+    );
+
+    expect(result.mapCount).toBe(1);
+    const [stored] = await importedMaps(result.campaignId);
+    expect(stored.imageUrl).toBe('');
+    expect(stored.baseLayerUrl).toBe('');
+    expect(stored.spiritLayerUrl).toBeNull();
+    expect(result.warnings).toEqual([
+      'Map "Cellar": left out its picture, which was not uploaded as a map picture.',
+      'Map "Cellar": left out its spirit layer picture, which was not uploaded as a map picture.',
+    ]);
+    const kept = await prisma.asset.findMany({ where: { campaignId: result.campaignId }, select: { type: true } });
+    expect(kept).toEqual([{ type: 'TOKEN' }]);
   });
 });
 
