@@ -9,11 +9,15 @@
  * anyone locked the whole instance out of signing in.
  *
  * nginx now takes the visitor from X-Forwarded-For, believing it only on a
- * connection from a private or local address, and hands the backend that
- * one address. A visitor from the internet cannot choose theirs, because
- * their own connection is not from a trusted address. These check the
- * configuration that decides it; docs/DEPLOYMENT.md describes it for
- * self-hosters.
+ * connection from a trusted address, and hands the backend that one address.
+ * Trusted means loopback, plus whatever the self-hoster lists in
+ * NGINX_TRUSTED_PROXIES in .env for a tunnel or proxy in front. It used to
+ * mean every private range, and Docker relays a visitor over IPv6 from its
+ * own gateway, a private address, so such a visitor could choose the address
+ * the limits counted. X-Forwarded-Proto, which decides whether the session
+ * cookie is marked Secure, is believed from the same addresses only. These
+ * check the configuration that decides it; docs/DEPLOYMENT.md describes it
+ * for self-hosters.
  *
  * Also here, because it is the same file's promise about who reaches the
  * backend: the backup restore upload streams to the backend, which refuses
@@ -63,18 +67,12 @@ function proxyingLocations(lines: string[]): { name: string; directives: string[
 }
 
 describe('the bundled nginx configuration', () => {
-  it('believes X-Forwarded-For only from loopback and private addresses', () => {
-    // The trusted ranges, exactly: one more (a public range, or 0.0.0.0/0)
-    // would let a visitor from the internet choose the address the rate
-    // limits count, and dodge them.
-    expect(values(live, 'set_real_ip_from')).toEqual([
-      '127.0.0.1',
-      '10.0.0.0/8',
-      '172.16.0.0/12',
-      '192.168.0.0/16',
-      '::1',
-      'fc00::/7',
-    ]);
+  it('believes X-Forwarded-For only from loopback and the addresses .env lists', () => {
+    // The trusted addresses, exactly: one more (a private range, which is
+    // where Docker relays IPv6 visitors from, or 0.0.0.0/0) would let a
+    // visitor choose the address the rate limits count, and dodge them.
+    expect(values(live, 'set_real_ip_from')).toEqual(['127.0.0.1', '::1']);
+    expect(live).toContain('${NGINX_REAL_IP_FROM}');
     expect(values(live, 'real_ip_header')).toEqual(['X-Forwarded-For']);
     // Without this nginx takes only the last address in the header, which
     // behind a tunnel on the same server is another private address.
@@ -149,6 +147,39 @@ describe('the bundled nginx configuration', () => {
     const targets = proxyingLocations(lines).map((l) => values(l.directives, 'proxy_pass')[0]);
     expect(targets.length).toBeGreaterThanOrEqual(6);
     expect(targets.filter((t) => t !== '$cozyvtt_backend' && t !== '$cozyvtt_frontend')).toEqual([]);
+  });
+
+  it('believes X-Forwarded-Proto only from the addresses it believes X-Forwarded-For from', () => {
+    // A trusted connection is told apart by the address it really came from.
+    const geo = /^geo \$realip_remote_addr \$cozyvtt_trusted_proxy \{\n([\s\S]*?)\n\}/m.exec(conf);
+    if (!geo) throw new Error('nginx/nginx.conf no longer marks a trusted connection with a geo block');
+    const entries = geo[1].split('\n').map((line) => line.trim()).filter(Boolean);
+    expect(entries).toEqual(['default   0;', '127.0.0.1 1;', '::1       1;', '${NGINX_TRUSTED_GEO}']);
+
+    const proto = /^map "\$cozyvtt_trusted_proxy:\$http_x_forwarded_proto" \$real_proto \{\n([\s\S]*?)\n\}/m.exec(conf);
+    if (!proto) throw new Error('nginx/nginx.conf no longer decides $real_proto from the trusted flag and the header');
+    expect(proto[1].split('\n').map((line) => line.trim().replace(/\s+/g, ' ')).filter(Boolean)).toEqual([
+      'default $scheme;',
+      '"1:https" https;',
+      '"1:http" http;',
+    ]);
+    expect(live.filter((line) => line.includes('$http_x_forwarded_proto') && !line.startsWith('map '))).toEqual([]);
+  });
+
+  it('has the trusted list rendered into it from NGINX_TRUSTED_PROXIES in .env', () => {
+    const compose = read('docker-compose.yml');
+    const nginx = compose.slice(compose.indexOf('\n  nginx:\n'), compose.indexOf('\nvolumes:'));
+    expect(nginx).toMatch(/\n {6}NGINX_TRUSTED_PROXIES: \$\{NGINX_TRUSTED_PROXIES:-\}\n/);
+    // Empty unless the script below fills them, so the template renders even
+    // where the script cannot run.
+    expect(nginx).toMatch(/\n {6}NGINX_REAL_IP_FROM: ""\n/);
+    expect(nginx).toMatch(/\n {6}NGINX_TRUSTED_GEO: ""\n/);
+    const filter = /\n {6}NGINX_ENVSUBST_FILTER: "([^"]*)"\n/.exec(nginx)?.[1] ?? '';
+    expect(filter.split('|').sort()).toEqual(['NGINX_MAX_BODY_SIZE', 'NGINX_REAL_IP_FROM', 'NGINX_TRUSTED_GEO']);
+    // Sourced by the image's entrypoint before it renders the template.
+    expect(nginx).toMatch(/\n {6}- \.\/nginx\/trusted-proxies\.envsh:\/docker-entrypoint\.d\/\d\d-[a-z-]+\.envsh:ro\n/);
+    const order = /docker-entrypoint\.d\/(\d\d)-/.exec(nginx)?.[1];
+    expect(Number(order)).toBeLessThan(20);
   });
 
   it('is paired with a backend that trusts exactly one proxy, this one', () => {

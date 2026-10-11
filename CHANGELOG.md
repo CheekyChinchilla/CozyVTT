@@ -10,6 +10,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Upgrading from 1.5.1
 
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is no database change and no new required setting. Nothing you have stored is rewritten. The nginx container is recreated, because this release changes `docker-compose.yml` and `nginx/nginx.conf`, and the backend and frontend are rebuilt and recreated as in every release. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch.
+
+If you have edited `nginx/nginx.conf` or `docker-compose.yml`, `git pull` stops at it because this release changes both files. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If you added `set_real_ip_from` lines to `nginx/nginx.conf`, put those addresses in the new `NGINX_TRUSTED_PROXIES` setting in `.env` instead, and keep the file's own lines.
+
+There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it out and the bundled nginx believes no proxy in front of it. If you have a tunnel or proxy in front, see the first point under "What to do afterwards".
+
 #### What you will notice
 
 - **A production instance refuses to start on a weak `SESSION_SECRET`.** Until now it refused only the placeholder from `.env.example`. It now also refuses every example value the guides show or used to show (`your-64-char-random-string`, the deployment guide's `<paste the 64 characters that command prints>` line copied as it stands, and the development guide's example), and any value shorter than 32 characters. If yours is one of those, `docker compose logs backend` ends with a line starting `[FATAL] SESSION_SECRET`; put the output of `openssl rand -hex 32` in `.env` and run `docker compose up -d`. A new secret signs everyone out once. A secret made as the guide says is 64 characters and needs no change.
@@ -35,6 +48,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **An upload's name is at most 200 characters and its description at most 1,000, with at most 50 tags of up to 50 characters each.** The **Upload Asset** dialog stops each box at those lengths. Files already uploaded keep their names, descriptions and tags.
 
 - **The Profile page has a new Remove Avatar button.** **Remove Avatar**, under your avatar, clears it and deletes the picture, unless something else such as a token uses it. Uploading a new avatar now deletes the old picture the same way.
+
+
+#### What to do afterwards, if it applies to you
+
+- **If a Cloudflare Tunnel or another proxy passes visitors to the bundled nginx, add one line to `.env`.** For a tunnel or proxy on the same server it is `NGINX_TRUSTED_PROXIES=172.16.0.0/12`; then run `docker compose up -d`. Without it, every visitor counts as the proxy's one address, so a few wrong passwords from anyone lock everybody out of signing in for 15 minutes, and sign-in cookies are no longer marked HTTPS-only. With a tunnel on the same server, also add `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, which keep nginx's ports to that server. Other setups, and a check that it worked, are in [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits).
 
 ### Added
 
@@ -252,6 +270,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Malformed dice rolls now count towards the dice roll limit.** A roll sent with a malformed expression, or by a spectator, was answered with an error before it was counted against the limit of 50 dice rolls a second and 200 a minute, so a script could send them without end and get an error back for every one. Every roll is now counted first; past the limit the sender is told once, as for valid rolls. Nobody rolling from the app notices any difference.
 
 - **The development stack, `docker-compose.dev.yml`, now opens its ports to the computer it runs on and no one else.** Its database, backend and frontend ports were open on every network interface, though the development guide said they were local, so on a server the database could be reached from other machines. It also runs in development mode whatever `.env` says, as the guide describes; with the `NODE_ENV=production` line `.env.example` ships, it ran in production mode. The production stack is not affected. To open the dev stack from another device on your network, see [Local Setup (With Docker)](docs/DEVELOPMENT.md#local-setup-with-docker).
+
+- **The bundled nginx believes a visitor's address, and whether they used HTTPS, only from proxies you list.** It believed the `X-Forwarded-For` header from any private address, and Docker hands nginx a visitor who connects over IPv6 from one, so such a visitor could get round the sign-in limits. `X-Forwarded-Proto` was believed from anyone. Both headers are now believed only from nginx's own container and from the addresses in the new optional `NGINX_TRUSTED_PROXIES` setting in `.env`. If a tunnel or proxy passes visitors to the bundled nginx, add its line, as [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits) shows.
 
 ## [1.5.1] - 2026-10-10
 

@@ -284,7 +284,7 @@ ingress:
   - service: http_status:404
 ```
 
-This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`), secure-cookie headers and each visitor's own address (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)) working without extra configuration.
+This is also the option that keeps upload limits (`NGINX_MAX_BODY_SIZE`) working without extra configuration. So that nginx believes the tunnel about each visitor's address and about HTTPS, add `NGINX_TRUSTED_PROXIES=172.16.0.0/12` to `.env`, and keep nginx's ports to this server with `HTTP_PORT=127.0.0.1:80` and `HTTPS_PORT=127.0.0.1:443`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains.
 
 **2. Run `cloudflared` as a container** on CozyVTT's own Docker network. Nothing is published to the host at all — the tunnel reaches the containers by name:
 
@@ -339,7 +339,33 @@ The two-factor code (the six-digit code from an authenticator app, or a backup c
 
 Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's.
 
-**With the bundled nginx this is handled for you**, including behind a Cloudflare Tunnel. A tunnel or proxy names the visitor it is passing along in a header called `X-Forwarded-For`. nginx believes that header only when the connection comes from a *private address*: `127.0.0.1`, or one starting with `10.`, `172.16.` to `172.31.`, or `192.168.`. That is what a tunnel on the same server, a proxy in Docker, or a proxy on your own network looks like. Someone connecting straight from the internet cannot pretend to be someone else by sending the header; nginx uses the address they actually connect from.
+**With the bundled nginx, a visitor who connects straight to your server is counted by their own address.** When a tunnel or another proxy stands in front of nginx, every request reaches nginx from that proxy, and nginx has to be told it may believe what the proxy says. A proxy names the visitor it is passing along in a header called `X-Forwarded-For`, and says whether the visitor used HTTPS in `X-Forwarded-Proto` (which decides whether CozyVTT marks the sign-in cookie as HTTPS-only). Anyone can send those headers, so nginx believes them only from the addresses you list in `NGINX_TRUSTED_PROXIES` in `.env`. From anyone else it ignores them, so a visitor from the internet cannot pretend to be someone else.
+
+| Your setup | Line to add to `.env` |
+|---|---|
+| Visitors connect straight to your server, with no tunnel or proxy in front of nginx | none |
+| A Cloudflare Tunnel or another proxy on the same server, installed on it or in a Docker container | `NGINX_TRUSTED_PROXIES=172.16.0.0/12` |
+| A proxy on another machine on your network | its address, for example `NGINX_TRUSTED_PROXIES=192.168.1.10` |
+| Cloudflare's proxy (the orange cloud) pointed at your server's public address, without a tunnel | Cloudflare's address ranges from [cloudflare.com/ips](https://www.cloudflare.com/ips/), all on that one line, separated by spaces |
+
+Several entries can share the line, separated by spaces or commas. Then apply it:
+
+```bash
+docker compose up -d
+```
+
+`up -d` reads `.env` again and recreates nginx; `docker compose restart` would keep the old setting. An entry that is not an IP address or range is ignored, and `docker compose logs nginx` says which.
+
+Why `172.16.0.0/12` for a proxy on the same server: Docker hands nginx a connection from the server itself, or from another container, from an address on its own network, and Docker's networks use the addresses `172.16.0.0` to `172.31.255.255`.
+
+> 🔒 **With a tunnel on the same server, keep nginx's ports to that server.** Docker also hands nginx some connections from outside from its own network's address: a visitor who connects over IPv6, and on Docker Desktop (Windows and Mac) or rootless Docker every visitor. Once you trust that range, such a visitor could choose the address CozyVTT counts them as. A tunnel only needs to reach nginx from the server itself, so publish nginx's ports there alone, with these two lines in `.env`:
+>
+> ```env
+> HTTP_PORT=127.0.0.1:80
+> HTTPS_PORT=127.0.0.1:443
+> ```
+>
+> Then run `docker compose up -d`. The tunnel keeps pointing at `http://localhost:80`. A firewall rule is no substitute: Docker's published ports bypass UFW.
 
 To check it, open CozyVTT from a device outside your network (a phone on mobile data, with Wi-Fi off), then run this on the server:
 
@@ -355,10 +381,12 @@ cozyvtt-nginx  | 203.0.113.25 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me
 
 You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address, and a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes. That happens when:
 
-- **A proxy in front of nginx is on a public address**, for example Cloudflare's proxy (the orange cloud) pointed at your server's public IP without a tunnel. nginx does not believe a public address, so add that proxy's address ranges to `nginx/nginx.conf`, one `set_real_ip_from` line each, next to the lines already there. For Cloudflare the ranges are listed at [cloudflare.com/ips](https://www.cloudflare.com/ips/). Then run `docker compose restart nginx`. `git pull` will stop at the changed file from then on; set your change aside and bring it back with the same `git stash` steps as in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml).
-- **Docker hands visitors to nginx from its own address.** Docker Desktop (on Windows and Mac) and rootless Docker do this. A visitor connecting straight to such a server could then choose the address CozyVTT counts them as. Put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front, and keep ports 80 and 443 closed to the internet.
+- **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`. Add its line from the table above.
+- **Docker hands visitors to nginx from its own address** and there is no proxy in front: Docker Desktop and rootless Docker do this for every visitor, and a server reached over IPv6 does it for those visitors. Listing Docker's range would let them choose their address, so put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front instead, set up as above.
 
-One thing to know: a device on your own network connects from a private address, so it can set the header itself and choose the address CozyVTT counts it as. On a home network those are people you already let in.
+If the address is one of Cloudflare's own (the ranges on [cloudflare.com/ips](https://www.cloudflare.com/ips/)), Cloudflare's proxy is in front of your server's public address: add those ranges as in the table.
+
+Only list addresses that are your own proxies. Whatever connects from a listed address can choose the address CozyVTT counts it as.
 
 **If you removed the bundled nginx**, the backend takes the **last** address in the `X-Forwarded-For` header your proxy sends as the visitor's own. Proxies add the address they were connected from there, which is right when nothing else stands in front of yours. If something does (Cloudflare's proxy in front of Caddy, say), set your proxy to believe it, or every visitor counts as the same address: `trusted_proxies` in Caddy, `forwardedHeaders.trustedIPs` in Traefik, `set_real_ip_from` in nginx.
 
@@ -1359,6 +1387,7 @@ Before going live:
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
+- [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
 - [ ] **Setup finished** — The setup wizard has been completed, so `curl -s https://your-domain.com/api/setup/status` prints `"setupCompleted":true`. Until then the wizard, protected by the setup token, is the only thing the instance offers
 - [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
@@ -1425,9 +1454,16 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/setup/status
    ```
    You want a line of JSON and, below it, `200 application/json; charset=utf-8`. Anything else means the tunnel isn't reaching the backend — see [Troubleshooting](#troubleshooting).
-8. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
+8. Tell nginx to believe the tunnel, and keep nginx's ports to this server. Add these three lines to `.env`:
+   ```env
+   NGINX_TRUSTED_PROXIES=172.16.0.0/12
+   HTTP_PORT=127.0.0.1:80
+   HTTPS_PORT=127.0.0.1:443
+   ```
+   then run `docker compose up -d`. Without the first line, every visitor is counted as the tunnel's one address, so a few wrong passwords from anyone lock everybody out of signing in. Without the other two, a visitor reaching your server over IPv6 could choose the address CozyVTT counts them as. [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains both.
+9. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
-Once running, you can **close ports 80 and 443 on your VPS firewall entirely** — only SSH (port 22, or your chosen alternative) needs to be reachable, and even that you can put behind Cloudflare Access if you want.
+Once running, ports 80 and 443 are open to the server itself and nothing else, so only SSH (port 22, or your chosen alternative) needs to be reachable from the internet, and even that you can put behind Cloudflare Access if you want.
 
 ### When NOT to use a Cloudflare Tunnel
 

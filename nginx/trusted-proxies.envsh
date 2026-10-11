@@ -1,0 +1,48 @@
+#!/bin/sh
+# CozyVTT: which addresses may tell the bundled nginx who the visitor is
+# (X-Forwarded-For) and whether they arrived over HTTPS (X-Forwarded-Proto).
+#
+# The nginx image's entrypoint sources this file before it renders
+# nginx/nginx.conf (docker-compose.yml mounts it into /docker-entrypoint.d/).
+# It reads NGINX_TRUSTED_PROXIES from .env, a list of IP addresses and ranges
+# separated by spaces or commas, and exports the two lines the template is
+# rendered with: NGINX_REAL_IP_FROM, one set_real_ip_from per entry, and
+# NGINX_TRUSTED_GEO, one entry each for the geo block that decides whether
+# X-Forwarded-Proto is believed. Loopback (127.0.0.1 and ::1) is written into
+# the template itself and always trusted.
+#
+# An entry that is not an IP address or range is left out, with a warning in
+# `docker compose logs nginx`, so nothing but an address reaches the
+# configuration. Sourced, this runs inside the entrypoint's own shell, which
+# stops at the first failing command: it must fail at nothing, and leave
+# behind only the two variables.
+
+cozyvtt_name="trusted-proxies.envsh"
+cozyvtt_real_ip_from=""
+cozyvtt_trusted_geo=""
+cozyvtt_octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+
+# The list is split on spaces with the shell's file name expansion off, so an
+# entry such as * stays itself; the setting is put back afterwards.
+case $- in
+  *f*) cozyvtt_noglob=1 ;;
+  *) cozyvtt_noglob=0; set -f ;;
+esac
+
+for cozyvtt_entry in $(printf '%s' "${NGINX_TRUSTED_PROXIES:-}" | tr ',' ' '); do
+  # An IPv4 address with an optional /0 to /32, or hex digits, colons and
+  # dots with a colon before any dot (IPv6) and an optional /prefix. nginx
+  # itself refuses a malformed IPv6 address when it starts.
+  if printf '%s' "$cozyvtt_entry" | grep -Eq "^(${cozyvtt_octet}\.){3}${cozyvtt_octet}(/([0-9]|[12][0-9]|3[0-2]))?\$|^[0-9A-Fa-f]*:[0-9A-Fa-f:.]*(/[0-9]{1,3})?\$"; then
+    cozyvtt_real_ip_from="${cozyvtt_real_ip_from}set_real_ip_from ${cozyvtt_entry}; "
+    cozyvtt_trusted_geo="${cozyvtt_trusted_geo}${cozyvtt_entry} 1; "
+  else
+    echo "${cozyvtt_name}: NGINX_TRUSTED_PROXIES: '${cozyvtt_entry}' is not an IP address or range, so it is ignored" >&2
+  fi
+done
+
+if [ "$cozyvtt_noglob" = 0 ]; then set +f; fi
+
+export NGINX_REAL_IP_FROM="$cozyvtt_real_ip_from"
+export NGINX_TRUSTED_GEO="$cozyvtt_trusted_geo"
+unset cozyvtt_name cozyvtt_real_ip_from cozyvtt_trusted_geo cozyvtt_octet cozyvtt_noglob cozyvtt_entry

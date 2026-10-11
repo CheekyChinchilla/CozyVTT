@@ -54,9 +54,10 @@ info:
     The HTTP limits are counted per client address as the backend sees it: the
     last address in `X-Forwarded-For`, since the backend trusts one proxy. The
     bundled nginx puts the visitor's own address there, taken from a tunnel or
-    proxy in front of it only when that connects from a private address. Behind
-    a proxy that does not pass the visitor's address on, every client shares one
-    allowance. Uploads, campaign archives and the WebSocket limits are counted
+    proxy in front of it only when that connects from an address listed in
+    `NGINX_TRUSTED_PROXIES` (or from loopback). Behind a proxy that is not
+    listed, or that does not pass the visitor's address on, every client shares
+    one allowance. Uploads, campaign archives and the WebSocket limits are counted
     per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
