@@ -25,7 +25,7 @@ This guide covers everything you need to get started, from the setup wizard to a
 
 ### First-Time Setup (Admin Only)
 
-When you first navigate to your CozyVTT instance, you'll be greeted by the **Setup Wizard** — a short four-step process that configures the platform before anyone else can log in.
+When you first navigate to your CozyVTT instance, you'll be greeted by the **Setup Wizard** — a short four-step process that creates the administrator account and configures the platform. Nobody else has an account until it is done, so run it before you share the address with anyone.
 
 *Screenshot pending — Setup wizard welcome screen.*
 
@@ -35,6 +35,7 @@ Read the brief intro and click **Next** to begin. The whole process takes about 
 **Step 2 — Admin Account**
 Create the administrator account. This is the most powerful account on the platform — keep these credentials safe!
 
+- **Setup token** — Proves you run this server, so a stranger who finds a new instance first cannot make themselves its administrator. The backend prints it in its log when it starts: on the server, `docker compose logs backend | grep "setup token"` shows it. If you set `SETUP_TOKEN` in `.env`, enter that value instead. See [Complete the setup wizard](DEPLOYMENT.md#4-complete-the-setup-wizard)
 - **Display Name** — What other users will see (2–50 characters)
 - **Email** — Your login email address
 - **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character: one of `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; ' : " \ | , . < > / ?` (a space, `~` or an accented letter does not count)
@@ -235,9 +236,9 @@ Each token has:
 
 **Colored-letter placeholders:** Tokens without an assigned image display a colored circle with the first letter of their name. Player tokens are blue; for creatures the color reflects the disposition, and objects are grey.
 
-**Moving tokens:** During a session, drag tokens around the map. Everyone connected sees the movement as it happens.
+**Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
 
-*GIF pending — Dragging a token across the map.*
+*GIF pending — Picking up a token and putting it down across the map.*
 
 ---
 
@@ -371,7 +372,7 @@ For when the vibes turn from cozy to eldritch:
 
 Street magic meets corporate dystopia:
 
-> **Note:** Shadowrun 6e support is on the roadmap for a future release. Stay tuned!
+> **Note:** Shadowrun 6th Edition is planned, not available yet. CozyVTT has groundwork for its rules, but no character sheet, so it is left out of the lists you pick a game system from.
 
 #### Flexible System
 
@@ -575,7 +576,7 @@ still appears, marked as having no notes.
 
 ### Moving Your Token
 
-When the DM has placed your character's token on the map, you can **drag it** to move around. Just click and drag to your destination.
+When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, or move the pointer off the map, to put it back where it was.
 
 *GIF pending — Moving a player token.*
 

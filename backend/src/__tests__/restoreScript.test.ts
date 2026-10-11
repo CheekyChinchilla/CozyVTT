@@ -144,4 +144,27 @@ describeOnPosix('restore.sh', () => {
       expect([line, kept.includes(line)]).toEqual([line, !isOwnershipStatement(line)]);
     }
   });
+
+  // On a Docker install the last thing the script prints is how to check the
+  // app. A tunnel setup writes HTTP_PORT=127.0.0.1:80, which "where PORT is
+  // HTTP_PORT" read oddly beside; the message names the address to use.
+  it('tells a Docker install which address to check, whatever HTTP_PORT holds', async () => {
+    // A stand-in docker: the database service is running, and psql inside it reads the dump.
+    await fs.writeFile(
+      path.join(bin, 'docker'),
+      `#!/bin/sh\ncase "$2" in\n  ps) echo database ;;\n  exec) cat > "${loaded}" ;;\nesac\n`,
+      { mode: 0o755 }
+    );
+
+    const result = spawnSync('bash', [SCRIPT, backup], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { PATH: `${bin}:${process.env.PATH ?? ''}`, RESTORE_ASSUME_YES: 'yes', TMPDIR: root },
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('curl http://localhost/health');
+    expect(result.stdout).toContain('HTTP_PORT=127.0.0.1:8080');
+    expect(result.stdout).not.toMatch(/where PORT is/);
+  });
 });

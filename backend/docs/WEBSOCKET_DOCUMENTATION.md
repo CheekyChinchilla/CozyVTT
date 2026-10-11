@@ -1,6 +1,6 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-10-07
+**Last Updated:** 2026-10-11
 
 > **This is not a public API.** These events are the ones CozyVTT's own web
 > client sends and receives. They are not versioned, carry no compatibility
@@ -31,14 +31,28 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 - Real-time token movement
 - Dice roll synchronization (public and secret rolls)
 - In-game chat
-- Map switching and token CRUD
+- Map switching (the DM's `map.change`)
 - Wall segment management (add, remove, bulk operations)
 - Spirit layer control and per-token visibility
 - Initiative tracker (combat state, turn advancement)
-- Session lifecycle (start, pause, resume, end)
+- Announcements of the session lifecycle (`session.started`, `session.paused`, `session.resumed`, `session.ended`)
 - Vibe tracker updates
 - Atmosphere effects and ambient audio
 - Character HP updates
+
+Two things people expect on the socket are not there:
+
+- **Creating, editing and deleting a token** are REST calls (`POST`, `PUT` and
+  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). Those routes do
+  not tell the other connected clients; the web client follows each call with a
+  `map.change` for the map, so the table reloads it. A script that changes a
+  token over REST does the same. Moving a token is the one token change with
+  socket events of its own (below).
+- **Starting, pausing, resuming and ending a session** are REST calls too
+  (`POST /api/campaigns/{campaignId}/sessions`, then `PUT .../sessions/{sessionId}/pause`,
+  `PUT /api/campaigns/{campaignId}/resume` and `PUT .../sessions/{sessionId}/end`). The
+  socket only carries the `session.*` announcements the server broadcasts when
+  one of them happens.
 
 ### Architecture
 
@@ -128,8 +142,8 @@ const response = await fetch('http://localhost:4000/api/auth/login', {
   headers: { 'Content-Type': 'application/json' },
   credentials: 'include', // Important!
   body: JSON.stringify({
-    email: 'user@example.com',
-    password: 'password123'
+    email: 'you@example.com',
+    password: 'your-own-password'
   })
 });
 ```
@@ -148,13 +162,18 @@ const socket = io('http://localhost:4000', {
 A handshake a browser marks as made from another site (`Sec-Fetch-Site` of
 `same-site` or `cross-site`) is refused unless its `Origin` is exactly
 `CORS_ORIGIN`, as the HTTP API refuses such a request. A program that is not
-a browser sends no such header and connects as above.
+a browser sends no such header and connects as above. That refusal is what makes
+the client's `connect_error` fire; a connection with no usable sign-in is
+accepted and then ended, as the next paragraph says.
 
 The handshake accepts exactly the sessions the HTTP guards accept: a sign-in
 with no two-factor step left to finish, and no password change due. A session
 that has passed the password step but not the code is refused with
 `error { message: 'Unauthorized' }` and disconnected, as is one whose account
-must set a new password. The same check runs again on every `authenticate`,
+must set a new password, one that has ended, and a connection with no session
+cookie at all. The connection itself is accepted first: the client sees
+`connect`, then the `error` event, then `disconnect` with the reason
+`io server disconnect`. It never sees `connected`. The same check runs again on every `authenticate`,
 so a sign-in that ends later (signing out, expiry, a password change elsewhere)
 cannot join a campaign.
 
@@ -494,7 +513,7 @@ socket.on('token.move.start', (data) => {
 
 **Direction:** Client → Server
 **Purpose:** Update token position during drag
-**Throttling:** 60 updates per second maximum (16ms interval)
+**Throttling:** the server passes on at most one `token.move` per 16 ms (about 60 a second) from each connection; frames that arrive inside that window are merged into the last one, without an answer. A user's frames are also held to 150 a second across all their connections, dropped without an answer past that (see [Flood ceilings](#fog-lighting-and-explored-memory)). The web client sends no more than one frame every 16 ms.
 **Payload:**
 ```typescript
 {
@@ -512,15 +531,16 @@ the check on the start cannot stand in for this one.
 - Player can move tokens where `controlledBy === userId`
 - Spectator cannot move tokens
 
-A move the sender is not allowed to make is dropped without an `error`, because
-this fires up to 60 times a second and one error per frame would be its own
-problem. `token.move.end` answers properly.
+Once the position is on the map (see Validation), a move the sender is not
+allowed to make is dropped without an `error`, because this fires up to 60 times
+a second and one error per frame would be its own problem. `token.move.end`
+answers properly.
 
 **Validation:**
 - Coordinates must be numbers, counted in grid squares
 - X must be >= 0 and < map.width (the map's width in squares)
 - Y must be >= 0 and < map.height (the map's height in squares)
-- A position off the map is answered with `error` "Token position out of bounds"; other invalid data is silently ignored during rapid updates
+- A position off the map is answered with `error` "Token position out of bounds" on every frame, and this check comes before the permission check, so a sender who may not move the token gets it too. Other invalid data (a missing id, a coordinate that is not a number, a map the sender may not read) is ignored without an answer
 
 **Broadcast:** `token.moved` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender excluded. On a lit map each frame goes to the DM and to the players whose tokens can see the token at that frame's position, tested against the line of sight decided for the drag (see `token.move.start`). A player who had the token and cannot see the frame's position is sent `token:disappeared` instead, once, and no frames while it stays out of their sight. A player who does not have the token and can see the frame's position is sent `token:appeared` first, with the token at that position and only the fields they may have, then the frame; this is also how a cancelled drag's last frame gives the token back to a player who lost sight of it on the way. The drop (`token.move.end`) then decides as before.
 **Broadcast Payload:**
@@ -537,7 +557,7 @@ problem. `token.move.end` answers properly.
 
 **Throttling Implementation:**
 ```typescript
-// Server-side (lodash)
+// Server-side (lodash), one per connection
 const handleTokenMove = throttle(async (socket, data) => {
   // Validate and broadcast
 }, 16); // 16ms = ~60fps
@@ -561,8 +581,15 @@ function toSquare(event) {
   return { x: Math.floor(px / currentMap.gridSize), y: Math.floor(py / currentMap.gridSize) };
 }
 
-// Send updates on every mouse move
+// Send updates as the pointer moves, at most one every 16 ms. The server
+// passes on no more than that from one connection and merges the rest into
+// the latest, so frames sent faster are bandwidth for nothing.
+let lastFrameAt = 0;
 function onMouseMove(event) {
+  const now = performance.now();
+  if (now - lastFrameAt < 16) return;
+  lastFrameAt = now;
+
   const { x, y } = toSquare(event);
 
   socket.emit('token.move', {
@@ -571,9 +598,6 @@ function onMouseMove(event) {
     x,
     y
   });
-
-  // Server throttles to 60fps automatically
-  // Client can send as fast as needed
 }
 
 // Receive updates. The sender is left out of drag frames, so apply every
@@ -718,15 +742,23 @@ An `initiative.request_state` while nothing is in the order is answered from mem
 
 ### Connection Errors
 
+A connection with no usable sign-in is accepted, sent an `error` event with the
+message `Unauthorized`, and disconnected. `connect_error` does not carry that
+message: it fires when the connection could not be made at all, such as a
+network failure or a browser handshake refused as coming from another site.
+
 ```javascript
-socket.on('connect_error', (error) => {
-  if (error.message === 'Unauthorized') {
-    // Not logged in - redirect to login
+// Signed out, or the sign-in has ended: told first, then disconnected.
+socket.on('error', (data) => {
+  if (data.message === 'Unauthorized') {
+    // Not logged in - sign in again over REST, then connect again
     window.location.href = '/login';
-  } else {
-    // Network error - show retry UI
-    showConnectionError();
   }
+});
+
+// The connection could not be made.
+socket.on('connect_error', () => {
+  showConnectionError();
 });
 ```
 
@@ -906,72 +938,53 @@ export function useTokenMovement(socket: Socket | null, mapId: string) {
 
 ## Testing
 
-### Interactive Test Client
+### A scripted client
 
-Access the WebSocket test client at:
-```
-http://localhost:4000/websocket-test
-```
-
-**Test Steps:**
-1. Login via REST API
-2. Connect to WebSocket
-3. Authenticate to campaign
-4. Test token movement
-
-### Manual Testing with Browser Console
+There is no test page. A program signs in over REST like the web client does,
+keeps the session cookie from the answer, and sends it with the socket
+handshake. This needs Node 20 or later and `npm install socket.io-client`. Put
+your own address, email and password in place of the ones shown, and use an
+account you can also sign in to in the browser. The browser's own developer
+console cannot do this: the app's pages refuse to load a script from another
+address.
 
 ```javascript
-// 1. Login first via REST API
-const loginResponse = await fetch('http://localhost:4000/api/auth/login', {
+import { io } from 'socket.io-client';
+
+const base = 'http://localhost'; // your instance's address
+
+// 1. Sign in over REST and keep the session cookie.
+const login = await fetch(`${base}/api/auth/login`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  credentials: 'include',
-  body: JSON.stringify({
-    email: 'admin@cozyvtt.local',
-    password: 'admin123!'
-  })
+  body: JSON.stringify({ email: 'you@example.com', password: 'your-own-password' })
 });
+if (!login.ok) throw new Error(`Sign-in refused: ${login.status}`);
+const cookie = login.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
 
-// 2. Load Socket.io client
-const script = document.createElement('script');
-script.src = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
-document.head.appendChild(script);
-
-// 3. Connect
-const socket = io('http://localhost:4000', {
-  withCredentials: true
-});
-
-// 4. Authenticate
-socket.emit('authenticate', {
-  campaignId: 'your-campaign-id'
-});
-
-// 5. Move token
-socket.emit('token.move.start', {
-  mapId: 'map-id',
-  tokenId: 'token-id'
-});
-
-socket.emit('token.move', {
-  mapId: 'map-id',
-  tokenId: 'token-id',
-  x: 100,
-  y: 200
-});
-
-socket.emit('token.move.end', {
-  mapId: 'map-id',
-  tokenId: 'token-id',
-  x: 100,
-  y: 200
-});
-
-// Listen for events
+// 2. Connect with that cookie.
+const socket = io(base, { extraHeaders: { cookie } });
+socket.on('error', (data) => console.error('Error:', data.message));
 socket.on('token.moved', (data) => console.log('Moved:', data));
-socket.on('error', (data) => console.error('Error:', data));
+
+// 3. Join a campaign you are a member of.
+socket.on('connected', () => socket.emit('authenticate', { campaignId: 'your-campaign-id' }));
+
+// 4. Once joined, move a token. The positions are grid squares.
+socket.on('authenticated', (data) => {
+  console.log('Joined as', data.role);
+  const move = { mapId: 'map-id', tokenId: 'token-id' };
+  socket.emit('token.move.start', move);
+  socket.emit('token.move', { ...move, x: 10, y: 12 });
+  socket.emit('token.move.end', { ...move, x: 10, y: 12 });
+});
 ```
+
+An account with two-factor authentication on answers the sign-in with
+`{ "mfaRequired": true }` and needs the `POST /api/auth/mfa/verify-login` step
+before the cookie is good for anything. Too many wrong passwords lock the
+account (see [API_REFERENCE.md](../../docs/API_REFERENCE.md)), so do not retry
+a refused sign-in in a loop.
 
 ### Multi-Tab Testing
 
@@ -1008,12 +1021,17 @@ socket.on('reconnect', () => {
 });
 ```
 
-3. **Debounce user input, let server throttle:**
+3. **Throttle rapid input yourself:**
 ```javascript
-// Don't throttle client-side
-// Server handles throttling automatically
+// The server passes on at most one token.move per 16 ms from a connection and
+// merges the rest into the latest; past 150 a second from one user it drops
+// frames without an answer. Send no more than about 60 a second.
+let lastFrameAt = 0;
 function onMouseMove(event) {
-  socket.emit('token.move', { x: event.x, y: event.y });
+  const now = performance.now();
+  if (now - lastFrameAt < 16) return;
+  lastFrameAt = now;
+  socket.emit('token.move', { tokenId, mapId, x: square.x, y: square.y });
 }
 ```
 
@@ -1024,7 +1042,7 @@ function moveToken(tokenId, x, y) {
   updateTokenPositionLocally(tokenId, x, y);
 
   // Send to server
-  socket.emit('token.move', { tokenId, x, y });
+  socket.emit('token.move', { tokenId, mapId, x, y });
 
   // Server will confirm via broadcast
 }
@@ -1043,18 +1061,29 @@ useEffect(() => {
 
 ### Server-Side
 
-1. **Always validate permissions:**
+1. **Always validate permissions, from the socket and the database, never from the payload:**
 ```typescript
-if (socket.role !== 'DM' && token.controlledBy !== socket.userId) {
-  socket.emit('error', { message: 'Permission denied' });
+import { canControlToken, canReadMap } from '../services/permissions';
+
+// socket.role and socket.userId were set by the server when the socket
+// authenticated. A player may read only the campaign's current map, and a
+// spectator controls nothing, even a token still naming them.
+if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) {
+  socket.emit('error', { message: 'Map not found' });
+  return;
+}
+if (!canControlToken(socket.role, token.controlledBy, socket.userId)) {
+  socket.emit('error', { message: 'You do not have permission to move this token' });
   return;
 }
 ```
 
 2. **Validate data:**
 ```typescript
-if (typeof x !== 'number' || typeof y !== 'number') {
-  socket.emit('error', { message: 'Invalid coordinates' });
+// token.move.end answers a bad drop with an error. A drag frame is dropped
+// without an answer, since it can arrive 60 times a second.
+if (!Number.isInteger(x) || !Number.isInteger(y)) {
+  socket.emit('error', { message: 'Invalid token move data' });
   return;
 }
 ```
@@ -1211,8 +1240,8 @@ _Who may send it is read from the shared permission predicates each handler call
 
 ### Connection Issues
 
-**Problem:** "Unauthorized" error on connect
-**Solution:** Login via REST API first to obtain session cookie
+**Problem:** An `error` event with "Unauthorized" right after connecting, then a disconnect
+**Solution:** Sign in via REST first and send the session cookie with the handshake; the sign-in may also have ended or the account may still have a two-factor step or a password change to finish
 
 **Problem:** Socket connects but can't authenticate to campaign
 **Solution:** Verify user is a member of the campaign
@@ -1223,7 +1252,7 @@ _Who may send it is read from the shared permission predicates each handler call
 ### Performance Issues
 
 **Problem:** Token movement is laggy
-**Solution:** Server throttles to 60fps automatically. Check network latency.
+**Solution:** The server passes on at most one frame per 16 ms from a connection, and drops frames past 150 a second from a user. Send about 60 a second at most, and check network latency.
 
 **Problem:** Too many reconnection attempts
 **Solution:** Check server logs for disconnection reason

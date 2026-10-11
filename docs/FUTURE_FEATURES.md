@@ -363,4 +363,3 @@ _Nothing at present._
 ## Won't Do
 
 - **Obscuring tokens automatically by light.** Dim light is lightly obscured in the rules (disadvantage on Perception) and darkness is heavily obscured (effectively blinded); there is no half-seen state in between for an automatic blur to stand for. It would also fight the DM's manual switch, flicker as tokens move, and do nothing on any map that already exists, since those have Global Illumination on.
-_(items intentionally dropped — explain why)_

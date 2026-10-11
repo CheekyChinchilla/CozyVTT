@@ -42,19 +42,23 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 ```json
 {
-  "error": "Authentication required"
+  "error": "Unauthorized",
+  "message": "You must be logged in to access this resource"
 }
 ```
 HTTP status: `401 Unauthorized`
+
+A sign-in that is still waiting for its two-factor code gets the same body with the message `MFA verification required. Please complete MFA login.`, and one that has reached its 30-day limit adds `"code": "SIGN_IN_EXPIRED"`. Act on the status code and on `code`; the wording of `message` can change.
 
 ### Error Responses for Insufficient Permissions
 
 ```json
 {
-  "error": "Forbidden"
+  "error": "Forbidden",
+  "message": "You are not a member of this campaign"
 }
 ```
-HTTP status: `403 Forbidden`
+HTTP status: `403 Forbidden`. `message` says what was missing, for example `This action requires Dungeon Master (DM) role`.
 
 ---
 
@@ -68,7 +72,10 @@ longer exist, and were removed rather than corrected.
 For the complete, checked list of every route the server mounts, see
 [`backend/docs/API_DOCUMENTATION.yaml`](../backend/docs/API_DOCUMENTATION.yaml).
 That file is verified against the code by `scripts/spec-coverage.py`, so it
-cannot silently fall behind the way this one did.
+cannot silently fall behind the way this one did. It is also the place to look
+up the fields of a request or a response: the examples here are shortened to
+show the shape, and a backend test checks that every field they show is one the
+route sends.
 
 These routes are also not a public API: they are not versioned and they carry no
 compatibility promise, so any of them may change shape in a point release.
@@ -128,6 +135,19 @@ Authenticate a user and create a session.
 }
 ```
 HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login`.
+
+**A script that keeps sending a wrong password locks the account.** Ten wrong
+passwords in an hour for one email address, counted from every address together,
+make this route answer `429` for that email, with any password and from any
+address, until the oldest of the ten is an hour old. A script or bridge that is
+left running after the account's password was changed keeps adding wrong
+passwords, so the lock never lifts for as long as it runs, and the person cannot
+sign in on any device. A browser that is already signed in carries on. Stop
+the script first. Then either wait out the hour, or set a new password, which
+lifts the lock at once: use **Forgot your password?**, ask an administrator for
+a temporary password, or change it from a browser that is still signed in. Give
+the script the new password before it runs again, and have it stop on a `401`
+from this route in place of trying again.
 
 ---
 
@@ -269,19 +289,38 @@ Returns the instance's appearance settings, with its name, which the browser tab
 
 List all campaigns the authenticated user is a member of.
 
-**Response:**
+**Response:** an object with a `campaigns` list. Each campaign carries its own
+fields, its `owner` and every member in `memberships`, and two fields about the
+caller: `userRole` (`DM`, `PLAYER` or `SPECTATOR`; there is no `role` here) and
+`characterIds`, the characters they bring to it. Emails are never included. The
+example is shortened; the OpenAPI file has the full shapes.
+
 ```json
-[
-  {
-    "id": "cuid...",
-    "name": "The Lost Mines",
-    "description": "A classic starter adventure.",
-    "gameSystem": "DND_5E",
-    "status": "ACTIVE",
-    "role": "DM",
-    "createdAt": "2025-02-01T10:00:00.000Z"
-  }
-]
+{
+  "campaigns": [
+    {
+      "id": "cuid...",
+      "name": "The Lost Mines",
+      "description": "A classic starter adventure.",
+      "gameSystem": "DND_5E",
+      "status": "ACTIVE",
+      "ownerId": "cuid...",
+      "owner": { "id": "cuid...", "displayName": "Merric Thorngage", "avatarUrl": null },
+      "memberships": [
+        {
+          "userId": "cuid...",
+          "role": "DM",
+          "characterIds": [],
+          "joinedAt": "2025-02-01T10:00:00.000Z",
+          "user": { "id": "cuid...", "displayName": "Merric Thorngage", "avatarUrl": null }
+        }
+      ],
+      "userRole": "DM",
+      "characterIds": [],
+      "createdAt": "2025-02-01T10:00:00.000Z"
+    }
+  ]
+}
 ```
 
 ---
@@ -317,18 +356,31 @@ Update campaign properties (DM only). Every field is optional and is validated w
 
 ### `GET /api/campaigns/:id/characters`
 
-Get all characters assigned to this campaign, with their assigned players.
+The campaign's roster: one entry for every member, with the characters that
+member brings to the campaign. A member with no character has an empty
+`characters` list. `hp` is `null` for a character whose sheet has no hit
+points to read.
 
 **Response:**
 ```json
 {
   "roster": [
     {
-      "characterId": "cuid...",
-      "characterName": "Elara Moonwhisper",
-      "gameSystem": "DND_5E",
       "userId": "cuid...",
-      "userDisplayName": "Alice"
+      "userName": "Alice",
+      "userAvatar": null,
+      "role": "PLAYER",
+      "joinedAt": "2025-02-01T10:00:00.000Z",
+      "characters": [
+        {
+          "id": "cuid...",
+          "name": "Elara Moonwhisper",
+          "tokenImageUrl": null,
+          "gameSystem": "DND_5E",
+          "userId": "cuid...",
+          "hp": { "current": 24, "max": 31, "temp": 0 }
+        }
+      ]
     }
   ]
 }
@@ -1042,16 +1094,47 @@ List assets accessible to the authenticated user (Global + their own User scope 
 **Query params:**
 - `type` — filter by `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`. With no `type`, documents are left out: they have their own page in the app, and a rulebook does not belong among map thumbnails
 - `scope` — filter by `GLOBAL`, `USER`, `CAMPAIGN`
-- `search` — search by name or tags
-- `campaignId` — required when filtering by `CAMPAIGN` scope
-- `sort` — `date` (default), `name`, `size`
+- `search` — part of the asset's name, in any capitals. Tags are not searched
+- `campaignId` — list one campaign's library. You must be a member (`403` otherwise)
 - `page` — pagination page (default: 1)
-- `limit` — items per page (default: 25)
+- `limit` — items per page (default: 50, at most 100)
+
+The newest upload comes first. There is no sort order to ask for. An
+administrator can also send `uploadedBy` (a user id, or `none`) to list one
+person's uploads, and `usable=true` to see only what they could put on a map.
 
 Each asset carries a `canChange` boolean: whether the caller may delete it,
 move it out of its scope, or rewrite it if it is a text or Markdown
 document, by the rule those routes apply, so the client offers those
 controls only then.
+
+**Response:** the assets, shortened here, and the page they are on.
+
+```json
+{
+  "assets": [
+    {
+      "id": "cuid...",
+      "type": "TOKEN",
+      "scope": "USER",
+      "uploadedById": "cuid...",
+      "campaignId": null,
+      "filename": "1f3a.png",
+      "originalName": "goblin.png",
+      "mimeType": "image/png",
+      "fileSize": 18432,
+      "name": "Goblin",
+      "description": null,
+      "tags": [],
+      "createdAt": "2025-02-01T10:00:00.000Z",
+      "uploadedBy": { "id": "cuid...", "displayName": "Merric Thorngage" },
+      "campaign": null,
+      "canChange": true
+    }
+  ],
+  "pagination": { "page": 1, "limit": 50, "total": 1, "totalPages": 1 }
+}
+```
 
 ---
 
@@ -1538,7 +1621,7 @@ listens for or emits.
 
 ## Error Responses
 
-All error responses follow this shape:
+Most errors are JSON in this shape:
 
 ```json
 {
@@ -1546,6 +1629,12 @@ All error responses follow this shape:
   "message": "Human-readable description of what went wrong."
 }
 ```
+
+Not all of them. The invitation routes (`/api/invitations/...`) send `message`
+alone, and the character check (`GET /api/characters/:id/validate`) answers with
+`isValid` and a list of `errors`. Some errors add a `code` for a program to act on, such as
+`PASSWORD_CHANGE_REQUIRED`. Read the status code first, then `code` if there is
+one, then `message`.
 
 ### Common HTTP Status Codes
 

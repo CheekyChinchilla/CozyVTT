@@ -55,8 +55,8 @@ cp .env.example .env
 Edit `.env` and fill in all required values. At minimum (with `NODE_ENV=production`, the app refuses to start while `DATABASE_PASSWORD` is still the placeholder from `.env.example`, and while `SESSION_SECRET` is a placeholder, is the example value shown here, or is shorter than 32 characters):
 
 ```env
-# Database
-DATABASE_PASSWORD=choose-a-strong-password-here
+# Database — paste the output of: openssl rand -hex 16
+DATABASE_PASSWORD=<paste the 32 characters that command prints>
 
 # Security — paste the output of: openssl rand -hex 32
 SESSION_SECRET=<paste the 64 characters that command prints>
@@ -66,6 +66,8 @@ CORS_ORIGIN=https://your-domain.com
 
 NODE_ENV=production
 ```
+
+**Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `@`, `/`, `#`, `?`, `:` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Waiting for database to be ready...` up to 30 times and then `Database connection failed`, or it stops with `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
 
 `CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. With the bundled nginx the app and its API share one address, so this needs nothing from you; if you serve the frontend from a separate address, `CORS_ORIGIN` must be exactly that address (`https://`, host and any port).
 
@@ -81,13 +83,13 @@ docker compose exec database psql -U cozyvtt -d cozyvtt -c "ALTER USER cozyvtt W
 echo "$NEW_PASSWORD"
 ```
 
-The command uses the default names. If you changed them in `.env`, put your `DATABASE_USER` in place of `cozyvtt` after `-U` and after `ALTER USER`, and your `DATABASE_NAME` in place of `cozyvtt` after `-d`. Then put the printed value in `.env` as `DATABASE_PASSWORD` (and in `DATABASE_URL` too if you wrote that by hand), and restart:
+The command uses the default names. If you changed them in `.env`, put your `DATABASE_USER` in place of `cozyvtt` after `-U` and after `ALTER USER`, and your `DATABASE_NAME` in place of `cozyvtt` after `-d`. Then put the printed value in `.env` as `DATABASE_PASSWORD`, and restart. The stack builds the database's address from it, so there is no `DATABASE_URL` to change in `.env` (a line you added there is ignored on Docker):
 
 ```bash
 docker compose up -d
 ```
 
-A hex password avoids any quoting trouble in the command above and in `.env`. On a manual install the same `ALTER USER` runs through `sudo -u postgres psql`, as in the install steps below.
+A hex password avoids any quoting trouble in the command above and in `.env`, and the characters that break the database's address. On a manual install the same `ALTER USER` runs through `sudo -u postgres psql`, as in the install steps below, and the new password goes in `DATABASE_URL` in `backend/.env`.
 
 ### 3. Build and start the stack
 
@@ -544,21 +546,73 @@ Running in a folder is on the backlog rather than ruled out. If it matters to yo
 ### Prerequisites
 
 - A domain name pointing at your server
-- Ports 80 and 443 open in your firewall (the default configuration)
+- Ports 80 and 443 open in your firewall and published by the stack (the default configuration). Let's Encrypt checks your domain by fetching a small file from port 80, now and again at every renewal, so port 80 has to stay reachable
+- A terminal in the CozyVTT folder, the one with `docker-compose.yml`, for every command below
+
+### HTTPS is remembered by browsers
+
+CozyVTT's backend sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer it gives, the API's included. That header (HSTS) tells a browser to use only HTTPS for that name, and for every name under it, for 180 days. A browser takes notice of it only when it arrives over HTTPS, so it begins to apply the first time someone uses your instance over HTTPS: through a certificate of your own, a Cloudflare Tunnel or any other proxy that adds HTTPS.
+
+So decide before you start that this name stays on HTTPS. If you try HTTPS briefly and then go back to plain HTTP on the same name, every browser that loaded the app over HTTPS refuses `http://` for that name, and for any name under it such as `play.vtt.example.com` if you use `vtt.example.com`, for up to six months, until the time runs out or each visitor clears it in their browser. A different name for testing avoids it.
+
+### How it works
+
+Let's Encrypt gives a certificate to whoever can show they control the domain. Certbot, the program that asks for it, shows that by writing a small file into a folder, and Let's Encrypt then fetches that file from `http://your-domain.com/.well-known/acme-challenge/` on port 80. So the nginx container has to serve that folder, and the folder has to be one the container can see. The `nginx/conf.d/` folder is already shared with the container (it appears there as `/etc/nginx/cozyvtt.d/`), so a folder inside it, `nginx/conf.d/acme/`, is shared too.
+
+This is certbot's "webroot" method. It leaves nginx running, which matters at renewal: certbot renews by itself every couple of months, and the other method, `--standalone`, needs port 80 for itself and so fails while nginx holds it.
 
 ### Obtain a certificate
 
-```bash
-# Install Certbot
-sudo apt-get install -y certbot
+1. Install certbot and make the folder it will write into:
 
-# Stop the nginx container temporarily so Certbot can bind port 80
-docker compose stop nginx
-sudo certbot certonly --standalone -d your-domain.com
-docker compose start nginx
-```
+   ```bash
+   sudo apt-get install -y certbot
+   mkdir -p nginx/conf.d/acme
+   ```
 
-Certificates are placed at `/etc/letsencrypt/live/your-domain.com/`.
+   `apt-get` prints a long list of what it installs and ends without an error; `mkdir` prints nothing. `ls nginx/conf.d` should now list `acme`.
+
+2. Create `nginx/conf.d/acme.conf`, putting your domain in place of `your-domain.com`. It answers Let's Encrypt's check on port 80 and carries on serving CozyVTT over HTTP as before:
+
+   ```nginx
+   # nginx/conf.d/acme.conf: Let's Encrypt's check on port 80.
+   # Replaced by https.conf once the certificate is in place.
+   server {
+       listen 80;
+       server_name your-domain.com;
+
+       location /.well-known/acme-challenge/ {
+           root /etc/nginx/cozyvtt.d/acme;
+       }
+
+       include /etc/nginx/cozyvtt/locations.conf;
+   }
+   ```
+
+3. Restart nginx and check it started:
+
+   ```bash
+   docker compose restart nginx
+   docker compose logs --tail 20 nginx
+   ```
+
+   The log should end with lines about worker processes starting. If nginx found a mistake in your file, it does not start, and the last line names the file and the line.
+
+4. Ask for the certificate:
+
+   ```bash
+   sudo certbot certonly --webroot -w "$PWD/nginx/conf.d/acme" -d your-domain.com
+   ```
+
+   The first time, certbot asks for your email address and for you to accept its terms. It should end with `Successfully received certificate` and say that the certificate was saved under `/etc/letsencrypt/live/your-domain.com/`. `$PWD` is the folder you are in, which is why this runs from the CozyVTT folder.
+
+   If it fails instead:
+
+   | Certbot says | Meaning |
+   |---|---|
+   | `Invalid response from http://your-domain.com/.well-known/acme-challenge/...` with `404` | nginx is not serving the folder. Check that step 2's file is named as shown and that you restarted nginx in step 3 |
+   | `Timeout during connect (likely firewall problem)` | Port 80 does not reach this server from the internet. Open it in your firewall and your router |
+   | `DNS problem: NXDOMAIN` | The domain does not point at this server yet |
 
 ### Configure Nginx to use the certificate
 
@@ -571,19 +625,26 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
    sudo chown $(whoami) nginx/certs/*
    ```
 
-2. Create `nginx/conf.d/https.conf` with this content, putting your domain in place of `your-domain.com` on the two `server_name` lines:
+2. Take away the temporary file from step 2 of "Obtain a certificate", if you made it. `https.conf` below answers Let's Encrypt's check itself, and two files answering for the same domain on port 80 would leave the first one in charge:
+
+   ```bash
+   rm -f nginx/conf.d/acme.conf
+   ```
+
+3. Create `nginx/conf.d/https.conf` with this content, putting your domain in place of `your-domain.com` on the two `server_name` lines:
 
    ```nginx
    # nginx/conf.d/https.conf: CozyVTT over HTTPS, with the certificate in nginx/certs/
 
    # Visitors who type http:// for your domain are sent to https://.
-   # Let's Encrypt's HTTP check still reaches its folder.
+   # Let's Encrypt's HTTP check still reaches its folder, because the redirect
+   # is inside "location /" and the check has a location of its own.
    server {
        listen 80;
        server_name your-domain.com;
 
        location /.well-known/acme-challenge/ {
-           root /var/www/certbot;
+           root /etc/nginx/cozyvtt.d/acme;
        }
 
        location / {
@@ -602,10 +663,11 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
        ssl_ciphers         HIGH:!aNULL:!MD5;
        ssl_prefer_server_ciphers on;
 
-       # HSTS tells browsers to reach this domain over HTTPS only. Turn it on
-       # once HTTPS works, not before: a browser that has seen it refuses
-       # plain HTTP to this domain until max-age runs out, and nothing can
-       # undo that. Start with a short max-age (300), then raise it.
+       # HSTS tells browsers to reach this domain over HTTPS only. The backend
+       # already sends a 180-day one with every answer from /api (see "HTTPS is
+       # remembered by browsers" above), so this line only adds it to the app
+       # page and lets you choose the length. Turn it on once HTTPS works,
+       # not before, and start with a short max-age (300) before raising it.
        # add_header Strict-Transport-Security "max-age=63072000" always;
 
        # The same rules as the plain-HTTP server: /api/ and /socket.io/ to
@@ -618,7 +680,7 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
 
    The first server sends to HTTPS only requests for your domain: a plain-HTTP request by your server's IP address, or under another name that leads to it, is still answered by CozyVTT's own server without HTTPS. To send those to your domain over HTTPS too, write `listen 80 default_server;` in place of `listen 80;`, and `return 301 https://your-domain.com$request_uri;` in place of the `return` line.
 
-3. Restart Nginx and check it started:
+4. Restart Nginx and check it started:
    ```bash
    docker compose restart nginx
    docker compose logs --tail 20 nginx
@@ -626,25 +688,65 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
 
    The log should end with lines about worker processes starting. If nginx found a mistake in your file, it does not start, and the last line names the file and the line, for example `nginx: [emerg] ... in /etc/nginx/cozyvtt.d/https.conf:12`.
 
-4. Open `https://your-domain.com`. You should see CozyVTT with a padlock in the address bar, and `http://your-domain.com` should send you there.
+5. Open `https://your-domain.com`. You should see CozyVTT with a padlock in the address bar, and `http://your-domain.com` should send you there. If it does not, `acme.conf` is still in `nginx/conf.d/`: remove it and restart nginx again.
 
-### Automate certificate renewal
+### Keep the certificate renewed
 
-Certbot installs a systemd timer. Test it:
-
-```bash
-sudo certbot renew --dry-run
-```
-
-After each renewal, re-copy the updated certs and restart Nginx. Add to cron:
+Certbot's package sets up a timer that tries to renew twice a day, and renews a certificate in its last 30 days. Check that it is there:
 
 ```bash
-# Weekly, Monday at 3 AM
-0 3 * * 1 \
-  cp /etc/letsencrypt/live/your-domain.com/fullchain.pem /path/to/cozyvtt/nginx/certs/server.crt && \
-  cp /etc/letsencrypt/live/your-domain.com/privkey.pem /path/to/cozyvtt/nginx/certs/server.key && \
-  docker compose -f /path/to/cozyvtt/docker-compose.yml restart nginx
+systemctl list-timers | grep certbot
 ```
+
+A line with a time under `NEXT` means it is. Two more things make renewal complete:
+
+1. **Copy the renewed certificate to where nginx reads it, and restart nginx.** Certbot runs every script in `/etc/letsencrypt/renewal-hooks/deploy/` after it renews a certificate. Create one, putting the full path to your CozyVTT folder in place of `/path/to/CozyVTT`:
+
+   ```bash
+   sudo tee /etc/letsencrypt/renewal-hooks/deploy/cozyvtt.sh >/dev/null <<'EOF'
+   #!/bin/sh
+   # Runs after certbot renews a certificate: put it where nginx reads it, then restart nginx.
+   set -e
+   COZYVTT=/path/to/CozyVTT
+   cp "$RENEWED_LINEAGE/fullchain.pem" "$COZYVTT/nginx/certs/server.crt"
+   cp "$RENEWED_LINEAGE/privkey.pem" "$COZYVTT/nginx/certs/server.key"
+   docker compose -f "$COZYVTT/docker-compose.yml" restart nginx
+   EOF
+   sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/cozyvtt.sh
+   ```
+
+   `RENEWED_LINEAGE` is a value certbot fills in: the folder of the certificate it just renewed.
+
+2. **Test a renewal now, without waiting two months:**
+
+   ```bash
+   sudo certbot renew --dry-run
+   ```
+
+   Certbot asks Let's Encrypt's test server for a pretend renewal, which makes the same check on port 80. It should end with `Congratulations, all simulated renewals succeeded`, and it changes nothing. It does not run the script above either, so run that once by hand to see that it works:
+
+   ```bash
+   sudo RENEWED_LINEAGE=/etc/letsencrypt/live/your-domain.com /etc/letsencrypt/renewal-hooks/deploy/cozyvtt.sh
+   docker compose logs --tail 5 nginx
+   ```
+
+   The first command prints nothing when it works, and the log shows nginx starting again.
+
+If the dry run fails, it names the domain and the reason; the table under "Obtain a certificate" lists the usual ones. One more:
+
+| Certbot says | Meaning |
+|---|---|
+| `Could not bind TCP port 80` | The certificate was obtained with `--standalone`, the method an earlier version of this guide used, which cannot renew while nginx runs. See the next section |
+
+### If you obtained your certificate with the earlier steps
+
+An earlier version of this guide had you stop nginx and run `certbot certonly --standalone`. That certificate works until it expires, about 90 days after it was issued, and then fails to renew. Run `sudo certbot renew --dry-run` to see whether yours is affected: if it says `Could not bind TCP port 80`, it is. To fix it:
+
+1. Make the folder: `mkdir -p nginx/conf.d/acme`
+2. In `nginx/conf.d/https.conf`, make the port-80 server's check location read `root /etc/nginx/cozyvtt.d/acme;` (it may say `root /var/www/certbot;`), or add the location as shown above if it has none. Then restart nginx: `docker compose restart nginx`
+3. Run the command from step 4 of "Obtain a certificate" again with `--force-renewal` added. It replaces the certificate and changes how certbot renews it from now on
+4. Copy the new certificate with the commands in step 1 of "Configure Nginx to use the certificate", restart nginx, and set up the script and the dry run under "Keep the certificate renewed"
+5. If you added the weekly `cron` line from the earlier steps, remove it with `crontab -e`: the script does its job
 
 ---
 
@@ -724,6 +826,8 @@ server {
 }
 
 server {
+    # nginx 1.25.1 and later prefer "listen 443 ssl;" with "http2 on;" on the
+    # next line; this form works on older versions too.
     listen 443 ssl http2;
     server_name your-domain.com;
 
@@ -732,6 +836,8 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
+    # Headers for everything nginx answers except the app page, which sets its
+    # own full set in "location /" below.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options nosniff always;
     add_header X-Frame-Options SAMEORIGIN always;
@@ -799,6 +905,9 @@ server {
         proxy_pass         http://127.0.0.1:4000;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 10s;
     }
 
@@ -820,6 +929,8 @@ server {
         proxy_set_header   Connection        "upgrade";
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400s;
     }
 
@@ -828,6 +939,17 @@ server {
         root  /path/to/cozyvtt/frontend/dist;
         index index.html;
         try_files $uri $uri/ /index.html;
+
+        # The app page's own security headers: the same ones the Docker setup
+        # sends from frontend/security-headers.conf. HSTS is repeated here
+        # because a location that sets any header of its own loses the ones
+        # set in the server block above.
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
     }
 }
 ```
@@ -837,6 +959,18 @@ sudo ln -s /etc/nginx/sites-available/cozyvtt /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+`sudo nginx -t` should print `syntax is ok` and `test is successful`.
+
+**The security headers in `location /` matter.** The Docker setup sends them from the frontend container, which a manual install does not have, so without them the app page has no Content-Security-Policy: nothing stops a script injected through some other flaw from running. They go on the page only, because the backend sets its own on `/api`, and a `frame-ancestors 'none'` on the PDFs it serves would stop the document reader from showing them. nginx drops the server block's headers from any location that sets one of its own, so a location you add yourself (to cache pictures, say) needs the same lines repeated in it. Check that they arrive:
+
+```bash
+curl -sI https://your-domain.com/ | grep -i -e content-security -e permissions-policy -e x-frame
+```
+
+It should print three lines. These lines are a copy of `frontend/security-headers.conf`, so after an upgrade compare them with that file.
+
+**Backups need PostgreSQL's command-line tools.** The Admin Dashboard's **Create Backup** and restore run `pg_dump` and `psql` on the machine the backend runs on. The `postgresql-15` package from step 2 brings them; `pg_dump --version` should print 15 or higher. If it says command not found, install `postgresql-client-15` from the same repository.
 
 ---
 
@@ -866,6 +1000,8 @@ SMTP_FROM="CozyVTT <noreply@your-domain.com>"
 SMTP_SECURE=false   # true for port 465 (TLS), false for port 587 (STARTTLS)
 APP_URL=https://your-domain.com
 ```
+
+Email counts as set up only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are **all** set. A mail server that needs no login, such as a relay on your own network, is not supported: leave the user or password empty and the **Settings** tab of the Admin Panel says **Not configured** and names the three settings, there is no **Send Test Email** button, and password-reset and invitation emails stay off, whatever else you set. `SMTP_PORT` defaults to 587 and `SMTP_SECURE` to `false`.
 
 Test it after deploying with **Send Test Email** on the **Settings** tab of the Admin Panel.
 
@@ -959,7 +1095,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
 | `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
 | `NODE_ENV` | `production` | `production` or `development` | No: the compose file sets `production` |
-| `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.yml` instead |
+| `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.override.yml` instead; [Database Backups](#database-backups) shows how that file works |
 | `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
 | `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
 | `FRONTEND_URL` | none | An older name for `APP_URL`, read only when `APP_URL` is not set | No: the compose file always sets `APP_URL` |
@@ -1333,7 +1469,15 @@ docker compose exec backend wget -qO- http://localhost:4000/health
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
 
-The **Status** card on the Admin Panel's dashboard asks the backend the same question, and also whether live game connections can be made. It says **Healthy** only when the API, the database (**DB**) and live connections (**WS**) all work, **Degraded** with the failing part in red when one does not, and **Unknown** when the backend could not be asked at all.
+The **Status** card on the Admin Panel's dashboard shows three lights and a count of the live connections open at that moment:
+
+| Light | Green when | What it does not tell you |
+|---|---|---|
+| **API** | The card's request reached the backend | |
+| **DB** | The database answers a simple query, as in the check above | |
+| **WS** | The backend's live-connection service (Socket.io) is running inside the backend. That is so whenever the backend itself is up, so it is practically always green | It does not tell you that a proxy in front lets live connections through. A proxy that refuses WebSocket connections leaves it green while dice, chat and token movement fail |
+
+The card says **Healthy** when all three are green, **Degraded** with the failing part in red when **DB** or **WS** is not, and **Unknown** when the backend could not be asked at all. To see whether live connections really work, open a campaign: the right of its header shows **Connected** (on a narrow screen only an icon), and a table that stays on **Connecting...**, **Disconnected** or **Connection Error** has the problem described under [Live features don't work](#live-features-dont-work-dice-token-movement-chat).
 
 If you run your own reverse proxy and want an uptime monitor to reach `/health` from outside, add a route for it alongside your `/api` route, both pointing at the backend.
 
@@ -1483,7 +1627,7 @@ Before going live:
 
 - [ ] **Strong secret** — `SESSION_SECRET` is a 32+ character random string, not the placeholder value from `.env.example`. A production instance refuses to start on a placeholder or on anything shorter than 32 characters
 - [ ] **Real database password** — `DATABASE_PASSWORD` is not the placeholder from `.env.example`. A production instance refuses to start on it, the same way it does for `SESSION_SECRET`
-- [ ] **HTTPS only** — SSL certificate installed, and your `nginx/conf.d/https.conf` sends plain-HTTP visitors to HTTPS (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), or a Cloudflare Tunnel provides HTTPS
+- [ ] **HTTPS only** — SSL certificate installed, and your `nginx/conf.d/https.conf` sends plain-HTTP visitors to HTTPS (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), or a Cloudflare Tunnel provides HTTPS. With Let's Encrypt, `sudo certbot renew --dry-run` ends with `all simulated renewals succeeded`: a certificate that cannot renew expires after about 90 days
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
@@ -1492,7 +1636,7 @@ Before going live:
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
-- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS server: see the commented line in the `nginx/conf.d/https.conf` example
+- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS**: the backend already sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer from `/api`, so a browser that has used the instance over HTTPS keeps that name on HTTPS for 180 days (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)). The app page itself carries it only if you turn on the commented line in the `nginx/conf.d/https.conf` example
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date
@@ -1562,6 +1706,8 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
 9. Confirm CozyVTT sees each visitor's own address and not the tunnel's, with the check in [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits).
 
 Once running, ports 80 and 443 are open to the server itself and nothing else, so only SSH (port 22, or your chosen alternative) needs to be reachable from the internet, and even that you can put behind Cloudflare Access if you want.
+
+A tunnel makes browsers see HTTPS, so the backend's HSTS header starts to apply to your name: plan to keep it on HTTPS (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)).
 
 ### When NOT to use a Cloudflare Tunnel
 

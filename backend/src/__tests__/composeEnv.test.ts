@@ -24,6 +24,13 @@ const NOT_PASSED_THROUGH: Record<string, string> = {
   // Backups are bind-mounted at ./backend/backups; a path inside the
   // container that is not mounted would lose every backup on a rebuild.
   BACKUP_DIR: 'the backups volume in docker-compose.yml decides where they go',
+  // The uploads folder is bind-mounted at ./backend/uploads; a path inside the
+  // container that is not mounted would lose every upload on a rebuild.
+  UPLOAD_DIR: 'the uploads volume in docker-compose.yml decides where they go',
+  // Only a fallback for the name set in the setup wizard and Admin > Settings.
+  INSTANCE_NAME: 'the instance name is set in Admin > Settings; this is a fallback for installs without Docker',
+  // The compose file always sets APP_URL, which is read first.
+  FRONTEND_URL: 'an older name for APP_URL, which the compose file always sets',
 };
 
 /** The keys the backend reads from its environment, from the source itself. */
@@ -82,6 +89,47 @@ describe.each(['docker-compose.yml', 'docker-compose.dev.yml'])('%s', (file) => 
       (key) => backend.has(key) && !passed.has(key) && !(key in NOT_PASSED_THROUGH)
     );
     expect(missing).toEqual([]);
+  });
+});
+
+/**
+ * Names the backend reads that are not settings a self-hoster chooses: the
+ * operating system's, and the like.
+ */
+const NOT_A_SETTING: Record<string, string> = {
+  PATH: 'the operating system finds psql and pg_dump through it',
+  PGPASSWORD: 'the backend sets it for the pg_dump and psql it starts; it does not read one',
+};
+
+// The example file is where a self-hoster looks to learn what can be set.
+// UPLOAD_DIR, INSTANCE_NAME and FRONTEND_URL were read by the backend and
+// named in no example file at all.
+describe('.env.example', () => {
+  it('names every setting the backend reads, set or commented out as an example', () => {
+    const offered = new Set(keysTheExampleOffers());
+    const missing = [...keysTheBackendReads()].filter((key) => !offered.has(key) && !(key in NOT_A_SETTING));
+    expect(missing).toEqual([]);
+  });
+});
+
+// The developer guide has a table of the backend's settings. It listed 19 of
+// the 29 the backend reads, and marked SMTP_USER and SMTP_PASS as not
+// required, though email counts as set up only with both.
+describe('the backend settings table in docs/DEVELOPMENT.md', () => {
+  const guide = read('docs/DEVELOPMENT.md');
+  const table = guide.slice(guide.indexOf('### Backend (`backend/.env`)'), guide.indexOf('### Frontend (`frontend/.env`)'));
+  const named = new Set([...table.matchAll(/^\| `([A-Z][A-Z0-9_]*)` \|/gm)].map((m) => m[1]));
+
+  it('has a row for every setting the backend reads', () => {
+    const missing = [...keysTheBackendReads()].filter((key) => !named.has(key) && !(key in NOT_A_SETTING));
+    expect(missing).toEqual([]);
+  });
+
+  it('says SMTP_USER and SMTP_PASS are needed for email, with SMTP_HOST', () => {
+    for (const key of ['SMTP_USER', 'SMTP_PASS']) {
+      const row = table.split('\n').find((line) => line.startsWith(`| \`${key}\` |`)) ?? '';
+      expect(row).toMatch(/email/i);
+    }
   });
 });
 

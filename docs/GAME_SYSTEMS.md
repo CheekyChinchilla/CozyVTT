@@ -2,7 +2,7 @@
 
 This guide explains how to add a new tabletop game system to CozyVTT end to end. It reflects the code as it actually ships — file names, the exact functions you extend, and the reference systems to copy from.
 
-CozyVTT currently ships four systems: **D&D 5e**, **Pathfinder 2e**, **Call of Cthulhu 7e**, and **Shadowrun 6e** (backend-complete; its sheet UI is a placeholder — see [Reference systems](#reference-systems)). Adding a fifth means touching a fixed set of registration points, all of which are plain `switch` statements and enums — no dynamic plugin loader, no config file. If you add your system to every switch the compiler and tests point you at, it works.
+CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2e** and **Call of Cthulhu 7e**. A fourth, **Shadowrun 6e**, is in the code as groundwork: its backend is complete and its sheet is a placeholder, so it is left out of the lists a game system is chosen from (see [Reference systems](#reference-systems)). Adding another system means touching a fixed set of registration points, all of which are plain `switch` statements and enums — no dynamic plugin loader, no config file. If you add your system to every switch the compiler and tests point you at, it works.
 
 ---
 
@@ -841,12 +841,7 @@ describe('mySystemCharacterDataSchema', () => {
 });
 ```
 
-There is also a template test suite under `backend/src/utils/character-templates/__tests__/` — add coverage there if your templates have non-trivial logic. Then run the gates:
-
-```bash
-cd backend  && npx tsc --noEmit && npm test
-cd frontend && npm run typecheck && npm run lint && npm test && npm run build
-```
+There is also a template test suite under `backend/src/utils/character-templates/__tests__/` — add coverage there if your templates have non-trivial logic. Then run all of the gates in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done), not a subset: the type check, lint, tests and build for the backend and the frontend, and the two documentation checks. The frontend tests run with `npx vitest run`; `npm test` there is watch mode, which waits for a key press and never finishes.
 
 The exhaustive `switch`/`Record` types mean a missed backend registration point shows up as a **compile error**, not a runtime surprise.
 

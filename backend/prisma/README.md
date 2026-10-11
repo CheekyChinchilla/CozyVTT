@@ -63,7 +63,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by dom
 | `LogLevel` | `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `InvitationStatus` | `PENDING`, `ACCEPTED`, `DECLINED` |
 
-Note: `AssetType` includes `DOCUMENT` and `OTHER`, but the upload route rejects them — only MAP / TOKEN / AUDIO / AVATAR are accepted from clients. The two extra values are reserved for future use.
+Note: `AssetType` includes `OTHER`, but the upload route rejects it — only MAP / TOKEN / AUDIO / AVATAR / DOCUMENT are accepted from clients. `OTHER` is reserved for future use.
 
 ## Important constraints
 
@@ -116,7 +116,7 @@ npx prisma migrate reset
 
 ## Migration strategy
 
-- **Always** create migrations via `prisma migrate dev`. Never hand-edit migrations in version control.
+- Create schema migrations with Prisma's own tooling (`prisma migrate dev`, or `prisma migrate diff` where `migrate dev` refuses to run; `docs/DEVELOPMENT.md` shows both). A migration that moves data is written by hand in SQL, and has to be safe to run twice and safe to fail half-way: `20260417000000_migrate_light_bright_dim`, which rewrites every map's lights, is the one so far. Never edit a migration that has shipped: a database that already ran it would no longer match the file.
 - **Production deployments** run `npx prisma migrate deploy` on backend startup — this only applies migrations that haven't run on the target DB. It never modifies existing migration history.
 - The `migrations/` directory is **tracked in git**. Every PR that touches `schema.prisma` should also commit the generated migration file alongside it.
 - Migrations are forward-only. There's no `prisma migrate down`. To "revert," write a new migration that undoes the previous change.

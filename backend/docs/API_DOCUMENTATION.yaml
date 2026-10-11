@@ -87,7 +87,9 @@ info:
       `RateLimit-*` headers on a sign-in answer are this limit's (`10;w=3600`).
       A new password forgets the email's count at once, whether set through
       `POST /api/auth/reset-password`, `POST /api/auth/change-password` or
-      `POST /api/users/{id}/reset-password`
+      `POST /api/users/{id}/reset-password`. A script or bridge left running
+      on an old password keeps adding wrong passwords, so it keeps the account
+      locked for the person too, from every address, until it is stopped
     - Password checks from a signed-in session (`POST /api/auth/change-password`,
       `DELETE /api/auth/account`, and `PUT /api/users/{id}` when it carries
       `currentPassword`): one shared allowance of 10 wrong passwords per 15
@@ -2180,7 +2182,7 @@ paths:
         `maps` lists every map to the DM and only the campaign's current map
         to other members (none when no map is current). It carries metadata
         only, not the token, wall, fog or light data a map fetch
-        (`GET /api/maps/{id}`) returns. `spiritLayerUrl` is filled in for the
+        (`GET /api/campaigns/{campaignId}/maps/{id}`) returns. `spiritLayerUrl` is filled in for the
         DM, for every member while the campaign's spirit layer is switched on,
         and for a player who has a visible token of their own on the spirit
         layer of the current map. Everyone else gets `null`, so a map's spirit

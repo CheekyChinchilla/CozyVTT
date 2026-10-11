@@ -43,7 +43,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Admin dashboard** — user management, system settings, activity logs, database backups
 
 ### Campaign Tools
-- **Interactive map canvas** — upload map images, place tokens, drag to move in real time
+- **Interactive map canvas** — upload map images, place tokens, click a token to pick it up and click a square to put it down, with every move shown to the table in real time
 - **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); colored-letter placeholders for tokens without images; the DM can hide a token from players or obscure what it is, and players are sent only what they may see of each token
 - **Creature library** — browse, search, and place creatures from the SRD bestiary (auto-imported from Open5e) or custom campaign-specific templates; per-campaign favorites with star toggle; duplicate SRD creatures to customize; edit custom creatures in-place; save token images back to templates
 - **Token templates** — save reusable token configurations (image, stats, HP, size, disposition, full NPC stat block); place from library or save from map context menu; copy templates between campaigns the DM owns
@@ -97,7 +97,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Admin-approval registration** (optional)
 - **File upload validation** — magic-byte content checks (not just MIME header), size limits by type; text uploads must genuinely be text, and documents are served as plain text or PDF, never as a web page
 - **Per-endpoint rate limiting** — global API limit, strict auth limit, asset upload limit (configurable via `ASSET_UPLOAD_RATE_LIMIT`), a limit on campaign invitation emails per DM, and per-account limits on everything sent to the live table, set far above what a game sends
-- **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use
+- **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use. The Docker setup sends them; an install without Docker gets them from the Nginx example in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#5-serve-with-nginx)
 - **WebSocket campaign isolation** — server-authenticated campaign membership; no client-spoofing
 - **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs. In the two nginx containers the master process runs as root, as nginx's own image does, and the worker processes that handle requests run as the unprivileged `nginx` user. Every container runs with `no-new-privileges`, and the one serving the app's files has a read-only filesystem
 - **Production refuses to start** with a placeholder `SESSION_SECRET` or `DATABASE_PASSWORD`

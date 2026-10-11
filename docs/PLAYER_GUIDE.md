@@ -135,7 +135,7 @@ The page has three main areas:
 - If you're curious about your fellow adventurers, it's all here
 
 ### Center — The Map
-This is the battle map. During a session, you'll see your token here and can drag it to move around.
+This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)).
 
 ### Right Sidebar — Your Tools
 A tabbed panel — click a tab to switch between:
@@ -259,7 +259,7 @@ One thing to know: if the DM has **paused** the session, your rolls are worked o
 
 ## Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. You can't move it while the session is paused or has ended.
+When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
 
 *GIF pending — Picking up a player token and placing it across the map.*
 
@@ -305,7 +305,7 @@ If a session shows no notes, your DM simply didn't write any that night.
 
 ### Pointing at a token
 
-Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are dragging: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
+Hover any token and a card appears in the bottom-left with a large view of its picture, its **HP**, any **conditions** it has, and its **Initiative** if it is in the current fight. It stays useful while you are holding a token: the card follows the square under your cursor, so you can see who is already standing where you are about to land.
 
 You will only ever see what you are meant to. Another player's hit points come from their character sheet, which you can already read. A creature's are the DM's to reveal, and appear only once they turn its HP bar on. A grey token with a question mark is something you can see but cannot make out: the DM has obscured it, and your browser is not sent its name, picture, conditions, hit points or who controls it until they reveal it. And a token standing in unrevealed fog tells you nothing at all — no name, no picture, nothing.
 
@@ -378,7 +378,6 @@ Roll before the DM clicks **Start Combat**. Once combat has started, the dice ic
 | **D&D 5e** | `d20 +` your Dexterity modifier, plus the **other bonus** box on your sheet |
 | **Pathfinder 2e** | `d20 +` whichever stat the **Uses:** dropdown names — Perception unless your GM asks for something else |
 | **Call of Cthulhu 7e** | Nothing is rolled. Investigators act in DEX order, so the button reads **Set Initiative** and takes your DEX |
-| **Shadowrun 6e** | Your initiative dice plus your initiative base, both from your sheet |
 
 **D&D 5e players — the "other bonus" box.** Your Dexterity is added automatically, but plenty of things add to initiative beyond it: the **Alert** feat's flat +5, a Bard's Jack of All Trades or a Champion's Remarkable Athlete, subclasses that let you use a different ability. Put the total of those in **Initiative — other bonus** on the Combat tab and it's included every time; the box takes anything from -30 to +30. The Initiative number itself is worked out for you now, so there's nothing to keep in step by hand.
 

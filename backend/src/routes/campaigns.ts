@@ -286,9 +286,9 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
         // PERFORMANCE: return map/character METADATA only. The full
         // token/wall/fog/light blobs and full character sheets are unbounded and
         // were never used from this payload — the active map's full data loads via
-        // GET /api/maps/:id (spirit-filtered) and character sheets via
-        // GET /api/characters/:id. Frontend only reads ids + a few metadata fields
-        // from these arrays (map move-to-map, token ownership).
+        // GET /api/campaigns/:campaignId/maps/:id (spirit-filtered) and character
+        // sheets via GET /api/characters/:id. Frontend only reads ids + a few
+        // metadata fields from these arrays (map move-to-map, token ownership).
         maps: {
           select: {
             id: true,
@@ -1293,6 +1293,8 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
 
 /**
  * GET /api/admin/campaigns
+ * TODO(docs): no such path. The route below is GET /api/campaigns/admin/all, so
+ * the line above should say that.
  * Get all campaigns in the system (Admin only)
  * Requires: Admin role
  */
