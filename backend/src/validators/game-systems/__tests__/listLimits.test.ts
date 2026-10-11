@@ -17,6 +17,7 @@ import {
   dnd5eCharacterDataSchema,
   pathfinder2eCharacterDataSchema,
   callOfCthulhu7eCharacterDataSchema,
+  shadowrun6eCharacterDataSchema,
   flexibleCharacterDataSchema,
 } from '../index';
 import { unboundedLists } from '../../../__tests__/helpers/sheetSchemaWalk';
@@ -33,6 +34,7 @@ describe('every list on a sheet', () => {
     ['DND_5E', dnd5eCharacterDataSchema],
     ['PATHFINDER_2E', pathfinder2eCharacterDataSchema],
     ['CALL_OF_CTHULHU_7E', callOfCthulhu7eCharacterDataSchema],
+    ['SHADOWRUN_6E', shadowrun6eCharacterDataSchema],
     ['Flexible', flexibleCharacterDataSchema],
   ] as Array<[string, z.ZodType]>)('has a count limit in %s', (_system, schema) => {
     expect(unboundedLists(schema)).toEqual([]);
@@ -264,5 +266,28 @@ describe('the Call of Cthulhu lists', () => {
 
   it.each(lists)('take %s at the limit', (path, entry) => {
     expect(refusals(GameSystem.CALL_OF_CTHULHU_7E, sheet(path, rows(SHEET_LIST_MAX, entry)))).toEqual([]);
+  });
+});
+
+describe('the Shadowrun 6e lists', () => {
+  // No editor offers Shadowrun yet, but the API still takes a sheet for it.
+  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.SHADOWRUN_6E), path, value);
+
+  const lists: Array<[string, unknown]> = [
+    ['conditions', 'Stunned'],
+    ['vehicles', 'Westwind 2000'],
+    ['qualities', { name: 'Ambidextrous', type: 'positive', cost: 4, notes: '' }],
+    ['contacts', { name: 'Mr. Johnson', role: 'Fixer', loyalty: 1, connection: 1, notes: '' }],
+    ['magic.spells', 'Manaball'],
+    ['matrixStats.programs', 'Decryption'],
+  ];
+
+  it.each(lists)('refuse %s past the limit, naming the list', (path, entry) => {
+    const refused = refusals(GameSystem.SHADOWRUN_6E, sheet(path, rows(SHEET_LIST_MAX + 1, entry)));
+    expect(refused).toContain(`${path}: Can hold at most ${SHEET_LIST_MAX} entries`);
+  });
+
+  it('take a list at the limit', () => {
+    expect(refusals(GameSystem.SHADOWRUN_6E, sheet('vehicles', rows(SHEET_LIST_MAX, 'Westwind 2000')))).toEqual([]);
   });
 });
