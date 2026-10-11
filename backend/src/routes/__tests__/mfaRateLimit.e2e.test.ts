@@ -14,7 +14,6 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
-import express from 'express';
 import request from 'supertest';
 import speakeasy from 'speakeasy';
 import { createTestApp } from '../../__tests__/helpers/test-app';
@@ -53,12 +52,8 @@ it('stops repeated MFA verification attempts after five failures', async () => {
 });
 
 describe('the sign-in code step, per account', () => {
-  // The test app wrapped in one that trusts a proxy hop, as server.ts does, so
-  // each request can come from its own address via X-Forwarded-For. A mounted
-  // app inherits the setting.
-  const proxied = express();
-  proxied.set('trust proxy', 1);
-  proxied.use(createTestApp());
+  // The test app trusts one proxy hop, as the server's does, so each request
+  // can come from its own address via X-Forwarded-For.
 
   const secret = speakeasy.generateSecret({ length: 20 }).base32;
   const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
@@ -71,7 +66,7 @@ describe('the sign-in code step, per account', () => {
   }
 
   async function attempt(address: string, ip: string, token: string) {
-    const agent = request.agent(proxied);
+    const agent = request.agent(app);
     const login = await agent.post('/api/auth/login').set('X-Forwarded-For', ip).send({ email: address, password: TEST_PASSWORD });
     expect(login.body.mfaRequired).toBe(true);
     return agent.post('/api/auth/mfa/verify-login').set('X-Forwarded-For', ip).send({ token });
