@@ -149,6 +149,7 @@ const TESTED: Record<string, string> = {
   'PUT /api/users/:id/preferences': 'routes/__tests__/userRoutes.e2e.test.ts',
   'POST /api/users/:id/send-reset-link': 'routes/__tests__/userRoutes.e2e.test.ts',
   'GET /api/admin/stats': 'routes/__tests__/adminRoutes.e2e.test.ts',
+  'GET /api/admin/health': 'routes/__tests__/adminHealth.e2e.test.ts',
   'POST /api/admin/users': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'POST /api/admin/users/invite': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'POST /api/admin/users/:id/resend-invite': 'routes/__tests__/adminRoutes.e2e.test.ts',

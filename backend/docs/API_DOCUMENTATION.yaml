@@ -8499,6 +8499,50 @@ paths:
   # ADMIN ENDPOINTS
   # ============================================
 
+  /api/admin/health:
+    get:
+      tags: [Admin]
+      summary: Check the server's parts, for the dashboard's status card
+      description: >-
+        Platform ADMIN only. Asks the database for an answer and checks that the
+        live-connection (Socket.io) server is running. Answers 200 whatever it
+        finds, with each part's state; `status` is `healthy` only when every part
+        is `ok`. A request that cannot reach this route at all (no answer, or an
+        error before it) is how a client tells the API itself is down. The public
+        `GET /health` is the probe for uptime monitors; this one is behind the
+        admin session.
+      operationId: adminGetHealth
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The state of each part
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded]
+                  services:
+                    type: object
+                    properties:
+                      api: { type: string, enum: [ok] }
+                      database: { type: string, enum: [ok, error] }
+                      websocket: { type: string, enum: [ok, error] }
+                  connections:
+                    type: integer
+                    description: Live connections open now.
+              example:
+                status: healthy
+                services: { api: ok, database: ok, websocket: ok }
+                connections: 4
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/admin/stats:
     get:
       tags: [Admin]

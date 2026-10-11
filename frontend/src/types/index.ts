@@ -299,6 +299,14 @@ export interface AssetTypeStat {
   sizeBytes: number;
 }
 
+/** GET /api/admin/health: whether each part of the server is working. */
+export interface AdminHealth {
+  status: 'healthy' | 'degraded';
+  services: { api: 'ok'; database: 'ok' | 'error'; websocket: 'ok' | 'error' };
+  /** Live connections open now. */
+  connections: number;
+}
+
 export interface SystemStats {
   userCount: number;
   campaignCount: number;

@@ -1191,6 +1191,8 @@ docker compose exec backend wget -qO- http://localhost:4000/health
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
 
+The **Status** card on the Admin Panel's dashboard asks the backend the same question, and also whether live game connections can be made. It says **Healthy** only when the API, the database (**DB**) and live connections (**WS**) all work, **Degraded** with the failing part in red when one does not, and **Unknown** when the backend could not be asked at all.
+
 If you run your own reverse proxy and want an uptime monitor to reach `/health` from outside, add a route for it alongside your `/api` route, both pointing at the backend.
 
 ### Database Connectivity

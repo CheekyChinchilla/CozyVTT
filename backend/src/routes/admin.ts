@@ -201,6 +201,34 @@ router.get('/stats', async (_req, res) => {
 });
 
 // ============================================
+// GET /api/admin/health
+// Whether the database answers and the live-connection server is running,
+// for the dashboard's status card. Answers 200 with each part's state; a
+// request that cannot reach this route at all tells the card the API is down.
+// ============================================
+router.get('/health', async (_req, res) => {
+  let database: 'ok' | 'error' = 'ok';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    logger.warn('Health check: the database did not answer', { err: error });
+    database = 'error';
+  }
+  let websocket: 'ok' | 'error' = 'ok';
+  let connections = 0;
+  try {
+    connections = getSocketInstance().engine.clientsCount;
+  } catch {
+    websocket = 'error';
+  }
+  return res.json({
+    status: database === 'ok' && websocket === 'ok' ? 'healthy' : 'degraded',
+    services: { api: 'ok', database, websocket },
+    connections,
+  });
+});
+
+// ============================================
 // GET /api/admin/settings
 // Returns current system settings.
 // ============================================
