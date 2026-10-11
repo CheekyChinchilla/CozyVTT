@@ -701,6 +701,15 @@ server {
     # Must be >= the largest MAX_*_SIZE_MB in .env, plus a few MB of overhead
     client_max_body_size 55M;
 
+    # Compress text on the way out: the app's scripts and styles, and the
+    # backend's JSON, shrink to about a third. Leave the version out of answers.
+    gzip            on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_vary       on;
+    gzip_types      application/json text/css application/javascript image/svg+xml text/plain;
+    server_tokens   off;
+
     # Backup restore → backend: a whole instance backup, up to 4 GB, passed
     # straight through (the backend refuses anyone but an admin before reading
     # it), with time to load it
