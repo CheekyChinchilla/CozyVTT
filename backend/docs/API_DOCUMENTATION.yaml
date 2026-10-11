@@ -5223,8 +5223,10 @@ paths:
                     type: array
                     description: >-
                       At most 100 entries; `omitted` counts the rest. Each is
-                      one map, character, template, creature or campaign, or a
-                      map's tokens together (`count`), or, where the caller may
+                      one map, character, template, creature or campaign, a
+                      map's tokens together (`count`), or a campaign's
+                      time-of-day period whose sound it is (`vibePeriod`, named
+                      by the period, since 1.5.2), or, where the caller may
                       not see the record, every use of one kind folded into a
                       single entry with `name`, `campaignId` and `campaignName`
                       null.
@@ -5233,11 +5235,11 @@ paths:
                       properties:
                         kind:
                           type: string
-                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting]
+                          enum: [map, token, character, characterTemplate, creature, tokenTemplate, campaignSetting, vibePeriod]
                         name:
                           type: string
                           nullable: true
-                          description: The map, character, template, creature or campaign.
+                          description: The map, character, template, creature or campaign, or the time-of-day period for `vibePeriod`.
                         campaignId:
                           type: string
                           nullable: true

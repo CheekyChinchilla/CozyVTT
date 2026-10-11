@@ -884,7 +884,8 @@ export type AssetUseKind =
   | 'characterTemplate'
   | 'creature'
   | 'tokenTemplate'
-  | 'campaignSetting';
+  | 'campaignSetting'
+  | 'vibePeriod';
 
 /**
  * One place an asset is used, from the server's refusal to delete it. `name`

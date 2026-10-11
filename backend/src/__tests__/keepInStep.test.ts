@@ -47,6 +47,11 @@
  * DATABASE_URL in its own copy of the same block; a fix to one (decoding the
  * password, the default port) has to reach the other.
  *
+ * The kinds of thing that can use an asset. The server lists them when it
+ * refuses to delete one, the client describes each kind and drops a kind it
+ * does not know, and the API document lists them; a kind added on the server
+ * alone shows the DM a shorter list than the server sent.
+ *
  * The themes and fonts. The server accepts a theme or font only from its
  * list, for a user's preferences and the instance's default theme alike; a
  * theme the app offers that the list lacks is one nobody can save.
@@ -309,5 +314,31 @@ describe('the DATABASE_URL block in backup.sh and restore.sh', () => {
 
   it('is the same in both scripts', () => {
     expect(block('backend/scripts/restore.sh')).toBe(block('backend/scripts/backup.sh'));
+  });
+});
+
+describe('the kinds of thing that can use an asset', () => {
+  /** The members of `export type AssetUseKind = | 'a' | 'b';` in a file. */
+  const union = (rel: string) => {
+    const m = /export type AssetUseKind =([^;]+);/.exec(read(rel));
+    if (!m) throw new Error(`${rel} no longer declares AssetUseKind; update this test with the file`);
+    return [...m[1].matchAll(/'([A-Za-z]+)'/g)].map((k) => k[1]).sort();
+  };
+  const server = union('backend/src/services/assetUsage.ts');
+
+  it('are the same in the browser and on the server', () => {
+    expect(union('frontend/src/types/index.ts')).toEqual(server);
+  });
+
+  it('are all kept by the client when it reads a refusal', () => {
+    const m = /const ASSET_USE_KINDS: readonly AssetUseKind\[\] = \[([^\]]+)\]/.exec(read('frontend/src/utils/errors.ts'));
+    if (!m) throw new Error('frontend/src/utils/errors.ts no longer declares ASSET_USE_KINDS; update this test with the file');
+    expect([...m[1].matchAll(/'([A-Za-z]+)'/g)].map((k) => k[1]).sort()).toEqual(server);
+  });
+
+  it('are listed in the API document', () => {
+    const m = /enum: \[(map, token, character[^\]]*)\]/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer lists the asset use kinds; update this test with the file');
+    expect(m[1].split(',').map((k) => k.trim()).sort()).toEqual(server);
   });
 });
