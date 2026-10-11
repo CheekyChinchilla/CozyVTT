@@ -43,8 +43,8 @@ export const FLEXIBLE_MAX_ROWS = 1000;
 export const FLEXIBLE_MAX_COLUMNS = 50;
 
 /**
- * D&D 5e: spell slots of one level, in total. A 20th-level caster has at most
- * four of a level; the sheet draws one mark per slot.
+ * D&D 5e and Pathfinder 2e: spell slots of one level, in total. A 20th-level
+ * caster has at most four of a level; a D&D sheet draws one mark per slot.
  */
 export const SPELL_SLOTS_MAX = 20;
 
@@ -57,3 +57,18 @@ export const SPELL_SLOTS_MAX = 20;
  * holds, and a sheet drawing this many rows is slow but never frozen.
  */
 export const SHEET_LIST_MAX = 500;
+
+/**
+ * Typed sheets: entries in a list inside one row, such as the traits of one
+ * Pathfinder 2e strike. A weapon has about ten, so this is five times that,
+ * and low because it multiplies by the rows around it.
+ */
+export const SHEET_ROW_TAGS_MAX = 50;
+
+/**
+ * Pathfinder 2e: an item bonus, or an item penalty. The Core Rulebook's run
+ * from +4 down to -2, so this admits homebrew several times over and stays far
+ * below the dice roller's own limit of 9,999 on a modifier.
+ */
+export const PF2E_ITEM_BONUS_MIN = -30;
+export const PF2E_ITEM_BONUS_MAX = 30;

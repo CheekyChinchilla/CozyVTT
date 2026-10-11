@@ -14,7 +14,7 @@ import type { Prisma } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { getBlankCharacterTemplate } from '../../validators/game-systems';
-import { SHEET_LIST_MAX } from '../../validators/game-systems/sheetLimits';
+import { PF2E_ITEM_BONUS_MAX, SHEET_LIST_MAX, SPELL_SLOTS_MAX } from '../../validators/game-systems/sheetLimits';
 import { GameSystem } from '../../game-systems';
 
 const app = createTestApp();
@@ -94,5 +94,57 @@ describe('a D&D 5e sheet', () => {
 
     expect(res.status).toBe(400);
     expect(named(res.body)).toEqual(refusal('spellcasting.spells'));
+  });
+});
+
+describe('a Pathfinder 2e sheet', () => {
+  const gameSystem = GameSystem.PATHFINDER_2E;
+  const blank = () => getBlankCharacterTemplate(gameSystem) as Record<string, unknown>;
+
+  async function create(): Promise<string> {
+    const res = await agent.post('/api/characters').send({ name: 'Seelah', gameSystem, data: blank() });
+    expect(res.status).toBe(201);
+    return res.body.character.id as string;
+  }
+
+  it('refuses too many languages, an item bonus out of range and a slot total no caster has, naming each', async () => {
+    const id = await create();
+    const sheet = blank() as {
+      savingThrows: { will: Record<string, unknown> };
+      languages: string[];
+      spellcasting?: unknown;
+    };
+    sheet.languages = Array.from({ length: SHEET_LIST_MAX + 1 }, () => 'Common');
+    sheet.savingThrows = { ...sheet.savingThrows, will: { ...sheet.savingThrows.will, itemBonus: PF2E_ITEM_BONUS_MAX + 1 } };
+    const slots = Object.fromEntries(
+      ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'].map((rank) => [rank, { total: 0, expended: 0 }])
+    );
+    sheet.spellcasting = { slots: { ...slots, '2': { total: SPELL_SLOTS_MAX + 1, expended: 0 } } };
+
+    const res = await agent.put(`/api/characters/${id}`).send({ data: sheet });
+
+    expect(res.status).toBe(400);
+    expect(named(res.body).sort()).toEqual(
+      [
+        `languages: Can hold at most ${SHEET_LIST_MAX} entries`,
+        `savingThrows.will.itemBonus: Must be from -30 to 30`,
+        `spellcasting.slots.2.total: Must be from 0 to ${SPELL_SLOTS_MAX}`,
+      ].sort()
+    );
+  });
+
+  it('keeps loading a sheet stored with an item bonus out of range, and refuses its next save', async () => {
+    const id = await create();
+    const stored = blank() as { skills: { stealth: Record<string, unknown> } };
+    stored.skills = { ...stored.skills, stealth: { ...stored.skills.stealth, itemBonus: 900 } };
+    await prisma.character.update({ where: { id }, data: { data: stored as unknown as Prisma.InputJsonValue } });
+
+    const loaded = await agent.get(`/api/characters/${id}`);
+    expect(loaded.status).toBe(200);
+    expect(loaded.body.character.data.skills.stealth.itemBonus).toBe(900);
+
+    const unchanged = await agent.put(`/api/characters/${id}`).send({ data: loaded.body.character.data });
+    expect(unchanged.status).toBe(400);
+    expect(named(unchanged.body)).toEqual(['skills.stealth.itemBonus: Must be from -30 to 30']);
   });
 });
