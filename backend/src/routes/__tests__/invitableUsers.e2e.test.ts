@@ -6,8 +6,10 @@
  * picker used to answer with every account on the instance that was not
  * already in or invited to the campaign: id, display name and avatar, accounts
  * still waiting for an administrator's approval included, unpaged. It now
- * answers only a search of at least two characters, with at most 20 matches,
- * and leaves out accounts that are not approved.
+ * answers only a search: at least two characters find names that contain
+ * them, and one character finds names that are exactly that character, so
+ * nobody is out of reach. It gives at most 20 matches and leaves out accounts
+ * that are not approved.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -53,6 +55,9 @@ let aliceId: string;
 let percentId: string;
 let underscoreId: string;
 let backslashId: string;
+let oneLetterId: string;
+let percentOnlyId: string;
+let accentedId: string;
 
 beforeAll(async () => {
   const owner = await createTestUser({ email: `invitable-dm-${stamp}@test.invalid`, displayName: `DM ${tag}` });
@@ -68,6 +73,9 @@ beforeAll(async () => {
   percentId = await account(`Rate 50%% ${tag}`);
   underscoreId = await account(`Under__score ${tag}`);
   backslashId = await account(`Back\\slash ${tag}`);
+  oneLetterId = await account('Q');
+  percentOnlyId = await account('%');
+  accentedId = await account('\u00c9');
 
   await prisma.campaignMembership.create({ data: { campaignId, userId: memberId, role: 'PLAYER', characterIds: [] } });
   await prisma.campaignInvitation.create({ data: { campaignId, userId: invitedId, status: 'PENDING' } });
@@ -92,10 +100,25 @@ describe('GET /api/campaigns/:campaignId/invitable-users', () => {
     expect(res.body.users).toEqual([]);
   });
 
-  it('returns nobody for a search shorter than two characters', async () => {
-    const res = await search(' Z ');
+  it('returns nobody for a search of spaces', async () => {
+    const res = await search('   ');
     expect(res.status).toBe(200);
     expect(res.body.users).toEqual([]);
+  });
+
+  it('finds a one-character name from that character, ignoring case, and lists no longer name', async () => {
+    const exactly = async (term: string, expected: string): Promise<string[]> => {
+      const res = await search(term);
+      expect(res.status).toBe(200);
+      const found = res.body.users as Array<{ id: string; displayName: string }>;
+      for (const user of found) expect(user.displayName.toLowerCase()).toBe(expected.toLowerCase());
+      return found.map((u) => u.id);
+    };
+    // Every name this file made contains a q, and none of them is listed.
+    expect(await exactly(' q ', 'Q')).toContain(oneLetterId);
+    expect(await exactly('%', '%')).toContain(percentOnlyId);
+    // An accented letter typed as a letter plus an accent mark is the same name.
+    expect(await exactly('E\u0301', '\u00c9')).toContain(accentedId);
   });
 
   it('finds people by part of their display name, ignoring case', async () => {

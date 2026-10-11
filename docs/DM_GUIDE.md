@@ -55,7 +55,7 @@ From here you can update:
 To invite a player to your campaign:
 
 1. Click **Invite Player** in the left sidebar, or open **Campaign Settings**
-2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
+2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. If their whole name is one letter, type that letter: a single letter finds only people whose name is exactly that letter. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
 3. Optionally tick **Also email them an invitation**
 4. The player sees a **Pending Invitation** on their dashboard
 

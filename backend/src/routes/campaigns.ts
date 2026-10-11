@@ -675,15 +675,19 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
   }
 });
 
-/** The fewest characters the invite picker searches on, and the most matches it returns. */
+/** The shortest search that matches part of a name; a shorter one matches only whole names. */
 export const INVITE_SEARCH_MIN_LENGTH = 2;
+/** The most matches the invite picker returns. */
 export const INVITE_SEARCH_MAX_RESULTS = 20;
 
 /**
  * GET /api/campaigns/:campaignId/invitable-users?search=<part of a name>
  * Search the accounts that can be invited to this campaign by display name.
- * Answers nobody for a search shorter than INVITE_SEARCH_MIN_LENGTH, and at
- * most INVITE_SEARCH_MAX_RESULTS, with `hasMore` when there were more.
+ * A search of INVITE_SEARCH_MIN_LENGTH or more characters finds names that
+ * contain it; a shorter one finds only names that are exactly it, so a
+ * one-character name can still be invited without listing everyone. Answers
+ * nobody for an empty search, and at most INVITE_SEARCH_MAX_RESULTS, with
+ * `hasMore` when there were more.
  * Excludes: existing members, users with a pending invitation, and accounts
  * still waiting for an administrator's approval.
  * Requires: Campaign DM role
@@ -698,14 +702,16 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
     if (raw !== undefined && typeof raw !== 'string') {
       return res.status(400).json({ error: 'Validation Error', message: 'Send the search once, as text.' });
     }
-    const search = (raw ?? '').trim();
+    // Display names are stored in NFC, so an accent typed as its own mark
+    // still finds the name.
+    const search = (raw ?? '').normalize('NFC').trim();
     if (search.length > MAX_DISPLAY_NAME_LENGTH) {
       return res.status(400).json({
         error: 'Validation Error',
         message: `A display name is at most ${MAX_DISPLAY_NAME_LENGTH} characters, so search for that many or fewer.`,
       });
     }
-    if (search.length < INVITE_SEARCH_MIN_LENGTH) {
+    if (search.length === 0) {
       return res.status(200).json({ users: [], hasMore: false });
     }
 
@@ -734,8 +740,10 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
       where: {
         id: { notIn: excludedIds },
         isApproved: true,
-        // Escaped, or a search of `%%` would match every name.
-        displayName: { contains: escapeLikePattern(search), mode: 'insensitive' },
+        // Escaped both ways, or a search of `%%`, or `%` alone, would match every name.
+        displayName: search.length < INVITE_SEARCH_MIN_LENGTH
+          ? { equals: escapeLikePattern(search), mode: 'insensitive' }
+          : { contains: escapeLikePattern(search), mode: 'insensitive' },
       },
       orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
       take: INVITE_SEARCH_MAX_RESULTS + 1,

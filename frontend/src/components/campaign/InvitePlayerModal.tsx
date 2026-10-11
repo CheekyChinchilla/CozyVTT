@@ -1,11 +1,12 @@
 /**
  * Invite Player Modal
  *
- * Finds the person to invite by searching for part of their display name.
- * The server answers only a search of at least two characters, with at most
- * 20 matches, so running a campaign is not a way to list everyone on the
- * instance. Renders through the shared Modal's portal, so the sidebar does not
- * clip it.
+ * Finds the person to invite by searching for their display name. The server
+ * answers at most 20 matches: two or more characters find names that contain
+ * them, and one character finds only names that are exactly it, so running a
+ * campaign is not a way to list everyone on the instance and a one-letter name
+ * can still be found. Renders through the shared Modal's portal, so the
+ * sidebar does not clip it.
  */
 
 import { useState, useEffect } from 'react';
@@ -17,8 +18,8 @@ import type { InvitableUser } from '@/types';
 import { Button, Modal, Field, Input } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
 
-/** What the server needs before it searches; kept in step with the route. */
-const MIN_SEARCH_LENGTH = 2;
+/** The shortest search the server matches against part of a name; kept in step with the route. */
+const PART_SEARCH_MIN_LENGTH = 2;
 /** How long typing has to pause before a search goes out. */
 const SEARCH_DELAY_MS = 300;
 
@@ -54,7 +55,7 @@ export default function InvitePlayerModal({
   const term = search.trim();
 
   useEffect(() => {
-    if (term.length < MIN_SEARCH_LENGTH) {
+    if (term.length === 0) {
       setUsers([]);
       setHasMore(false);
       setAnswered(null);
@@ -119,6 +120,7 @@ export default function InvitePlayerModal({
   };
 
   const showNoMatches = !searching && answered === term && users.length === 0;
+  const wholeNameOnly = term.length < PART_SEARCH_MIN_LENGTH;
 
   return (
     <Modal
@@ -152,7 +154,10 @@ export default function InvitePlayerModal({
           </div>
         )}
 
-        <Field label="Search by display name" hint="Type at least 2 letters of their display name.">
+        <Field
+          label="Search by display name"
+          hint="Type at least 2 letters of their display name, or the whole name if it is one letter long."
+        >
           {(field) => (
             <Input
               {...field}
@@ -214,7 +219,13 @@ export default function InvitePlayerModal({
           </p>
         )}
 
-        {showNoMatches && (
+        {showNoMatches && wholeNameOnly && (
+          <p className="text-sm text-ink-muted text-center py-2">
+            No one called “{term}” can be invited. Type 2 or more letters to search for part of a name.
+          </p>
+        )}
+
+        {showNoMatches && !wholeNameOnly && (
           <p className="text-sm text-ink-muted text-center py-2">
             No one by that name can be invited. They need an account on this server, and cannot
             already be in this campaign or have an invitation waiting.

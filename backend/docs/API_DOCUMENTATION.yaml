@@ -2452,11 +2452,15 @@ paths:
         invitation to it, and are not waiting for an administrator's
         approval. Used by the DM-side invite picker. DM only.
 
-        A `search` shorter than 2 characters (after trimming), or none,
-        answers 200 with no users: the route never lists the whole
-        directory. At most 20 users are returned, ordered by display name;
-        `hasMore` says there were more matches. A `%`, `_` or `\` in the
-        search matches only itself.
+        A `search` of 2 or more characters (after trimming) finds display
+        names that contain it. A 1-character `search` finds only display
+        names that are exactly that character, ignoring case, so a
+        one-character name can still be invited. An empty `search`, or
+        none, answers 200 with no users: the route never lists the whole
+        directory. The search is put in Unicode NFC first, the form display
+        names are saved in. A `%`, `_` or `\` in it matches only itself. At
+        most 20 users are returned, ordered by display name; `hasMore` says
+        there were more matches.
       operationId: listInvitableUsers
       security:
         - cookieAuth: []
@@ -2465,13 +2469,15 @@ paths:
         - name: search
           in: query
           required: false
-          description: Part of the display name, at least 2 and at most 50 characters after trimming.
+          description: >-
+            Part of the display name, at most 50 characters after trimming;
+            a single character matches only a whole display name.
           schema:
             type: string
             maxLength: 50
       responses:
         '200':
-          description: Up to 20 users available to invite whose display name contains the search.
+          description: Up to 20 users available to invite whose display name contains the search, or, for a 1-character search, is exactly it.
           content:
             application/json:
               schema:

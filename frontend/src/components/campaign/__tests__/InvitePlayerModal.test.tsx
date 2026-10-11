@@ -2,8 +2,9 @@
  * The Invite Player dialog searches for people by name.
  *
  * It used to load every account on the instance into one dropdown. The server
- * now answers only a search of at least two characters, with at most 20
- * matches, so the dialog asks for part of a name and lists what comes back.
+ * now answers only a search, with at most 20 matches: two or more characters
+ * find names that contain them, and one character finds names that are
+ * exactly it. The dialog asks for a name and lists what comes back.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -41,12 +42,33 @@ beforeEach(() => {
 });
 
 describe('InvitePlayerModal', () => {
-  it('asks for two letters and lists nobody until then', async () => {
+  it('says what to type, and searches nothing until something is typed', async () => {
     open();
-    expect(screen.getByText('Type at least 2 letters of their display name.')).toBeTruthy();
-    fireEvent.change(searchBox(), { target: { value: 'a' } });
+    expect(
+      screen.getByText('Type at least 2 letters of their display name, or the whole name if it is one letter long.')
+    ).toBeTruthy();
+    fireEvent.change(searchBox(), { target: { value: '   ' } });
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(listInvitableUsers).not.toHaveBeenCalled();
+  });
+
+  it('finds someone whose whole name is one letter', async () => {
+    listInvitableUsers.mockResolvedValue({ users: [{ id: 'u-j', displayName: 'J', avatarUrl: null }], hasMore: false });
+    open();
+    fireEvent.change(searchBox(), { target: { value: 'j' } });
+
+    expect(await screen.findByRole('radio', { name: 'J' })).toBeTruthy();
+    expect(listInvitableUsers).toHaveBeenLastCalledWith('camp-1', 'j');
+  });
+
+  it('says a single letter finds only that whole name when nobody has it', async () => {
+    listInvitableUsers.mockResolvedValue({ users: [], hasMore: false });
+    open();
+    fireEvent.change(searchBox(), { target: { value: 'a' } });
+    expect(
+      await screen.findByText('No one called \u201ca\u201d can be invited. Type 2 or more letters to search for part of a name.')
+    ).toBeTruthy();
+    expect(screen.queryByText(/No one by that name can be invited/)).toBeNull();
   });
 
   it('searches as you type and lists the matches with their pictures', async () => {
