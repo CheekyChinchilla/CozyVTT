@@ -12,7 +12,7 @@
  */
 
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSecret, generateSync } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import * as sessionStore from '../../services/sessionStore';
@@ -52,7 +52,7 @@ it('caps the account\'s sessions at a password sign-in, keeping the new one', as
 });
 
 it('caps them when the two-factor step completes the sign-in', async () => {
-  const secret = speakeasy.generateSecret({ length: 20 }).base32;
+  const secret = generateSecret();
   const user = await createTestUser({ displayName: 'Bookkeeping MFA' });
   created.push(user.id);
   await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaSecret: secret } });
@@ -60,7 +60,7 @@ it('caps them when the two-factor step completes the sign-in', async () => {
   expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).body.mfaRequired).toBe(true);
   capped.mockClear();
 
-  const res = await agent.post('/api/auth/mfa/verify-login').send({ token: speakeasy.totp({ secret, encoding: 'base32' }) });
+  const res = await agent.post('/api/auth/mfa/verify-login').send({ token: generateSync({ secret }) });
 
   expect(res.status).toBe(200);
   expect(capped).toHaveBeenCalledWith(user.id, sidOf(res));

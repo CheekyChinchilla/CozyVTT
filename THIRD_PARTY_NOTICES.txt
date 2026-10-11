@@ -327,10 +327,12 @@ qrcode 1.5.4
   License: MIT
   https://github.com/soldair/node-qrcode
 
-speakeasy 2.0.0
-  Copyright (c) Mark Bao
+otplib 13.5.0
+  Copyright (c) 2026 Gerald Yeo
   License: MIT
-  https://github.com/speakeasyjs/speakeasy
+  https://github.com/yeojz/otplib
+  Includes @noble/hashes and @scure/base, Copyright (c) 2022 Paul Miller,
+  License: MIT
 
 zod 4.3.6
   Copyright (c) Colin McDonnell

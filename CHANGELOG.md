@@ -328,6 +328,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **The libraries the backend and the app are built on are updated to their newest releases within the versions they already used.** Two of the backend's had published security advisories: the image library, and the library that reads a visitor's address from the proxy in front of the backend. Neither could be reached in CozyVTT as it is set up. The next `docker compose up -d --build` installs the new versions, and there is nothing else to do.
 
+- **Two-factor codes are checked by a maintained library, and a code is accepted only as exactly six digits.** The library that checked authenticator codes had had no update since 2017, and it read a code with a stray character in it, such as a letter after five digits, as a number. Authenticator apps already set up keep working: there is nothing to scan again. New set-ups get a secret of 160 random bits, the strength authenticator apps are built for; the secrets made before were slightly weaker and keep working as they are.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

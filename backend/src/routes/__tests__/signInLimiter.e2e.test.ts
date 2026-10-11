@@ -24,7 +24,7 @@
 
 import express from 'express';
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSecret } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { hashPassword } from '../../services/auth';
@@ -164,7 +164,7 @@ describe('one allowance for every route that checks a credential', () => {
   it('is spent by a bad reset link, wrong passwords for MFA changes and a wrong MFA code', async () => {
     const address = freshAddress();
     const [plain, enrolled] = await users(2);
-    const secret = speakeasy.generateSecret({ length: 20 }).base32;
+    const secret = generateSecret();
 
     const plainAgent = request.agent(app);
     const enrolledAgent = request.agent(app);

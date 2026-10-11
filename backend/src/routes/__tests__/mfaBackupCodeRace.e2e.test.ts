@@ -17,7 +17,7 @@ jest.mock('express-rate-limit', () => {
 });
 
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSecret } from 'otplib';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { generateBackupCodes, hashBackupCodes } from '../../utils/backupCodes';
@@ -36,7 +36,7 @@ async function withCodes(label: string) {
     where: { id: user.id },
     data: {
       mfaEnabled: true,
-      mfaSecret: speakeasy.generateSecret({ length: 20 }).base32,
+      mfaSecret: generateSecret(),
       mfaBackupCodes: await hashBackupCodes(codes),
     },
   });
