@@ -268,6 +268,28 @@ For every other event, see the [Event Inventory](#event-inventory).
 }
 ```
 
+#### `campaign.access.revoked`
+**Direction:** Server → Client
+**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, a platform role changed, the account deleted, or the instance restored from a backup)
+**Payload:**
+```typescript
+{
+  campaignId: string | null;  // the campaign the connection was in; null if it had not joined one
+  reason: 'removed' | 'campaign-deleted' | 'signed-out';
+  message: string;            // a sentence for the person, e.g. "You were removed from this campaign."
+}
+```
+
+What follows depends on the reason:
+
+| `reason` | The connection afterwards | What a client should do |
+| --- | --- | --- |
+| `removed` | Stays open, but has left the campaign's room and is no longer authenticated to any campaign: it hears nothing from the table, and every campaign event it sends is refused | Stop, show `message`, leave the campaign |
+| `campaign-deleted` | The same, for every connection that was in the campaign | The same |
+| `signed-out` | The server closes it straight after (`disconnect` with reason `io server disconnect`) | Do not reconnect: a new connection would be refused. Sign in again |
+
+Before this event existed the server sent an `error` with the reason instead ("You are no longer a member of this campaign", "This campaign was deleted", or the sign-in's reason); it no longer does.
+
 #### `user.joined`
 **Direction:** Server → All Campaign Members (except sender)
 **When:** User authenticates to campaign
@@ -724,10 +746,20 @@ socket.on('error', (data) => {
 ### Disconnection Handling
 
 ```javascript
+// Removed, the campaign deleted, or the sign-in ended: told why first.
+let accessRevoked = false;
+socket.on('campaign.access.revoked', ({ reason, message }) => {
+  accessRevoked = true;
+  showNotice(message);
+  if (reason === 'signed-out') window.location.href = '/auth/login';
+  else leaveCampaign();
+});
+
 socket.on('disconnect', (reason) => {
+  if (accessRevoked) return; // nothing to reconnect to
   if (reason === 'io server disconnect') {
-    // Server kicked us - probably session expired
-    window.location.href = '/login';
+    // Server closed the connection without a reason: check the sign-in over REST
+    checkSignIn();
   } else {
     // Network issue - auto-reconnect
     showReconnectingIndicator();
@@ -1105,6 +1137,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `atmosphere.audio.updated` | `atmosphereAudio.ts` |
 | `atmosphere.effect.updated` | `atmosphere.ts` |
 | `authenticated` | `events.ts` |
+| `campaign.access.revoked` | `utils.ts` |
 | `campaign.dm.transferred` | `campaigns.ts` |
 | `campaign.role.changed` | `campaigns.ts` |
 | `character.hp.updated` | `characters.ts` |

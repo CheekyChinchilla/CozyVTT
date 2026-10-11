@@ -1414,6 +1414,22 @@ export interface CharacterHpUpdatedBroadcast {
  * The DM seat moved to another member. Campaign ownership is a separate thing
  * and does not move with it.
  */
+/** Why a connection lost its campaign, as `campaign.access.revoked` says. */
+export type AccessRevokedReason = 'removed' | 'campaign-deleted' | 'signed-out';
+
+/**
+ * `campaign.access.revoked`: this connection may no longer use its campaign.
+ * Declared on the server too (websocket/utils.ts); keepInStep.test.ts there
+ * fails if the two differ.
+ */
+export interface AccessRevoked {
+  /** The campaign the connection was in, or null when it had not joined one. */
+  campaignId: string | null;
+  reason: AccessRevokedReason;
+  /** A sentence for the person, shown as it is. */
+  message: string;
+}
+
 /** A member's role in a campaign changed (`campaign.role.changed`). */
 export interface MemberRoleChangedBroadcast {
   campaignId: string;

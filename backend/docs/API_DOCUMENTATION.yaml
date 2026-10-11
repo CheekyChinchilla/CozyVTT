@@ -2346,8 +2346,9 @@ paths:
         what the campaign holds (maps, memberships, invitations, sessions,
         chat, dice rolls, personal notes, macros, creatures, token templates
         and document links) is deleted with it. Afterwards
-        every open connection in the campaign leaves it and receives an
-        `error` event saying the campaign was deleted, and its combat state is
+        every open connection in the campaign leaves it and receives
+        `campaign.access.revoked` (`{ campaignId, reason: 'campaign-deleted',
+        message: 'This campaign was deleted.' }`), and its combat state is
         discarded. An admin naming a campaign that does not exist gets a 500.
       operationId: deleteCampaign
       security:
@@ -2568,8 +2569,9 @@ paths:
         characters are taken out of the campaign in the same step (their
         `campaignId` becomes null), and a character still naming a campaign
         its owner has left is readable and editable by its owner alone. The
-        removed member's open connections leave the campaign and receive an
-        `error` event saying they are no longer a member, and the campaign
+        removed member's open connections leave the campaign and receive
+        `campaign.access.revoked` (`{ campaignId, reason: 'removed', message:
+        'You were removed from this campaign.' }`), and the campaign
         receives `roster.updated` (`{ action: 'member.left', userId,
         campaignId }`).
       operationId: removeMember

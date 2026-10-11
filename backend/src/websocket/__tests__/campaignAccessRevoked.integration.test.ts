@@ -143,6 +143,23 @@ describe('clearCampaignFromLiveSockets', () => {
     elsewhere.disconnect();
   });
 
+  // The connection stays open, so nothing else would tell the page: it used
+  // to get a plain 'error' that only an open Dice tab showed.
+  it('tells the connection why, with campaign.access.revoked', async () => {
+    const playerClient = await server.connectAndAuth(playerCookie, campaignId);
+    const elsewhere = await server.connectAndAuth(playerCookie, otherCampaignId);
+
+    const told = waitForEvent<{ campaignId: string | null; reason: string; message: string }>(playerClient, 'campaign.access.revoked');
+    const notTold = expectNoEvent(elsewhere, 'campaign.access.revoked', 500);
+    await clearCampaignFromLiveSockets(playerId, campaignId);
+
+    await expect(told).resolves.toEqual({ campaignId, reason: 'removed', message: 'You were removed from this campaign.' });
+    await expect(notTold).resolves.toBeUndefined();
+
+    playerClient.disconnect();
+    elsewhere.disconnect();
+  });
+
   it('is a quiet no-op when the user has no connection open', async () => {
     const neverConnected = randomUUID();
     expect(await clearCampaignFromLiveSockets(neverConnected, campaignId)).toBe(0);

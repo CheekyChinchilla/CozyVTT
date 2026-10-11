@@ -35,7 +35,7 @@ import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely } from '../utils/archive';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
-import { getSocketInstance } from '../websocket/utils';
+import { endEveryLiveSocket } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import logger from '../utils/logger';
 
@@ -1193,13 +1193,7 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
     // would keep the identity and campaign role it cached before the restore.
     // Best-effort: the load itself is done. The in-memory combat state
     // belonged to the old data.
-    try {
-      const io = getSocketInstance();
-      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
-      io.disconnectSockets(true);
-    } catch (error) {
-      logger.warn('Restore: live sockets could not be ended', { err: error });
-    }
+    await endEveryLiveSocket('The instance was restored from a backup. Sign in again.');
     clearAllCombatState();
 
     // 7. Copy the archive's uploaded files over the existing ones. A backup

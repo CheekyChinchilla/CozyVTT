@@ -91,6 +91,12 @@ class SocketClient {
   private signInChecks = 0;
   /** The server refused this socket's sign-in; the disconnect that follows must not reconnect. */
   private signInRefused = false;
+  /**
+   * The server said this connection may no longer use its campaign
+   * (`campaign.access.revoked`): removed, the campaign deleted, or the
+   * sign-in ended. Nothing is reconnected after that; the page says why.
+   */
+  private accessRevoked = false;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000; // Start with 1 second
   private isConnecting = false;
@@ -164,6 +170,7 @@ class SocketClient {
       this.isConnecting = true;
       this.campaignId = campaignId;
       this.signInRefused = false;
+      this.accessRevoked = false;
 
       // Disconnect and clean up any existing socket first
       if (this.socket) {
@@ -239,6 +246,8 @@ class SocketClient {
       // Disconnected
       this.socket.on('disconnect', (reason) => {
         if (reason !== 'io server disconnect') return;
+        // Told why first: there is nothing to reconnect to or to ask about.
+        if (this.accessRevoked) return;
         // Server disconnected us. If it no longer accepts the sign-in,
         // another socket would only be refused again: ask the REST API,
         // whose answer to an ended sign-in sends the user to sign in.
@@ -268,13 +277,12 @@ class SocketClient {
         reject(new Error('Failed to reconnect after maximum attempts'));
       });
 
-      // TODO(play): when the server ends a table's sign-in (a password
-      // changed elsewhere, a platform role changed, the account deleted) it
-      // sends the reason here before closing the socket, and it is only
-      // written to the console; the Dice tab shows it only if it is open at
-      // the time. Show the reason to the user, in a toast or on the
-      // connection badge.
-      //
+      // The connection's access has ended, with the reason: the page shows
+      // it (useAccessRevoked), and the disconnect that may follow is final.
+      this.socket.on('campaign.access.revoked', () => {
+        this.accessRevoked = true;
+      });
+
       // Error events from server
       this.socket.on('error', (error) => {
         console.error('[Socket] Server error event:', error);

@@ -18,6 +18,7 @@ import type { Socket } from 'socket.io-client';
 import socketClient from '@/services/socket';
 import { errorMessage } from '@/utils/errors';
 import { keepSessionAlive, SESSION_KEEPALIVE_MS } from '@/services/sessionKeepAlive';
+import type { AccessRevoked } from '@/types';
 
 // ============================================
 // Types
@@ -97,6 +98,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
    * and triggers a refetch.
    */
   const previouslyConnectedCampaignRef = useRef<string | null>(null);
+  /**
+   * The server said this connection may no longer use its campaign
+   * (`campaign.access.revoked`). The badge then keeps the error, with the
+   * reason, through the disconnect that may follow; the page itself says
+   * why and leaves (useAccessRevoked).
+   */
+  const revokedRef = useRef(false);
 
   // Keep statusRef in sync with status state
   useEffect(() => {
@@ -121,6 +129,24 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     return () => { socketClient.off('authenticated', onJoined); };
   }, []);
 
+  // The table has ended for this connection: removed, the campaign deleted,
+  // or the sign-in ended. A removed member's connection stays open, so
+  // without this the badge kept saying Connected.
+  useEffect(() => {
+    const onRevoked = (revoked: AccessRevoked) => {
+      if (!isMountedRef.current) return;
+      revokedRef.current = true;
+      if (heartbeatCleanupRef.current) {
+        heartbeatCleanupRef.current();
+        heartbeatCleanupRef.current = null;
+      }
+      setStatus('error');
+      setError(revoked.message);
+    };
+    socketClient.on('campaign.access.revoked', onRevoked);
+    return () => { socketClient.off('campaign.access.revoked', onRevoked); };
+  }, []);
+
   // Wire up the full lifecycle on the raw socket so the status badge stays
   // in sync across drops and auto-reconnects. Run for every socket the page
   // uses: the one connect() is handed and each one the client builds itself.
@@ -129,7 +155,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     // `.once('disconnect')` left the badge stuck after the first drop while
     // socket.io reconnected underneath.
     socket.on('disconnect', () => {
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || revokedRef.current) return;
       setStatus('disconnected');
     });
 
@@ -188,6 +214,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
     setStatus('connecting');
     setError(null);
+    revokedRef.current = false;
 
     try {
       await socketClient.connect(id);
