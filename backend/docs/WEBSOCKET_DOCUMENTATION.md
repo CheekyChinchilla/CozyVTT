@@ -556,8 +556,13 @@ answers properly.
 ```
 
 **Throttling Implementation:**
+
+Frames sent faster than one every 16 ms are not all passed on: the first goes
+out at once, then at most one every 16 ms, always the latest one sent, so the
+last frame of a drag is never lost.
+
 ```typescript
-// Server-side (lodash), one per connection
+// Server-side (utils/throttle.ts), one per connection
 const handleTokenMove = throttle(async (socket, data) => {
   // Validate and broadcast
 }, 16); // 16ms = ~60fps
@@ -1090,7 +1095,7 @@ if (!Number.isInteger(x) || !Number.isInteger(y)) {
 
 3. **Use throttling for rapid events:**
 ```typescript
-import { throttle } from 'lodash';
+import { throttle } from '../../utils/throttle';
 
 const handler = throttle((socket, data) => {
   // Process event

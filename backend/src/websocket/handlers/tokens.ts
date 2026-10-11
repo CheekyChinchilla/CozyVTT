@@ -4,7 +4,7 @@
 // ============================================
 
 import { Server } from 'socket.io';
-import { throttle } from 'lodash';
+import { throttle } from '../../utils/throttle';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import {

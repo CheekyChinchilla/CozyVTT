@@ -354,11 +354,6 @@ fs-extra 11.3.4
   License: MIT
   https://github.com/jprichardson/node-fs-extra
 
-lodash 4.17.23
-  Copyright (c) JS Foundation and other contributors
-  License: MIT
-  https://github.com/lodash/lodash
-
 cross-env 10.1.0
   Copyright (c) Kent C. Dodds
   License: MIT
