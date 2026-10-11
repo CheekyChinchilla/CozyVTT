@@ -32,6 +32,7 @@ Two checks, run from the repository root:
 ```bash
 python3 scripts/spec-coverage.py       # HTTP routes
 python3 scripts/websocket-events.py --check   # Socket.io events
+python3 -m unittest discover -s scripts/tests # the two checks' own tests
 ```
 
 The first covers `API_DOCUMENTATION.yaml`, which must be complete in both
@@ -41,6 +42,15 @@ accumulated, all wrong paths rather than removed features. It also loads the
 YAML file when PyYAML is installed (CI installs it; locally, `pip install
 pyyaml`), because the route check reads it line by line and does not care
 whether it loads, and three unquoted colons once made it unloadable.
+
+It reads the routes from `backend/src/app.ts`, where `createApp` mounts every
+router, and from `server.ts`, and fails on any route declaration or mount it
+cannot read: a path held in a variable or worked out in a template,
+`router.route()`, `router.all()`, or a router mounted inside another. Each
+would leave a route out of both counts while the check passed. It also checks
+every request the frontend's API client (`frontend/src/services/api.ts`)
+sends against the catalogue, so a route renamed in the routers and the YAML
+fails here before the page's request answers 404.
 
 The second regenerates the event inventory from the handlers and fails on any
 difference from the one in the doc: a new or removed event, a handler that
@@ -78,6 +88,14 @@ authoritative.
 Comments are blanked before any of this is read, so a gate that is commented
 out changes the row just as deleting it would, and a handler or an emit that
 is commented out is not listed.
+
+The check fails, in every mode, on a handler or emit whose event name is not
+a quoted string, such as a name held in a variable or built in a template:
+the table would leave it out. The broadcast helpers' own bodies pass on the
+event they were given, by design, and are not counted. Both scripts read the
+source through `scripts/tssource.py`, which blanks comments and strings
+without moving anything, and `scripts/tests/` feeds them small sources in
+every form the code uses.
 
 The WebSocket guide's table of flood ceilings is checked as well, by the
 backend test suite rather than by these scripts:

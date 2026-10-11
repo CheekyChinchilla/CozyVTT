@@ -445,6 +445,7 @@ cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && \
 # `python`)
 python3 scripts/spec-coverage.py
 python3 scripts/websocket-events.py --check
+python3 -m unittest discover -s scripts/tests
 ```
 
 Two of those deserve a note:
@@ -540,11 +541,14 @@ Two of those deserve a note:
   mounts and fails when they disagree in either direction, and loads the file
   as YAML when PyYAML is installed (`pip install pyyaml`; CI installs it), since
   the route check does not care whether the file loads and three unquoted
-  colons once made it unloadable;
+  colons once made it unloadable. It also fails when a request the
+  frontend's API client sends is not in the file;
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with
-  `python3 scripts/websocket-events.py --write`.
+  `python3 scripts/websocket-events.py --write`. Both fail on a route or
+  event declared in a form they cannot read, so nothing is left out of them
+  unnoticed; `python3 -m unittest discover -s scripts/tests` tests that.
 
 `.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
 and on pull requests into them (a push to any other branch runs nothing), and

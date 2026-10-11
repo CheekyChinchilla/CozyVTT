@@ -87,3 +87,5 @@ jobs:
       - run: pip install pyyaml
       - run: python3 scripts/spec-coverage.py
       - run: python3 scripts/websocket-events.py --check
+      # The two checks' own tests: every form of route and event they read.
+      - run: python3 -m unittest discover -s scripts/tests
