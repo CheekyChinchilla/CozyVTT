@@ -3131,6 +3131,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * come from the sheet, and the roster and sheet viewer offer the same menu
    * with no token in hand. One rule, three callers — see services/permissions.
    */
+  /** Whether a character is one of this campaign's, as the campaign was loaded. */
+  const campaignHasCharacter = (characterId: string): boolean =>
+    campaign?.characters?.some((c) => c.id === characterId) ?? false;
+
   const canRollForToken = (token: Token): boolean => {
     if (!user || !token.characterId) return false;
     const character = campaign?.characters?.find((c) => c.id === token.characterId);
@@ -4096,22 +4100,29 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         >
           {contextMenu.token.characterId && (
             <>
-              <button
-                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
-                onClick={async () => {
-                  const characterId = contextMenu.token.characterId!;
-                  const tokenId = contextMenu.token.id;
-                  setContextMenu(null);
-                  try {
-                    const { character } = await api.getCharacter(characterId);
-                    setViewingSheet({ character, tokenId });
-                  } catch (err) {
-                    console.error('Failed to load character sheet:', err);
-                  }
-                }}
-              >
-                View Character Sheet
-              </button>
+              {/* Only for a character of this campaign, which every member
+                  may read, and whose campaign is the one the sheet is opened
+                  in, so it is shown Edit by this campaign's role. A token
+                  keeps its character after the character leaves. */}
+              {campaignHasCharacter(contextMenu.token.characterId) && (
+                <button
+                  className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                  onClick={async () => {
+                    const characterId = contextMenu.token.characterId!;
+                    const tokenId = contextMenu.token.id;
+                    setContextMenu(null);
+                    try {
+                      const { character } = await api.getCharacter(characterId);
+                      setViewingSheet({ character, tokenId });
+                    } catch (err) {
+                      console.error('Failed to load character sheet:', err);
+                      showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
+                    }
+                  }}
+                >
+                  View Character Sheet
+                </button>
+              )}
               {canRollForToken(contextMenu.token) && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"

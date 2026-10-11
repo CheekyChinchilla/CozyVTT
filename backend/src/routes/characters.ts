@@ -1001,6 +1001,10 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
             action: 'character.unassigned',
             characterId: id,
             userId,
+            // TODO(play): no campaignId, unlike every other roster.updated, so
+            // the campaign page's member and character lists (CampaignContext)
+            // skip it and keep offering the character's sheet and rolls until
+            // a reload. Send campaignId: character.campaignId here.
           });
         } catch (error) {
           logger.error('Failed to broadcast roster update', { err: error });
