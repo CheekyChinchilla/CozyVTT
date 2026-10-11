@@ -16,6 +16,23 @@ Self-hosters are responsible for keeping their instances up to date.
 
 Use the **"Report a vulnerability"** button on the [Security tab](https://github.com/CheekyChinchilla/CozyVTT/security) of this repository. This creates a private advisory that only repository maintainers can see.
 
+### If you cannot use GitHub
+
+If you have no GitHub account, or the button is not there, use the contact form linked under [Become a Collaborator](docs/CONTRIBUTING.md#-become-a-collaborator) in CONTRIBUTING.md to ask for another private way to send the details. Say only that you have a security report; put the details in nothing public and nothing you cannot take back.
+
+### What to include
+
+The version (`git describe --tags --always` in your CozyVTT folder), how it is installed, what you did, what happened and what you expected. Do not send your `.env`, a backup or a session cookie: describe the problem with a throwaway instance instead.
+
+## What is in scope
+
+- **In scope:** the code in this repository (the backend, the frontend and the live table) and the configuration it ships with (`docker-compose.yml`, `nginx/`, `.env.example`), run as the [deployment guide](docs/DEPLOYMENT.md) describes.
+- **Out of scope:** a weakness that needs a change the guides tell you not to make; the security of your own server, firewall, proxy or tunnel; the software CozyVTT is built on, which belongs to its authors (but do tell us if CozyVTT's configuration makes a weakness in it worse); an action that needs an administrator's own account, since an administrator is trusted; and the output of a scanner with no demonstration that it matters.
+
+## What to expect
+
+CozyVTT is a one-person project run in spare time. A report is read and answered as soon as the maintainer can; there is no fixed response time. Please keep the details private until a fixed version is released and the reply says it is safe to share.
+
 ## Notes on the security design
 
 Decisions a self-hoster or a reviewer may want to know about. The deployment guide's [Hardening Checklist](docs/DEPLOYMENT.md#hardening-checklist) says what to do; this says why the app behaves as it does.

@@ -1,0 +1,8 @@
+# The new-issue chooser. Blank issues are off so every report comes with the
+# questions the templates ask, and a vulnerability has a private route here
+# before anyone writes it up in public.
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/CheekyChinchilla/CozyVTT/security/advisories/new
+    about: Do not open a public issue for a vulnerability. This sends it privately to the maintainer.

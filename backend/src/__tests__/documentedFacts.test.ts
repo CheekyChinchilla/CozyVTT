@@ -472,6 +472,36 @@ describe('backend/DATABASE_MIGRATIONS.md', () => {
 });
 
 describe('what a reader is asked to send, and where', () => {
+  const template = read('.github/ISSUE_TEMPLATE/bug_report.md').toLowerCase();
+
+  // CONTRIBUTING.md asks for the CozyVTT version and more; the template was
+  // GitHub's stock one, which asks for the browser's version and nothing about
+  // the install, and says nothing about secrets in a pasted .env or log.
+  it('the bug report template asks for what CONTRIBUTING.md asks for', () => {
+    const asked = [...read('docs/CONTRIBUTING.md').matchAll(/^- (CozyVTT version|Browser and OS|Steps to reproduce|Expected vs actual behavior|Console output)/gm)].map((m) => m[1]);
+    expect(asked).toHaveLength(5);
+    for (const key of ['cozyvtt version', 'browser', 'steps to reproduce', 'expected', 'console']) expect(template).toContain(key);
+  });
+
+  it('the bug report template asks how it is installed and warns against pasting secrets', () => {
+    expect(template).toMatch(/docker|install/);
+    expect(template).toMatch(/proxy|tunnel/);
+    expect(template).toMatch(/redact|remove (any )?(secret|password)/);
+    expect(template).toContain('security.md');
+  });
+
+  it('the new-issue chooser links the security policy and has no blank issue', () => {
+    const config = read('.github/ISSUE_TEMPLATE/config.yml');
+    expect(config).toMatch(/blank_issues_enabled: false/);
+    expect(config).toMatch(/security\/advisories\/new/);
+  });
+
+  it('SECURITY.md says what is in scope and what to do without GitHub reporting', () => {
+    const policy = read('SECURITY.md');
+    expect(policy).toMatch(/## What is in scope/);
+    expect(policy).toMatch(/If you cannot use GitHub/);
+  });
+
   // The Won't Do list kept the template's "explain why" line under a real entry.
   it('FUTURE_FEATURES.md keeps no template placeholder', () => {
     expect(read('docs/FUTURE_FEATURES.md')).not.toMatch(/_\(items intentionally dropped/);
