@@ -102,6 +102,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Everything an administrator does to someone's account is now written to Admin → Activity.** Granting or taking away **Global Assets** or template editing, changing another person's email address, display name, avatar or bio, deleting an account and sending a password reset link left no line there, so on an instance with several administrators nobody could tell who had done them. Each now writes a line saying which administrator acted, whose account it was and what changed, with the value before and after. The log is kept for as long as the instance exists, and a deleted account's lines stay in it; see [The activity log](docs/USER_GUIDE.md#the-activity-log-admins).
 
+- **The instance's default theme colours are checked before they are saved.** The Admin Panel's default theme is painted for every visitor, the sign-in page included, and the server saved whatever custom colours it was sent, so a malformed value sent through the API broke the page for everyone until an administrator put it right. The theme, the font and the four custom colours are now checked the same way as a user's own theme choice: each colour must be a six-digit hex colour such as `#FAF6EC`, and anything else is refused with a message naming the field. Settings already saved keep loading.
+
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

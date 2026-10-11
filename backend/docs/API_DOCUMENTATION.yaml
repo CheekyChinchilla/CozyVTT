@@ -8579,7 +8579,10 @@ paths:
                       customThemeColors:
                         type: object
                         nullable: true
-                        description: Map of theme token name to colour string, stored as the PUT request sent it.
+                        description: >-
+                          The custom theme's four colours, each `#RRGGBB`. A row
+                          stored before 1.5.2 may hold whatever the PUT request
+                          sent then.
                         additionalProperties:
                           type: string
                       fontId:
@@ -8610,10 +8613,17 @@ paths:
       tags: [Admin]
       summary: Update system settings
       description: |
-        Every field is optional; only the ones present are changed. `instanceName`,
-        `timezone`, `themeId` and `fontId` are trimmed, stripped of `<` and `>`, then cut
-        to their max length rather than rejected for being too long. `customThemeColors`
-        is stored exactly as sent, with no validation of its keys or values.
+        Every field is optional; only the ones present are changed, and fields not
+        listed here are ignored. A field of the wrong type answers 400.
+        `instanceName` and `timezone` are trimmed, stripped of `<` and `>`, then cut
+        to their max length rather than rejected for being too long.
+
+        `themeId` and `fontId` must name one of the app's themes (or `custom`) and
+        fonts, the same lists `PUT /api/users/{id}/preferences` accepts.
+        `customThemeColors` holds exactly `primary`, `accent`, `background` and
+        `text`, each `#RRGGBB`; `null` clears it. Anything else answers 400 and
+        nothing is changed. The theme is painted for every visitor, the sign-in
+        page included, which is why it is checked.
 
         `customLogoUrl`, `customFaviconUrl` and `customMascotUrl` name a file this
         instance serves: `""` or `null` clears the override back to the default, and
@@ -8643,14 +8653,20 @@ paths:
                   type: boolean
                 themeId:
                   type: string
-                  maxLength: 50
+                  enum: [cozy-default, autumn-hearth, desert-sand, rose-garden, ocean-depths, northern-frost, enchanted-forest, twilight-vale, obsidian-night, shadow-realm, deep-dungeon, midnight-court, parchment-classic, slate-modern, dragonfire, arcane-storm, custom]
                 customThemeColors:
                   type: object
-                  additionalProperties:
-                    type: string
+                  nullable: true
+                  additionalProperties: false
+                  required: [primary, accent, background, text]
+                  properties:
+                    primary: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                    accent: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                    background: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                    text: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
                 fontId:
                   type: string
-                  maxLength: 50
+                  enum: [default, medieval, elegant, modern, handwritten, clean, scholarly, gothic]
                 customLogoUrl:
                   type: string
                   nullable: true
@@ -8677,7 +8693,18 @@ paths:
                     type: object
                     description: The full settings object, in the same shape as GET /api/admin/settings returns.
         '400':
-          description: A branding URL was not a same-origin path
+          description: >-
+            A field had the wrong type, `themeId` or `fontId` named no theme or
+            font of the app, `customThemeColors` was not four `#RRGGBB` colours
+            (`Validation Error`, the message naming the field), or a branding
+            URL was not a same-origin path. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: 'customThemeColors.background: background must be #RRGGBB'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':

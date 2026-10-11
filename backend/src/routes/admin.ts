@@ -23,6 +23,7 @@ import {
   updateSystemSettings,
 } from '../services/systemSettings';
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
+import { UpdateSystemSettingsSchema } from '../validators/systemSettings';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
@@ -173,42 +174,50 @@ router.get('/settings', async (_req, res) => {
 // Updates system settings.
 // ============================================
 router.put('/settings', async (req, res) => {
+  const parsed = UpdateSystemSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: issue ? `${issue.path.join('.') || 'settings'}: ${issue.message}` : 'Invalid settings',
+    });
+  }
   try {
     const {
       instanceName, timezone, allowRegistration, requireAdminApproval,
       themeId, customThemeColors, fontId,
       customLogoUrl, customFaviconUrl, customMascotUrl,
-    } = req.body;
+    } = parsed.data;
 
     const updateData: Parameters<typeof updateSystemSettings>[0] = {};
 
-    if (typeof instanceName === 'string') {
+    if (instanceName !== undefined) {
       updateData.instanceName = sanitizeInput(instanceName).slice(0, 100);
     }
-    if (typeof timezone === 'string') {
+    if (timezone !== undefined) {
       updateData.timezone = sanitizeInput(timezone).slice(0, 50);
     }
-    if (typeof allowRegistration === 'boolean') {
+    if (allowRegistration !== undefined) {
       updateData.allowRegistration = allowRegistration;
     }
-    if (typeof requireAdminApproval === 'boolean') {
+    if (requireAdminApproval !== undefined) {
       updateData.requireAdminApproval = requireAdminApproval;
     }
-    if (typeof themeId === 'string') {
-      updateData.themeId = sanitizeInput(themeId).slice(0, 50);
+    if (themeId !== undefined) {
+      updateData.themeId = themeId;
     }
     if (customThemeColors !== undefined) {
       updateData.customThemeColors = customThemeColors;
     }
-    if (typeof fontId === 'string') {
-      updateData.fontId = sanitizeInput(fontId).slice(0, 50);
+    if (fontId !== undefined) {
+      updateData.fontId = fontId;
     }
     // Branding images are files this instance serves. See isSameOriginPath.
     const branding = {
       customLogoUrl,
       customFaviconUrl,
       customMascotUrl,
-    } satisfies Record<string, unknown>;
+    } satisfies Record<string, string | null | undefined>;
     for (const [field, value] of Object.entries(branding)) {
       if (value === undefined) continue;
       if (typeof value === 'string' && value !== '' && !isSameOriginPath(value)) {

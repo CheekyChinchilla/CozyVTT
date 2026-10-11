@@ -1387,6 +1387,12 @@ Get system configuration settings.
 
 Update system configuration settings.
 
+`themeId` and `fontId` must name one of the app's themes (or `custom`) and
+fonts, and `customThemeColors` is `{ primary, accent, background, text }` as
+`#RRGGBB`, or `null` to clear it: the same rules as a user's own preferences.
+The instance theme is painted for every visitor, the sign-in page included, so
+anything else is refused with `400` and nothing is changed.
+
 `customLogoUrl`, `customFaviconUrl` and `customMascotUrl` name a path this
 instance serves, such as `/default-logo.png`. An address on another host is
 refused with `400`: the app page allows images from its own origin only, and an
