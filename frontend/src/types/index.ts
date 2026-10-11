@@ -322,6 +322,17 @@ export interface AdminHealth {
   connections: number;
 }
 
+/** How full the disk holding the uploads folder is (GET /api/admin/stats). */
+export interface UploadsDisk {
+  totalBytes: number;
+  /** What the server can still write. */
+  freeBytes: number;
+  /** Whole percent used, as `df` counts it. */
+  usedPercent: number;
+  /** More than 80% full. */
+  warning: boolean;
+}
+
 export interface SystemStats {
   userCount: number;
   campaignCount: number;
@@ -332,6 +343,8 @@ export interface SystemStats {
   characterCount: number;
   mapCount: number;
   assetBreakdown: AssetTypeStat[];
+  /** Null when the server could not read the disk. */
+  uploadsDisk?: UploadsDisk | null;
 }
 
 export interface AdminSystemSettings {

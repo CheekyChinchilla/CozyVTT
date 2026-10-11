@@ -46,6 +46,7 @@ import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
+import { uploadsDiskUsage } from '../services/uploadsDisk';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
@@ -161,6 +162,7 @@ router.get('/stats', async (_req, res) => {
       characterCount,
       mapCount,
       assetBreakdownRaw,
+      uploadsDisk,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.campaign.count(),
@@ -175,6 +177,9 @@ router.get('/stats', async (_req, res) => {
         _count: { id: true },
         _sum: { fileSize: true },
       }),
+      // How full the uploads' disk is, for the dashboard's warning. Null when
+      // it cannot be read. No per-user quota is enforced; this is the check.
+      uploadsDiskUsage(),
     ]);
 
     const assetBreakdown = assetBreakdownRaw.map((row) => ({
@@ -193,6 +198,7 @@ router.get('/stats', async (_req, res) => {
       characterCount,
       mapCount,
       assetBreakdown,
+      uploadsDisk,
     });
   } catch (error) {
     logger.error('Error fetching admin stats', { err: error });

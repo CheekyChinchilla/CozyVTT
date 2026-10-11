@@ -1030,6 +1030,27 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* No per-user storage quota is enforced: this warning is the
+                    check, before uploads, backups or the database fail. */}
+                {stats?.uploadsDisk?.warning && (
+                  <div
+                    role="alert"
+                    aria-label="Disk nearly full"
+                    className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-4 text-sm flex items-start gap-3"
+                  >
+                    <HardDrive className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">
+                        The disk that holds your uploads is {stats.uploadsDisk.usedPercent}% full ({formatBytes(stats.uploadsDisk.freeBytes)} free).
+                      </p>
+                      <p className="mt-1">
+                        When it fills, uploads fail, and backups and the database stop working too if they are on the same disk.
+                        Delete files nobody needs from the Assets tab, delete old backups, or move the uploads folder to a larger disk.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Stat Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
@@ -1074,6 +1095,11 @@ export default function AdminPage() {
                       {stats ? formatBytes(stats.totalStorageBytes) : '\u2014'}
                     </p>
                     <p className="text-xs text-warm-gray mt-1">Storage</p>
+                    {stats?.uploadsDisk && (
+                      <p className={`text-xs mt-0.5 ${stats.uploadsDisk.warning ? 'text-danger-ink' : 'text-success-ink'}`}>
+                        {formatBytes(stats.uploadsDisk.freeBytes)} free on disk
+                      </p>
+                    )}
                   </div>
 
                   <HealthCard health={health} failed={healthFailed} />

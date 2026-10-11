@@ -8701,6 +8701,26 @@ paths:
                           type: integer
                         sizeBytes:
                           type: integer
+                  uploadsDisk:
+                    type: object
+                    nullable: true
+                    description: >-
+                      How full the disk holding the uploads folder is (the
+                      nearest folder that exists, before the first upload), or
+                      null when the server cannot read it. No per-user storage
+                      quota is enforced; the dashboard warns from this instead.
+                    properties:
+                      totalBytes:
+                        type: integer
+                      freeBytes:
+                        type: integer
+                        description: What the backend can still write; space the file system keeps back is not counted.
+                      usedPercent:
+                        type: integer
+                        description: Whole percent used, counted as `df` counts it.
+                      warning:
+                        type: boolean
+                        description: '`usedPercent` is over 80.'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
