@@ -333,6 +333,48 @@ export function filterTokensByLighting(
   return tokens.filter((t) => sight.seesToken(t));
 }
 
+/**
+ * What each light reaches, by the map read it came from. A fan-out asks for
+ * every player's sight from one read of the map, and the lights' reach does
+ * not depend on the player, so it is raycast once per read and not once per
+ * player. Keyed on the read's own wall and light arrays, so a later read, or
+ * a change, never sees an old answer, and nothing is kept once they go.
+ */
+const litCache = new WeakMap<object, WeakMap<object, { key: string; lits: Lit[] }>>();
+
+function litsFor(
+  walls: unknown,
+  lights: unknown,
+  wallSegs: WallSegment[],
+  enabledLights: LightSource[],
+  mapWidthPx: number,
+  mapHeightPx: number,
+  gridSize: number
+): Lit[] {
+  const key = `${mapWidthPx}x${mapHeightPx}@${gridSize}`;
+  const byWalls = Array.isArray(lights) && Array.isArray(walls) ? litCache.get(lights) : undefined;
+  const hit = byWalls?.get(walls as object);
+  if (hit && hit.key === key) return hit.lits;
+  // Light positions are already in map-space pixels (Y=0 at top), so no flip
+  // is needed.
+  const lits: Lit[] = enabledLights.map((light) => {
+    const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
+    return {
+      cx: light.x,
+      cy: light.y,
+      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
+      brightPx: (light.brightRadius ?? 0) * gridSize,
+      dimPx: dimRadiusPx,
+    };
+  });
+  if (Array.isArray(lights) && Array.isArray(walls)) {
+    const entry = litCache.get(lights) ?? new WeakMap<object, { key: string; lits: Lit[] }>();
+    entry.set(walls, { key, lits });
+    litCache.set(lights, entry);
+  }
+  return lits;
+}
+
 /** What a player's tokens make out on a lit map, built once and asked many times. */
 export interface PlayerSight {
   /**
@@ -414,18 +456,9 @@ export function playerSightOnLitMap(
     };
   });
 
-  // What each light reaches, bounded by its own walls. Light positions are
-  // already in map-space pixels (Y=0 at top), so no flip is needed.
-  const lits: Lit[] = enabledLights.map((light) => {
-    const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
-    return {
-      cx: light.x,
-      cy: light.y,
-      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
-      brightPx: (light.brightRadius ?? 0) * gridSize,
-      dimPx: dimRadiusPx,
-    };
-  });
+  // What each light reaches, bounded by its own walls: the same for every
+  // player, so worked out once per map read (litsFor).
+  const lits = litsFor(walls, lights, wallSegs, enabledLights, mapWidthPx, mapHeightPx, gridSize);
   const inside: InsideFn = (p, poly) => isPointVisible(p, poly);
 
   const elapsed = Date.now() - startMs;
