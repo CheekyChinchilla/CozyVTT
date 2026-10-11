@@ -169,6 +169,8 @@ src/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
 │   ├── unsavedWork.ts What a lost session does while an editor has unsaved changes
+│   ├── pageLoad.ts    The full page loads the API client sends a page on with (sign in, required pages)
+│   ├── signInNotice.ts  The reason a sign-in ended, carried to the sign-in page across that load
 │   ├── sessionKeepAlive.ts  Pings the session from the game table and from editors with unsaved changes
 │   └── auth.service.ts  Auth-specific API calls
 ├── hooks/
@@ -452,7 +454,7 @@ sequenceDiagram
     S-->>C: 200 response
 ```
 
-A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. It also ends `REMEMBER_ME_MAX_AGE` (30 days) after it was made, however active: `signedInAt` is set at sign-in and checked by the guards and the socket handshake (`services/signedIn.ts`), and a session from before the field existed is stamped when next seen. Each sign-in removes the account's oldest sessions beyond 20 (`capLoginSessions`), and the session row holds the user id and role, `signedInAt`, `mustChangePassword` and the MFA pending fields. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and a character sheet editor while it holds unsaved changes (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
+A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember me" makes it 30 days), and each request starts the hour again. It also ends `REMEMBER_ME_MAX_AGE` (30 days) after it was made, however active: `signedInAt` is set at sign-in and checked by the guards and the socket handshake (`services/signedIn.ts`), and a session from before the field existed is stamped when next seen. Each sign-in removes the account's oldest sessions beyond 20 (`capLoginSessions`), and the session row holds the user id and role, `signedInAt`, `mustChangePassword` and the MFA pending fields. Two kinds of activity make no requests, so they ping `GET /api/auth/ping` every ten minutes through `services/sessionKeepAlive.ts`: the campaign page while its live connection is up, and a character sheet editor while it holds unsaved changes (at once when the changes appear too, since the hour may be nearly up). When a request answers 401 on a page that needs a session, the API client's interceptor normally sends the browser to the sign-in page, carrying the page as `?next=` so signing in returns to it (`utils/returnTo.ts` follows only a path on this origin that is not a public page). A sign-in that reached its age limit answers with `code: 'SIGN_IN_EXPIRED'`, and its sentence is kept in `sessionStorage` (`services/signInNotice.ts`) for the sign-in page to show once. The calls that check the current password or a code while signed in (change password, delete account, MFA disable, backup codes, MFA setup, an email change) answer 401 for a wrong one; they pass `skipAuthRedirect`, and their forms show the message. The sign-in check at page load treats only a refusal (a 4xx other than 408 and 429) as signed out; no answer or a server error shows "Can't reach the server" on protected pages and retries. While a character sheet editor holds unsaved changes it does not: `services/unsavedWork.ts` keeps the page where it is and marks the browser signed out, and the editor says so, with a link to sign in in a new tab. The session cookie is shared between tabs, so the editor's Save works once that sign-in is done.
 
 ### Role-Based Authorization
 
@@ -495,6 +497,17 @@ connected sockets in place (`applyRoleToLiveSockets`) and broadcasts
 `campaign.dm.transferred`, rather than waiting for a reconnect. REST needs no
 equivalent: `loadCampaignMembership` reads the membership per request.
 
+Taking access away works the same way. Removing a member and deleting a
+campaign make the affected sockets leave the room and forget the campaign
+(`clearCampaignFromLiveSockets`, `clearDeletedCampaignFromLiveSockets`), and
+ending a sign-in closes its sockets (`endLiveSockets`; a restore ends every
+socket with `endEveryLiveSocket`). Each socket is first sent
+`campaign.access.revoked` with the reason (`removed`, `campaign-deleted`,
+`signed-out`). On the client, `socket.ts` stops reconnecting after it, the
+connection badge shows the reason, and `hooks/useAccessRevoked.ts` on the
+campaign page goes to the dashboard with a notice, or to the sign-in page,
+unless an editor holds unsaved changes.
+
 ### MFA (TOTP)
 
 MFA uses the `speakeasy` library for TOTP generation and verification. The `window: 1` setting allows ±30 seconds of clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
@@ -528,6 +541,19 @@ sequenceDiagram
     C->>S: socket.disconnect()
     S->>S: socket.leave all rooms
 ```
+
+### Reconnecting
+
+socket.io retries a dropped connection for as long as it takes, backing off
+to 30 seconds between tries, and the client builds a new socket the same way
+after the server closes one (a restart closes every socket). A socket the
+server refuses before it joins (too many tabs, a sign-in it no longer
+accepts) is retried only five times in a row. `WebSocketContext` follows
+every socket from the moment it is built (`socketClient.onCreated`), counts
+each `authenticated` as a join (`joinedEpoch`, which drives the catch-up
+after every rejoin, Retry included) and as connected, retries a first connect
+that left no socket behind, and reconnects at once when the page becomes
+visible again.
 
 ### Room Structure
 
