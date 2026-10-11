@@ -13,6 +13,7 @@ import logger from '../../utils/logger';
 import { emitToMapReaders, emitToMapReadersAs } from '../utils';
 import {
   filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallSentTo, wallsSentTo,
+  type PlayerSight,
 } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
@@ -32,6 +33,36 @@ const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } a
  * last. A refusal is returned as its message.
  */
 type Locked<T> = { refused: string; current?: WallSegment } | { done: T };
+
+/**
+ * What a player's tokens can see of a lit map, for which doors they may open
+ * or close: null on a map without dynamic lighting, where every door is
+ * theirs to try, and on one they may not read, which the toggle then refuses.
+ * Read without the map's lock: it reads the player's plane, which is a
+ * database read of its own, and casts rays from each of their tokens, and a
+ * player can send forty toggles a second.
+ */
+async function doorSightFor(
+  mapId: string,
+  campaignId: string,
+  role: string | undefined,
+  userId: string
+): Promise<PlayerSight | null> {
+  const map = await prisma.map.findUnique({
+    where: { id: mapId },
+    select: {
+      ...EXTENT, wallSegments: true, tokens: true, lightingEnabled: true, lights: true, globalIllumination: true,
+      campaign: { select: { currentMapId: true } },
+    },
+  });
+  if (!map || map.campaignId !== campaignId || !map.lightingEnabled) return null;
+  if (!canReadMap(role, mapId, map.campaign.currentMapId)) return null;
+  const spiritVisible = await getSpiritVisibility(campaignId, userId);
+  return playerSightOnLitMap(
+    filterTokensByRole(map.tokens, role ?? 'PLAYER', spiritVisible, userId), viewerIdFor(role, userId), map.wallSegments,
+    map.width, map.height, map.gridSize, map.lights, map.globalIllumination
+  );
+}
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -148,16 +179,16 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       const role = socket.role;
       const userId = socket.userId!;
       const sent = parsed.data;
+      // A player's sight on a lit map, worked out before the lock is taken,
+      // so no edit of this map waits on it; the door is judged against it
+      // under the lock, where it is and as it is then.
+      const sight = role === 'DM' ? null : await doorSightFor(mapId, campaignId, role, userId);
       const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<WallSegment>> => {
         // A player may toggle doors only on the map the campaign is showing;
         // a prepared map is the DM's until they switch to it.
         const map = await tx.map.findUnique({
           where: { id: mapId },
-          select: {
-            ...EXTENT, wallSegments: true, campaign: { select: { currentMapId: true } },
-            // For whether a player can see the door, on a lit map.
-            tokens: true, lightingEnabled: true, lights: true, globalIllumination: true,
-          },
+          select: { ...EXTENT, wallSegments: true, lightingEnabled: true, campaign: { select: { currentMapId: true } } },
         });
         if (!map || map.campaignId !== campaignId || !canReadMap(role, mapId, map.campaign.currentMapId)) {
           return { refused: 'Map not found' };
@@ -176,24 +207,19 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
           const isDoor = ['door-open', 'door-closed', 'door-locked'].includes(existing[idx].type);
           if (!isDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
           // On a lit map, only a door one of their tokens can see, by the rule
-          // the map shows doors by; asked before the lock, so a door in the
-          // dark tells them nothing.
+          // the map shows doors by; asked before whether it is locked, so a
+          // door in the dark tells them nothing. The door is judged where it
+          // is now, so one the DM moved since the sight was worked out is
+          // refused if it went out of it, and on a map lit since then, with
+          // no sight worked out, no door is seen yet.
           // TODO(maps): manual fog is not asked. A player can still toggle a
           // door in unrevealed squares, which their screen covers, and learn
           // from the answer that it is there. Refuse a door with no revealed
           // square on either side of its middle, and offer none in the
           // client's doorAccess.ts.
-          if (map.lightingEnabled) {
-            const door = existing[idx];
-            const spiritVisible = await getSpiritVisibility(campaignId, userId);
-            const viewer = viewerIdFor(role, userId);
-            const sight = playerSightOnLitMap(
-              filterTokensByRole(map.tokens, role ?? 'PLAYER', spiritVisible, userId), viewer, map.wallSegments,
-              map.width, map.height, map.gridSize, map.lights, map.globalIllumination
-            );
-            if (!sight.seesPoint((door.x1 + door.x2) / 2, (door.y1 + door.y2) / 2)) {
-              return { refused: 'You cannot see that door', current: door };
-            }
+          const door = existing[idx];
+          if (map.lightingEnabled && !(sight?.seesPoint((door.x1 + door.x2) / 2, (door.y1 + door.y2) / 2) ?? false)) {
+            return { refused: 'You cannot see that door', current: door };
           }
           const targetType = sent.type;
           const currentType = existing[idx].type;

@@ -14,6 +14,8 @@
 import { randomUUID } from 'crypto';
 import { prisma } from '../../config/database';
 import { toJson } from '../../utils/prisma-json';
+import * as mapTokens from '../../utils/mapTokens';
+import * as spiritLayer from '../../utils/spirit-layer';
 import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 
 jest.setTimeout(20000);
@@ -107,6 +109,106 @@ describe('on a lit map', () => {
     const refused = waitForEvent<{ message: string }>(player, 'error');
     player.emit('wall:update', { mapId, segment: { ...FAR_LOCKED, type: 'door-open' } });
     expect((await refused).message).toBe('You cannot see that door');
+    player.disconnect();
+  });
+});
+
+/**
+ * The map's lock and the player's sight. Working out what a player's tokens
+ * can see reads the database (their plane) and casts rays from each token,
+ * and a player may send forty toggles a second. Done under the map's lock,
+ * every wall, light and token edit on the map waited for it, and the plane
+ * was read on a second connection while the lock's transaction held one. The
+ * sight is now worked out before the lock is taken, and the door, read again
+ * under the lock, is judged on where it is and what it is then.
+ */
+describe('the sight check and the map\'s lock', () => {
+  /** Run `during` while the player's sight is being worked out. */
+  function whileSightIsWorkedOut(during: () => Promise<void>) {
+    const original = spiritLayer.getSpiritVisibility;
+    return jest.spyOn(spiritLayer, 'getSpiritVisibility').mockImplementation(async (campaign, user) => {
+      await during();
+      return original(campaign, user);
+    });
+  }
+
+  const moveDoor = (mapId: string, door: Wall) => async () => {
+    const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId } });
+    const walls = (map.wallSegments as unknown as Wall[]).map((w) => (w.id === door.id ? door : w));
+    await prisma.map.update({ where: { id: mapId }, data: { wallSegments: toJson(walls) } });
+  };
+
+  it('works out the player\'s sight before taking the lock', async () => {
+    const mapId = await newMap(true);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const underLock: string[] = [];
+    let locked = false;
+    const withLock = mapTokens.withMapsLocked;
+    const lock = jest.spyOn(mapTokens, 'withMapsLocked').mockImplementation((ids, fn) =>
+      withLock(ids, async (tx) => {
+        locked = true;
+        try {
+          return await fn(tx);
+        } finally {
+          locked = false;
+        }
+      })
+    );
+    const plane = spiritLayer.getSpiritVisibility;
+    const visibility = jest.spyOn(spiritLayer, 'getSpiritVisibility').mockImplementation((campaign, user) => {
+      if (locked) underLock.push('the player\'s plane');
+      return plane(campaign, user);
+    });
+    const raycast = spiritLayer.playerSightOnLitMap;
+    const sight = jest.spyOn(spiritLayer, 'playerSightOnLitMap').mockImplementation((...args) => {
+      if (locked) underLock.push('line of sight');
+      return raycast(...args);
+    });
+    try {
+      const opened = waitForEvent<{ segment: Wall }>(player, 'wall:updated');
+      player.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+      expect((await opened).segment.type).toBe('door-open');
+      expect(sight).toHaveBeenCalled();
+      expect(underLock).toEqual([]);
+    } finally {
+      lock.mockRestore();
+      visibility.mockRestore();
+      sight.mockRestore();
+    }
+    player.disconnect();
+  });
+
+  it('refuses a door the DM moves out of the player\'s sight meanwhile, judged where it is now', async () => {
+    const mapId = await newMap(true);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const beyond = { ...NEAR, x1: 800, x2: 800 };
+    const meanwhile = whileSightIsWorkedOut(moveDoor(mapId, beyond));
+    try {
+      const refused = waitForEvent<{ message: string }>(player, 'error');
+      const back = waitForEvent<{ segment: Wall }>(player, 'wall:updated');
+      player.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+      expect((await refused).message).toBe('You cannot see that door');
+      expect((await back).segment).toEqual(beyond);
+    } finally {
+      meanwhile.mockRestore();
+    }
+    const stored = (await prisma.map.findUniqueOrThrow({ where: { id: mapId } })).wallSegments as unknown as Wall[];
+    expect(stored.find((w) => w.id === NEAR.id)).toEqual(beyond);
+    player.disconnect();
+  });
+
+  it('refuses a door the DM locks meanwhile, judged on what it is now', async () => {
+    const mapId = await newMap(true);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const meanwhile = whileSightIsWorkedOut(moveDoor(mapId, { ...NEAR, type: 'door-locked' }));
+    try {
+      const refused = waitForEvent<{ message: string }>(player, 'error');
+      player.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+      expect((await refused).message).toBe('That door is locked');
+    } finally {
+      meanwhile.mockRestore();
+    }
+    expect(await stored(mapId, NEAR.id)).toBe('door-locked');
     player.disconnect();
   });
 });
