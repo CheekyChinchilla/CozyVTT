@@ -138,8 +138,8 @@ info:
       from any `/api/campaigns/{campaignId}/...` route that needs membership,
       including for a campaign id that does not exist. Such routes never answer
       404 for an unknown campaign.
-    - **403** with `code: PASSWORD_CHANGE_REQUIRED`, and the setup-gate 403, as
-      described above.
+    - **403** with `code: PASSWORD_CHANGE_REQUIRED` or `code: MFA_ENROLMENT_REQUIRED`,
+      and the setup-gate 403, as described above and below.
     - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
     - **500** `{ error, message }` on an unexpected error. In production the
@@ -152,6 +152,22 @@ info:
     `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config` returns
     HTTP 403 with `code: PASSWORD_CHANGE_REQUIRED`. WebSocket connections are refused
     on the same basis. Clients should route on `code` rather than the message.
+
+    ## Administrator two-factor policy
+    An `ADMIN` account must have MFA on. One without it carries
+    `adminMfaDeadline` (an ISO date) on the `user` object `/api/auth/login`,
+    `/api/auth/mfa/verify-login`, `/api/setup/init` and `/api/auth/me` return:
+    7 days from when the policy started on the instance or from the account's
+    creation, whichever is later. For everyone else the field is `null`. Past
+    the deadline every endpoint except `POST /api/auth/mfa/setup`,
+    `POST /api/auth/mfa/verify`, `POST /api/auth/change-password`,
+    `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
+    `GET /api/auth/appearance` and `GET /api/config` returns HTTP 403
+    `{ error: 'MFA Required', code: 'MFA_ENROLMENT_REQUIRED', message }`. The
+    same check refreshes the session's copy of the platform role from the
+    database on every administrator request, so a demoted administrator loses
+    the admin routes on their next request, and a session whose account no
+    longer exists is ended with 401.
 
     ## Real-time Events
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
@@ -10073,6 +10089,14 @@ components:
           description: May edit and delete anyone's character template.
         mustChangePassword:
           type: boolean
+        adminMfaDeadline:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            For an administrator without MFA, when it becomes required; null
+            for everyone else. Present on the `user` of /api/auth/login,
+            /api/auth/mfa/verify-login, /api/setup/init and /api/auth/me.
           description: Set when an admin created the account or reset its password; see Forced password changes.
         isApproved:
           type: boolean

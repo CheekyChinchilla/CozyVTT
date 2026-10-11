@@ -666,6 +666,8 @@ For extra account security, enable **MFA** in the Security section. You'll be as
 
 You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
 
+**Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule) and links to the setup page. After that date the app takes you to the setup page and nothing else works until MFA is on. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
+
 ### Themes & Fonts
 
 From the **Appearance** section of your profile, pick the color theme and font *you* want to see across the app:

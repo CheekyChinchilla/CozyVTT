@@ -12,6 +12,7 @@ import { sessionConfig, sessionPool } from './config/session';
 import { enforceDatabaseCredential } from './config/databaseGuard';
 import { requireSetupComplete } from './middleware/setup';
 import { requirePasswordChanged } from './middleware/passwordChange';
+import { requireAdminMfa } from './middleware/adminMfa';
 import { bodyParsers } from './middleware/bodyParsers';
 import { originCheck } from './middleware/originCheck';
 import { errorHandler } from './middleware/errorHandler';
@@ -160,6 +161,10 @@ app.use('/api', generalApiLimiter);
 // Accounts flagged `mustChangePassword` (admin-created, or admin-reset) can do
 // nothing but change it until they do — see middleware/passwordChange.ts
 app.use('/api', requirePasswordChanged);
+
+// Administrators must use two-factor authentication: past the deadline an
+// admin without it can do nothing but set it up (middleware/adminMfa.ts).
+app.use('/api', requireAdminMfa);
 
 // Setup wizard (accessible before setup is complete)
 app.use('/api/setup', setupRoutes);

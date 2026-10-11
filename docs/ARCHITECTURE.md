@@ -62,6 +62,8 @@ src/
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication, requireAuth guards
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
+│   ├── adminMfa.ts        Gates an administrator without MFA past their deadline (services/adminMfaPolicy.ts);
+│   │                      re-reads the admin's role on every request
 │   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
 │   │                  and exporting campaign archives, one archive at a time

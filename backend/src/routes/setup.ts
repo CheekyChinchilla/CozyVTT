@@ -1,7 +1,8 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
 import { setupState } from '../services/systemSettings';
-import { sanitizeUser, RegistrationError } from '../services/auth';
+import { RegistrationError } from '../services/auth';
+import { clientUser } from './auth';
 import { setUpInstance, SetupAlreadyRunError } from '../services/setup';
 import { setupTokenMatches } from '../services/setupToken';
 import { regenerateSession } from '../utils/session';
@@ -83,7 +84,7 @@ router.post('/init', async (req: Request, res: Response) => {
 
     return res.status(201).json({
       message: 'Setup completed successfully',
-      user: sanitizeUser(user),
+      user: await clientUser(user),
     });
   } catch (error) {
     if (error instanceof SetupAlreadyRunError) {

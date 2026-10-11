@@ -468,6 +468,11 @@ then on also asks for the current password:
 | Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
+An `ADMIN` account must have MFA on: past a 7-day deadline
+(`services/adminMfaPolicy.ts`), `middleware/adminMfa.ts` answers 403
+`MFA_ENROLMENT_REQUIRED` to everything but enrolment, and on every admin
+request it re-reads the role from the database into the session.
+
 The admin reset routes, `POST /api/users/:id/reset-password` and
 `POST /api/admin/users/:id/reset-mfa`, ask for no password because the admin
 does not have the target's. They refuse the caller's own id (400), so a stolen

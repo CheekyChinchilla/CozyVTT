@@ -128,6 +128,12 @@ class ApiClient {
               if (window.location.pathname !== '/auth/change-password') {
                 window.location.href = '/auth/change-password';
               }
+            } else if (code === 'MFA_ENROLMENT_REQUIRED') {
+              // An administrator past the two-factor deadline may do nothing
+              // else until it is set up.
+              if (window.location.pathname !== '/auth/mfa-setup') {
+                window.location.href = '/auth/mfa-setup';
+              }
             } else {
               console.error('Permission denied:', data.message);
             }

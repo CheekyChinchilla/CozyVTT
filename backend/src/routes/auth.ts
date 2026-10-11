@@ -23,6 +23,7 @@ import { writeSystemLog } from '../services/systemLog';
 import { MAX_EMAIL_LENGTH } from '../utils/validation';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
+import { adminMfaDeadline } from '../services/adminMfaPolicy';
 import {
   parseBody,
   LoginBodySchema,
@@ -38,6 +39,16 @@ import {
 
 /** 400 for a body `parseBody` refused. */
 const invalid = (res: Response, message: string) => res.status(400).json({ error: 'Validation Error', message });
+
+/**
+ * The signed-in user as the client sees them: sanitised, plus the date by
+ * which an administrator without MFA must set it up (services/adminMfaPolicy),
+ * null for everyone else. The pages show it as a banner.
+ */
+export async function clientUser(user: Parameters<typeof sanitizeUser>[0]) {
+  const deadline = await adminMfaDeadline(user);
+  return { ...sanitizeUser(user), adminMfaDeadline: deadline ? deadline.toISOString() : null };
+}
 
 /**
  * How long the code step may follow the password step. A pending sign-in sat
@@ -361,7 +372,7 @@ router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Reques
     // Return sanitized user with mustChangePassword flag
     return res.status(200).json({
       message: 'Login successful',
-      user: sanitizeUser(user),
+      user: await clientUser(user),
       mustChangePassword: user.mustChangePassword,
     });
   } catch (error) {
@@ -424,7 +435,7 @@ router.get('/me', async (req: Request, res: Response) => {
     }
 
     return res.status(200).json({
-      user: sanitizeUser(user),
+      user: await clientUser(user),
     });
   } catch (error) {
     logger.error('Error in GET /me', { err: error });
@@ -973,14 +984,14 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
     // and silently dropped the warning a user needs to see.
     const response: {
       message: string;
-      user: ReturnType<typeof sanitizeUser>;
+      user: Awaited<ReturnType<typeof clientUser>>;
       mustChangePassword: boolean;
       backupCodeUsed?: boolean;
       remainingBackupCodes?: number;
       warning?: string;
     } = {
       message: 'Login successful',
-      user: sanitizeUser(user),
+      user: await clientUser(user),
       mustChangePassword: user.mustChangePassword,
     };
 

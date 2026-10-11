@@ -562,7 +562,7 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
       { targetUserId: id }
     );
 
-    return res.json({ message: 'MFA has been reset. The user signs in with their password alone until they turn it on again.' });
+    return res.json({ message: 'MFA has been reset. The user signs in with their password alone until they turn it on again; an administrator is asked to set it up again within 7 days.' });
   } catch (error) {
     logger.error('Error resetting MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to reset MFA' });
