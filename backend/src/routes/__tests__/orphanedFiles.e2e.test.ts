@@ -27,6 +27,7 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import * as fileUtils from '../../utils/fileUtils';
 
 const app = createTestApp();
 const userIds: string[] = [];
@@ -150,6 +151,29 @@ describe('deleting leftover files', () => {
 
     expect(exists(orphan)).toBe(false);
     for (const file of [adopted, named, namedThumb, fresh, lateOrphan, 'README.txt']) expect(exists(file)).toBe(true);
+  });
+});
+
+describe('a file an asset delete could not remove', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('is listed by the report once the asset is gone, and can then be deleted', async () => {
+    const relative = plant(`tokens/global/${randomUUID()}.png`);
+    const asset = await assetNaming(relative, null, admin.user.id);
+    // The delete removes the row first and the file after; here the file
+    // cannot be removed, which left it on disk with nothing naming it.
+    jest.spyOn(fileUtils, 'deleteFile').mockRejectedValueOnce(Object.assign(new Error('permission denied'), { code: 'EACCES' }));
+
+    expect((await admin.agent.delete(`/api/assets/${asset.id}`)).status).toBe(200);
+    expect(await prisma.asset.findUnique({ where: { id: asset.id } })).toBeNull();
+    expect(exists(relative)).toBe(true);
+
+    const report = await admin.agent.get('/api/admin/orphaned-files');
+    expect((report.body.files as { path: string }[]).map((f) => f.path)).toContain(relative);
+
+    const res = await admin.agent.delete('/api/admin/orphaned-files').send({ paths: [relative] });
+    expect(res.body.deleted).toEqual([relative]);
+    expect(exists(relative)).toBe(false);
   });
 });
 
