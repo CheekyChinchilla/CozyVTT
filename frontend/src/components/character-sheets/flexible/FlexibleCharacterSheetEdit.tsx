@@ -165,6 +165,10 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
     }
   };
 
+  // TODO(sheets): the server keeps at most 100 sections on a sheet (FLEXIBLE_MAX_SECTIONS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addSection = (template: SectionTemplate) => {
     const newSection = template.create();
     setSections([...sections, newSection]);
