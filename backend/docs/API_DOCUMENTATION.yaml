@@ -6734,9 +6734,12 @@ paths:
         campaign is showing, and to the DM's connections for any other. On a
         lit map that the campaign is showing, each player is then sent
         `map.changed` with the map as they can now see it, since walls and
-        doors decide which tokens a player is sent. A change that sends
-        players no event, as `updateWallType` describes, sends them no
-        `map.changed` either.
+        doors decide which tokens a player is sent. Anyone but the DM is
+        sent `walls:replaced` from this route only when the list they are
+        sent changes: a list whose walls are, as they see them, the same and
+        in the same order, as when closed doors are locked or unlocked, sends
+        them nothing. A change that sends players no event, here or as
+        `updateWallType` describes, sends them no `map.changed` either.
       operationId: replaceWalls
       security:
         - cookieAuth: []
@@ -6962,9 +6965,12 @@ paths:
         campaign is showing, and to the DM's connections for any other. On a
         lit map that the campaign is showing, each player is then sent
         `map.changed` with the map as they can now see it, since lights decide
-        which tokens a player is sent. A change that sends players no event,
-        such as adding, changing or deleting a light that is off, sends them
-        no `map.changed` either.
+        which tokens a player is sent. Anyone but the DM is sent
+        `lights:replaced` from this route only when the lights that are on
+        change: a list that differs only in lights that are off, such as an
+        empty list replacing lights that are all off, sends them nothing. A
+        change that sends players no event, such as adding, changing or
+        deleting a light that is off, sends them no `map.changed` either.
       operationId: replaceLights
       security:
         - cookieAuth: []

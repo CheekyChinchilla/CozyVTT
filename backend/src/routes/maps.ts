@@ -8,7 +8,8 @@ import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
 import {
   canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
-  lightReachesPlayers, lightRemovalSentTo, lightsSentTo, wallChangeReachesPlayers, wallChangeSentTo, wallSentTo, wallsSentTo,
+  lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo, lightsReplacedSentTo, lightsSentTo,
+  wallChangeReachesPlayers, wallChangeSentTo, wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo,
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
@@ -1819,22 +1820,22 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segments' });
     }
     const next = parsed.data;
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<unknown>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
       if (!fresh) return MAP_GONE;
       if (wallOutsideMap(next, fresh, fresh.wallSegments)) {
         return { status: 400, error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE };
       }
       await tx.map.update({ where: { id }, data: { wallSegments: toJson(next) } });
-      return { done: null };
+      return { done: fresh.wallSegments };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    // The same events the socket wall edits send, to those who may read the map.
-    await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => ({
-      event: 'walls:replaced', data: { mapId: id, segments: wallsSentTo(role, next) },
-    }));
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // The same events the socket wall edits send, to those who may read the
+    // map; a player whose walls are as they were is told nothing.
+    const before = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, before, next));
+    if (wallListChangeReachesPlayers(before, next)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segments: next });
   } catch (error) {
     logger.error('Error replacing wall segments', { err: error });
@@ -2003,21 +2004,21 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid lights array' });
     }
     const next = parsed.data;
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<unknown>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
       if (!fresh) return MAP_GONE;
       if (lightOutsideMap(next, fresh, fresh.lights)) {
         return { status: 400, error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE };
       }
       await tx.map.update({ where: { id }, data: { lights: toJson(next) } });
-      return { done: null };
+      return { done: fresh.lights };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => ({
-      event: 'lights:replaced', data: { mapId: id, lights: lightsSentTo(role, next) },
-    }));
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // A player whose lights that are on are as they were is told nothing.
+    const before = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => lightsReplacedSentTo(role, id, before, next));
+    if (lightListChangeReachesPlayers(before, next)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ lights: next });
   } catch (error) {
     logger.error('Error replacing light sources:', error);

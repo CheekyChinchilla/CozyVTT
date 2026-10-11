@@ -11,7 +11,8 @@ import type { LightSource } from '../../types/walls';
 import logger from '../../utils/logger';
 import { emitToMapReadersAs } from '../utils';
 import {
-  lightChangeReachesPlayers, lightChangeSentTo, lightReachesPlayers, lightRemovalSentTo, lightsSentTo,
+  lightChangeReachesPlayers, lightChangeSentTo, lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo,
+  lightsReplacedSentTo, lightsSentTo,
 } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
@@ -207,23 +208,27 @@ export function registerLightHandlers(io: Server, socket: AuthenticatedSocket): 
 
       const campaignId = socket.campaignId;
       const next = parsed.data;
-      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked> => {
+      // Answers the list it replaced, so each member is told only of a change to their copy.
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<{ refused: string } | { done: unknown }> => {
         const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, lights: true } });
         if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
         if (lightOutsideMap(next, map, map.lights)) return { refused: LIGHT_OUTSIDE_MAP_MESSAGE };
 
         await tx.map.update({ where: { id: mapId }, data: { lights: toJson(next) } });
-        return { done: true };
+        return { done: map.lights };
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      await emitToMapReadersAs(io, campaignId, mapId, 'lights:replaced', (role) => ({
-        event: 'lights:replaced', data: { mapId, lights: lightsSentTo(role, next), ...echoedOpId(data) },
-      }));
-      resendSightAfterChange(io, campaignId, mapId);
+      // A player whose lights that are on are as they were, as after Clear
+      // All on lights that are off, is told nothing, and is not sent the map again.
+      const before = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'lights:replaced', (role) =>
+        lightsReplacedSentTo(role, mapId, before, next, echoedOpId(data))
+      );
+      if (lightListChangeReachesPlayers(before, next)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('lights:replace failed', { err: error });
       socket.emit('error', { message: 'Failed to replace light sources' });

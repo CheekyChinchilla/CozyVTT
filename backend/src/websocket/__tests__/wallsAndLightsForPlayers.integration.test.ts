@@ -202,9 +202,10 @@ describe('a live edit', () => {
     dm.emit('light:update', { mapId, light: { ...dark, enabled: false } });
     expect((await gone).lightId).toBe(dark.id);
 
+    const moved = { ...LIT, x: 350 };
     const replaced = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
-    dm.emit('lights:replace', { mapId, lights: [LIT, OUT] });
-    expect((await replaced).lights).toEqual([LIT]);
+    dm.emit('lights:replace', { mapId, lights: [moved, OUT] });
+    expect((await replaced).lights).toEqual([moved]);
 
     dm.disconnect();
     player.disconnect();
@@ -360,6 +361,97 @@ describe('a change a player cannot see, on a lit map', () => {
 
     const resent = waitForEvent(player, 'map.changed');
     expect((await dmAgent.patch(`${base}/lights/${OUT.id}`).send({ enabled: true })).status).toBe(200);
+    await resent;
+
+    player.disconnect();
+  });
+});
+
+/**
+ * The same for a whole list replaced at once, as the Walls panel's Change
+ * type does to a selection (it offers Locked), and as Clear All in the
+ * Lights panel does once only lights that are off are left. A player whose
+ * list it leaves as it was is sent nothing, and on a lit map not the map
+ * again either.
+ */
+describe.each([
+  ['an unlit map', false],
+  ['a lit map', true],
+])('a whole list replaced on %s', (_label, lit) => {
+  it('sends a player nothing when walls:replace leaves their walls as they were, and the walls when it does not', async () => {
+    const mapId = await newMap(lit);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    // The locked door unlocked and locked again: a player has it closed throughout.
+    const told = heard(player);
+    const unlocked = waitForEvent<{ segments: Wall[] }>(dm, 'walls:replaced');
+    dm.emit('walls:replace', { mapId, segments: [asClosed, PLAIN] });
+    expect((await unlocked).segments).toEqual([asClosed, PLAIN]);
+    const locked = waitForEvent<{ segments: Wall[] }>(dm, 'walls:replaced');
+    dm.emit('walls:replace', { mapId, segments: [LOCKED, PLAIN] });
+    expect((await locked).segments).toEqual([LOCKED, PLAIN]);
+    await settled();
+    expect(told).toEqual([]);
+
+    const opened = { ...LOCKED, type: 'door-open' };
+    const replaced = waitForEvent<{ segments: Wall[] }>(player, 'walls:replaced');
+    const resent = lit ? waitForEvent(player, 'map.changed') : Promise.resolve();
+    dm.emit('walls:replace', { mapId, segments: [opened, PLAIN] });
+    expect((await replaced).segments).toEqual([opened, PLAIN]);
+    await resent;
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('sends a player nothing when lights:replace leaves their lights as they were, Clear All on lights that are off included', async () => {
+    const mapId = await newMap(lit);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    // The light that is off moved and another added: a player has only LIT throughout.
+    const dark = { ...OUT, id: randomUUID(), x: 700 };
+    const told = heard(player);
+    const changed = waitForEvent(dm, 'lights:replaced');
+    dm.emit('lights:replace', { mapId, lights: [LIT, { ...OUT, x: 650 }, dark] });
+    await changed;
+    await settled();
+    expect(told).toEqual([]);
+
+    // The last light that is on goes, which a player is sent; then Clear All.
+    const lastOn = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
+    const resent = lit ? waitForEvent(player, 'map.changed') : Promise.resolve();
+    dm.emit('lights:replace', { mapId, lights: [OUT, dark] });
+    expect((await lastOn).lights).toEqual([]);
+    await resent;
+    await settled();
+    const toldAfter = heard(player);
+    const cleared = waitForEvent<{ lights: Light[] }>(dm, 'lights:replaced');
+    dm.emit('lights:replace', { mapId, lights: [] });
+    expect((await cleared).lights).toEqual([]);
+    await settled();
+    expect(toldAfter).toEqual([]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('sends a player nothing for the same replaces made through the REST routes', async () => {
+    const mapId = await newMap(lit);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const base = `/api/campaigns/${campaignId}/maps/${mapId}`;
+
+    const told = heard(player);
+    expect((await dmAgent.put(`${base}/walls`).send({ segments: [asClosed, PLAIN] })).status).toBe(200);
+    expect((await dmAgent.put(`${base}/lights`).send({ lights: [LIT, { ...OUT, x: 650 }] })).status).toBe(200);
+    await settled();
+    expect(told).toEqual([]);
+
+    const replaced = waitForEvent<{ lights: Light[] }>(player, 'lights:replaced');
+    const resent = lit ? waitForEvent(player, 'map.changed') : Promise.resolve();
+    expect((await dmAgent.put(`${base}/lights`).send({ lights: [] })).status).toBe(200);
+    expect((await replaced).lights).toEqual([]);
     await resent;
 
     player.disconnect();

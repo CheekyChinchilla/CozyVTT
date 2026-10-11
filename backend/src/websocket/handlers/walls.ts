@@ -13,7 +13,7 @@ import logger from '../../utils/logger';
 import { emitToMapReaders, emitToMapReadersAs } from '../utils';
 import {
   filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
-  wallSentTo, wallsSentTo, type PlayerSight,
+  wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
@@ -288,23 +288,27 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       const campaignId = socket.campaignId;
       const next = parsed.data;
-      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<null>> => {
+      // Answers the list it replaced, so each member is told only of a change to their copy.
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<unknown>> => {
         const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, wallSegments: true } });
         if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
         if (wallOutsideMap(next, map, map.wallSegments)) return { refused: WALL_OUTSIDE_MAP_MESSAGE };
 
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(next) } });
-        return { done: null };
+        return { done: map.wallSegments };
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      await emitToMapReadersAs(io, campaignId, mapId, 'walls:replaced', (role) => ({
-        event: 'walls:replaced', data: { mapId, segments: wallsSentTo(role, next), ...echoedOpId(data) },
-      }));
-      resendSightAfterChange(io, campaignId, mapId);
+      // A player whose walls are as they were, closed doors locked or
+      // unlocked, is told nothing, and is not sent the map again.
+      const before = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'walls:replaced', (role) =>
+        wallsReplacedSentTo(role, mapId, before, next, echoedOpId(data))
+      );
+      if (wallListChangeReachesPlayers(before, next)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
       socket.emit('error', { message: 'Failed to replace wall segments' });

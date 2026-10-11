@@ -532,10 +532,44 @@ export function wallChangeSentTo(
   return { event: 'wall:updated', data: { mapId, segment: wallSentTo(role, after), ...extra } };
 }
 
+/** A stored JSON list (a map's walls or lights), or an empty one for anything else. */
+function storedList<T>(value: unknown): T[] {
+  return (Array.isArray(value) ? value : []) as unknown as T[];
+}
+
 /** A map's walls as a member is sent them (wallSentTo). */
 export function wallsSentTo(role: string | undefined, walls: unknown): WallSegment[] {
-  const list = (Array.isArray(walls) ? walls : []) as unknown as WallSegment[];
-  return role === 'DM' ? list : list.map((w) => wallSentTo(role, w));
+  const list = storedList<WallSegment>(walls);
+  return role === 'DM' ? list : list.map(playersWall);
+}
+
+/**
+ * Whether a map's walls replaced, from the stored list `before` to `after`,
+ * changes the list anyone but the DM has. It does not when every wall they
+ * are sent stays as it was, in the same order, as when the Walls panel's
+ * Change type locks or unlocks closed doors.
+ */
+export function wallListChangeReachesPlayers(before: unknown, after: unknown): boolean {
+  const was = storedList<WallSegment>(before).map(playersWall);
+  const now = storedList<WallSegment>(after).map(playersWall);
+  return was.length !== now.length || was.some((wall, i) => !sameWall(wall, now[i]));
+}
+
+/**
+ * What a member is told of a map's walls replaced, from the stored list
+ * `before` to `after`: the DM `walls:replaced`; anyone else the walls as
+ * they are sent them, and nothing when that is the list they have already
+ * (wallListChangeReachesPlayers). `extra` (an operation id) rides on the event.
+ */
+export function wallsReplacedSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: unknown,
+  after: unknown,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !wallListChangeReachesPlayers(before, after)) return null;
+  return { event: 'walls:replaced', data: { mapId, segments: wallsSentTo(role, after), ...extra } };
 }
 
 /**
@@ -545,7 +579,7 @@ export function wallsSentTo(role: string | undefined, walls: unknown): WallSegme
  * where it is.
  */
 export function lightsSentTo(role: string | undefined, lights: unknown): LightSource[] {
-  const list = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
+  const list = storedList<LightSource>(lights);
   return role === 'DM' ? list : list.filter(lightReachesPlayers);
 }
 
@@ -562,6 +596,42 @@ export function lightReachesPlayers(light: LightSource | undefined): boolean {
 /** Whether a light changing from `before` to `after` changes the copy anyone but the DM has. */
 export function lightChangeReachesPlayers(before: LightSource, after: LightSource): boolean {
   return lightReachesPlayers(before) || lightReachesPlayers(after);
+}
+
+/** Whether two lights match in every field a member is sent. */
+function sameLight(a: LightSource, b: LightSource): boolean {
+  return a.id === b.id && a.x === b.x && a.y === b.y && a.brightRadius === b.brightRadius
+    && a.dimRadius === b.dimRadius && a.color === b.color && a.enabled === b.enabled;
+}
+
+/**
+ * Whether a map's lights replaced, from the stored list `before` to `after`,
+ * changes the list anyone but the DM has. It does not when every light that
+ * is on stays as it was, in the same order, whatever happens to those that
+ * are off, as when Clear All in the Lights panel removes only lights that
+ * are off.
+ */
+export function lightListChangeReachesPlayers(before: unknown, after: unknown): boolean {
+  const was = storedList<LightSource>(before).filter(lightReachesPlayers);
+  const now = storedList<LightSource>(after).filter(lightReachesPlayers);
+  return was.length !== now.length || was.some((light, i) => !sameLight(light, now[i]));
+}
+
+/**
+ * What a member is told of a map's lights replaced, from the stored list
+ * `before` to `after`: the DM `lights:replaced`; anyone else the lights that
+ * are on, and nothing when that is the list they have already
+ * (lightListChangeReachesPlayers). `extra` (an operation id) rides on the event.
+ */
+export function lightsReplacedSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: unknown,
+  after: unknown,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !lightListChangeReachesPlayers(before, after)) return null;
+  return { event: 'lights:replaced', data: { mapId, lights: lightsSentTo(role, after), ...extra } };
 }
 
 /**
