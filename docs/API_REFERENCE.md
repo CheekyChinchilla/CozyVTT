@@ -767,9 +767,13 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 (`true` to return only your own), `limit` (max 100, default 50), `offset`.
 
 **Response:** `{ templates, total, limit, offset }`. Each template includes
-`createdBy: { id, displayName }` — never the author's email.
+`createdBy: { id, displayName }` — never the author's email — and leaves out
+its sheet (`data`), which a page of 100 would otherwise carry 100 times.
 
 ### `GET /api/character-templates/:id`
+
+One template, with its sheet in `data`. Fetch this before copying a template
+into a character or editing it.
 
 ### `POST /api/character-templates`
 
@@ -793,6 +797,9 @@ Query parameters: `search` (name contains, case-insensitive), `gameSystem` (a
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
+- One account may author at most 500 templates. Past that the request answers
+  `400`: "You have already published 500 character templates, the most one
+  account can. Delete one you no longer need to make room."
 
 ### `PUT /api/character-templates/:id`
 

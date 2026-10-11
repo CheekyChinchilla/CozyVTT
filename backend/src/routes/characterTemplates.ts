@@ -25,12 +25,44 @@ import {
 } from '../validators/characterTemplates';
 import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils/asset-urls';
 import { toJson } from '../utils/prisma-json';
+import { holdOwnerCreates } from '../utils/ownerLimit';
 import logger from '../utils/logger';
 
 const router = Router();
 
 /** Author fields returned alongside a template, minus anything private. */
 const AUTHOR_SELECT = { id: true, displayName: true } as const;
+
+/**
+ * What the list returns for each template: everything but the sheet, which
+ * GET /:id serves. A page holds up to 100 templates and every user's browser
+ * loads it, so it carried up to 100 full sheets.
+ */
+const TEMPLATE_SUMMARY_SELECT = {
+  id: true,
+  name: true,
+  description: true,
+  gameSystem: true,
+  tokenImageUrl: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+  createdBy: { select: AUTHOR_SELECT },
+} as const;
+
+/**
+ * The most templates one account may publish. Every template is shown to
+ * every user, so this bounds what one account can add to everyone's list. A
+ * user curating a library for their table publishes tens; 500 is far above
+ * that, and a template editor can still edit and delete anyone's.
+ */
+export const MAX_TEMPLATES_PER_USER = 500;
+const TEMPLATE_LIMIT_REACHED =
+  `You have already published ${MAX_TEMPLATES_PER_USER} character templates, the most one account can. ` +
+  'Delete one you no longer need to make room.';
+
+/** Refused inside the create's transaction when the author is at the ceiling. */
+class TemplateLimitReached extends Error {}
 
 /**
  * May this user modify this template?
@@ -178,7 +210,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         orderBy: { name: 'asc' },
         take,
         skip,
-        include: { createdBy: { select: AUTHOR_SELECT } },
+        select: TEMPLATE_SUMMARY_SELECT,
       }),
       prisma.characterTemplate.count({ where: where as never }),
     ]);
@@ -246,21 +278,30 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: 'Validation Error', message: image.error });
     }
 
-    const template = await prisma.characterTemplate.create({
-      data: {
-        id: randomUUID(),
-        name,
-        description: description ?? null,
-        gameSystem: gameSystem ?? null,
-        tokenImageUrl: image.url,
-        data: toJson(sheet.data),
-        createdById: userId,
-      },
-      include: { createdBy: { select: AUTHOR_SELECT } },
+    const template = await prisma.$transaction(async (tx) => {
+      await holdOwnerCreates(tx, 'character-templates', userId);
+      if ((await tx.characterTemplate.count({ where: { createdById: userId } })) >= MAX_TEMPLATES_PER_USER) {
+        throw new TemplateLimitReached();
+      }
+      return tx.characterTemplate.create({
+        data: {
+          id: randomUUID(),
+          name,
+          description: description ?? null,
+          gameSystem: gameSystem ?? null,
+          tokenImageUrl: image.url,
+          data: toJson(sheet.data),
+          createdById: userId,
+        },
+        include: { createdBy: { select: AUTHOR_SELECT } },
+      });
     });
 
     return res.status(201).json(template);
   } catch (error) {
+    if (error instanceof TemplateLimitReached) {
+      return res.status(400).json({ error: 'Validation Error', message: TEMPLATE_LIMIT_REACHED });
+    }
     logger.error('Error creating character template', { err: error });
     return res
       .status(500)

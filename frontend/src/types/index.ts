@@ -298,6 +298,12 @@ export interface CharacterTemplate {
   updatedAt: string;
 }
 
+/**
+ * A template as the list sends it: everything but the sheet, which
+ * GET /api/character-templates/:id serves.
+ */
+export type CharacterTemplateSummary = Omit<CharacterTemplate, 'data'>;
+
 // ============================================
 // Admin Types
 // ============================================

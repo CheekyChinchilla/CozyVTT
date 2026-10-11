@@ -185,6 +185,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Display names no longer keep invisible characters.** A display name kept zero-width spaces, control characters and the marks that turn text round to read right to left, so a name could look blank, or show one thing while saying another, in the roster, chat, dice log and invite search. These characters are now removed when a name is set at sign-up, on the Profile page and when an administrator creates or invites an account, and accented letters are stored in one form however they were typed. A name left empty once they are removed is refused with "Display name is required". Names already saved are unchanged until their owner next edits them. Display names are still not unique.
 
+- **One account can publish up to 500 character templates, and the template list loads without every template's sheet.** Every template is shown to everyone, nothing limited how many one account could publish, and each page of the **Character Templates** list carried the full sheet of up to 100 templates, so one account publishing thousands of large sheets slowed the page for everybody. The list now carries only each template's name, description, system, picture and author, and **Use** and the pencil fetch the one template they need. Publishing a 501st template answers "You have already published 500 character templates, the most one account can. Delete one you no longer need to make room." Templates already published all stay, even past 500.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

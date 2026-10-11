@@ -292,7 +292,7 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 - while creating a character, if you want to keep the character and share it at the same time
 - **Import** on the templates page, which publishes a character JSON file as a template
 
-Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you.
+Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you. One account can publish up to 500 templates; past that, publishing another says so, and deleting one you no longer need makes room.
 
 **Editing one.** The pencil on one of your templates opens **Edit Template**, with the name and description at the top and the sheet below. **Save Details** saves the name and description and closes the dialog; the sheet's own **Save** saves the sheet, and the dialog stays open showing it. If the sheet has changes you haven't saved, closing the dialog asks first, and **Save Details** keeps it open so you can save them. A token picture chosen on the sheet is not used for a template, because a template's picture has to be a global asset (see the note below).
 

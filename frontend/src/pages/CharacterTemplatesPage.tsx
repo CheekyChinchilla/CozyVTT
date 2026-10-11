@@ -15,7 +15,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCharacterTemplatesQuery, storeCharacterInList } from '@/hooks/queries';
 import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
-import { GameSystem, type CharacterTemplate } from '@/types';
+import { GameSystem, type CharacterTemplate, type CharacterTemplateSummary } from '@/types';
 import { canModifyTemplate } from '@/utils/templatePermissions';
 import { GAME_SYSTEM_OPTIONS, GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
@@ -38,9 +38,10 @@ export default function CharacterTemplatesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editing, setEditing] = useState<CharacterTemplate | null>(null);
-  const [deleting, setDeleting] = useState<CharacterTemplate | null>(null);
+  const [deleting, setDeleting] = useState<CharacterTemplateSummary | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [usingId, setUsingId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const templatesQuery = useCharacterTemplatesQuery({
     search: search || undefined,
@@ -51,14 +52,28 @@ export default function CharacterTemplatesPage() {
   const templates = templatesQuery.data?.templates ?? [];
 
   /** Mirrors the server rule — see utils/templatePermissions. */
-  const canModify = (template: CharacterTemplate) => canModifyTemplate(user, template);
+  const canModify = (template: CharacterTemplateSummary) => canModifyTemplate(user, template);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['character-templates'] });
 
-  /** Copy a template into a character owned by the current user. */
-  const handleUse = async (template: CharacterTemplate) => {
-    setUsingId(template.id);
+  /** Open the editor on a template, fetched with its sheet: the list carries none. */
+  const handleEdit = async (summary: CharacterTemplateSummary) => {
+    setOpeningId(summary.id);
     try {
+      setEditing(await api.getCharacterTemplate(summary.id));
+    } catch {
+      showToast('Failed to open the template', 'error');
+    } finally {
+      setOpeningId(null);
+    }
+  };
+
+  /** Copy a template into a character owned by the current user. */
+  const handleUse = async (summary: CharacterTemplateSummary) => {
+    setUsingId(summary.id);
+    try {
+      // The list carries no sheets, so the template is fetched with its own.
+      const template = await api.getCharacterTemplate(summary.id);
       const created = await api.createCharacter({
         name: template.name,
         gameSystem: template.gameSystem ?? undefined,
@@ -262,7 +277,8 @@ export default function CharacterTemplatesPage() {
                   {canModify(template) && (
                     <>
                       <Button
-                        onClick={() => setEditing(template)}
+                        onClick={() => handleEdit(template)}
+                        loading={openingId === template.id}
                         variant="secondary"
                         iconOnly
                         aria-label={`Edit ${template.name}`}

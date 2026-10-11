@@ -21,6 +21,7 @@ const showToast = vi.fn();
 const updateCharacterTemplate = vi.fn();
 const uploadAsset = vi.fn();
 const listCharacterTemplates = vi.fn();
+const getCharacterTemplate = vi.fn();
 
 vi.mock('@/hooks/queries', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/hooks/queries')>()),
@@ -37,6 +38,7 @@ vi.mock('@/services/api', () => {
     updateCharacterTemplate: (id: string, body: unknown) => updateCharacterTemplate(id, body),
     uploadAsset: (form: FormData) => uploadAsset(form),
     listCharacterTemplates: (params: unknown) => listCharacterTemplates(params),
+    getCharacterTemplate: (id: string) => getCharacterTemplate(id),
   };
   return { default: api, api };
 });
@@ -115,7 +117,10 @@ describe('Edit Template', () => {
 
   it('stays open with unsaved sheet edits after Save Details', async () => {
     updateCharacterTemplate.mockResolvedValue(template('PATHFINDER_2E'));
-    listCharacterTemplates.mockResolvedValue({ templates: [template('PATHFINDER_2E')] });
+    // The list carries no sheets; Edit fetches the template with its own.
+    const { data: _sheet, ...summary } = template('PATHFINDER_2E');
+    listCharacterTemplates.mockResolvedValue({ templates: [summary] });
+    getCharacterTemplate.mockResolvedValue(template('PATHFINDER_2E'));
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <MemoryRouter>

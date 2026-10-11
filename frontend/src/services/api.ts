@@ -34,6 +34,7 @@ import type {
   Token,
   CreatureTemplate,
   CharacterTemplate,
+  CharacterTemplateSummary,
   TokenTemplate,
   CampaignImportPreview,
   CampaignImportResult,
@@ -1066,7 +1067,8 @@ class ApiClient {
     mine?: boolean;
     limit?: number;
     offset?: number;
-  }): Promise<{ templates: CharacterTemplate[]; total: number; limit: number; offset: number }> {
+  }): Promise<{ templates: CharacterTemplateSummary[]; total: number; limit: number; offset: number }> {
+    // The list carries no sheets; getCharacterTemplate fetches one with its sheet.
     const response = await this.client.get('/api/character-templates', { params });
     return response.data;
   }
