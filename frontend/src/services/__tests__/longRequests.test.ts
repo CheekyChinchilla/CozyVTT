@@ -12,12 +12,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { AxiosInstance } from 'axios';
 import { api } from '@/services/api';
-import nginxConf from '../../../../nginx/nginx.conf?raw';
+import nginxLocations from '../../../../nginx/locations.conf?raw';
 
-/** The proxy_read_timeout the bundled nginx gives a location, in milliseconds. */
+/** The proxy_read_timeout the bundled nginx gives a location (nginx/locations.conf, which every server includes), in milliseconds. */
 function proxyTimeoutMs(location: string): number {
-  const block = new RegExp(`\\n\\s*location ${location.replace(/\//g, '\\/')} \\{([^}]*)\\}`).exec(nginxConf);
-  if (!block) throw new Error(`nginx.conf has no location ${location}; update this test with the file`);
+  const block = new RegExp(`\\n\\s*location ${location.replace(/\//g, '\\/')} \\{([^}]*)\\}`).exec(nginxLocations);
+  if (!block) throw new Error(`nginx/locations.conf has no location ${location}; update this test with the file`);
   const seconds = /proxy_read_timeout\s+(\d+)s;/.exec(block[1]);
   if (!seconds) throw new Error(`location ${location} sets no proxy_read_timeout`);
   return Number(seconds[1]) * 1000;

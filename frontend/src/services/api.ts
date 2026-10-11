@@ -1384,7 +1384,7 @@ async function refusalFrom(response: Response): Promise<Error> {
 }
 
 // Export singleton instance
-/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/nginx.conf). */
+/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/locations.conf). */
 const LONG_ADMIN_REQUEST_MS = 600_000;
 
 export const api = new ApiClient();
