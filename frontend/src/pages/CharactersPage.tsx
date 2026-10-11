@@ -11,7 +11,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { Plus, LogOut, Loader2, RefreshCw, Upload } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import characterService from '@/services/character.service';
-import { useCampaignsQuery, useCharactersQuery, queryKeys } from '@/hooks/queries';
+import { useCampaignsQuery, useCharactersQuery, queryKeys, toCharacterSummary } from '@/hooks/queries';
 import CharacterCard from '@/components/character/CharacterCard';
 import NewCharacterModal from '@/components/character/NewCharacterModal';
 import DeleteCharacterModal from '@/components/character/DeleteCharacterModal';
@@ -19,7 +19,7 @@ import AssignCharacterModal from '@/components/character/AssignCharacterModal';
 import ImportCharacterModal from '@/components/character/ImportCharacterModal';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 import EmptyState from '@/components/common/EmptyState';
-import type { Character, Campaign } from '@/types';
+import type { Character, CharacterSummary, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
 import { canEditCharacterIn } from '@/services/permissions';
@@ -36,7 +36,7 @@ export default function CharactersPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
-  const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
+  const [selectedCharacter, setSelectedCharacter] = useState<CharacterSummary | null>(null);
 
   // Server resources via react-query (shared cache with DashboardPage)
   const queryClient = useQueryClient();
@@ -56,13 +56,14 @@ export default function CharactersPage() {
     campaignsQuery.refetch();
   };
 
-  // Local cache mutations mirror the previous setState behavior
-  const setCharactersData = (updater: (prev: Character[]) => Character[]) => {
-    queryClient.setQueryData<Character[]>(queryKeys.characters, (prev) => updater(prev ?? []));
+  // Local cache mutations mirror the previous setState behavior. The list
+  // holds no sheets, as the server lists it.
+  const setCharactersData = (updater: (prev: CharacterSummary[]) => CharacterSummary[]) => {
+    queryClient.setQueryData<CharacterSummary[]>(queryKeys.characters, (prev) => updater(prev ?? []));
   };
 
   const handleCharacterCreated = (newCharacter: Character) => {
-    setCharactersData((prev) => [newCharacter, ...prev]);
+    setCharactersData((prev) => [toCharacterSummary(newCharacter), ...prev]);
     showSuccess('Character created successfully!');
     // Note: For now we just close the modal.
   };
@@ -73,25 +74,32 @@ export default function CharactersPage() {
   // step from the Edit button on the sheet — the same shape as opening a
   // character from the campaign roster, and it means glancing at your own
   // character can no longer drop you into a form you have to back out of.
-  const handleView = (character: Character) => {
-    setViewingCharacter(character);
+  //
+  // The list carries no sheets, so the sheet is fetched each time it opens,
+  // which also means it always shows the character as last saved.
+  const handleView = async (character: CharacterSummary) => {
+    try {
+      setViewingCharacter(await characterService.getCharacter(character.id));
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to open the character', 'error');
+    }
   };
 
-  const handleEdit = (character: Character) => {
+  const handleEdit = (character: CharacterSummary) => {
     navigate(`/characters/${character.id}/edit`);
   };
 
-  const handleCopy = async (character: Character) => {
+  const handleCopy = async (character: CharacterSummary) => {
     try {
       const copiedCharacter = await characterService.copyCharacter(character.id);
-      setCharactersData((prev) => [copiedCharacter, ...prev]);
+      setCharactersData((prev) => [toCharacterSummary(copiedCharacter), ...prev]);
       showSuccess(`${character.name} copied successfully`);
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to copy character', 'error');
     }
   };
 
-  const handleDeleteClick = (character: Character) => {
+  const handleDeleteClick = (character: CharacterSummary) => {
     setSelectedCharacter(character);
     setShowDeleteModal(true);
   };
@@ -105,7 +113,7 @@ export default function CharactersPage() {
     setSelectedCharacter(null);
   };
 
-  const handleAssignClick = (character: Character) => {
+  const handleAssignClick = (character: CharacterSummary) => {
     setSelectedCharacter(character);
     setShowAssignModal(true);
   };
@@ -125,16 +133,21 @@ export default function CharactersPage() {
 
     // Update character in list
     setCharactersData((prev) =>
-      prev.map((c) => (c.id === characterId ? updatedCharacter : c))
+      prev.map((c) => (c.id === characterId ? toCharacterSummary(updatedCharacter) : c))
     );
 
     setShowAssignModal(false);
     setSelectedCharacter(null);
   };
 
-  const handleExport = (character: Character) => {
-    characterService.exportCharacterJSON(character);
-    showSuccess(`Exported ${character.name}`);
+  // The sheet is fetched for the export, since the list carries none.
+  const handleExport = async (character: CharacterSummary) => {
+    try {
+      characterService.exportCharacterJSON(await characterService.getCharacter(character.id));
+      showSuccess(`Exported ${character.name}`);
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Failed to export the character', 'error');
+    }
   };
 
   const handleImport = async (data: { name: string; gameSystem: string | null; data: CharacterData }) => {
@@ -145,7 +158,7 @@ export default function CharactersPage() {
       gameSystem: data.gameSystem as import('@/types').GameSystem | null,
     });
 
-    setCharactersData((prev) => [importedCharacter, ...prev]);
+    setCharactersData((prev) => [toCharacterSummary(importedCharacter), ...prev]);
     showSuccess(`${data.name} imported successfully`);
   };
 
@@ -158,7 +171,7 @@ export default function CharactersPage() {
   };
 
   // Get campaign for a character
-  const getCharacterCampaign = (character: Character): Campaign | null => {
+  const getCharacterCampaign = (character: CharacterSummary): Campaign | null => {
     if (!character.campaignId) return null;
     return campaigns.find((c) => c.id === character.campaignId) || null;
   };
@@ -346,7 +359,7 @@ export default function CharactersPage() {
           campaign={getCharacterCampaign(viewingCharacter)}
           onClose={() => setViewingCharacter(null)}
           onCharacterChanged={(stored) =>
-            setCharactersData((prev) => prev.map((c) => (c.id === stored.id ? stored : c)))
+            setCharactersData((prev) => prev.map((c) => (c.id === stored.id ? toCharacterSummary(stored) : c)))
           }
         />
       )}

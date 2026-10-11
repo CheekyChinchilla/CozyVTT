@@ -5,7 +5,7 @@
 
 import { useState, useEffect } from 'react';
 import { Loader2, Link2, AlertCircle } from 'lucide-react';
-import type { Character, Campaign } from '@/types';
+import type { CharacterSummary, Campaign } from '@/types';
 import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { Button, Modal } from '@/components/ui';
@@ -14,7 +14,7 @@ import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface AssignCharacterModalProps {
   isOpen: boolean;
-  character: Character | null;
+  character: CharacterSummary | null;
   currentCampaign?: Campaign | null;
   onClose: () => void;
   onConfirm: (characterId: string, campaignId: string | null) => Promise<void>;

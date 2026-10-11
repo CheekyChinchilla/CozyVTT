@@ -7,6 +7,7 @@ import api from './api';
 import { downloadCharacterJSON } from '@/utils/character-export';
 import type {
   Character,
+  CharacterSummary,
   CreateCharacterRequest,
   UpdateCharacterRequest,
 } from '@/types';
@@ -20,9 +21,9 @@ export type { Character } from '@/types';
 
 class CharacterService {
   /**
-   * Get all characters owned by the current user
+   * Get all characters owned by the current user, without their sheets
    */
-  async getCharacters(): Promise<Character[]> {
+  async getCharacters(): Promise<CharacterSummary[]> {
     const response = await api.listCharacters();
     return response.characters;
   }

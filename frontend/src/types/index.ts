@@ -739,6 +739,14 @@ export interface Character {
 }
 
 /**
+ * A character as GET /api/characters lists it: everything but the sheet,
+ * which GET /api/characters/:id serves, plus the campaign it is in.
+ */
+export type CharacterSummary = Omit<Character, 'data'> & {
+  campaign?: { id: string; name: string } | null;
+};
+
+/**
  * Character data union type - supports all game systems
  * Import specific types from './game-systems' for type-safe access
  */

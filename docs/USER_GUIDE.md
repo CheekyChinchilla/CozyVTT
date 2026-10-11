@@ -255,6 +255,8 @@ From here you can:
 - From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign**, or unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
 - **Import** a character from a JSON file
 
+One account can have up to 1,000 characters, copies included. Past that, creating, copying or importing another says so; deleting one you no longer need makes room. A copy's name is the original's with " (Copy)" added, shortened if needed so the whole name stays within 200 characters.
+
 ### Creating a Character
 
 Click **Create Character** to open the character creation dialog. Choose your **Game System** first — this determines which character sheet you'll fill out.

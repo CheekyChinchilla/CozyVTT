@@ -17,6 +17,7 @@ import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
 import { GameSystem, type CharacterTemplate, type CharacterTemplateSummary } from '@/types';
 import { canModifyTemplate } from '@/utils/templatePermissions';
+import { apiErrorMessage } from '@/utils/errors';
 import { GAME_SYSTEM_OPTIONS, GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
 import EmptyState from '@/components/common/EmptyState';
@@ -83,8 +84,9 @@ export default function CharacterTemplatesPage() {
       storeCharacterInList(queryClient, created.character);
       showToast(`Created "${created.character.name}" from this template`, 'success');
       navigate(`/characters/${created.character.id}/edit`);
-    } catch {
-      showToast('Failed to create a character from this template', 'error');
+    } catch (err) {
+      // The server says why, such as an account already at its most characters.
+      showToast(apiErrorMessage(err) || 'Failed to create a character from this template', 'error');
     } finally {
       setUsingId(null);
     }

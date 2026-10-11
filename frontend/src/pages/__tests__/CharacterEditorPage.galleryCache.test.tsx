@@ -5,7 +5,8 @@
  * full-page editor saved without touching it. Back on the Characters page the
  * card, its sheet, its export and its editor all worked from the version
  * before the save, and an edit made from that old copy was refused as out of
- * date, which looked like the earlier save had been lost.
+ * date, which looked like the earlier save had been lost. The list now holds
+ * each character without its sheet, as the server lists it.
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
@@ -14,8 +15,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
 import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
-import { queryKeys } from '@/hooks/queries';
-import type { Character } from '@/types';
+import { queryKeys, toCharacterSummary } from '@/hooks/queries';
+import type { Character, CharacterSummary } from '@/types';
 
 const showToast = vi.fn();
 const auth = { user: { id: 'user-1', platformRole: 'USER' } };
@@ -56,7 +57,7 @@ function renderPage(client: QueryClient) {
 
 function clientHoldingList(): QueryClient {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
-  client.setQueryData<Character[]>(queryKeys.characters, [pf2eCharacter(), other]);
+  client.setQueryData<CharacterSummary[]>(queryKeys.characters, [toCharacterSummary(pf2eCharacter()), toCharacterSummary(other)]);
   return client;
 }
 
@@ -87,8 +88,8 @@ describe('the Characters page list after a full-page save', () => {
     fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(client.getQueryData<Character[]>(queryKeys.characters)?.[0]).toEqual(saved));
-    expect(client.getQueryData<Character[]>(queryKeys.characters)?.[1]).toEqual(other);
+    await waitFor(() => expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[0]).toEqual(toCharacterSummary(saved)));
+    expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[1]).toEqual(toCharacterSummary(other));
     expect(client.getQueryState(queryKeys.characters)?.isInvalidated).toBe(true);
   });
 
@@ -105,7 +106,7 @@ describe('the Characters page list after a full-page save', () => {
     fireEvent.change(name, { target: { value: 'Seelah the Bold' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(client.getQueryData<Character[]>(queryKeys.characters)?.[0]).toEqual(fresh));
+    await waitFor(() => expect(client.getQueryData<CharacterSummary[]>(queryKeys.characters)?.[0]).toEqual(toCharacterSummary(fresh)));
   });
 
   it('does not write the sheet to the browser console', async () => {

@@ -22,6 +22,7 @@ import type {
   CreateCampaignRequest,
   UpdateCampaignRequest,
   Character,
+  CharacterSummary,
   CreateCharacterRequest,
   UpdateCharacterRequest,
   Asset,
@@ -827,8 +828,9 @@ class ApiClient {
   // Characters
   // ============================================
 
-  async listCharacters(): Promise<{ characters: Character[] }> {
-    const response = await this.client.get<{ characters: Character[] }>('/api/characters');
+  /** The user's characters without their sheets; getCharacter fetches one with its sheet. */
+  async listCharacters(): Promise<{ characters: CharacterSummary[] }> {
+    const response = await this.client.get<{ characters: CharacterSummary[] }>('/api/characters');
     return response.data;
   }
 

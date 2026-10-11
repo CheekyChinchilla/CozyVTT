@@ -642,13 +642,17 @@ The counts are of what was created. Everything is held to what the app's own rou
 
 ### `GET /api/characters`
 
-List all characters owned by the authenticated user.
+List all characters owned by the authenticated user, newest first, each with
+its `campaign` (`{ id, name }` or null) and without its sheet: `data` is left
+out. `GET /api/characters/:id` returns one character with its sheet.
 
 ---
 
 ### `POST /api/characters`
 
-Create a new character.
+Create a new character. One account may own at most 1,000 characters, copies
+included; past that this answers `400` with "You already have 1000 characters,
+the most one account can. Delete one you no longer need to make room."
 
 **Request:**
 ```json

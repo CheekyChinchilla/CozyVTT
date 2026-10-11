@@ -4,23 +4,23 @@
 // ============================================
 
 import { memo, useState } from 'react';
-import type { Character, Campaign } from '@/types';
+import type { CharacterSummary, Campaign } from '@/types';
 import { User, Calendar, Link2, MoreVertical, Edit, Copy, Trash2, FileDown, Link as LinkIcon } from 'lucide-react';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface CharacterCardProps {
-  character: Character;
+  character: CharacterSummary;
   campaign?: Campaign | null;
   /** Clicking the card body — opens the sheet to read. */
-  onView: (character: Character) => void;
-  onEdit: (character: Character) => void;
+  onView: (character: CharacterSummary) => void;
+  onEdit: (character: CharacterSummary) => void;
   /** False hides Edit, for an owner who is a spectator in the character's campaign. */
   canEdit?: boolean;
-  onCopy: (character: Character) => void;
-  onDelete: (character: Character) => void;
-  onAssign: (character: Character) => void;
-  onExport: (character: Character) => void;
+  onCopy: (character: CharacterSummary) => void;
+  onDelete: (character: CharacterSummary) => void;
+  onAssign: (character: CharacterSummary) => void;
+  onExport: (character: CharacterSummary) => void;
 }
 
 function CharacterCardInner({

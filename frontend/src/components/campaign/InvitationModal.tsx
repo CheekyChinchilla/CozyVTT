@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react';
 import { Check, XCircle, Users } from 'lucide-react';
 import { api } from '@/services/api';
 import Toast, { useToast } from '@/components/Toast';
-import type { CampaignInvitation, Character } from '@/types';
+import type { CampaignInvitation, CharacterSummary } from '@/types';
 import { Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
@@ -24,7 +24,7 @@ export default function InvitationModal({
   onAccept,
   onDecline,
 }: InvitationModalProps) {
-  const [characters, setCharacters] = useState<Character[]>([]);
+  const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -39,7 +39,7 @@ export default function InvitationModal({
 
         // Unassigned characters the server will let join this campaign
         const compatible = response.characters.filter(
-          (char: Character) => !char.campaignId && systemsCompatible(char.gameSystem, invitation.campaign?.gameSystem)
+          (char: CharacterSummary) => !char.campaignId && systemsCompatible(char.gameSystem, invitation.campaign?.gameSystem)
         );
 
         setCharacters(compatible);
