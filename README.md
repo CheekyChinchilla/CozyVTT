@@ -16,7 +16,7 @@ A self-hosted, browser-based Virtual Tabletop (VTT) platform. Designed for ease 
 
 CozyVTT is a self-hosted, community-maintained project run **by you** on **your hardware**. It is provided as-is, with no warranty, no SLA, and no central support — see the [AGPL-3.0 License](LICENSE) for the legal version of this.
 
-**You are responsible for the security and uptime of your instance.** We do our best (Argon2id passwords, MFA, magic-byte file validation, per-endpoint rate limiting, security headers on the app page, non-root Docker containers — the full list is under [Features → Security](#security)), but the operating environment is yours.
+**You are responsible for the security and uptime of your instance.** We do our best (Argon2id passwords, MFA, magic-byte file validation, per-endpoint rate limiting, security headers on the app page, a backend that runs as an unprivileged user — the full list is under [Features → Security](#security)), but the operating environment is yours.
 
 **Recommended deployment posture** for a public-facing instance:
 
@@ -99,7 +99,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Per-endpoint rate limiting** — global API limit, strict auth limit, asset upload limit (configurable via `ASSET_UPLOAD_RATE_LIMIT`), a limit on campaign invitation emails per DM, and per-account limits on everything sent to the live table, set far above what a game sends
 - **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use
 - **WebSocket campaign isolation** — server-authenticated campaign membership; no client-spoofing
-- **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs
+- **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs. In the two nginx containers the master process runs as root, as nginx's own image does, and the worker processes that handle requests run as the unprivileged `nginx` user. Every container runs with `no-new-privileges`, and the one serving the app's files has a read-only filesystem
 - **Production refuses to start** with a placeholder `SESSION_SECRET` or `DATABASE_PASSWORD`
 - See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy
 

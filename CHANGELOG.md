@@ -17,7 +17,7 @@ git pull origin main
 docker compose up -d --build
 ```
 
-There is no database change and no new required setting. Nothing you have stored is rewritten. The nginx container is recreated, because this release changes `docker-compose.yml` and `nginx/nginx.conf`, and the backend and frontend are rebuilt and recreated as in every release. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch.
+There is no database change and no new required setting. Nothing you have stored is rewritten. All four containers are recreated, because `docker-compose.yml` changes each of them: every container gets Docker's `no-new-privileges` option, the frontend container's files become read-only, the backend is given longer to stop, and nginx moves to its stable 1.30 releases with a reworked `nginx/nginx.conf`. Your campaigns, uploads and backups are kept in a volume and in folders that the recreation does not touch.
 
 If you have edited `docker-compose.yml`, `git pull` stops at it because this release changes it. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml).
 
@@ -285,6 +285,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 - **The development stack, `docker-compose.dev.yml`, now opens its ports to the computer it runs on and no one else.** Its database, backend and frontend ports were open on every network interface, though the development guide said they were local, so on a server the database could be reached from other machines. It also runs in development mode whatever `.env` says, as the guide describes; with the `NODE_ENV=production` line `.env.example` ships, it ran in production mode. The production stack is not affected. To open the dev stack from another device on your network, see [Local Setup (With Docker)](docs/DEVELOPMENT.md#local-setup-with-docker).
 
 - **The bundled nginx believes a visitor's address, and whether they used HTTPS, only from proxies you list.** It believed the `X-Forwarded-For` header from any private address, and Docker hands nginx a visitor who connects over IPv6 from one, so such a visitor could get round the sign-in limits. `X-Forwarded-Proto` was believed from anyone. Both headers are now believed only from nginx's own container and from the addresses in the new optional `NGINX_TRUSTED_PROXIES` setting in `.env`. If a tunnel or proxy passes visitors to the bundled nginx, add its line, as [Visitor addresses and sign-in limits](docs/DEPLOYMENT.md#visitor-addresses-and-sign-in-limits) shows.
+
+- **Every container now runs with Docker's `no-new-privileges` option, the container that serves the app's files is read-only, and neither nginx names its version.** Nothing inside a container can gain privileges through a program marked to run as another user, and the frontend container can no longer change its own files. The README said CozyVTT runs non-root containers; only the backend drops to an unprivileged user, and the two nginx containers run their master process as root, as nginx's own image does, with the processes that handle requests unprivileged. The README now says so.
 
 ## [1.5.1] - 2026-10-10
 

@@ -41,6 +41,9 @@ services:
     container_name: cozyvtt-database
     logging: *logging
     restart: unless-stopped
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-cozyvtt}
       POSTGRES_USER: ${DATABASE_USER:-cozyvtt}
@@ -71,6 +74,9 @@ services:
     # for example, is let finish for up to ten minutes; with none running the
     # backend stops in a few seconds.
     stop_grace_period: 10m30s
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       database:
         condition: service_healthy
@@ -151,6 +157,19 @@ services:
     container_name: cozyvtt-frontend
     logging: *logging
     restart: unless-stopped
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
+    # It only serves the built app, so its files are read-only, apart from
+    # nginx's pid file and scratch folders, held in memory. The proxy is not
+    # read-only: it renders its configuration when it starts, and keeps large
+    # uploads and downloads on disk as they pass. Nor is the backend, which
+    # writes a backup's database dump to /tmp.
+    read_only: true
+    tmpfs:
+      - /run
+      - /var/cache/nginx
+      - /tmp
     depends_on:
       - backend
     expose:
@@ -169,6 +188,9 @@ services:
     container_name: cozyvtt-nginx
     logging: *logging
     restart: unless-stopped
+    # Nothing in the container can gain privileges through a setuid program.
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       - frontend
       - backend

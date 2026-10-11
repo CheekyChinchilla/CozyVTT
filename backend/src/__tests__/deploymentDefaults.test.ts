@@ -25,6 +25,13 @@
  * backend gives (map tokens, walls, lights, fog, the roster) went out
  * uncompressed, which a phone on mobile data feels most. It now compresses
  * text on the way out, and leaves its version out of its answers.
+ *
+ * Hardening. Every container runs with no-new-privileges, so nothing in it
+ * can gain privileges through a setuid program; the start scripts that drop
+ * from root to an unprivileged user (the backend's, Postgres's, nginx's) do
+ * not need any. The frontend container, which only serves files, runs on a
+ * read-only filesystem with memory-backed folders for nginx's own scratch
+ * files. The README says what runs as root, and no more.
  */
 
 import fs from 'fs';
@@ -134,5 +141,25 @@ describe('the bundled nginx', () => {
 
   it('does not name its version', () => {
     expect(setting('server_tokens')).toBe('off');
+  });
+});
+
+describe('the containers', () => {
+  it.each(['database', 'backend', 'frontend', 'nginx'])('run %s with no-new-privileges', (name) => {
+    expect(service('docker-compose.yml', name)).toMatch(/\n {4}security_opt:\n {6}- no-new-privileges:true\n/);
+  });
+
+  it('give the frontend a read-only filesystem, with room for the files nginx writes as it runs', () => {
+    const frontend = service('docker-compose.yml', 'frontend');
+    expect(frontend).toMatch(/\n {4}read_only: true\n/);
+    const tmpfs = /\n {4}tmpfs:\n((?: {6}- .*\n)+)/.exec(frontend)?.[1] ?? '';
+    // Its pid file, and the folders it keeps request bodies and proxied answers in.
+    expect([...tmpfs.matchAll(/- (\S+)/g)].map((m) => m[1])).toEqual(expect.arrayContaining(['/run', '/var/cache/nginx']));
+  });
+
+  it('are described in the README as they run: only the backend is said to drop to an unprivileged user', () => {
+    const readme = read('README.md');
+    expect(readme).not.toMatch(/non-root Docker containers/i);
+    expect(readme).toMatch(/master process runs as root/);
   });
 });
