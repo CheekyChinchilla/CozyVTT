@@ -432,3 +432,41 @@ describe('the schema documents in backend/prisma', () => {
     expect(read('backend/prisma/README.md')).toContain(`only ${accepted.join(' / ')} are accepted from clients`);
   });
 });
+
+describe('backend/DATABASE_MIGRATIONS.md', () => {
+  const doc = read('backend/DATABASE_MIGRATIONS.md');
+  const migrations = fs
+    .readdirSync(path.join(root, 'backend/prisma/migrations'), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  // A migration that changes rows runs by itself on upgrade, which the page's
+  // table of data scripts, run by hand, could be read to deny. The one that
+  // rewrites every map's lights was not named anywhere.
+  it('names every migration that changes rows, and says it runs by itself', () => {
+    const changesRows = migrations.filter((name) =>
+      /^\s*(UPDATE|DELETE FROM|INSERT INTO)\b/im.test(read(`backend/prisma/migrations/${name}/migration.sql`))
+    );
+    expect(changesRows.length).toBeGreaterThan(0);
+    expect(changesRows.filter((name) => !doc.includes(name))).toEqual([]);
+    expect(doc).toMatch(/run by themselves|runs by itself|run automatically/);
+  });
+
+  // `docker compose down -v` deletes the database volume. It sat under
+  // Troubleshooting, in a file the deployment guide sends self-hosters to.
+  it('shows a reset that deletes the database only under a development-only warning', () => {
+    const resets = [...doc.matchAll(/down -v/g)].map((m) => doc.slice(Math.max(0, m.index - 700), m.index));
+    expect(resets.length).toBeGreaterThan(0);
+    expect(resets.filter((before) => !/development only/i.test(before))).toEqual([]);
+  });
+
+  it('spells the Compose command the current way', () => {
+    expect(doc).not.toMatch(/docker-compose (?!\.)/);
+  });
+
+  it('gives the command to run each data script in the production image', () => {
+    const scripts = [...read('backend/package.json').matchAll(/"[\w:-]+": "ts-node src\/scripts\/([\w-]+)\.ts"/g)].map((m) => m[1]);
+    expect(scripts.length).toBeGreaterThan(0);
+    expect(scripts.filter((name) => !doc.includes(`dist/scripts/${name}.js`))).toEqual([]);
+  });
+});

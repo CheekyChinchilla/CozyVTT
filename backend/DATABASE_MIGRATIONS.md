@@ -67,6 +67,13 @@ about; the list is not exhaustive.
 - `20260211043730_add_system_settings` - System settings table for setup wizard
 - `20260215000000_add_password_reset` - Password reset tokens
 - `20260220041038_add_game_system_support` - Game system support for characters
+- `20260417000000_migrate_light_bright_dim` - Rewrites the `lights` of every map
+  from the old radius-and-intensity form to a bright radius and a dim radius
+  (bright is half the old radius, dim is the old radius, so the area lit stays
+  the same). This one changes rows, and like every migration it runs by itself
+  when the backend starts. It is safe to run twice: it touches only a light that
+  still has a `radius` and no `brightRadius`, so lights already in the new form
+  are left alone.
 - `20260902204427_add_personal_notes` - `PersonalNote` table for per-user
   Markdown notes. Purely additive: one `CREATE TABLE` with two foreign keys and
   an index, and no `ALTER` on any existing table, so upgrading cannot touch
@@ -102,18 +109,20 @@ about; the list is not exhaustive.
 Some changes move data around inside the JSON columns rather than altering the
 schema. Prisma does not run these — they are scripts you run once, by hand, and
 they are safe to run again. Each ends with exit status 0 when it succeeds and 1
-when it fails, so a wrapper can tell the two apart.
+when it fails, so a wrapper can tell the two apart. (A data change that is small
+and safe to repeat is sometimes a SQL migration instead, and then it runs by
+itself like any other: see `20260417000000_migrate_light_bright_dim` above.)
 
-| Script | What it does |
-|---|---|
-| `npm run migrate:sheet-fields` | Moves character sheets onto the fields the app reads. See below. |
-| `npm run migrate:characters` | Guesses a game system for characters stored before game systems existed. Not for a current instance; see below. |
-| `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. |
-| `npm run validate:characters` | Changes nothing. Lists the characters the server would refuse when next saved. See below. |
+| Script | What it does | In the production image |
+|---|---|---|
+| `npm run migrate:sheet-fields` | Moves character sheets onto the fields the app reads. See below. | `docker compose exec backend node dist/scripts/migrate-sheet-fields.js` |
+| `npm run migrate:characters` | Guesses a game system for characters stored before game systems existed. Not for a current instance; see below. | `docker compose exec backend node dist/scripts/migrate-characters.js` |
+| `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. | `docker compose exec backend node dist/scripts/migrate-avatar-scope.js` |
+| `npm run validate:characters` | Changes nothing. Lists the characters the server would refuse when next saved. See below. | `docker compose exec backend node dist/scripts/validate-characters.js` |
 
-The `npm run` forms need a development checkout. In the production image run
-the compiled file instead, as shown for `migrate:sheet-fields` below:
-`node dist/scripts/<name>.js` with the same options.
+The `npm run` forms run the TypeScript source and need a development checkout.
+In the production image, which has no source and no `ts-node`, run the compiled
+file shown in the last column, with the same options.
 
 ### `migrate:sheet-fields`
 
@@ -238,23 +247,34 @@ If you see errors like "The table `public.SystemSettings` does not exist", it me
 **Solution:**
 ```bash
 # Stop all containers
-docker-compose down
+docker compose down
 
 # Rebuild and restart (migrations will run automatically)
-docker-compose up --build
+docker compose up --build
 
 # Or run migrations manually:
 docker exec -it cozyvtt-backend npx prisma migrate deploy
 ```
 
-### Migration Conflicts
+### A migration fails on an instance with real data
 
-If you have migration conflicts (usually during development), you may need to reset the database:
+Do not reset anything. Each migration runs as a single step, so a failed one
+normally leaves your data as it was. Take the last lines of `docker compose logs backend` and the output of
+`docker exec -it cozyvtt-backend npx prisma migrate status`, and open an issue
+with both. If you have to get back to a working instance first, restore the last
+backup (see [Database Backups](../docs/DEPLOYMENT.md#database-backups)).
+
+### Migration conflicts (development only)
+
+> **Development only. This deletes the database.** `down -v` removes the database
+> volume, and every campaign, character and account with it. Never run it on an
+> instance whose data you want. For that, restore a backup as described above.
+
+If you have migration conflicts on a development database you can throw away, you may need to reset it:
 
 ```bash
-# WARNING: This will delete all data!
-docker-compose down -v  # Remove volumes
-docker-compose up --build  # Fresh start with migrations
+docker compose down -v  # Remove volumes
+docker compose up --build  # Fresh start with migrations
 ```
 
 ### Checking Migration Status
