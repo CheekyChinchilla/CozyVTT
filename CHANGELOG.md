@@ -231,6 +231,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **The User Guide now covers the setup token and says how a token is moved.** The first-time setup steps did not mention the setup token the wizard asks for, and said the wizard ran "before anyone else can log in". Moving a token was described as dragging it, but the map picks a token up on one click and puts it down on the next, so a drag leaves it held until you click again. Shadowrun was said to be "on the roadmap"; it is now described as planned and not yet available.
 
+- **The Player Guide says how to move your token and no longer lists Shadowrun.** It described moving a token as dragging it, though the map picks a token up on one click and puts it down on the next. It also gave Shadowrun's initiative rule as if you could play it; you cannot choose Shadowrun yet.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.
