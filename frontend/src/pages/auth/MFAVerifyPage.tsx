@@ -259,9 +259,10 @@ export default function MFAVerifyPage() {
                   // Allow alphanumeric and dashes
                   let value = e.target.value.replace(/[^a-zA-Z0-9-]/g, '');
 
-                  // Auto-format with dash after 4 characters
-                  if (value.length === 4 && !value.includes('-')) {
-                    value = value + '-';
+                  // The dash goes in once a fifth character is typed. Adding
+                  // it at four put it back as soon as Backspace removed it.
+                  if (value.length > 4 && !value.includes('-')) {
+                    value = `${value.slice(0, 4)}-${value.slice(4)}`;
                   }
 
                   setBackupCode(value);

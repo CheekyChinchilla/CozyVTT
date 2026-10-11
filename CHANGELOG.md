@@ -76,6 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Sign-up, sign-in and the two-factor code page say why they refused.** They showed the reply's short label, such as "Registration Failed", "Authentication Failed" or "Invalid Code", in place of the sentence that explains it. Sign-up now says, for example, "Email already registered", and the code page says "Your sign-in timed out at the code step. Sign in again with your password." once the five minutes have passed.
 
+- **A backup code mistyped at sign-in can be corrected with Backspace.** The backup-code box added its dash as soon as it held four characters, so Backspace put the dash straight back and the box could not be cleared below "ABCD-" without selecting the text. The dash now goes in when the fifth character is typed.
+
 ### Security
 
 - **A sign-in ends 30 days after it was made, and an account keeps at most 20 sign-ins.** A sign-in lasted for as long as it kept making requests, and the campaign page makes one every ten minutes while a tab is open, so a tab left open on a shared computer, or a **Remember me** cookie used once a month, kept a sign-in alive for ever. Every sign-in now ends 30 days after it was made (`REMEMBER_ME_MAX_AGE` if you changed it), with the message "Your sign-in has reached its 30-day limit. Sign in again.", and live table connections end with it. Each sign-in also removes the account's oldest sign-ins beyond 20, so a script signing in over and over cannot fill the database with sessions; the Admin Panel's **Activity** tab asks the database who is online instead of loading every session.
