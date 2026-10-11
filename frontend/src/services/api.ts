@@ -891,6 +891,11 @@ class ApiClient {
     return response.data;
   }
 
+  // TODO(assets): this upload has the shared 30-second timeout, which counts
+  // the upload itself, so a 50 MB map picture or PDF on a connection slower
+  // than about 14 Mbit/s is cut off with "Failed to upload asset". Nothing
+  // queues on the server here; it should have no limit of its own, like the
+  // UVTT and campaign imports, leaving the proxy to bound it.
   async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
@@ -991,10 +996,16 @@ class ApiClient {
     if (gridSize) formData.append('gridSize', String(gridSize));
     if (options?.confirm) formData.append('confirm', 'true');
     if (options?.includeObjectWalls) formData.append('includeObjectWalls', 'true');
+    // Once the upload has arrived, the server answers within 50 seconds: an
+    // import waits up to 20 for its turn behind other DMs' imports and runs
+    // for up to 30, and reaching either limit answers 503 saying which. A
+    // limit of the page's own would count the upload too and give up before
+    // that answer, so there is none; the bundled nginx allows the answer 60
+    // seconds.
     const response = await this.client.post(
       `/api/campaigns/${campaignId}/maps/import-uvtt`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 },
     );
     return response.data;
   }
