@@ -9,12 +9,13 @@
     "dev": "vite",
     "build": "vite build",
     "build:analyze": "ANALYZE=true vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p e2e",
     "preview": "vite preview",
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
@@ -33,6 +34,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

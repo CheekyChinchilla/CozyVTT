@@ -397,6 +397,26 @@ npm run test:coverage     # Generate coverage report
 
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
 
+### Browser smoke tests (Playwright)
+
+`frontend/e2e/` holds a handful of end-to-end tests that drive a real browser
+(Chromium, at a desktop and a phone size) through a running instance: the
+setup wizard on a fresh one, signing in and out, creating a campaign and
+opening it with its live connection, and nothing wider than the screen on a
+phone. CI runs them against the production stack it has just built. To run
+them yourself, start an instance, then from `frontend/`:
+
+```bash
+npx playwright install chromium     # once, to fetch the browser
+E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run test:e2e
+```
+
+The first test finishes the setup wizard, so point them at an instance you
+can throw away; on one already set up, it is skipped and the others sign in
+as `E2E_ADMIN_EMAIL` with `E2E_ADMIN_PASSWORD`. The settings are listed in
+`frontend/e2e/instance.ts`. One test checks the page's security headers and
+runs only with `E2E_PRODUCTION=1`, since the development server sends none.
+
 ### Checking sign-in by hand
 
 The automated suites cover sign-in from both ends: the backend's route tests
@@ -563,7 +583,8 @@ also does what self-hosters run and a developer usually does not:
 - **Collects test coverage** in both projects and shows it in the job
   summary, per folder under `src/`. A report only: no threshold fails yet.
 - **Builds both production images** with `docker compose build`, after
-  reading `docker-compose.yml` with the example settings.
+  reading `docker-compose.yml` with the example settings, then starts the
+  stack and runs the browser smoke tests against it (below).
 - **Checks the bundled nginx's configuration** with
   `python3 scripts/nginx-check.py`: it renders `nginx/nginx.conf` with the
   image's own entrypoint, the environment and mounts `docker-compose.yml`

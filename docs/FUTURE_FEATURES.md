@@ -326,8 +326,8 @@ _Nothing at present._
   nobody here runs. Note also that `base` is **build-time**, so the runtime env
   var the issue asked for cannot do it, and the path would end up recorded in
   four or five places that fail as a blank page whenever two disagree. Roughly
-  4-6 days including a browser test harness the project does not have and would
-  then maintain. **Revisit if** more people ask, or if asset storage is reworked
+  4-6 days including browser tests of the prefixed layout on top of the smoke
+  tests in `frontend/e2e/`. **Revisit if** more people ask, or if asset storage is reworked
   for another reason — the prerequisite is storing bare UUIDs rather than URLs,
   for which `extractAssetId` already exists on both sides and
   `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite
