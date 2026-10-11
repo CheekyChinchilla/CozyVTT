@@ -17,6 +17,7 @@ import CreateCampaignModal from '@/components/CreateCampaignModal';
 import CampaignImportDialog from '@/components/campaign/CampaignImportDialog';
 import InvitationModal from '@/components/campaign/InvitationModal';
 import CampaignCardSkeleton from '@/components/skeletons/CampaignCardSkeleton';
+import LeftCampaignNotes from '@/components/LeftCampaignNotes';
 import type { Campaign, CampaignInvitation } from '@/types';
 import { CampaignRole, PlatformRole } from '@/types';
 import Button from '@/components/ui/Button';
@@ -58,6 +59,7 @@ export default function DashboardPage() {
     campaignsQuery.refetch();
     charactersQuery.refetch();
     invitationsQuery.refetch();
+    queryClient.invalidateQueries({ queryKey: queryKeys.leftCampaigns });
   };
 
   const handleCampaignCreated = (newCampaign: Campaign) => {
@@ -511,6 +513,9 @@ export default function DashboardPage() {
               </div>
             )}
           </section>
+
+          {/* Notes and saved rolls from campaigns the user was removed from */}
+          <LeftCampaignNotes />
 
           {/* Campaign Stats (if campaigns exist) */}
           {!loading && campaigns.length > 0 && (

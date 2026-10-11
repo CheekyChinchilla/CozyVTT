@@ -111,6 +111,8 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 *Screenshot pending — Campaign card grid with status indicators.*
 
+**Notes From Campaigns You Have Left** — Shown only if a DM has removed you from a campaign in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
+
 **Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
 ### Creating a New Campaign

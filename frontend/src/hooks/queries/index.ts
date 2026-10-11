@@ -29,6 +29,7 @@ export const queryKeys = {
   characterTemplates: (params: CharacterTemplateListParams) =>
     ['character-templates', params] as const,
   serverConfig: ['server-config'] as const,
+  leftCampaigns: ['left-campaigns'] as const,
 };
 
 /**
@@ -50,6 +51,14 @@ export function useCampaignsQuery() {
   return useQuery({
     queryKey: queryKeys.campaigns,
     queryFn: () => campaignService.getCampaigns(),
+  });
+}
+
+/** Campaigns the user has left that still hold their notes or dice macros. */
+export function useLeftCampaignsQuery() {
+  return useQuery({
+    queryKey: queryKeys.leftCampaigns,
+    queryFn: async () => (await api.listLeftCampaigns()).campaigns,
   });
 }
 

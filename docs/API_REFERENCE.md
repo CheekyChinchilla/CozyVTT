@@ -368,6 +368,19 @@ a body changing neither is refused so a mistake is visible. A new expression is
 checked exactly as it was on creation, so an edit cannot leave a macro
 unrollable.
 
+
+### `GET /api/campaigns/left` and `GET /api/campaigns/left/:campaignId`
+
+Removing a member keeps their personal notes and dice macros, but the notes and
+macros routes above answer only members. `GET /api/campaigns/left` lists the
+campaigns you are no longer in and still have notes or macros in, by name, each
+with your note titles (newest edit first, no text) and your macros.
+`GET /api/campaigns/left/:campaignId` returns `campaign` (`id`, `name`), your
+`notes` with their `content`, and your `macros` in one campaign, and answers
+`404` ("You have no notes or dice macros in that campaign") where you have none.
+Both are read only and return nothing of anyone else's. Deleting the campaign
+deletes the notes and macros.
+
 ### `GET|POST /api/campaigns/:campaignId/documents`
 
 The rulebooks and handouts a campaign's members can read. **`GET` requires

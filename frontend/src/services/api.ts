@@ -49,6 +49,8 @@ import type {
   AdminBackup,
   OrphanedFilesReport,
   OrphanedFilesDeletion,
+  LeftCampaignSummary,
+  LeftCampaignDetail,
   AppearanceSettings,
   UserPreferences,
   ServerConfig,
@@ -692,6 +694,18 @@ class ApiClient {
 
   async deleteNote(campaignId: string, noteId: string): Promise<{ message: string }> {
     const response = await this.client.delete(`/api/campaigns/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
+
+  /** Campaigns the caller has left that still hold their notes or dice macros. */
+  async listLeftCampaigns(): Promise<{ campaigns: LeftCampaignSummary[] }> {
+    const response = await this.client.get('/api/campaigns/left');
+    return response.data;
+  }
+
+  /** The caller's notes, with their text, and dice macros in one campaign they have left. */
+  async getLeftCampaign(campaignId: string): Promise<LeftCampaignDetail> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}`);
     return response.data;
   }
 

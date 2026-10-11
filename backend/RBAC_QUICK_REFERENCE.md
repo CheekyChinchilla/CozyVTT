@@ -587,6 +587,20 @@ is not sent the old campaign's view under its new role.
 REST needs no equivalent for campaign roles; its middleware reads the membership
 per request. Platform role is a different matter, see below.
 
+### A removed member's own notes and macros
+
+Removing a member deletes none of their `PersonalNote` or `DiceMacro` rows, and
+every notes and macros route asks for membership. Two read-only routes, guarded
+by `authenticated` alone, let the author still read their own:
+`GET /api/campaigns/left` lists the campaigns the caller has no membership in
+and still has notes or macros in, and `GET /api/campaigns/left/:campaignId`
+returns their notes, with text, and macros in one campaign
+(`routes/leftCampaigns.ts`). Every query is scoped to the session's user id; the
+second answers `404` where the caller has none, member or not, so it reveals
+nothing about a campaign they were never in. Nothing lets a non-member change
+them. Rejoining puts them back behind the member routes, and deleting the
+campaign cascades them away.
+
 ---
 
 ## Error Response Format

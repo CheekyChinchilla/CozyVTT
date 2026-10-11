@@ -3380,6 +3380,130 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/campaigns/left:
+    get:
+      tags:
+        - Notes
+      summary: List your notes and dice macros from campaigns you have left
+      description: >-
+        The campaigns the caller is no longer a member of and still has
+        personal notes or dice macros in, sorted by name. Removing a member
+        deletes neither, but the notes and macros routes ask for membership,
+        so this is how a removed player reads their own. Each campaign carries
+        the titles of the caller's notes (most recently edited first, no
+        `content`) and their macros (oldest first). Only the caller's own are
+        ever listed. A campaign they are in again is not listed, and deleting
+        a campaign deletes its notes and macros, so it drops out of the list.
+      operationId: listLeftCampaignNotes
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Campaigns left, with your notes and macros in each
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaigns:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        notes:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/PersonalNoteSummary'
+                        macros:
+                          type: array
+                          items:
+                            $ref: '#/components/schemas/DiceMacro'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to fetch your notes
+
+  /api/campaigns/left/{campaignId}:
+    get:
+      tags:
+        - Notes
+      summary: Read your notes and dice macros in one campaign
+      description: >-
+        The caller's own notes, with their text, most recently edited first,
+        and dice macros, oldest first, in one campaign, with the campaign's id
+        and name. Read only: there is no route to change them while the caller
+        is not a member. Answers for any campaign the caller has notes or
+        macros in, whether or not they are a member now, and 404 where they
+        have none, so it says nothing about a campaign they were never in. A
+        campaign's notes can run to 200 of 100,000 characters each.
+      operationId: getLeftCampaignNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: Your notes and macros in that campaign
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  campaign:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                  notes:
+                    type: array
+                    items:
+                      allOf:
+                        - $ref: '#/components/schemas/PersonalNoteSummary'
+                        - type: object
+                          properties:
+                            content:
+                              type: string
+                              description: Markdown source, as typed.
+                  macros:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiceMacro'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: You have no notes or dice macros in that campaign, or it does not exist.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: You have no notes or dice macros in that campaign
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to fetch your notes
+
   /api/campaigns/{campaignId}/notes:
     get:
       tags:

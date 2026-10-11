@@ -61,6 +61,8 @@ const TESTED: Record<string, string> = {
   'GET /api/campaigns/:campaignId/notes/:noteId': 'routes/__tests__/personalNotes.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/notes/:noteId': 'routes/__tests__/personalNotes.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/notes/:noteId': 'routes/__tests__/personalNotes.e2e.test.ts',
+  'GET /api/campaigns/left': 'routes/__tests__/leftCampaignNotes.e2e.test.ts',
+  'GET /api/campaigns/left/:campaignId': 'routes/__tests__/leftCampaignNotes.e2e.test.ts',
   'GET /api/campaigns/:campaignId/sessions': 'routes/__tests__/sessionHistory.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/sessions/:sessionId/notes': 'routes/__tests__/sessionHistory.e2e.test.ts',
   'POST /api/campaigns/:campaignId/sessions': 'routes/__tests__/sessionResume.e2e.test.ts',

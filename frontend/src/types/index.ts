@@ -649,6 +649,24 @@ export interface PersonalNote extends PersonalNoteSummary {
 }
 
 /**
+ * A campaign the caller is no longer in and still has notes or dice macros
+ * in (GET /api/campaigns/left). Notes are titles only, newest edit first.
+ */
+export interface LeftCampaignSummary {
+  id: string;
+  name: string;
+  notes: PersonalNoteSummary[];
+  macros: DiceMacro[];
+}
+
+/** The caller's notes, with their text, and macros in one campaign (GET /api/campaigns/left/:campaignId). */
+export interface LeftCampaignDetail {
+  campaign: { id: string; name: string };
+  notes: PersonalNote[];
+  macros: DiceMacro[];
+}
+
+/**
  * A past session as the history list returns it.
  *
  * Deliberately without `savedState`: that is a large blob of token positions
