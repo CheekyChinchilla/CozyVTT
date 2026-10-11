@@ -11,8 +11,8 @@
 
 import { cleanDisplayName } from '../users';
 
-const ZWNJ = '‌';
-const ZWJ = '‍';
+const ZWNJ = '\u200C';
+const ZWJ = '\u200D';
 /** Man, woman, girl and boy, joined into one family emoji. */
 const FAMILY = `\u{1F468}${ZWJ}\u{1F469}${ZWJ}\u{1F467}${ZWJ}\u{1F466}`;
 /** Woman technologist with a medium skin tone. */
@@ -77,10 +77,10 @@ describe('cleanDisplayName removes joiners and tags anywhere else', () => {
   });
 
   it('removes a right-to-left override at the start of a name', () => {
-    expect(cleanDisplayName('‮Alice')).toBe('Alice');
+    expect(cleanDisplayName('\u202EAlice')).toBe('Alice');
   });
 
   it('still removes zero-width spaces, word joiners, byte-order marks and controls', () => {
-    expect(cleanDisplayName('Al​i⁠c﻿e\u0007⁦')).toBe('Alice');
+    expect(cleanDisplayName('Al\u200Bi\u2060c\uFEFFe\u0007\u2066')).toBe('Alice');
   });
 });
