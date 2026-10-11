@@ -26,13 +26,10 @@ type Project = 'frontend' | 'backend';
 /**
  * The licence of each production package whose lockfile entry records none.
  * Each declares it in the older `licenses` field of its package.json, which
- * npm does not copy into the lockfile, or, for pause, in its readme.
+ * npm does not copy into the lockfile.
  */
 const LICENCE_NOT_IN_LOCKFILE: Record<string, string> = {
   busboy: 'MIT',
-  pause: 'MIT',
-  'passport-local': 'MIT',
-  'passport-strategy': 'MIT',
   streamsearch: 'MIT',
   'xmlhttprequest-ssl': 'MIT',
 };

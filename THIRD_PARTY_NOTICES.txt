@@ -306,16 +306,6 @@ otplib 13.x
   https://github.com/yeojz/otplib
   With @noble/hashes and @scure/base, Copyright (c) 2022 Paul Miller (MIT)
 
-passport 0.7.x
-  Copyright (c) Jared Hanson
-  License: MIT
-  https://github.com/jaredhanson/passport
-
-passport-local 1.x
-  Copyright (c) Jared Hanson
-  License: MIT
-  https://github.com/jaredhanson/passport-local
-
 pg 8.x
   Copyright (c) Brian Carlson
   License: MIT
