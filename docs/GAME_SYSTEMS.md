@@ -62,7 +62,7 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | D&D 5e spell slots of one level: 0 to 20, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count |
 | D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
 
-A sheet stored before a limit existed still loads; its next save is refused, with the path of each field over a limit in `validationErrors`.
+A sheet stored before a limit existed still loads; its next save is refused, with the path of each field over a limit in `validationErrors`. Both places that save a sheet, the Character Editor page and the editor that opens over a sheet at the table or on the Characters page, turn that into one message through `refusedSaveMessage` in `frontend/src/utils/sheetSaveRefusal.ts`: "Not saved." and the first five paths with their reasons, then a count of the rest.
 
 ### A field only the DM sees: Keeper's Notes
 
