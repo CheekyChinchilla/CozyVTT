@@ -57,4 +57,6 @@ Decisions a self-hoster or a reviewer may want to know about. The deployment gui
 
 - **Dependencies.** Every push to the development and release branches checks the packages an instance runs against the published advisories (`npm audit`): a high or critical advisory in them fails the check. The developer tools (the test runners, the linter, the build tools) are checked too and reported without failing, since they never reach an instance. Dependabot proposes updates to the packages, to the Docker base images and to the CI actions each week. The CI actions are pinned to commits, so a tag moved upstream cannot change what runs. Turning on Dependabot alerts and security updates is a repository setting.
 
+- **Where the packages come from.** Both lockfiles take every package from the npm registry with a hash of its contents, and the images install with `npm ci`, which refuses a package that does not match its hash; a backend test fails if a lockfile entry points anywhere else or has no hash. A package may run a script while it installs only if its project's `package.json` names it under `allowScripts`: the Prisma packages, which fetch the database engines, argon2, which checks for its prebuilt binary, and a few developer tools.
+
 Known issues and deliberately deferred work are tracked in [docs/FUTURE_FEATURES.md](docs/FUTURE_FEATURES.md).

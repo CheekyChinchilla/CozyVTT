@@ -59,5 +59,9 @@
   },
   "engines": {
     "node": ">=26.0.0"
+  },
+  "allowScripts": {
+    "esbuild": true,
+    "fsevents": true
   }
 }

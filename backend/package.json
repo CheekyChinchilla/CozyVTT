@@ -85,5 +85,14 @@
   },
   "engines": {
     "node": ">=26.0.0"
+  },
+  "allowScripts": {
+    "@parcel/watcher": true,
+    "@prisma/client": true,
+    "@prisma/engines": true,
+    "argon2": true,
+    "fsevents": true,
+    "prisma": true,
+    "unrs-resolver": true
   }
 }

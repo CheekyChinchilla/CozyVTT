@@ -151,6 +151,16 @@ cd ../frontend
 npm install
 ```
 
+A package may run a script while it installs only if its project's
+`package.json` names it under `allowScripts`: the Prisma packages fetch the
+database engines that way, argon2 checks for its prebuilt binary, and a few
+developer tools set up their own binaries. npm warns about a package with a
+script that is not listed, and later npm versions skip the script. When a new
+dependency brings one, `npm install-scripts ls` names it; read what the script
+does, then add it with
+`npm install-scripts approve --no-allow-scripts-pin <package>`, or leave it
+out. `dependencySources.test.ts` fails until the list matches the lockfile.
+
 ### 2. Set up PostgreSQL
 
 Create a database and user:
