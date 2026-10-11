@@ -476,6 +476,10 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
       });
     }
   } catch (error) {
+    // TODO(accounts): only a known address reaches the token writes above, so
+    // a failure there (a full disk, a read-only database) answers 500 for
+    // known addresses and 200 for unknown ones, which tells them apart while
+    // it lasts. Log the failure and answer the same 200 as for any address.
     logger.error('Error in forgot-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
