@@ -692,3 +692,26 @@ describe('the dependency check SECURITY.md describes', () => {
     for (const step of tools) expect(step).toMatch(/continue-on-error:\s*true/);
   });
 });
+
+describe('the install-script list the guides describe', () => {
+  // npm 11, which builds the images and runs CI, still runs the install script
+  // of a package that allowScripts does not name, and prints a warning. It
+  // refuses one only when an .npmrc turns on strict-allow-scripts. Turning it
+  // on makes "still runs" untrue: change the guides in the same change.
+  const npmrcs = ['.npmrc', 'backend/.npmrc', 'frontend/.npmrc'].filter((rel) => fs.existsSync(path.join(root, rel)));
+  const paragraphs = ['SECURITY.md', 'docs/DEVELOPMENT.md'].flatMap((rel) =>
+    read(rel)
+      .split(/\n\s*\n/)
+      .filter((paragraph) => paragraph.includes('allowScripts'))
+      .map((paragraph) => ({ rel, text: paragraph.replace(/\s+/g, ' ') }))
+  );
+
+  it('say npm still runs the script of a package not on it, since no .npmrc tells npm to refuse one', () => {
+    expect(npmrcs.filter((rel) => /^\s*strict-allow-scripts\s*=\s*true\b/m.test(read(rel)))).toEqual([]);
+    expect(paragraphs.map(({ rel }) => rel).sort()).toEqual(['SECURITY.md', 'docs/DEVELOPMENT.md']);
+    for (const { rel, text } of paragraphs) {
+      expect(`${rel}: ${text}`).not.toMatch(/only if .*allowScripts/);
+      expect(`${rel}: ${text}`).toMatch(/still runs the script of a package/);
+    }
+  });
+});

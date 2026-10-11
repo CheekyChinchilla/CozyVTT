@@ -151,13 +151,13 @@ cd ../frontend
 npm install
 ```
 
-A package may run a script while it installs only if its project's
-`package.json` names it under `allowScripts`: the Prisma packages fetch the
-database engines that way, argon2 checks for its prebuilt binary, and a few
-developer tools set up their own binaries. npm warns about a package with a
-script that is not listed, and later npm versions skip the script. When a new
-dependency brings one, `npm install-scripts ls` names it; read what the script
-does, then add it with
+Each project's `package.json` names under `allowScripts` the packages that
+run a script while they install: the Prisma packages fetch the database engines
+that way, argon2 checks for its prebuilt binary, and a few developer tools set
+up their own binaries. npm 11 still runs the script of a package that is not
+listed and prints a warning naming it; later npm versions skip the script. When
+a new dependency brings one, `npm install-scripts ls` names it; read what the
+script does, then add it with
 `npm install-scripts approve --no-allow-scripts-pin <package>`, or leave it
 out. `dependencySources.test.ts` fails until the list matches the lockfile.
 
