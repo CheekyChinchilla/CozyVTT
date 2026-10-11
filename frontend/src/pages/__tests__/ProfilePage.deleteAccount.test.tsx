@@ -46,4 +46,20 @@ describe('the Delete Account confirmation', () => {
     expect(screen.getByText(/files you uploaded into a campaign and documents you shared into one stay there/)).toBeInTheDocument();
     expect(screen.getByText(/A personal file a campaign still uses stays on the server with no owner/)).toBeInTheDocument();
   });
+
+  // Templates and creatures outlive their author, and the confirmation did
+  // not say so, so someone deleting their account to remove what they wrote
+  // was not told these stay.
+  it('says the templates and creatures the person made stay', async () => {
+    render(
+      <MemoryRouter>
+        <ProfilePage />
+      </MemoryRouter>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+
+    expect(
+      screen.getByText(/Character templates you published stay in the shared library, and token templates and creatures you made stay in their campaigns/)
+    ).toBeInTheDocument();
+  });
 });

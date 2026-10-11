@@ -1253,7 +1253,10 @@ paths:
         campaign, stays. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
         null, and documents they shared into a campaign stay shared (the
-        share passes to the campaign's DM, or its owner).
+        share passes to the campaign's DM, or its owner). Character
+        templates they published, and token templates and creatures they
+        made, stay with no author; a creature's `createdById` keeps the
+        deleted user's id, since it is not linked to the user row.
 
         Only campaigns the user owns are checked. One whose DM seat another
         member holds passes to that DM. One where the user holds the DM seat,

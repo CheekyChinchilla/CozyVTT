@@ -926,6 +926,8 @@ export default function ProfilePage() {
                       and documents you shared into one stay there, no longer linked to you. A personal file a campaign
                       still uses stays on the server with no owner, and the campaign cannot show it again until an
                       administrator moves it there.
+                      Character templates you published stay in the shared library, and token templates and creatures
+                      you made stay in their campaigns, no longer linked to you; delete any you want gone first.
                       A campaign you own passes to whoever is running it as DM; one you run yourself has to be handed
                       to another DM, or deleted, first.
                     </p>
