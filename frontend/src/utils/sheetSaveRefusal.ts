@@ -3,8 +3,8 @@
  *
  * The server answers with one entry for each box it refused, naming the box
  * (`inventory`, `backstory`, `spellcasting.cantrips`) and the reason. Both
- * places that save a sheet, the full-page editor and the editor opened from a
- * campaign, say the same thing from it, so a player over a limit knows which
+ * sheet editors, the full-page editor and the editor opened from a campaign,
+ * say the same thing from it, so a player over a limit knows which
  * box to shorten whichever way they opened the sheet.
  */
 

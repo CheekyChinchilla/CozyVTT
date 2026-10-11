@@ -4,8 +4,8 @@
  *
  * The server refuses a sheet whose weapons, possessions or spells hold more
  * than the list limit, so an add button or a box that went past it made a
- * sheet that could be filled in and not saved. Here the limit is two, so a
- * list needs two rows rather than five hundred.
+ * sheet that could be filled in and not saved. Here the limit is two, so two
+ * rows fill a list.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';

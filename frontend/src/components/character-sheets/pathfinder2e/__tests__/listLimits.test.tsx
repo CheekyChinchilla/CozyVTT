@@ -5,8 +5,7 @@
  * The server refuses a sheet whose lists hold more than the list limit, whose
  * item bonus is outside -30 to 30, or whose slot total is over 20, so a box
  * that let the player go past made a sheet that could be filled in and not
- * saved. Here both list limits are two, so a list needs two rows rather than
- * five hundred.
+ * saved. Here both list limits are two, so two rows fill a list.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';

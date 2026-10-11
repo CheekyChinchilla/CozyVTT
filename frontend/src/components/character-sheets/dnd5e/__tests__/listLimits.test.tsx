@@ -4,7 +4,7 @@
  * The server refuses a sheet whose inventory, attacks, hit dice, spells,
  * features or cantrips hold more than the list limit, so an add button past it
  * made a sheet that could be filled in and not saved. Here the limit is two, so
- * the lists need two rows rather than five hundred.
+ * two rows fill a list.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
