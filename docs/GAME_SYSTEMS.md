@@ -59,6 +59,7 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | The character's own name on the sheet: at most 200 characters, the `name` column's limit, since a save copies it there | `SHEET_NAME_MAX` | `sheetCharacterNameSchema` in `sheetText.ts`, used by every system's name field; the editors' name boxes stop there |
 | Any other one-line text: at most 1,000 characters | `SHEET_SHORT_TEXT_MAX` | `sheetShortTextSchema` in `sheetText.ts` |
 | Text that holds paragraphs (notes, descriptions, backstory, personality, a feature, which an older sheet may hold as one long line): at most 100,000 characters | `SHEET_LONG_TEXT_MAX` | `sheetLongTextSchema` in `sheetText.ts` |
+| The name in Allies & Organizations (D&D 5e and Pathfinder 2e): the paragraph limit, since a sheet written before 1.3.0 had its whole allies paragraph moved into it | `SHEET_LONG_TEXT_MAX` | `alliesAndOrganizations.schema.ts`, imported by both schemas |
 | D&D 5e spell slots of one level: 0 to 20, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count |
 | D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
 

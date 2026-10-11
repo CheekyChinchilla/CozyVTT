@@ -19,6 +19,7 @@ import {
   shadowrun6eCharacterDataSchema,
   flexibleCharacterDataSchema,
 } from '../index';
+import { migrateLegacySheetFields } from '../../../utils/sheetFieldMigrations';
 import { SHEET_LONG_TEXT_MAX, SHEET_SHORT_TEXT_MAX } from '../sheetLimits';
 
 /** The path of every string in `schema` that has no maximum length. */
@@ -109,5 +110,32 @@ describe('the limits', () => {
 
   it('take a feature written before descriptions existed, however long its line', () => {
     expect(paths(GameSystem.DND_5E, { ...blank(GameSystem.DND_5E), featuresAndTraits: ['z'.repeat(5000)] })).toEqual([]);
+  });
+});
+
+describe('the allies name', () => {
+  const paths = (system: GameSystem, data: unknown) => {
+    const result = validateCharacterData(system, data);
+    return result.success ? [] : result.errors.issues.map((issue) => issue.path.join('.'));
+  };
+  const paragraph = 'y'.repeat(SHEET_SHORT_TEXT_MAX * 5);
+  const blank = (system: GameSystem) => getBlankCharacterTemplate(system) as Record<string, unknown>;
+
+  it('takes the paragraph a pre-1.3.0 D&D 5e sheet had in its allies field, once that is moved', () => {
+    const older: Record<string, unknown> = { ...blank(GameSystem.DND_5E), allies: paragraph };
+    delete older.alliesAndOrganizations;
+    const moved = migrateLegacySheetFields(GameSystem.DND_5E, older) as { alliesAndOrganizations: { name: string } };
+
+    expect(moved.alliesAndOrganizations.name).toBe(paragraph);
+    expect(paths(GameSystem.DND_5E, moved)).toEqual([]);
+  });
+
+  it.each([GameSystem.DND_5E, GameSystem.PATHFINDER_2E])('takes a paragraph in %s', (system) => {
+    expect(paths(system, { ...blank(system), alliesAndOrganizations: { name: paragraph } })).toEqual([]);
+  });
+
+  it.each([GameSystem.DND_5E, GameSystem.PATHFINDER_2E])('is still refused past the paragraph limit in %s', (system) => {
+    const sheet = { ...blank(system), alliesAndOrganizations: { name: 'x'.repeat(SHEET_LONG_TEXT_MAX + 1) } };
+    expect(paths(system, sheet)).toContain('alliesAndOrganizations.name');
   });
 });

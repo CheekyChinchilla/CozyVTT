@@ -11,6 +11,7 @@ import {
   sheetLongTextSchema as longText,
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
+import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
 
 /**
  * Proficiency rank
@@ -422,15 +423,6 @@ const personalitySchema = z.object({
   ideals: longText.optional(),
   bonds: longText.optional(),
   flaws: longText.optional(),
-});
-
-/**
- * Allies and organizations
- * All fields optional to allow quick entries
- */
-const alliesAndOrganizationsSchema = z.object({
-  name: shortText.optional(),
-  description: longText.optional(),
 });
 
 /**

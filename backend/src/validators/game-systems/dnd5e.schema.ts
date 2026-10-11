@@ -11,6 +11,7 @@ import {
   sheetLongTextSchema as longText,
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
+import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
 import { SPELL_SLOTS_MAX } from './sheetLimits';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
 
@@ -332,15 +333,6 @@ const personalitySchema = z.object({
   ideals: longText.optional(),
   bonds: longText.optional(),
   flaws: longText.optional(),
-});
-
-/**
- * Allies and organizations
- * Description optional to allow quick entries
- */
-const alliesAndOrganizationsSchema = z.object({
-  name: shortText.optional(),
-  description: longText.optional(),
 });
 
 /**
