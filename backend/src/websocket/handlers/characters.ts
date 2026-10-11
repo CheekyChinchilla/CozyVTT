@@ -10,6 +10,7 @@ import logger from '../../utils/logger';
 import { toJson } from '../../utils/prisma-json';
 import type { DnD5eHitDice } from '../../game-systems/dnd5e';
 import { withinCeiling } from '../shared';
+import { emitCharacterUpdated } from '../utils';
 
 /** The parts of a character blob this handler touches — see `charData` below. */
 interface HpBlock {
@@ -242,9 +243,9 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
       // event an open character sheet already refreshes on — rather than a
       // narrow one of its own that nothing would listen to. No token art or
       // name changed, so nothing needs to repaint the map.
-      io.to(socket.campaignId).emit('character.updated', {
+      // The sheet as each member may read it: the Keeper's Notes to the DM alone.
+      await emitCharacterUpdated(socket.campaignId, updated, {
         characterId,
-        character: updated,
         userId: socket.userId,
         tokensChanged: false,
       });

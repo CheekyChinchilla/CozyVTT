@@ -2954,7 +2954,8 @@ paths:
       description: |
         Accept the invitation and join the campaign as a `PLAYER`. Optionally
         assigns one or more of the accepting user's characters to the campaign
-        in the same transaction.
+        in the same transaction. A Call of Cthulhu character brought in loses
+        its Keeper's Notes (see `Character.data`).
 
         Validation, in this order:
         - `characterIds`, when sent, must be a list of at most 50 non-empty ids.
@@ -4261,7 +4262,9 @@ paths:
       description: >-
         Every character the caller owns, newest first, each with its
         `campaign` as `{ id, name }` (null when unassigned). Characters owned
-        by other members of the caller's campaigns are not included.
+        by other members of the caller's campaigns are not included. A Call
+        of Cthulhu sheet carries its Keeper's Notes only when the caller is
+        the DM of its campaign (see `Character.data`).
       operationId: listCharacters
       security:
         - cookieAuth: []
@@ -4416,7 +4419,8 @@ paths:
         that campaign (DM, player or spectator) can read it too, as long as
         the owner is still a member there; otherwise anyone else gets 403.
         The response includes `campaign` (`id`, `name`) and the owner as
-        `user` (`id`, `displayName`, `avatarUrl`).
+        `user` (`id`, `displayName`, `avatarUrl`). A Call of Cthulhu sheet's
+        Keeper's Notes go to the campaign's DM alone (see `Character.data`).
       operationId: getCharacterById
       security:
         - cookieAuth: []
@@ -4650,7 +4654,9 @@ paths:
           match the campaign's (both flexible, or the same typed system), or
           the request answers 400 and nothing changes. If the character was
           assigned to another campaign, it is removed from the caller's
-          membership there first.
+          membership there first. A character coming from another campaign,
+          or from none, loses a Call of Cthulhu sheet's Keeper's Notes (see
+          `Character.data`).
         - Assigning broadcasts `roster.updated` to the new campaign, with
           `action` set to `character.assigned` and `characterId`, `userId`
           and `campaignId`. Unassigning a character that had a campaign
@@ -4798,7 +4804,8 @@ paths:
       summary: Duplicate a character
       description: |
         Creates a copy of the character for the same owner, with the same
-        `gameSystem`, sheet and `tokenImageUrl`. The copy is unassigned
+        `gameSystem`, sheet (less a Call of Cthulhu sheet's Keeper's Notes)
+        and `tokenImageUrl`. The copy is unassigned
         (`campaignId: null`), its name is the original's followed by a space
         and `(Copy)`, and the response carries no `campaign` object. Only the
         character's owner may copy it.
@@ -10991,7 +10998,18 @@ components:
           description: Game system for this character (determines data structure)
         data:
           type: object
-          description: Flexible JSON data for character stats (structure depends on gameSystem)
+          description: >-
+            Flexible JSON data for character stats (structure depends on
+            gameSystem). On a `CALL_OF_CTHULHU_7E` sheet the top-level `notes`
+            (Keeper's Notes) is the DM's alone: it is sent only to the DM of
+            the character's campaign, always, as an empty string when nothing
+            is written, and never to anyone else, the owner included, on every
+            read, every save's reply and every `character.updated` event. A
+            save by anyone but that DM keeps the stored `notes`, whatever it
+            sent; a character created by anyone but the DM of the campaign it
+            is created in is stored without them; and a character assigned to
+            a campaign it was not in, brought in by accepting an invitation,
+            or copied loses them.
         tokenImageUrl:
           type: string
           nullable: true

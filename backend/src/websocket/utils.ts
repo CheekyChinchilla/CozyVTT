@@ -1,9 +1,11 @@
 import { Server } from 'socket.io';
 import { CampaignRole } from '@prisma/client';
+import type { GameSystem, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
 import { canReadMap } from '../services/permissions';
+import { characterForReader } from '../utils/keeperNotes';
 import type { AuthenticatedFields } from './auth';
 
 /**
@@ -54,6 +56,24 @@ export function announceRosterChange(userId: string, campaignIds: string[], acti
     } catch (error) {
       logger.warn('roster.updated not broadcast; the change stands', { err: error, campaignId, userId });
     }
+  }
+}
+
+/**
+ * `character.updated` to a campaign's room with the sheet in it, as each
+ * member may read it: the Keeper's Notes go to the campaign's DM alone
+ * (utils/keeperNotes.ts). `fields` are the rest of the payload, the same for
+ * everyone.
+ */
+export async function emitCharacterUpdated<C extends { gameSystem: GameSystem | null; data: Prisma.JsonValue }>(
+  campaignId: string,
+  character: C,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const io = getSocketInstance();
+  for (const s of await campaignSockets(io, campaignId)) {
+    const keeper = (s as unknown as AuthenticatedFields).role === 'DM';
+    s.emit('character.updated', { ...fields, character: characterForReader(character, keeper) });
   }
 }
 

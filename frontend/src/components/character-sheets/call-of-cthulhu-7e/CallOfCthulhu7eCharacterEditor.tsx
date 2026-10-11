@@ -160,6 +160,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const data = character.data as CoC7eFormData;
+  // The Keeper is sent the notes field always, and nobody else ever is.
+  const keeperNotesShown = typeof data.notes === 'string';
 
   // Form state
   const [formData, setFormData] = useState<CoC7eFormData>(() => ({
@@ -1145,18 +1147,24 @@ value={formData.wealth?.cash}
         </div>
       </div>
 
-      {/* Keeper's Notes. The sheet has always displayed these when reading it;
-          there was no way to write them. */}
-      <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-3">Keeper&apos;s Notes</h3>
-        <textarea
-          rows={4}
-          value={formData.notes ?? ''}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          placeholder="Notes kept by the Keeper about this investigator"
-          className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
-        />
-      </div>
+      {/* Keeper's Notes. The server sends them to the DM of the character's
+          campaign alone, always (empty when nothing is written), and keeps
+          them as stored when anyone else saves, so the box is offered only
+          when the sheet arrived with the field. */}
+      {keeperNotesShown && (
+        <div>
+          <h3 className="text-lg font-bold text-sepia-900 mb-1">Keeper&apos;s Notes</h3>
+          <p className="text-sm text-sepia-700 mb-3">Only you, as the Keeper, can see or change these.</p>
+          <textarea
+            rows={4}
+            value={formData.notes ?? ''}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Notes kept by the Keeper about this investigator"
+            aria-label="Keeper's Notes"
+            className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+          />
+        </div>
+      )}
     </div>
   );
 

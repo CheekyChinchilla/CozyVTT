@@ -361,6 +361,7 @@ For when the vibes turn from cozy to eldritch:
 - Weapons and attacks
 - Backstory, personal description, and ideals
 - Possessions and important people
+- **Keeper's Notes**, on the Backstory tab, for the Keeper alone: only the DM of the investigator's campaign can see or change them, so the investigator's player and the rest of the table never see them. They stay with the campaign: moving the investigator into another campaign, or copying it, leaves them behind.
 
 *Screenshot pending — Call of Cthulhu 7e character sheet.*
 
