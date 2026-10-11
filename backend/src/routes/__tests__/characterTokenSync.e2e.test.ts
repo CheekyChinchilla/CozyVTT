@@ -252,3 +252,81 @@ describe('character token image sync', () => {
     expect(bound!.imageUrl).toBe('');
   });
 });
+
+/**
+ * A DM may change the picture of a player's character in the campaign they
+ * run, and the character's tokens follow it. The tokens it left in a
+ * campaign the player played before belong to that campaign: its own DM
+ * placed them, and another DM's choice of picture is not theirs to make. A
+ * DM's change now repaints tokens only in campaigns that DM runs; the
+ * owner's own change still repaints every token bound to the character.
+ */
+describe('a DM changing a player character\'s token picture', () => {
+  const OLD_IMAGE = '/api/assets/tokens/00000000-0000-4000-8000-00000000c01d';
+  const NEW_IMAGE = '/api/assets/tokens/00000000-0000-4000-8000-00000000d3e7';
+  const userIds: string[] = [];
+  const campaignIds: string[] = [];
+  let characterId: string;
+  let mapInA: string;
+  let mapInB: string;
+  let dmA: ReturnType<typeof request.agent>;
+
+  const boundToken = (characterId: string, controlledBy: string) => ({
+    id: `bound-${characterId}`, characterId, name: 'Wren', imageUrl: OLD_IMAGE,
+    position: { x: 1, y: 1 }, size: { width: 1, height: 1 }, layer: 'token', visible: true,
+    controlledBy, rotation: 0, conditions: [], metadata: {}, type: 'player', disposition: null, hp: null, showHpBar: false, notes: '',
+  });
+  const imageOn = async (mapId: string) => {
+    const map = await prisma.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
+    return (map.tokens as unknown as Array<{ characterId: string; imageUrl: string }>).find((t) => t.characterId === characterId)?.imageUrl;
+  };
+
+  beforeAll(async () => {
+    const stamp = Date.now();
+    const [ownerOfA, ownerOfB, player] = await Promise.all([
+      createTestUser({ email: `tok2_dma_${stamp}@test.invalid` }),
+      createTestUser({ email: `tok2_dmb_${stamp}@test.invalid` }),
+      createTestUser({ email: `tok2_pl_${stamp}@test.invalid` }),
+    ]);
+    userIds.push(ownerOfA.id, ownerOfB.id, player.id);
+    const a = await createTestCampaign(ownerOfA.id, { name: `Campaign A ${stamp}` });
+    const b = await createTestCampaign(ownerOfB.id, { name: `Campaign B ${stamp}` });
+    campaignIds.push(a.id, b.id);
+    await prisma.campaignMembership.createMany({
+      data: [
+        { campaignId: a.id, userId: ownerOfA.id, role: 'DM', characterIds: [] },
+        { campaignId: a.id, userId: player.id, role: 'PLAYER', characterIds: [] },
+        { campaignId: b.id, userId: ownerOfB.id, role: 'DM', characterIds: [] },
+        { campaignId: b.id, userId: player.id, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+    // The player moved the character from B to A; its token stayed on B's map.
+    characterId = (await prisma.character.create({ data: { userId: player.id, campaignId: a.id, name: 'Wren', tokenImageUrl: OLD_IMAGE, data: {} } })).id;
+    const mapFor = (campaignId: string, name: string) => prisma.map.create({
+      data: {
+        campaignId, name, imageUrl: '/uploads/maps/m.png', baseLayerUrl: '/uploads/maps/m.png',
+        width: 20, height: 20, tokens: [boundToken(characterId, player.id)], annotations: [],
+      },
+    });
+    mapInA = (await mapFor(a.id, 'A map')).id;
+    mapInB = (await mapFor(b.id, 'B map')).id;
+
+    dmA = request.agent(app);
+    expect((await dmA.post('/api/auth/login').send({ email: `tok2_dma_${stamp}@test.invalid`, password: TEST_PASSWORD })).status).toBe(200);
+  });
+
+  afterAll(async () => {
+    await prisma.character.deleteMany({ where: { id: characterId } });
+    await prisma.map.deleteMany({ where: { campaignId: { in: campaignIds } } });
+    await cleanupCampaigns(campaignIds);
+    await cleanupUsers(userIds);
+  });
+
+  it('repaints the tokens in the campaign they run and leaves another campaign\'s alone', async () => {
+    const res = await dmA.put(`/api/characters/${characterId}`).send({ tokenImageUrl: NEW_IMAGE });
+    expect(res.status).toBe(200);
+
+    expect(await imageOn(mapInA)).toBe(NEW_IMAGE);
+    expect(await imageOn(mapInB)).toBe(OLD_IMAGE);
+  });
+});

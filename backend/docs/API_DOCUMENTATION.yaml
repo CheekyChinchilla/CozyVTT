@@ -4481,7 +4481,9 @@ paths:
           bound to this character (found by its `characterId`, in any
           campaign, not only this character's own) has its picture set to the
           new address, or to an empty string when it was cleared, except in a
-          campaign where the caller is a spectator. The token's name is not
+          campaign where the caller is a spectator. When the caller is not the
+          owner (the DM of the character's campaign), only tokens in
+          campaigns the caller is DM of are changed. The token's name is not
           touched. Each campaign whose tokens changed has its initiative
           state resent. A failure here is logged and does not fail the save.
         - If the character is in a campaign and its owner is still a member,

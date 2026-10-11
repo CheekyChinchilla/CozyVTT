@@ -680,18 +680,25 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           WHERE tokens @> ${JSON.stringify([{ characterId: updatedCharacter.id }])}::jsonb
         `;
 
-        // A campaign where the editor is only a spectator keeps its tokens as
-        // they are: spectators change nothing at the table, and this is the
-        // one write of theirs that would otherwise reach it.
-        const spectatorIn = new Set(
+        // Whose tokens this edit may repaint. The owner's: every campaign
+        // bound to the character, except one where the owner is only a
+        // spectator, since spectators change nothing at the table and this is
+        // the one write of theirs that would otherwise reach it. A DM editing
+        // a player's character: only the campaigns that DM runs. The tokens a
+        // character left in another campaign are that campaign's, and its DM
+        // did not choose the picture.
+        const editorRoles = new Map(
           (await prisma.campaignMembership.findMany({
-            where: { userId, role: 'SPECTATOR', campaignId: { in: boundMaps.map((m) => m.campaignId) } },
-            select: { campaignId: true },
-          })).map((m) => m.campaignId)
+            where: { userId, campaignId: { in: boundMaps.map((m) => m.campaignId) } },
+            select: { campaignId: true, role: true },
+          })).map((m) => [m.campaignId, m.role])
         );
+        const isOwner = character.userId === userId;
+        const mayRepaint = (campaignId: string) =>
+          isOwner ? editorRoles.get(campaignId) !== 'SPECTATOR' : editorRoles.get(campaignId) === 'DM';
 
         for (const map of boundMaps) {
-          if (spectatorIn.has(map.campaignId)) continue;
+          if (!mayRepaint(map.campaignId)) continue;
           // Rewritten from the list as it is under the map's lock, like every
           // other write to a map's tokens; the list the query above returned
           // only says which maps to visit.

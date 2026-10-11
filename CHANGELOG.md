@@ -185,6 +185,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Only someone who could delete a document can rewrite it, and only someone who could delete a global asset can take it out of the library.** Editing a document's text was open to whoever had uploaded it, wherever they now stood: a DM who wrote a campaign handout kept the right after handing the seat on and leaving the campaign, and the uploader of a global document kept it after losing **Global Assets**. Meanwhile the campaign's DM could not edit the campaign's own documents. Editing now follows the rule for deleting: a campaign's document is its writer's while they are still in the campaign, the DM's and an administrator's; a global one an administrator's, or its writer's while they are still a global asset manager. Moving a global asset to a personal library or a campaign is now likewise limited to an administrator or the global asset manager who uploaded it, as deleting it already was.
 
+- **A DM's change to a player's token picture changes only the tokens in campaigns that DM runs.** When the DM changed the token picture on a player's character, every token of that character changed with it, including tokens it had left on the maps of a campaign the player used to play in, which that DM does not run. Those tokens now keep their picture. A player changing their own character's picture still changes every token of it, as before.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
