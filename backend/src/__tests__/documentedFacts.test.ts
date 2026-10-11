@@ -126,6 +126,23 @@ describe('the manual-install nginx example in the deployment guide', () => {
   });
 });
 
+describe("the changelog's note for installs without Docker", () => {
+  const example = section('docs/DEPLOYMENT.md', '### 5. Serve with Nginx', '## Environment Configuration');
+  const note = /^- \*\*If you installed without Docker[^\n]*/m.exec(read('CHANGELOG.md'))?.[0] ?? '';
+
+  // The note named the two X-Forwarded lines of the socket's block. The
+  // example's health check block gained three lines too: X-Real-IP,
+  // X-Forwarded-For and X-Forwarded-Proto.
+  it('names the health check block of the example as well as the live-connection block', () => {
+    expect(note).not.toBe('');
+    expect(example).toMatch(/location = \/health \{[^}]*X-Forwarded-Proto/);
+    expect(example).toMatch(/location \/socket\.io\/ \{[^}]*X-Forwarded-Proto/);
+    expect(note).toContain('`/socket.io/` block');
+    expect(note).toContain('`/health` block');
+    expect(note).toContain('`X-Real-IP`');
+  });
+});
+
 describe('HSTS, in the deployment guide', () => {
   /** The Strict-Transport-Security value helmet sets when asked for nothing about it. */
   function helmetDefault(): string | undefined {

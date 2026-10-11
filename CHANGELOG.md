@@ -67,7 +67,7 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **If you got a Let's Encrypt certificate with the deployment guide's earlier steps, check that it can renew.** Those steps used a method that fails at renewal while nginx runs, so the certificate works until it expires, about 90 days after it was issued, and then visitors see a certificate error. Run `sudo certbot renew --dry-run`. If it says `Could not bind TCP port 80`, follow [If you obtained your certificate with the earlier steps](docs/DEPLOYMENT.md#if-you-obtained-your-certificate-with-the-earlier-steps).
 
-- **If you installed without Docker, add the new security headers to your Nginx site file.** Copy the headers in the `location /` block of the example in [Manual Deployment](docs/DEPLOYMENT.md#5-serve-with-nginx), and the two `X-Forwarded` lines in its `/socket.io/` block, then run `sudo nginx -t` and `sudo systemctl reload nginx`. Without them the app page has no Content-Security-Policy.
+- **If you installed without Docker, add the new security headers to your Nginx site file.** Copy the headers in the `location /` block of the example in [Manual Deployment](docs/DEPLOYMENT.md#5-serve-with-nginx), the two `X-Forwarded` lines in its `/socket.io/` block, and the `X-Real-IP`, `X-Forwarded-For` and `X-Forwarded-Proto` lines in its `/health` block, then run `sudo nginx -t` and `sudo systemctl reload nginx`. Without the headers in `location /`, the app page has no Content-Security-Policy.
 
 ### Added
 
