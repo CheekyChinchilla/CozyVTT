@@ -815,6 +815,8 @@ server {
 }
 
 server {
+    # nginx 1.25.1 and later prefer "listen 443 ssl;" with "http2 on;" on the
+    # next line; this form works on older versions too.
     listen 443 ssl http2;
     server_name your-domain.com;
 
@@ -823,6 +825,8 @@ server {
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 
+    # Headers for everything nginx answers except the app page, which sets its
+    # own full set in "location /" below.
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Content-Type-Options nosniff always;
     add_header X-Frame-Options SAMEORIGIN always;
@@ -890,6 +894,9 @@ server {
         proxy_pass         http://127.0.0.1:4000;
         proxy_http_version 1.1;
         proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 10s;
     }
 
@@ -911,6 +918,8 @@ server {
         proxy_set_header   Connection        "upgrade";
         proxy_set_header   Host              $host;
         proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_read_timeout 86400s;
     }
 
@@ -919,6 +928,17 @@ server {
         root  /path/to/cozyvtt/frontend/dist;
         index index.html;
         try_files $uri $uri/ /index.html;
+
+        # The app page's own security headers: the same ones the Docker setup
+        # sends from frontend/security-headers.conf. HSTS is repeated here
+        # because a location that sets any header of its own loses the ones
+        # set in the server block above.
+        add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+        add_header Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()" always;
     }
 }
 ```
@@ -928,6 +948,18 @@ sudo ln -s /etc/nginx/sites-available/cozyvtt /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
+
+`sudo nginx -t` should print `syntax is ok` and `test is successful`.
+
+**The security headers in `location /` matter.** The Docker setup sends them from the frontend container, which a manual install does not have, so without them the app page has no Content-Security-Policy: nothing stops a script injected through some other flaw from running. They go on the page only, because the backend sets its own on `/api`, and a `frame-ancestors 'none'` on the PDFs it serves would stop the document reader from showing them. nginx drops the server block's headers from any location that sets one of its own, so a location you add yourself (to cache pictures, say) needs the same lines repeated in it. Check that they arrive:
+
+```bash
+curl -sI https://your-domain.com/ | grep -i -e content-security -e permissions-policy -e x-frame
+```
+
+It should print three lines. These lines are a copy of `frontend/security-headers.conf`, so after an upgrade compare them with that file.
+
+**Backups need PostgreSQL's command-line tools.** The Admin Dashboard's **Create Backup** and restore run `pg_dump` and `psql` on the machine the backend runs on. The `postgresql-15` package from step 2 brings them; `pg_dump --version` should print 15 or higher. If it says command not found, install `postgresql-client-15` from the same repository.
 
 ---
 
@@ -1583,7 +1615,7 @@ Before going live:
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
-- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS server: see the commented line in the `nginx/conf.d/https.conf` example
+- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS is the one you add yourself**, in your HTTPS server: see the commented line in the `nginx/conf.d/https.conf` example
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date

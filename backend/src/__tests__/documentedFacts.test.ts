@@ -55,3 +55,42 @@ describe("the Let's Encrypt steps in the deployment guide", () => {
     expect(steps).toContain('sudo certbot renew --dry-run');
   });
 });
+
+describe('the manual-install nginx example in the deployment guide', () => {
+  const example = section('docs/DEPLOYMENT.md', '### 5. Serve with Nginx', '## Environment Configuration');
+
+  /** Each `location` block of the example, by its path, with the text inside it. */
+  const locations = [...example.matchAll(/^\s*location\s+(?:=\s+)?(\S+)\s*\{([^}]*)\}/gm)].map((m) => ({ path: m[1], body: m[2] }));
+
+  /**
+   * The headers the frontend container sends with the app page, as lines of
+   * its config file. The policy there names an extra connect address, filled
+   * in at image build time and empty now that the backend shares the page's
+   * address.
+   */
+  const pageHeaders = read('frontend/security-headers.conf')
+    .split('\n')
+    .filter((line) => line.startsWith('add_header '))
+    .map((line) => line.replace('${CSP_CONNECT_EXTRA}', ''));
+
+  // A host nginx serving frontend/dist never sees the container's config, so
+  // the page it serves had no Content-Security-Policy and no Permissions-Policy
+  // at all, and a weaker X-Frame-Options.
+  it('sends the app page every header the bundled setup sends it', () => {
+    const page = locations.find((location) => location.path === '/');
+    expect(pageHeaders.length).toBeGreaterThan(0);
+    expect(page).toBeDefined();
+    for (const header of pageHeaders) expect(page?.body).toContain(header);
+  });
+
+  // The socket's block had neither header, so the backend read every
+  // visitor to a live table as the proxy.
+  it('hands the backend the visitor’s address and protocol from every proxied location', () => {
+    const proxied = locations.filter((location) => location.body.includes('proxy_pass'));
+    expect(proxied.length).toBeGreaterThan(0);
+    const without = proxied
+      .filter((location) => !location.body.includes('X-Forwarded-For') || !location.body.includes('X-Forwarded-Proto'))
+      .map((location) => location.path);
+    expect(without).toEqual([]);
+  });
+});
