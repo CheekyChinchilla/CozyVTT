@@ -13,6 +13,7 @@
  */
 
 import { prisma } from '../config/database';
+import { destroyUserLoginSessions } from './sessionStore';
 
 /**
  * A campaign that stops a deletion, with the other members its DM seat could
@@ -81,6 +82,10 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
     // The campaigns they were in, read before the cascade removes the rows.
     const campaignIds = (await tx.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
       .map((m) => m.campaignId);
+    // Their sign-ins end with the row, in the same transaction: the guards
+    // read the session, so a deleted admin's other device would otherwise
+    // keep the role until the session expired.
+    await destroyUserLoginSessions(userId, undefined, tx);
     await tx.user.delete({ where: { id: userId } });
     return { deleted: true, campaignIds };
   });

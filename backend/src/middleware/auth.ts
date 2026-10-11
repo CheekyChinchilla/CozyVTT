@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { PlatformRole } from '@prisma/client';
-import { sessionIsSignedIn, notSignedInMessage } from '../services/signedIn';
+import { sessionIsSignedIn, notSignedInMessage, sessionHasAgedOut, agedOutMessage } from '../services/signedIn';
 
 /**
  * The three guards share one idea of "signed in" (services/signedIn): a user
@@ -11,9 +11,22 @@ import { sessionIsSignedIn, notSignedInMessage } from '../services/signedIn';
 
 /** 401 unless the session is signed in; true when the guard may go on. */
 function signedInOr401(req: Request, res: Response): boolean {
-  if (sessionIsSignedIn(req.session)) return true;
-  res.status(401).json({ error: 'Unauthorized', message: notSignedInMessage(req.session) });
-  return false;
+  if (!sessionIsSignedIn(req.session)) {
+    res.status(401).json({ error: 'Unauthorized', message: notSignedInMessage(req.session) });
+    return false;
+  }
+  // A sign-in ends REMEMBER_ME_MAX_AGE after it was made, however active.
+  // One from before the field existed is stamped now, so an upgrade signs
+  // nobody out; it then has the full window from here.
+  if (req.session.signedInAt === undefined) {
+    req.session.signedInAt = Date.now();
+  } else if (sessionHasAgedOut(req.session)) {
+    req.session.destroy(() => {
+      res.status(401).json({ error: 'Unauthorized', message: agedOutMessage() });
+    });
+    return false;
+  }
+  return true;
 }
 
 /**

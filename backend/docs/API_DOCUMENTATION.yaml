@@ -20,7 +20,8 @@ info:
     come with is a promise: a script authenticates **as a specific user** and can
     do only what that user could do in the browser, the session expires after an
     hour of inactivity by default (`SESSION_MAX_AGE`; 30 days when signing in
-    with `rememberMe`), an account with MFA enabled needs
+    with `rememberMe`) and in any case `REMEMBER_ME_MAX_AGE` (30 days) after it
+    was made, however active, an account with MFA enabled needs
     the second step, and any route here may change shape in a point release
     without notice. Treat this document as a map of the current code rather than
     a contract.
@@ -631,7 +632,11 @@ paths:
                     Keeps the session for `REMEMBER_ME_MAX_AGE` of inactivity
                     (30 days by default) instead of `SESSION_MAX_AGE`. With MFA,
                     it takes effect when `/api/auth/mfa/verify-login` succeeds.
-                    Must be a boolean when sent.
+                    Must be a boolean when sent. Either way the session ends
+                    `REMEMBER_ME_MAX_AGE` after it was made, however active, with
+                    401 "Your sign-in has reached its 30-day limit. Sign in
+                    again.", and each sign-in removes the account's oldest
+                    sessions beyond 20.
             example:
               email: dm@example.com
               password: hunter2-correct-horse-battery
@@ -1509,7 +1514,9 @@ paths:
       description: |
         Extends the rolling session cookie without fetching user data.
         Called periodically by the frontend during active gameplay so a long
-        session doesn't expire mid-roll. Cheap — just touches the session.
+        session doesn't expire mid-roll. Cheap — just touches the session. It
+        cannot carry a sign-in past `REMEMBER_ME_MAX_AGE` after it was made;
+        then it answers 401 like every other guarded route.
       operationId: pingSession
       security:
         - cookieAuth: []

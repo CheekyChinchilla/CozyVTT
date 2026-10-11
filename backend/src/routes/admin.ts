@@ -578,15 +578,18 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
 // ============================================
 router.get('/activity', async (_req, res) => {
   try {
-    // Query the connect-pg-simple session table for active sessions.
-    // Only userId and expiry are extracted — no tokens or sensitive session data.
+    // Who is signed in, from the connect-pg-simple session table: one row per
+    // user with their latest expiry, worked out by the database. Loading every
+    // live session into Node and searching them per user grew with the table,
+    // which a sign-in script could make very large.
     const rawSessions = await prisma.$queryRaw<{ userId: string; expire: Date }[]>`
-      SELECT sess->>'userId' AS "userId", expire
+      SELECT DISTINCT ON (sess->>'userId') sess->>'userId' AS "userId", expire
       FROM session
       WHERE expire > NOW() AND sess->>'userId' IS NOT NULL
+      ORDER BY sess->>'userId', expire DESC
     `;
-
-    const onlineUserIds = [...new Set(rawSessions.map((s) => s.userId))];
+    const latestExpiry = new Map(rawSessions.map((s) => [s.userId, s.expire]));
+    const onlineUserIds = [...latestExpiry.keys()];
 
     const [recentUsers, recentSessions, onlineUsersData, recentLogs] = await Promise.all([
       prisma.user.findMany({
@@ -639,7 +642,7 @@ router.get('/activity', async (_req, res) => {
 
     const onlineUsers = onlineUsersData.map((u) => ({
       ...u,
-      sessionExpiry: rawSessions.find((s) => s.userId === u.id)?.expire ?? null,
+      sessionExpiry: latestExpiry.get(u.id) ?? null,
     }));
 
     return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs });

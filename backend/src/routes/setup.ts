@@ -81,6 +81,7 @@ router.post('/init', async (req: Request, res: Response) => {
     await regenerateSession(req);
     req.session.userId = user.id;
     req.session.platformRole = user.platformRole;
+    req.session.signedInAt = Date.now();
 
     return res.status(201).json({
       message: 'Setup completed successfully',

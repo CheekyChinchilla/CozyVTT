@@ -6,7 +6,7 @@ import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassw
 import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
-import { destroyUserLoginSessions } from '../services/sessionStore';
+import { destroyUserLoginSessions, capLoginSessions } from '../services/sessionStore';
 import { voidOutstandingResetLinks, issueResetToken, findResetTokenRow, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
@@ -39,6 +39,20 @@ import {
 
 /** 400 for a body `parseBody` refused. */
 const invalid = (res: Response, message: string) => res.status(400).json({ error: 'Validation Error', message });
+
+/**
+ * The bookkeeping every completed sign-in does, after the session has been
+ * regenerated and the user set: stamp when it was made, so the guards can end
+ * it after the remember-me window however active it stays, and remove the
+ * account's oldest sessions beyond the cap. The cap is housekeeping and must
+ * not stop a sign-in, so its failure is logged and the sign-in goes on.
+ */
+function recordSignIn(req: Request, userId: string): void {
+  req.session.signedInAt = Date.now();
+  capLoginSessions(userId, req.sessionID).catch((err: unknown) => {
+    logger.error('Failed to cap login sessions', { err, userId });
+  });
+}
 
 /**
  * The signed-in user as the client sees them: sanitised, plus the date by
@@ -264,9 +278,8 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       // Auto-approved registration — create session and log in, on a fresh id.
       await regenerateSession(req);
       req.session.userId = user.id;
-      req.session.email = user.email;
-      req.session.displayName = user.displayName;
       req.session.platformRole = user.platformRole;
+      recordSignIn(req, user.id);
 
       return res.status(201).json({
         message: 'User registered successfully',
@@ -279,9 +292,8 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
 
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
+    recordSignIn(req, user.id);
 
     return res.status(201).json({
       message: 'User registered successfully',
@@ -358,11 +370,10 @@ router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Reques
     // No MFA - create full session on a fresh id (session fixation).
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
     // Gates every other API call until the password is replaced
     req.session.mustChangePassword = user.mustChangePassword;
+    recordSignIn(req, user.id);
 
     // Extend session if "Remember Me" is checked
     if (rememberMe && req.session.cookie) {
@@ -711,9 +722,8 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
     if (!deletion.deleted) {
       return res.status(409).json({ error: 'Conflict', message: runsCampaignsMessage(deletion.runs, 'you') });
     }
-    // The account's other sign-ins outlive the row, and the guards read the
-    // session, so a deleted admin would keep the role on another device.
-    await destroyUserLoginSessions(userId);
+    // The deletion ended the account's other sign-ins in its own transaction
+    // (services/accountDeletion); the live connections end here.
     await endLiveSockets(userId, 'Your account was deleted.');
     announceRosterChange(userId, deletion.campaignIds, 'member.left');
 
@@ -967,9 +977,8 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
     const rememberMe = req.session.mfaRememberMe;
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
+    recordSignIn(req, user.id);
     req.session.mfaPending = undefined;
     req.session.mfaPendingUserId = undefined;
     req.session.mfaRememberMe = undefined;

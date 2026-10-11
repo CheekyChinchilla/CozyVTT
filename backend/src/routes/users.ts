@@ -492,9 +492,8 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
     const campaignIds = deletion.campaignIds;
 
-    // The session outlives the row it refers to, and the guards read the
-    // session, so it has to go too.
-    await destroyUserLoginSessions(id);
+    // The deletion ended the account's sign-ins in its own transaction
+    // (services/accountDeletion); the live connections end here.
     await endLiveSockets(id, 'Your account was deleted.');
     announceRosterChange(id, campaignIds, 'member.left');
 
