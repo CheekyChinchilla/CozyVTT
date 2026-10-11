@@ -23,7 +23,10 @@
  * behind it for as long as its connection stayed open. A request that has
  * waited that long is refused with a message saying to try again, and the
  * refusal is not counted. A request whose client goes away while it waits
- * leaves the queue.
+ * leaves the queue. A route that runs two of these limiters in a row (the
+ * sign-in) gives the request one wait between them: the second limiter lets
+ * it wait only for what the first left, so the two together never hold it
+ * longer than one would.
  *
  * A refusal is JSON, `{ error: 'Rate Limited', message }`, like every other
  * answer the API gives, so the pages can show the message.
@@ -66,6 +69,12 @@ export interface FailureLimiterOptions {
  * and still inside the 30 seconds the pages wait for an answer.
  */
 export const FAILURE_LIMITER_WAIT_MS = 15 * 1000;
+
+/**
+ * When a request's wait ends, set by the first limiter that makes it wait and
+ * read by any limiter after that on the same request.
+ */
+const waitDeadlines = new WeakMap<Request, number>();
 
 /** The refusal for a request that waited `waitMs` without its turn coming. */
 export const STILL_CHECKING_MESSAGE = 'Other attempts are still being checked. Please try again in a moment.';
@@ -144,8 +153,11 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
 
     const startWaiting = (): void => {
       state.waiting.push(admit);
-      // The wait is timed from when it began, not from each turn it missed.
+      // The wait is timed from when it began, not from each turn it missed, and
+      // from when it began at the first limiter that held this request.
       if (waitTimer !== undefined) return;
+      const deadline = waitDeadlines.get(req) ?? Date.now() + waitMs;
+      waitDeadlines.set(req, deadline);
       waitTimer = setTimeout(() => {
         stopWaiting();
         if (!res.destroyed && !res.writableEnded) {
@@ -154,7 +166,7 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
           res.status(429).json({ error: 'Rate Limited', message: STILL_CHECKING_MESSAGE });
         }
         forgetIfIdle(key, state);
-      }, waitMs);
+      }, Math.max(0, deadline - Date.now()));
       onGone = () => {
         stopWaiting();
         forgetIfIdle(key, state);

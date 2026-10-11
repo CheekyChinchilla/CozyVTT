@@ -105,3 +105,68 @@ describe('a request waiting behind a check that does not finish', () => {
     }
   });
 });
+
+/**
+ * POST /api/auth/login runs two of these limiters in a row (the address, then
+ * the account). Each held a request for up to its own wait, so a sign-in could
+ * wait twice as long as one limiter allows, which is the whole 30 seconds the
+ * page waits for an answer. The wait is one budget for the chain.
+ */
+describe('a request passing through two limiters in a row', () => {
+  it('waits no longer in total than one limiter lets it wait', async () => {
+    const waitMs = 600;
+    const first = failureLimiter({ windowMs: 60_000, max: 2, message: 'Too many attempts', waitMs });
+    const second = failureLimiter({ windowMs: 60_000, max: 2, message: 'Too many attempts', waitMs });
+    const stalledFirst: Response[] = [];
+    const stalledSecond: Response[] = [];
+    const releaseFirst = () => { for (const res of stalledFirst.splice(0)) res.status(200).json({ ok: true }); };
+    const releaseSecond = () => { for (const res of stalledSecond.splice(0)) res.status(200).json({ ok: true }); };
+
+    const app = express();
+    // The chain under test: both limiters, then a route that fails or answers.
+    app.post('/probe', first, second, (req: Request, res: Response) => {
+      const status = Number(req.query.status ?? 200);
+      if (status >= 400) {
+        first.recordFailure(req);
+        second.recordFailure(req);
+      }
+      res.status(status).json({ ok: status < 400 });
+    });
+    // One check stuck behind each limiter alone, so that each is full.
+    app.post('/first-only', first, (_req: Request, res: Response) => { stalledFirst.push(res); });
+    app.post('/second-only', second, (_req: Request, res: Response) => { stalledSecond.push(res); });
+
+    const server = app.listen(0);
+    let stuckSecond: Promise<unknown> = Promise.resolve();
+    try {
+      // A wrong answer counted by both, then a stuck check in each.
+      expect((await request(server).post('/probe?status=401')).status).toBe(401);
+      const stuckFirst = request(server).post('/first-only').then((res) => res);
+      stuckSecond = request(server).post('/second-only').then((res) => res);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // The request waits in the first limiter; the check ahead of it ends just
+      // before the wait does, and it meets the full second limiter.
+      const started = Date.now();
+      const waiting = request(server).post('/probe?status=200').then((res) => res);
+      await new Promise((resolve) => setTimeout(resolve, waitMs - 100));
+      releaseFirst();
+      expect((await stuckFirst).status).toBe(200);
+
+      const answer = await within(waitMs * 3, waiting);
+      const waited = Date.now() - started;
+
+      expect(answer).not.toBe('still waiting');
+      if (answer === 'still waiting') return;
+      expect(answer.status).toBe(429);
+      expect(answer.body.message).toBe('Other attempts are still being checked. Please try again in a moment.');
+      // One budget: about waitMs, not waitMs for each limiter.
+      expect(waited).toBeLessThan(waitMs * 1.5);
+    } finally {
+      releaseFirst();
+      releaseSecond();
+      await stuckSecond;
+      server.close();
+    }
+  });
+});
