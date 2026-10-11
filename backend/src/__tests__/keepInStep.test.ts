@@ -81,6 +81,13 @@
  * their folder (`COPY . .`), so only the folder's .dockerignore stands between
  * a stray .env.local or .env.production and the image's layers. The two files
  * are copies of one rule.
+ *
+ * The Node.js major. It is written in `.nvmrc`, every Dockerfile stage built
+ * on Node, every CI job that sets Node up, the `engines` field of both
+ * projects, the backend's `@types/node`, and the version the README and the
+ * guides ask a reader to install. A move to a new major that misses one runs
+ * CI, the images or a manual install on a different Node from the rest.
+ * `.nvmrc` holds the major alone and the others are compared with it.
  */
 
 import crypto from 'crypto';
@@ -477,5 +484,60 @@ describe('the .dockerignore of each image', () => {
         .map((line) => line.trim())
         .filter((line) => line.startsWith('.env') || line.startsWith('!.env'));
     expect(envLines('frontend/.dockerignore')).toEqual(envLines('backend/.dockerignore'));
+  });
+});
+
+describe('the Node.js major', () => {
+  const expected = read('.nvmrc').trim();
+
+  /** The leading major of a version or range ("26", "26.x", ">=26.0.0", "^26.6.5"), or the text itself when it has none. */
+  const majorOf = (version: string): string => /^\D{0,2}(\d+)/.exec(version)?.[1] ?? version;
+
+  /** Every match of `pattern` in a file, as majors; a file the pattern no longer matches fails the check. */
+  function found(rel: string, text: string, pattern: RegExp): string[] {
+    const versions = [...text.matchAll(pattern)].map((m) => majorOf(m.slice(1).find((g) => g !== undefined) ?? ''));
+    if (versions.length === 0) throw new Error(`${rel} no longer matches ${pattern}; update this test with the file`);
+    return versions;
+  }
+
+  const pkg = (rel: string) =>
+    JSON.parse(read(rel)) as { engines?: { node?: string }; devDependencies?: Record<string, string> };
+  const lock = JSON.parse(read('backend/package-lock.json')) as { packages: Record<string, { version?: string }> };
+  const ci = read('.github/workflows/ci.yml');
+
+  // A tag with no leading number (node:lts-alpine, node:current) is kept as
+  // written, so it shows up as a disagreement.
+  const places: [string, string[]][] = [
+    ...['backend/Dockerfile', 'backend/Dockerfile.prod', 'frontend/Dockerfile', 'frontend/Dockerfile.prod'].map(
+      (rel): [string, string[]] => [rel, found(rel, instructions(rel).join('\n'), /^FROM\s+node:(\S+)/gm)]
+    ),
+    ['.github/workflows/ci.yml', found('.github/workflows/ci.yml', ci, /^\s*node-version:\s*['"]?([^'"\s]+)/gm)],
+    ['backend/package.json engines', [majorOf(pkg('backend/package.json').engines?.node ?? 'missing')]],
+    ['frontend/package.json engines', [majorOf(pkg('frontend/package.json').engines?.node ?? 'missing')]],
+    ['backend/package.json @types/node', [majorOf(pkg('backend/package.json').devDependencies?.['@types/node'] ?? 'missing')]],
+    ['backend/package-lock.json @types/node', [majorOf(lock.packages['node_modules/@types/node']?.version ?? 'missing')]],
+    ['README.md', found('README.md', read('README.md'), /^- Node\.js (\d+)\+/gm)],
+    ['docs/DEVELOPMENT.md', found('docs/DEVELOPMENT.md', read('docs/DEVELOPMENT.md'), /\| Node\.js \| (\d+)\.x \||Comes with Node\.js (\d+)/g)],
+    ['docs/DEPLOYMENT.md', found('docs/DEPLOYMENT.md', read('docs/DEPLOYMENT.md'), /Install Node\.js (\d+)|setup_(\d+)\.x/g)],
+  ];
+
+  it('is a major alone in .nvmrc, and an even one, which is what gets long-term support', () => {
+    expect(expected).toMatch(/^\d+$/);
+    expect(Number(expected) % 2).toBe(0);
+  });
+
+  it('is the same in every Dockerfile stage, CI job, engines field, @types/node and guide', () => {
+    const disagree = places
+      .filter(([, majors]) => majors.some((m) => m !== expected))
+      .map(([where, majors]) => `${where}: ${majors.join(', ')}`);
+    expect(disagree).toEqual([]);
+  });
+
+  // The jobs are counted so that a job added without a node-version, which
+  // would run on the runner's own Node, fails here too.
+  it('is set in every CI job that sets Node up', () => {
+    const setups = ci.match(/uses: actions\/setup-node@/g) ?? [];
+    const versions = ci.match(/^\s*node-version:/gm) ?? [];
+    expect(versions.length).toBe(setups.length);
   });
 });

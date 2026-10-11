@@ -25,9 +25,9 @@ This guide covers everything you need to run CozyVTT locally **for development w
 
 | Tool | Minimum Version | Notes |
 |------|----------------|-------|
-| Node.js | 20.x | Use `nvm` or `fnm` to manage versions |
+| Node.js | 26.x | Use `nvm` or `fnm` to manage versions |
 | PostgreSQL | 14+ | Or use the Docker Compose stack |
-| npm | 10+ | Comes with Node.js 20 |
+| npm | 11+ | Comes with Node.js 26 |
 | Docker + Docker Compose | Any recent | Optional — needed for the containerized setup |
 
 ---

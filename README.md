@@ -146,7 +146,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Requirements
 
-- Node.js 20+
+- Node.js 26+
 - PostgreSQL 14+
 - A modern browser (Chrome, Firefox, Edge, Safari)
 - SMTP server (optional — required for password reset and invitation emails)

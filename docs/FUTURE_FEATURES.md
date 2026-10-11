@@ -143,24 +143,6 @@ _Nothing at present._
   supported server range has to be checked for the target major first.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Move to Node.js 26.** Everything runs on Node 20, which reached the end of
-  its upstream support on 30 April 2026, so it no longer gets security fixes.
-  Node 26 becomes the long-term release on 28 October 2026 and is supported
-  until April 2029; Node 24 drops to maintenance on 20 October 2026 and ends in
-  April 2028, so 26 is the target. The version is written in several
-  places that have to move together: `.nvmrc`, the `FROM node:20-alpine` lines
-  in `backend/Dockerfile`, `backend/Dockerfile.prod` (twice),
-  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the four
-  `node-version: 20` lines in `.github/workflows/ci.yml` (the `frontend`,
-  `backend`, `audit` and `images` jobs), `engines` and
-  `@types/node` in the two `package.json` files, and the Node version the
-  README, `docs/DEVELOPMENT.md` and `docs/DEPLOYMENT.md` ask for. A newer
-  `node:*-alpine` image may sit on a newer Alpine, so check that
-  `postgresql16-client` is still packaged there (the `keepInStep` test fails if
-  the client falls behind the server). Run the full gates and an upgrade
-  rehearsal on the new image, and add a check that fails when the places above
-  disagree. **Do** in 1.5.2.
-
 - **Bring the dependencies up to date, and keep them there.** Several
   libraries are a major version or more behind, and some are out of support:
   ESLint 8 since October 2024, and Prisma 5.8 (January 2024), which gets no
