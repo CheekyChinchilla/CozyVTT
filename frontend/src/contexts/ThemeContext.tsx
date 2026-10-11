@@ -252,6 +252,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [appearance]
   );
 
+  // The browser tab shows the instance's name.
+  useEffect(() => {
+    if (!appearance) return;
+    document.title = appearance.instanceName?.trim() || 'CozyVTT';
+  }, [appearance]);
+
   const mascotUrl = appearance?.customMascotUrl || '/default-mascot.png';
   const logoUrl = appearance?.customLogoUrl || '/default-logo.png';
   const faviconUrl = appearance?.customFaviconUrl || '/default-mascot.png';

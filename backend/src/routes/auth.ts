@@ -1126,7 +1126,7 @@ router.get('/registration-status', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/auth/appearance
- * Returns the instance's appearance settings (theme, font, branding).
+ * Returns the instance's appearance settings (name, theme, font, branding).
  * No authentication required — the login page needs to render with the correct theme.
  */
 router.get('/appearance', async (_req: Request, res: Response) => {
@@ -1135,6 +1135,7 @@ router.get('/appearance', async (_req: Request, res: Response) => {
     return res.status(200).json(appearance);
   } catch (error) {
     return res.status(200).json({
+      instanceName: 'CozyVTT',
       themeId: 'cozy-default',
       customThemeColors: null,
       fontId: 'default',

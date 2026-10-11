@@ -45,8 +45,7 @@ Create the administrator account. This is the most powerful account on the platf
 **Step 3 — System Configuration**
 Give your instance its identity:
 
-- **Instance Name** — Appears in browser tabs and the page title (e.g., "The Hearthstone Tavern")
-- **Timezone** — Used for timestamps across the platform; you can auto-detect or pick from a list
+- **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Hearthstone Tavern"). You can change it later under **Admin Panel → Settings**.
 - **Public Registration** — Choose whether new users can register themselves. For private groups, leave this **off** and create accounts manually from the Admin Panel
 
 *Screenshot pending — System configuration step.*

@@ -21,6 +21,7 @@ import { ThemeProvider, useTheme } from '../ThemeContext';
 const CUSTOM = { primary: '#7C9A6E', accent: '#D4A55A', background: '#FAF6EC', text: '#3A2E26' };
 
 const appearance = (over: Partial<AppearanceSettings>): AppearanceSettings => ({
+  instanceName: 'CozyVTT',
   themeId: 'cozy-default',
   customThemeColors: null,
   fontId: 'default',

@@ -237,7 +237,6 @@ export default function AdminPage() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     instanceName: '',
-    timezone: 'UTC',
     allowRegistration: false,
     requireAdminApproval: true,
   });
@@ -436,7 +435,6 @@ export default function AdminPage() {
     if (settings) {
       setSettingsForm({
         instanceName: settings.instanceName,
-        timezone: settings.timezone,
         allowRegistration: settings.allowRegistration,
         requireAdminApproval: settings.requireAdminApproval,
       });
@@ -863,6 +861,8 @@ export default function AdminPage() {
       const updated = await adminService.updateSettings(settingsForm);
       setSettings(updated);
       showToast('Settings saved!', 'success');
+      // The instance name is the browser tab's title.
+      void refreshAppearance();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setSettingsError(apiErrorMessage(e) ?? 'Failed to save settings');
@@ -1918,10 +1918,11 @@ export default function AdminPage() {
               <section className="glass-panel p-6 space-y-6">
                 {/* Instance Name */}
                 <div>
-                  <label className="block text-sm font-medium text-stone-gray mb-1">
+                  <label htmlFor="admin-instance-name" className="block text-sm font-medium text-stone-gray mb-1">
                     Instance Name
                   </label>
                   <input
+                    id="admin-instance-name"
                     type="text"
                     value={settingsForm.instanceName}
                     maxLength={100}
@@ -1930,25 +1931,7 @@ export default function AdminPage() {
                     placeholder="CozyVTT"
                   />
                   <p className="text-xs text-warm-gray mt-1">
-                    The name displayed on your platform instance.
-                  </p>
-                </div>
-
-                {/* Timezone */}
-                <div>
-                  <label className="block text-sm font-medium text-stone-gray mb-1">
-                    Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={settingsForm.timezone}
-                    maxLength={50}
-                    onChange={e => setSettingsForm(f => ({ ...f, timezone: e.target.value }))}
-                    className="input-cozy w-full"
-                    placeholder="UTC"
-                  />
-                  <p className="text-xs text-warm-gray mt-1">
-                    IANA timezone identifier (e.g. UTC, America/New_York).
+                    Shown in the browser tab and in the emails the instance sends.
                   </p>
                 </div>
 

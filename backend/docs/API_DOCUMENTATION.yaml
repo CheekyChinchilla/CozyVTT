@@ -430,18 +430,18 @@ paths:
                   type: string
                   default: CozyVTT
                   description: >-
-                    Shown in browser tabs and page titles. Angle brackets are
-                    removed, the value is trimmed, and anything past 100
-                    characters is cut off. Blank, missing or non-string values
-                    leave the default in place rather than failing setup, which
-                    can only be run once.
+                    Shown in the browser tab and in the emails the instance
+                    sends. Angle brackets are removed, the value is trimmed,
+                    and anything past 100 characters is cut off. Blank, missing
+                    or non-string values leave the default in place rather than
+                    failing setup, which can only be run once.
                 timezone:
                   type: string
                   default: UTC
                   description: >-
-                    IANA timezone name, used for timestamps. Not checked against
-                    the timezone list. Treated like `instanceName`, cut off at
-                    50 characters.
+                    Stored, and used by nothing; the wizard no longer sends it.
+                    Accepted so an older client is not refused. Treated like
+                    `instanceName`, cut off at 50 characters.
                 allowRegistration:
                   type: boolean
                   default: false
@@ -1497,9 +1497,10 @@ paths:
         - Authentication
       summary: Get instance appearance settings
       description: |
-        Public endpoint — returns the instance's theme, font, and branding
-        URLs. The frontend calls this on every page load so the login page
-        can paint with the correct theme before authentication. No
+        Public endpoint — returns the instance's name, theme, font, and
+        branding URLs. The frontend calls this on every page load so the login
+        page can paint with the correct theme before authentication, and shows
+        the name as the browser tab's title. No
         authentication required, and reachable during a forced password
         change. Until setup has run it is refused with the setup 403 like
         other routes, so the setup wizard shows the built-in defaults.
@@ -1513,6 +1514,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AppearanceSettings'
               example:
+                instanceName: The Hearthstone Tavern
                 themeId: cozy-default
                 customThemeColors: null
                 fontId: default
@@ -8616,7 +8618,10 @@ paths:
         Every field is optional; only the ones present are changed, and fields not
         listed here are ignored. A field of the wrong type answers 400.
         `instanceName` and `timezone` are trimmed, stripped of `<` and `>`, then cut
-        to their max length rather than rejected for being too long.
+        to their max length rather than rejected for being too long. `instanceName`
+        is the browser tab's title and is used in emails. `timezone` is stored and
+        used by nothing; the Admin Panel no longer offers it, and it is accepted so
+        an older client is not refused.
 
         `themeId` and `fontId` must name one of the app's themes (or `custom`) and
         fonts, the same lists `PUT /api/users/{id}/preferences` accepts.
@@ -11837,6 +11842,12 @@ components:
         Instance-wide appearance settings — used on public/unauthenticated pages
         and as the default for users who have not picked their own theme.
       properties:
+        instanceName:
+          type: string
+          example: The Hearthstone Tavern
+          description: >-
+            The name set in the setup wizard or Admin → Settings, shown as the
+            browser tab's title. Emails use it too.
         themeId:
           type: string
           example: cozy-default
@@ -11844,8 +11855,8 @@ components:
           type: object
           nullable: true
           description: >-
-            The colours an administrator chose for the custom theme. The app
-            sends these four keys; the server stores the object as sent.
+            The colours an administrator chose for the custom theme: these
+            four keys, each `#RRGGBB` (checked since 1.5.2).
           properties:
             primary:    { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
             accent:     { type: string, pattern: '^#[0-9a-fA-F]{6}$' }

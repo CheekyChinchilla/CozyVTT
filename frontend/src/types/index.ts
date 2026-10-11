@@ -326,6 +326,8 @@ export interface AdminSystemSettings {
 }
 
 export interface AppearanceSettings {
+  /** The instance's name, which the browser tab shows. */
+  instanceName: string;
   themeId: string;
   customThemeColors: Record<string, string> | null;
   fontId: string;

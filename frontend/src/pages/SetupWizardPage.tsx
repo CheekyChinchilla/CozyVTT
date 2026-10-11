@@ -32,7 +32,6 @@ interface AdminAccountData {
 
 interface SystemConfigData {
   instanceName: string;
-  timezone: string;
   enableRegistration: boolean;
 }
 
@@ -59,7 +58,6 @@ export default function SetupWizardPage() {
 
   const [systemConfig, setSystemConfig] = useState<SystemConfigData>({
     instanceName: 'CozyVTT',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     enableRegistration: false,
   });
 
@@ -209,7 +207,6 @@ export default function SetupWizardPage() {
         password: adminData.password,
         displayName: adminData.displayName,
         instanceName: systemConfig.instanceName,
-        timezone: systemConfig.timezone,
         allowRegistration: systemConfig.enableRegistration,
       });
 
@@ -641,24 +638,6 @@ interface Step3Props {
 }
 
 function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
-  // Get common timezones
-  const timezones = [
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Phoenix',
-    'America/Anchorage',
-    'Pacific/Honolulu',
-    'Europe/London',
-    'Europe/Paris',
-    'Europe/Berlin',
-    'Asia/Tokyo',
-    'Asia/Shanghai',
-    'Australia/Sydney',
-    'UTC',
-  ];
-
   return (
     <div className="space-y-6">
       <div className="text-center">
@@ -690,38 +669,11 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
             placeholder="CozyVTT"
           />
           <p className="mt-1 text-xs text-warm-gray">
-            This will appear in the browser tab and page titles
+            Shown in the browser tab and in the emails the instance sends
           </p>
           {fieldErrors.instanceName && (
             <p className="mt-1 text-xs text-spirit-red">{fieldErrors.instanceName}</p>
           )}
-        </div>
-
-        {/* Timezone */}
-        <div>
-          <label htmlFor="timezone" className="block text-sm font-medium text-brand-ink mb-1">
-            Timezone
-          </label>
-          <select
-            id="timezone"
-            value={data.timezone}
-            onChange={(e) => setData({ ...data, timezone: e.target.value })}
-            className="input-cozy w-full"
-          >
-            <option value={data.timezone}>{data.timezone} (Detected)</option>
-            <optgroup label="Common Timezones">
-              {timezones
-                .filter((tz) => tz !== data.timezone)
-                .map((tz) => (
-                  <option key={tz} value={tz}>
-                    {tz}
-                  </option>
-                ))}
-            </optgroup>
-          </select>
-          <p className="mt-1 text-xs text-warm-gray">
-            Used for scheduling and timestamps
-          </p>
         </div>
 
         {/* Enable Registration */}
@@ -816,10 +768,6 @@ function Step4Review({ adminData, systemConfig }: Step4Props) {
             <div className="flex justify-between">
               <dt className="text-warm-gray">Instance Name:</dt>
               <dd className="text-brand-ink font-medium">{systemConfig.instanceName}</dd>
-            </div>
-            <div className="flex justify-between">
-              <dt className="text-warm-gray">Timezone:</dt>
-              <dd className="text-brand-ink font-medium">{systemConfig.timezone}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-warm-gray">Public Registration:</dt>

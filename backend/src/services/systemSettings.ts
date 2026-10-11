@@ -83,11 +83,13 @@ export async function setupState(): Promise<{ setupCompleted: boolean; hasUsers:
 }
 
 /**
- * Update system settings
+ * What every page needs before anyone signs in: the instance's name (the
+ * browser tab's title), theme and branding.
  */
 export async function getAppearanceSettings() {
   const settings = await getSystemSettings();
   return {
+    instanceName: settings.instanceName,
     themeId: settings.themeId,
     customThemeColors: settings.customThemeColors,
     fontId: settings.fontId,
@@ -97,6 +99,9 @@ export async function getAppearanceSettings() {
   };
 }
 
+/**
+ * Update system settings
+ */
 export async function updateSystemSettings(data: {
   instanceName?: string;
   timezone?: string;

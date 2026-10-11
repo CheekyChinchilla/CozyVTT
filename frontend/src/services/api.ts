@@ -239,7 +239,6 @@ class ApiClient {
     password: string;
     displayName: string;
     instanceName?: string;
-    timezone?: string;
     allowRegistration?: boolean;
   }): Promise<{ message: string; user: User }> {
     const response = await this.client.post('/api/setup/init', data);

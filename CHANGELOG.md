@@ -30,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A player removed from a campaign can still read their notes and saved rolls from it.** Removing a player kept their personal notes and saved rolls, but they could no longer open them, since the campaign page is closed to them. They now appear on that player's dashboard under **Notes From Campaigns You Have Left**, where **Open** shows each note and the saved rolls and **Download** saves them all as one Markdown file. They cannot be changed there, and nobody else can see them. They are back in the campaign if the player is invited again, and deleting the campaign still deletes them. See [Removing a Player](docs/DM_GUIDE.md#removing-a-player).
 
+### Removed
+
+- **The Timezone setting is gone from the setup wizard and from Admin Panel → Settings.** It was stored and nothing ever used it, though the guides said it set the time shown on timestamps; times are shown in each viewer's own time zone, as they always were. A value saved before stays in the database, unused, and nothing else changes.
+
 ### Fixed
 
 - **Dice rolls made in the same instant keep one order in the dice history.** Two or more rolls stored in the same millisecond, as happens when a table rolls at once, were listed in whichever order the database returned them, so the history could show them swapped between one load and the next. They now have a fixed order, and the order is the same on every page of the history.
@@ -75,6 +79,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **The Custom theme shows the colours that were picked.** A Custom theme saved from **Profile → Appearance**, or set by an administrator as the instance default in **Admin Panel → Appearance**, was painted with broken colours as soon as it was saved and on every later visit: backgrounds and text fell back to the browser's own colours, and the instance default did that on the sign-in page for every visitor. The picker's own preview was right, which hid the fault until the page reloaded. The saved colours are now painted as picked. A custom theme whose stored colours are not four colours shows the default theme instead.
 
 - **Dragging a custom colour on the Profile page saves it once.** The colour picker reports every colour it passes through while it is dragged, and each one was saved to the server along with a reload of your account, so a few seconds of dragging sent well over a hundred requests and could reach the request limit, and a slow reply could put an older colour back. The page still follows the colour as you drag, and saves it when you stop for 0.4 seconds.
+
+- **The instance name is now the browser tab's title and is used in emails.** The name given in the setup wizard or in **Admin Panel → Settings** was stored and never shown: the tab said CozyVTT whatever it was, and emails took their name only from an `INSTANCE_NAME` setting that no guide mentioned. The tab now shows the instance's name on every page, the sign-in page included, and changes as soon as a new name is saved. Welcome, invitation, password reset, email-changed, campaign invitation and test emails use it too. An instance that set `INSTANCE_NAME` and left the stored name as CozyVTT keeps the name it had in emails.
 
 ### Security
 

@@ -239,11 +239,12 @@ with nobody in the DM seat, until they hand the seat on or delete it.
 
 ### `GET /api/auth/appearance`
 
-Returns the instance's appearance settings. **No authentication required** — the login page needs this to render the correct theme.
+Returns the instance's appearance settings, with its name, which the browser tab shows. **No authentication required** — the login page needs this to render the correct theme.
 
 **Response:**
 ```json
 {
+  "instanceName": "CozyVTT",
   "themeId": "cozy-default",
   "customThemeColors": null,
   "fontId": "default",

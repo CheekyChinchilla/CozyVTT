@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import logger from '../utils/logger';
 import { escapeHtml } from '../utils/html';
+import { getSystemSettings } from './systemSettings';
 
 /**
  * Email Service
@@ -37,11 +38,24 @@ function getAppUrl(): string {
   return (process.env.APP_URL || process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
 }
 
+const DEFAULT_INSTANCE_NAME = 'CozyVTT';
+
 /**
- * Instance display name shown in emails
+ * The instance's name, as emails show it: the name set in the setup wizard
+ * or Admin → Settings. While that is empty or still the default, the
+ * INSTANCE_NAME environment variable, which emails read before the stored
+ * name was used, so an instance that set it keeps its name. Settings that
+ * cannot be read do not stop an email.
  */
-function getInstanceName(): string {
-  return process.env.INSTANCE_NAME || 'CozyVTT';
+async function getInstanceName(): Promise<string> {
+  let stored = '';
+  try {
+    stored = (await getSystemSettings()).instanceName.trim();
+  } catch (err) {
+    logger.warn('Could not read the instance name for an email; using the default', { err });
+  }
+  if (stored && stored !== DEFAULT_INSTANCE_NAME) return stored;
+  return process.env.INSTANCE_NAME?.trim() || stored || DEFAULT_INSTANCE_NAME;
 }
 
 // ============================================
@@ -52,8 +66,8 @@ function getInstanceName(): string {
  * Wrap content in a styled CozyVTT email shell.
  * All styles are inlined for broad email client compatibility.
  */
-function emailLayout(content: string, previewText?: string): string {
-  const instanceName = escapeHtml(getInstanceName());
+function emailLayout(name: string, content: string, previewText?: string): string {
+  const instanceName = escapeHtml(name);
   const preview = previewText
     ? `<div style="display:none;max-height:0;overflow:hidden;font-size:1px;color:#FDFAF4;">${escapeHtml(previewText)}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;</div>`
     : '';
@@ -77,7 +91,7 @@ ${preview}
         <tr>
           <td style="background-color:#3D6B4F;border-radius:12px 12px 0 0;padding:28px 40px;text-align:center;">
             <div style="font-size:26px;font-weight:bold;color:#FDFAF4;letter-spacing:1px;">&#x2665; CozyVTT</div>
-            ${instanceName !== 'CozyVTT' ? `<div style="font-size:11px;color:#A8C8B0;margin-top:6px;letter-spacing:2px;text-transform:uppercase;">${instanceName}</div>` : ''}
+            ${name !== DEFAULT_INSTANCE_NAME ? `<div style="font-size:11px;color:#A8C8B0;margin-top:6px;letter-spacing:2px;text-transform:uppercase;">${instanceName}</div>` : ''}
           </td>
         </tr>
 
@@ -164,19 +178,20 @@ const h2 = (text: string) =>
 export async function sendTestEmail(toEmail: string, toName: string): Promise<void> {
   const transporter = createTransporter();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const instanceName = await getInstanceName();
 
   const content =
     h2('SMTP Test Successful') +
     p(`Hello <strong>${escapeHtml(toName)}</strong>,`) +
-    p('This is a test email from your CozyVTT instance. If you received this, your SMTP configuration is working correctly.') +
+    p(`This is a test email from ${escapeHtml(instanceName)}. If you received this, your SMTP configuration is working correctly.`) +
     divider +
     p('<em style="color:#8B7355;font-size:13px;">No action is required. This email was triggered from the Admin Dashboard.</em>');
 
   await transporter.sendMail({
     from: fromAddress,
     to: toEmail,
-    subject: 'CozyVTT — SMTP Test',
-    html: emailLayout(content, 'Your SMTP configuration is working correctly.'),
+    subject: `${instanceName} — SMTP Test`,
+    html: emailLayout(instanceName, content, 'Your SMTP configuration is working correctly.'),
   });
   logger.info('Email sent', { type: 'smtp_test', to: toEmail });
 }
@@ -192,12 +207,12 @@ export async function sendWelcomeEmail(
   const transporter = createTransporter();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
   const appUrl = getAppUrl();
-  const instanceName = getInstanceName();
+  const instanceName = await getInstanceName();
 
   const content =
     h2(`Welcome to ${escapeHtml(instanceName)}!`) +
     p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
-    p('An administrator has created an account for you on CozyVTT. You can sign in using the credentials below.') +
+    p(`An administrator has created an account for you on ${escapeHtml(instanceName)}. You can sign in using the credentials below.`) +
     infoBox(
       `<strong>Your login details</strong><br>` +
       `<span style="display:block;margin-top:8px;">Email: <code style="font-family:monospace;background:#E8DFCE;padding:1px 6px;border-radius:3px;">${escapeHtml(toEmail)}</code></span>` +
@@ -212,7 +227,7 @@ export async function sendWelcomeEmail(
     from: fromAddress,
     to: toEmail,
     subject: `Welcome to ${instanceName} — Your account is ready`,
-    html: emailLayout(content, `Your ${instanceName} account has been created.`),
+    html: emailLayout(instanceName, content, `Your ${instanceName} account has been created.`),
   });
   logger.info('Email sent', { type: 'welcome', to: toEmail });
 }
@@ -234,7 +249,7 @@ export async function sendInvitationEmail(
   const transporter = createTransporter();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
   const appUrl = getAppUrl();
-  const instanceName = getInstanceName();
+  const instanceName = await getInstanceName();
   const inviteLink = `${appUrl}/accept-invite?token=${token}`;
 
   const content =
@@ -255,7 +270,7 @@ export async function sendInvitationEmail(
     from: fromAddress,
     to: toEmail,
     subject: `${invitedByName} invited you to ${instanceName}`,
-    html: emailLayout(content, `Join ${instanceName} — set your password to get started.`),
+    html: emailLayout(instanceName, content, `Join ${instanceName} — set your password to get started.`),
   });
   logger.info('Email sent', { type: 'invitation', to: toEmail });
 }
@@ -272,12 +287,13 @@ export async function sendPasswordResetEmail(
   const transporter = createTransporter();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
   const appUrl = getAppUrl();
+  const instanceName = await getInstanceName();
   const resetLink = `${appUrl}/reset-password?token=${token}`;
 
   const content =
     h2('Password Reset Request') +
     p(`Hello <strong>${escapeHtml(displayName)}</strong>,`) +
-    p('We received a request to reset the password for your CozyVTT account. Click the button below to set a new password.') +
+    p(`We received a request to reset the password for your ${escapeHtml(instanceName)} account. Click the button below to set a new password.`) +
     ctaButton('Reset My Password', resetLink) +
     infoBox(
       `Or copy and paste this link into your browser:<br>` +
@@ -288,8 +304,8 @@ export async function sendPasswordResetEmail(
   await transporter.sendMail({
     from: fromAddress,
     to: email,
-    subject: 'CozyVTT — Password Reset Request',
-    html: emailLayout(content, 'Reset your CozyVTT password.'),
+    subject: `${instanceName} — Password Reset Request`,
+    html: emailLayout(instanceName, content, `Reset your ${instanceName} password.`),
   });
   logger.info('Email sent', { type: 'password_reset', to: email });
 }
@@ -310,7 +326,7 @@ export async function sendEmailChangedNotice(
 ): Promise<void> {
   const transporter = createTransporter();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
-  const instanceName = getInstanceName();
+  const instanceName = await getInstanceName();
 
   const content =
     h2('Your email address was changed') +
@@ -329,7 +345,7 @@ export async function sendEmailChangedNotice(
     from: fromAddress,
     to: oldEmail,
     subject: `Your ${instanceName} email address was changed`,
-    html: emailLayout(content, `The email address for your ${instanceName} account was changed.`),
+    html: emailLayout(instanceName, content, `The email address for your ${instanceName} account was changed.`),
   });
   logger.info('Email sent', { type: 'email_changed', to: oldEmail });
 }
@@ -347,7 +363,7 @@ export async function sendCampaignInvitationEmail(
   const transporter = createTransporter();
   const fromAddress = process.env.SMTP_FROM || process.env.SMTP_USER;
   const appUrl = getAppUrl();
-  const instanceName = getInstanceName();
+  const instanceName = await getInstanceName();
 
   const descriptionBlock = campaignDescription
     ? infoBox(`<strong>About this campaign:</strong><br><em style="color:#6B5035;">${escapeHtml(campaignDescription)}</em>`)
@@ -375,7 +391,7 @@ export async function sendCampaignInvitationEmail(
     from: fromAddress,
     to: toEmail,
     subject: `${instanceName} — ${dmName} invited you to "${campaignName}"`,
-    html: emailLayout(content, `You've been invited to join "${campaignName}" on ${instanceName}.`),
+    html: emailLayout(instanceName, content, `You've been invited to join "${campaignName}" on ${instanceName}.`),
   });
   logger.info('Email sent', { type: 'campaign_invitation', to: toEmail, campaign: campaignName });
 }

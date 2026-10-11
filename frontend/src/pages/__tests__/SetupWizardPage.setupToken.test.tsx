@@ -107,6 +107,26 @@ describe('SetupWizardPage', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/dashboard'));
   });
 
+  // Nothing used the timezone the wizard asked for, so it no longer asks.
+  it('asks for the instance name and no timezone, and sends none', async () => {
+    setupService.initializeSetup.mockResolvedValue({ message: 'Setup completed successfully', user: { id: 'u1', platformRole: 'ADMIN' } });
+    await openAccountStep();
+    fillAccount(true);
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    await screen.findByText('System Configuration');
+
+    expect(screen.getByLabelText(/Instance Name/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Timezone/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /next/i }));
+    await screen.findByText('Review & Confirm');
+    expect(screen.queryByText(/Timezone/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /complete setup/i }));
+    await waitFor(() => expect(setupService.initializeSetup).toHaveBeenCalledTimes(1));
+    expect(setupService.initializeSetup.mock.calls[0][0]).not.toHaveProperty('timezone');
+  });
+
   it('shows the server\'s answer when the token is wrong, and keeps the form', async () => {
     const message = 'Setup token is missing or wrong. Copy it from the backend log (docker compose logs backend), or from SETUP_TOKEN in .env if you set one.';
     setupService.initializeSetup.mockRejectedValue(apiError(403, 'Forbidden', message));

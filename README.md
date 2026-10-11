@@ -191,7 +191,6 @@ Most runtime configuration is managed through the Admin dashboard after setup. E
 | Settings | Instance Name | Displayed in the browser title and emails |
 | Settings | Allow Registration | Whether new users can self-register |
 | Settings | Require Admin Approval | New registrations must be approved before login |
-| Settings | Timezone | Server timezone for session timestamps |
 | Settings | SMTP | Shows the email settings from `.env`, with **Send Test Email** |
 | Settings | Upload Limits | Shows the per-type file size limits from `.env` (maps, tokens, audio, avatars, documents) |
 | Appearance | Default Theme | Theme shown on the login page and used for new users (each user can override from their profile) |

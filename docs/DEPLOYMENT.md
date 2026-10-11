@@ -814,6 +814,26 @@ Then apply it with `docker compose up -d`. Leave it out and the default of 20 ap
 
 Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT`.
 
+### Other settings
+
+The rest of what the backend reads from its environment. Every one is optional; leave it out and the default applies. On Docker, set the ones marked **Yes** in `.env` and apply them with `docker compose up -d`. The ones marked **No** are not passed to the backend container, so setting them in `.env` does nothing there; they are for an install without Docker (`backend/.env`).
+
+| Setting | Default | What it does | Docker |
+|---|---|---|---|
+| `SESSION_MAX_AGE` | `3600000` (1 hour) | How long a sign-in lasts without a request, in milliseconds | Yes |
+| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds | Yes |
+| `RATE_LIMIT_MAX_REQUESTS` | `300` | Requests per minute to `/api` from one address | Yes |
+| `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
+| `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
+| `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
+| `NODE_ENV` | `production` | `production` or `development` | No: the compose file sets `production` |
+| `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.yml` instead |
+| `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
+| `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
+| `FRONTEND_URL` | none | An older name for `APP_URL`, read only when `APP_URL` is not set | No: the compose file always sets `APP_URL` |
+
+The instance's name is not an environment setting: set it in the setup wizard or in **Admin → Settings → Instance Name**. It is the browser tab's title and is used in every email the instance sends.
+
 ---
 
 ## File Storage
