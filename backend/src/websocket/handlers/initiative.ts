@@ -320,6 +320,10 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       // The DM rolls for a whole encounter, so the DM's rolls have a ceiling
       // of their own; everyone else's count as dice rolls, below.
       if (socket.role === 'DM' && !withinCeiling(socket, 'initiative.roll')) return;
+      // TODO(play): a player's roll is counted against the dice.roll ceiling
+      // only after the spectator, token and expression checks below, so a
+      // flood of refused initiative rolls is never counted and each draws its
+      // own error. Count it here, before those checks, as dice.roll now does.
 
       // A spectator may not roll, as with dice.roll, and is told so before
       // anything is read. The token check below refuses one too, for a role

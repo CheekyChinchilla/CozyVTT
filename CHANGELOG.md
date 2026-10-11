@@ -201,6 +201,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Only an administrator can import the SRD creatures, and the import gives up on Open5e after 15 seconds.** **Import D&D 5e SRD** in the Creature Library fills the library every campaign shares and fetches from Open5e each time, and any DM could start it, which means anyone, since anyone can create a campaign; a script could keep the server fetching from Open5e and hold every other DM's import back. It also waited on an Open5e that did not answer for minutes, followed the next page wherever Open5e's answer pointed, and stored creatures without checking them. Now only an administrator sees the button; a DM who is not one is told to ask an administrator, and the creatures an administrator imports appear in every campaign. Each page from Open5e has 15 seconds, only Open5e's own address is followed, a creature whose stat block the library would refuse is left out, and a failed import says why and adds nothing. An import started from the command line at the same time as one from the app no longer adds every creature twice.
 
+- **Malformed dice rolls now count towards the dice roll limit.** A roll sent with a malformed expression, or by a spectator, was answered with an error before it was counted against the limit of 50 dice rolls a second and 200 a minute, so a script could send them without end and get an error back for every one. Every roll is now counted first; past the limit the sender is told once, as for valid rolls. Nobody rolling from the app notices any difference.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
