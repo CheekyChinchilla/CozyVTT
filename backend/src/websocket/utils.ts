@@ -1,9 +1,11 @@
 import { Server } from 'socket.io';
 import { CampaignRole } from '@prisma/client';
+import type { GameSystem, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { jsonOrNull } from '../utils/prisma-json';
 import { canReadMap } from '../services/permissions';
+import { characterForReader } from '../utils/keeperNotes';
 import type { AuthenticatedFields } from './auth';
 
 /**
@@ -54,6 +56,24 @@ export function announceRosterChange(userId: string, campaignIds: string[], acti
     } catch (error) {
       logger.warn('roster.updated not broadcast; the change stands', { err: error, campaignId, userId });
     }
+  }
+}
+
+/**
+ * `character.updated` to a campaign's room with the sheet in it, as each
+ * member may read it: the Keeper's Notes go to the campaign's DM alone
+ * (utils/keeperNotes.ts). `fields` are the rest of the payload, the same for
+ * everyone.
+ */
+export async function emitCharacterUpdated<C extends { gameSystem: GameSystem | null; data: Prisma.JsonValue }>(
+  campaignId: string,
+  character: C,
+  fields: Record<string, unknown>
+): Promise<void> {
+  const io = getSocketInstance();
+  for (const s of await campaignSockets(io, campaignId)) {
+    const keeper = (s as unknown as AuthenticatedFields).role === 'DM';
+    s.emit('character.updated', { ...fields, character: characterForReader(character, keeper) });
   }
 }
 
@@ -146,6 +166,33 @@ export async function emitToMapReaders(
     }
   } catch (error) {
     logger.warn(`${event} not broadcast; the change stands`, { err: error, mapId });
+  }
+}
+
+/**
+ * emitToMapReaders, with the event and its data decided per reader from
+ * their role: what a player may be sent of a map's walls and lights differs
+ * from what the DM is. `sendFor` returns null for a reader who is told
+ * nothing.
+ */
+export async function emitToMapReadersAs(
+  io: Server,
+  campaignId: string,
+  mapId: string,
+  what: string,
+  sendFor: (role: string | undefined) => { event: string; data: unknown } | null
+): Promise<void> {
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
+    const currentMapId = campaign?.currentMapId ?? null;
+    for (const s of await campaignSockets(io, campaignId)) {
+      const role = (s as unknown as AuthenticatedFields).role;
+      if (!canReadMap(role, mapId, currentMapId)) continue;
+      const send = sendFor(role);
+      if (send) s.emit(send.event, send.data);
+    }
+  } catch (error) {
+    logger.warn(`${what} not broadcast; the change stands`, { err: error, mapId });
   }
 }
 

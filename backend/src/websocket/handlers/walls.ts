@@ -10,7 +10,11 @@ import { prisma } from '../../config/database';
 import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
 import type { WallSegment } from '../../types/walls';
 import logger from '../../utils/logger';
-import { emitToMapReaders } from '../utils';
+import { emitToMapReaders, emitToMapReadersAs } from '../utils';
+import {
+  filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
+  wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
+} from '../../utils/spirit-layer';
 import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
@@ -28,7 +32,37 @@ const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } a
  * adds in one tick) apply one after another instead of each overwriting the
  * last. A refusal is returned as its message.
  */
-type Locked<T> = { refused: string } | { done: T };
+type Locked<T> = { refused: string; current?: WallSegment } | { done: T };
+
+/**
+ * What a player's tokens can see of a lit map, for which doors they may open
+ * or close: null on a map without dynamic lighting, where every door is
+ * theirs to try, and on one they may not read, which the toggle then refuses.
+ * Read without the map's lock: it reads the player's plane, which is a
+ * database read of its own, and casts rays from each of their tokens, and a
+ * player can send forty toggles a second.
+ */
+async function doorSightFor(
+  mapId: string,
+  campaignId: string,
+  role: string | undefined,
+  userId: string
+): Promise<PlayerSight | null> {
+  const map = await prisma.map.findUnique({
+    where: { id: mapId },
+    select: {
+      ...EXTENT, wallSegments: true, tokens: true, lightingEnabled: true, lights: true, globalIllumination: true,
+      campaign: { select: { currentMapId: true } },
+    },
+  });
+  if (!map || map.campaignId !== campaignId || !map.lightingEnabled) return null;
+  if (!canReadMap(role, mapId, map.campaign.currentMapId)) return null;
+  const spiritVisible = await getSpiritVisibility(campaignId, userId);
+  return playerSightOnLitMap(
+    filterTokensByRole(map.tokens, role ?? 'PLAYER', spiritVisible, userId), viewerIdFor(role, userId), map.wallSegments,
+    map.width, map.height, map.gridSize, map.lights, map.globalIllumination
+  );
+}
 
 export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
@@ -71,7 +105,9 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:added', { mapId, segment: added, ...echoedOpId(data) });
+      await emitToMapReadersAs(io, campaignId, mapId, 'wall:added', (role) => ({
+        event: 'wall:added', data: { mapId, segment: wallSentTo(role, added), ...echoedOpId(data) },
+      }));
       resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:add failed', { err: error });
@@ -141,13 +177,18 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       const campaignId = socket.campaignId;
       const role = socket.role;
+      const userId = socket.userId!;
       const sent = parsed.data;
-      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<WallSegment>> => {
+      // A player's sight on a lit map, worked out before the lock is taken,
+      // so no edit of this map waits on it; the door is judged against it
+      // under the lock, where it is and as it is then.
+      const sight = role === 'DM' ? null : await doorSightFor(mapId, campaignId, role, userId);
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<{ before: WallSegment; after: WallSegment }>> => {
         // A player may toggle doors only on the map the campaign is showing;
         // a prepared map is the DM's until they switch to it.
         const map = await tx.map.findUnique({
           where: { id: mapId },
-          select: { ...EXTENT, wallSegments: true, campaign: { select: { currentMapId: true } } },
+          select: { ...EXTENT, wallSegments: true, lightingEnabled: true, campaign: { select: { currentMapId: true } } },
         });
         if (!map || map.campaignId !== campaignId || !canReadMap(role, mapId, map.campaign.currentMapId)) {
           return { refused: 'Map not found' };
@@ -161,19 +202,34 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         // and only that: the segment they send is otherwise ignored, so the door
         // stays where the DM drew it. Storing the whole segment let a player
         // move or stretch any unlocked door across the map by toggling it.
-        // TODO(maps): a player's toggle is not checked against sight, so they
-        // can open a door none of their tokens can see, and "That door is
-        // locked" tells them a door is there. Refuse a toggle of a door the
-        // player's tokens cannot see; MapCanvas should stop offering it too.
         let updated: WallSegment;
         if (role !== 'DM') {
+          const isDoor = ['door-open', 'door-closed', 'door-locked'].includes(existing[idx].type);
+          if (!isDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
+          // On a lit map, only a door one of their tokens can see, by the rule
+          // the map shows doors by; asked before whether it is locked, so a
+          // door in the dark tells them nothing. The door is judged where it
+          // is now, so one the DM moved since the sight was worked out is
+          // refused if it went out of it, and on a map lit since then, with
+          // no sight worked out, no door is seen yet.
+          // TODO(maps): manual fog is not asked. A player can still toggle a
+          // door in unrevealed squares, which their screen covers, and learn
+          // from the answer that it is there. Refuse a door with no revealed
+          // square on either side of its middle, and offer none in the
+          // client's doorAccess.ts.
+          const door = existing[idx];
+          if (map.lightingEnabled && !(sight?.seesPoint((door.x1 + door.x2) / 2, (door.y1 + door.y2) / 2) ?? false)) {
+            return { refused: 'You cannot see that door', current: door };
+          }
           const targetType = sent.type;
           const currentType = existing[idx].type;
-          // Locked doors cannot be opened by players
-          if (currentType === 'door-locked') return { refused: 'That door is locked' };
+          // Locked doors cannot be opened by players. The refusal carries the
+          // segment, so the player's page, which drew the door open as it
+          // asked, is put back.
+          if (currentType === 'door-locked') return { refused: 'That door is locked', current: existing[idx] };
           const isDoorToggle = targetType === 'door-open' || targetType === 'door-closed';
           const currentIsDoor = currentType === 'door-open' || currentType === 'door-closed';
-          if (!isDoorToggle || !currentIsDoor) return { refused: 'Players may only toggle doors' };
+          if (!isDoorToggle || !currentIsDoor) return { refused: 'Players may only toggle doors', current: existing[idx] };
           updated = { ...existing[idx], type: targetType };
         } else {
           // The DM may move a wall, within the map's bounds. One stored outside
@@ -182,17 +238,27 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
           updated = sent;
         }
 
+        const before = existing[idx];
         existing[idx] = updated;
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(existing) } });
-        return { done: updated };
+        return { done: { before, after: updated } };
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
+        // The wall as this socket may see it, with no operation id, so its page
+        // takes it in place of what it drew; a locked door stays closed to
+        // anyone but the DM.
+        if (outcome.current) socket.emit('wall:updated', { mapId, segment: wallSentTo(role, outcome.current) });
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'wall:updated', { mapId, segment: outcome.done, ...echoedOpId(data) });
-      resendSightAfterChange(io, campaignId, mapId);
+      // A member whose copy of the wall is unchanged, a player's of a closed
+      // door locked or unlocked, is told nothing, and is not sent the map again.
+      const { before, after } = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'wall:updated', (role) =>
+        wallChangeSentTo(role, mapId, before, after, echoedOpId(data))
+      );
+      if (wallChangeReachesPlayers(before, after)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('wall:update failed', { err: error });
       socket.emit('error', { message: 'Failed to update wall segment' });
@@ -222,21 +288,27 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
 
       const campaignId = socket.campaignId;
       const next = parsed.data;
-      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<null>> => {
+      // Answers the list it replaced, so each member is told only of a change to their copy.
+      const outcome = await withMapsLocked([mapId], async (tx): Promise<Locked<unknown>> => {
         const map = await tx.map.findUnique({ where: { id: mapId }, select: { ...EXTENT, wallSegments: true } });
         if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
         if (wallOutsideMap(next, map, map.wallSegments)) return { refused: WALL_OUTSIDE_MAP_MESSAGE };
 
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(next) } });
-        return { done: null };
+        return { done: map.wallSegments };
       });
       if ('refused' in outcome) {
         socket.emit('error', { message: outcome.refused });
         return;
       }
 
-      await emitToMapReaders(io, campaignId, mapId, 'walls:replaced', { mapId, segments: next, ...echoedOpId(data) });
-      resendSightAfterChange(io, campaignId, mapId);
+      // A player whose walls are as they were, closed doors locked or
+      // unlocked, is told nothing, and is not sent the map again.
+      const before = outcome.done;
+      await emitToMapReadersAs(io, campaignId, mapId, 'walls:replaced', (role) =>
+        wallsReplacedSentTo(role, mapId, before, next, echoedOpId(data))
+      );
+      if (wallListChangeReachesPlayers(before, next)) resendSightAfterChange(io, campaignId, mapId);
     } catch (error) {
       logger.error('walls:replace failed', { err: error });
       socket.emit('error', { message: 'Failed to replace wall segments' });
@@ -262,8 +334,8 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
       // the map the campaign is showing.
       if (!canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
-      const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-      socket.emit('walls:replaced', { mapId, segments });
+      // A locked door goes to anyone but the DM as a closed one.
+      socket.emit('walls:replaced', { mapId, segments: wallsSentTo(socket.role, map.wallSegments) });
     } catch (error) {
       logger.error('walls:request failed', { err: error });
     }

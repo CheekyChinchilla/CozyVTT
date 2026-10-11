@@ -22,8 +22,12 @@ import {
   UpdateDocumentContentSchema,
   TYPED_DOCUMENT_MIME,
 } from '../validators/documents';
-import { canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, spiritLayerAssetIdsHiddenFrom } from '../services/permissions';
+import {
+  canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, mayChangeAsset, spiritLayerAssetIdsHiddenFrom,
+  assetChangeFactsFor,
+} from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
+import { UpdateAssetScopeSchema } from '../validators/assetScope';
 import path from 'path';
 import fs from 'fs';
 import { pipeline } from 'stream';
@@ -263,7 +267,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const total = await prisma.asset.count({ where });
 
     // Get paginated assets.
-    const assets = await prisma.asset.findMany({
+    const rows = await prisma.asset.findMany({
       where,
       select: ASSET_PUBLIC_SELECT,
       orderBy: {
@@ -272,6 +276,14 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       skip,
       take: limitNum,
     });
+
+    // Each says whether the caller may delete it, move it out of its scope,
+    // or rewrite it if it is a document, by the rule those routes apply, so a
+    // page offers those controls exactly when they would be taken.
+    const facts = isAdmin ? undefined : await assetChangeFactsFor(userId);
+    const assets = await Promise.all(
+      rows.map(async (asset) => ({ ...asset, canChange: await mayChangeAsset(asset, userId, isAdmin, facts) }))
+    );
 
     return res.json({
       assets,
@@ -559,6 +571,20 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
   }
 });
 
+/** Why a delete was refused, by the asset's scope. */
+const DELETE_REFUSALS: Record<AssetScopes, string> = {
+  GLOBAL: 'Only admins or the uploading global asset manager can delete global assets',
+  USER: 'Only the owner can delete personal assets',
+  CAMPAIGN: 'Only the uploader while a member of the campaign, its DM, or an admin can delete campaign assets',
+};
+
+/** Why a move out of the asset's scope was refused, by that scope. */
+const MOVE_REFUSALS: Record<AssetScopes, string> = {
+  GLOBAL: 'Only admins or the uploading global asset manager can move a global asset out of the library',
+  USER: 'Only the asset owner can move personal assets',
+  CAMPAIGN: 'Only the asset owner or campaign DM can move this asset',
+};
+
 /**
  * DELETE /api/assets/:id
  * Delete an asset
@@ -584,64 +610,12 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       });
     }
 
-    // Gather facts needed for permission check
-    const isOwner = asset.uploadedById === userId;
     const isAdmin = req.session.platformRole === 'ADMIN';
 
-    // globalAssetManager requires a DB read (not stored in session). Read it
-    // whenever it could still change the answer: a GLOBAL asset where the
-    // requester is not already an admin.
-    //
-    // This guard used to skip the read for the owner (`!isAdmin && !isOwner`),
-    // but the only rule that consults the flag also requires ownership — so for
-    // an owner it stayed false and a global asset manager could never delete
-    // their own global asset. Same lazy-read shape as the scope-change handler
-    // below, which has always been correct.
-    let isGlobalAssetManager = false;
-    if (!isAdmin && asset.scope === 'GLOBAL') {
-      const userRecord = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { globalAssetManager: true },
-      });
-      isGlobalAssetManager = userRecord?.globalAssetManager === true;
-    }
-
-    let isCampaignDM = false;
-    let isCampaignMember = false;
-    if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
-      });
-      isCampaignDM = membership?.role === 'DM';
-      isCampaignMember = membership !== null;
-    }
-
-    // Scope-based permission matrix
-    if (asset.scope === 'GLOBAL') {
-      // Admin can always delete; globalAssetManager can delete their own global assets
-      if (!isAdmin && !(isOwner && isGlobalAssetManager)) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'Only admins or the uploading global asset manager can delete global assets',
-        });
-      }
-    } else if (asset.scope === 'USER') {
-      // Only the owner or admin can delete personal assets
-      if (!isOwner && !isAdmin) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'Only the owner can delete personal assets',
-        });
-      }
-    } else if (asset.scope === 'CAMPAIGN') {
-      // The uploader while still a member, the campaign's DM, or an admin: a
-      // campaign asset stays with the campaign once its uploader has left.
-      if (!(isOwner && isCampaignMember) && !isCampaignDM && !isAdmin) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'Only the uploader while a member of the campaign, its DM, or an admin can delete campaign assets',
-        });
-      }
+    // Scope-based permission matrix, shared with the scope move and the
+    // document editor (mayChangeAsset).
+    if (!(await mayChangeAsset(asset, userId, isAdmin))) {
+      return res.status(403).json({ error: 'Forbidden', message: DELETE_REFUSALS[asset.scope] });
     }
 
     // Whatever shows this asset is not told when it goes, and a deleted file
@@ -824,7 +798,10 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
 /**
  * PUT /api/assets/documents/:id/content
  * Replace the text of a plain text or Markdown document.
- * Requires: the uploader, or an admin
+ * Requires: whoever may delete it (mayChangeAsset): for a campaign's document
+ * its uploader while still a member, the campaign's DM, or an admin; for a
+ * global one an admin, or its uploader while they manage global assets; for a
+ * personal one its uploader, or an admin
  *
  * A PDF cannot be edited here; it is a file, not text. The size recorded on
  * the row is updated so the library keeps telling the truth about it.
@@ -845,7 +822,7 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
     }
 
     const isAdmin = req.session.platformRole === 'ADMIN';
-    if (asset.uploadedById !== req.session.userId && !isAdmin) {
+    if (!(await mayChangeAsset(asset, req.session.userId!, isAdmin))) {
       // 404 rather than 403: a document you may not edit is one whose existence
       // this route should not confirm.
       return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
@@ -1290,22 +1267,25 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
  * Body: { scope: 'GLOBAL' | 'USER' | 'CAMPAIGN', campaignId?: string }
  *
  * Permission matrix:
- *   Admin / globalAssetManager → any move including to/from GLOBAL
- *   Owner → USER → CAMPAIGN (own campaign), CAMPAIGN → USER, CAMPAIGN → CAMPAIGN
- *   Campaign DM (not owner) → CAMPAIGN → USER, CAMPAIGN → CAMPAIGN (source campaign only)
+ *   Admin → any move
+ *   Moving out of a scope → whoever may delete the asset there (mayChangeAsset):
+ *     GLOBAL: its uploader while a global asset manager; USER: its owner;
+ *     CAMPAIGN: its uploader while still a member, or the campaign's DM
+ *   Moving to or from GLOBAL → also a global asset manager
+ *   Moving to CAMPAIGN → also whoever may upload that type there
  */
 router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { id } = req.params;
-    const { scope, campaignId } = req.body;
-    const userId = req.session.userId!;
-
-    if (!scope || !['GLOBAL', 'USER', 'CAMPAIGN'].includes(scope)) {
+    const parsed = UpdateAssetScopeSchema.safeParse(req.body);
+    if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: 'scope must be GLOBAL, USER, or CAMPAIGN',
+        message: parsed.error.issues[0]?.message ?? 'scope must be GLOBAL, USER, or CAMPAIGN',
       });
     }
+    const { scope, campaignId } = parsed.data;
+    const userId = req.session.userId!;
 
     const asset = await prisma.asset.findUnique({ where: { id } });
     if (!asset) {
@@ -1313,7 +1293,6 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     }
 
     const isAdmin = req.session.platformRole === 'ADMIN';
-    const isOwner = asset.uploadedById === userId;
 
     // Check globalAssetManager only when GLOBAL scope is involved
     let isGlobalAssetManager = false;
@@ -1351,26 +1330,11 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
 
     // Non-admin permission checks (GLOBAL already handled above)
     if (!isAdmin) {
-      // Moving FROM USER: only the owner can initiate this
-      if (asset.scope === 'USER' && !isOwner) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'Only the asset owner can move personal assets',
-        });
-      }
-
-      // Moving FROM CAMPAIGN: the owner while still a member, or the DM of
-      // the source campaign, as for a delete
-      if (asset.scope === 'CAMPAIGN' && asset.campaignId) {
-        const sourceMembership = await prisma.campaignMembership.findUnique({
-          where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
-        });
-        if (!(isOwner && sourceMembership) && sourceMembership?.role !== 'DM') {
-          return res.status(403).json({
-            error: 'Forbidden',
-            message: 'Only the asset owner or campaign DM can move this asset',
-          });
-        }
+      // Moving out of where it is: whoever may delete it there. A global asset
+      // manager moving another manager's global asset out of the library
+      // would take it from every DM, which deleting it forbids.
+      if (!(await mayChangeAsset(asset, userId, false))) {
+        return res.status(403).json({ error: 'Forbidden', message: MOVE_REFUSALS[asset.scope] });
       }
 
       // Moving TO CAMPAIGN: the same question the upload route asks, so a
@@ -1387,7 +1351,7 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     const updated = await prisma.asset.update({
       where: { id },
       data: {
-        scope: scope as AssetScope,
+        scope,
         campaignId: resolvedCampaignId,
       },
       select: ASSET_PUBLIC_SELECT,

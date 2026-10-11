@@ -634,7 +634,11 @@ export async function canReadAsset(
 ): Promise<boolean> {
   if (isAdmin) return true;
 
-  if (asset.scope === 'USER') {
+  // A campaign asset with no campaign recorded is read as a personal one. The
+  // foreign key nulls the campaign when one is deleted; the delete route turns
+  // its assets personal first, and this keeps any other way of removing a
+  // campaign from opening its assets to everyone.
+  if (asset.scope === 'USER' || (asset.scope === 'CAMPAIGN' && !asset.campaignId)) {
     if (asset.uploadedById === userId) return true;
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
     return documentSharedWithUser(asset.id, userId);
@@ -651,8 +655,69 @@ export async function canReadAsset(
     return documentSharedWithUser(asset.id, userId);
   }
 
-  // GLOBAL, or a campaign asset with no campaign recorded.
+  // GLOBAL.
   return true;
+}
+
+/**
+ * Whether a user may change an asset where it is: delete it, move it out of
+ * its scope, or rewrite a document's text. One rule for all three, so a
+ * right the delete route takes away cannot be kept through another route.
+ *
+ * - GLOBAL: an admin, or its uploader while they still manage global assets.
+ * - USER: its uploader, or an admin.
+ * - CAMPAIGN: its uploader while still a member, the campaign's DM, or an
+ *   admin. A campaign asset stays with the campaign once its uploader leaves.
+ *   One with no campaign recorded is an admin's alone.
+ *
+ * `known` is what the rule reads about the user, read once beforehand
+ * (assetChangeFactsFor) when it is asked of a whole list; without it the
+ * rule reads what it needs.
+ */
+export async function mayChangeAsset(
+  asset: Pick<AssetAccessFacts, 'scope' | 'uploadedById' | 'campaignId'>,
+  userId: string,
+  isAdmin: boolean,
+  known?: AssetChangeFacts
+): Promise<boolean> {
+  if (isAdmin) return true;
+  const isOwner = asset.uploadedById === userId;
+
+  if (asset.scope === 'GLOBAL') {
+    if (!isOwner) return false;
+    if (known) return known.globalAssetManager;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { globalAssetManager: true } });
+    return user?.globalAssetManager === true;
+  }
+
+  if (asset.scope === 'USER') return isOwner;
+
+  if (!asset.campaignId) return false;
+  const role = known
+    ? (known.roles.get(asset.campaignId) ?? null)
+    : ((await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
+        select: { role: true },
+      }))?.role ?? null);
+  return (isOwner && role !== null) || role === 'DM';
+}
+
+/** What mayChangeAsset reads about a user: whether they manage global assets, and their role in each campaign. */
+export interface AssetChangeFacts {
+  globalAssetManager: boolean;
+  roles: ReadonlyMap<string, CampaignRole>;
+}
+
+/** A user's AssetChangeFacts, in two reads, for asking mayChangeAsset of many assets. */
+export async function assetChangeFactsFor(userId: string): Promise<AssetChangeFacts> {
+  const [user, memberships] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { globalAssetManager: true } }),
+    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } }),
+  ]);
+  return {
+    globalAssetManager: user?.globalAssetManager === true,
+    roles: new Map(memberships.map((m) => [m.campaignId, m.role])),
+  };
 }
 
 /**

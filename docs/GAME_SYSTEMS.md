@@ -64,6 +64,16 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 
 A sheet stored before a limit existed still loads; its next save is refused, with the path of each field over a limit in `validationErrors`.
 
+### A field only the DM sees: Keeper's Notes
+
+A sheet is read by the whole table, its player included, so a field meant for the DM alone has to be withheld by the server, never just hidden on the page. Call of Cthulhu has one: the top-level `notes`, shown as **Keeper's Notes**. `backend/src/utils/keeperNotes.ts` lists it in `KEEPER_ONLY_FIELD` and applies these rules:
+
+- **Reading.** Only the DM of the character's campaign (the Keeper) is sent it, on `GET /api/characters`, `GET /api/characters/:id`, every save's reply and every `character.updated` event. The Keeper is always sent it, as an empty string when nothing is written, and the editor offers the box exactly when the field arrives; anyone else, the character's owner included, never gets the key.
+- **Writing.** Only the Keeper can change it. A save by anyone else (the owner, a script) keeps the stored value, whatever it sent for the field. A character created by anyone but the DM of the campaign it is created in is stored without it.
+- **Moving.** A character entering a campaign it was not in (assigned to another campaign, or brought in when its owner accepts an invitation) loses it, and so does a copy. The notes were the last campaign's Keeper's, and a player who moved their investigator into a campaign they run would otherwise be its Keeper and read them.
+
+The DM's campaign export carries the notes. To give another system such a field, add it to `KEEPER_ONLY_FIELD`; every route already goes through the helpers.
+
 ### Flexible sheets
 
 A character or template with no game system has a **Flexible** sheet: a list of sections the player lays out. It has no enum value and no per-system files, but it is checked like the others, by `backend/src/validators/game-systems/flexible.schema.ts`, on create, update, template publish and template update (character import goes through create). The sheet must be an object, and each section's `type` decides the list its page reads:

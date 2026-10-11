@@ -11,6 +11,7 @@ import { broadcastToCampaign } from '../websocket/utils';
 import logger from '../utils/logger';
 import { acceptInvitationSchema } from '../validators/invitations';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
+import { clearKeeperNotes } from '../utils/keeperNotes';
 
 const router = Router();
 
@@ -160,8 +161,10 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
           },
         });
 
-        // Assign characters to campaign
+        // Assign characters to campaign. Each leaves any Keeper's Notes
+        // behind: they belong to the Keeper of a campaign it was in before.
         if (characterIds.length > 0) {
+          for (const characterId of characterIds) await clearKeeperNotes(tx, characterId);
           const assigned = await tx.character.updateMany({
             where: {
               id: { in: characterIds },

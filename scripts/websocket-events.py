@@ -356,12 +356,14 @@ def collect():
         # The token move handlers hand the event name to a helper that picks
         # the recipients, so the name is that call's first argument. A map's
         # live edits go through emitToMapReaders (or the map routes' wrapper,
-        # tellMapReaders), where the name is the first quoted argument.
+        # tellMapReaders), where the name is the first quoted argument; the
+        # per-role forms (emitToMapReadersAs, tellMapReadersAs) take the event
+        # they stand for in the same place.
         patterns = (
             r"\.emit\(\s*'([^']+)'",
             r"broadcastTo(?:Campaign|User)\(\s*[^,]+,\s*'([^']+)'",
-            r"emitMoveTo(?:VisibleSockets|DragRecipients)\(\s*'([^']+)'",
-            r"(?:emitToMapReaders|tellMapReaders)\(\s*[^'()]*'([^']+)'",
+            r"emitMoveToVisibleSockets\(\s*'([^']+)'",
+            r"(?:emitToMapReaders|tellMapReaders)(?:As)?\(\s*[^'()]*'([^']+)'",
         )
         for pattern in patterns:
             for m in re.finditer(pattern, plain):

@@ -9,7 +9,7 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canReadAsset } from '../services/permissions';
+import { canReadAsset, mayChangeAsset } from '../services/permissions';
 import { LinkDocumentSchema } from '../validators/campaignDocuments';
 import logger from '../utils/logger';
 
@@ -17,7 +17,9 @@ const router = Router();
 
 /**
  * GET /api/campaigns/:campaignId/documents
- * The documents shared with this campaign.
+ * The documents shared with this campaign, each with `canEdit`: whether the
+ * caller may rewrite it, by the rule the edit route applies (mayChangeAsset),
+ * so the page offers Edit exactly when a save would be taken.
  * Requires: Campaign membership (any role)
  */
 router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
@@ -32,6 +34,10 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
       fileSize: true,
       createdAt: true,
       uploadedBy: { select: { id: true, displayName: true } },
+      // For canEdit below; not sent.
+      scope: true,
+      campaignId: true,
+      uploadedById: true,
     } as const;
 
     // Two ways a document can belong here, and the list has to show both or
@@ -55,7 +61,7 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
     ]);
 
     const linkedIds = new Set(links.map((l) => l.assetId));
-    const documents = [
+    const listed = [
       ...links.map((link) => ({
         ...link.asset,
         linkedAt: link.createdAt,
@@ -73,6 +79,14 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
           shared: false,
         })),
     ];
+    const userId = req.session.userId!;
+    const isAdmin = req.session.platformRole === 'ADMIN';
+    const documents = await Promise.all(
+      listed.map(async ({ scope, campaignId: assetCampaignId, uploadedById, ...doc }) => ({
+        ...doc,
+        canEdit: await mayChangeAsset({ scope, campaignId: assetCampaignId, uploadedById }, userId, isAdmin),
+      }))
+    );
 
     return res.status(200).json({ documents });
   } catch (error) {

@@ -24,11 +24,13 @@ const h = vi.hoisted(() => {
     userRole: 'DM' as string,
     currentMap: null as unknown,
     joinedEpoch: 1,
+    characters: [] as Array<{ id: string; userId: string; name: string }>,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const emitted: Array<[string, unknown]> = [];
   const setPlayerSpiritVisible = vi.fn();
   const deleteToken = vi.fn();
+  const getCharacter = vi.fn();
   const raw = {
     on(event: string, fn: (data: never) => void) {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -48,6 +50,7 @@ const h = vi.hoisted(() => {
     state,
     setPlayerSpiritVisible,
     deleteToken,
+    getCharacter,
     handlers,
     emitted,
     raw,
@@ -67,7 +70,10 @@ vi.mock('@/contexts/CampaignContext', async () => {
     h.set({ currentMap: typeof next === 'function' ? (next as (p: unknown) => unknown)(h.state.currentMap) : next });
   };
   const noop = () => undefined;
-  const campaign = { id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, memberships: [], characters: [] };
+  const campaign = {
+    id: 'campaign-1', name: 'Test', spiritLayerEnabled: false, memberships: [],
+    get characters() { return h.state.characters; },
+  };
   return {
     useCampaign: () => {
       useSyncExternalStore(h.subscribe, h.snapshot);
@@ -119,7 +125,8 @@ vi.mock('@/services/map.service', () => ({
 
 vi.mock('@/services/api', () => {
   const client = new Proxy({}, {
-    get: (_target, prop: string) => (prop === 'deleteToken' ? h.deleteToken : vi.fn().mockResolvedValue({})),
+    get: (_target, prop: string) =>
+      prop === 'deleteToken' ? h.deleteToken : prop === 'getCharacter' ? h.getCharacter : vi.fn().mockResolvedValue({}),
   });
   return { api: client, default: client };
 });
@@ -170,9 +177,10 @@ beforeEach(() => {
   h.emitted.length = 0;
   h.setPlayerSpiritVisible.mockClear();
   h.deleteToken.mockReset().mockResolvedValue({});
+  h.getCharacter.mockReset();
   useGameStore.getState().setTokens([]);
   h.handlers.clear();
-  h.set({ userRole: 'DM', joinedEpoch: 1, currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
+  h.set({ userRole: 'DM', joinedEpoch: 1, characters: [], currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
 });
 
 function openWallSelect() {
@@ -538,5 +546,47 @@ describe("the token menu's Remove from Map", () => {
 
     expect(await screen.findByText(/Network down|Failed to remove the token/)).toBeInTheDocument();
     expect(useGameStore.getState().tokens['tok-1']).toBeDefined();
+  });
+});
+
+/**
+ * The token menu offers View Character Sheet only for a character of this
+ * campaign, which every member may read. A token keeps its character when
+ * the character leaves the campaign, and the item used to be offered for it
+ * anyway: the refusal reached only the console, so the click did nothing.
+ * A sheet that cannot be loaded now says why.
+ */
+describe("the token menu's View Character Sheet", () => {
+  const aldra = (characterId: string) => ({
+    id: 'tok-pc', name: 'Aldra', imageUrl: '', position: { x: 0, y: 19 }, size: { width: 1, height: 1 },
+    layer: 'material', visible: true, type: 'player', conditions: [], characterId,
+  } as unknown as Token);
+
+  function openMenuOn(token: Token) {
+    act(() => { useGameStore.getState().setTokens([token]); });
+    const input = document.querySelector('canvas[class*="cursor-"]');
+    if (!input) throw new Error('no input canvas');
+    fireEvent.contextMenu(input, { clientX: 10, clientY: 10 });
+  }
+
+  it('is not offered for a character that is not in this campaign', () => {
+    render(<MapCanvas />);
+    openMenuOn(aldra('char-elsewhere'));
+    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+    expect(screen.queryByText('View Character Sheet')).not.toBeInTheDocument();
+  });
+
+  it('is offered for a character of this campaign, and says why when the sheet cannot be loaded', async () => {
+    h.set({ characters: [{ id: 'char-here', userId: 'player-1', name: 'Aldra' }] });
+    h.getCharacter.mockRejectedValue({
+      isAxiosError: true,
+      response: { status: 403, data: { error: 'Forbidden', message: 'You do not have permission to view this character' } },
+    });
+    render(<MapCanvas />);
+    openMenuOn(aldra('char-here'));
+    await act(async () => { fireEvent.click(screen.getByText('View Character Sheet')); });
+
+    expect(h.getCharacter).toHaveBeenCalledWith('char-here');
+    expect(await screen.findByText('You do not have permission to view this character')).toBeInTheDocument();
   });
 });

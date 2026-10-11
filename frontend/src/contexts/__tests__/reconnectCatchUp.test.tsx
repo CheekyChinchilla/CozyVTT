@@ -96,6 +96,29 @@ it('refreshes the member list when the roster changes', async () => {
   await waitFor(() => expect(latest!.campaign?.memberships?.map((m) => m.userId)).toEqual(['me', 'newcomer']));
 });
 
+// A character brought into the campaign is announced the same way. The
+// campaign's character list decides which tokens offer View Character Sheet
+// and Roll..., so it follows too.
+it('refreshes the character list when a character is brought in', async () => {
+  getCampaign.mockResolvedValueOnce({ ...campaignAs('ACTIVE', 'm1', 'DM'), characters: [] });
+  render(
+    <MemoryRouter initialEntries={['/campaigns/c1']}>
+      <Routes>
+        <Route path="/campaigns/:id" element={<CampaignProvider><Probe /></CampaignProvider>} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(latest?.campaign?.id).toBe('c1'));
+  const onRoster = socketOn.mock.calls.filter(([event]) => event === 'roster.updated').pop()?.[1] as ((d: unknown) => void) | undefined;
+
+  getCampaign.mockResolvedValueOnce({
+    ...campaignAs('ACTIVE', 'm1', 'DM'),
+    characters: [{ id: 'char-new', userId: 'newcomer', name: 'Aldra' }],
+  });
+  await act(async () => { onRoster!({ action: 'character.assigned', campaignId: 'c1', characterId: 'char-new', userId: 'newcomer' }); });
+  await waitFor(() => expect(latest!.campaign?.characters?.map((c) => c.id)).toEqual(['char-new']));
+});
+
 
 // A catch-up still waiting on the server when the page moves to another
 // campaign wrote the first campaign's map, tokens and session over the new

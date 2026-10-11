@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest';
 import fixture from '../__fixtures__/vision-scenarios.json';
 import { computeVisibility, isPointVisible } from '../raycasting';
 import { tierAt, isSeen, type Viewer, type Lit, type InsideFn } from '../visibilityRule';
+import { tokenCentre } from '../tokenCentre';
 import type { WallSegment } from '@/types/walls';
 
 const { width, height, gridSize } = fixture.map;
@@ -20,10 +21,11 @@ const inside: InsideFn = (p, poly) => poly.points.length >= 3 && isPointVisible(
 type ScenarioToken = (typeof fixture.scenarios)[number]['tokens'][number] & { controlledBy?: string; sightRadius?: number; size?: { width: number; height: number } };
 
 // Token grid coordinates count y from the bottom row; pixels count from the top.
+// The centre is the server's, from the file both packages share.
 const centre = (t: ScenarioToken) => {
   const w = t.size?.width ?? 1;
   const h = t.size?.height ?? 1;
-  return { x: (t.x + w / 2) * gridSize, y: (height - 1 - t.y + h / 2) * gridSize, w, h };
+  return { ...tokenCentre({ position: { x: t.x, y: t.y }, size: { width: w, height: h } }, gridSize, height), w, h };
 };
 
 describe('vision scenarios (client: tiers and what is seen)', () => {

@@ -636,6 +636,11 @@ export interface CampaignDocument {
    * scope, where there is no link to remove.
    */
   shared: boolean;
+  /**
+   * Whether the server will take an edit of its text from the signed-in
+   * user, by the rule for deleting it. Offer Edit on this alone.
+   */
+  canEdit: boolean;
 }
 
 /**
@@ -885,6 +890,12 @@ export interface Asset {
   /** Populated by backend include — available in list responses */
   uploadedBy?: { id: string; displayName: string } | null;
   campaign?: { id: string; name: string } | null;
+  /**
+   * In the asset list only: whether the server will let this user delete the
+   * asset, move it out of its scope, or rewrite it if it is a text document,
+   * by the rule those routes apply.
+   */
+  canChange?: boolean;
 }
 
 /** What kind of record uses an asset. */

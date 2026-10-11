@@ -404,7 +404,9 @@ campaign membership; `POST` requires the DM role.**
 with `CAMPAIGN` scope inside it, and those a DM has shared from elsewhere. Each
 item carries the asset fields plus `linkedAt`, `linkedBy` and a `shared`
 boolean, which is what tells the two apart, so the client knows whether
-"unshare" is a thing it can offer.
+"unshare" is a thing it can offer. A `canEdit` boolean says whether
+`PUT /api/assets/documents/:id/content` would take an edit from the caller,
+by the rule for deleting the document, so the client offers Edit only then.
 
 `POST` takes `{ assetId }` and shares an existing document. Two checks, in
 order. The asset must be of type `DOCUMENT` **and readable by the DM making the
@@ -1033,6 +1035,11 @@ List assets accessible to the authenticated user (Global + their own User scope 
 - `page` — pagination page (default: 1)
 - `limit` — items per page (default: 25)
 
+Each asset carries a `canChange` boolean: whether the caller may delete it,
+move it out of its scope, or rewrite it if it is a text or Markdown
+document, by the rule those routes apply, so the client offers those
+controls only then.
+
 ---
 
 ### `POST /api/assets/upload`
@@ -1134,8 +1141,11 @@ rate limit, since it creates a file on disk exactly as an upload does.
 
 ### `PUT /api/assets/documents/:id/content`
 
-Replace the text of a `.txt` or `.md` document. **The uploader or a platform
-admin only**; anyone else gets `404`. A PDF answers `400`: only text and
+Replace the text of a `.txt` or `.md` document. **Whoever may delete it**:
+for a campaign's own document, its uploader while still a member, the
+campaign's DM, or a platform admin; for a global document, a platform admin or
+its uploader while they still manage global assets; for a personal document,
+its uploader or a platform admin. Anyone else gets `404`. A PDF answers `400`: only text and
 Markdown can be edited in place. Takes `{ content }` under the same limits as
 creation. Readers see the new text the next time they open it; there is no
 live refresh.

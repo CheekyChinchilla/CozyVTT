@@ -6,8 +6,12 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility } from '../utils/spirit-layer';
-import { emitToMapReaders, getSocketInstance } from '../websocket/utils';
+import {
+  canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
+  lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo, lightsReplacedSentTo, lightsSentTo,
+  wallChangeReachesPlayers, wallChangeSentTo, wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo,
+} from '../utils/spirit-layer';
+import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
 import { normalizeAssetUrl, extractAssetId } from '../utils/asset-urls';
 import { canReadAssetById, canReferenceAsset, canControlToken, canHoldTokens, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../services/permissions';
 import { WallSegmentSchema, WallSegmentsArraySchema, FogOperationSchema, LightSourceSchema, LightSourcesArraySchema, LightSourceUpdateSchema, DUPLICATE_WALL_ID_MESSAGE, DUPLICATE_LIGHT_ID_MESSAGE } from '../validators/walls';
@@ -118,6 +122,23 @@ async function tellMapReaders(campaignId: string, mapId: string, event: string, 
     await emitToMapReaders(getSocketInstance(), campaignId, mapId, event, data);
   } catch (err) {
     logger.warn('Map change not broadcast', { err, event, mapId });
+  }
+}
+
+/**
+ * tellMapReaders, with what each reader is told decided from their role
+ * (emitToMapReadersAs): a locked door and a light that is off are the DM's.
+ */
+async function tellMapReadersAs(
+  campaignId: string,
+  mapId: string,
+  what: string,
+  sendFor: (role: string | undefined) => { event: string; data: unknown } | null
+): Promise<void> {
+  try {
+    await emitToMapReadersAs(getSocketInstance(), campaignId, mapId, what, sendFor);
+  } catch (err) {
+    logger.warn('Map change not broadcast', { err, event: what, mapId });
   }
 }
 
@@ -1775,8 +1796,8 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
-    const segments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-    return res.status(200).json({ segments });
+    // A locked door goes to anyone but the DM as a closed one.
+    return res.status(200).json({ segments: wallsSentTo(req.campaignMembership!.role, map.wallSegments) });
   } catch (error) {
     logger.error('Error fetching wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch wall segments' });
@@ -1799,20 +1820,22 @@ router.put('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Resp
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid segments' });
     }
     const next = parsed.data;
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<unknown>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, wallSegments: true } });
       if (!fresh) return MAP_GONE;
       if (wallOutsideMap(next, fresh, fresh.wallSegments)) {
         return { status: 400, error: 'Validation Error', message: WALL_OUTSIDE_MAP_MESSAGE };
       }
       await tx.map.update({ where: { id }, data: { wallSegments: toJson(next) } });
-      return { done: null };
+      return { done: fresh.wallSegments };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    // The same events the socket wall edits send, to those who may read the map.
-    await tellMapReaders(campaignId, id, 'walls:replaced', { mapId: id, segments: next });
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // The same events the socket wall edits send, to those who may read the
+    // map; a player whose walls are as they were is told nothing.
+    const before = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, before, next));
+    if (wallListChangeReachesPlayers(before, next)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ segments: next });
   } catch (error) {
     logger.error('Error replacing wall segments', { err: error });
@@ -1856,7 +1879,9 @@ router.post('/:id/walls', campaignDM, async (req: AuthenticatedRequest, res: Res
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'wall:added', { mapId: id, segment });
+    await tellMapReadersAs(campaignId, id, 'wall:added', (role) => ({
+      event: 'wall:added', data: { mapId: id, segment: wallSentTo(role, segment) },
+    }));
     resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ segment, total: outcome.done });
   } catch (error) {
@@ -1915,7 +1940,7 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: 'Validation Error', message: `type must be one of: ${validTypes.join(', ')}` });
     }
 
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<WallSegment>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<{ before: WallSegment; after: WallSegment }>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { wallSegments: true } });
       if (!fresh) return MAP_GONE;
       const existing = (Array.isArray(fresh.wallSegments) ? fresh.wallSegments : []) as unknown as WallSegment[];
@@ -1923,15 +1948,19 @@ router.patch('/:id/walls/:sid', campaignDM, async (req: AuthenticatedRequest, re
       if (segIndex === -1) {
         return { status: 404, error: 'Not Found', message: 'Wall segment not found' };
       }
-      existing[segIndex] = { ...existing[segIndex], type: type.data };
+      const before = existing[segIndex];
+      existing[segIndex] = { ...before, type: type.data };
       await tx.map.update({ where: { id }, data: { wallSegments: toJson(existing) } });
-      return { done: existing[segIndex] };
+      return { done: { before, after: existing[segIndex] } };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'wall:updated', { mapId: id, segment: outcome.done });
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
-    return res.status(200).json({ segment: outcome.done });
+    // A player whose copy is unchanged, as a closed door locked or unlocked
+    // is, is told nothing, and is not sent the map again.
+    const { before, after } = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'wall:updated', (role) => wallChangeSentTo(role, id, before, after));
+    if (wallChangeReachesPlayers(before, after)) resendSightAfterChange(getSocketInstance(), campaignId, id);
+    return res.status(200).json({ segment: after });
   } catch (error) {
     logger.error('Error updating wall segment', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to update wall segment' });
@@ -1951,8 +1980,8 @@ router.get('/:id/lights', campaignMember, async (req: AuthenticatedRequest, res:
     const { campaignId, id } = req.params;
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
-    const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-    return res.status(200).json({ lights });
+    // A light that is off goes to the DM alone.
+    return res.status(200).json({ lights: lightsSentTo(req.campaignMembership!.role, map.lights) });
   } catch (error) {
     logger.error('Error fetching light sources:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch light sources' });
@@ -1975,19 +2004,21 @@ router.put('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Res
       return res.status(400).json({ error: 'Validation Error', message: parsed.error.issues[0]?.message ?? 'Invalid lights array' });
     }
     const next = parsed.data;
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<unknown>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
       if (!fresh) return MAP_GONE;
       if (lightOutsideMap(next, fresh, fresh.lights)) {
         return { status: 400, error: 'Validation Error', message: LIGHT_OUTSIDE_MAP_MESSAGE };
       }
       await tx.map.update({ where: { id }, data: { lights: toJson(next) } });
-      return { done: null };
+      return { done: fresh.lights };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'lights:replaced', { mapId: id, lights: next });
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // A player whose lights that are on are as they were is told nothing.
+    const before = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => lightsReplacedSentTo(role, id, before, next));
+    if (lightListChangeReachesPlayers(before, next)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ lights: next });
   } catch (error) {
     logger.error('Error replacing light sources:', error);
@@ -2031,8 +2062,12 @@ router.post('/:id/lights', campaignDM, async (req: AuthenticatedRequest, res: Re
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:added', { mapId: id, light: added });
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // A light that is off goes to the DM alone, and players are not sent the
+    // map again for it.
+    await tellMapReadersAs(campaignId, id, 'light:added', (role) =>
+      role === 'DM' || lightReachesPlayers(added) ? { event: 'light:added', data: { mapId: id, light: added } } : null
+    );
+    if (lightReachesPlayers(added)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(201).json({ light: added, total: outcome.done });
   } catch (error) {
     logger.error('Error adding light source:', error);
@@ -2057,11 +2092,13 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     }
 
     const patch = parsed.data;
+    let before: LightSource | undefined;
     const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<LightSource>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { ...GEOMETRY, lights: true } });
       if (!fresh) return MAP_GONE;
       const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
       const idx = existing.findIndex((l) => l.id === lightId);
+      before = existing[idx];
       if (idx === -1) {
         return { status: 404, error: 'Not Found', message: 'Light source not found' };
       }
@@ -2085,8 +2122,12 @@ router.patch('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReques
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:updated', { mapId: id, light: outcome.done });
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // Anyone but the DM has only the lights that are on, so a light that
+    // stays off is neither sent to them nor followed by the map.
+    const after = outcome.done;
+    const was = before ?? after;
+    await tellMapReadersAs(campaignId, id, 'light:updated', (role) => lightChangeSentTo(role, id, was, after));
+    if (lightChangeReachesPlayers(was, after)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ light: outcome.done });
   } catch (error) {
     logger.error('Error updating light source:', error);
@@ -2104,21 +2145,23 @@ router.delete('/:id/lights/:lightId', campaignDM, async (req: AuthenticatedReque
     const map = await findMapInCampaign(campaignId, id, res, req.campaignMembership!.role);
     if (!map) return;
 
-    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<null>> => {
+    const outcome = await withMapsLocked([id], async (tx): Promise<LockedEdit<LightSource>> => {
       const fresh = await tx.map.findUnique({ where: { id }, select: { lights: true } });
       if (!fresh) return MAP_GONE;
       const existing = (Array.isArray(fresh.lights) ? fresh.lights : []) as unknown as LightSource[];
-      const filtered = existing.filter((l) => l.id !== lightId);
-      if (filtered.length === existing.length) {
+      const removed = existing.find((l) => l.id === lightId);
+      if (!removed) {
         return { status: 404, error: 'Not Found', message: 'Light source not found' };
       }
-      await tx.map.update({ where: { id }, data: { lights: toJson(filtered) } });
-      return { done: null };
+      await tx.map.update({ where: { id }, data: { lights: toJson(existing.filter((l) => l.id !== lightId)) } });
+      return { done: removed };
     });
     if (!('done' in outcome)) return sendRefusal(res, outcome);
 
-    await tellMapReaders(campaignId, id, 'light:removed', { mapId: id, lightId });
-    resendSightAfterChange(getSocketInstance(), campaignId, id);
+    // A light that was off was the DM's alone, so its going is too.
+    const removed = outcome.done;
+    await tellMapReadersAs(campaignId, id, 'light:removed', (role) => lightRemovalSentTo(role, id, lightId, removed));
+    if (lightReachesPlayers(removed)) resendSightAfterChange(getSocketInstance(), campaignId, id);
     return res.status(200).json({ message: 'Light source deleted' });
   } catch (error) {
     logger.error('Error deleting light source:', error);

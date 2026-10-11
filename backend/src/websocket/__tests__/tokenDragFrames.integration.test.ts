@@ -5,9 +5,9 @@
  * but the frames before it (`token.move`, up to sixty a second) went to the
  * whole room for any visible material token, so on a lit map a player
  * received the exact path of a monster in the dark or behind a wall. The
- * frames now go to the DM's sockets and to the players whose tokens could
- * see the token where its drag began, decided once per drag; the end event
- * still decides who is sent where it stopped.
+ * frames now go to the DM's sockets and to the players whose tokens can see
+ * the token where each frame puts it, tested against sight decided once per
+ * drag; the end event still decides who is sent where it stopped.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -15,6 +15,8 @@
 import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
+import * as spiritLayer from '../../utils/spirit-layer';
+import { DRAG_DECISION_MS } from '../handlers/tokens';
 import {
   createWsTestServer,
   expectNoEvent,
@@ -151,6 +153,149 @@ describe('drag frames on a lit map', () => {
   });
 });
 
+/**
+ * Where a drag goes, judged frame by frame. Who could see the token where it
+ * was picked up is not who can see where it is carried: a monster dragged
+ * from the torchlight round a corner is out of sight halfway, and the frames
+ * after that would say where it waits. Each frame's position is now tested
+ * against each player's sight; a player who loses sight of it is told it has
+ * gone and sent no more frames, and one who gains sight of it is sent it.
+ *
+ * The map: lit, everything in sight bright, 50 px squares, a wall from top
+ * to bottom at x = 500 px. The player's token stands at square 5; squares 10
+ * and beyond are on the far side of the wall.
+ */
+describe('drag frames carried across the edge of sight', () => {
+  const WALL = [{ id: 'wall-split', x1: 500, y1: 0, x2: 500, y2: 1000, type: 'wall' }];
+
+  async function litMapWith(farX: number) {
+    await prisma.map.update({
+      where: { id: mapId },
+      data: {
+        lightingEnabled: true, globalIllumination: true, lights: [], wallSegments: WALL,
+        tokens: [token(OWN, 5, playerId), { ...token(FAR, farX, null), notes: 'Waits by the altar' }],
+      },
+    });
+  }
+
+  afterAll(async () => {
+    await prisma.map.update({ where: { id: mapId }, data: { wallSegments: [] } });
+  });
+
+  it('stop reaching a player once the token is carried out of their sight, who is told it has gone', async () => {
+    await litMapWith(8);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const seen = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
+    drag(dm, FAR, [9]);
+    expect(await seen).toMatchObject({ tokenId: FAR, x: 9 });
+
+    const beyond: number[] = [];
+    const gone: unknown[] = [];
+    player.on('token.moved', (e: { x: number }) => beyond.push(e.x));
+    player.on('token:disappeared', (e: unknown) => gone.push(e));
+    dm.emit('token.move', { tokenId: FAR, mapId, x: 12, y: 5 });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    dm.emit('token.move', { tokenId: FAR, mapId, x: 13, y: 5 });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(beyond).toEqual([]);
+    expect(gone).toEqual([{ tokenId: FAR, mapId }]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('bring the token back to a player when it is carried back into their sight, as a cancelled drag does', async () => {
+    await litMapWith(8);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const gone = waitForEvent(player, 'token:disappeared');
+    drag(dm, FAR, [12]);
+    await gone;
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const back = waitForEvent<{ token: { id: string; position: { x: number; y: number }; notes?: string }; mapId: string }>(player, 'token:appeared');
+    const frame = waitForEvent<{ tokenId: string; x: number; dragging?: boolean }>(player, 'token.moved');
+    dm.emit('token.move', { tokenId: FAR, mapId, x: 8, y: 5 });
+    const appeared = await back;
+    expect(appeared.token).toMatchObject({ id: FAR, position: { x: 8, y: 5 } });
+    expect(appeared.token.notes).toBeUndefined();
+    expect(await frame).toMatchObject({ tokenId: FAR, x: 8, dragging: true });
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('reach a player once the token is carried into their sight from beyond it', async () => {
+    await litMapWith(12);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const unseen = expectNoEvent(player, 'token.moved', 400);
+    drag(dm, FAR, [13]);
+    await unseen;
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const appeared = waitForEvent<{ token: { id: string; position: { x: number; y: number } } }>(player, 'token:appeared');
+    const frame = waitForEvent<{ tokenId: string; x: number }>(player, 'token.moved');
+    dm.emit('token.move', { tokenId: FAR, mapId, x: 9, y: 5 });
+    expect((await appeared).token).toMatchObject({ id: FAR, position: { x: 9, y: 5 } });
+    expect(await frame).toMatchObject({ tokenId: FAR, x: 9 });
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});
+
+/**
+ * What a lit-map drag costs. Working out one player's line of sight takes
+ * tens of milliseconds on a map with many walls, once per player token and
+ * once per light, and every frame is tested against the sight worked out
+ * last. So a drag works it out again no more often than an unlit map
+ * decides who its frames go to: once every DRAG_DECISION_MS.
+ */
+describe('line of sight during a drag on a lit map', () => {
+  it('is worked out once for each player, and again only after DRAG_DECISION_MS', async () => {
+    await resetMap(true, true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    // The server's clock, moved by hand: each frame below arrives as far
+    // into the drag as it says, whatever the test machine's speed.
+    const start = Date.now();
+    let elapsed = 0;
+    const clock = jest.spyOn(Date, 'now').mockImplementation(() => start + elapsed);
+    const sight = jest.spyOn(spiritLayer, 'playerSightOnLitMap');
+    try {
+      const first = waitForEvent<{ x: number }>(player, 'token.moved');
+      drag(dm, FAR, [16]);
+      expect((await first).x).toBe(16);
+
+      const frameAt = async (ms: number, x: number) => {
+        elapsed = ms;
+        const frame = waitForEvent<{ x: number }>(player, 'token.moved');
+        dm.emit('token.move', { tokenId: FAR, mapId, x, y: 5 });
+        expect((await frame).x).toBe(x);
+      };
+      await frameAt(DRAG_DECISION_MS * 0.3, 15);
+      await frameAt(DRAG_DECISION_MS * 0.6, 14);
+      await frameAt(DRAG_DECISION_MS * 0.9, 13);
+      expect(sight).toHaveBeenCalledTimes(1);
+
+      await frameAt(DRAG_DECISION_MS, 12);
+      expect(sight).toHaveBeenCalledTimes(2);
+    } finally {
+      sight.mockRestore();
+      clock.mockRestore();
+    }
+
+    dm.disconnect();
+    player.disconnect();
+  });
+});
+
 // A frame says where a token is being carried; the drop, where it stands. A
 // page moves sight and explored memory only for the second, so a DM carrying
 // a player's token about reveals nothing to that player on the way.
@@ -269,7 +414,7 @@ describe('drag frames on an unlit map', () => {
 
     // Every player is now on the spirit plane; the dragged token is not.
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: true } });
-    const later = Date.now() + 1500;
+    const later = Date.now() + DRAG_DECISION_MS + 500;
     const clock = jest.spyOn(Date, 'now').mockReturnValue(later);
     try {
       const quiet = expectNoEvent(player, 'token.moved', 800);

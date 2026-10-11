@@ -9,7 +9,7 @@
  * never a no-op and the list cannot show duplicates.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CampaignDocumentsModal from '../CampaignDocumentsModal';
 import type { Asset, CampaignDocument } from '@/types';
@@ -54,6 +54,7 @@ const shared = (id: string, name: string, originalName: string): CampaignDocumen
   linkedAt: '2026-01-02T00:00:00.000Z',
   linkedBy: { id: 'dm', displayName: 'The DM' },
   shared: true,
+  canEdit: true,
 });
 
 /** Uploaded into the campaign itself; "shared by" is its uploader. */
@@ -330,5 +331,60 @@ describe('CampaignDocumentsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
     fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/document not found/i);
+  });
+});
+
+// Editing a document follows the rule for deleting it, which turns on facts
+// the page does not have (whether its uploader still manages global assets,
+// or is still in the campaign it was uploaded to), so the list says, for each
+// document, whether the server will take an edit from this user, and Edit is
+// offered on that alone. Each document below carries what the server says.
+describe('who is offered Edit', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('# Notes', { status: 200 })));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const byCoHost = { id: 'cohost', displayName: 'Co-host' };
+
+  it('offers the DM Edit on the campaign\'s own document, whoever wrote it', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...own('d6', 'Co-host Rules', 'rules.md'), uploadedBy: byCoHost }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    fireEvent.click(await screen.findByText('Co-host Rules'));
+    expect(await screen.findByRole('button', { name: /^edit$/i })).toBeInTheDocument();
+  });
+
+  it('does not offer the DM Edit on a document someone else shared in', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d7', 'Linked Lore', 'lore.md'), uploadedBy: byCoHost, canEdit: false }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    fireEvent.click(await screen.findByText('Linked Lore'));
+    await waitFor(() => expect(screen.getAllByText('Linked Lore').length).toBeGreaterThan(1));
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+
+  it('does not offer a player Edit on the campaign\'s own document', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...own('d8', 'Table Rules', 'table.md'), uploadedBy: byCoHost, canEdit: false }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+    fireEvent.click(await screen.findByText('Table Rules'));
+    await waitFor(() => expect(screen.getAllByText('Table Rules').length).toBeGreaterThan(1));
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+
+  // The server answers 404 to such a save.
+  it('does not offer Edit on a global document to its uploader once they may no longer edit it', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d9', 'Global Rules', 'global.md'), canEdit: false }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    fireEvent.click(await screen.findByText('Global Rules'));
+    await waitFor(() => expect(screen.getAllByText('Global Rules').length).toBeGreaterThan(1));
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+
+  it('offers Edit on a document someone else shared in when the server says this user may edit it', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d10', 'Admin Copy', 'admin.md'), uploadedBy: byCoHost, canEdit: true }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+    fireEvent.click(await screen.findByText('Admin Copy'));
+    expect(await screen.findByRole('button', { name: /^edit$/i })).toBeInTheDocument();
   });
 });

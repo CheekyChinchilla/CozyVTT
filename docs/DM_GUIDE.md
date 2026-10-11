@@ -143,8 +143,17 @@ Once your map is in the asset library:
 
 1. Inside your campaign, click **Map Library** (the map icon) in the header
 2. The Map Library panel opens
-3. Click **Create Map**, pick your uploaded image and check the grid settings
+3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings
 4. The map is now available to switch to at any time
+
+**Where an Upload New picture goes.** The upload window offers two places for the map picture, and for the spirit layer picture, with a line under each saying what it means. **Personal** is selected at first.
+
+| Choice | Who can see the picture | When you leave the campaign or delete your account |
+|---|---|---|
+| **Personal** | You, in your own library. Players see it only once you switch to the map, and whoever is the campaign's DM sees it on every map. | It stays yours, so the table loses it. Once you leave the campaign, or delete your account after handing the DM seat over, nobody in the campaign can load it, the new DM included: maps using it show "Failed to load map image" until the DM picks another picture in **Edit Map**. After an account is deleted the file is kept, owned by no one, and only an administrator can open it. |
+| **Campaign** | Everyone in the campaign, in the campaign's library, at once, before you switch to the map too. | It stays with the campaign, for the table and whoever runs it next. |
+
+Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
@@ -176,7 +185,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign**, so a map you prepare stays a surprise (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, so a map picture you upload as **Campaign** from the Asset Library can be seen there before you switch to the map, as can a token image uploaded from inside the campaign. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
 - **Keep backups** — Export important maps so you can recover them if needed
 - **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
@@ -250,6 +259,8 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
+
+If a change cannot be saved, for example while the connection is down, a message says why and the control goes back to what it was. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
 
 *Screenshot pending — NPC quick editor popup with image picker.*
 
@@ -654,7 +665,9 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 
 **Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
-A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
+A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
+
+As the DM you can edit any of the campaign's own documents, whoever wrote them, for example a co-DM who has since left. A DM who hands the seat on and leaves the campaign can no longer edit the documents they wrote there. A document shared in from someone's own library stays theirs to edit.
 
 **Keeping notes current.** Text and Markdown documents can be edited in place: open one and press **Edit**. This is the natural home for a running session log or a set of house rules that change as the campaign goes on, since the table always reads the latest text and you never re-upload. See [Documents](USER_GUIDE.md#documents) in the user guide for formats, sizes and what is and is not allowed.
 
@@ -843,7 +856,7 @@ Click **End combat** (the circled ✕ beside **Next Turn**) and confirm with **E
 
 Fog of war covers your map and lets you reveal it a piece at a time, so players discover a dungeon room by room instead of seeing the whole floor plan at once. You control it by hand — nothing is revealed until you say so.
 
-**Under fog, players see nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it.
+**Under fog, players' screens show nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it. Fog hides things on the screen; it does not keep them from the player's browser. [What players' browsers receive](#what-players-browsers-receive) below says exactly what does reach it.
 
 > 💡 **Fog of war and dynamic lighting are two different things.** Fog is manual: you decide what has been revealed, and it stays revealed. Dynamic lighting (the next section) is automatic and depends on where each character is standing and what walls block their view. You can use either on its own, or both together.
 
@@ -884,6 +897,26 @@ A token standing in an unrevealed area is hidden from players entirely, even if 
 **Entirely** means the details panel too. Pointing at an unrevealed square tells a player nothing — no name, no picture, no hit points, no conditions. A player's own token is the one exception, and is always shown to them wherever it stands.
 
 Worth knowing what fog does *not* do: it hides tokens from view, but the map still sends them to the player's browser, because revealing a square has to be instant. A token you want kept secret from a determined player should be set **hidden** rather than merely left in the dark — a hidden token is never sent at all.
+
+### What players' browsers receive
+
+Fog is drawn over the map in each player's browser, so everything under it has already arrived there. A determined player can read what their browser was sent, with the browser's developer tools, even where their screen shows nothing. For the map you are showing, each player and spectator receives:
+
+| What | What they receive |
+|---|---|
+| **The map picture** | The whole picture, fogged areas included. |
+| **Tokens** | Every token on the plane they are on that is not **hidden**, fog or no fog. With dynamic lighting on, only the tokens their own characters can see. Never your token notes or stat blocks, a creature's hit points only when its HP bar is on, and an obscured token only as a shape. |
+| **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away, and locking or unlocking a closed door sends them nothing at all, whether you change one door or a whole selection with **Change type**; a player who tries it is told it is locked. |
+| **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on, and adding, moving or deleting one that is off sends them nothing at all, **Clear All** included when every light left is off. |
+| **Fog** | Only which squares are revealed to them. |
+
+With dynamic lighting on, a change to a wall, door or light also sends each player the tokens their characters can now see. A change that sends them nothing in the table above, such as locking a closed door, does not, so nothing reaches their browser to say that anything happened.
+
+A map you have prepared but not switched to sends them nothing at all. So, for anything that must stay secret:
+
+- a creature or object: set its token **hidden**;
+- a whole area: keep it on a separate map until the party gets there, since a map's picture arrives whole;
+- a lit room: switch its lights off until it matters.
 
 ---
 
@@ -1074,6 +1107,8 @@ Dynamic lighting is off on a new map, unless the map was imported from a Univers
 
 Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
 
+The same goes for a token while you carry it. A player sees it move only while it is somewhere they can see: carry it out of their sight and it leaves their map at that point, carry it into their sight and it appears there.
+
 *Screenshot pending — Map settings with Dynamic Lighting checkbox.*
 
 ### Global Illumination
@@ -1140,7 +1175,7 @@ Two practical consequences when you are building a map:
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
 4. Pick a color from the palette or enter a custom hex
 
-Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way.
+Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see; spectators cannot open or close doors at all.
 
 | Preset | Bright (sq) | Dim (sq) | Typical Use |
 |--------|-------------|----------|-------------|

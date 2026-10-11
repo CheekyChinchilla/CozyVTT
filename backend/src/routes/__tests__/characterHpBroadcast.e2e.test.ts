@@ -36,6 +36,10 @@ jest.mock('../../websocket/utils', () => ({
   broadcastToCampaign: jest.fn((campaignId: string, event: string, data: unknown) => {
     mockBroadcasts.push({ campaignId, event, data });
   }),
+  // character.updated goes out per member, each sent the sheet they may read.
+  emitCharacterUpdated: jest.fn(async (campaignId: string, character: unknown, fields: Record<string, unknown>) => {
+    mockBroadcasts.push({ campaignId, event: 'character.updated', data: { ...fields, character } });
+  }),
 }));
 
 import { createTestApp } from '../../__tests__/helpers/test-app';

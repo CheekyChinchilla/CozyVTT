@@ -327,7 +327,10 @@ is what the map itself does with it.
 The five asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
 `/documents/:id`, `/audio/:id`, `/avatars/:userId`) decide read access from the
 asset's **scope**. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
-campaign's members, and `USER` by its uploader.
+campaign's members, and `USER` by its uploader. A `CAMPAIGN` asset with no
+campaign recorded (the foreign key nulls it when a campaign row goes) is read
+as a `USER` one, so a way of removing campaigns that forgets to turn their
+assets personal first cannot open them to everyone.
 
 Scope alone is not enough for maps and tokens, because an asset can be *used*
 somewhere its scope does not describe. A DM picking a map out of their own
@@ -403,9 +406,14 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   request's.** `Asset.campaignId` decides which campaign lists an asset, so a
   personal upload naming a campaign would otherwise put a row in that
   campaign's library without anyone there asking for it.
-- **Editing is the uploader's or an admin's.** `PUT /documents/:id/content`
-  checks `uploadedById` against the session, not `canReadAsset`; being able to
-  read a shared rulebook must not mean being able to rewrite it for the table.
+- **Editing follows the delete rule.** `PUT /documents/:id/content` asks
+  `mayChangeAsset`, not `canReadAsset`; being able to read a shared rulebook
+  must not mean being able to rewrite it for the table. `mayChangeAsset` is the
+  one rule for deleting an asset, moving it out of its scope and editing a
+  document: a campaign's own asset is its uploader's while still a member, the
+  campaign's DM's and an admin's; a global one an admin's, or its uploader's
+  while they keep `globalAssetManager`; a personal one its uploader's and an
+  admin's. A campaign asset with no campaign recorded is an admin's alone.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
   and sharing is limited to the DM's own documents and global ones. A DM may
   read a document shared with a table they play at; they may not re-share it.

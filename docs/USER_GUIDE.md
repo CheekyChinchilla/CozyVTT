@@ -361,6 +361,7 @@ For when the vibes turn from cozy to eldritch:
 - Weapons and attacks
 - Backstory, personal description, and ideals
 - Possessions and important people
+- **Keeper's Notes**, on the Backstory tab, for the Keeper alone: only the DM of the investigator's campaign can see or change them, so the investigator's player and the rest of the table never see them. They stay with the campaign: moving the investigator into another campaign, or copying it, leaves them behind.
 
 *Screenshot pending — Call of Cthulhu 7e character sheet.*
 
@@ -446,8 +447,8 @@ Rulebooks, house rules, handouts: the things a table reads rather than looks at.
 | Format | How it gets here | Editable later? |
 |--------|------------------|-----------------|
 | **PDF** | Upload | No, it is a file; upload a new one to replace it |
-| **Plain text** (`.txt`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it |
-| **Markdown** (`.md`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it |
+| **Plain text** (`.txt`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it (see [Editing](#editing)) |
+| **Markdown** (`.md`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it (see [Editing](#editing)) |
 
 Markdown documents render headings, lists, emphasis, tables, task lists and links. A single press of Enter starts a new line, the way it does in a chat message, so notes read the way you typed them.
 
@@ -471,13 +472,23 @@ Click a document's name or its **Read** button to open it in a full-screen reade
 
 ### Editing
 
-Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
+Open a text or Markdown document and press **Edit**. Who can edit a document is who can delete it, and **Edit** in the reader and the bin button on the **Documents** page show only for someone who can:
+
+| Scope | Who can edit it |
+|-------|-----------------|
+| **Personal** | You, and an administrator. |
+| **Campaign** | Whoever wrote or uploaded it while they are still in the campaign, the campaign's DM, and an administrator. Someone who leaves or is removed from the campaign can no longer edit what they put there. |
+| **Global** | An administrator, and whoever wrote or uploaded it while they are still a global asset manager. |
+
+What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
 
 ### Safety
 
 Uploads are checked rather than trusted. A PDF must really be a PDF, and a text or Markdown file must really be text; a program renamed to `.md` is refused. Documents are always shown as text or as a PDF, never as a web page, so a file that contains HTML or a script is displayed as-is and nothing in it can run. There is no need to avoid typing `<` or `>` in a document; they show as typed.
 
-Pictures in a Markdown document or note only load from your own CozyVTT. An image that points at another website would make every reader's browser contact that site, revealing who opened the document; instead its description is shown and nothing is fetched. To show a picture, upload it to your asset library and link to it from there.
+Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it.
+
+Links in a document or note open in a new tab, so following one never takes you away from the table.
 
 ---
 
