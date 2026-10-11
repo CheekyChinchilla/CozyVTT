@@ -854,7 +854,11 @@ export interface Asset {
   id: string;
   type: AssetType;
   scope: AssetScope;
-  /** Null once the uploader's account is deleted: the file stays, owned by no one. */
+  /**
+   * Null once the uploader's account is deleted, on the files that outlive it:
+   * campaign and global uploads, and personal files something still uses. The
+   * avatar and the personal files nothing uses are deleted with the account.
+   */
   uploadedById: string | null;
   campaignId: string | null;
   filename: string;
