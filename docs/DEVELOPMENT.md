@@ -706,7 +706,7 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 - **Routes** handle HTTP parsing and response formatting only — business logic goes in `services/`
 - **Middleware** in `src/middleware/` — authentication and role guards (named in the route declaration, composed in `compose.ts`), rate limiting, file uploads
-- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails
+- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails. A key that may be left out says `.optional()`, a `z.unknown()` key included: since zod 4.4 a missing `z.unknown()` key is an error
 - **WebSocket handlers** in `src/websocket/handlers/` — one module per domain (tokens, dice, chat, fog, …), each registering its events for a connection; `events.ts` only wires them together
 
 ### Frontend Patterns
