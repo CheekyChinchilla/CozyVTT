@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import AssetCard from '../AssetCard';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
@@ -19,7 +19,10 @@ vi.mock('../../../contexts/AuthContext', () => ({
 }));
 
 vi.mock('../../../services/api', () => ({
-  api: { getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}` },
+  api: {
+    getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
+    getAssetDownloadUrl: (id: string) => `https://api.example.com/api/assets/${id}/download`,
+  },
 }));
 
 function asset(type: AssetType, originalName: string): Asset {
@@ -65,5 +68,16 @@ describe('AssetCard', () => {
   it('shows audio as an icon too', () => {
     const { container } = renderCard(asset(AssetType.AUDIO, 'rain.mp3'));
     expect(container.querySelector('img')).toBeNull();
+  });
+
+  it('downloads from the address the API client gives, in a new tab that cannot reach back to this page', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    try {
+      renderCard(asset(AssetType.DOCUMENT, 'rules.pdf'), 'list');
+      fireEvent.click(screen.getByTitle('Download'));
+      expect(open).toHaveBeenCalledWith('https://api.example.com/api/assets/a1/download', '_blank', 'noopener,noreferrer');
+    } finally {
+      open.mockRestore();
+    }
   });
 });

@@ -933,6 +933,11 @@ class ApiClient {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
   }
 
+  /** The address that downloads an asset under its original file name. */
+  getAssetDownloadUrl(id: string): string {
+    return `${API_BASE_URL}/api/assets/${encodeURIComponent(id)}/download`;
+  }
+
   /**
    * The address to load a stored picture reference from. Token templates keep
    * the reference as sent, which from their editor's upload is the asset's bare
