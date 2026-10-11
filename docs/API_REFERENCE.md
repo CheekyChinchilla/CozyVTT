@@ -1222,9 +1222,10 @@ Create a new user account with a generated temporary password. The account is fl
 `mustChangePassword`, so that password can only be used to set a real one.
 
 The address is trimmed and lowercased, and one holding `<` or `>` is refused with `400`.
-`displayName` is checked as sign-up checks it (1 to 50 characters once angle brackets and
-surrounding spaces are removed, or `400` with the reason) and defaults to the part of the
-address before `@`. An address already in use answers `409`.
+`displayName` is checked as sign-up checks it (1 to 50 characters once invisible characters,
+angle brackets and surrounding spaces are removed and it is put in Unicode NFC, or `400` with
+the reason; the joiners and flag tags emoji and some scripts need are kept) and defaults to the
+part of the address before `@`. An address already in use answers `409`.
 
 **Request:**
 ```json

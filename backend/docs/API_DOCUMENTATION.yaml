@@ -428,8 +428,16 @@ paths:
                   minLength: 1
                   maxLength: 50
                   description: >-
-                    Trimmed, and angle brackets removed, before the length is
-                    checked.
+                    Cleaned before the length is checked, in this order: control
+                    and invisible formatting characters (zero-width spaces,
+                    bidirectional marks, overrides and isolates, the byte-order
+                    mark, tag characters, line and paragraph separators) are
+                    removed, bar the tags of a Scotland, Wales or England flag
+                    and the zero-width joiner and non-joiner; the name is put
+                    in Unicode NFC; a joiner or non-joiner is kept only between
+                    two characters that are neither ASCII nor whitespace; angle
+                    brackets are removed and the name is trimmed. A name left
+                    empty is refused with 400 `Display name is required`.
                 instanceName:
                   type: string
                   default: CozyVTT
@@ -543,7 +551,18 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 50
-                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
+                  description: >-
+                    Cleaned before the length is checked, in this order: control
+                    and invisible formatting characters (zero-width spaces,
+                    bidirectional marks, overrides and isolates, the byte-order
+                    mark, tag characters, line and paragraph separators) are
+                    removed, bar the tags of a Scotland, Wales or England flag
+                    and the zero-width joiner and non-joiner; the name is put
+                    in Unicode NFC; a joiner or non-joiner is kept only between
+                    two characters that are neither ASCII nor whitespace; angle
+                    brackets are removed and the name is trimmed. A name left
+                    empty is refused with 400 `Display name is required`. Anything else, including a value that is not a
+                    string, is refused with 400.
       responses:
         '201':
           description: Registered, or submitted pending admin approval.
@@ -1652,7 +1671,18 @@ paths:
                   type: string
                   minLength: 1
                   maxLength: 50
-                  description: Trimmed, and angle brackets removed, before the length is checked. Anything else, including a value that is not a string, is refused with 400.
+                  description: >-
+                    Cleaned before the length is checked, in this order: control
+                    and invisible formatting characters (zero-width spaces,
+                    bidirectional marks, overrides and isolates, the byte-order
+                    mark, tag characters, line and paragraph separators) are
+                    removed, bar the tags of a Scotland, Wales or England flag
+                    and the zero-width joiner and non-joiner; the name is put
+                    in Unicode NFC; a joiner or non-joiner is kept only between
+                    two characters that are neither ASCII nor whitespace; angle
+                    brackets are removed and the name is trimmed. A name left
+                    empty is refused with 400 `Display name is required`. Anything else, including a value that is not a
+                    string, is refused with 400.
                 email:
                   type: string
                   format: email
@@ -9153,9 +9183,11 @@ paths:
 
         `email` is trimmed and lowercased; an address holding `<` or `>` is refused
         with 400, so the address checked for a duplicate is the one stored and
-        emailed. `displayName` is checked as sign-up checks it: text, stripped of `<`
-        and `>` and trimmed, then 1 to 50 characters, or 400 with the reason. Omitted,
-        null or blank, it defaults to the part of the email before `@` (its first 50
+        emailed. `displayName` is checked as sign-up checks it: text, cleaned of
+        control and invisible formatting characters (bar the joiners and flag tags
+        described under `POST /api/auth/register`), put in Unicode NFC, stripped of
+        `<` and `>` and trimmed, then 1 to 50 characters, or 400 with the reason.
+        Omitted, null or only whitespace, it defaults to the part of the email before `@` (its first 50
         characters). `platformRole` is not validated against the enum: any value
         other than exactly `"ADMIN"`, including an unrecognised string, becomes `USER`.
       operationId: adminCreateUser
@@ -9176,6 +9208,13 @@ paths:
                 displayName:
                   type: string
                   maxLength: 50
+                  description: >-
+                    Cleaned as in `POST /api/auth/register`: invisible
+                    characters removed (bar the joiners and flag tags real
+                    names and emoji need), put in Unicode NFC, angle brackets
+                    removed and trimmed, then 1 to 50 characters, or 400 with
+                    the reason. Omitted, null or only whitespace, it is the
+                    part of the email before `@`.
                 platformRole:
                   type: string
                   enum: [USER, ADMIN]
@@ -9257,6 +9296,13 @@ paths:
                 displayName:
                   type: string
                   maxLength: 50
+                  description: >-
+                    Cleaned as in `POST /api/auth/register`: invisible
+                    characters removed (bar the joiners and flag tags real
+                    names and emoji need), put in Unicode NFC, angle brackets
+                    removed and trimmed, then 1 to 50 characters, or 400 with
+                    the reason. Omitted, null or only whitespace, it is the
+                    part of the email before `@`.
                 platformRole:
                   type: string
                   enum: [USER, ADMIN]
