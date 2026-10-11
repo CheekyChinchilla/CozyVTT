@@ -8,7 +8,7 @@ import { useState, FormEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
@@ -58,7 +58,7 @@ export default function MFAVerifyPage() {
 
       // On success, user is logged in and will be redirected
     } catch (err) {
-      console.error('MFA verification error:', err);
+      console.error('MFA verification error:', errorSummary(err));
 
       // The reply's sentence (`message`) is for the person, such as the one
       // for a code step that timed out; its `error` is a short label, shown
@@ -104,7 +104,7 @@ export default function MFAVerifyPage() {
 
       // On success, user is logged in and will be redirected
     } catch (err) {
-      console.error('Backup code verification error:', err);
+      console.error('Backup code verification error:', errorSummary(err));
 
       const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (serverError) {

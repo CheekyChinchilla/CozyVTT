@@ -7,7 +7,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { authService } from '@/services/auth.service';
 import { queryClient } from '@/lib/queryClient';
-import { apiErrorStatus, errorMessage } from '@/utils/errors';
+import { apiErrorStatus, errorSummary } from '@/utils/errors';
 import type {
   User,
   AuthContextType,
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       await authService.logout();
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Logout error:', errorSummary(error));
       // Continue with local logout even if API call fails
     } finally {
       queryClient.clear();
@@ -266,7 +266,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await authService.logout();
     } catch (error) {
       // The waiting sign-in also ends by itself after five minutes.
-      console.error('Failed to end the waiting sign-in:', apiErrorStatus(error) ?? errorMessage(error));
+      console.error('Failed to end the waiting sign-in:', errorSummary(error));
     }
     setMfaPending(false);
   }, []);
@@ -375,7 +375,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setMustChangePassword(false);
         return;
       }
-      console.error('Failed to refresh user:', apiErrorStatus(error) ?? errorMessage(error));
+      console.error('Failed to refresh user:', errorSummary(error));
     }
   }, [authenticated, takeUser]);
 

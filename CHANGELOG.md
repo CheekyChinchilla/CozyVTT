@@ -118,6 +118,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Signing out now clears the lists the app had loaded for you.** The campaigns, characters and invitations the dashboard loads were kept after signing out, so the next person to sign in on the same browser tab within five minutes was first shown yours, for up to 30 seconds. Signing out now clears them, and so does signing in as a different account.
 
+- **A failed two-factor code or setup no longer leaves the code or the new password in the browser's console.** When the code step or the setup wizard was refused, the page wrote the whole failed request to the browser's developer console, including the code, or the administrator's email, password and setup token, where anyone with the console open or a screenshot of it could read them. Only the status and the server's message are written now.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

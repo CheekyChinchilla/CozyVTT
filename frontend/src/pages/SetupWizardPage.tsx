@@ -17,7 +17,7 @@ import {
   getPasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
 
 // ============================================
 // Types
@@ -222,7 +222,7 @@ export default function SetupWizardPage() {
       // Redirect to dashboard
       navigate('/dashboard');
     } catch (err) {
-      console.error('Setup error:', err);
+      console.error('Setup error:', errorSummary(err));
 
       const serverError = apiErrorText(err);
       if (serverError) {
