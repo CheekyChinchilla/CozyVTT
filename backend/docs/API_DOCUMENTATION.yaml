@@ -930,7 +930,7 @@ paths:
       tags:
         - Authentication
       summary: Change own password
-      description: Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user's unused password-reset and invitation links, and forgets the wrong passwords counted against the account by the per-account sign-in limit. Rate limited: 10 wrong current passwords per 15 minutes for the account, from every address, shared with `DELETE /api/auth/account` and an email change through `PUT /api/users/{id}`; then 429 `Too many wrong passwords, please try again later`. A correct password never counts.
+      description: 'Change password for the authenticated user. Requires current password verification. Sets mustChangePassword to false, for this session too, so the forced-change gate lifts at once. Ends the user''s other login sessions and their live WebSocket connections; the session making the request stays signed in. Voids the user''s unused password-reset and invitation links, and forgets the wrong passwords counted against the account by the per-account sign-in limit. Rate limited: 10 wrong current passwords per 15 minutes for the account, from every address, shared with `DELETE /api/auth/account` and an email change through `PUT /api/users/{id}`; then 429 `Too many wrong passwords, please try again later`. A correct password never counts.'
       operationId: changePassword
       security:
         - cookieAuth: []
