@@ -1134,7 +1134,7 @@ router.get('/registration-status', async (_req: Request, res: Response) => {
     }
     const settings = await getSystemSettings();
     return res.status(200).json({ allowRegistration: settings.allowRegistration });
-  } catch (error) {
+  } catch {
     // Safe fallback: hide registration link on error
     return res.status(200).json({ allowRegistration: false });
   }
@@ -1149,7 +1149,7 @@ router.get('/appearance', async (_req: Request, res: Response) => {
   try {
     const appearance = await getAppearanceSettings();
     return res.status(200).json(appearance);
-  } catch (error) {
+  } catch {
     return res.status(200).json({
       instanceName: 'CozyVTT',
       themeId: 'cozy-default',
