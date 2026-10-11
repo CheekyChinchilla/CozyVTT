@@ -707,7 +707,7 @@ From the **Appearance** section of your profile, pick the color theme and font *
 - Pick from 8 open-source font families
 - Or click **Custom** to dial in your own primary / accent / background / text colors
 
-Your choice is saved to your account and applies immediately. It also persists across logout — when you log back in, your theme is restored. Unauthenticated visitors and brand-new users see whatever theme the platform admin has set as the instance default.
+Your choice is saved to your account and applies immediately. While you drag one of the **Custom** colours, the page follows the colour as it changes and saves it once you let go for a moment. It also persists across logout — when you log back in, your theme is restored. Unauthenticated visitors and brand-new users see whatever theme the platform admin has set as the instance default.
 
 ### Signing Out
 
