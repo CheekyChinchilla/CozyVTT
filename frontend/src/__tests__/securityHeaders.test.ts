@@ -100,7 +100,8 @@ describe('the site config', () => {
   });
 
   it('still serves the SPA fallback', () => {
-    expect(siteConfig).toContain('try_files $uri $uri/ /index.html;');
+    // Pages are walked in spaFallback.test.ts; this is that the fallback is there.
+    expect(siteConfig).toMatch(/try_files \$uri \/index\.html;/);
   });
 
   /** A directive's value at server level, comments dropped. */

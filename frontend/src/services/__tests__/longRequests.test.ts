@@ -73,3 +73,31 @@ describe('the Universal VTT import', () => {
     expect(post.mock.calls[0][2]?.timeout).toBe(0);
   });
 });
+
+describe('the asset upload', () => {
+  // Map pictures, PDFs, token art, avatars and sheet portraits all go through
+  // it, up to 50 MB. The shared 30 seconds counted the upload itself, so a
+  // connection slower than about 14 Mbit/s was cut off with "Failed to upload
+  // asset" before the file had arrived. Nothing queues on the server here, so
+  // the proxy, which times the answer and not the upload, is the only limit.
+  it('has no limit of the page\'s own, which would count the upload', async () => {
+    const post = vi.spyOn(client, 'post').mockResolvedValue({ data: {} });
+    await api.uploadAsset(new FormData());
+    expect(post.mock.calls[0][0]).toBe('/api/assets/upload');
+    expect(post.mock.calls[0][2]?.timeout).toBe(0);
+  });
+});
+
+describe('the download of a left campaign\'s notes', () => {
+  // A campaign holds up to 200 notes of 100,000 characters, so the one answer
+  // is 20 to 40 MB before compression. The shared 30 seconds count the
+  // download itself and ended it on a slow connection every time. The server
+  // writes the answer out as it reads, and the proxy drops a connection that
+  // goes silent for 60 seconds, so those are the limits.
+  it('has no limit of the page\'s own, which would count the download', async () => {
+    const get = vi.spyOn(client, 'get').mockResolvedValue({ data: { notes: [] } });
+    await api.getLeftCampaignNotes('campaign-1');
+    expect(get.mock.calls[0][0]).toBe('/api/campaigns/left/campaign-1/notes');
+    expect(get.mock.calls[0][1]?.timeout).toBe(0);
+  });
+});

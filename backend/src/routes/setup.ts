@@ -4,7 +4,7 @@ import { setupState } from '../services/systemSettings';
 import { RegistrationError } from '../services/auth';
 import { clientUser } from './auth';
 import { setUpInstance, SetupAlreadyRunError } from '../services/setup';
-import { setupTokenMatches } from '../services/setupToken';
+import { setupTokenMatches, setupTokenHint } from '../services/setupToken';
 import { regenerateSession } from '../utils/session';
 import { systemConfigFromSetupBody } from '../utils/setupConfig';
 import { parseBody, RegisterBodySchema } from '../validators/auth';
@@ -55,6 +55,16 @@ router.post('/init', async (req: Request, res: Response) => {
   const raw: unknown = req.body;
   const given = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).setupToken : undefined;
   if (!setupTokenMatches(given)) {
+    // The start-up line is the only other place the token is printed, and it
+    // is missing when the setup state could not be read then or when
+    // LOG_LEVEL hid it. Written at the one level every setting shows, to the
+    // log only: the answer below never carries the token. Once setup has run
+    // the token has no use and a refusal says nothing; a setup state that
+    // cannot be read counts as not run.
+    const setupRun = await setupState().then((state) => state.setupCompleted, () => false);
+    if (!setupRun) {
+      logger.error(`The setup wizard was refused: the setup token was missing or wrong. ${setupTokenHint()}`);
+    }
     return res.status(403).json({
       error: 'Forbidden',
       message: 'Setup token is missing or wrong. Copy it from the backend log (docker compose logs backend), or from SETUP_TOKEN in .env if you set one.',

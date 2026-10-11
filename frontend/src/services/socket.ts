@@ -113,6 +113,10 @@ class SocketClient {
   private reconnectDelay = 1000; // Start with 1 second
   private isConnecting = false;
   private campaignId: string | null = null;
+  /** The ten second limit on the connect under way, kept so leaving the page can end it. */
+  private connectionTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The pause before the next reconnect, kept so leaving the page can cancel it. */
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * Every application listener registered through this client, so they can be
@@ -212,6 +216,8 @@ class SocketClient {
         }
         reject(new Error('Connection timeout - server did not respond'));
       }, 10000);
+
+      this.connectionTimer = connectionTimeout;
 
       this.socket = io(SOCKET_ORIGIN, {
         path: SOCKET_PATH,
@@ -388,7 +394,8 @@ class SocketClient {
     // Exponential backoff capped at 30s, plus up to 1s jitter to avoid lockstep retries.
     const backoff = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts), 30000);
     const delay = backoff + Math.floor(Math.random() * 1000);
-    setTimeout(() => {
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
       this.reconnectAttempts++;
       if (this.campaignId) {
         this.connect(this.campaignId)
@@ -406,8 +413,17 @@ class SocketClient {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
-      this.campaignId = null;
     }
+
+    // Forget the campaign whether or not a socket is held: a connect that
+    // timed out leaves none, and the reconnect loop that follows it carries on
+    // for as long as a campaign is named. A connect that is abandoned must
+    // not time out whatever is connected after it, either.
+    this.campaignId = null;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = null;
+    if (this.connectionTimer) clearTimeout(this.connectionTimer);
+    this.connectionTimer = null;
 
     // Reset connection state to allow reconnection
     this.isConnecting = false;

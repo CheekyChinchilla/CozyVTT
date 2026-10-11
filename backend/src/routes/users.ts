@@ -16,7 +16,7 @@ import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators
 import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
-import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
+import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { removeAvatars } from '../services/avatars';
 import { writeSystemLog, writeAdminLog } from '../services/systemLog';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
@@ -284,25 +284,38 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
 
     // Perform update. A new address also voids every unused reset or
     // invitation link, in the same transaction, so a link already sent to the
-    // old address cannot set the password afterwards. Taking the admin role
-    // away checks, in the same serializable transaction, that the instance
-    // keeps an admin (services/platformAdmins).
-    const demoting = updateData.platformRole === 'USER' && existingUser.platformRole === 'ADMIN';
-    const written = demoting
-      ? await inSerializableTransaction(async (tx) => {
-        if (await isOnlyAdmin(id, tx)) return null;
+    // old address cannot set the password afterwards. A request that sets the
+    // role to USER reads the account again inside a serializable transaction
+    // and decides there whether it takes the admin role away, which must leave
+    // the instance an admin (services/platformAdmins): the read above can be
+    // behind a promotion that landed since.
+    type Written =
+      | { kind: 'written'; before: User; row: User }
+      | { kind: 'only-admin' }
+      | { kind: 'gone' };
+    const written: Written = updateData.platformRole === 'USER'
+      ? await inSerializableTransaction(async (tx): Promise<Written> => {
+        const current = await tx.user.findUnique({ where: { id } });
+        if (!current) return { kind: 'gone' };
+        if (current.platformRole === 'ADMIN' && await isOnlyAdmin(id, tx)) return { kind: 'only-admin' };
         const row = await tx.user.update({ where: { id }, data: updateData });
         if (emailChangedFrom !== null) await voidOutstandingResetLinks(id, tx);
-        return row;
+        return { kind: 'written', before: current, row };
       })
       : emailChangedFrom === null
-        ? await prisma.user.update({ where: { id }, data: updateData })
-        : await prisma.$transaction(async (tx) => {
+        ? { kind: 'written', before: existingUser, row: await prisma.user.update({ where: { id }, data: updateData }) }
+        : await prisma.$transaction(async (tx): Promise<Written> => {
           const row = await tx.user.update({ where: { id }, data: updateData });
           await voidOutstandingResetLinks(id, tx);
-          return row;
+          return { kind: 'written', before: existingUser, row };
         });
-    if (written === null) {
+    if (written.kind === 'gone') {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User not found',
+      });
+    }
+    if (written.kind === 'only-admin') {
       return res.status(409).json({
         error: 'Conflict',
         message: id === requestingUserId
@@ -310,7 +323,10 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
           : 'This is the only admin on this instance. Promote another user to admin first.',
       });
     }
-    const updatedUser = written;
+    // The account as it was when written: the logging and sign-out below
+    // compare against it, not against the earlier read.
+    const stored = written.before;
+    const updatedUser = written.row;
 
     // Clearing the avatar removes the pictures too, so none is left to be
     // served or brought back. The profile is already changed; a picture that
@@ -334,12 +350,12 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
     // own line below. Compared against what was stored, so saving the same
     // values again writes nothing.
     if (isAdmin) {
-      const changes = adminChangesTo(existingUser, updatedUser, id !== requestingUserId);
+      const changes = adminChangesTo(stored, updatedUser, id !== requestingUserId);
       const described = describeAdminChanges(changes);
       if (described.length > 0) {
         await writeAdminLog(
           requestingUserId!,
-          `Changed the account of ${existingUser.email}: ${described.join('; ')}`,
+          `Changed the account of ${stored.email}: ${described.join('; ')}`,
           changes.email ? 'WARNING' : 'INFO',
           { targetUserId: id, changes: toJson(changes) }
         );
@@ -354,7 +370,7 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
     // globalAssetManager and templateEditor are deliberately not session fields
     // and are read from the database where they are used, so changing one
     // already takes effect on the next request and needs no sign-out.
-    if (updateData.platformRole !== undefined && updateData.platformRole !== existingUser.platformRole) {
+    if (updateData.platformRole !== undefined && updateData.platformRole !== stored.platformRole) {
       // A role change goes to the admins' activity log. A promotion's line
       // also starts the account's 7 days to set up MFA (services/adminMfaPolicy).
       if (updateData.platformRole === 'ADMIN') {
@@ -565,7 +581,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     // (services/accountDeletion); the live connections end here.
     await endLiveSockets(id, 'Your account was deleted.');
     announceRosterChange(id, campaignIds, 'member.left');
-    await removePersonalFiles(deletion.personal);
+    removePersonalFilesAfterwards(deletion.personal);
 
     return res.status(200).json({
       message: 'User deleted successfully',
@@ -710,7 +726,15 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
 /** The account fields an administrator's change is logged for. */
 type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor'>;
 
-type AccountChanges = { [K in keyof LoggedAccountFields]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] } };
+/**
+ * What the log keeps of a change: the value before and after, except for the
+ * bio, which is text the person wrote about themselves and is kept for ever
+ * in a log that is part of every backup. The log says the bio changed and
+ * keeps none of it. Lines written by earlier versions keep the text they stored.
+ */
+type AccountChanges = {
+  [K in Exclude<keyof LoggedAccountFields, 'bio'>]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] };
+} & { bio?: { changed: true } };
 
 /**
  * What changed between two versions of an account: the permissions always,
@@ -723,9 +747,8 @@ function adminChangesTo(before: LoggedAccountFields, after: LoggedAccountFields,
     ? ['globalAssetManager', 'templateEditor', 'email', 'displayName', 'avatarUrl', 'bio']
     : ['globalAssetManager', 'templateEditor'];
   for (const field of fields) {
-    if (before[field] !== after[field]) {
-      Object.assign(changes, { [field]: { from: before[field], to: after[field] } });
-    }
+    if (before[field] === after[field]) continue;
+    Object.assign(changes, { [field]: field === 'bio' ? { changed: true } : { from: before[field], to: after[field] } });
   }
   return changes;
 }

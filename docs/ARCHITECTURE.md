@@ -95,6 +95,7 @@ src/
 │   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
 │   ├── authLimiters.ts    The per-account sign-in limit and the signed-in password-check limit
 │   ├── invitationEmailLimiter.ts  How many invitation emails a DM may have the instance send
+│   ├── leftNotesDownloadLimiter.ts  How often a user may download all the notes of a campaign they have left
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
 │   │                  and exporting campaign archives, one archive at a time
 │   │                  (the other HTTP limiters are declared beside their routes,
@@ -551,7 +552,7 @@ erDiagram
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
 - **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
-- **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included. Removing a member keeps both kinds of row; `GET /api/campaigns/left`, `/left/:campaignId` and `/left/:campaignId/notes/:noteId` let the author read their own afterwards, only while they are not a member and with note text one note at a time, and deleting the campaign deletes them.
+- **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included. Removing a member keeps both kinds of row; `GET /api/campaigns/left`, `/left/:campaignId`, `/left/:campaignId/notes` and `/left/:campaignId/notes/:noteId` let the author read their own afterwards, only while they are not a member, and deleting the campaign deletes them. The lists carry titles only. A note's text comes from `/notes/:noteId` one note at a time, or from `/left/:campaignId/notes` for all of a campaign's notes in one answer, which the Download button uses: it is written out ten notes at a time, since a campaign can hold 200 notes of 100,000 characters, and limited to 60 requests an hour per user.
 - **`CreatureFavorite` is a per-campaign, per-user join table** — with a unique constraint on `(campaignId, userId, creatureId)` to prevent duplicate favorites. Cascade deletes ensure cleanup when creatures, users, or campaigns are removed.
 - **`CampaignDocument` shares a document with a campaign without copying it.** A document is an ordinary `Asset` of type `DOCUMENT`; the join row, unique on `(campaignId, assetId)`, is what lets a `USER`-scoped rulebook be read by the members of every campaign it is linked to. It is the one place the asset read rule looks beyond scope: `canReadAsset` is the single function both the serving route and the linking route consult, so a DM cannot link a file they could not read themselves; and linking further requires the document to be the DM's own or `GLOBAL`, so a share into one campaign cannot be forwarded by a member of it who runs another. Unlinking revokes access; deleting the asset removes its links, and deleting the campaign leaves the document intact.
 
@@ -676,7 +677,10 @@ socket.io retries a dropped connection for as long as it takes, backing off
 to 30 seconds between tries, and the client builds a new socket the same way
 after the server closes one (a restart closes every socket). A socket the
 server refuses before it joins (too many tabs, a sign-in it no longer
-accepts) is retried only five times in a row. `WebSocketContext` follows
+accepts) is retried only five times in a row. Leaving the campaign page
+(`socketClient.disconnect()`) ends all of this: it forgets the campaign, cancels
+the pending retry and the connect under way, whether or not a socket is held.
+`WebSocketContext` follows
 every socket from the moment it is built (`socketClient.onCreated`), counts
 each `authenticated` as a join (`joinedEpoch`, which drives the catch-up
 after every rejoin, Retry included) and as connected, retries a first connect
@@ -810,6 +814,13 @@ nginx does not inherit `add_header` into a location that sets one of its own,
 and `try_files` routes `/` through the `= /index.html` block, so the headers
 are included per location rather than declared once at server level. A test
 asserts that per block.
+
+The app page's fallback is `try_files $uri /index.html` with no `$uri/`, and a
+request that names a folder of the build is rewritten to `/index.html` first.
+The build keeps its scripts and styles in a folder called `assets/`, which is
+also the address of the Asset Library page: `$uri/` matched that folder and
+nginx refused to list it, so reloading `/assets` gave `403 Forbidden`.
+`frontend/src/__tests__/spaFallback.test.ts` walks the config for such paths.
 
 ### Serving Audio
 

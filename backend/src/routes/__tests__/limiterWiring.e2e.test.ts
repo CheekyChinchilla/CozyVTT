@@ -54,6 +54,7 @@ import {
   campaignExportLimiter,
 } from '../../middleware/campaignArchiveLimits';
 import { invitationEmailLimiter } from '../../middleware/invitationEmailLimiter';
+import { leftNotesDownloadLimiter } from '../../middleware/leftNotesDownloadLimiter';
 
 jest.setTimeout(60000);
 
@@ -71,6 +72,7 @@ const LIMITERS = new Map<RequestHandler, string>([
   [campaignImportLimiter, 'campaignImportLimiter'],
   [campaignExportLimiter, 'campaignExportLimiter'],
   [invitationEmailLimiter, 'invitationEmailLimiter'],
+  [leftNotesDownloadLimiter, 'leftNotesDownloadLimiter'],
 ]);
 
 /** What a row's requests are sent with. */
@@ -124,6 +126,7 @@ const ROWS: Row[] = [
   { route: 'POST /api/campaigns/import/preview', limiter: 'campaignPreviewLimiter', limit: 20, testedIn: 'routes/__tests__/campaignArchiveLimits.e2e.test.ts' },
   { route: 'POST /api/campaigns/import', limiter: 'campaignImportLimiter', limit: 20, testedIn: 'routes/__tests__/campaignArchiveLimits.e2e.test.ts' },
   { route: 'POST /api/campaigns/:campaignId/invite', limiter: 'invitationEmailLimiter', limit: 20, testedIn: 'routes/__tests__/campaignInvite.e2e.test.ts' },
+  { route: 'GET /api/campaigns/left/:campaignId/notes', limiter: 'leftNotesDownloadLimiter', limit: 60, send: (c) => c.agent.get(`/api/campaigns/left/${c.campaignId}/notes`) },
 ];
 
 const rowKey = (route: string, limiter: string) => `${route} ${limiter}`;

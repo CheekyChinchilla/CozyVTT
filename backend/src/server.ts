@@ -16,8 +16,9 @@ import { createShutdown, onShutdownSignals, onProcessFailure } from './utils/shu
 import { setupState } from './services/systemSettings';
 import { removeLeftoverRestoreUploads } from './services/restoreState';
 import { resolveBackupDir } from './utils/backupDir';
-import { setupToken } from './services/setupToken';
+import { setupTokenHint } from './services/setupToken';
 import { backupsInProgress } from './services/backupsInProgress';
+import { personalFilesBeingRemoved } from './services/accountDeletion';
 
 // An error nothing caught is written to the log before the process ends.
 onProcessFailure();
@@ -39,8 +40,9 @@ const io = initializeWebSocket(httpServer);
 
 // Docker's stop, a service manager's stop and Ctrl+C all end the backend
 // here, which lets a backup being written finish, then closes the sockets,
-// the database and the session store.
-onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress }));
+// lets the removal of a deleted account's files finish, and closes the
+// database and the session store.
+onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress, files: personalFilesBeingRemoved }));
 
 // ============================================
 // START SERVER
@@ -78,11 +80,7 @@ httpServer.listen(PORT, () => {
   setupState()
     .then(({ setupCompleted }) => {
       if (setupCompleted) return;
-      if (process.env.SETUP_TOKEN?.trim()) {
-        logger.warn('Setup is not complete. The setup wizard asks for the setup token: the SETUP_TOKEN value in .env.');
-      } else {
-        logger.warn(`Setup is not complete. The setup wizard asks for this setup token: ${setupToken()}`);
-      }
+      logger.warn(`Setup is not complete. ${setupTokenHint()}`);
     })
     .catch((err: unknown) => logger.error('Could not read the setup state at start', { err }));
 });

@@ -117,7 +117,7 @@ Until the wizard has run, whoever submits it becomes the instance's administrato
 
    You should see one line containing a 32-character code, such as (in production the line is JSON, with the timestamp after the message)
    `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
-   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line.
+   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line. If it is still missing (the backend could not read its settings while it started, or `LOG_LEVEL` hides warnings), open the wizard and press the button with any token typed in: the wizard refuses it, and the backend prints the token again, as `The setup wizard was refused: the setup token was missing or wrong. The setup wizard asks for this setup token: ...`, in a line every `LOG_LEVEL` shows.
 
 2. Navigate to `http://your-server` (or `http://localhost` if testing locally). The wizard opens by itself on a fresh install.
 
@@ -162,6 +162,8 @@ docker compose down -v       # ⚠️ Also removes volumes — deletes all datab
 Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
 
 **While the Admin Dashboard is making a backup, stopping waits for it.** The backend takes no new requests, lets the backup finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping`. `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back.
+
+**Deleting an account removes its files just after the page confirms it.** If the backend is stopped in those seconds it waits up to 4 seconds for the removal to finish. Files it did not reach stay as assets with no owner, which an administrator can find with the **No Uploader (account deleted)** filter on the **Assets** tab of the Admin Panel and delete.
 
 ---
 
@@ -946,7 +948,14 @@ server {
     location / {
         root  /path/to/cozyvtt/frontend/dist;
         index index.html;
-        try_files $uri $uri/ /index.html;
+        # A folder in the build, such as assets/, is also the address of an app
+        # page (/assets is the Asset Library), so a path that names a folder
+        # serves the app too; without this line, reloading that page gives
+        # "403 Forbidden".
+        if (-d $request_filename) {
+            rewrite ^ /index.html last;
+        }
+        try_files $uri /index.html;
 
         # The app page's own security headers: the same ones the Docker setup
         # sends from frontend/security-headers.conf. HSTS is repeated here
@@ -1521,7 +1530,7 @@ Look at the last line it prints:
 
 ### The wizard says "Setup token is missing or wrong"
 
-The token the wizard asks for is printed in the backend log each time the backend starts while setup is not complete. Run `docker compose logs backend | grep "setup token"` and copy the code from the **last** such line: an earlier start printed a different one. If `.env` sets `SETUP_TOKEN`, enter exactly that value instead.
+The token the wizard asks for is printed in the backend log each time the backend starts while setup is not complete, and again each time the wizard is refused for lacking it. Run `docker compose logs backend | grep "setup token"` and copy the code from the **last** such line: an earlier start printed a different one. If `.env` sets `SETUP_TOKEN`, enter exactly that value instead; the log then only says to use it and does not print it.
 
 ### Setup fails with "An error occurred during setup" (502)
 

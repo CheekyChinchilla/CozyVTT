@@ -708,7 +708,8 @@ export interface LeftCampaignSummary {
 /**
  * One campaign the caller has left (GET /api/campaigns/left/:campaignId):
  * note titles, newest edit first, and macros. A note's text comes from
- * GET /api/campaigns/left/:campaignId/notes/:noteId, one note at a time.
+ * GET /api/campaigns/left/:campaignId/notes/:noteId, one note at a time, or
+ * from GET /api/campaigns/left/:campaignId/notes, all of them in one answer.
  */
 export interface LeftCampaignDetail {
   campaign: { id: string; name: string };

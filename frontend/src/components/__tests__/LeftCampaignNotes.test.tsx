@@ -6,8 +6,10 @@
  * notes panel lives there, so before this they could not reach what they
  * had written at all.
  *
- * The server sends a note's text one note at a time, so the dialog fetches
- * the note being read, and Download fetches the rest in turn.
+ * The dialog fetches the text of the note being read. Download asks the
+ * server for every note of the campaign in one request, however many there
+ * are: it used to ask once a note, up to 200 requests against the general
+ * limit.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within, waitFor } from '@testing-library/react';
@@ -21,6 +23,7 @@ const api = vi.hoisted(() => ({
   listLeftCampaigns: vi.fn(),
   getLeftCampaign: vi.fn(),
   getLeftCampaignNote: vi.fn(),
+  getLeftCampaignNotes: vi.fn(),
 }));
 vi.mock('@/services/api', () => ({ api, default: api }));
 
@@ -58,7 +61,12 @@ const answerNote = (_campaignId: string, noteId: string) => {
   return note ? Promise.resolve({ note }) : Promise.reject({ response: { status: 404, data: { message: 'Note not found' } } });
 };
 
-const rateLimited = { response: { status: 429, data: { message: 'Rate limit exceeded. Please slow down.' } } };
+const rateLimited = {
+  response: {
+    status: 429,
+    data: { message: 'You have downloaded your notes 60 times in the last hour, the most this server allows. Try again in 42 minutes.' },
+  },
+};
 
 const noteCalls = (noteId: string) => api.getLeftCampaignNote.mock.calls.filter(([, id]) => id === noteId).length;
 
@@ -75,6 +83,7 @@ beforeEach(() => {
   api.listLeftCampaigns.mockResolvedValue({ campaigns: [summary] });
   api.getLeftCampaign.mockResolvedValue(detail);
   api.getLeftCampaignNote.mockImplementation(answerNote);
+  api.getLeftCampaignNotes.mockResolvedValue({ notes: fullNotes });
 });
 
 async function openDialog() {
@@ -121,7 +130,7 @@ describe('notes from campaigns you have left', () => {
     expect(await within(dialog).findByText('Note not found')).toBeInTheDocument();
   });
 
-  it('downloads everything kept in a campaign as one file, fetching each note once', async () => {
+  it('downloads everything kept in a campaign as one file, in one request for all the notes', async () => {
     const dialog = await openDialog();
     await within(dialog).findByText('lied');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Download' }));
@@ -131,46 +140,56 @@ describe('notes from campaigns you have left', () => {
       leftCampaignMarkdown({ campaign: detail.campaign, notes: fullNotes, macros: detail.macros }),
       'text/markdown'
     );
-    // The note already open is not fetched again.
+    expect(api.getLeftCampaignNotes).toHaveBeenCalledTimes(1);
+    expect(api.getLeftCampaignNotes).toHaveBeenCalledWith('c-1');
+    // Only the note being read was fetched on its own.
     expect(noteCalls('n-1')).toBe(1);
-    expect(noteCalls('n-2')).toBe(1);
+    expect(noteCalls('n-2')).toBe(0);
   });
 
-  it('fetches the notes for a download one at a time', async () => {
-    let inFlight = 0;
-    let most = 0;
-    api.getLeftCampaignNote.mockImplementation(async (campaignId: string, noteId: string) => {
-      inFlight += 1;
-      most = Math.max(most, inFlight);
-      await new Promise((resolve) => setTimeout(resolve, 5));
-      inFlight -= 1;
-      return answerNote(campaignId, noteId);
-    });
+  it('asks once however many notes there are', async () => {
+    const many = Array.from({ length: 200 }, (_, i) => ({
+      id: `n-${i}`, title: `Note ${i}`, createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
+    }));
+    api.getLeftCampaign.mockResolvedValue({ ...detail, notes: many });
+    api.getLeftCampaignNotes.mockResolvedValue({ notes: many.map((n) => ({ ...n, content: `Text ${n.id}` })) });
     const dialog = await openDialog();
-    await within(dialog).findByText('lied');
+    await within(dialog).findByRole('button', { name: 'Note 199' });
     await userEvent.click(within(dialog).getByRole('button', { name: 'Download' }));
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
-    expect(most).toBe(1);
+    expect(api.getLeftCampaignNotes).toHaveBeenCalledTimes(1);
+    expect(api.getLeftCampaignNote.mock.calls.length).toBeLessThanOrEqual(1);
   });
 
-  it('says to wait and try again when the server asks it to slow down, keeping what it fetched', async () => {
-    api.getLeftCampaignNote.mockImplementation((campaignId: string, noteId: string) =>
-      noteId === 'n-2' && noteCalls('n-2') === 1 ? Promise.reject(rateLimited) : answerNote(campaignId, noteId)
+  it('asks for no notes when there are none, and still saves the saved rolls', async () => {
+    api.getLeftCampaign.mockResolvedValue({ ...detail, notes: [] });
+    const dialog = await openDialog();
+    await within(dialog).findByText('You kept no notes in this campaign.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Download' }));
+    await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
+    expect(api.getLeftCampaignNotes).not.toHaveBeenCalled();
+    expect(download).toHaveBeenCalledWith(
+      'Curse of the Left notes.md',
+      leftCampaignMarkdown({ campaign: detail.campaign, notes: [], macros: detail.macros }),
+      'text/markdown'
     );
+  });
+
+  it("shows the server's reason when it refuses the download, and downloads when asked again", async () => {
+    api.getLeftCampaignNotes.mockRejectedValueOnce(rateLimited);
     const dialog = await openDialog();
     await within(dialog).findByText('lied');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Download' }));
     expect(
       await within(dialog).findByText(
-        'Too many requests at once. Wait a minute, then press Download again. The notes fetched so far are kept.'
+        'You have downloaded your notes 60 times in the last hour, the most this server allows. Try again in 42 minutes.'
       )
     ).toBeInTheDocument();
     expect(download).not.toHaveBeenCalled();
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Download' }));
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
-    expect(noteCalls('n-1')).toBe(1);
-    expect(noteCalls('n-2')).toBe(2);
+    expect(api.getLeftCampaignNotes).toHaveBeenCalledTimes(2);
   });
 
   it('says why a campaign could not be opened', async () => {

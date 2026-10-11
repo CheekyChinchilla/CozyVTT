@@ -94,9 +94,9 @@ The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins
 - creates, invites, approves or deletes an account;
 - makes someone an administrator, or takes the role away;
 - grants or takes away **Global Assets** or template editing;
-- changes someone else's email address, display name, avatar or bio;
+- changes someone else's email address, display name, avatar or bio (the line says the bio changed and keeps none of its text);
 - resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
-- changes the instance's settings or default theme;
+- changes the instance's settings or default theme (only the settings whose value changed are listed, and saving without changing anything writes no line);
 - makes, deletes or restores a backup, or deletes leftover files.
 
 The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line of **Recent Admin Actions** shows:
@@ -106,9 +106,9 @@ The instance writes lines of its own too, such as an account locked after too ma
 | **Time** | How long ago it happened |
 | **Level** | INFO, or WARNING for the more serious actions, such as deleting an account or changing someone's email address |
 | **By** | The administrator who acted, by display name and email address. **The instance** for a line the instance wrote itself |
-| **Action** | What was done, naming the account it was done to by its email address. Under a change to an account or to the settings, **What changed** opens a list of each value before and after (for the settings, the new value) |
+| **Action** | What was done, naming the account it was done to by its email address. Under a change to an account or to the settings, **What changed** opens a list of each value before and after, except a bio, which shows only **Bio: changed**. Lines about the settings written by earlier versions list every setting that was sent, with its new value only |
 
-**What the log keeps, and for how long.** Lines are kept for as long as the instance exists: nothing removes them, and there is no control to clear them. A line names the account it was about by its email address, and deleting that account leaves the line as it is. **By** is looked up each time the tab opens, so if the administrator's own account is deleted later, their lines stay and **By** shows **Deleted account**. The log is part of every backup.
+**What the log keeps, and for how long.** Lines are kept for as long as the instance exists: nothing removes them, and there is no control to clear them. A line names the account it was about by its email address, and deleting that account leaves the line as it is. **By** is looked up each time the tab opens, so if the administrator's own account is deleted later, their lines stay and **By** shows **Deleted account**. **What a line stores about an account change:** the email address, display name and avatar address before and after, and whether Global Assets and template editing were granted or taken away. For a bio it stores only that the bio changed: none of the old or new text is kept, so nothing a person wrote about themselves stays in the log. Lines written by earlier versions of CozyVTT still hold the bio text they stored; they are not rewritten. The log is part of every backup.
 
 ### Campaign Roles
 
@@ -785,7 +785,7 @@ Email addresses cannot be changed from the app. Contact your platform administra
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server, a moment after the page says your account is gone.
 
 Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner, but the campaign can no longer show it until an administrator moves it into the campaign. To keep it showing, move it into the campaign from your asset library before you delete your account, if your role there allows it.
 

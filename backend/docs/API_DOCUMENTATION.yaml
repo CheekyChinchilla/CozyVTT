@@ -69,9 +69,10 @@ info:
       passwords arriving together from one address all pass it; wrong ones sent
       together are checked five at most (the rest wait for those to be checked,
       then get 429 if all five were wrong). A request waits at most 15 seconds
-      for its turn; past that it answers 429 `Other attempts are still being
-      checked. Please try again in a moment.` with `Retry-After: 5`, and is not
-      counted. The same wait applies to every limit below that counts only
+      for its turn, in all: a sign-in goes through the address limit and then the
+      per-account limit, and the two share that one wait. Past it the request
+      answers 429 `Other attempts are still being checked. Please try again in
+      a moment.` with `Retry-After: 5`, and is not counted. The same wait applies to every limit below that counts only
       wrong answers (per account, password checks, the MFA code step). That covers the password step of a
       sign-in only: the two-factor code step keeps its own limit, below. An
       unknown email counts and answers exactly as a wrong password does. The 429
@@ -122,6 +123,9 @@ info:
       `CAMPAIGN_ARCHIVE_RATE_LIMIT`), and one archive operation at a time per
       user across all three. Past either, the route answers 429; a request
       refused for overlapping another is not counted against the hour
+    - All the notes of a campaign you have left
+      (`GET /api/campaigns/left/{campaignId}/notes`): 60 per hour per user,
+      answering 429 `Too Many Requests` past that
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
@@ -395,10 +399,14 @@ paths:
         The route is public, so it asks for the setup token first: the value
         the backend printed in its log at start while setup was incomplete, or
         the `SETUP_TOKEN` environment variable when set. A missing or wrong
-        token answers 403 before anything else is checked. The password must
-        be at least 12 characters with an uppercase letter, a lowercase
-        letter, a number and a special character, the same rule enforced on
-        register, reset-password and change-password.
+        token answers 403 before anything else is checked, and, while setup has
+        not run, writes a line to the backend log (at error level, so every
+        `LOG_LEVEL` shows it) saying where to find the token: the token itself
+        when the backend made it, the name `SETUP_TOKEN` when the owner set
+        one. The answer never carries the token. The password must be at least
+        12 characters with an uppercase letter, a lowercase letter, a number
+        and a special character, the same rule enforced on register,
+        reset-password and change-password.
       operationId: initializeSystem
       security: []
       requestBody:
@@ -816,7 +824,7 @@ paths:
         - Authentication
       summary: Request password reset
       description: |
-        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged.
+        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
         The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
         For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does, and its used and expired link rows are removed. This happens even when SMTP is not configured and no email is sent.
@@ -865,7 +873,7 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
         '500':
-          description: Unexpected server error.
+          description: The address lookup itself failed, which it does for every address alike.
           content:
             application/json:
               schema:
@@ -1406,14 +1414,23 @@ paths:
         made, stay with no author; a creature's `createdById` keeps the
         deleted user's id, since it is not linked to the user row.
 
-        Only campaigns the user owns are checked. One whose DM seat another
-        member holds passes to that DM. One where the user holds the DM seat,
-        or where nobody does, refuses the deletion with 409 and nothing
-        changes. A campaign the user is DM of but does not own (after a DM
-        handover) is not checked: the deletion goes ahead and leaves that
-        campaign with no DM.
+        The account is gone when the 200 is sent. The personal files are
+        removed just after it, and a failure to remove one is logged and does
+        not change the answer; a shutdown waits up to 4 seconds for the
+        removal to finish.
 
-        Wrong passwords count only towards the general API rate limit.
+        The user's campaigns are checked before anything is written. A campaign
+        the user owns whose DM seat another member holds passes to that DM.
+        The deletion is refused with 409, and nothing changes, when the user
+        sits in the DM seat of any campaign, whether or not they own it (the
+        seat can be held by a member who is not the owner), or owns a campaign
+        whose DM seat is empty. A campaign the user is only a player or
+        spectator in is not checked.
+
+        Rate limits: the wrong-password allowance above is checked before the
+        password is, so past it the answer is 429 whatever password is sent.
+        The general API limit (300 requests per minute per address, set by
+        `RATE_LIMIT_MAX_REQUESTS`) applies as well.
       operationId: deleteOwnAccount
       security:
         - cookieAuth: []
@@ -1485,6 +1502,22 @@ paths:
               example:
                 error: Conflict
                 message: You run "Curse of the Lantern". Hand the DM seat to someone else in the campaign's settings, or delete the campaign, then delete your account.
+        '429':
+          description: >-
+            The account has had 10 wrong passwords in 15 minutes from every
+            address together (`Too many wrong passwords, please try again
+            later`, with `Retry-After`), or the request waited 15 seconds
+            behind other password checks for the account that were still
+            running (`Other attempts are still being checked. Please try again
+            in a moment.`, with `Retry-After: 5`; not counted). The general
+            API limit answers 429 too. Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Rate Limited
+                message: Too many wrong passwords, please try again later
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -1650,7 +1683,7 @@ paths:
         - Users
       summary: Update user
       description: |
-        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. A role change is written to the admins' activity log as a WARNING, and a promotion to `ADMIN` gives the account 7 days to set up MFA (see the administrator two-factor policy in the introduction). The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
+        Update user profile (own profile or admin). Every field is optional; only those sent are changed, and every check runs before anything is written. Admin can change platformRole, which ends every login session and live WebSocket connection the target has, because the role is carried in the session; an admin changing their own role is signed out too. Setting the role it already has signs no one out. An admin's change to another account is written to the admins' activity log with each changed field in the line's `changes`: `{ from, to }` for the email address, display name, avatar address and the two permission flags, and `{ changed: true }` for the bio, whose text is not stored (lines from earlier versions kept it). A role change is written to the admins' activity log as a WARNING, and a promotion to `ADMIN` gives the account 7 days to set up MFA (see the administrator two-factor policy in the introduction). The globalAssetManager and templateEditor flags are read from the database at the point of use, so changing those takes effect on the next request and does not sign anyone out.
 
         Changing your own email needs `currentPassword` (400 without it, 401 when wrong), checked before the new address is looked up; an admin changing someone else's does not. A wrong password counts against the shared allowance of 10 wrong passwords per 15 minutes for the account (see `POST /api/auth/change-password`); past it a request carrying `currentPassword` answers 429, while one without a password is not held to it. When the email changes, the user's unused password-reset and invitation links are voided, and the old address is emailed a notice if SMTP is configured (a failed send does not fail the change).
       operationId: updateUser
@@ -1797,9 +1830,11 @@ paths:
         every login session and live WebSocket connection the deleted user
         had, and broadcasts `roster.updated` (`member.left`) to each campaign
         they were a member of. What stays and what goes, which campaigns are
-        checked, and the 409 for a user who sits as DM of a campaign or owns
-        one whose DM seat is empty, are as for `DELETE /api/auth/account`. No
-        password is asked for.
+        checked, and the 409 for a user who sits as DM of any campaign, owned
+        or not, or owns one whose DM seat is empty, are as for
+        `DELETE /api/auth/account`, and so is the removal of the personal files
+        just after the answer. No password is asked for, so the wrong-password
+        allowance does not apply; only the general API limit can answer 429.
       operationId: deleteUser
       security:
         - cookieAuth: []
@@ -3625,7 +3660,8 @@ paths:
         the titles of the caller's notes (most recently edited first, no
         `content`) and their macros (oldest first); a note's text comes from
         `GET /api/campaigns/left/{campaignId}/notes/{noteId}`, one note at a
-        time. Only the caller's own are ever listed. A campaign they are in
+        time, or all of a campaign's from `GET /api/campaigns/left/{campaignId}/notes`.
+        Only the caller's own are ever listed. A campaign they are in
         again is not listed, and deleting a campaign deletes its notes and
         macros, so it drops out of the list.
       operationId: listLeftCampaignNotes
@@ -3727,6 +3763,70 @@ paths:
                 message: You have not left that campaign, or have no notes or dice macros in it
         '500':
           description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to fetch your notes
+
+  /api/campaigns/left/{campaignId}/notes:
+    get:
+      tags:
+        - Notes
+      summary: Download all your notes from a campaign you have left
+      description: >-
+        Every one of the caller's notes in a campaign they are no longer a
+        member of, each with its Markdown source, most recently edited first
+        (the order of the titles in `GET /api/campaigns/left/{campaignId}`).
+        The Download button on the dashboard uses it, in place of one request
+        a note. A campaign can hold 200 notes of 100,000 characters, so the
+        answer can run to tens of megabytes; the server writes it a few notes
+        at a time, and a failure after the first notes are out cuts the
+        connection off instead of answering 500. Read only. Answers 404, with
+        the message of `GET /api/campaigns/left/{campaignId}`, for a campaign
+        the caller is a member of, one they have no notes or macros in, and one
+        that does not exist. 60 requests per hour per user.
+      operationId: downloadLeftCampaignNotes
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: All the caller's notes in that campaign, with their text
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  notes:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PersonalNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: The caller has not left that campaign, or has no notes or macros in it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: You have not left that campaign, or have no notes or dice macros in it
+        '429':
+          description: 60 downloads in the last hour.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: You have downloaded your notes 60 times in the last hour, the most this server allows. Try again in 42 minutes.
+        '500':
+          description: The notes could not be read before any were sent.
           content:
             application/json:
               schema:
@@ -8978,6 +9078,13 @@ paths:
         no `//`, no backslash, no control characters) or the request answers 400. These
         images themselves are not uploaded here — replace the files in
         `frontend/public/` and rebuild to change what the path points at.
+
+        The admins' activity log gets one line, `Updated system settings:` and
+        the names of the settings whose value changed, with each one's value
+        before and after in the line's `changes` (`{ from, to }`). A field sent
+        with the value already stored is not listed, and a request that changes
+        nothing writes no line. Lines written by earlier versions list every
+        field sent, with the new value only.
       operationId: adminUpdateSettings
       security:
         - cookieAuth: []

@@ -29,6 +29,7 @@ import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeAdminLog } from '../services/systemLog';
+import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
@@ -250,6 +251,17 @@ router.get('/settings', async (_req, res) => {
   }
 });
 
+/** Whether two stored settings are the same value, however their object keys are ordered. */
+function sameSetting(a: unknown, b: unknown): boolean {
+  const canonical = (value: unknown): string =>
+    JSON.stringify(value ?? null, (_key, v: unknown) =>
+      typeof v === 'object' && v !== null && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)))
+        : v
+    );
+  return canonical(a) === canonical(b);
+}
+
 // ============================================
 // PUT /api/admin/settings
 // Updates system settings.
@@ -311,14 +323,24 @@ router.put('/settings', async (req, res) => {
       updateData[field as 'customLogoUrl' | 'customFaviconUrl' | 'customMascotUrl'] = stored;
     }
 
+    // The page sends every setting it shows, so the log lists the ones whose
+    // value differs from what was stored, with that value before and after,
+    // and a save that changes nothing writes nothing.
+    const before = await getSystemSettings();
     const settings = await updateSystemSettings(updateData);
 
-    await writeAdminLog(
-      req.session.userId!,
-      `Updated system settings: ${Object.keys(updateData).join(', ')}`,
-      'INFO',
-      { changes: updateData }
-    );
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const field of Object.keys(updateData) as (keyof typeof updateData)[]) {
+      if (!sameSetting(before[field], updateData[field])) changes[field] = { from: before[field], to: updateData[field] };
+    }
+    if (Object.keys(changes).length > 0) {
+      await writeAdminLog(
+        req.session.userId!,
+        `Updated system settings: ${Object.keys(changes).join(', ')}`,
+        'INFO',
+        { changes: toJson(changes) }
+      );
+    }
 
     return res.json({ message: 'Settings updated successfully', settings });
   } catch (error) {

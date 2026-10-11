@@ -7,22 +7,21 @@
  * It shows only when there is something to show. Deleting the campaign
  * deletes these too, so the section says so.
  *
- * The server sends a note's text one note at a time, as it does in the
- * campaign's notes panel: the dialog fetches the note being read, and
- * Download fetches the others in turn, reusing any already fetched.
+ * The dialog fetches the text of the note being read, as the campaign's notes
+ * panel does. Download asks for every note of the campaign in one request.
  */
 import { useEffect, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Download, Loader2, NotebookPen } from 'lucide-react';
 import Markdown from '@/components/common/Markdown';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { api } from '@/services/api';
 import { leftCampaignNoteQuery, useLeftCampaignsQuery } from '@/hooks/queries';
-import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
+import { apiErrorMessage } from '@/utils/errors';
 import { downloadTextFile } from '@/utils/download';
 import { leftCampaignFilename, leftCampaignMarkdown } from '@/utils/leftCampaignNotes';
-import type { LeftCampaignDetail, LeftCampaignSummary, PersonalNote, PersonalNoteSummary } from '@/types';
+import type { LeftCampaignDetail, LeftCampaignSummary, PersonalNoteSummary } from '@/types';
 import '@/styles/note-markdown.css';
 
 const count = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
@@ -54,11 +53,10 @@ function NoteText({ campaignId, note }: { campaignId: string; note: PersonalNote
 }
 
 function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSummary | null; onClose: () => void }) {
-  const queryClient = useQueryClient();
   const [detail, setDetail] = useState<LeftCampaignDetail | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   // Bumped whenever the dialog opens or closes, so a download still fetching
   // for a dialog that has gone stops and saves nothing.
@@ -66,7 +64,7 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
 
   useEffect(() => {
     opening.current += 1;
-    setProgress(null);
+    setDownloading(false);
     setDownloadError('');
     if (!campaign) return;
     let cancelled = false;
@@ -90,19 +88,16 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
 
   const selected = detail?.notes.find((n) => n.id === selectedId) ?? null;
 
-  /** Fetch every note's text, one request at a time, then save the file. */
+  /** Fetch every note's text in one request, then save the file. */
   const downloadAll = async () => {
-    if (!detail || progress) return;
+    if (!detail || downloading) return;
     const started = opening.current;
     setDownloadError('');
-    setProgress({ done: 0, total: detail.notes.length });
+    setDownloading(true);
     try {
-      const notes: PersonalNote[] = [];
-      for (const note of detail.notes) {
-        notes.push(await queryClient.fetchQuery(leftCampaignNoteQuery(detail.campaign.id, note)));
-        if (opening.current !== started) return;
-        setProgress({ done: notes.length, total: detail.notes.length });
-      }
+      // A campaign with no notes has nothing to ask for; its saved rolls are in the detail.
+      const notes = detail.notes.length > 0 ? (await api.getLeftCampaignNotes(detail.campaign.id)).notes : [];
+      if (opening.current !== started) return;
       downloadTextFile(
         leftCampaignFilename(detail.campaign.name),
         leftCampaignMarkdown({ campaign: detail.campaign, notes, macros: detail.macros }),
@@ -110,13 +105,9 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
       );
     } catch (err: unknown) {
       if (opening.current !== started) return;
-      setDownloadError(
-        apiErrorStatus(err) === 429
-          ? 'Too many requests at once. Wait a minute, then press Download again. The notes fetched so far are kept.'
-          : (apiErrorMessage(err) ?? 'Failed to fetch your notes')
-      );
+      setDownloadError(apiErrorMessage(err) ?? 'Failed to fetch your notes');
     } finally {
-      if (opening.current === started) setProgress(null);
+      if (opening.current === started) setDownloading(false);
     }
   };
 
@@ -132,8 +123,8 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>
-          <Button onClick={() => void downloadAll()} disabled={!detail || progress !== null} className="flex items-center gap-2">
-            {progress ? (
+          <Button onClick={() => void downloadAll()} disabled={!detail || downloading} className="flex items-center gap-2">
+            {downloading ? (
               <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
             ) : (
               <Download className="w-4 h-4" aria-hidden="true" />
@@ -148,10 +139,10 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
           {error || downloadError}
         </p>
       )}
-      {progress && (
+      {downloading && (
         <p role="status" className="flex items-center gap-2 text-sm text-warm-gray mb-4">
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          Fetching your notes for the download: {progress.done.toLocaleString()} of {progress.total.toLocaleString()}
+          Fetching your notes for the download
         </p>
       )}
       {!detail && !error && (

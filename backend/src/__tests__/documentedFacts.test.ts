@@ -90,8 +90,8 @@ describe("the Let's Encrypt comments in nginx/nginx.conf", () => {
 describe('the manual-install nginx example in the deployment guide', () => {
   const example = section('docs/DEPLOYMENT.md', '### 5. Serve with Nginx', '## Environment Configuration');
 
-  /** Each `location` block of the example, by its path, with the text inside it. */
-  const locations = [...example.matchAll(/^\s*location\s+(?:=\s+)?(\S+)\s*\{([^}]*)\}/gm)].map((m) => ({ path: m[1], body: m[2] }));
+  /** Each `location` block of the example, by its path, with the text inside it (one level of braces, as an `if` makes, may be nested). */
+  const locations = [...example.matchAll(/^\s*location\s+(?:=\s+)?(\S+)\s*\{((?:[^{}]|\{[^}]*\})*)\}/gm)].map((m) => ({ path: m[1], body: m[2] }));
 
   /**
    * The headers the frontend container sends with the app page, as lines of

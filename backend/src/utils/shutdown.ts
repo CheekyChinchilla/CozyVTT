@@ -13,6 +13,10 @@
  * container that long and more before Docker stops it. Stopped part-way, the
  * backup would be lost and have to be made again.
  *
+ * The personal files of an account just deleted are removed after the answer
+ * has gone out; a shutdown lets that finish too, for up to FILE_WAIT_MS, since
+ * the database is needed to decide which files may go.
+ *
  * Also here: an error nothing caught, thrown or rejected, which ends the
  * process (onProcessFailure).
  */
@@ -32,6 +36,8 @@ export interface ShutdownTargets {
   sessionPool: { end(): Promise<void> };
   /** Backups being written, which the shutdown lets finish before it closes the database. */
   backups?: { readonly count: number; finished(): Promise<void> };
+  /** Files of deleted accounts being removed, which the shutdown lets finish before it closes the database. */
+  files?: { readonly count: number; finished(): Promise<void> };
 }
 
 export interface ShutdownOptions {
@@ -41,6 +47,8 @@ export interface ShutdownOptions {
   graceMs?: number;
   /** How long it waits for a backup being written, before the grace above starts. */
   backupWaitMs?: number;
+  /** How long it waits, within the grace, for the files of deleted accounts being removed. */
+  fileWaitMs?: number;
 }
 
 /**
@@ -48,6 +56,13 @@ export interface ShutdownOptions {
  * terms, log lines written, before Docker would kill it.
  */
 export const SHUTDOWN_GRACE_MS = 8_000;
+
+/**
+ * The longest a shutdown waits for the files of a deleted account being
+ * removed: within the grace above, so the database is still closed, log lines
+ * written, before Docker would stop the container.
+ */
+export const FILE_WAIT_MS = 4_000;
 
 /**
  * The longest a shutdown waits for a backup being written: the ten minutes
@@ -81,6 +96,7 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
   const exit = options.exit ?? exitAfterLogs;
   const graceMs = options.graceMs ?? SHUTDOWN_GRACE_MS;
   const backupWaitMs = options.backupWaitMs ?? BACKUP_WAIT_MS;
+  const fileWaitMs = options.fileWaitMs ?? FILE_WAIT_MS;
   let running: Promise<void> | null = null;
 
   return (signal) => {
@@ -135,6 +151,17 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
         else logger.warn('The backup did not finish in time and is lost; make it again once the backend is back');
       }
       await step('close the server', () => serverClosed);
+      if (targets.files && targets.files.count > 0) {
+        let timer: NodeJS.Timeout | undefined;
+        const finished = await Promise.race([
+          targets.files.finished().then(() => true),
+          new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), fileWaitMs); }),
+        ]);
+        clearTimeout(timer);
+        if (!finished) {
+          logger.warn(`The files of a deleted account were still being removed after ${fileWaitMs / 1000} seconds; the ones not reached stay as assets with no owner, which an administrator can delete`);
+        }
+      }
       await step('disconnect from the database', () => targets.prisma.$disconnect());
       await step('close the session store', () => targets.sessionPool.end());
       clearTimeout(deadline);

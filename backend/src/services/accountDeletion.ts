@@ -12,7 +12,9 @@
  * personal file a map, token, template, creature or campaign setting still
  * names stays, owned by no one, like a campaign's files. The rows are
  * deleted with the account; the files are removed by removePersonalFiles,
- * which the routes call once the account's sessions have ended.
+ * which the routes start once the account's sessions have ended and the answer
+ * is on its way (removePersonalFilesAfterwards), since working out which may
+ * go costs several queries a file.
  *
  * A campaign needs an owner and a DM. One they own while someone else sits as
  * its DM passes to that DM. One whose DM seat is theirs, owned by them or not,
@@ -165,6 +167,45 @@ export async function removePersonalFiles(personal: PersonalAsset[]): Promise<vo
   } catch (error) {
     logger.error("Account deleted, but its personal files could not all be removed", { err: error });
   }
+}
+
+/** Removals started by removePersonalFilesAfterwards that have not finished. */
+const removals = new Set<Promise<void>>();
+
+/**
+ * The removals of deleted accounts' files that are still under way, which a
+ * shutdown waits for (utils/shutdown.ts) so it does not stop between the
+ * check and the delete.
+ */
+export const personalFilesBeingRemoved = {
+  get count(): number {
+    return removals.size;
+  },
+
+  /** Settles once none is under way: at once when none is. */
+  async finished(): Promise<void> {
+    while (removals.size > 0) await Promise.all([...removals]);
+  },
+};
+
+/**
+ * Remove the personal files of an account just deleted without making the
+ * caller wait: the account is gone, so what is left is housekeeping, and a
+ * person with many uploads waited on seven queries per file for an answer
+ * that was already settled. Never rejects; removePersonalFiles logs its own
+ * failures, and what it did not reach stays as assets owned by no one, which
+ * an administrator can delete.
+ */
+export function removePersonalFilesAfterwards(personal: PersonalAsset[]): void {
+  if (personal.length === 0) return;
+  const removal: Promise<void> = removePersonalFiles(personal)
+    .catch((error: unknown) => {
+      logger.error("Account deleted, but its personal files could not all be removed", { err: error });
+    })
+    .finally(() => {
+      removals.delete(removal);
+    });
+  removals.add(removal);
 }
 
 /** The reason a deletion was refused, for the person or an admin. */

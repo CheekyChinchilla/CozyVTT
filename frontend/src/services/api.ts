@@ -780,6 +780,20 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Every one of the caller's notes, with its text, from a campaign they have
+   * left, in one request. Up to 200 notes of 100,000 characters, so the
+   * answer can be large; the Download button is the only caller.
+   */
+  async getLeftCampaignNotes(campaignId: string): Promise<{ notes: PersonalNote[] }> {
+    // No limit of the page's own: the shared 30 seconds count the download,
+    // and at the cap the answer is 20 to 40 MB before compression. The server
+    // writes it out as it reads, and the proxy drops a connection that goes
+    // silent for 60 seconds.
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes`, { timeout: 0 });
+    return response.data;
+  }
+
   /** Past sessions and the notes recorded when each ended. Newest first. */
   async listSessions(campaignId: string): Promise<{ sessions: SessionSummary[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/sessions`);
@@ -891,16 +905,22 @@ class ApiClient {
     return response.data;
   }
 
-  // TODO(assets): this upload has the shared 30-second timeout, which counts
-  // the upload itself, so a 50 MB map picture or PDF on a connection slower
-  // than about 14 Mbit/s is cut off with "Failed to upload asset". Nothing
-  // queues on the server here; it should have no limit of its own, like the
-  // UVTT and campaign imports, leaving the proxy to bound it.
+  /**
+   * Upload a picture, sound, PDF or other file (up to 50 MB for a map picture
+   * or PDF). Serves map pictures, PDFs, token art, avatars and sheet portraits.
+   */
   async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      // No limit of the page's own: the shared 30 seconds count the upload
+      // itself, so a 50 MB file on a connection slower than about 14 Mbit/s
+      // was cut off with "Failed to upload asset" before it had arrived.
+      // Nothing queues on the server for this route; the proxy drops an upload
+      // that goes silent for 60 seconds, and the backend allows a request an
+      // hour, so those are the limits.
+      timeout: 0,
     });
     return response.data;
   }
