@@ -1,6 +1,7 @@
 /**
  * Shadowrun 6e Character Data Type Definitions
- * Based on /Examples/Shadowrun_character.json
+ * No example character file ships for this system; the shape is checked by
+ * validators/game-systems/shadowrun6e.schema.ts.
  */
 
 /**

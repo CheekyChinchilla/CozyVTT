@@ -570,3 +570,34 @@ describe('the guides on moving a token and on setting up', () => {
     expect(guide).not.toMatch(/before anyone else can log in/);
   });
 });
+
+describe('what the comments in the backend source point to', () => {
+  /** Every non-test source file under backend/src, by path from the repository root. */
+  const sources: string[] = [];
+  const collect = (dir: string) => {
+    for (const entry of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
+      const rel = path.posix.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name !== '__tests__' && entry.name !== 'node_modules') collect(rel);
+      } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+        sources.push(rel);
+      }
+    }
+  };
+  collect('backend/src');
+
+  // The campaign fetch comment sent a reader to GET /api/maps/:id, the route
+  // before maps were nested under their campaign.
+  it('never name the maps route as it was before maps were nested under campaigns', () => {
+    const found = sources.filter((rel) => /\/api\/maps\//.test(read(rel)));
+    expect(found).toEqual([]);
+  });
+
+  // The Shadowrun types cited /Examples/Shadowrun_character.json, a file the
+  // repository does not have.
+  it('name only example character files that exist', () => {
+    const cited = sources.flatMap((rel) => [...read(rel).matchAll(/\/Examples\/([\w.-]+)/g)].map((m) => ({ rel, file: m[1] })));
+    expect(cited.length).toBeGreaterThan(0);
+    expect(cited.filter(({ file }) => !fs.existsSync(path.join(root, 'Examples', file))).map(({ rel, file }) => `${rel}: ${file}`)).toEqual([]);
+  });
+});
