@@ -462,6 +462,23 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    setAvatarError('');
+    setAvatarSuccess('');
+    setAvatarUploading(true);
+    try {
+      await profileService.removeAvatar(user!.id);
+      setAvatarPreview(null);
+      await refreshUser();
+      setAvatarSuccess('Avatar removed');
+      setTimeout(() => setAvatarSuccess(''), 3000);
+    } catch (err) {
+      setAvatarError(apiErrorMessage(err) || 'Failed to remove avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   // ──────────────────────────────────────────
   // Change password
   // ──────────────────────────────────────────
@@ -697,6 +714,16 @@ export default function ProfilePage() {
                 onChange={handleAvatarFileChange}
                 className="hidden"
               />
+              {avatarDisplayUrl && !avatarPreview && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={avatarUploading}
+                  className="mt-2 block w-20 text-center text-xs text-stone-gray hover:text-danger-ink underline disabled:opacity-50"
+                >
+                  Remove Avatar
+                </button>
+              )}
               {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-[5rem]">{avatarError}</p>}
               {avatarSuccess && (
                 <p className="mt-1 text-xs text-brand-ink flex items-center gap-1">

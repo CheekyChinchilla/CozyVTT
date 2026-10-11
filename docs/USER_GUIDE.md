@@ -683,6 +683,8 @@ A display name is 1 to 50 characters. Invisible characters, such as zero-width s
 **Uploading an Avatar:**
 Click on your current avatar (or the placeholder) to open the avatar uploader. Choose an image file, then use the crop tool to frame it perfectly. The zoom slider lets you dial in exactly the right framing. Click **Upload** to save.
 
+A new avatar replaces the old one: the old picture is deleted from the server. **Remove Avatar**, under your avatar, takes it away and deletes the picture, and you are shown with the placeholder again. Deleting your avatar picture from the **Asset Library** does the same. A picture you have also used somewhere else, such as a token's picture, is kept until nothing uses it, but it is no longer your avatar.
+
 *GIF pending — Avatar crop and upload flow.*
 
 ### Changing Your Password

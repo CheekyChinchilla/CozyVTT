@@ -24,6 +24,7 @@ import {
 } from '../validators/documents';
 import { canReadAsset, type AssetAccessFacts, canPlaceAssetAtScope, spiritLayerAssetIdsHiddenFrom } from '../services/permissions';
 import { assetUsageFor } from '../services/assetUsage';
+import { removeAvatars, clearAvatarIfNoneLeft } from '../services/avatars';
 import path from 'path';
 import fs from 'fs';
 import { pipeline } from 'stream';
@@ -476,6 +477,16 @@ router.post(
         select: ASSET_PUBLIC_SELECT,
       });
 
+      // A new avatar replaces the ones before it: the avatar route serves the
+      // newest, and an older one left behind would come back if this one were
+      // deleted. The upload has succeeded by now; a picture that cannot be
+      // removed is logged.
+      if (req.assetType === 'AVATAR') {
+        await removeAvatars(userId, asset.id).catch((err) =>
+          logger.error('New avatar saved, but the earlier ones were not all removed', { err, userId })
+        );
+      }
+
       return res.status(201).json({
         message: 'Asset uploaded successfully',
         asset,
@@ -695,6 +706,14 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       } catch (thumbError) {
         logger.error('Error deleting thumbnail', { err: thumbError });
       }
+    }
+
+    // The last avatar picture gone leaves the profile with no avatar, so
+    // nothing shows a broken picture for it.
+    if (asset.type === 'AVATAR' && asset.uploadedById) {
+      await clearAvatarIfNoneLeft(asset.uploadedById).catch((err) =>
+        logger.error('Avatar picture deleted, but the profile still names it', { err, assetId: asset.id })
+      );
     }
 
     return res.json({
@@ -1254,6 +1273,16 @@ router.get('/audio/:id', authenticated, async (req: AuthenticatedRequest, res: R
 router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { userId } = req.params;
+
+    // A profile with no avatar has none to serve, whatever pictures are
+    // stored: clearing the avatar is what the person asked for.
+    const owner = await prisma.user.findUnique({ where: { id: userId }, select: { avatarUrl: true } });
+    if (!owner?.avatarUrl) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User avatar not found',
+      });
+    }
 
     // Find the user's avatar asset
     const asset = await prisma.asset.findFirst({

@@ -52,6 +52,7 @@ const TESTED: Record<string, string> = {
   'POST /api/campaigns/:campaignId/invite': 'routes/__tests__/campaignInvite.e2e.test.ts',
   'GET /api/campaigns/:campaignId/invitable-users': 'routes/__tests__/invitableUsers.e2e.test.ts',
   'GET /api/character-templates/:id': 'routes/__tests__/characterTemplates.e2e.test.ts',
+  'GET /api/assets/avatars/:userId': 'routes/__tests__/avatarReplace.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/members/:userId': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/members/:userId/role': 'websocket/__tests__/initiativeResend.integration.test.ts',
   'PUT /api/campaigns/:campaignId/dm': 'routes/__tests__/campaignOwnerRemoval.e2e.test.ts',
@@ -182,7 +183,6 @@ const UNTESTED: string[] = [
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
   'POST /api/campaigns/:campaignId/token-templates/from-token',
   'GET /api/characters/templates/:gameSystem/:templateName',
-  'GET /api/assets/avatars/:userId',
   'GET /api/invitations',
   'POST /api/invitations/:id/decline',
 ];
