@@ -452,7 +452,7 @@ error: Your local changes to the following files would be overwritten by merge:
 Please commit your changes or stash them before you merge.
 ```
 
-The same happens, and the same steps below fix it, if you edited `nginx/nginx.conf`; the message then names that file instead. You no longer need to: HTTPS goes in a file of your own in `nginx/conf.d/` (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), and a proxy's addresses go in `NGINX_TRUSTED_PROXIES` in `.env` (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). If you made either change by editing `nginx/nginx.conf` in an older version, the 1.5.2 upgrade notes in `CHANGELOG.md` say how to move it.
+The same happens if you edited `nginx/nginx.conf`; the message then names that file instead. You no longer need to: HTTPS goes in a file of your own in `nginx/conf.d/` (see [SSL/TLS with Let's Encrypt](#ssltls-with-lets-encrypt)), and a proxy's addresses go in `NGINX_TRUSTED_PROXIES` in `.env` (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). If you made either change by editing `nginx/nginx.conf` in an older version, move it with the steps in the 1.5.2 upgrade notes in `CHANGELOG.md`, which put the shipped file back before any `git stash` steps below: 1.5.2 reworked it, so a `git stash pop` of your old edits conflicts with most of it.
 
 Set your changes aside, update, then put them back:
 
@@ -1385,7 +1385,7 @@ The bundled nginx looks the backend and frontend up again within ten seconds of 
 docker compose restart nginx
 ```
 
-It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again. To stop it happening, bring your copy up to date with the `git stash` steps in [Updating after you've edited `docker-compose.yml`](#updating-after-youve-edited-docker-composeyml), which work the same for `nginx/nginx.conf`.
+It ends by printing `Container cozyvtt-nginx  Started`, and the site answers normally again. To stop it happening, put the shipped `nginx/nginx.conf` back and move your changes out of it, with the steps in the 1.5.2 upgrade notes in `CHANGELOG.md`: keep a copy of your changes, `git checkout nginx/nginx.conf`, pull, then put HTTPS in `nginx/conf.d/` and a proxy's addresses in `.env`. The `git stash` steps for `docker-compose.yml` do not suit this file: 1.5.2 reworked it, so a `git stash pop` of your old edits conflicts with most of it.
 
 ### Live features don't work (dice, token movement, chat)
 
