@@ -264,6 +264,28 @@ describe('token movement', () => {
     expect((await denial).message).toBe('Token position out of bounds');
     player.disconnect();
   });
+
+  // The WebSocket guide says both of these, so a drag handler written from it
+  // knows what a frame gets back.
+  it('answers a drag frame off the map with an error, even from a player who may not move the token', async () => {
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+    const denial = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('token.move', { tokenId: DM_TOKEN_ID, mapId, x: 999, y: 5 });
+    expect((await denial).message).toBe('Token position out of bounds');
+    player.disconnect();
+  });
+
+  it('drops a drag frame on the map from a player who may not move the token, without an answer', async () => {
+    const player = await server.connectAndAuth(player1Cookie, campaignId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const noAnswer = expectNoEvent(player, 'error');
+    const nothingSent = expectNoEvent(dm, 'token.moved');
+    player.emit('token.move', { tokenId: DM_TOKEN_ID, mapId, x: 12, y: 12 });
+    await noAnswer;
+    await nothingSent;
+    player.disconnect();
+    dm.disconnect();
+  });
 });
 
 // ── 3. Walls & doors ─────────────────────────────────────────────────────────
