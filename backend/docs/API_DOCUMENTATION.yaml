@@ -2520,7 +2520,12 @@ paths:
                 sendEmail:
                   type: boolean
                   default: false
-                  description: Email the invitation if the instance has SMTP configured. Anything other than exactly `true` is treated as no email.
+                  description: >-
+                    Email the invitation if the instance has SMTP configured.
+                    Anything other than exactly `true` is treated as no email.
+                    Each DM may have 20 invitation emails sent an hour; see the
+                    429 response. The email's subject and inbox preview name
+                    the instance only, never the campaign or the DM.
       responses:
         '201':
           description: >-
@@ -2562,6 +2567,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            `sendEmail` was `true`, SMTP is configured, and this DM has already
+            had 20 invitation emails sent in the last hour. No invitation is
+            created. Requests without `sendEmail`, on an instance without
+            SMTP, or refused with a 400 or 404 are not counted. Counted per
+            signed-in user, with the standard `RateLimit-*` headers.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: You have sent 20 invitation emails in the last hour, the most this server allows. Send this invitation without the email, or try again in 42 minutes.
 
   /api/campaigns/{campaignId}/members/{userId}:
     delete:

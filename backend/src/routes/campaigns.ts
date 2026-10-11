@@ -29,6 +29,7 @@ import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -728,9 +729,10 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
  * Invite a user to join the campaign.
  * Creates a pending invitation that the user must accept.
  * Requires: Campaign DM role
- * Campaign membership management
+ * An invitation that asks for an email counts against the DM's hourly
+ * ceiling on invitation emails (middleware/invitationEmailLimiter).
  */
-router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const parsed = CampaignInviteSchema.safeParse(req.body);

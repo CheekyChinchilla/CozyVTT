@@ -387,11 +387,15 @@ export async function sendCampaignInvitationEmail(
     divider +
     p('<em style="color:#8B7355;font-size:13px;">You can accept or decline this invitation from your Dashboard. Invitations may expire if not responded to.</em>');
 
+  // The subject and the inbox preview carry no text the DM chose. The
+  // campaign name and the DM's display name are anyone's to set, and in a
+  // subject line from the instance's own address they read as the instance
+  // speaking. They appear in the body, escaped, beside who sent them.
   await transporter.sendMail({
     from: fromAddress,
     to: toEmail,
-    subject: `${instanceName} — ${dmName} invited you to "${campaignName}"`,
-    html: emailLayout(instanceName, content, `You've been invited to join "${campaignName}" on ${instanceName}.`),
+    subject: `You have a new campaign invitation on ${instanceName}`,
+    html: emailLayout(instanceName, content, `A Dungeon Master on ${instanceName} has invited you to their campaign.`),
   });
   logger.info('Email sent', { type: 'campaign_invitation', to: toEmail, campaign: campaignName });
 }

@@ -436,6 +436,8 @@ Invite a user to the campaign. **Requires DM role.**
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
+Each DM may have 20 invitation emails sent an hour. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
+
 ### `PUT /api/campaigns/:campaignId/dm`
 
 Hand the Dungeon Master role to another member of the campaign. **Requires the

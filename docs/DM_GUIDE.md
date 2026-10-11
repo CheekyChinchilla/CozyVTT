@@ -63,6 +63,8 @@ To invite a player to your campaign:
 
 **About that checkbox.** It's off by default, and the invitation reaches them either way — the dashboard is what they actually accept from. Tick it only when a nudge in their inbox is genuinely useful; if they're sitting across the table from you, it isn't. If your instance has no mail server set up the option is greyed out and says so, rather than pretending to send something.
 
+The email's subject line names your instance and nothing else ("You have a new campaign invitation on CozyVTT"); the campaign's name, its description and your display name are in the body. Each DM can have the instance send 20 invitation emails an hour. Past that, **Send Invitation** with the box ticked says so and how many minutes to wait; untick the box and the invitation goes through at once, without the email.
+
 The list deliberately shows display names and not email addresses, so running a campaign doesn't become a way to collect everyone's address.
 
 When a player accepts, they'll choose which of their characters to bring. Once they've joined, their character appears in the **Campaign Roster** on the left sidebar.

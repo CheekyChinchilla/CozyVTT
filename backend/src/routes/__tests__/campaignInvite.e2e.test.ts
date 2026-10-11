@@ -167,3 +167,68 @@ describe('POST /api/campaigns/:campaignId/invite', () => {
     expect(mockSendEmail).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * Each invitation email goes out from the instance's own mail account, with a
+ * campaign name and description the DM wrote, and any user can be a DM of a
+ * campaign of their own. So one DM may have the instance send at most 20 of
+ * them an hour; invitations without an email are not counted.
+ */
+describe('emailed invitations per DM', () => {
+  const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 6)}`;
+  let dmId: string;
+  let campaignId: string;
+  let dmAgent: ReturnType<typeof request.agent>;
+  const invitees: string[] = [];
+  const saved = { host: process.env.SMTP_HOST, user: process.env.SMTP_USER, pass: process.env.SMTP_PASS };
+
+  beforeAll(async () => {
+    process.env.SMTP_HOST = 'smtp.test.invalid';
+    process.env.SMTP_USER = 'test';
+    process.env.SMTP_PASS = 'test';
+    const dm = await createTestUser({ email: `inv_limit_dm_${stamp}@test.invalid` });
+    dmId = dm.id;
+    campaignId = (await createTestCampaign(dmId, { name: `Invite Limit ${stamp}` })).id;
+    await prisma.campaignMembership.create({ data: { campaignId, userId: dmId, role: 'DM', characterIds: [] } });
+    for (let i = 0; i < 23; i += 1) {
+      const user = await prisma.user.create({
+        data: { email: `inv_limit_to_${i}_${stamp}@test.invalid`, passwordHash: 'not-used', displayName: `Invitee ${i}` },
+      });
+      invitees.push(user.id);
+    }
+    dmAgent = request.agent(app);
+    const res = await dmAgent.post('/api/auth/login').send({ email: dm.email, password: TEST_PASSWORD });
+    expect(res.status).toBe(200);
+  });
+
+  afterAll(async () => {
+    process.env.SMTP_HOST = saved.host;
+    process.env.SMTP_USER = saved.user;
+    process.env.SMTP_PASS = saved.pass;
+    await cleanupCampaigns([campaignId]);
+    await cleanupUsers([dmId, ...invitees]);
+  });
+
+  it('refuses the 21st emailed invitation in an hour, and still sends invitations without email', async () => {
+    const invite = (userId: string, sendEmail: boolean) =>
+      dmAgent.post(`/api/campaigns/${campaignId}/invite`).send({ userId, sendEmail });
+
+    // A refused invitation (already invited) sends nothing and is not counted.
+    expect((await invite(invitees[0], true)).status).toBe(201);
+    expect((await invite(invitees[0], true)).status).toBe(400);
+
+    for (let i = 1; i < 20; i += 1) {
+      expect((await invite(invitees[i], true)).status).toBe(201);
+    }
+
+    const refused = await invite(invitees[20], true);
+    expect(refused.status).toBe(429);
+    expect(refused.body.message).toMatch(/20 invitation emails in the last hour/);
+    expect(refused.body.message).toMatch(/without the email/);
+    expect(await prisma.campaignInvitation.count({ where: { campaignId, userId: invitees[20] } })).toBe(0);
+
+    const plain = await invite(invitees[21], false);
+    expect(plain.status).toBe(201);
+    expect(plain.body.emailSent).toBe(false);
+  });
+});

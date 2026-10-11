@@ -179,6 +179,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **A failed two-factor code or setup no longer leaves the code or the new password in the browser's console.** When the code step or the setup wizard was refused, the page wrote the whole failed request to the browser's developer console, including the code, or the administrator's email, password and setup token, where anyone with the console open or a screenshot of it could read them. Only the status and the server's message are written now.
 
+- **A DM can have the instance send 20 invitation emails an hour, and the email's subject no longer quotes the campaign.** Any account can create a campaign and invite every other account with **Also email them an invitation** ticked, and each email went out from the instance's own mail account with the campaign's name and the DM's display name in the subject line, so one account could send mail that looked like it came from the instance to everyone on it, as often as it liked. Each DM now gets 20 invitation emails an hour; past that, **Send Invitation** with the box ticked answers "You have sent 20 invitation emails in the last hour, the most this server allows. Send this invitation without the email, or try again in *N* minutes.", and the same invitation without the email goes through. Invitations without an email are not counted. The subject is now "You have a new campaign invitation on *your instance's name*"; the campaign's name and description and the DM's name are in the body, as before.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
