@@ -1407,6 +1407,11 @@ paths:
         made, stay with no author; a creature's `createdById` keeps the
         deleted user's id, since it is not linked to the user row.
 
+        The account is gone when the 200 is sent. The personal files are
+        removed just after it, and a failure to remove one is logged and does
+        not change the answer; a shutdown waits up to 4 seconds for the
+        removal to finish.
+
         Only campaigns the user owns are checked. One whose DM seat another
         member holds passes to that DM. One where the user holds the DM seat,
         or where nobody does, refuses the deletion with 409 and nothing
@@ -1799,7 +1804,8 @@ paths:
         had, and broadcasts `roster.updated` (`member.left`) to each campaign
         they were a member of. What stays and what goes, which campaigns are
         checked, and the 409 for a user who sits as DM of a campaign or owns
-        one whose DM seat is empty, are as for `DELETE /api/auth/account`. No
+        one whose DM seat is empty, are as for `DELETE /api/auth/account`, and
+        so is the removal of the personal files just after the answer. No
         password is asked for.
       operationId: deleteUser
       security:

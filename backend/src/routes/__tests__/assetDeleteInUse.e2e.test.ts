@@ -16,6 +16,7 @@
 
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { personalFilesBeingRemoved } from '../../services/accountDeletion';
 import {
   prisma,
   createTestUser,
@@ -292,6 +293,8 @@ describe('a sound a time-of-day period plays', () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { vibeSettings: periods(id) } });
 
     expect((await admin.delete(`/api/users/${owner.id}`)).status).toBe(200);
+    // The account's files are removed after the answer.
+    await personalFilesBeingRemoved.finished();
 
     expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
   });

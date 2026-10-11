@@ -23,7 +23,7 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { createShutdown, onShutdownSignals, onProcessFailure, SHUTDOWN_GRACE_MS, BACKUP_WAIT_MS, type ShutdownTargets } from '../shutdown';
+import { createShutdown, onShutdownSignals, onProcessFailure, SHUTDOWN_GRACE_MS, BACKUP_WAIT_MS, FILE_WAIT_MS, type ShutdownTargets } from '../shutdown';
 import logger from '../logger';
 
 function targets(order: string[] = []) {
@@ -177,6 +177,79 @@ describe('a shutdown while a backup is being written', () => {
     if (!grace) throw new Error('the backend service in docker-compose.yml sets no stop_grace_period');
     const seconds = Number(grace[1] ?? 0) * 60 + Number(grace[2] ?? 0);
     expect(seconds * 1000).toBeGreaterThan(BACKUP_WAIT_MS + SHUTDOWN_GRACE_MS);
+  });
+});
+
+/** Files of a deleted account being removed, until `finish` is called. */
+function filesBeingRemoved() {
+  let finish = () => {};
+  const done = new Promise<void>((resolve) => { finish = resolve; });
+  let count = 1;
+  const files = {
+    get count() { return count; },
+    finished: () => done,
+  };
+  return { files, finish: () => { count = 0; finish(); } };
+}
+
+describe('a shutdown while the files of a deleted account are being removed', () => {
+  it('closes the database only once the removal has finished', async () => {
+    const order: string[] = [];
+    const t = targets(order);
+    const { files, finish } = filesBeingRemoved();
+    const exit = jest.fn();
+    const withFiles = { ...t, files };
+    const done = createShutdown(withFiles, { exit })('SIGTERM');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(t.io.close).toHaveBeenCalledTimes(1);
+    expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+
+    order.push('files');
+    finish();
+    await done;
+    expect(order).toEqual(['io', 'files', 'prisma', 'sessionPool']);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  it('waits no longer than its bound, says so in the log, and closes the rest', async () => {
+    jest.useFakeTimers();
+    const warned = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    try {
+      const t = targets();
+      const { files } = filesBeingRemoved();
+      const exit = jest.fn();
+      const withFiles = { ...t, files };
+      const done = createShutdown(withFiles, { exit, fileWaitMs: 3000, graceMs: 8000 })('SIGTERM');
+
+      await jest.advanceTimersByTimeAsync(2999);
+      expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await done;
+      expect(t.prisma.$disconnect).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(0);
+      expect(warned).toHaveBeenCalledWith(expect.stringContaining('files'));
+    } finally {
+      warned.mockRestore();
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not wait when none is being removed', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = targets();
+      const exit = jest.fn();
+      const withFiles = { ...t, files: { count: 0, finished: () => new Promise<void>(() => {}) } };
+      await createShutdown(withFiles, { exit })('SIGTERM');
+      expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('waits for less time than the whole shutdown is given', () => {
+    expect(FILE_WAIT_MS).toBeLessThan(SHUTDOWN_GRACE_MS);
   });
 });
 

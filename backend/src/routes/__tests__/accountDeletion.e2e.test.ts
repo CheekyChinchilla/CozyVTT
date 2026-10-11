@@ -17,6 +17,7 @@ import request from 'supertest';
 import { randomUUID } from 'crypto';
 import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
+import { personalFilesBeingRemoved } from '../../services/accountDeletion';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers, cleanupCampaigns, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
@@ -85,6 +86,7 @@ it('deletes a player who has rolled and uploaded, keeping the rolls and campaign
 // alone. Those go with the account now: the avatar always, and a personal
 // file when nothing uses it and no campaign has it shared. A personal file a
 // campaign still uses stays, with no owner, as a campaign's own files do.
+// They are removed after the answer, so each test waits for the removal.
 describe('the personal files of a deleted account', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-account-files-'));
   afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -123,6 +125,7 @@ describe('the personal files of a deleted account', () => {
     const privateDocument = await personalFile(leaver.user.id, 'DOCUMENT');
 
     expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
 
     await gone(avatar);
     await gone(unusedMap);
@@ -137,6 +140,7 @@ describe('the personal files of a deleted account', () => {
     });
 
     expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
     await gone(art);
   });
 
@@ -153,6 +157,7 @@ describe('the personal files of a deleted account', () => {
     await prisma.campaignDocument.create({ data: { campaignId, assetId: handout.id, linkedById: leaver.user.id } });
 
     expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
 
     await kept(mapArt);
     await kept(handout);
@@ -165,6 +170,7 @@ describe('the personal files of a deleted account', () => {
     const unused = await personalFile(target.user.id, 'TOKEN');
 
     expect((await admin.agent.delete(`/api/users/${target.user.id}`)).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
 
     await gone(avatar);
     await gone(unused);

@@ -16,7 +16,7 @@ import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators
 import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
-import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
+import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { removeAvatars } from '../services/avatars';
 import { writeSystemLog, writeAdminLog } from '../services/systemLog';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
@@ -581,7 +581,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     // (services/accountDeletion); the live connections end here.
     await endLiveSockets(id, 'Your account was deleted.');
     announceRosterChange(id, campaignIds, 'member.left');
-    await removePersonalFiles(deletion.personal);
+    removePersonalFilesAfterwards(deletion.personal);
 
     return res.status(200).json({
       message: 'User deleted successfully',

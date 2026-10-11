@@ -18,7 +18,7 @@ import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import logger from '../utils/logger';
-import { deleteAccount, removePersonalFiles, runsCampaignsMessage } from '../services/accountDeletion';
+import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { adminMfaDeadline } from '../services/adminMfaPolicy';
 import {
   parseBody,
@@ -712,7 +712,7 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
     // (services/accountDeletion); the live connections end here.
     await endLiveSockets(userId, 'Your account was deleted.');
     announceRosterChange(userId, deletion.campaignIds, 'member.left');
-    await removePersonalFiles(deletion.personal);
+    removePersonalFilesAfterwards(deletion.personal);
 
     // Destroy the session
     req.session.destroy(() => {});
