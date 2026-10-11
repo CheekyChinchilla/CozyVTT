@@ -154,7 +154,7 @@ npm install
 Each project's `package.json` names under `allowScripts` the packages that
 run a script while they install: the Prisma packages fetch the database engines
 that way, argon2 checks for its prebuilt binary, and a few developer tools set
-up their own binaries. npm 11.20, which builds the images, still runs the
+up their own binaries. npm 11, which builds the images, still runs the
 script of a package that is not listed and prints a warning naming it; npm 12
 is announced to block such a script unless the list names it. When a new
 dependency brings one, `npm install-scripts ls` names it; read what the script
