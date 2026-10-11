@@ -30,8 +30,8 @@ info:
     All endpoints (except `/health`, `/api/setup/*`, `/api/config` and the public auth routes) require authentication via session cookies.
     Login via `/api/auth/login` to obtain a session cookie.
 
-    Until the setup wizard has run, every request except `/health` and
-    `/api/setup/*` is refused with 403
+    Until the setup wizard has run, every request except `/health`,
+    `/api/setup` and the routes under it is refused with 403
     `{ error: 'Setup Required', message, setupUrl: '/api/setup/status' }`,
     the public routes included.
 

@@ -46,6 +46,7 @@ import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
 import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
+import { forgetSetupComplete } from '../middleware/setup';
 import { uploadsDiskUsage } from '../services/uploadsDisk';
 import logger from '../utils/logger';
 
@@ -1343,6 +1344,8 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     // old data.
     await endEveryLiveSocket('The instance was restored from a backup. Sign in again.');
     clearAllCombatState();
+    // The restored database may be one that was never set up.
+    forgetSetupComplete();
 
     // 7. Copy the archive's uploaded files over the existing ones. A backup
     // without any is fine; a copy that fails is not, and is reported after the
