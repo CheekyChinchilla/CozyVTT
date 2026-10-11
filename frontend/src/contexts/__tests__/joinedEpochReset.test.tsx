@@ -21,6 +21,7 @@ vi.mock('@/services/socket', () => ({
   default: {
     connect: vi.fn().mockResolvedValue(undefined),
     onRebuilt: () => () => {},
+    onCreated: () => () => {},
     isConnectInProgress: () => false,
     disconnect: vi.fn(),
     getSocket: () => ({ connected: true, on: vi.fn(), disconnect: vi.fn(), io: { on: vi.fn() } }),

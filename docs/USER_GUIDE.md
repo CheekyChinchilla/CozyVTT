@@ -724,7 +724,9 @@ This is usually a loading issue. Refresh the page. If the problem persists, chec
 
 ### I lost connection mid-session
 
-CozyVTT will automatically try to reconnect if you lose connection briefly. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away appear once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If reconnection fails, refresh the page — everything should be right where you left it.
+CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, and the map the table moved to are all brought up to date once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page — everything should be right where you left it.
+
+If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard.
 
 ### Someone else is editing my character
 
