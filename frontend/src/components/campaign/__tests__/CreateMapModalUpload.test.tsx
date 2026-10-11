@@ -1,15 +1,16 @@
 /**
- * A picture uploaded from Create Map goes to the DM's personal library.
+ * Where a picture uploaded from Create Map goes.
  *
  * It went to the campaign's library, where every member, spectators
  * included, can browse it, so a map prepared days ahead could be seen in the
- * Asset Library before the DM switched to it. A personal picture is read by
- * the players only once the map using it is the one on screen.
+ * Asset Library before the DM switched to it. Upload New now asks: Personal,
+ * selected at first, which players see only once the map using it is on
+ * screen, or the campaign's library, which keeps it for the table if the DM
+ * leaves. Each choice says so in a line of its own.
  */
 
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { AssetScope } from '@/types';
 
 vi.mock('@/services/api', () => {
   const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}`, listAssets: vi.fn().mockResolvedValue({ assets: [], pagination: {} }) };
@@ -18,8 +19,8 @@ vi.mock('@/services/api', () => {
 vi.mock('@/services/map.service', () => ({ default: { createMap: vi.fn() } }));
 vi.mock('@/utils/detectMapGrid', () => ({ detectMapGrid: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/components/assets/AssetUploadModal', () => ({
-  default: ({ defaultScope, defaultCampaignId }: { defaultScope?: AssetScope; defaultCampaignId?: string }) => (
-    <span data-testid="upload-target">{`${defaultScope ?? 'none'}|${defaultCampaignId ?? 'no campaign'}`}</span>
+  default: ({ defaultScope, defaultCampaignId, campaignOption }: { defaultScope?: string; defaultCampaignId?: string; campaignOption?: string }) => (
+    <span data-testid="upload-target">{`${defaultScope ?? 'scope not locked'}|${defaultCampaignId ?? 'campaign not locked'}|${campaignOption ?? 'no campaign offered'}`}</span>
   ),
 }));
 
@@ -31,9 +32,12 @@ beforeAll(() => {
 });
 
 describe('Create Map → Upload New', () => {
-  it('uploads the map picture and the spirit layer picture to the personal library', () => {
+  it('offers the map picture and the spirit layer picture a choice of Personal or this campaign', () => {
     render(<CreateMapModal isOpen campaignId="campaign-1" onClose={vi.fn()} onCreated={vi.fn()} />);
     const targets = screen.getAllByTestId('upload-target').map((t) => t.textContent);
-    expect(targets).toEqual([`${AssetScope.USER}|no campaign`, `${AssetScope.USER}|no campaign`]);
+    expect(targets).toEqual([
+      'scope not locked|campaign not locked|campaign-1',
+      'scope not locked|campaign not locked|campaign-1',
+    ]);
   });
 });

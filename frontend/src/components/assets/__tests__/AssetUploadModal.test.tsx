@@ -8,15 +8,18 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AssetUploadModal from '../AssetUploadModal';
 import { AssetType } from '@/types';
 import type { Campaign } from '@/types';
 
 let campaigns: Campaign[] = [];
-vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me', platformRole: 'USER' } }) }));
+let manager = false;
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me', platformRole: 'USER', globalAssetManager: manager } }) }));
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 vi.mock('@/services/campaign.service', () => ({ default: { getCampaigns: () => Promise.resolve(campaigns) } }));
+const uploadAsset = vi.fn();
+vi.mock('@/services/api', () => ({ api: { uploadAsset: (form: FormData) => uploadAsset(form) } }));
 
 const campaign = (id: string, userRole: 'DM' | 'PLAYER' | 'SPECTATOR') =>
   ({ id, name: `Campaign ${id}`, ownerId: 'someone-else', userRole, memberships: [] }) as unknown as Campaign;
@@ -79,5 +82,61 @@ describe('switching to a kind of asset the chosen campaign does not take', () =>
     fireEvent.click(screen.getByText('Map'));
 
     expect((screen.getByRole('combobox') as HTMLSelectElement).value).toBe('');
+  });
+});
+
+// Create Map's Upload New: a picture for a map the DM may be preparing in
+// secret. Personal is chosen at first; the campaign's library is a click
+// away. Nothing else is offered, not even Global to a global asset manager,
+// and the campaign is the one the map is for.
+describe('choosing Personal or the campaign, as Create Map offers', () => {
+  const PERSONAL_HINT = 'Players see it once its map is on screen, while you are in the campaign.';
+  const CAMPAIGN_HINT = 'Everyone in the campaign can browse it now, and it stays if you leave.';
+
+  beforeEach(() => {
+    campaigns = [campaign('home', 'DM'), campaign('friday', 'DM')];
+    manager = true;
+    uploadAsset.mockReset();
+    uploadAsset.mockResolvedValue({ asset: { id: 'new' } });
+  });
+
+  function openForCampaign() {
+    render(
+      <AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} defaultType={AssetType.MAP} campaignOption="home" />
+    );
+  }
+
+  async function uploadAPicture() {
+    // The dialog is drawn outside the test's container, on the page itself.
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['png'], 'Old Mill.png', { type: 'image/png' })] } });
+    fireEvent.click(screen.getByRole('button', { name: /^upload$/i }));
+    await waitFor(() => expect(uploadAsset).toHaveBeenCalledTimes(1));
+    const form = uploadAsset.mock.calls[0][0] as FormData;
+    return { scope: form.get('scope'), campaignId: form.get('campaignId') };
+  }
+
+  it('offers Personal, selected, and Campaign, each with its hint, and nothing else', async () => {
+    openForCampaign();
+    expect(screen.getByRole('button', { name: /^personal/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^campaign/i })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText(PERSONAL_HINT)).toBeInTheDocument();
+    expect(screen.getByText(CAMPAIGN_HINT)).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByText('Global')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('uploads to the personal library unless Campaign is chosen', async () => {
+    openForCampaign();
+    expect(await uploadAPicture()).toEqual({ scope: 'USER', campaignId: null });
+  });
+
+  it('uploads to the campaign it was opened for when Campaign is chosen', async () => {
+    openForCampaign();
+    fireEvent.click(screen.getByRole('button', { name: /^campaign/i }));
+    expect(screen.getByRole('button', { name: /^campaign/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(await uploadAPicture()).toEqual({ scope: 'CAMPAIGN', campaignId: 'home' });
   });
 });
