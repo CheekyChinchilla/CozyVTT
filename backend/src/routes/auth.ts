@@ -19,6 +19,9 @@ import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
+import { passwordCheckLimiter } from '../middleware/authLimiters';
+import { writeSystemLog } from '../services/systemLog';
+import { MAX_EMAIL_LENGTH } from '../utils/validation';
 import logger from '../utils/logger';
 import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
 import {
@@ -70,6 +73,48 @@ export const credentialLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 5, // 5 wrong answers per window
   message: 'Too many authentication attempts, please try again later',
+});
+
+/**
+ * The email a sign-in is for, as the account table stores it, so the count
+ * below cannot be dodged with capitals or spaces. Null when the body has no
+ * usable email: the schema refuses such a request with 400 and nothing counts.
+ */
+function signInEmailKey(req: Request): string | null {
+  const body: unknown = req.body;
+  if (typeof body !== 'object' || body === null) return null;
+  const email = (body as Record<string, unknown>).email;
+  if (typeof email !== 'string') return null;
+  const normalised = email.trim().toLowerCase();
+  if (normalised === '' || normalised.length > MAX_EMAIL_LENGTH) return null;
+  return `account:${normalised}`;
+}
+
+/**
+ * Wrong passwords per account, from every address: 10 in an hour, then that
+ * email is refused with 429 until the oldest counted failure is an hour old.
+ * The limiter above counts per address, so someone with many addresses had as
+ * many guesses at one account as addresses, with nothing to notice it. This
+ * one counts the account, and tells the admins when it trips.
+ *
+ * Ten an hour is far more than a person mistyping their own password needs,
+ * and a locked account is still opened by the password reset link. The count
+ * and the answer are the same for an email with no account, so this cannot
+ * be used to find out who has one.
+ */
+export const accountLoginLimiter = failureLimiter({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  message: 'Too many failed sign-ins for this account, please try again later',
+  key: signInEmailKey,
+  onLimit: (req, key) => {
+    const email = key.slice('account:'.length);
+    void writeSystemLog({
+      level: 'WARNING',
+      message: `Sign-in locked for ${email}: 10 wrong passwords within an hour, the last from ${req.ip ?? 'an unknown address'}`,
+      context: { email, address: req.ip ?? null },
+    });
+  },
 });
 
 /**
@@ -126,35 +171,30 @@ export const mfaSetupLimiter = rateLimit({
 });
 
 /**
- * MFA login verification: 5 failed codes per 15 minutes, on its own window.
- * Same reasoning: a correct code is not an attack and does not spend the budget.
+ * The code step of a sign-in: 5 wrong codes per 15 minutes per address, on
+ * its own window. Only a wrong code or backup code counts, recorded by the
+ * route, as the password step does: counting on arrival refused the sixth of
+ * six correct codes sent together from one address, and left it counted.
  */
-export const mfaLoginLimiter = rateLimit({
+export const mfaLoginLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: { error: 'Rate Limited', message: 'Too many MFA login attempts, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
+  message: 'Too many MFA login attempts, please try again later',
 });
 
 /**
- * MFA login verification, per account: 5 failed codes per 15 minutes for one
- * account, from wherever they come. The limiter above counts per address, so
- * someone who already has the password could otherwise spread their guesses
- * at the code across many addresses. Keyed on the account the pending sign-in
+ * The code step, per account: 5 wrong codes per 15 minutes for one account,
+ * from wherever they come. The limiter above counts per address, so someone
+ * who already has the password could otherwise spread their guesses at the
+ * code across many addresses. Keyed on the account the pending sign-in
  * belongs to, which the password step put in the session; a request with no
- * sign-in pending is refused by the handler and not counted here.
+ * sign-in pending is refused by the handler and neither held nor counted here.
  */
-export const mfaAccountLimiter = rateLimit({
+export const mfaAccountLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000,
   max: 5,
-  message: { error: 'Rate Limited', message: 'Too many MFA login attempts for this account, please try again later' },
-  standardHeaders: true,
-  legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  skip: (req) => !req.session?.mfaPendingUserId,
-  keyGenerator: (req) => `mfa-account:${req.session.mfaPendingUserId}`,
+  message: 'Too many MFA login attempts for this account, please try again later',
+  key: (req) => (req.session?.mfaPendingUserId ? `mfa-account:${req.session.mfaPendingUserId}` : null),
 });
 
 /**
@@ -247,7 +287,7 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
  * POST /api/auth/login
  * Authenticate user and create session
  */
-router.post('/login', credentialLimiter, async (req: Request, res: Response) => {
+router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Request, res: Response) => {
   const body = parseBody(LoginBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { email, password, rememberMe } = body.data;
@@ -260,9 +300,10 @@ router.post('/login', credentialLimiter, async (req: Request, res: Response) => 
       rememberMe,
     });
 
-    // The same answer, and the same count, whether or not the address has an account.
+    // The same answer, and the same counts, whether or not the address has an account.
     if (!user) {
       credentialLimiter.recordFailure(req);
+      accountLoginLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Invalid email or password',
@@ -525,14 +566,11 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
 
 /**
  * POST /api/auth/change-password
- * Change password for authenticated user
+ * Change password for authenticated user. Wrong current passwords count
+ * against passwordCheckLimiter, shared with DELETE /account and an email
+ * change: 10 per 15 minutes for the account.
  */
-// TODO(accounts): this route, DELETE /account below and the current-password
-// check on an email change in users.ts have no attempt limit of their own, only
-// the general API limit of 300 requests a minute by default, so a stolen
-// session could guess the password through them. Limit failed password checks
-// on all three, as credentialLimiter does for /mfa/disable.
-router.post('/change-password', requireAuth, async (req: Request, res: Response) => {
+router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
   const body = parseBody(ChangePasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { currentPassword, newPassword } = body.data;
@@ -553,6 +591,7 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
     // Verify current password
     const isValid = await verifyPassword(user.passwordHash, currentPassword);
     if (!isValid) {
+      passwordCheckLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Current password is incorrect',
@@ -605,11 +644,10 @@ router.post('/change-password', requireAuth, async (req: Request, res: Response)
 
 /**
  * DELETE /api/auth/account
- * Self-service account deletion. Requires password confirmation.
+ * Self-service account deletion. Requires password confirmation; a wrong
+ * password counts against passwordCheckLimiter.
  */
-// Same TODO(accounts) as POST /change-password above: failed password checks
-// here have no attempt limit of their own.
-router.delete('/account', requireAuth, async (req: Request, res: Response) => {
+router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;
@@ -625,6 +663,7 @@ router.delete('/account', requireAuth, async (req: Request, res: Response) => {
     // Verify password
     const passwordValid = await verifyPassword(user.passwordHash, password);
     if (!passwordValid) {
+      passwordCheckLimiter.recordFailure(req);
       return res.status(401).json({
         error: 'Authentication Failed',
         message: 'Incorrect password',
@@ -850,6 +889,8 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       const isValid = verifyTotpOnce(user.id, user.mfaSecret, token);
 
       if (!isValid) {
+        mfaLoginLimiter.recordFailure(req);
+        mfaAccountLimiter.recordFailure(req);
         return res.status(401).json({
           error: 'Invalid Code',
           message: 'Invalid authentication code. Please try again.',
@@ -859,6 +900,8 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
       // Verify backup code against the Argon2 hashes on record.
       const matchIndex = await verifyBackupCode(backupCode ?? '', user.mfaBackupCodes);
       if (matchIndex === -1) {
+        mfaLoginLimiter.recordFailure(req);
+        mfaAccountLimiter.recordFailure(req);
         return res.status(401).json({
           error: 'Invalid Code',
           message: 'Invalid backup code. Please try again.',
@@ -879,6 +922,8 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
         RETURNING cardinality("mfaBackupCodes") AS remaining
       `;
       if (spent.length === 0) {
+        mfaLoginLimiter.recordFailure(req);
+        mfaAccountLimiter.recordFailure(req);
         return res.status(401).json({
           error: 'Invalid Code',
           message: 'Invalid backup code. Please try again.',

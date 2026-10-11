@@ -27,6 +27,7 @@ import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validat
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { writeSystemLog } from '../services/systemLog';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
@@ -89,18 +90,7 @@ async function writeAdminLog(
   level: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO',
   context?: Prisma.InputJsonObject
 ): Promise<void> {
-  try {
-    await prisma.systemLog.create({
-      data: {
-        level,
-        message,
-        userId: adminUserId,
-        context: context ?? Prisma.JsonNull,
-      },
-    });
-  } catch (e) {
-    logger.error('Failed to write system log', { err: e });
-  }
+  await writeSystemLog({ level, message, userId: adminUserId, context });
 }
 
 /**

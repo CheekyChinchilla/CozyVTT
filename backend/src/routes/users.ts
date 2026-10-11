@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
+import { passwordCheckLimiter } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
 import type { Prisma } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
@@ -96,7 +97,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
  */
-router.put('/:id', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -183,11 +184,10 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
               message: 'Enter your current password to change your email address',
             });
           }
-          // TODO(accounts): a wrong password here counts only against the
-          // general API limit, so a stolen session can guess the password
-          // through this check. Limit failed checks as credentialLimiter does;
-          // see the matching TODO on POST /change-password in auth.ts.
+          // A wrong one counts against passwordCheckLimiter, shared with the
+          // password change and account deletion.
           if (!(await verifyPassword(existingUser.passwordHash, currentPassword))) {
+            passwordCheckLimiter.recordFailure(req);
             return res.status(401).json({
               error: 'Authentication Failed',
               message: 'Current password is incorrect',

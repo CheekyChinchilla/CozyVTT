@@ -1,6 +1,8 @@
 /**
- * A per-address limit on wrong answers: wrong passwords, wrong codes, bad
- * reset links. Nothing else counts, not a correct answer and not a refusal.
+ * A limit on wrong answers: wrong passwords, wrong codes, bad reset links.
+ * Nothing else counts, not a correct answer and not a refusal. Counted per
+ * address unless `key` says otherwise: per account for the sign-in, per
+ * pending sign-in for the code step, per signed-in user for a password check.
  *
  * The limit is checked before the route checks the credential, and the route
  * says when an answer was wrong (`recordFailure`). Counting on arrival and
@@ -25,8 +27,23 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 export interface FailureLimiter extends RequestHandler {
-  /** Count one wrong answer against the address this request came from. */
+  /** Count one wrong answer against this request's key (its address, unless `key` says otherwise). */
   recordFailure(req: Request): void;
+}
+
+export interface FailureLimiterOptions {
+  windowMs: number;
+  max: number;
+  message: string;
+  /**
+   * What a request is counted against. The default is the client address as
+   * Express reads it with the app's `trust proxy` setting. Returning null
+   * means the request is neither held to the limit nor counted: a sign-in
+   * body with no usable email, a code step with no sign-in pending.
+   */
+  key?: (req: Request) => string | null;
+  /** Called once each time a key's failures reach the limit, with the request that did it. */
+  onLimit?: (req: Request, key: string) => void;
 }
 
 interface AddressState {
@@ -38,13 +55,14 @@ interface AddressState {
   waiting: Array<() => void>;
 }
 
-export function failureLimiter(options: { windowMs: number; max: number; message: string }): FailureLimiter {
-  const { windowMs, max, message } = options;
+export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
+  const { windowMs, max, message, onLimit } = options;
   const addresses = new Map<string, AddressState>();
 
   // The address as Express reads it with the app's `trust proxy` setting,
   // which is what express-rate-limit keyed on.
-  const keyOf = (req: Request): string => req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  const byAddress = (req: Request): string => req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  const keyOf = options.key ?? byAddress;
 
   const stateOf = (key: string): AddressState => {
     let state = addresses.get(key);
@@ -76,6 +94,10 @@ export function failureLimiter(options: { windowMs: number; max: number; message
 
   const limiter = (req: Request, res: Response, next: NextFunction): void => {
     const key = keyOf(req);
+    if (key === null) {
+      next();
+      return;
+    }
     const state = stateOf(key);
 
     const admit = (): void => {
@@ -125,7 +147,14 @@ export function failureLimiter(options: { windowMs: number; max: number; message
 
   return Object.assign(limiter, {
     recordFailure(req: Request): void {
-      stateOf(keyOf(req)).failures.push(Date.now());
+      const key = keyOf(req);
+      if (key === null) return;
+      const state = stateOf(key);
+      const now = Date.now();
+      prune(state, now);
+      const before = state.failures.length;
+      state.failures.push(now);
+      if (before < max && state.failures.length >= max) onLimit?.(req, key);
     },
   });
 }

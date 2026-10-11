@@ -1499,6 +1499,9 @@ when it sees it.
 | Endpoint Group | Limit | Window | Counts |
 |----------------|-------|--------|--------|
 | Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
+| Login, per account (from every address) | 10 wrong passwords | 1 hour | Wrong passwords only; each lock is noted in the admins' activity log |
+| Two-factor code at sign-in | 5 wrong codes per address, and 5 per account | 15 minutes | Wrong codes and backup codes only |
+| Change password, delete account, change own email (per account) | 10 wrong passwords | 15 minutes | Wrong current passwords only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, and writing a document | 30 requests | 1 minute | Every request |
@@ -1513,9 +1516,13 @@ The **Counts** column matters. Where only wrong answers count, signing in
 correctly never uses up the allowance, and neither does being refused: a
 household sharing one address could otherwise lock itself out by logging in
 normally. Correct passwords arriving together from one address all pass this
-limit. That covers the password step of a sign-in only: the two-factor code step
-(`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 failed codes per 15
-minutes per address, and 5 per 15 minutes per account from any address. Where every request counts, the success
+limit. Wrong passwords are also counted per account: 10 in an hour for one email,
+from every address together, then that email is refused with 429 for an hour and
+the admins' activity log gets a line; an email with no account is counted and
+answered the same. That covers the password step of a sign-in only: the two-factor code step
+(`POST /api/auth/mfa/verify-login`) keeps its own limit of 5 wrong codes per 15
+minutes per address, and 5 per 15 minutes per account from any address, and it
+too counts only wrong codes. Where every request counts, the success
 is the thing being limited: sending a password-reset email, or creating an
 account.
 
