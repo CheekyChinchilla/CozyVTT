@@ -13,10 +13,17 @@
  *
  * Answers still being checked are held to the allowance left: with three
  * failures counted, two may be checked at once, and the rest wait their turn
- * rather than being refused. So wrong answers sent together never get more
+ * instead of being refused. So wrong answers sent together never get more
  * than the allowance, and correct ones sent together all get through. Waiting
  * costs little, since the password check is the slow part and the server runs
  * only a few of those at a time anyway.
+ *
+ * A wait has a limit (`waitMs`, 15 seconds unless set). A check that never
+ * finished, such as one whose database stopped answering, held every request
+ * behind it for as long as its connection stayed open. A request that has
+ * waited that long is refused with a message saying to try again, and the
+ * refusal is not counted. A request whose client goes away while it waits
+ * leaves the queue.
  *
  * A refusal is JSON, `{ error: 'Rate Limited', message }`, like every other
  * answer the API gives, so the pages can show the message.
@@ -49,7 +56,22 @@ export interface FailureLimiterOptions {
   key?: (req: Request) => string | null;
   /** Called once each time a key's failures reach the limit, with the request that did it. */
   onLimit?: (req: Request, key: string) => void;
+  /** How long a request may wait for a check ahead of it to finish; 15 seconds unless set. */
+  waitMs?: number;
 }
+
+/**
+ * How long a request waits for the checks ahead of it. A password check takes
+ * well under a second, and a busy server a few; fifteen is many times either,
+ * and still inside the 30 seconds the pages wait for an answer.
+ */
+export const FAILURE_LIMITER_WAIT_MS = 15 * 1000;
+
+/** The refusal for a request that waited `waitMs` without its turn coming. */
+export const STILL_CHECKING_MESSAGE = 'Other attempts are still being checked. Please try again in a moment.';
+
+/** The Retry-After sent with that refusal, in seconds. */
+const STILL_CHECKING_RETRY_SECONDS = 5;
 
 interface AddressState {
   /** When each counted failure happened, oldest first. */
@@ -62,6 +84,7 @@ interface AddressState {
 
 export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
   const { windowMs, max, message, onLimit } = options;
+  const waitMs = options.waitMs ?? FAILURE_LIMITER_WAIT_MS;
   const addresses = new Map<string, AddressState>();
 
   // The address as Express reads it with the app's `trust proxy` setting,
@@ -105,20 +128,59 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
     }
     const state = stateOf(key);
 
+    // Set while this request waits in the queue: the timer that ends the
+    // wait, and the listener that takes it out if its client goes away.
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    let onGone: (() => void) | undefined;
+
+    const stopWaiting = (): void => {
+      if (waitTimer !== undefined) clearTimeout(waitTimer);
+      waitTimer = undefined;
+      if (onGone) res.off('close', onGone);
+      onGone = undefined;
+      const queued = state.waiting.indexOf(admit);
+      if (queued !== -1) state.waiting.splice(queued, 1);
+    };
+
+    const startWaiting = (): void => {
+      state.waiting.push(admit);
+      // The wait is timed from when it began, not from each turn it missed.
+      if (waitTimer !== undefined) return;
+      waitTimer = setTimeout(() => {
+        stopWaiting();
+        if (!res.destroyed && !res.writableEnded) {
+          setHeaders(res, state, Date.now());
+          res.setHeader('Retry-After', String(STILL_CHECKING_RETRY_SECONDS));
+          res.status(429).json({ error: 'Rate Limited', message: STILL_CHECKING_MESSAGE });
+        }
+        forgetIfIdle(key, state);
+      }, waitMs);
+      onGone = () => {
+        stopWaiting();
+        forgetIfIdle(key, state);
+      };
+      res.on('close', onGone);
+    };
+
     const admit = (): void => {
       // Gone while it waited: there is nobody to answer.
-      if (res.destroyed || res.writableEnded) return;
+      if (res.destroyed || res.writableEnded) {
+        stopWaiting();
+        return;
+      }
       const now = Date.now();
       prune(state, now);
+
+      if (state.failures.length < max && state.failures.length + state.checking >= max) {
+        startWaiting();
+        return;
+      }
+      stopWaiting();
 
       if (state.failures.length >= max) {
         setHeaders(res, state, now);
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((state.failures[0] + windowMs - now) / 1000))));
         res.status(429).json({ error: 'Rate Limited', message });
-        return;
-      }
-      if (state.failures.length + state.checking >= max) {
-        state.waiting.push(admit);
         return;
       }
 

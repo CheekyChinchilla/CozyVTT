@@ -67,7 +67,11 @@ info:
       429 itself. The limit is checked before the credential is, so correct
       passwords arriving together from one address all pass it; wrong ones sent
       together are checked five at most (the rest wait for those to be checked,
-      then get 429 if all five were wrong). That covers the password step of a
+      then get 429 if all five were wrong). A request waits at most 15 seconds
+      for its turn; past that it answers 429 `Other attempts are still being
+      checked. Please try again in a moment.` with `Retry-After: 5`, and is not
+      counted. The same wait applies to every limit below that counts only
+      wrong answers (per account, password checks, the MFA code step). That covers the password step of a
       sign-in only: the two-factor code step keeps its own limit, below. An
       unknown email counts and answers exactly as a wrong password does. The 429
       carries `Retry-After`, the seconds until the oldest counted failure leaves
