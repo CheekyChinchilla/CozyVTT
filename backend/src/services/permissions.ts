@@ -656,6 +656,41 @@ export async function canReadAsset(
 }
 
 /**
+ * Whether a user may change an asset where it is: delete it, move it out of
+ * its scope, or rewrite a document's text. One rule for all three, so a
+ * right the delete route takes away cannot be kept through another route.
+ *
+ * - GLOBAL: an admin, or its uploader while they still manage global assets.
+ * - USER: its uploader, or an admin.
+ * - CAMPAIGN: its uploader while still a member, the campaign's DM, or an
+ *   admin. A campaign asset stays with the campaign once its uploader leaves.
+ *   One with no campaign recorded is an admin's alone.
+ */
+export async function mayChangeAsset(
+  asset: Pick<AssetAccessFacts, 'scope' | 'uploadedById' | 'campaignId'>,
+  userId: string,
+  isAdmin: boolean
+): Promise<boolean> {
+  if (isAdmin) return true;
+  const isOwner = asset.uploadedById === userId;
+
+  if (asset.scope === 'GLOBAL') {
+    if (!isOwner) return false;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { globalAssetManager: true } });
+    return user?.globalAssetManager === true;
+  }
+
+  if (asset.scope === 'USER') return isOwner;
+
+  if (!asset.campaignId) return false;
+  const membership = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
+    select: { role: true },
+  });
+  return (isOwner && membership !== null) || membership?.role === 'DM';
+}
+
+/**
  * Whether a document has been shared with a campaign this user belongs to.
  *
  * A document is private to its uploader until a DM links it to a campaign, and

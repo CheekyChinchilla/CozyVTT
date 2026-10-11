@@ -9,7 +9,7 @@
  * never a no-op and the list cannot show duplicates.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import CampaignDocumentsModal from '../CampaignDocumentsModal';
 import type { Asset, CampaignDocument } from '@/types';
@@ -330,5 +330,42 @@ describe('CampaignDocumentsModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
     fireEvent.click(screen.getByRole('button', { name: /^share$/i }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/document not found/i);
+  });
+});
+
+// Editing a campaign's own document follows the rule for deleting it: its
+// uploader, the campaign's DM, or an admin. A document shared in by link is
+// still its uploader's to edit.
+describe('who is offered Edit', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('# Notes', { status: 200 })));
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const byCoHost = { id: 'cohost', displayName: 'Co-host' };
+
+  it('offers the DM Edit on the campaign\'s own document, whoever wrote it', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...own('d6', 'Co-host Rules', 'rules.md'), uploadedBy: byCoHost }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    fireEvent.click(await screen.findByText('Co-host Rules'));
+    expect(await screen.findByRole('button', { name: /^edit$/i })).toBeInTheDocument();
+  });
+
+  it('does not offer the DM Edit on a document someone else shared in', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...shared('d7', 'Linked Lore', 'lore.md'), uploadedBy: byCoHost }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+    fireEvent.click(await screen.findByText('Linked Lore'));
+    await waitFor(() => expect(screen.getAllByText('Linked Lore').length).toBeGreaterThan(1));
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
+  });
+
+  it('does not offer a player Edit on the campaign\'s own document', async () => {
+    listCampaignDocuments.mockResolvedValue({ documents: [{ ...own('d8', 'Table Rules', 'table.md'), uploadedBy: byCoHost }] });
+    render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+    fireEvent.click(await screen.findByText('Table Rules'));
+    await waitFor(() => expect(screen.getAllByText('Table Rules').length).toBeGreaterThan(1));
+    expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
   });
 });

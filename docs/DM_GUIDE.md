@@ -656,6 +656,8 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 
 A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
 
+As the DM you can edit any of the campaign's own documents, whoever wrote them, for example a co-DM who has since left. A DM who hands the seat on and leaves the campaign can no longer edit the documents they wrote there. A document shared in from someone's own library stays theirs to edit.
+
 **Keeping notes current.** Text and Markdown documents can be edited in place: open one and press **Edit**. This is the natural home for a running session log or a set of house rules that change as the campaign goes on, since the table always reads the latest text and you never re-upload. See [Documents](USER_GUIDE.md#documents) in the user guide for formats, sizes and what is and is not allowed.
 
 ---

@@ -5276,9 +5276,14 @@ paths:
         | Case | Requirement |
         |------|-------------|
         | Either the current or the new scope is GLOBAL | Caller has `globalAssetManager` |
+        | Current scope is GLOBAL | Caller is the asset's uploader, as for deleting it |
         | Current scope is USER | Caller is the asset's owner |
-        | Current scope is CAMPAIGN | Caller is the asset's owner and still a member of that campaign, or is that campaign's DM |
+        | Current scope is CAMPAIGN | Caller is the asset's owner and still a member of that campaign, or is that campaign's DM; a CAMPAIGN asset with no campaign recorded is an admin's alone |
         | New scope is CAMPAIGN | Caller may place an asset of this type in the target campaign: its DM, or a player placing TOKEN art only |
+
+        The "current scope" rows are the rule for deleting the asset, so a
+        right to remove an asset from where it is cannot be had by one route
+        and not the other.
 
         So, for example, CAMPAIGN → CAMPAIGN needs both the "current scope is
         CAMPAIGN" and "new scope is CAMPAIGN" rows; a non-admin
@@ -5286,9 +5291,11 @@ paths:
         satisfy that campaign's placement rule, the same as uploading there
         directly.
 
-        When `scope: CAMPAIGN`, `campaignId` is required and the campaign must
-        exist (404 otherwise, checked before the ownership and placement
-        rows); for
+        An unknown `scope` answers 400 "scope must be GLOBAL, USER, or
+        CAMPAIGN", and a `campaignId` that is not a UUID answers 400
+        "campaignId must be a campaign id". When `scope: CAMPAIGN`,
+        `campaignId` is required and the campaign must exist (404 otherwise,
+        checked before the ownership and placement rows); for
         any other scope `campaignId` is ignored and cleared. The asset's file
         does not move on disk: only the DB record's scope and `campaignId` are
         updated, and the uploader stays as recorded. Moving an asset to USER
@@ -5489,8 +5496,12 @@ paths:
         - Documents
       summary: Replace the text of a text or Markdown document
       description: >-
-        The uploader or an admin. A document the caller may not edit answers
-        404, so the reply does not confirm a private id exists. A PDF answers
+        Whoever may delete the document: for a campaign's own document
+        (CAMPAIGN scope), its uploader while still a member of the campaign,
+        the campaign's DM, or an admin; for a GLOBAL document, an admin or its
+        uploader while they still have `globalAssetManager`; for a personal
+        document, its uploader or an admin. A document the caller may not edit
+        answers 404, so the reply does not confirm a private id exists. A PDF answers
         400: it is a file, and is replaced by uploading a new one. The recorded
         size is updated. Not counted against the upload rate limit. The new
         text replaces the old whole: a save that fails partway leaves the

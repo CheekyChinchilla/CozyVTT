@@ -51,8 +51,13 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
 
   const { user } = useAuth();
   const isAdmin = user?.platformRole === PlatformRole.ADMIN;
-  /** Edit rights: the uploader or an admin. The server decides for real. */
-  const canEdit = (doc: CampaignDocument) => isAdmin || (doc.uploadedBy !== null && doc.uploadedBy.id === user?.id);
+  /**
+   * Edit rights, as for deleting: the uploader, an admin, and the DM for the
+   * campaign's own documents (not shared in by link). The server decides for
+   * real.
+   */
+  const canEdit = (doc: CampaignDocument) =>
+    isAdmin || (isDM && !doc.shared) || (doc.uploadedBy !== null && doc.uploadedBy.id === user?.id);
 
   const load = useCallback(async () => {
     setLoading(true);

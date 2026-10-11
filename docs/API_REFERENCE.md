@@ -1134,8 +1134,11 @@ rate limit, since it creates a file on disk exactly as an upload does.
 
 ### `PUT /api/assets/documents/:id/content`
 
-Replace the text of a `.txt` or `.md` document. **The uploader or a platform
-admin only**; anyone else gets `404`. A PDF answers `400`: only text and
+Replace the text of a `.txt` or `.md` document. **Whoever may delete it**:
+for a campaign's own document, its uploader while still a member, the
+campaign's DM, or a platform admin; for a global document, a platform admin or
+its uploader while they still manage global assets; for a personal document,
+its uploader or a platform admin. Anyone else gets `404`. A PDF answers `400`: only text and
 Markdown can be edited in place. Takes `{ content }` under the same limits as
 creation. Readers see the new text the next time they open it; there is no
 live refresh.

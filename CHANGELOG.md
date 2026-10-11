@@ -183,6 +183,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **On a lit map, a token carried out of a player's sight leaves their map at that point.** While a token was dragged, every step of the drag went to each player who could see it where it was picked up, so their browser was told where it went even after it passed out of their sight, up to the square where it was put down. Each player is now sent the token only while it is somewhere they can see: it leaves their map where it goes out of sight, and appears where it comes into sight.
 
+- **Only someone who could delete a document can rewrite it, and only someone who could delete a global asset can take it out of the library.** Editing a document's text was open to whoever had uploaded it, wherever they now stood: a DM who wrote a campaign handout kept the right after handing the seat on and leaving the campaign, and the uploader of a global document kept it after losing **Global Assets**. Meanwhile the campaign's DM could not edit the campaign's own documents. Editing now follows the rule for deleting: a campaign's document is its writer's while they are still in the campaign, the DM's and an administrator's; a global one an administrator's, or its writer's while they are still a global asset manager. Moving a global asset to a personal library or a campaign is now likewise limited to an administrator or the global asset manager who uploaded it, as deleting it already was.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0
