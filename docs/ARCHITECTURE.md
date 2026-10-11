@@ -80,7 +80,8 @@ src/
 │   ├── creatures.ts   Creature template CRUD, SRD seeding, favorites
 │   ├── assets.ts      File upload and retrieval
 │   ├── invitations.ts Campaign invitation lifecycle
-│   ├── setup.ts       First-run setup wizard
+│   ├── setup.ts       First-run setup wizard; asks for the setup token (services/setupToken.ts)
+│   │                  and runs services/setup.ts, one transaction for the first admin and the settings
 │   ├── config.ts      Public client config (upload limits)
 │   └── admin.ts       Admin: stats, settings, users, backups, logs
 ├── services/          Business logic (called by routes and WebSocket handlers)

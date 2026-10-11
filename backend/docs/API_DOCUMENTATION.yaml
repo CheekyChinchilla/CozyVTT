@@ -310,7 +310,12 @@ paths:
       tags:
         - Setup
       summary: Check setup status
-      description: Check if the system setup wizard needs to be run. Accessible before setup.
+      description: >-
+        Whether the setup wizard still has to run. Accessible before setup.
+        `needsSetup` is true until the wizard has completed. An instance an
+        older version left with its administrator created but setup never
+        marked complete is marked complete by this call (and by any other
+        request), so that administrator can sign in.
       operationId: getSetupStatus
       security: []
       responses:
@@ -327,6 +332,7 @@ paths:
                     type: boolean
                   needsSetup:
                     type: boolean
+                    description: The same as `setupCompleted` being false.
 
   /api/setup/init:
     post:
@@ -334,13 +340,19 @@ paths:
         - Setup
       summary: Initialize system
       description: >-
-        Create the first admin account, apply the wizard's instance settings,
-        mark setup complete, and sign the new admin in (the response sets a
-        fresh session cookie). Only works while setup is not yet complete and
-        no account exists; both are checked before the body is read. The
-        password must be at least 12 characters with an uppercase letter, a
-        lowercase letter, a number and a special character, the same rule
-        enforced on register, reset-password and change-password.
+        Create the first admin account, apply the wizard's instance settings
+        and mark setup complete, in one transaction, then sign the new admin
+        in (the response sets a fresh session cookie). Of two wizards
+        submitted together exactly one succeeds; the other is told setup is
+        already complete and nothing of it is kept.
+
+        The route is public, so it asks for the setup token first: the value
+        the backend printed in its log at start while setup was incomplete, or
+        the `SETUP_TOKEN` environment variable when set. A missing or wrong
+        token answers 403 before anything else is checked. The password must
+        be at least 12 characters with an uppercase letter, a lowercase
+        letter, a number and a special character, the same rule enforced on
+        register, reset-password and change-password.
       operationId: initializeSystem
       security: []
       requestBody:
@@ -350,10 +362,16 @@ paths:
             schema:
               type: object
               required:
+                - setupToken
                 - email
                 - password
                 - displayName
               properties:
+                setupToken:
+                  type: string
+                  description: >-
+                    The setup token from the backend log, or `SETUP_TOKEN`.
+                    Compared exactly, as text.
                 email:
                   type: string
                   format: email
@@ -361,14 +379,14 @@ paths:
                 password:
                   type: string
                   minLength: 12
+                  maxLength: 1024
                 displayName:
                   type: string
                   minLength: 1
                   maxLength: 50
                   description: >-
                     Trimmed, and angle brackets removed, before the length is
-                    checked. Anything else, including a value that is not a
-                    string, is refused with 400 `Setup Failed`.
+                    checked.
                 instanceName:
                   type: string
                   default: CozyVTT
@@ -406,21 +424,37 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           description: >-
-            `Setup Already Completed`; `Users Exist` when any account exists;
-            `Validation Error` for a missing field, an invalid email, or a
-            password that does not meet the strength rule (that case alone
-            carries an `errors` array listing each rule not met); or
-            `Setup Failed` with the reason, for a display name that is refused.
+            `Setup Already Completed` once the wizard has run, or when another
+            wizard submitted at the same moment got there first; `Validation
+            Error` with a message naming the problem: a field that is missing
+            or not text, an invalid email, a password that does not meet the
+            strength rule, or a display name that is refused.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Validation Error
-                message: Password does not meet requirements
-                errors:
-                  - Password must contain at least one uppercase letter
-                  - Password must contain at least one special character
+                message: Password must contain at least one uppercase letter, Password must contain at least one special character
+        '403':
+          description: >-
+            `Forbidden`: the setup token is missing, not text, or wrong. The
+            body is not read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Setup token is missing or wrong. Copy it from the backend log (docker compose logs backend), or from SETUP_TOKEN in .env if you set one.
+        '500':
+          description: >-
+            `Internal Server Error` with a fixed message; the detail is in the
+            backend log. Nothing is kept, so the wizard can be run again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   # ============================================
   # AUTHENTICATION

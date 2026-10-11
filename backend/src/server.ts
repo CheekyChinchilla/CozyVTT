@@ -38,6 +38,8 @@ import { getProxyLimitWarnings } from './utils/proxyLimits';
 import { applyRequestTimeouts } from './config/httpServer';
 import { createShutdown, onShutdownSignals } from './utils/shutdown';
 import { positiveIntegerFromEnv } from './config/env';
+import { setupState } from './services/systemSettings';
+import { setupToken } from './services/setupToken';
 
 // A production instance on the placeholder database password stops here.
 enforceDatabaseCredential();
@@ -248,6 +250,21 @@ httpServer.listen(PORT, () => {
   for (const warning of getProxyLimitWarnings()) {
     logger.warn(warning);
   }
+
+  // Until setup has run, the wizard asks for a token only the owner can
+  // read, so a stranger who finds the instance first cannot become its
+  // administrator. Printed here, where the owner reads the log, unless they
+  // set one themselves in .env.
+  setupState()
+    .then(({ setupCompleted }) => {
+      if (setupCompleted) return;
+      if (process.env.SETUP_TOKEN?.trim()) {
+        logger.warn('Setup is not complete. The setup wizard asks for the setup token: the SETUP_TOKEN value in .env.');
+      } else {
+        logger.warn(`Setup is not complete. The setup wizard asks for this setup token: ${setupToken()}`);
+      }
+    })
+    .catch((err: unknown) => logger.error('Could not read the setup state at start', { err }));
 });
 
 export default app;

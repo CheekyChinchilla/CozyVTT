@@ -103,7 +103,25 @@ Database migrations run automatically when the backend starts.
 
 ### 4. Complete the setup wizard
 
-Navigate to `http://your-server` (or `http://localhost` if testing locally) and complete the setup wizard to create your admin account.
+Until the wizard has run, whoever submits it becomes the instance's administrator. So the wizard asks for a **setup token** that only you can read: the backend prints one in its log when it starts and setup is not yet complete.
+
+1. Get the token from the backend log:
+
+   ```bash
+   docker compose logs backend | grep "setup token"
+   ```
+
+   You should see one line ending in a 32-character code, such as
+   `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
+   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line.
+
+2. Navigate to `http://your-server` (or `http://localhost` if testing locally). The wizard opens by itself on a fresh install.
+
+3. On the **Create Admin Account** step, paste the token into **Setup token**, fill in your administrator account, and finish the wizard.
+
+If you would rather choose the token yourself, set `SETUP_TOKEN=your-value` in `.env` before starting the stack; the log then says to use that value instead of printing one. The token has no use once setup is complete.
+
+> **Finish setup before you share the address.** A fresh instance reachable from the internet is found by scanners within minutes. The token stops a stranger from taking the administrator account, but the sooner the wizard is done the better.
 
 ### 5. Verify the stack
 
@@ -697,6 +715,10 @@ sudo systemctl reload nginx
 openssl rand -hex 32
 ```
 
+### Setup token (optional)
+
+`SETUP_TOKEN` is the token the setup wizard asks for on a fresh install. It is optional: left unset, the backend makes one at start and prints it in its log (see [Complete the setup wizard](#4-complete-the-setup-wizard)). Set it only if you want to choose the value yourself, for example in an automated install. Once setup has run it is never read again, so you can remove it from `.env`.
+
 ### SMTP Setup (Optional)
 
 Email is required for password resets and invitations. Configure in `.env`:
@@ -1169,6 +1191,10 @@ Look at the last line it prints:
 | A web page, then `200 text/html` | `/api` is being answered by the web pages instead of the backend | Add the `/api/...` → backend route to your proxy |
 | `502 …`, or `000` (no connection at all) | Nothing is listening where your proxy points | Open the backend port — see [Option A](#option-a--remove-the-nginx-service-most-common) step 2 |
 
+### The wizard says "Setup token is missing or wrong"
+
+The token the wizard asks for is printed in the backend log each time the backend starts while setup is not complete. Run `docker compose logs backend | grep "setup token"` and copy the code from the **last** such line: an earlier start printed a different one. If `.env` sets `SETUP_TOKEN`, enter exactly that value instead.
+
 ### Setup fails with "An error occurred during setup" (502)
 
 Same root cause as above: the browser reached the wizard (served by the frontend), but the request that creates your admin account goes to the backend, which your proxy can't reach. Run the same check.
@@ -1284,6 +1310,7 @@ Before going live:
 - [ ] **HTTPS only** — SSL certificate installed; HTTP block in `nginx/nginx.conf` redirects to HTTPS
 - [ ] **Firewall** — Only ports 80 and 443 (or your configured `HTTP_PORT`/`HTTPS_PORT`) are publicly reachable; backend (4000) and database (5432) are not exposed to the internet
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
+- [ ] **Setup finished** — The setup wizard has been completed, so `curl -s https://your-domain.com/api/setup/status` prints `"setupCompleted":true`. Until then the wizard, protected by the setup token, is the only thing the instance offers
 - [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
 - [ ] **Admin MFA** — Admin account has MFA enabled
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully

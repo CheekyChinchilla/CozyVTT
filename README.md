@@ -39,7 +39,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 ### Platform
 - **Multi-campaign** — one server, unlimited campaigns, isolated from each other
 - **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign
-- **Setup wizard** — guided first-run initialization; no manual database seeding required
+- **Setup wizard** — guided first-run initialization; no manual database seeding required. It asks for a one-time setup token printed in the backend log, so only the person running the server can create the first administrator
 - **Admin dashboard** — user management, system settings, activity logs, database backups
 
 ### Campaign Tools
@@ -164,7 +164,7 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Navigate to `http://localhost` and complete the setup wizard.
+Navigate to `http://localhost` and complete the setup wizard. It asks for the setup token the backend printed when it started: `docker compose logs backend | grep "setup token"` shows it.
 
 ### Local Development
 

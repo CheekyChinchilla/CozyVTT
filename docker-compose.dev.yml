@@ -41,6 +41,7 @@ services:
       NODE_ENV: ${NODE_ENV}
       PORT: 4000
       SESSION_SECRET: ${SESSION_SECRET}
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
       CORS_ORIGIN: ${CORS_ORIGIN}
       APP_URL: ${APP_URL:-http://localhost:3000}
       SMTP_HOST: ${SMTP_HOST}

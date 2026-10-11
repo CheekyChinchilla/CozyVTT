@@ -224,6 +224,7 @@ class ApiClient {
   }
 
   async initializeSetup(data: {
+    setupToken: string;
     email: string;
     password: string;
     displayName: string;

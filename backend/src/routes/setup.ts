@@ -1,15 +1,12 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
-import {
-  isSetupCompleted,
-  markSetupCompleted,
-  hasUsers,
-  updateSystemSettings,
-} from '../services/systemSettings';
-import { registerUser, sanitizeUser } from '../services/auth';
+import { setupState } from '../services/systemSettings';
+import { sanitizeUser, RegistrationError } from '../services/auth';
+import { setUpInstance, SetupAlreadyRunError } from '../services/setup';
+import { setupTokenMatches } from '../services/setupToken';
 import { regenerateSession } from '../utils/session';
-import { validateEmail, validatePasswordStrength } from '../utils/validation';
 import { systemConfigFromSetupBody } from '../utils/setupConfig';
+import { parseBody, RegisterBodySchema } from '../validators/auth';
 import logger from '../utils/logger';
 
 const router = Router();
@@ -27,13 +24,12 @@ const router = Router();
  */
 router.get('/status', async (_req: Request, res: Response) => {
   try {
-    const setupComplete = await isSetupCompleted();
-    const usersExist = await hasUsers();
+    const state = await setupState();
 
     res.status(200).json({
-      setupCompleted: setupComplete,
-      hasUsers: usersExist,
-      needsSetup: !setupComplete || !usersExist,
+      setupCompleted: state.setupCompleted,
+      hasUsers: state.hasUsers,
+      needsSetup: !state.setupCompleted,
     });
   } catch (error) {
     logger.error('Error checking setup status', { err: error });
@@ -46,86 +42,43 @@ router.get('/status', async (_req: Request, res: Response) => {
 
 /**
  * POST /api/setup/init
- * Initialize the system with first admin account
- * Public endpoint - no authentication required
- * Create admin account and complete setup
+ * Create the first administrator, apply the wizard's settings and mark setup
+ * complete, in one transaction, then sign the administrator in.
+ *
+ * Public, so it asks for the setup token first: the one the backend printed
+ * in its log at start, or SETUP_TOKEN. Until setup has run this route is the
+ * way to become the instance's administrator, and a fresh instance is often
+ * reachable from the internet before its owner opens the wizard.
  */
 router.post('/init', async (req: Request, res: Response) => {
-  try {
-    const { email, password, displayName } = req.body;
+  const raw: unknown = req.body;
+  const given = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).setupToken : undefined;
+  if (!setupTokenMatches(given)) {
+    return res.status(403).json({
+      error: 'Forbidden',
+      message: 'Setup token is missing or wrong. Copy it from the backend log (docker compose logs backend), or from SETUP_TOKEN in .env if you set one.',
+    });
+  }
 
-    // Check if setup is already completed
-    const setupComplete = await isSetupCompleted();
-    if (setupComplete) {
+  const body = parseBody(RegisterBodySchema, req.body);
+  if (!body.ok) {
+    return res.status(400).json({ error: 'Validation Error', message: body.message });
+  }
+
+  try {
+    const state = await setupState();
+    if (state.setupCompleted) {
       return res.status(400).json({
         error: 'Setup Already Completed',
         message: 'System setup has already been completed',
       });
     }
 
-    // Check if users already exist
-    const usersExist = await hasUsers();
-    if (usersExist) {
-      return res.status(400).json({
-        error: 'Users Exist',
-        message: 'Cannot run setup when users already exist',
-      });
-    }
-
-    // Validate required fields
-    if (!email || !password || !displayName) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Email, password, and display name are required',
-      });
-    }
-
-    // Validate email format
-    if (!validateEmail(email)) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Invalid email format',
-      });
-    }
-
-    // Validate password strength
-    const passwordValidation = validatePasswordStrength(password);
-    if (!passwordValidation.valid) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Password does not meet requirements',
-        errors: passwordValidation.errors,
-      });
-    }
-
-    // Create first admin user
-    // registerUser automatically makes first user an ADMIN
-    const user = await registerUser({
-      email,
-      password,
-      displayName,
-    });
-
-    // TODO(accounts): two requests racing through the checks above both get
-    // here. registerUser makes only the first an admin, but the second still
-    // applies its own settings (registration open, instance name), completes
-    // setup and is signed in. Only the request that created the admin should
-    // apply settings; refuse the other with the "Setup Already Completed" 400.
-    // Apply the wizard's system configuration step. See utils/setupConfig for
-    // why these were being dropped and how each field is treated.
-    const settings = systemConfigFromSetupBody(req.body);
-    if (Object.keys(settings).length > 0) {
-      await updateSystemSettings(settings);
-    }
-
-    // Mark setup as completed
-    await markSetupCompleted();
+    const user = await setUpInstance(body.data, systemConfigFromSetupBody(req.body));
 
     // Create the admin session on a fresh id (session fixation).
     await regenerateSession(req);
     req.session.userId = user.id;
-    req.session.email = user.email;
-    req.session.displayName = user.displayName;
     req.session.platformRole = user.platformRole;
 
     return res.status(201).json({
@@ -133,19 +86,22 @@ router.post('/init', async (req: Request, res: Response) => {
       user: sanitizeUser(user),
     });
   } catch (error) {
-    logger.error('Error during setup', { err: error });
-
-    if (error instanceof Error) {
+    if (error instanceof SetupAlreadyRunError) {
+      // Another wizard submitted at the same moment got there first.
       return res.status(400).json({
-        error: 'Setup Failed',
-        message: error.message,
-      });
-    } else {
-      return res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'An unexpected error occurred during setup',
+        error: 'Setup Already Completed',
+        message: 'System setup has already been completed',
       });
     }
+    if (error instanceof RegistrationError) {
+      return res.status(400).json({ error: 'Validation Error', message: error.message });
+    }
+    // Anything else is the server's; its text stays in the log.
+    logger.error('Error during setup', { err: error });
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'An unexpected error occurred during setup',
+    });
   }
 });
 

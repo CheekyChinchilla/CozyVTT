@@ -1420,16 +1420,20 @@ Sizes are in bytes. `maxUploadBytes` is the largest configured limit — the cap
 
 ---
 
-## Setup Endpoint
+## Setup Endpoints
 
 ### `GET /api/setup/status`
 
-Check whether the setup wizard has been completed.
+Check whether the setup wizard has been completed. Public.
 
 **Response:**
 ```json
-{ "setupComplete": false }
+{ "setupCompleted": false, "hasUsers": false, "needsSetup": true }
 ```
+
+### `POST /api/setup/init`
+
+Run the wizard: create the first administrator, apply the instance settings and mark setup complete, in one step, then sign the administrator in. Public, but it needs the setup token the backend printed in its log at start (or `SETUP_TOKEN`), as `setupToken` in the body; without it, or with the wrong one, the answer is `403 Forbidden` before the rest of the body is read. Once setup is complete every call answers `400 Setup Already Completed`. The full request and every answer are in the OpenAPI document.
 
 ---
 

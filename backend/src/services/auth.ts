@@ -1,6 +1,6 @@
 import argon2 from 'argon2';
 import { prisma } from '../config/database';
-import { User, PlatformRole } from '@prisma/client';
+import { User, PlatformRole, type Prisma } from '@prisma/client';
 import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
 import { parseDisplayName } from '../validators/users';
 
@@ -35,6 +35,18 @@ export class RegistrationError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'RegistrationError';
+  }
+}
+
+/**
+ * Thrown by the setup wizard's registration when an account already exists:
+ * another wizard submitted at the same moment got there first, or an older
+ * version's setup had already created the administrator.
+ */
+export class SetupAlreadyRunError extends Error {
+  constructor() {
+    super('Setup has already been run');
+    this.name = 'SetupAlreadyRunError';
   }
 }
 
@@ -76,17 +88,25 @@ export async function verifyPassword(hash: string, password: string): Promise<bo
   }
 }
 
+/** A registration checked and hashed, ready to be written. */
+export interface PreparedRegistration {
+  email: string;
+  displayName: string;
+  passwordHash: string;
+}
+
 /**
- * Register a new user
- * First user automatically becomes ADMIN
+ * Check a registration and hash its password, before any transaction.
+ *
+ * Argon2 is deliberately slow, and holding the registration lock across it
+ * would serialise every signup on the hash. Throws RegistrationError for
+ * anything that was sent wrongly.
  */
-export async function registerUser(input: RegisterInput): Promise<User> {
-  // Validate email format
+export async function prepareRegistration(input: RegisterInput): Promise<PreparedRegistration> {
   if (!validateEmail(input.email)) {
     throw new RegistrationError('Invalid email format');
   }
 
-  // Validate password strength
   const passwordValidation = validatePasswordStrength(input.password);
   if (!passwordValidation.valid) {
     throw new RegistrationError(passwordValidation.errors.join(', '));
@@ -96,37 +116,58 @@ export async function registerUser(input: RegisterInput): Promise<User> {
   if (!parsedName.ok) {
     throw new RegistrationError(parsedName.message);
   }
-  const displayName = parsedName.name;
 
-  // Sanitize inputs
-  const email = sanitizeInput(input.email.toLowerCase());
+  return {
+    email: sanitizeInput(input.email.toLowerCase()),
+    displayName: parsedName.name,
+    passwordHash: await hashPassword(input.password),
+  };
+}
 
-  // Hash before the transaction: Argon2 is deliberately slow, and holding the
-  // registration lock across it would serialise every signup on the hash.
-  const passwordHash = await hashPassword(input.password);
+/**
+ * Create the account inside a transaction, under the registration lock.
+ *
+ * The first user on an instance becomes ADMIN, decided by a count that is
+ * then acted on. Two registrations racing on a fresh, internet-facing install
+ * both read zero and both become admin. A transaction-scoped advisory lock
+ * serialises the count-and-create so exactly one wins the first-admin role;
+ * it is one fixed key, so only registration waits on registration, and it is
+ * released when the transaction ends. The setup wizard passes `mustBeFirst`:
+ * it may only ever create the first account, so a count that is not zero
+ * means another wizard, or an older setup, got there first.
+ */
+export async function createRegisteredUser(
+  tx: Prisma.TransactionClient,
+  prepared: PreparedRegistration,
+  isApproved: boolean,
+  options: { mustBeFirst?: boolean } = {}
+): Promise<User> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
 
-  // The first user on an instance becomes ADMIN, decided by a count that is
-  // then acted on. Two registrations racing on a fresh, internet-facing install
-  // both read zero and both become admin. A transaction-scoped advisory lock
-  // serialises the count-and-create so exactly one wins the first-admin role;
-  // it is one fixed key, so only registration waits on registration, and it is
-  // released when the transaction ends. No schema change, and it covers every
-  // caller of registerUser (setup and public registration alike).
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`;
+  const userCount = await tx.user.count();
+  if (options.mustBeFirst && userCount > 0) {
+    throw new SetupAlreadyRunError();
+  }
 
-    const existingUser = await tx.user.findUnique({ where: { email } });
-    if (existingUser) {
-      throw new RegistrationError('Email already registered');
-    }
+  const existingUser = await tx.user.findUnique({ where: { email: prepared.email } });
+  if (existingUser) {
+    throw new RegistrationError('Email already registered');
+  }
 
-    const userCount = await tx.user.count();
-    const platformRole: PlatformRole = userCount === 0 ? 'ADMIN' : 'USER';
+  const platformRole: PlatformRole = userCount === 0 ? 'ADMIN' : 'USER';
 
-    return tx.user.create({
-      data: { email, passwordHash, displayName, platformRole, isApproved: input.isApproved ?? true },
-    });
+  return tx.user.create({
+    data: { ...prepared, platformRole, isApproved },
   });
+}
+
+/**
+ * Register a new user
+ * First user automatically becomes ADMIN
+ */
+export async function registerUser(input: RegisterInput): Promise<User> {
+  const prepared = await prepareRegistration(input);
+  return prisma.$transaction((tx) => createRegisteredUser(tx, prepared, input.isApproved ?? true));
 }
 
 /**
