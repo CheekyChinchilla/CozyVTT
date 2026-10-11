@@ -480,7 +480,7 @@ Open a text or Markdown document you uploaded or wrote and press **Edit**. Who c
 | **Campaign** | Whoever wrote or uploaded it while they are still in the campaign, the campaign's DM, and an administrator. Someone who leaves or is removed from the campaign can no longer edit what they put there. |
 | **Global** | An administrator, and whoever wrote or uploaded it while they are still a global asset manager. |
 
- What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
+What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
 
 ### Safety
 
