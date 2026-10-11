@@ -85,15 +85,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const failedChecks = useRef(0);
   const mounted = useRef(true);
+  /**
+   * Counts sign-in checks and sign-ins. A check answered after a newer check
+   * started, or after a sign-in succeeded, is out of date and is dropped: one
+   * sent before a sign-in went without its session and would sign it out.
+   */
+  const authEpoch = useRef(0);
 
   const checkAuthentication = useCallback(async (): Promise<void> => {
     if (retryTimer.current !== null) {
       clearTimeout(retryTimer.current);
       retryTimer.current = null;
     }
+    authEpoch.current += 1;
+    const epoch = authEpoch.current;
     try {
       const currentUser = await authService.getCurrentUser();
-      if (!mounted.current) return;
+      if (!mounted.current || epoch !== authEpoch.current) return;
       takeUser(currentUser);
       setAuthenticated(true);
       setMustChangePassword(currentUser.mustChangePassword || false);
@@ -101,7 +109,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       failedChecks.current = 0;
       setLoading(false);
     } catch (error) {
-      if (!mounted.current) return;
+      if (!mounted.current || epoch !== authEpoch.current) return;
       if (answersSignedOut(error)) {
         setUser(null);
         setAuthenticated(false);
@@ -124,6 +132,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const retryAuthCheck = useCallback((): void => {
     void checkAuthentication();
   }, [checkAuthentication]);
+
+  /**
+   * A sign-in has succeeded, which answers the sign-in check: stop waiting to
+   * check again, drop the answer to any check still on its way, and stop
+   * saying the server cannot be reached.
+   */
+  const endAuthCheck = useCallback((): void => {
+    authEpoch.current += 1;
+    if (retryTimer.current !== null) {
+      clearTimeout(retryTimer.current);
+      retryTimer.current = null;
+    }
+    failedChecks.current = 0;
+    setServerUnreachable(false);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     mounted.current = true;
@@ -157,6 +181,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       // Login successful — MFA branch returned early above, so response is AuthResponse
       const authResponse = response as AuthResponse;
+      endAuthCheck();
       takeUser(authResponse.user);
       setAuthenticated(true);
       setMfaPending(false);
@@ -167,7 +192,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setMfaPending(false);
       throw error;
     }
-  }, [takeUser]);
+  }, [endAuthCheck, takeUser]);
 
   // ============================================
   // Logout
@@ -205,6 +230,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Account created but pending admin approval — do not authenticate
         return { pendingApproval: true };
       }
+      endAuthCheck();
       takeUser(response.user);
       setAuthenticated(true);
       setMfaPending(false);
@@ -215,7 +241,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAuthenticated(false);
       throw error;
     }
-  }, [takeUser]);
+  }, [endAuthCheck, takeUser]);
 
   // ============================================
   // MFA Verification (during login)
@@ -227,11 +253,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const response = await authService.verifyMFALogin(token);
+    endAuthCheck();
     takeUser(response.user);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(response.mustChangePassword || false);
-  }, [mfaPending, takeUser]);
+  }, [endAuthCheck, mfaPending, takeUser]);
 
   const verifyMFAWithBackupCode = useCallback(async (backupCode: string): Promise<void> => {
     if (!mfaPending) {
@@ -239,6 +266,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     const response = await authService.verifyMFALoginWithBackupCode(backupCode);
+    endAuthCheck();
     takeUser(response.user);
     setAuthenticated(true);
     setMfaPending(false);
@@ -249,7 +277,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (response.backupCodeUsed && typeof response.remainingBackupCodes === 'number') {
       setBackupCodesLeft(response.remainingBackupCodes);
     }
-  }, [mfaPending, takeUser]);
+  }, [endAuthCheck, mfaPending, takeUser]);
 
   const dismissBackupCodesLeft = useCallback((): void => {
     setBackupCodesLeft(null);
@@ -348,11 +376,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
    * screen.
    */
   const adoptSession = useCallback((adopted: User): void => {
+    endAuthCheck();
     takeUser(adopted);
     setAuthenticated(true);
     setMfaPending(false);
     setMustChangePassword(adopted.mustChangePassword || false);
-  }, [takeUser]);
+  }, [endAuthCheck, takeUser]);
 
   const refreshUser = useCallback(async (): Promise<void> => {
     if (!authenticated) {
