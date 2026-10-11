@@ -726,7 +726,15 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
 /** The account fields an administrator's change is logged for. */
 type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor'>;
 
-type AccountChanges = { [K in keyof LoggedAccountFields]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] } };
+/**
+ * What the log keeps of a change: the value before and after, except for the
+ * bio, which is text the person wrote about themselves and is kept for ever
+ * in a log that is part of every backup. The log says the bio changed and
+ * keeps none of it. Lines written by earlier versions keep the text they stored.
+ */
+type AccountChanges = {
+  [K in Exclude<keyof LoggedAccountFields, 'bio'>]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] };
+} & { bio?: { changed: true } };
 
 /**
  * What changed between two versions of an account: the permissions always,
@@ -739,9 +747,8 @@ function adminChangesTo(before: LoggedAccountFields, after: LoggedAccountFields,
     ? ['globalAssetManager', 'templateEditor', 'email', 'displayName', 'avatarUrl', 'bio']
     : ['globalAssetManager', 'templateEditor'];
   for (const field of fields) {
-    if (before[field] !== after[field]) {
-      Object.assign(changes, { [field]: { from: before[field], to: after[field] } });
-    }
+    if (before[field] === after[field]) continue;
+    Object.assign(changes, { [field]: field === 'bio' ? { changed: true } : { from: before[field], to: after[field] } });
   }
   return changes;
 }

@@ -106,9 +106,30 @@ describe('Recent Admin Actions', () => {
     await userEvent.click(within(section).getByText('What changed'));
 
     expect(within(section).getByText('What changed').closest('details')).toHaveAttribute('open');
+    // A line written by an earlier version keeps the bio text it stored.
     expect(within(section).getByText('Bio: was "Likes dragons", now "Likes owlbears"')).toBeVisible();
     expect(within(section).getByText('Global Assets: was no, now yes')).toBeVisible();
     expect(within(section).getByText('Avatar: was "/uploads/avatars/a.png", now none')).toBeVisible();
+  });
+
+  it('says a bio changed, without any text, for a line that stores none', async () => {
+    const section = await openActivity([
+      line({
+        message: 'Changed the account of sam@example.com: bio changed; email address changed from sam@example.com to sam@new.example.com',
+        context: {
+          targetUserId: 'user-3',
+          changes: {
+            bio: { changed: true },
+            email: { from: 'sam@example.com', to: 'sam@new.example.com' },
+          },
+        },
+      }),
+    ]);
+
+    await userEvent.click(within(section).getByText('What changed'));
+
+    expect(within(section).getByText('Bio: changed')).toBeVisible();
+    expect(within(section).getByText('Email: was "sam@example.com", now "sam@new.example.com"')).toBeVisible();
   });
 
   it('lists the value before and after of a settings change', async () => {

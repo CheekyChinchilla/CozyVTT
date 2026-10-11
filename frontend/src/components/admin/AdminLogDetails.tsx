@@ -36,17 +36,24 @@ function isBeforeAndAfter(value: unknown): value is { from: unknown; to: unknown
   return typeof value === 'object' && value !== null && 'from' in value && 'to' in value;
 }
 
+/** A change that says only that the field changed, as the bio's does: the log keeps none of its text. */
+function isChangedOnly(value: unknown): value is { changed: true } {
+  return typeof value === 'object' && value !== null && (value as { changed?: unknown }).changed === true && !('from' in value);
+}
+
 /**
  * A line's changes in words. An account change and a settings change store
- * each field as `{ from, to }`. A settings change written by an earlier
- * version stored only the new value of every setting sent, and still reads
- * that way.
+ * each field as `{ from, to }`, except a bio, which is stored as
+ * `{ changed: true }` with none of its text. A settings change, and a bio
+ * change, written by an earlier version stored the new value of every setting
+ * sent and the bio's text before and after, and still read that way.
  */
 export function changeLines(context: AdminSystemLog['context']): string[] {
   const changes = context?.changes;
   if (typeof changes !== 'object' || changes === null || Array.isArray(changes)) return [];
   return Object.entries(changes as Record<string, unknown>).map(([field, value]) => {
     const label = FIELD_LABELS[field] ?? field;
+    if (isChangedOnly(value)) return `${label}: changed`;
     return isBeforeAndAfter(value)
       ? `${label}: was ${formatValue(value.from)}, now ${formatValue(value.to)}`
       : `${label}: now ${formatValue(value)}`;

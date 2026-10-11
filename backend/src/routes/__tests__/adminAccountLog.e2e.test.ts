@@ -106,6 +106,39 @@ describe('PUT /api/users/:id by an administrator', () => {
     });
   });
 
+  it("writes that someone else's bio changed, and not what it said before or after", async () => {
+    const { agent } = await signedInAdmin('change-bio');
+    const target = await account('change-bio-target');
+    await prisma.user.update({ where: { id: target.id }, data: { bio: 'Likes dragons, afraid of owlbears' } });
+    const newEmail = `adminlog-bio-moved-${stamp}@test.cozyvtt.local`;
+
+    expect((await agent.put(`/api/users/${target.id}`).send({ bio: 'Moved to Lisbon in March' })).status).toBe(200);
+    // Clearing it is a change too, and the other fields keep their values.
+    expect((await agent.put(`/api/users/${target.id}`).send({ bio: null, email: newEmail })).status).toBe(200);
+
+    const rows = await rowsAbout(target.id);
+    expect(rows).toHaveLength(2);
+    expect(rows[0].message).toContain('bio changed');
+    expect(rows[0].context).toMatchObject({ changes: { bio: { changed: true } } });
+    expect(rows[1].context).toMatchObject({
+      changes: { bio: { changed: true }, email: { from: target.email, to: newEmail } },
+    });
+    // Neither the text that was there nor the text that replaced it is stored.
+    const stored = JSON.stringify(rows.map((row) => [row.message, row.context]));
+    expect(stored).not.toMatch(/dragons|owlbears|Lisbon/);
+    expect((rows[0].context as { changes: { bio: object } }).changes.bio).toEqual({ changed: true });
+  });
+
+  it('writes nothing when a bio is saved as it was', async () => {
+    const { agent } = await signedInAdmin('same-bio');
+    const target = await account('same-bio-target');
+    await prisma.user.update({ where: { id: target.id }, data: { bio: 'Unchanged' } });
+
+    expect((await agent.put(`/api/users/${target.id}`).send({ bio: 'Unchanged' })).status).toBe(200);
+
+    expect(await rowsAbout(target.id)).toHaveLength(0);
+  });
+
   it('writes nothing when an administrator saves the same values again', async () => {
     const { agent } = await signedInAdmin('no-change');
     const target = await account('no-change-target');
