@@ -342,6 +342,8 @@ There is one new setting, `NGINX_TRUSTED_PROXIES`, and it is optional: leave it 
 
 - **Asking for a password reset now gives the same answer for every address even when the server has trouble saving the link.** The page says the same thing whether or not the address has an account, so it cannot be used to find out who has one. When the server failed to save the link, though, only an address with an account got an error, which gave the difference away for as long as the trouble lasted. Every address now gets the usual answer, and the failure is written to the log for the administrator.
 
+- **Taking the administrator role away can no longer leave an instance with no administrator when another request promotes the same person at that moment.** Whether a role change removes the administrator role was decided from a copy of the account read just before the change, so a promotion landing in between made it look like a change from user to user, and the check that an administrator remains was skipped. The account is now read again inside the change, so the check, the sign-out of the person demoted and the line in **Admin → Activity** all follow what the account really was.
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

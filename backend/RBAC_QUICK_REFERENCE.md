@@ -513,6 +513,12 @@ other's write and is refused with the `409`. Only serializable transactions
 are checked against each other, so any new path that takes an admin away has
 to ask the same way.
 
+`PUT /api/users/:id` reads the account again inside that transaction when the
+request sets `platformRole` to `USER`, and decides there whether it takes the
+admin role away. The read the route makes first can be behind a promotion that
+landed since, and a demotion judged from it would skip the check, the sign-out
+and the activity log line. Its logging compares against the row as written.
+
 ### What a session alone cannot change
 
 A session cookie can be stolen, so anything that decides who can sign in from
