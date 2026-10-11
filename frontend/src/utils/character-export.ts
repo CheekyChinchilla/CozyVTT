@@ -141,7 +141,7 @@ export function readJSONFile(file: File): Promise<unknown> {
         const content = e.target?.result as string;
         const parsed = JSON.parse(content);
         resolve(parsed);
-      } catch (error) {
+      } catch {
         reject(new Error('Invalid JSON format'));
       }
     };

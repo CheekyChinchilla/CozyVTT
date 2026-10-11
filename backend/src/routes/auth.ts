@@ -1,6 +1,5 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
-import speakeasy from 'speakeasy';
 import qrcode from 'qrcode';
 import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError } from '../services/auth';
 import { rememberMeMaxAge } from '../config/sessionDurations';
@@ -11,7 +10,7 @@ import { voidOutstandingResetLinks, issueResetToken, findResetTokenRow, RESET_LI
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
-import { verifyTotpOnce, forgetTotpSteps } from '../utils/totp';
+import { verifyTotpOnce, forgetTotpSteps, newTotpSecret, totpSetupUri } from '../utils/totp';
 import { requireAuth } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
@@ -753,31 +752,22 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
     }
 
     // Generate TOTP secret
-    const secret = speakeasy.generateSecret({
-      name: `CozyVTT:${user.email}`,
-      length: 20,
-    });
+    const secret = newTotpSecret();
 
     // Store the pending secret (not enabled yet)
     await prisma.user.update({
       where: { id: userId },
-      data: { mfaSecret: secret.base32 },
+      data: { mfaSecret: secret },
     });
     forgetTotpSteps(userId);
 
     // Generate QR code as a data URL
-    const otpauthUrl = speakeasy.otpauthURL({
-      secret: secret.base32,
-      encoding: 'base32',
-      issuer: 'CozyVTT',
-      label: user.email,
-    });
-    const qrCodeUrl = await qrcode.toDataURL(otpauthUrl);
+    const qrCodeUrl = await qrcode.toDataURL(totpSetupUri(secret, user.email));
 
     return res.status(200).json({
       message: 'MFA setup initiated. Scan the QR code and verify to enable.',
       qrCodeUrl,
-      secret: secret.base32,
+      secret,
     });
   } catch (error) {
     logger.error('Error in MFA setup', { err: error });
@@ -1134,7 +1124,7 @@ router.get('/registration-status', async (_req: Request, res: Response) => {
     }
     const settings = await getSystemSettings();
     return res.status(200).json({ allowRegistration: settings.allowRegistration });
-  } catch (error) {
+  } catch {
     // Safe fallback: hide registration link on error
     return res.status(200).json({ allowRegistration: false });
   }
@@ -1149,7 +1139,7 @@ router.get('/appearance', async (_req: Request, res: Response) => {
   try {
     const appearance = await getAppearanceSettings();
     return res.status(200).json(appearance);
-  } catch (error) {
+  } catch {
     return res.status(200).json({
       instanceName: 'CozyVTT',
       themeId: 'cozy-default',

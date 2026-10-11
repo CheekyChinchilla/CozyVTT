@@ -12,13 +12,13 @@
  */
 
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSecret, generateSync } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
 const app = createTestApp();
 const created: string[] = [];
-const secret = speakeasy.generateSecret({ length: 20 }).base32;
+const secret = generateSecret();
 
 async function pendingSignIn(): Promise<request.Agent> {
   const user = await createTestUser({ displayName: 'Code step' });
@@ -37,7 +37,7 @@ afterAll(async () => {
 
 it('accepts the code within five minutes', async () => {
   const agent = await pendingSignIn();
-  const res = await agent.post('/api/auth/mfa/verify-login').send({ token: speakeasy.totp({ secret, encoding: 'base32' }) });
+  const res = await agent.post('/api/auth/mfa/verify-login').send({ token: generateSync({ secret }) });
   expect(res.status).toBe(200);
 });
 
@@ -55,7 +55,7 @@ it('refuses the code step after five minutes and ends the pending sign-in', asyn
   expect(expired.body).toEqual({ error: 'Sign-In Expired', message: 'Your sign-in timed out at the code step. Sign in again with your password.' });
 
   // The pending state is gone: a correct code no longer finishes this sign-in.
-  const again = await agent.post('/api/auth/mfa/verify-login').send({ token: speakeasy.totp({ secret, encoding: 'base32' }) });
+  const again = await agent.post('/api/auth/mfa/verify-login').send({ token: generateSync({ secret }) });
   expect(again.status).toBe(401);
   expect(again.body.message).toBe('No MFA verification pending. Please log in first.');
 });

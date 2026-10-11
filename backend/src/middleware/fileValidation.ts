@@ -86,7 +86,7 @@ export async function validateFileType(
     // Check file exists
     try {
       await fs.access(filePath);
-    } catch (error) {
+    } catch {
       res.status(500).json({
         error: 'Internal Server Error',
         message: 'Uploaded file not found',

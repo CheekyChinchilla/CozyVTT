@@ -751,6 +751,12 @@ router.get(
       }
 
       // Get image dimensions for pixels_per_grid calculation
+      // TODO(maps): these bytes reach sharp unidentified, and a map's picture
+      // may name an asset that is not a picture (canReferenceAsset does not
+      // check the asset's type), such as a typed document holding SVG text,
+      // which sharp then parses with librsvg. Identify the bytes as PNG, JPEG,
+      // WebP or GIF before sharp, and/or accept only MAP assets as a map's
+      // picture.
       const meta = await sharp(imageBuffer).metadata();
       const imageWidthPx = meta.width;
 

@@ -143,38 +143,26 @@ _Nothing at present._
   supported server range has to be checked for the target major first.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Move to Node.js 26.** Everything runs on Node 20, which reached the end of
-  its upstream support on 30 April 2026, so it no longer gets security fixes.
-  Node 26 becomes the long-term release on 28 October 2026 and is supported
-  until April 2029; Node 24 drops to maintenance on 20 October 2026 and ends in
-  April 2028, so 26 is the target. The version is written in several
-  places that have to move together: `.nvmrc`, the `FROM node:20-alpine` lines
-  in `backend/Dockerfile`, `backend/Dockerfile.prod` (twice),
-  `frontend/Dockerfile` and `frontend/Dockerfile.prod`, the four
-  `node-version: 20` lines in `.github/workflows/ci.yml` (the `frontend`,
-  `backend`, `audit` and `images` jobs), `engines` and
-  `@types/node` in the two `package.json` files, and the Node version the
-  README, `docs/DEVELOPMENT.md` and `docs/DEPLOYMENT.md` ask for. A newer
-  `node:*-alpine` image may sit on a newer Alpine, so check that
-  `postgresql16-client` is still packaged there (the `keepInStep` test fails if
-  the client falls behind the server). Run the full gates and an upgrade
-  rehearsal on the new image, and add a check that fails when the places above
-  disagree. **Do** in 1.5.2.
+- **Move the remaining libraries to their current major versions.** Prisma
+  is held on 5.8 (January 2024), which gets no more fixes, and Vite, Vitest,
+  Express and React are a major version or more behind. React Router 6 has
+  two moderate advisories that cannot be reached in CozyVTT, a single-page
+  app with no server rendering that never navigates to an address taken
+  from a link; version 7 clears them. Everything inside the current major
+  versions, ESLint 10 and the failing advisory check are done. **Do** in
+  1.5.3, a release of its own: Prisma to its newest stable major first, with
+  a full upgrade rehearsal, then Vite and Vitest, Express 5, and React 19
+  with React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
 
-- **Bring the dependencies up to date, and keep them there.** Several
-  libraries are a major version or more behind, and some are out of support:
-  ESLint 8 since October 2024, and Prisma 5.8 (January 2024), which gets no
-  more fixes. Neither production advisory open today can be reached in
-  CozyVTT, but an internet-facing app should not run on unsupported code.
-  **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
-  inside the current major versions, and then turning CI's advisory check,
-  which reports high or critical advisories in production dependencies
-  today, into one that fails; Dependabot's grouped weekly pull requests
-  against `dev` are set up, and nginx is done, both images pinned to the 1.30
-  stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
-  newest stable major first, with a full upgrade rehearsal, then Vite and
-  Vitest, Express 5, and React 19 with React Router 7. **Defer** Tailwind
-  CSS 4 and TypeScript 7.
+- **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
+  on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's
+  dependency update left it alone. The dice parser
+  (`backend/src/utils/dice-parser.ts`) uses it only to add, subtract,
+  multiply and divide numbers it has built itself, so no typed text reaches
+  it, yet it is about 18 MB installed. Replacing it means writing and testing
+  an evaluator for those four operators. **Do** as a separate small project,
+  not tied to a release, and before the dice grammar lets anything other
+  than numbers and those operators through.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks

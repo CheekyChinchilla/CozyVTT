@@ -111,15 +111,25 @@ describe('the session secret', () => {
   });
 });
 
+/**
+ * The cookie settings, which express-session also accepts as a function of
+ * the request. The configuration here sets them as values.
+ */
+function cookieOf(mod: SessionModule): session.CookieOptions | undefined {
+  const cookie = mod.sessionConfig.cookie;
+  if (typeof cookie === 'function') throw new Error('the session cookie settings are a function; read them from a request');
+  return cookie;
+}
+
 describe('the session settings', () => {
   it('expire after an hour of inactivity unless SESSION_MAX_AGE says otherwise, and remember for 30 days', () => {
     const defaults = loadWith({ SESSION_MAX_AGE: undefined, REMEMBER_ME_MAX_AGE: undefined });
-    expect(defaults.sessionConfig.cookie?.maxAge).toBe(60 * 60 * 1000);
+    expect(cookieOf(defaults)?.maxAge).toBe(60 * 60 * 1000);
     expect(defaults.sessionConfig.rolling).toBe(true);
     expect(defaults.rememberMeMaxAge).toBe(30 * 24 * 60 * 60 * 1000);
 
     const custom = loadWith({ SESSION_MAX_AGE: '7200000', REMEMBER_ME_MAX_AGE: '86400000' });
-    expect(custom.sessionConfig.cookie?.maxAge).toBe(7200000);
+    expect(cookieOf(custom)?.maxAge).toBe(7200000);
     expect(custom.rememberMeMaxAge).toBe(86400000);
   });
 
@@ -129,7 +139,7 @@ describe('the session settings', () => {
     ['SESSION_MAX_AGE', 'one hour', 60 * 60 * 1000],
   ])('fall back to the default and warn, naming the variable, when %s is "%s"', (name, value, fallback) => {
     const mod = loadWith({ [name]: value });
-    const read = name === 'SESSION_MAX_AGE' ? mod.sessionConfig.cookie?.maxAge : mod.rememberMeMaxAge;
+    const read = name === 'SESSION_MAX_AGE' ? cookieOf(mod)?.maxAge : mod.rememberMeMaxAge;
     expect(read).toBe(fallback);
     expect(logged.warn).toHaveBeenCalledWith(expect.stringContaining(name));
   });

@@ -22,6 +22,21 @@ module.exports = {
   moduleNameMapper: {
     '^file-type$': '<rootDir>/src/__tests__/helpers/file-type-mock.ts',
   },
+  // otplib (authenticator codes) is CommonJS, and loads two packages that are
+  // ES modules only: @noble/hashes for HMAC-SHA1 and @scure/base for base32.
+  // Node loads those itself, and Jest does only when run with
+  // --experimental-vm-modules, so these two are compiled to CommonJS for the
+  // tests, and the tests check codes with the real library.
+  transform: {
+    '^.+\\.tsx?$': 'ts-jest',
+    '/node_modules/(@noble/hashes|@scure/base)/.+\\.js$': [
+      'ts-jest',
+      { tsconfig: { allowJs: true, module: 'commonjs', target: 'ES2022' }, diagnostics: false },
+    ],
+  },
+  // A package is judged by the innermost node_modules it sits in: npm nests
+  // otplib's copy of @noble/hashes inside the plugin that uses it.
+  transformIgnorePatterns: ['/node_modules/(?!(@noble/hashes|@scure/base)/)(?!.*/node_modules/)'],
   collectCoverageFrom: [
     'src/**/*.ts',
     '!src/**/*.d.ts',

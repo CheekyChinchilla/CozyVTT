@@ -13,7 +13,7 @@
 
 import express from 'express';
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSecret, generateSync } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
@@ -32,7 +32,7 @@ const freshAddress = () => {
 
 /** An account with MFA on, with its own secret, signed in to the code step from `address`. */
 async function pending(address: string): Promise<{ agent: request.Agent; secret: string }> {
-  const secret = speakeasy.generateSecret({ length: 20 }).base32;
+  const secret = generateSecret();
   const user = await createTestUser({ displayName: 'Code limiter' });
   created.push(user.id);
   await prisma.user.update({ where: { id: user.id }, data: { mfaEnabled: true, mfaSecret: secret } });
@@ -42,7 +42,7 @@ async function pending(address: string): Promise<{ agent: request.Agent; secret:
   return { agent, secret };
 }
 
-const code = (secret: string) => speakeasy.totp({ secret, encoding: 'base32' });
+const code = (secret: string) => generateSync({ secret });
 
 afterAll(async () => {
   await cleanupUsers(created);

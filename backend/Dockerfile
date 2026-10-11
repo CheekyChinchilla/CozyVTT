@@ -1,6 +1,6 @@
 # Development Dockerfile
 # For production, use Dockerfile.prod (multi-stage, non-root, compiled output)
-FROM node:20-alpine
+FROM node:26-alpine
 
 # bash: required by start.sh (#!/bin/bash shebang); not included in alpine by default
 # postgresql16-client: pg_dump (backup) and psql (restore). Pinned to the major

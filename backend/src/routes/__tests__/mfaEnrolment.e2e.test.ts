@@ -26,7 +26,7 @@ jest.mock('../../services/sessionStore', () => ({
 }));
 
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSync } from 'otplib';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { destroyUserLoginSessions } from '../../services/sessionStore';
@@ -43,6 +43,25 @@ async function signedIn(label: string) {
   const agent = request.agent(app);
   expect((await agent.post('/api/auth/login').send({ email: user.email, password: TEST_PASSWORD })).status).toBe(200);
   return { user, agent };
+}
+
+/** RFC 4648 base32, as an authenticator app reads a secret, to bytes. */
+function fromBase32(text: string): number[] {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const out: number[] = [];
+  let value = 0;
+  let bits = 0;
+  for (const ch of text.replace(/=+$/, '')) {
+    const index = alphabet.indexOf(ch);
+    if (index === -1) throw new Error(`${JSON.stringify(ch)} is not base32`);
+    value = ((value << 5) | index) & 0xffff;
+    bits += 5;
+    if (bits >= 8) {
+      out.push((value >>> (bits - 8)) & 0xff);
+      bits -= 8;
+    }
+  }
+  return out;
 }
 
 beforeEach(() => destroyed.mockClear());
@@ -75,6 +94,23 @@ describe('POST /api/auth/mfa/setup', () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.secret).toBe('string');
   });
+
+  // A secret of twenty printable characters holds about 127 bits; twenty
+  // random bytes hold 160, which is what authenticator apps expect.
+  it('makes each secret from 20 random bytes of any value, not 20 printable characters', async () => {
+    const { agent } = await signedIn('bytes');
+    const bytes: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      const res = await agent.post('/api/auth/mfa/setup').send({ password: TEST_PASSWORD });
+      expect(res.status).toBe(200);
+      const secret = fromBase32(res.body.secret);
+      expect(secret).toHaveLength(20);
+      bytes.push(...secret);
+    }
+    // Printable characters run from 0x21 to 0x7e. 200 random bytes all
+    // falling below 0x80 has odds of one in 2 to the 200th.
+    expect(bytes.some((b) => b >= 0x80)).toBe(true);
+  });
 });
 
 describe('POST /api/auth/mfa/verify', () => {
@@ -83,7 +119,7 @@ describe('POST /api/auth/mfa/verify', () => {
     const setup = await agent.post('/api/auth/mfa/setup').send({ password: TEST_PASSWORD });
     expect(setup.status).toBe(200);
 
-    const token = speakeasy.totp({ secret: setup.body.secret, encoding: 'base32' });
+    const token = generateSync({ secret: setup.body.secret });
     const res = await agent.post('/api/auth/mfa/verify').send({ token });
     expect(res.status).toBe(200);
 

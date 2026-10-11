@@ -660,3 +660,65 @@ describe('what the comments in the backend source point to', () => {
     expect(cited.filter(({ file }) => !fs.existsSync(path.join(root, 'Examples', file))).map(({ rel, file }) => `${rel}: ${file}`)).toEqual([]);
   });
 });
+
+describe('the dependency check SECURITY.md describes', () => {
+  /** The steps of one CI job, each as its text. */
+  function jobSteps(job: string): string[] {
+    const workflow = read('.github/workflows/ci.yml');
+    const start = workflow.indexOf(`\n  ${job}:\n`);
+    if (start === -1) throw new Error(`.github/workflows/ci.yml no longer has a ${job} job`);
+    const rest = workflow.slice(start + 1);
+    const end = rest.slice(1).search(/\n {2}[a-z]/);
+    const body = end === -1 ? rest : rest.slice(0, end + 1);
+    return body.split(/\n {6}- /).slice(1);
+  }
+
+  const productionAudits = jobSteps('audit').filter((step) => /npm audit --omit=dev/.test(step));
+
+  // The check reported and passed whatever it found, while the advisories it
+  // found then were being cleared. SECURITY.md now says it fails the run.
+  it('fails the run on a high or critical advisory in what an instance runs, in both projects', () => {
+    expect(productionAudits.map((step) => /working-directory: (\w+)/.exec(step)?.[1]).sort()).toEqual(['backend', 'frontend']);
+    for (const step of productionAudits) {
+      expect(step).toMatch(/--audit-level=high\b/);
+      expect(step).not.toMatch(/continue-on-error:\s*true/);
+    }
+    expect(read('SECURITY.md')).toMatch(/high or critical advisory .*fails/);
+  });
+
+  // A failing backend audit skipped the frontend's, so its result was never seen.
+  it('runs every audit whatever the audits before it found', () => {
+    const audits = jobSteps('audit').filter((step) => /npm audit\b/.test(step));
+    expect(audits.length).toBeGreaterThan(1);
+    for (const step of audits.slice(1)) expect(step).toMatch(/^\s*if: always\(\)\s*$/m);
+  });
+
+  it('reports the developer tools without failing on them', () => {
+    const tools = jobSteps('audit').filter((step) => /npm audit\b/.test(step) && !/--omit=dev/.test(step));
+    expect(tools.length).toBeGreaterThan(0);
+    for (const step of tools) expect(step).toMatch(/continue-on-error:\s*true/);
+  });
+});
+
+describe('the install-script list the guides describe', () => {
+  // npm 11, which builds the images and runs CI, still runs the install script
+  // of a package that allowScripts does not name, and prints a warning. It
+  // refuses one only when an .npmrc turns on strict-allow-scripts. Turning it
+  // on makes "still runs" untrue: change the guides in the same change.
+  const npmrcs = ['.npmrc', 'backend/.npmrc', 'frontend/.npmrc'].filter((rel) => fs.existsSync(path.join(root, rel)));
+  const paragraphs = ['SECURITY.md', 'docs/DEVELOPMENT.md'].flatMap((rel) =>
+    read(rel)
+      .split(/\n\s*\n/)
+      .filter((paragraph) => paragraph.includes('allowScripts'))
+      .map((paragraph) => ({ rel, text: paragraph.replace(/\s+/g, ' ') }))
+  );
+
+  it('say npm still runs the script of a package not on it, since no .npmrc tells npm to refuse one', () => {
+    expect(npmrcs.filter((rel) => /^\s*strict-allow-scripts\s*=\s*true\b/m.test(read(rel)))).toEqual([]);
+    expect(paragraphs.map(({ rel }) => rel).sort()).toEqual(['SECURITY.md', 'docs/DEVELOPMENT.md']);
+    for (const { rel, text } of paragraphs) {
+      expect(`${rel}: ${text}`).not.toMatch(/only if .*allowScripts/);
+      expect(`${rel}: ${text}`).toMatch(/still runs the script of a package/);
+    }
+  });
+});

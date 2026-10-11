@@ -754,12 +754,20 @@ An earlier version of this guide had you stop nginx and run `certbot certonly --
 
 If you prefer to manage the processes yourself (systemd, pm2, etc.) without Docker:
 
-### 1. Install Node.js 20
+### 1. Install Node.js 26
 
 ```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+curl -fsSL https://deb.nodesource.com/setup_26.x | sudo -E bash -
 sudo apt-get install -y nodejs
 ```
+
+Check that it worked:
+
+```bash
+node --version
+```
+
+If it worked, this prints `v26` followed by the rest of the version number, for example `v26.11.1`.
 
 ### 2. Install PostgreSQL 15
 

@@ -25,9 +25,9 @@ This guide covers everything you need to run CozyVTT locally **for development w
 
 | Tool | Minimum Version | Notes |
 |------|----------------|-------|
-| Node.js | 20.x | Use `nvm` or `fnm` to manage versions |
+| Node.js | 26.x | Use `nvm` or `fnm` to manage versions |
 | PostgreSQL | 14+ | Or use the Docker Compose stack |
-| npm | 10+ | Comes with Node.js 20 |
+| npm | 11+ | Comes with Node.js 26 |
 | Docker + Docker Compose | Any recent | Optional — needed for the containerized setup |
 
 ---
@@ -150,6 +150,17 @@ npm install
 cd ../frontend
 npm install
 ```
+
+Each project's `package.json` names under `allowScripts` the packages that
+run a script while they install: the Prisma packages fetch the database engines
+that way, argon2 checks for its prebuilt binary, and a few developer tools set
+up their own binaries. npm 11, which builds the images, still runs the
+script of a package that is not listed and prints a warning naming it; npm 12
+is announced to block such a script unless the list names it. When a new
+dependency brings one, `npm install-scripts ls` names it; read what the script
+does, then add it with
+`npm install-scripts approve --no-allow-scripts-pin <package>`, or leave it
+out. `dependencySources.test.ts` fails until the list matches the lockfile.
 
 ### 2. Set up PostgreSQL
 
@@ -597,9 +608,12 @@ also does what self-hosters run and a developer usually does not:
   it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
   HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
   needs Docker, openssl and PyYAML, and runs locally too.
-- **Reports known advisories** in the packages an instance runs
-  (`npm audit --omit=dev --audit-level=high` in both projects). A high or
-  critical one marks its step; the job still passes for now.
+- **Checks known advisories** in the packages an instance runs
+  (`npm audit --omit=dev --audit-level=high` in both projects): a high or
+  critical one fails the job. A last step lists the advisories in each
+  project's developer tools too, and fails nothing, since those never reach
+  an instance. Each of these steps runs whatever the ones before it found,
+  so a failing backend audit still shows the frontend's result.
 
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into
@@ -677,6 +691,12 @@ cd backend && npm run lint
 cd frontend && npm run lint
 ```
 
+The rules are in each package's `eslint.config.js` (ESLint 10, flat config):
+ESLint's recommended rules, typescript-eslint's recommended rules and, in the
+frontend, the React hooks rules. Only TypeScript files are linted. A rule that
+is switched off says why beside it, and the ones waiting to be turned on are
+marked `TODO(ratchet)`.
+
 There is no enforced code formatter (Prettier), but follow the existing style in the file you're editing:
 - 2-space indentation
 - Single quotes for strings
@@ -686,7 +706,7 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 - **Routes** handle HTTP parsing and response formatting only — business logic goes in `services/`
 - **Middleware** in `src/middleware/` — authentication and role guards (named in the route declaration, composed in `compose.ts`), rate limiting, file uploads
-- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails
+- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails. A key that may be left out says `.optional()`, a `z.unknown()` key included: since zod 4.4 a missing `z.unknown()` key is an error
 - **WebSocket handlers** in `src/websocket/handlers/` — one module per domain (tokens, dice, chat, fog, …), each registering its events for a connection; `events.ts` only wires them together
 
 ### Frontend Patterns
