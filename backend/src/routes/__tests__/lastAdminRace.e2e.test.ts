@@ -22,7 +22,6 @@ import request from 'supertest';
 import type express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
-import { hashPassword } from '../../services/auth';
 
 jest.setTimeout(60000);
 
@@ -32,6 +31,9 @@ const sharedUrl = process.env.DATABASE_URL;
 let schema: IsolatedSchema;
 let db: PrismaClient;
 let app: express.Express;
+// Imported once the app's client is set below: anything that imports
+// config/database first would make the app use a client of its own.
+let hashPassword: (password: string) => Promise<string>;
 
 beforeAll(async () => {
   schema = createIsolatedSchema('last_admin_race_test');
@@ -54,6 +56,7 @@ beforeAll(async () => {
       },
     },
   });
+  ({ hashPassword } = await import('../../services/auth'));
   const { createTestApp } = await import('../../__tests__/helpers/test-app');
   app = createTestApp();
 });
