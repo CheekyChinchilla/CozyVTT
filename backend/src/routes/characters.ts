@@ -17,6 +17,7 @@ import { CreateCharacterSchema, UpdateCharacterSchema } from '../validators/char
 import { broadcastToCampaign } from '../websocket/utils';
 import { resendInitiative } from '../websocket/handlers/initiative';
 import logger from '../utils/logger';
+import { cutText } from '../utils/cutText';
 import { readTokens, toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp, sameCharacterHp } from '../utils/characterHp';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
@@ -56,7 +57,7 @@ const COPY_SUFFIX = ' (Copy)';
 
 /** A copy's name: the original's with " (Copy)", cut so the whole stays a name the editor can save. */
 export function copyName(original: string): string {
-  return `${original.slice(0, MAX_CHARACTER_NAME_LENGTH - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
+  return `${cutText(original, MAX_CHARACTER_NAME_LENGTH - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
 }
 
 /**

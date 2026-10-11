@@ -87,4 +87,18 @@ describe('POST /api/characters/:id/copy', () => {
     expect(copy.body.character.name).toHaveLength(200);
     expect(copy.body.character.name.endsWith(' (Copy)')).toBe(true);
   });
+
+  it('does not cut a character in two where it shortens the name', async () => {
+    const { agent } = await signedIn();
+    // The emoji takes two UTF-16 units, the 193rd and 194th, where the cut falls.
+    const name = `${'n'.repeat(192)}\u{1F409}tail`;
+    const created = await agent.post('/api/characters').send({ name });
+    expect(created.status).toBe(201);
+
+    const copy = await agent.post(`/api/characters/${created.body.character.id}/copy`);
+    expect(copy.status).toBe(201);
+    expect(copy.body.character.name).toBe(`${'n'.repeat(192)} (Copy)`);
+    const stored = await prisma.character.findUnique({ where: { id: copy.body.character.id }, select: { name: true } });
+    expect(stored?.name).toBe(`${'n'.repeat(192)} (Copy)`);
+  });
 });

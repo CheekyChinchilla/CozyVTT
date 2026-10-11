@@ -10,6 +10,7 @@
 import path from 'path';
 import { z } from 'zod';
 import { ASSET_LIMITS } from './assetLimits';
+import { cutText } from '../utils/cutText';
 
 export const MAX_ASSET_NAME_LENGTH = ASSET_LIMITS.maxNameLength;
 const MAX_ASSET_DESCRIPTION_LENGTH = ASSET_LIMITS.maxDescriptionLength;
@@ -64,14 +65,6 @@ export function parseUploadMetadata(body: unknown): { ok: true; value: UploadMet
   };
 }
 
-/** The first `max` UTF-16 units of `text`, without cutting a character in two. */
-function cut(text: string, max: number): string {
-  let end = Math.max(0, max);
-  const code = text.charCodeAt(end - 1);
-  if (end < text.length && code >= 0xd800 && code <= 0xdbff) end -= 1;
-  return text.slice(0, end);
-}
-
 /**
  * A file name cut to at most `max` characters, keeping its extension, so a
  * name typed as the asset's own, or taken from a very long file name, stays
@@ -80,6 +73,6 @@ function cut(text: string, max: number): string {
 export function shortenFileName(name: string, max: number): string {
   if (name.length <= max) return name;
   const ext = path.extname(name);
-  if (ext.length === 0 || ext.length > 20) return cut(name, max);
-  return `${cut(name.slice(0, name.length - ext.length), max - ext.length)}${ext}`;
+  if (ext.length === 0 || ext.length > 20) return cutText(name, max);
+  return `${cutText(name.slice(0, name.length - ext.length), max - ext.length)}${ext}`;
 }
