@@ -245,6 +245,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Malformed dice rolls now count towards the dice roll limit.** A roll sent with a malformed expression, or by a spectator, was answered with an error before it was counted against the limit of 50 dice rolls a second and 200 a minute, so a script could send them without end and get an error back for every one. Every roll is now counted first; past the limit the sender is told once, as for valid rolls. Nobody rolling from the app notices any difference.
 
+- **The development stack, `docker-compose.dev.yml`, now opens its ports to the computer it runs on and no one else.** Its database, backend and frontend ports were open on every network interface, though the development guide said they were local, so on a server the database could be reached from other machines. It also runs in development mode whatever `.env` says, as the guide describes; with the `NODE_ENV=production` line `.env.example` ships, it ran in production mode. The production stack is not affected. To open the dev stack from another device on your network, see [Local Setup (With Docker)](docs/DEVELOPMENT.md#local-setup-with-docker).
+
 ## [1.5.1] - 2026-10-10
 
 ### Upgrading from 1.5.0

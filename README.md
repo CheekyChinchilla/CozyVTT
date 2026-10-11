@@ -168,7 +168,7 @@ Navigate to `http://localhost` and complete the setup wizard. It asks for the se
 
 ### Local Development
 
-If you've cloned the repo to hack on CozyVTT itself, use the dev compose file instead — it enables hot reload, exposes the backend port directly, and runs `NODE_ENV=development`:
+If you've cloned the repo to hack on CozyVTT itself, use the dev compose file instead — it enables hot reload, publishes the frontend, backend and database ports on this computer only, and runs `NODE_ENV=development`:
 
 ```bash
 docker compose -f docker-compose.dev.yml up

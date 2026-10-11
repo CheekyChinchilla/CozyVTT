@@ -9,6 +9,11 @@
  * avatar, sound and document blank: the page's security policy, the
  * backend's resource policy and the canvas's anonymous image loads each
  * refuse a picture from another address. The offer is gone.
+ *
+ * The development stack. It is for a developer's own computer: its ports are
+ * published on 127.0.0.1 only, where the guide said they were (Docker binds a
+ * port with no address to every interface, past the firewall), and it runs
+ * in development mode whatever NODE_ENV the copied .env.example sets.
  */
 
 import fs from 'fs';
@@ -31,5 +36,39 @@ describe('one address for the page and the backend', () => {
 
   it('is not described as an option in the development guide', () => {
     expect(read('docs/DEVELOPMENT.md')).not.toMatch(/\|\s*`VITE_(API|SOCKET)_URL`\s*\|/);
+  });
+});
+
+/** One service's block of a compose file, from its name to the next service. */
+function service(file: string, name: string): string {
+  const text = read(file);
+  const start = text.indexOf(`\n  ${name}:\n`);
+  if (start === -1) throw new Error(`${file} has no ${name} service`);
+  const rest = text.slice(start + 1);
+  const end = rest.slice(1).search(/\n {2}[a-z]|\n[a-z]/);
+  return end === -1 ? rest : rest.slice(0, end + 1);
+}
+
+/** The host side of each port a service publishes. */
+function published(block: string): string[] {
+  const ports = /\n {4}ports:\n((?: {6}- .*\n)+)/.exec(block);
+  return ports ? [...ports[1].matchAll(/- "([^"]+)"/g)].map((m) => m[1]) : [];
+}
+
+describe('the development stack', () => {
+  it.each(['database', 'backend', 'frontend'])('publishes the %s on this computer only', (name) => {
+    const ports = published(service('docker-compose.dev.yml', name));
+    expect(ports.length).toBeGreaterThan(0);
+    expect(ports.filter((p) => !p.startsWith('127.0.0.1:'))).toEqual([]);
+  });
+
+  it('runs the backend in development mode, whatever .env says', () => {
+    expect(service('docker-compose.dev.yml', 'backend')).toMatch(/\n {6}NODE_ENV: development\n/);
+  });
+
+  it('lets the browser reach the backend through the Vite proxy, on the page\'s own address', () => {
+    const frontend = service('docker-compose.dev.yml', 'frontend');
+    expect(frontend).not.toMatch(/VITE_API_URL|VITE_SOCKET_URL/);
+    expect(frontend).toMatch(/\n {6}VITE_PROXY_TARGET: http:\/\/backend:4000\n/);
   });
 });
