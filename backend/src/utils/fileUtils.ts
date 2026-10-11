@@ -331,6 +331,15 @@ export function isAllowedExtension(assetType: AssetType, extension: string): boo
 }
 
 /**
+ * The uploads folder as an absolute path: `UPLOAD_DIR`, or `uploads` in the
+ * working directory. Read when asked, so a test that sets UPLOAD_DIR is
+ * followed.
+ */
+export function getUploadsDirectory(): string {
+  return path.resolve(process.env.UPLOAD_DIR || 'uploads');
+}
+
+/**
  * Get temporary upload directory path
  * @returns Path to temp directory
  */

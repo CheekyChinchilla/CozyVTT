@@ -12,6 +12,7 @@
 import fsp from 'fs/promises';
 import path from 'path';
 import type { StatsFs } from 'fs';
+import { getUploadsDirectory } from '../utils/fileUtils';
 
 export const DISK_WARNING_PERCENT = 80;
 
@@ -25,18 +26,13 @@ export interface UploadsDisk {
   warning: boolean;
 }
 
-/** The uploads folder, as the upload routes find it. */
-export function uploadsFolder(): string {
-  return path.resolve(process.env.UPLOAD_DIR || 'uploads');
-}
-
 /**
  * Read the disk `dir` is on. A folder not made yet is read from the nearest
  * one above it that exists. Answers null when the disk cannot be read, so
  * the dashboard leaves the line out instead of failing.
  */
 export async function uploadsDiskUsage(
-  dir: string = uploadsFolder(),
+  dir: string = getUploadsDirectory(),
   statfs: (where: string) => Promise<StatsFs> = (where) => fsp.statfs(where),
 ): Promise<UploadsDisk | null> {
   let where = path.resolve(dir);
