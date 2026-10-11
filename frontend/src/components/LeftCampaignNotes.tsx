@@ -6,28 +6,68 @@
  * them. This dashboard section lets them read and download what they wrote.
  * It shows only when there is something to show. Deleting the campaign
  * deletes these too, so the section says so.
+ *
+ * The server sends a note's text one note at a time, as it does in the
+ * campaign's notes panel: the dialog fetches the note being read, and
+ * Download fetches the others in turn, reusing any already fetched.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, Loader2, NotebookPen } from 'lucide-react';
 import Markdown from '@/components/common/Markdown';
 import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import { api } from '@/services/api';
-import { useLeftCampaignsQuery } from '@/hooks/queries';
-import { apiErrorMessage } from '@/utils/errors';
+import { leftCampaignNoteQuery, useLeftCampaignsQuery } from '@/hooks/queries';
+import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
 import { downloadTextFile } from '@/utils/download';
 import { leftCampaignFilename, leftCampaignMarkdown } from '@/utils/leftCampaignNotes';
-import type { LeftCampaignDetail, LeftCampaignSummary } from '@/types';
+import type { LeftCampaignDetail, LeftCampaignSummary, PersonalNote, PersonalNoteSummary } from '@/types';
 import '@/styles/note-markdown.css';
 
 const count = (n: number, one: string, many: string) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
+/** The note being read, fetched when it is opened. */
+function NoteText({ campaignId, note }: { campaignId: string; note: PersonalNoteSummary }) {
+  const { data, error } = useQuery(leftCampaignNoteQuery(campaignId, note));
+  return (
+    <>
+      <h3 className="text-base font-semibold text-brand-ink mb-2 break-words">{note.title}</h3>
+      {error ? (
+        <p role="alert" className="text-sm text-danger-ink">
+          {apiErrorMessage(error) ?? 'Failed to load this note'}
+        </p>
+      ) : !data ? (
+        <p className="flex items-center gap-2 text-sm text-warm-gray">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          Loading the note
+        </p>
+      ) : data.content ? (
+        <div className="prose-notes">
+          <Markdown>{data.content}</Markdown>
+        </div>
+      ) : (
+        <p className="text-warm-gray italic">This note is empty.</p>
+      )}
+    </>
+  );
+}
+
 function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSummary | null; onClose: () => void }) {
+  const queryClient = useQueryClient();
   const [detail, setDetail] = useState<LeftCampaignDetail | null>(null);
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [downloadError, setDownloadError] = useState('');
+  // Bumped whenever the dialog opens or closes, so a download still fetching
+  // for a dialog that has gone stops and saves nothing.
+  const opening = useRef(0);
 
   useEffect(() => {
+    opening.current += 1;
+    setProgress(null);
+    setDownloadError('');
     if (!campaign) return;
     let cancelled = false;
     setDetail(null);
@@ -50,6 +90,36 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
 
   const selected = detail?.notes.find((n) => n.id === selectedId) ?? null;
 
+  /** Fetch every note's text, one request at a time, then save the file. */
+  const downloadAll = async () => {
+    if (!detail || progress) return;
+    const started = opening.current;
+    setDownloadError('');
+    setProgress({ done: 0, total: detail.notes.length });
+    try {
+      const notes: PersonalNote[] = [];
+      for (const note of detail.notes) {
+        notes.push(await queryClient.fetchQuery(leftCampaignNoteQuery(detail.campaign.id, note)));
+        if (opening.current !== started) return;
+        setProgress({ done: notes.length, total: detail.notes.length });
+      }
+      downloadTextFile(
+        leftCampaignFilename(detail.campaign.name),
+        leftCampaignMarkdown({ campaign: detail.campaign, notes, macros: detail.macros }),
+        'text/markdown'
+      );
+    } catch (err: unknown) {
+      if (opening.current !== started) return;
+      setDownloadError(
+        apiErrorStatus(err) === 429
+          ? 'Too many requests at once. Wait a minute, then press Download again. The notes fetched so far are kept.'
+          : (apiErrorMessage(err) ?? 'Failed to fetch your notes')
+      );
+    } finally {
+      if (opening.current === started) setProgress(null);
+    }
+  };
+
   return (
     <Modal
       open={campaign !== null}
@@ -62,20 +132,26 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
           <Button variant="secondary" onClick={onClose}>
             Close
           </Button>
-          <Button
-            onClick={() => detail && downloadTextFile(leftCampaignFilename(detail.campaign.name), leftCampaignMarkdown(detail), 'text/markdown')}
-            disabled={!detail}
-            className="flex items-center gap-2"
-          >
-            <Download className="w-4 h-4" aria-hidden="true" />
+          <Button onClick={() => void downloadAll()} disabled={!detail || progress !== null} className="flex items-center gap-2">
+            {progress ? (
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <Download className="w-4 h-4" aria-hidden="true" />
+            )}
             Download
           </Button>
         </>
       }
     >
-      {error && (
-        <p role="alert" className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg p-3">
-          {error}
+      {(error || downloadError) && (
+        <p role="alert" className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg p-3 mb-4">
+          {error || downloadError}
+        </p>
+      )}
+      {progress && (
+        <p role="status" className="flex items-center gap-2 text-sm text-warm-gray mb-4">
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          Fetching your notes for the download: {progress.done.toLocaleString()} of {progress.total.toLocaleString()}
         </p>
       )}
       {!detail && !error && (
@@ -105,12 +181,7 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
                 ))}
               </ul>
               <article className="min-w-0">
-                {selected && (
-                  <>
-                    <h3 className="text-base font-semibold text-brand-ink mb-2 break-words">{selected.title}</h3>
-                    {selected.content ? <div className="prose-notes"><Markdown>{selected.content}</Markdown></div> : <p className="text-warm-gray italic">This note is empty.</p>}
-                  </>
-                )}
+                {selected && <NoteText campaignId={detail.campaign.id} note={selected} />}
               </article>
             </div>
           ) : (

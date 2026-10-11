@@ -6,8 +6,9 @@
  * list, read or copy them. They stay tied to the campaign: rejoining shows
  * them in the campaign again, and deleting the campaign deletes them.
  *
- * Only the caller's own notes and macros are ever answered, and a campaign
- * the caller is still in is not listed as one they have left.
+ * Only the caller's own notes and macros are ever answered, and only for a
+ * campaign the caller is no longer in. Note text comes one note at a time,
+ * as it does for a member, so no single answer carries a campaign's worth.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -96,16 +97,52 @@ describe('notes and macros from a campaign the person was removed from', () => {
     expect(left!.macros.map((m) => [m.name, m.expression])).toEqual([['Sneak attack', '3d6']]);
   });
 
-  it('answers the text of their notes, and their macros, for that campaign', async () => {
+  it('answers the titles of their notes, and their macros, for that campaign', async () => {
     const res = await leaver.agent.get(`/api/campaigns/left/${campaignId}`);
     expect(res.status).toBe(200);
     expect(res.body.campaign).toEqual({ id: campaignId, name: 'Curse of the Left' });
     expect(res.body.notes).toHaveLength(1);
-    expect(res.body.notes[0]).toMatchObject({ id: noteId, title: 'Suspects', content: '# The baron\n\nLied about the mill.' });
+    expect(res.body.notes[0]).toMatchObject({ id: noteId, title: 'Suspects' });
+    expect(res.body.notes[0].content).toBeUndefined();
     expect(res.body.macros).toHaveLength(1);
     expect(res.body.macros[0]).toMatchObject({ name: 'Sneak attack', expression: '3d6' });
     // Nobody else's.
     expect((res.body.notes as { id: string }[]).map((n) => n.id)).not.toContain(stayerNoteId);
+  });
+
+  it('answers the text of one of their notes from that campaign', async () => {
+    const res = await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes/${noteId}`);
+    expect(res.status).toBe(200);
+    expect(res.body.note).toMatchObject({ id: noteId, title: 'Suspects', content: '# The baron\n\nLied about the mill.' });
+  });
+
+  it('sends no note text with the campaign, however long the notes are', async () => {
+    const long = await prisma.personalNote.create({
+      data: { campaignId, userId: leaver.user.id, title: 'Session log', content: 'é'.repeat(100_000) },
+    });
+    try {
+      const res = await leaver.agent.get(`/api/campaigns/left/${campaignId}`);
+      expect(res.status).toBe(200);
+      expect((res.body.notes as { id: string }[]).map((n) => n.id)).toContain(long.id);
+      expect(res.text.length).toBeLessThan(2_000);
+
+      const one = await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes/${long.id}`);
+      expect(one.status).toBe(200);
+      expect(one.body.note.content).toHaveLength(100_000);
+    } finally {
+      await prisma.personalNote.delete({ where: { id: long.id } });
+    }
+  });
+
+  it('answers nothing for a campaign the person is still in', async () => {
+    // A member reads their notes through the campaign's own notes routes.
+    const campaign = await stayer.agent.get(`/api/campaigns/left/${campaignId}`);
+    expect(campaign.status).toBe(404);
+    expect(campaign.body.message).toBe('You have not left that campaign, or have no notes or dice macros in it');
+    const note = await stayer.agent.get(`/api/campaigns/left/${campaignId}/notes/${stayerNoteId}`);
+    expect(note.status).toBe(404);
+    expect(note.body.message).toBe('Note not found');
+    expect((await stayer.agent.get(`/api/campaigns/${campaignId}/notes/${stayerNoteId}`)).status).toBe(200);
   });
 
   it('still refuses them the campaign itself and its notes routes', async () => {
@@ -125,9 +162,16 @@ describe('notes and macros from a campaign the person was removed from', () => {
     expect((await stranger.agent.get('/api/campaigns/left')).body.campaigns).toEqual([]);
     const theirs = await stranger.agent.get(`/api/campaigns/left/${campaignId}`);
     expect(theirs.status).toBe(404);
-    expect(theirs.body.message).toBe('You have no notes or dice macros in that campaign');
+    expect(theirs.body.message).toBe('You have not left that campaign, or have no notes or dice macros in it');
+    const theirNote = await stranger.agent.get(`/api/campaigns/left/${campaignId}/notes/${noteId}`);
+    expect(theirNote.status).toBe(404);
+    expect(theirNote.body.message).toBe('Note not found');
+    // Someone else's note in the campaign they did leave, and an id that is no note's.
+    expect((await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes/${stayerNoteId}`)).status).toBe(404);
+    expect((await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes/not-a-note`)).status).toBe(404);
     expect((await request(app).get('/api/campaigns/left')).status).toBe(401);
     expect((await request(app).get(`/api/campaigns/left/${campaignId}`)).status).toBe(401);
+    expect((await request(app).get(`/api/campaigns/left/${campaignId}/notes/${noteId}`)).status).toBe(401);
   });
 
   it('shows them in the campaign again when the person rejoins', async () => {
@@ -135,6 +179,8 @@ describe('notes and macros from a campaign the person was removed from', () => {
     const notes = await leaver.agent.get(`/api/campaigns/${campaignId}/notes`);
     expect((notes.body.notes as { id: string }[]).map((n) => n.id)).toEqual([noteId]);
     expect(((await leaver.agent.get('/api/campaigns/left')).body.campaigns as LeftCampaign[]).map((c) => c.id)).not.toContain(campaignId);
+    expect((await leaver.agent.get(`/api/campaigns/left/${campaignId}`)).status).toBe(404);
+    expect((await leaver.agent.get(`/api/campaigns/left/${campaignId}/notes/${noteId}`)).status).toBe(404);
     await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: leaver.user.id, campaignId } } });
   });
 });

@@ -590,14 +590,18 @@ per request. Platform role is a different matter, see below.
 ### A removed member's own notes and macros
 
 Removing a member deletes none of their `PersonalNote` or `DiceMacro` rows, and
-every notes and macros route asks for membership. Two read-only routes, guarded
-by `authenticated` alone, let the author still read their own:
-`GET /api/campaigns/left` lists the campaigns the caller has no membership in
-and still has notes or macros in, and `GET /api/campaigns/left/:campaignId`
-returns their notes, with text, and macros in one campaign
-(`routes/leftCampaigns.ts`). Every query is scoped to the session's user id; the
-second answers `404` where the caller has none, member or not, so it reveals
-nothing about a campaign they were never in. Nothing lets a non-member change
+every notes and macros route asks for membership. Three read-only routes,
+guarded by `authenticated` alone, let the author still read their own
+(`routes/leftCampaigns.ts`): `GET /api/campaigns/left` lists the campaigns the
+caller has no membership in and still has notes or macros in,
+`GET /api/campaigns/left/:campaignId` returns their note titles and macros in
+one such campaign, and `GET /api/campaigns/left/:campaignId/notes/:noteId`
+returns one note with its text. Every query is scoped to the session's user id
+and to a campaign the caller has no membership in, so a member is answered
+`404` and uses the member routes. The second and third answer `404` where the
+caller has nothing, so they reveal nothing about a campaign they were never in.
+Note text goes out one note at a time, as it does for a member: a campaign can
+hold 200 notes of 100,000 characters each. Nothing lets a non-member change
 them. Rejoining puts them back behind the member routes, and deleting the
 campaign cascades them away.
 

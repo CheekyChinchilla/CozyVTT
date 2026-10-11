@@ -703,9 +703,15 @@ class ApiClient {
     return response.data;
   }
 
-  /** The caller's notes, with their text, and dice macros in one campaign they have left. */
+  /** The caller's note titles and dice macros in one campaign they have left. */
   async getLeftCampaign(campaignId: string): Promise<LeftCampaignDetail> {
     const response = await this.client.get(`/api/campaigns/left/${campaignId}`);
+    return response.data;
+  }
+
+  /** One of the caller's notes, with its text, from a campaign they have left. */
+  async getLeftCampaignNote(campaignId: string, noteId: string): Promise<{ note: PersonalNote }> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes/${noteId}`);
     return response.data;
   }
 

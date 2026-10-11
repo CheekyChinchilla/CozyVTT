@@ -1,16 +1,23 @@
-import type { LeftCampaignDetail } from '@/types';
+import type { DiceMacro, PersonalNote } from '@/types';
+
+/** Everything a person kept in a campaign they have left, note text included. */
+export interface LeftCampaignContents {
+  campaign: { name: string };
+  notes: PersonalNote[];
+  macros: DiceMacro[];
+}
 
 /**
  * One Markdown file holding everything a person kept in a campaign they have
  * left: each note under its title, then their saved rolls.
  */
-export function leftCampaignMarkdown(detail: LeftCampaignDetail): string {
-  const lines = [`# ${detail.campaign.name}`, ''];
-  for (const note of detail.notes) {
+export function leftCampaignMarkdown({ campaign, notes, macros }: LeftCampaignContents): string {
+  const lines = [`# ${campaign.name}`, ''];
+  for (const note of notes) {
     lines.push(`## ${note.title}`, '', note.content, '');
   }
-  if (detail.macros.length > 0) {
-    lines.push('## Saved rolls', '', ...detail.macros.map((m) => `- ${m.name}: \`${m.expression}\``), '');
+  if (macros.length > 0) {
+    lines.push('## Saved rolls', '', ...macros.map((m) => `- ${m.name}: \`${m.expression}\``), '');
   }
   return lines.join('\n');
 }

@@ -659,10 +659,14 @@ export interface LeftCampaignSummary {
   macros: DiceMacro[];
 }
 
-/** The caller's notes, with their text, and macros in one campaign (GET /api/campaigns/left/:campaignId). */
+/**
+ * One campaign the caller has left (GET /api/campaigns/left/:campaignId):
+ * note titles, newest edit first, and macros. A note's text comes from
+ * GET /api/campaigns/left/:campaignId/notes/:noteId, one note at a time.
+ */
 export interface LeftCampaignDetail {
   campaign: { id: string; name: string };
-  notes: PersonalNote[];
+  notes: PersonalNoteSummary[];
   macros: DiceMacro[];
 }
 

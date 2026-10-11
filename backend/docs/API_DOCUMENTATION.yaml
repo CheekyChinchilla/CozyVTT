@@ -3391,9 +3391,11 @@ paths:
         deletes neither, but the notes and macros routes ask for membership,
         so this is how a removed player reads their own. Each campaign carries
         the titles of the caller's notes (most recently edited first, no
-        `content`) and their macros (oldest first). Only the caller's own are
-        ever listed. A campaign they are in again is not listed, and deleting
-        a campaign deletes its notes and macros, so it drops out of the list.
+        `content`) and their macros (oldest first); a note's text comes from
+        `GET /api/campaigns/left/{campaignId}/notes/{noteId}`, one note at a
+        time. Only the caller's own are ever listed. A campaign they are in
+        again is not listed, and deleting a campaign deletes its notes and
+        macros, so it drops out of the list.
       operationId: listLeftCampaignNotes
       security:
         - cookieAuth: []
@@ -3439,15 +3441,16 @@ paths:
     get:
       tags:
         - Notes
-      summary: Read your notes and dice macros in one campaign
+      summary: List your notes and dice macros in one campaign you have left
       description: >-
-        The caller's own notes, with their text, most recently edited first,
-        and dice macros, oldest first, in one campaign, with the campaign's id
-        and name. Read only: there is no route to change them while the caller
-        is not a member. Answers for any campaign the caller has notes or
-        macros in, whether or not they are a member now, and 404 where they
-        have none, so it says nothing about a campaign they were never in. A
-        campaign's notes can run to 200 of 100,000 characters each.
+        One campaign the caller is no longer a member of: its id and name, the
+        titles of the caller's notes in it (most recently edited first, no
+        `content`) and their dice macros (oldest first). Read only: there is
+        no route to change them while the caller is not a member. Answers 404,
+        with the same message, for a campaign the caller is a member of (the
+        campaign's own notes and macros routes serve them), one they have no
+        notes or macros in, and one that does not exist, so it says nothing
+        about a campaign they were never in.
       operationId: getLeftCampaignNotes
       security:
         - cookieAuth: []
@@ -3455,7 +3458,7 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
       responses:
         '200':
-          description: Your notes and macros in that campaign
+          description: Your note titles and macros in that campaign
           content:
             application/json:
               schema:
@@ -3472,13 +3475,7 @@ paths:
                   notes:
                     type: array
                     items:
-                      allOf:
-                        - $ref: '#/components/schemas/PersonalNoteSummary'
-                        - type: object
-                          properties:
-                            content:
-                              type: string
-                              description: Markdown source, as typed.
+                      $ref: '#/components/schemas/PersonalNoteSummary'
                   macros:
                     type: array
                     items:
@@ -3486,14 +3483,16 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          description: You have no notes or dice macros in that campaign, or it does not exist.
+          description: >-
+            You are a member of that campaign, have no notes or dice macros in
+            it, or it does not exist.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Not Found
-                message: You have no notes or dice macros in that campaign
+                message: You have not left that campaign, or have no notes or dice macros in it
         '500':
           description: Unexpected server error.
           content:
@@ -3503,6 +3502,58 @@ paths:
               example:
                 error: Internal Server Error
                 message: Failed to fetch your notes
+
+  /api/campaigns/left/{campaignId}/notes/{noteId}:
+    get:
+      tags:
+        - Notes
+      summary: Read one of your notes from a campaign you have left
+      description: >-
+        One of the caller's notes, with its Markdown source, from a campaign
+        they are no longer a member of. Read only. Answers 404 for a note that
+        is not theirs, one in a campaign they are a member of (the campaign's
+        own notes route serves it), and one that does not exist.
+      operationId: getLeftCampaignNote
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: noteId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The note
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  note:
+                    $ref: '#/components/schemas/PersonalNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No such note of yours in a campaign you have left.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Note not found
+        '500':
+          description: Unexpected server error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Internal Server Error
+                message: Failed to fetch note
 
   /api/campaigns/{campaignId}/notes:
     get:
