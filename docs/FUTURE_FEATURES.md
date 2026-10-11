@@ -166,10 +166,11 @@ _Nothing at present._
   more fixes. Neither production advisory open today can be reached in
   CozyVTT, but an internet-facing app should not run on unsupported code.
   **Do** in two steps. 1.5.2: ESLint 10 with typescript-eslint 8, every update
-  inside the current major versions, Dependabot opening grouped weekly pull
-  requests against `dev`, and a CI check that fails on a high or critical
-  advisory in production dependencies; nginx is done, both images pinned to
-  the 1.30 stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
+  inside the current major versions, and then turning CI's advisory check,
+  which reports high or critical advisories in production dependencies
+  today, into one that fails; Dependabot's grouped weekly pull requests
+  against `dev` are set up, and nginx is done, both images pinned to the 1.30
+  stable line in 1.5.2. 1.5.3, a release of its own: Prisma to its
   newest stable major first, with a full upgrade rehearsal, then Vite and
   Vitest, Express 5, and React 19 with React Router 7. **Defer** Tailwind
   CSS 4 and TypeScript 7.

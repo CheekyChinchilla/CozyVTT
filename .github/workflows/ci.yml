@@ -8,8 +8,13 @@
 #
 # The same commands a developer runs, on every push and pull request touching
 # dev or main, plus what self-hosters run and a developer usually does not: the
-# production images, the nginx configuration and the migrations against the
-# schema. No deployment, no publishing, no secrets.
+# production images, the nginx configuration, the migrations against the
+# schema, and an advisory check of the dependencies. No deployment, no
+# publishing, no secrets.
+#
+# Every action is pinned to a commit, with its version in a comment, so a tag
+# moved upstream cannot change what runs here; Dependabot
+# (.github/dependabot.yml) proposes new versions.
 name: CI
 
 on:
@@ -31,8 +36,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: npm
@@ -70,8 +75,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
           cache: npm
@@ -102,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # The route check also loads the OpenAPI file as YAML, which needs PyYAML.
       - run: pip install pyyaml
       - run: python3 scripts/spec-coverage.py
@@ -110,6 +115,27 @@ jobs:
       # The scripts' own tests: every form of route and event the doc checks
       # read, and what the nginx check reads.
       - run: python3 -m unittest discover -s scripts/tests
+
+  # Known advisories in the packages an instance runs, from both lockfiles.
+  # A report for now: a high or critical advisory marks its step, and the job
+  # still passes. Developer tools (--omit=dev) are left out.
+  audit:
+    name: Dependency advisories (report only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+      - name: Backend
+        working-directory: backend
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
+      - name: Frontend
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit --omit=dev --audit-level=high
 
   # What a self-hoster's `docker compose up -d --build` runs: the compose file
   # read, both production images built, and the bundled nginx's configuration
@@ -120,7 +146,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Read docker-compose.yml with the example settings
         run: cp .env.example .env && docker compose config -q
       - run: docker compose build

@@ -569,6 +569,16 @@ also does what self-hosters run and a developer usually does not:
   it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
   HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
   needs Docker, openssl and PyYAML, and runs locally too.
+- **Reports known advisories** in the packages an instance runs
+  (`npm audit --omit=dev --audit-level=high` in both projects). A high or
+  critical one marks its step; the job still passes for now.
+
+Every action the workflow uses is pinned to a commit, with its version in a
+comment, and `.github/dependabot.yml` asks for a weekly pull request into
+`dev` for each project's minor and patch updates (grouped), each major
+update, the actions and the Docker base images. Node and nginx move to a new
+major or stable line by hand, and PostgreSQL's major version never through
+Dependabot, since its data has to be dumped and restored.
 
 Note that CI **reports** failures rather than blocking a merge —
 blocking needs branch protection with required status checks, which is a

@@ -38,4 +38,6 @@ Decisions a self-hoster or a reviewer may want to know about. The deployment gui
 
 - **Two-factor sign-ins.** A sign-in that has passed the password step but not the code is not signed in anywhere: the HTTP guards, the admin guards and the live-table handshake all read one definition. It expires 5 minutes after the password step, and it ends whenever the account's password is changed or reset or its sessions are ended for another reason.
 
+- **Dependencies.** Every push to the development and release branches checks the packages an instance runs against the published advisories (`npm audit`, reported for now while the current findings are being cleared), and Dependabot proposes updates to them, to the Docker base images and to the CI actions each week. The CI actions are pinned to commits, so a tag moved upstream cannot change what runs. Turning on Dependabot alerts and security updates is a repository setting.
+
 Known issues and deliberately deferred work are tracked in [docs/FUTURE_FEATURES.md](docs/FUTURE_FEATURES.md).

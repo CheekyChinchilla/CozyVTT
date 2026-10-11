@@ -1,0 +1,76 @@
+# Dependabot: a pull request each week for the dependencies with a newer
+# version, into dev, where work lands (main only takes releases). Minor and
+# patch updates come grouped, one pull request per project; a major version
+# comes on its own, since it can change behaviour.
+#
+# Version updates only. Alerts and security updates for a published advisory
+# are turned on in the repository's settings, and GitHub opens those against
+# the default branch whatever target-branch says.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      backend-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      frontend-minor-and-patch:
+        update-types: [minor, patch]
+
+  # The actions CI runs, pinned to commit SHAs; Dependabot moves the SHA and
+  # its version comment together.
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Base images. Node and nginx move to a new major or stable line by hand:
+  # Node only to an even-numbered (long-term support) release, and nginx only
+  # to an even minor (its stable lines), changed in docker-compose.yml and
+  # frontend/Dockerfile.prod together, which a backend test holds in step.
+  - package-ecosystem: docker
+    directory: /backend
+    target-branch: dev
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    target-branch: dev
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: [version-update:semver-major]
+      - dependency-name: nginx
+        update-types: [version-update:semver-major, version-update:semver-minor]
+
+  # docker-compose.yml. A PostgreSQL major version cannot be taken by pulling
+  # a new image: the data folder has to be dumped and restored, so that is a
+  # release of its own.
+  - package-ecosystem: docker-compose
+    directory: /
+    target-branch: dev
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: postgres
+        update-types: [version-update:semver-major]
+      - dependency-name: nginx
+        update-types: [version-update:semver-major, version-update:semver-minor]
