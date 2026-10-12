@@ -617,14 +617,18 @@ also does what self-hosters run and a developer usually does not:
 
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into
-`dev` for each project's minor and patch updates (grouped), each major
-update, the actions and the Docker base images. Node and nginx move to a new
-major or stable line by hand, and PostgreSQL's major version never through
-Dependabot, since its data has to be dumped and restored.
+`dev` for each project's minor and patch updates (grouped), the actions and
+the Docker base images. Major versions of npm packages are held back until
+the 1.5.3 platform release takes them by hand; after it, each major comes as
+a pull request of its own. Node and nginx move to a new major or stable line
+by hand, and PostgreSQL's major version never through Dependabot, since its
+data has to be dumped and restored. Dependabot alerts for published
+advisories are on; its automatic security pull requests are off for now,
+because GitHub opens those against `main`, which only takes releases.
 
-Note that CI **reports** failures rather than blocking a merge —
-blocking needs branch protection with required status checks, which is a
-setting in the repository rather than a file in it.
+A pull request into `main` cannot merge until the Frontend, Backend, Docs,
+Dependency advisories and production images jobs pass (a ruleset in the
+repository's settings). Pushes to `dev` are not blocked: CI reports there.
 
 ### Before a release: rehearse the upgrade
 
