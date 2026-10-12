@@ -103,6 +103,8 @@ This starts four containers on an isolated internal network:
 - `cozyvtt-frontend` — React SPA served by Nginx on internal port 80
 - `cozyvtt-nginx` — Reverse proxy, the only container with public ports (80 and 443)
 
+Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and the frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user.
+
 Database migrations run automatically when the backend starts.
 
 ### 4. Complete the setup wizard
