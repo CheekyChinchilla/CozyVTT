@@ -2,8 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
-// Conditionally import bundle visualizer (only when ANALYZE=true)
-// Install with: npm install --save-dev rollup-plugin-visualizer
+// The bundle visualizer (a devDependency), loaded only for npm run build:analyze
 const visualizerPlugin = process.env.ANALYZE === 'true'
   ? (await import('rollup-plugin-visualizer')).visualizer({
       open: true,
