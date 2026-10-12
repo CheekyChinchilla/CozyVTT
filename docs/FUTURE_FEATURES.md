@@ -8,7 +8,7 @@ A running list of features, polish, and ideas that have been discussed or scoped
 - When shipped, delete the entry. `CHANGELOG.md` is the record of what shipped;
   keeping a second list here only gives the two something to disagree about.
 - When dropped, move it to **Won't Do** with a one-liner explaining why.
-- Keep entries terse — link to a longer plan or PR if more detail is needed.
+- Keep entries terse, and link to a longer plan or PR if more detail is needed.
 
 ---
 
@@ -96,15 +96,15 @@ _Nothing at present._
 
 ### User-facing
 
-- **Sound effects** — dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
-- **Browser notifications** — desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
-- **Per-user default dice color** — surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice log (`DiceRoller.tsx` and `DiceResult.tsx`) and the socket roll payload metadata, then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
+- **Sound effects.** Dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
+- **Browser notifications.** Desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
+- **Per-user default dice color.** Surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice log (`DiceRoller.tsx` and `DiceResult.tsx`) and the socket roll payload metadata, then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
 - **Bulk character export as a ZIP.** The app exports one character at a time, with **Export as JSON** on the Characters page. `downloadMultipleCharactersZIP` in `frontend/src/utils/character-export.ts` was written for a bulk export, but nothing calls it, and it downloads each character as a separate file. Building it needs a way to pick several characters, a fetch of each one's sheet (the Characters page loads only summaries), and a ZIP library such as JSZip, which is a new dependency.
 - **Merge the hardcoded starter templates into the character template library.** `backend/src/utils/character-templates/` holds two presets per system, a blank sheet and one example character, as source constants served by `GET /api/characters/templates/:gameSystem/:templateName`, and the New Character dialog lists them a second time (`NewCharacterModal.tsx`), while user-published templates live in the database. Two systems for one idea. Folding the presets in as seeded, admin-owned rows would leave one browsable list and one endpoint. `getTemplatesForGameSystem` and `getAllTemplates` in that directory have no callers, and `getBlankTemplate` there and `getBlankCharacterTemplate` in `validators/game-systems/index.ts` are called only by tests.
-- **Shadowrun 6E character sheet** — the backend (types, validation, templates) is complete, but the frontend sheet is still a placeholder and the system is hidden from the creation dropdown until it's finished. See `docs/GAME_SYSTEMS.md`.
-- **NPC chatbot / asset generation (AI)** — No code yet. The `@anthropic-ai/sdk` dependency was removed before v1.0.0 launch (it was installed but unused, and shipping it left an open `npm audit` finding). When this feature work begins, re-add the current major of the SDK and introduce `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` env vars at the same time so they enter the codebase together rather than sitting around as dead config.
-- **EPUB and other document formats in the library** — #39 asked for "PDF and standard e-reader formats"; the library shipped with PDF, plain text and Markdown, which a browser can show on its own. EPUB cannot: it is a zip of XHTML that needs a reader library (`epub.js` or similar), and every one of them renders the book's own HTML inside an iframe through `blob:` URLs, which means loosening the Content-Security-Policy the whole instance runs under, and trusting a third party to sanitise a file an anonymous user uploaded. That is the one genuinely risky part of the original request, and it is separable, so it waits. **Revisit if** people ask for it with real books in hand; the answer will hinge on finding a reader that renders into a sandboxed frame without `allow-same-origin`, and on measuring what the CSP change exposes.
-- **Admin upload UI for instance branding (logo / favicon / mascot)** — backend already accepts `customLogoUrl` / `customFaviconUrl` / `customMascotUrl` on `SystemSettings`, as paths this instance serves, and `ThemeContext` reads them and dynamically swaps the favicon when set. What's missing is a file-upload form on the Admin → Appearance tab so an instance operator can swap branding at runtime without redeploy. Until then, operators replace the defaults at `frontend/public/default-logo.png` and `frontend/public/default-mascot.png` and rebuild.
+- **Shadowrun 6E character sheet.** The backend (types, validation, templates) is complete, but the frontend sheet is still a placeholder and the system is hidden from the creation dropdown until it's finished. See `docs/GAME_SYSTEMS.md`.
+- **NPC chatbot / asset generation (AI).** No code yet. The `@anthropic-ai/sdk` dependency was removed before v1.0.0 launch (it was installed but unused, and shipping it left an open `npm audit` finding). When this feature work begins, re-add the current major of the SDK and introduce `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` env vars at the same time so they enter the codebase together and never sit around as dead config.
+- **EPUB and other document formats in the library.** #39 asked for "PDF and standard e-reader formats"; the library shipped with PDF, plain text and Markdown, which a browser can show on its own. EPUB cannot: it is a zip of XHTML that needs a reader library (`epub.js` or similar), and every one of them renders the book's own HTML inside an iframe through `blob:` URLs, which means loosening the Content-Security-Policy the whole instance runs under, and trusting a third party to sanitise a file an anonymous user uploaded. That is the one genuinely risky part of the original request, and it is separable, so it waits. **Revisit if** people ask for it with real books in hand; the answer will hinge on finding a reader that renders into a sandboxed frame without `allow-same-origin`, and on measuring what the CSP change exposes.
+- **Admin upload UI for instance branding (logo / favicon / mascot).** The backend already accepts `customLogoUrl` / `customFaviconUrl` / `customMascotUrl` on `SystemSettings`, as paths this instance serves, and `ThemeContext` reads them and dynamically swaps the favicon when set. What's missing is a file-upload form on the Admin → Appearance tab so an instance operator can swap branding at runtime without redeploy. Until then, operators replace the defaults at `frontend/public/default-logo.png` and `frontend/public/default-mascot.png` and rebuild.
 - **Change your email address from the app.** The server accepts a new address on `PUT /api/users/:id`, with the current password when the change is your own, but no screen sends one, so today an address can only be changed through the API.
 - **A per-user storage quota, as an admin setting.** Nothing limits how much one account uploads in total; the upload rate limit slows a script, and the Admin Panel's System Overview warns once the disk holding the uploads is over 80% full. A quota would sum each user's `Asset.fileSize` before accepting an upload, with a limit set in **Admin → Settings**, off by default so no upgrade starts refusing uploads. It needs a column in `SystemSettings` (a migration), the check in the upload, typed-document and UVTT routes and in campaign import, and a clear refusal saying how much space the user has left.
 
@@ -114,10 +114,10 @@ _Nothing at present._
 - **Show that a hidden-HP creature is down.** Players are sent a creature's hit points only when its HP bar is on, so a creature at 0 HP with its bar off still looks standing to them and blocks its square. A separate "down" flag the server could send without the numbers would let the body fade and be stood on.
 - **DM soundboard (layered audio).** One track plays at a time today: a one-shot from the Atmosphere panel replaces the vibe's music until it ends or is stopped, and then the music returns. True layering, the vibe's bed plus one-shot effects over it, needs a second audio channel end to end: stored state, its own broadcast, a second player element with volume and fade, and the asset read rule widened to every asset in the playing set. That is the foundation of a DM soundboard and belongs with it.
 - **Reveal an obscured token to one player.** Obscure Identity is all-or-nothing today. A Perception roll that lets one player make the creature out, while the others still see a shape, needs a per-player reveal kept on the server, the way explored memory is kept per user.
-- **A per-token "vision on/off" switch** — what Foundry calls Vision Enabled and Roll20 Has Sight: a token with it off contributes nothing to what its player sees, useful when a player controls several tokens (a familiar, a mount, an unconscious character) and one of them should not see. A boolean on the token JSON, DM-only like `sightRadius`, applied where the viewer set is built (`filterTokensByLighting` on the server, the `viewerOwn` filter in `MapCanvas`) so the shared visibility rule stays untouched; it needs carrying through every place a token is created or copied, the import schemas, and the shared vision fixture. The projected-screen case it was first asked for (#67) is covered by previewing from a token instead.
+- **A per-token "vision on/off" switch.** What Foundry calls Vision Enabled and Roll20 Has Sight: a token with it off contributes nothing to what its player sees, useful when a player controls several tokens (a familiar, a mount, an unconscious character) and one of them should not see. A boolean on the token JSON, DM-only like `sightRadius`, applied where the viewer set is built (`filterTokensByLighting` on the server, the `viewerOwn` filter in `MapCanvas`) so the shared visibility rule stays untouched; it needs carrying through every place a token is created or copied, the import schemas, and the shared vision fixture. The projected-screen case it was first asked for (#67) is covered by previewing from a token instead.
 - **Optionally reveal along a carried token's path.** Sight and explored memory follow a token only where it is put down, for every drag. Roll20 makes this a page setting ("Update On Token Drop"), and with it off a player's explored areas fill in along the path as the DM drags their token, which some DMs use to walk a party through a map ahead of play. A per-map flag beside **Remember Explored Areas** could offer that, off by default. The drag frames already carry `dragging: true`, so the switch would be one decision in the store's `receiveTokenMove`: apply a frame as a move when the map allows it. It needs a column with a default (an additive migration), the map settings route and broadcast, the Edit Map checkbox and the DM guide. Not planned for any release yet.
-- **Wall collision (`wallsBlockMovement`)** — previously implemented and removed due to bugs. If reattempted, start fresh rather than reviving the old code.
-- **Auto-detection of walls from map images** — LLM, contour, and trace approaches all failed previously. Treat any future attempt as new R&D, not a continuation.
+- **Wall collision (`wallsBlockMovement`).** Previously implemented and removed due to bugs. If reattempted, start fresh without reviving the old code.
+- **Auto-detection of walls from map images.** LLM, contour, and trace approaches all failed previously. Treat any future attempt as new R&D, not a continuation.
 
 ### Polish / tech debt
 
@@ -168,15 +168,15 @@ _Nothing at present._
   than numbers and those operators through.
 
 - **One dice grammar for both sides.** The server owns the real parser
-  (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks
-  — `utils/diceExpression.ts` and a private one inside `DiceRoller` — which accept
+  (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks,
+  `utils/diceExpression.ts` and a private one inside `DiceRoller`, which accept
   things the server refuses, such as `2d6+` and `dddd`. That is survivable for a
   roll about to be sent, because the server answers immediately and the person is
   still looking at the box, and saved macros close the dangerous half by
   validating server-side before anything is stored. But three implementations of
   one grammar is two too many. The fix is extracting the parser into something
   both sides import, which today means introducing a shared package where none
-  exists — the reason it has not been done yet. **Revisit** when a second thing
+  exists, and that is why it has not been done yet. **Revisit** when a second thing
   needs shared logic, or if the checks disagree in a way a user notices.
 
 - **Two backend suites still stub `file-type`.** The backend tests load the
@@ -191,8 +191,8 @@ _Nothing at present._
   drop its stub.
 
 - **Dice macros shared by the DM.** #47 asked for personal saved rolls and got
-  them. A DM may well want a table-wide one — "Wild Magic Surge, d100" — that
-  everyone can click without each person saving it themselves. The storage would
+  them. A DM may well want a table-wide one, such as "Wild Magic Surge, d100",
+  that everyone can click without each person saving it themselves. The storage would
   take it: a nullable `userId` for campaign-wide, or an explicit `shared` flag on
   `DiceMacro`. What it really adds is a visibility axis and the permission
   question that comes with it, plus deciding what happens to a shared macro when
@@ -218,10 +218,10 @@ _Nothing at present._
   narrating while the owner plays).
 
 - **Advantage on initiative.** Initiative is worked out per system in
-  `utils/rules/initiative.ts`, but nothing expresses *advantage* on the roll — a
-  Sentinel Shield in D&D 5e, for instance. The dice layer already understands
-  `2d20kh1` (the roll pickers use it), so this is a sheet field and a branch in
-  the resolver rather than new dice work. Left out of 1.2.2 to keep that change
+  `utils/rules/initiative.ts`, but nothing expresses *advantage* on the roll,
+  such as a Sentinel Shield gives in D&D 5e. The dice layer already understands
+  `2d20kh1` (the roll pickers use it), so this needs a sheet field and a branch
+  in the resolver, and no new dice work. Left out of 1.2.2 to keep that change
   to the modifier.
 
 - **Shadowrun 6e initiative base is taken as stored.** The resolver in
