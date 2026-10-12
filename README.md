@@ -146,8 +146,8 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Requirements
 
-- Node.js 26+
-- PostgreSQL 14+
+- Docker 24+ with Docker Compose v2, for the recommended install below
+- Node.js 26+ and PostgreSQL 14+, only to install without Docker (see [Manual Deployment](docs/DEPLOYMENT.md#manual-deployment))
 - A modern browser (Chrome, Firefox, Edge, Safari)
 - SMTP server (optional — required for password reset and invitation emails)
 
