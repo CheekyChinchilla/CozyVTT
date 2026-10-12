@@ -74,8 +74,12 @@ For the complete, checked list of every route the server mounts, see
 That file is verified against the code by `scripts/spec-coverage.py`, so it
 cannot silently fall behind the way this one did. It is also the place to look
 up the fields of a request or a response: the examples here are shortened to
-show the shape, and a backend test checks that every field they show is one the
-route sends.
+show the shape. For seven of them a backend test
+(`backend/src/routes/__tests__/apiReferenceShapes.e2e.test.ts`) checks that
+every field shown is one the route sends: the 401 for an unauthenticated
+request, `POST /api/auth/login`, `GET /api/auth/me`, `GET /api/campaigns`,
+`GET /api/campaigns/:id/characters`, `GET /api/assets` and
+`GET /api/setup/status`. The other examples are not checked.
 
 These routes are also not a public API: they are not versioned and they carry no
 compatibility promise, so any of them may change shape in a point release.
