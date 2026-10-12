@@ -112,7 +112,7 @@ export default function CharacterTemplateEditorModal({
     try {
       setTemplate(await api.updateCharacterTemplate(template.id, { data }));
     } catch (err) {
-      // TODO(ui): a refused sheet is reported here as "Character data does not
+      // TODO(ui): a refused sheet is reported here as "Template data does not
       // match game system schema", with no box named, so a player whose
       // template sheet is over a limit cannot tell what to shorten. Say it as
       // the character editors do, with refusedSaveMessage from
