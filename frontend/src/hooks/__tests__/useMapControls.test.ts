@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { useMapControls } from '../useMapControls';
 
-/** 20 cols × 15 rows at 50px — the shape the test instance uses. */
+/** 20 cols × 15 rows at 50px, a common map's shape. */
 const CONFIG = { gridSize: 50, mapWidth: 20, mapHeight: 15 };
 
 function setup() {
