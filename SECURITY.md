@@ -4,7 +4,7 @@ CozyVTT is a self-hosted virtual tabletop platform. We take security seriously a
 
 ## Supported Versions
 
-Since this software is still considered beta/WIP support is always only given for the latest version. Security patches are only available for the latest version and not back-ported to older versions.
+Since this software is still considered beta/WIP, support is only given for the latest version. Security patches are only available for the latest version and not back-ported to older versions.
 
 Self-hosters are responsible for keeping their instances up to date.
 
@@ -55,7 +55,7 @@ Decisions a self-hoster or a reviewer may want to know about. The deployment gui
 
 - **Two-factor sign-ins.** A sign-in that has passed the password step but not the code is not signed in anywhere: the HTTP guards, the admin guards and the live-table handshake all read one definition. It expires 5 minutes after the password step, and it ends whenever the account's password is changed or reset or its sessions are ended for another reason.
 
-- **Dependencies.** Every push to the development and release branches checks the packages an instance runs against the published advisories (`npm audit`): a high or critical advisory in them fails the check. The developer tools (the test runners, the linter, the build tools) are checked too and reported without failing, since they never reach an instance. Dependabot proposes updates to the packages, to the Docker base images and to the CI actions each week. The CI actions are pinned to commits, so a tag moved upstream cannot change what runs. Turning on Dependabot alerts and security updates is a repository setting.
+- **Dependencies.** Every push to `dev` and `main`, and every pull request into them, checks the packages an instance runs against the published advisories (`npm audit`): a high or critical advisory in them fails the check. The developer tools (the test runners, the linter, the build tools) are checked too and reported without failing, since they never reach an instance. Dependabot proposes updates to the packages, to the Docker base images and to the CI actions each week. The CI actions are pinned to commits, so a tag moved upstream cannot change what runs. Turning on Dependabot alerts and security updates is a repository setting.
 
 - **Advisories in the libraries 1.5.1 shipped.** A published advisory is weighed against how CozyVTT uses the package. 1.5.1 shipped proxy-addr 2.0.7, the library Express uses to read a visitor's address from the proxies in front of it, which has a critical advisory in how it matches a list of trusted address ranges. The backend never reached that code: it trusts a count of one proxy, the bundled nginx, which Express checks by itself, and a test holds the setting to that count. Trusting a list of ranges instead would need proxy-addr 2.0.8 or later, which 1.5.2 installs. 1.5.1 also shipped sharp 0.35.4, the image library, which has a high-severity advisory in librsvg, the SVG renderer it bundles (GHSA-wq5f-xc86-pv6w), and any signed-in account could reach that one. 1.5.1 and earlier releases are affected; sharp 0.35.5, which 1.5.2 installs, fixes the advisory. 1.5.2 also closes the way an account could reach it: the backend now gives sharp only files whose content it has identified as PNG, JPEG, WebP or GIF, and switches off every reader in sharp but those four, the SVG renderer included.
 

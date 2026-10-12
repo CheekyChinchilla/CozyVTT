@@ -5,7 +5,7 @@
  * build puts its scripts and styles in. The page's fallback, `try_files $uri
  * $uri/ /index.html`, matched that folder and nginx then refused to list it,
  * 403 Forbidden (it may first redirect /assets to /assets/, an absolute
- * redirect that sends a visitor on port 8160 to port 80). Opening the page by
+ * redirect that sends a visitor on port 8080 to port 80). Opening the page by
  * clicking worked, since the router never asks the server; reloading or
  * bookmarking it did not.
  *

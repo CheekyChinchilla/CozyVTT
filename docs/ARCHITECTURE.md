@@ -110,14 +110,17 @@ src/
 │   ├── leftCampaigns.ts A removed member's own notes and macros, read only
 │   ├── campaignDocuments.ts Documents shared with a campaign
 │   ├── characters.ts  Character CRUD + assignment
+│   ├── characterTemplates.ts Character templates every user can read and copy
 │   ├── maps.ts        Map and token management
 │   ├── creatures.ts   Creature template CRUD, SRD seeding, favorites
+│   ├── tokenTemplates.ts A campaign's token templates (DM only), copied between campaigns
 │   ├── assets.ts      File upload and retrieval
 │   ├── invitations.ts Campaign invitation lifecycle
 │   ├── setup.ts       First-run setup wizard; asks for the setup token (services/setupToken.ts)
 │   │                  and runs services/setup.ts, one transaction for the first admin and the settings
 │   ├── config.ts      Public client config (upload limits)
-│   └── admin.ts       Admin: stats, settings, users, backups, logs
+│   ├── admin.ts       Admin: stats, settings, users, backups, logs
+│   └── adminStorage.ts Admin: files in the uploads folder that no asset names
 ├── services/          Business logic (called by routes and WebSocket handlers)
 ├── validators/        Zod validation schemas (one per domain, incl. game-systems/)
 ├── websocket/

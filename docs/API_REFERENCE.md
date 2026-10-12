@@ -21,7 +21,7 @@ The backend also ships a full **OpenAPI 3.0 specification** at `backend/docs/API
 11. [Invitation Endpoints](#invitation-endpoints)
 12. [User & Admin Endpoints](#user--admin-endpoints)
 13. [Config Endpoint](#config-endpoint)
-14. [Setup Endpoint](#setup-endpoint)
+14. [Setup Endpoints](#setup-endpoints)
 15. [WebSocket Events](#websocket-events)
 16. [Error Responses](#error-responses)
 17. [Rate Limits](#rate-limits)
@@ -74,8 +74,12 @@ For the complete, checked list of every route the server mounts, see
 That file is verified against the code by `scripts/spec-coverage.py`, so it
 cannot silently fall behind the way this one did. It is also the place to look
 up the fields of a request or a response: the examples here are shortened to
-show the shape, and a backend test checks that every field they show is one the
-route sends.
+show the shape. For seven of them a backend test
+(`backend/src/routes/__tests__/apiReferenceShapes.e2e.test.ts`) checks that
+every field shown is one the route sends: the 401 for an unauthenticated
+request, `POST /api/auth/login`, `GET /api/auth/me`, `GET /api/campaigns`,
+`GET /api/campaigns/:id/characters`, `GET /api/assets` and
+`GET /api/setup/status`. The other examples are not checked.
 
 These routes are also not a public API: they are not versioned and they carry no
 compatibility promise, so any of them may change shape in a point release.
@@ -144,7 +148,7 @@ left running after the account's password was changed keeps adding wrong
 passwords, so the lock never lifts for as long as it runs, and the person cannot
 sign in on any device. A browser that is already signed in carries on. Stop
 the script first. Then either wait out the hour, or set a new password, which
-lifts the lock at once: use **Forgot your password?**, ask an administrator for
+lifts the lock at once: use **Forgot password?** on the sign-in page, ask an administrator for
 a temporary password, or change it from a browser that is still signed in. Give
 the script the new password before it runs again, and have it stop on a `401`
 from this route in place of trying again.

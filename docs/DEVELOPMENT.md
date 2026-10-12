@@ -42,6 +42,7 @@ cozyvtt/
 │   │   ├── game-systems/  Game system type definitions
 │   │   ├── middleware/     Auth and role guards, the sign-in and other limiters, upload checks
 │   │   ├── routes/        Express route handlers
+│   │   ├── scripts/       Scripts run by hand: data migrations, checks, the SRD creature seed
 │   │   ├── services/      Business logic layer
 │   │   ├── types/         Shared TypeScript types
 │   │   ├── utils/         Helpers (dice parser, asset URLs, etc.)
@@ -55,8 +56,10 @@ cozyvtt/
 │
 ├── frontend/              React + Vite client
 │   ├── src/
+│   │   ├── assets/fonts/  The bundled typefaces and their licences
 │   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
+│   │   ├── constants/     Game system labels, and limits copied from the backend (keepInStep.test.ts compares them)
 │   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Theme, Toast)
 │   │   ├── stores/        Zustand store for live session state
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
@@ -66,9 +69,12 @@ cozyvtt/
 │   │   ├── styles/        Global CSS and effect stylesheets
 │   │   ├── types/         TypeScript type definitions
 │   │   └── utils/         Client-side helpers
+│   ├── e2e/               Playwright smoke tests against a running instance
 │   └── public/            Static assets
 │
 ├── docs/                  User and developer documentation
+├── nginx/                 The bundled reverse proxy's configuration
+├── scripts/               The doc, nginx and coverage checks (Python)
 ├── docker-compose.yml     Production Docker stack (default)
 ├── docker-compose.dev.yml Development Docker stack (hot-reload, exposed ports)
 └── .env.example           Environment variable template
@@ -126,12 +132,18 @@ PORT=4000
 CORS_ORIGIN="http://localhost:3000"
 ```
 
-### Frontend (`frontend/.env`)
+### Frontend dev server
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `VITE_ALLOWED_HOSTS` | No | — | Comma-separated allowed hostnames for the Vite server |
 | `VITE_PROXY_TARGET` | No | `http://localhost:4000` | Where the Vite dev server sends `/api` and `/socket.io` |
+
+The dev server reads these two from the environment it is started in, not from
+`frontend/.env`: `vite.config.ts` is read before Vite loads a `.env` file. The
+dev stack sets both (`VITE_ALLOWED_HOSTS` from the root `.env`). Outside Docker,
+put them before the command, for example
+`VITE_ALLOWED_HOSTS=mybox.local npm run dev`.
 
 The app asks its own address for the API and the live connection, and the Vite dev server proxies `/api` and `/socket.io` to the backend, so in development as in production everything is served from one address. Serving the backend from a different address than the page is not supported: the code still reads `VITE_API_URL` and `VITE_SOCKET_URL`, but with them set every picture, sound and document is refused by the page's security policy and the backend's resource policy. What it would take is a backlog entry in [FUTURE_FEATURES.md](./FUTURE_FEATURES.md).
 

@@ -1,12 +1,13 @@
 /**
  * The setup wizard's system configuration step.
  *
- * The wizard asks for an instance name, a timezone, and whether public
- * registration is allowed. It validated the name and showed all three back on
- * its review screen, but none of them were sent and `POST /api/setup/init` read
- * only the admin's credentials — so every instance came up with the defaults
- * regardless. An admin who deliberately enabled registration got it disabled,
- * and nothing said so.
+ * The wizard asks for an instance name and whether public registration is
+ * allowed. It once asked for a timezone too, which is still accepted and
+ * stored, though nothing uses it. It validated the name and showed its choices
+ * back on its review screen, but none of them were sent and
+ * `POST /api/setup/init` read only the admin's credentials — so every instance
+ * came up with the defaults regardless. An admin who deliberately enabled
+ * registration got it disabled, and nothing said so.
  *
  * Kept as a pure function rather than inline in the route so it can be tested
  * without a database. Reaching the state the route needs — no settings row, no

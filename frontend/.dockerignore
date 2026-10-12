@@ -1,6 +1,6 @@
 # ============================================================================
 # CozyVTT Frontend — .dockerignore
-# Stage-specific exclusions on top of the root .dockerignore.
+# The image is built from this folder alone, so this file decides what the build sees.
 # ============================================================================
 
 # ---- Dependencies (installed fresh inside the image) ------------------------

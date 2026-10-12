@@ -67,7 +67,7 @@ CORS_ORIGIN=https://your-domain.com
 NODE_ENV=production
 ```
 
-**Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `@`, `/`, `#`, `?`, `:` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Waiting for database to be ready...` up to 30 times and then `Database connection failed`, or it stops with `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
+**Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `/`, `#`, `?` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Database connection successful`, because that first check does not use the password, and then `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
 
 `CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. With the bundled nginx the app and its API share one address, so this needs nothing from you; if you serve the frontend from a separate address, `CORS_ORIGIN` must be exactly that address (`https://`, host and any port).
 
@@ -102,6 +102,8 @@ This starts four containers on an isolated internal network:
 - `cozyvtt-backend` — Express API on internal port 4000
 - `cozyvtt-frontend` — React SPA served by Nginx on internal port 80
 - `cozyvtt-nginx` — Reverse proxy, the only container with public ports (80 and 443)
+
+Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and the frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user.
 
 Database migrations run automatically when the backend starts.
 
@@ -337,7 +339,7 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment.
 
-Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with **Forgot password**, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in; the counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
+Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with the **Forgot password?** link, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in; the counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
 
 The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. Only a wrong code counts, so people signing in together behind one address are all let through, exactly as with passwords.
 
@@ -553,7 +555,7 @@ Running in a folder is on the backlog rather than ruled out. If it matters to yo
 
 ### HTTPS is remembered by browsers
 
-CozyVTT's backend sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer it gives, the API's included. That header (HSTS) tells a browser to use only HTTPS for that name, and for every name under it, for 180 days. A browser takes notice of it only when it arrives over HTTPS, so it begins to apply the first time someone uses your instance over HTTPS: through a certificate of your own, a Cloudflare Tunnel or any other proxy that adds HTTPS.
+CozyVTT's backend sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer it gives, the API's included. That header (HSTS) tells a browser to use only HTTPS for that name, and for every name under it, for 180 days. A browser takes notice of it only when it arrives over HTTPS with a certificate the browser trusts, so it begins to apply the first time someone uses your instance that way: through a trusted certificate of your own, such as one from Let's Encrypt, a Cloudflare Tunnel or any other proxy that adds HTTPS. A self-signed or Let's Encrypt staging certificate, which the browser warns about, does not start it, even if the visitor clicks past the warning.
 
 So decide before you start that this name stays on HTTPS. If you try HTTPS briefly and then go back to plain HTTP on the same name, every browser that loaded the app over HTTPS refuses `http://` for that name, and for any name under it such as `play.vtt.example.com` if you use `vtt.example.com`, for up to six months, until the time runs out or each visitor clears it in their browser. A different name for testing avoids it.
 
@@ -1027,7 +1029,7 @@ Test it after deploying with **Send Test Email** on the **Settings** tab of the 
 | Feature | With SMTP | Without SMTP |
 |---|---|---|
 | **Adding a user** | **Invite User** — they get an email with a link and choose their own password. Nobody else ever sees it. | **Create User** — a temporary password is generated and shown to you once, to hand over yourself |
-| Password resets (self-service) | User clicks "Forgot password" and gets a reset link | Unavailable — the user has to ask an admin |
+| Password resets (self-service) | User clicks **Forgot password?** on the sign-in page and gets a reset link | Unavailable — the user has to ask an admin |
 | Password resets (admin) | Email the user a reset link, or generate a temporary password | Generate a temporary password from the Users tab |
 | Campaign invitations | Appear on the player's dashboard. The DM may *optionally* tick a box to email them as well | Appear on the player's dashboard; the email option is disabled and says why |
 
@@ -1118,6 +1120,8 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | `FRONTEND_URL` | none | An older name for `APP_URL`, read only when `APP_URL` is not set | No: the compose file always sets `APP_URL` |
 
 The instance's name is not an environment setting: set it in the setup wizard or in **Admin → Settings → Instance Name**. It is the browser tab's title and is used in every email the instance sends.
+
+`VITE_ALLOWED_HOSTS` in `.env.example` is for the development stack only ([DEVELOPMENT.md](DEVELOPMENT.md)); the production stack does not read it.
 
 ---
 
@@ -1350,7 +1354,7 @@ If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
 ```
 
-Write the address exactly as the backend's `.env` has it. A password holding a character an address cannot carry as it is, such as `@`, `/` or `%`, is written percent-encoded there (`%40` for `@`), and the scripts decode it as the backend does. Leave out `:5432` and port 5432 is used.
+Write the address exactly as the backend's `.env` has it. A password holding a character an address cannot carry as it is, such as `/`, `#`, `?` or `%`, is written percent-encoded there (`%2F` for `/`, `%25` for `%`), and the scripts decode it as the backend does. Leave out `:5432` and port 5432 is used.
 
 Under Docker, the scripts take the database's user and name from
 `DATABASE_USER` and `DATABASE_NAME` in their environment, not from `.env`, and
@@ -1588,7 +1592,7 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**None of 1.4.0, 1.5.0 and 1.5.1 needs a manual step here**: their database migrations run automatically and change no existing data, and 1.5.1 has none. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
+**None of 1.4.0, 1.5.0, 1.5.1 and 1.5.2 needs a manual step here**: their database migrations run automatically and change no existing data, and 1.5.1 and 1.5.2 have none. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
 Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
 
@@ -1613,6 +1617,8 @@ Details in
 [backend/DATABASE_MIGRATIONS.md](../backend/DATABASE_MIGRATIONS.md).
 
 ### Without Docker
+
+Coming from 1.5.1 or earlier, install Node.js 26 first, as in [Install Node.js 26](#1-install-nodejs-26): CozyVTT is built and tested on Node.js 26 only. Check that `node --version` prints a version starting `v26`, then update:
 
 ```bash
 git pull origin main

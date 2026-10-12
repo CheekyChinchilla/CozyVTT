@@ -1295,9 +1295,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
 });
 
 /**
- * GET /api/admin/campaigns
- * TODO(docs): no such path. The route below is GET /api/campaigns/admin/all, so
- * the line above should say that.
+ * GET /api/campaigns/admin/all
  * Get all campaigns in the system (Admin only)
  * Requires: Admin role
  */

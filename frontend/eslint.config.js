@@ -1,8 +1,8 @@
-// ESLint baseline for the frontend. Restored in modernization Phase 3 —
-// the lint script existed but the config file had been lost, so nothing
-// was ever linted. Rules below are calibrated so `npm run lint` passes
-// (--max-warnings 0) on the current codebase and can be ratcheted stricter
-// over time; rules that would need a codebase-wide cleanup first are noted.
+// ESLint baseline for the frontend. Restored after the config file had been
+// lost: the lint script existed, but nothing was ever linted. Rules below are
+// calibrated so `npm run lint` passes (--max-warnings 0) on the current
+// codebase and can be ratcheted stricter over time; rules that would need a
+// codebase-wide cleanup first are noted.
 import tsPlugin from '@typescript-eslint/eslint-plugin';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { reactRefresh } from 'eslint-plugin-react-refresh';
@@ -33,12 +33,12 @@ export default [
     linterOptions: { reportUnusedDisableDirectives: 'error' },
     rules: {
       // TODO(ratchet): several files export hooks/helpers alongside components;
-      // splitting them is Phase 5+ cleanup. rules-of-hooks (error) still applies.
+      // splitting them is later cleanup. rules-of-hooks (error) still applies.
       'react-refresh/only-export-components': 'off',
 
       // TODO(ratchet): ~40 pre-existing violations. Fixing exhaustive-deps
       // changes runtime behavior (effects re-firing), so each needs individual
-      // review — planned alongside the state-layer migration (Phase 5).
+      // review before the rule is turned on.
       'react-hooks/exhaustive-deps': 'off',
 
       // Strict typing is a project requirement. This rule sat at 'off' behind a

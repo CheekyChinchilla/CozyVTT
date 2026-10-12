@@ -19,7 +19,7 @@ npm run typecheck        # type-check, the app and e2e/
 
 - [`src/components/`](src/components/) — reusable UI
 - [`src/pages/`](src/pages/) — top-level route components
-- [`src/contexts/`](src/contexts/) — global React state (Auth, Campaign, WebSocket, Theme)
+- [`src/contexts/`](src/contexts/) — global React state (Auth, Campaign, WebSocket, Theme, Toast)
 - [`src/services/api.ts`](src/services/api.ts) — REST client (Axios)
 - [`src/services/socket.ts`](src/services/socket.ts) — Socket.io client. Subscribe through its `on…` methods and unsubscribe with `off(event, handler)`: it rebuilds the socket on reconnect and re-attaches only what it holds, so a listener bound to `getSocket()` dies with the first socket
 - [`src/services/api.ts`](src/services/api.ts) sends a page to sign in on a 401 (`services/pageLoad.ts`, carrying the page as `?next=`, checked by `utils/returnTo.ts`). A call whose 401 means a wrong password or code, not a lost sign-in, passes `skipAuthRedirect` so its form can show the message

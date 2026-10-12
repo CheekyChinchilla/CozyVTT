@@ -538,7 +538,7 @@ Click your name or avatar at the top of the dashboard to reach your **Profile & 
 
 ### Security Settings
 
-**Change Password:** In the Security section, enter your current password and your new password (twice), then save.
+**Change Password:** In the Security section, enter your current password and your new password (twice), then click **Change Password**.
 
 **Multi-Factor Authentication (MFA):** For extra security, enable MFA. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Enter your current password to begin, scan the QR code shown during setup, verify the code to confirm, and save the backup codes somewhere safe. Turning MFA on signs out your other devices.
 
@@ -597,7 +597,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 **I need to switch characters.** From the Characters page, unassign your current character from the campaign and assign the new one. Let your DM know so they can update the token.
 
-**I forgot my password.** Use **Forgot password** on the sign-in page if your instance sends email. Otherwise contact your platform administrator — they can reset it and give you a temporary login.
+**I forgot my password.** Use the **Forgot password?** link on the sign-in page if your instance sends email. Otherwise contact your platform administrator — they can reset it and give you a temporary login.
 
 ---
 
