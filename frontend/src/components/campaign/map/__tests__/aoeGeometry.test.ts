@@ -8,7 +8,7 @@ import {
   squaresFor,
 } from '../aoeGeometry';
 
-const GRID = 50; // map pixels per square, matching the test instance's maps
+const GRID = 50; // map pixels per square, a common map's grid
 
 /** True when a coordinate sits exactly on a grid line. */
 const onGridLine = (v: number) => Math.abs(v / GRID - Math.round(v / GRID)) < 1e-9;
