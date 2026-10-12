@@ -21,7 +21,7 @@ The backend also ships a full **OpenAPI 3.0 specification** at `backend/docs/API
 11. [Invitation Endpoints](#invitation-endpoints)
 12. [User & Admin Endpoints](#user--admin-endpoints)
 13. [Config Endpoint](#config-endpoint)
-14. [Setup Endpoint](#setup-endpoint)
+14. [Setup Endpoints](#setup-endpoints)
 15. [WebSocket Events](#websocket-events)
 16. [Error Responses](#error-responses)
 17. [Rate Limits](#rate-limits)
