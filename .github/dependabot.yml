@@ -1,7 +1,10 @@
 # Dependabot: a pull request each week for the dependencies with a newer
 # version, into dev, where work lands (main only takes releases). Minor and
-# patch updates come grouped, one pull request per project; a major version
-# comes on its own, since it can change behaviour.
+# patch updates come grouped, one pull request per project. Major versions of
+# npm packages are held back until the 1.5.3 platform release, which takes
+# them by hand (Prisma, Vite, Vitest, Express, React and the rest); remove the
+# two npm ignore blocks then, and each major comes as a pull request of its
+# own, since it can change behaviour.
 #
 # Version updates only. Alerts and security updates for a published advisory
 # are turned on in the repository's settings, and GitHub opens those against
@@ -16,6 +19,9 @@ updates:
     groups:
       backend-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -25,6 +31,9 @@ updates:
     groups:
       frontend-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
 
   # The actions CI runs, pinned to commit SHAs; Dependabot moves the SHA and
   # its version comment together.
