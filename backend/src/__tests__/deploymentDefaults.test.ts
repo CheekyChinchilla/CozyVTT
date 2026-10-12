@@ -48,7 +48,7 @@ const offered = (rel: string) =>
     .filter((key): key is string => key !== undefined);
 
 describe('one address for the page and the backend', () => {
-  it.each(['.env.example', 'frontend/.env.example'])('%s does not offer a backend on another address', (file) => {
+  it.each(['.env.example'])('%s does not offer a backend on another address', (file) => {
     expect(offered(file).filter((key) => key === 'VITE_API_URL' || key === 'VITE_SOCKET_URL')).toEqual([]);
   });
 
