@@ -117,7 +117,7 @@ describe('.env.example', () => {
 // required, though email counts as set up only with both.
 describe('the backend settings table in docs/DEVELOPMENT.md', () => {
   const guide = read('docs/DEVELOPMENT.md');
-  const table = guide.slice(guide.indexOf('### Backend (`backend/.env`)'), guide.indexOf('### Frontend (`frontend/.env`)'));
+  const table = guide.slice(guide.indexOf('### Backend (`backend/.env`)'), guide.indexOf('### Frontend dev server'));
   const named = new Set([...table.matchAll(/^\| `([A-Z][A-Z0-9_]*)` \|/gm)].map((m) => m[1]));
 
   it('has a row for every setting the backend reads', () => {
