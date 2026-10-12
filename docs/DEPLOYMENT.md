@@ -67,7 +67,7 @@ CORS_ORIGIN=https://your-domain.com
 NODE_ENV=production
 ```
 
-**Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `@`, `/`, `#`, `?`, `:` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Waiting for database to be ready...` up to 30 times and then `Database connection failed`, or it stops with `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
+**Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `/`, `#`, `?` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Database connection successful`, because that first check does not use the password, and then `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
 
 `CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. With the bundled nginx the app and its API share one address, so this needs nothing from you; if you serve the frontend from a separate address, `CORS_ORIGIN` must be exactly that address (`https://`, host and any port).
 
@@ -1354,7 +1354,7 @@ If you run CozyVTT without Docker, give them a `DATABASE_URL` instead:
 DATABASE_URL="postgresql://user:pass@host:5432/cozyvtt" ./backend/scripts/backup.sh
 ```
 
-Write the address exactly as the backend's `.env` has it. A password holding a character an address cannot carry as it is, such as `@`, `/` or `%`, is written percent-encoded there (`%40` for `@`), and the scripts decode it as the backend does. Leave out `:5432` and port 5432 is used.
+Write the address exactly as the backend's `.env` has it. A password holding a character an address cannot carry as it is, such as `/`, `#`, `?` or `%`, is written percent-encoded there (`%2F` for `/`, `%25` for `%`), and the scripts decode it as the backend does. Leave out `:5432` and port 5432 is used.
 
 Under Docker, the scripts take the database's user and name from
 `DATABASE_USER` and `DATABASE_NAME` in their environment, not from `.env`, and
