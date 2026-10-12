@@ -1121,6 +1121,8 @@ The rest of what the backend reads from its environment. Every one is optional; 
 
 The instance's name is not an environment setting: set it in the setup wizard or in **Admin → Settings → Instance Name**. It is the browser tab's title and is used in every email the instance sends.
 
+`VITE_ALLOWED_HOSTS` in `.env.example` is for the development stack only ([DEVELOPMENT.md](DEVELOPMENT.md)); the production stack does not read it.
+
 ---
 
 ## File Storage
