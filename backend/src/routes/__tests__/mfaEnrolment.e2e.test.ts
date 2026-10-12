@@ -96,21 +96,23 @@ describe('POST /api/auth/mfa/setup', () => {
   });
 
   // A secret of twenty printable characters holds about 127 bits; twenty
-  // random bytes hold 160, which is what authenticator apps expect.
+  // random bytes hold 160, which is what authenticator apps expect. Each
+  // setup checks the password with argon2, which is slow on purpose, so the
+  // test takes three secrets and allows itself more than the default 5 s.
   it('makes each secret from 20 random bytes of any value, not 20 printable characters', async () => {
     const { agent } = await signedIn('bytes');
     const bytes: number[] = [];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 3; i++) {
       const res = await agent.post('/api/auth/mfa/setup').send({ password: TEST_PASSWORD });
       expect(res.status).toBe(200);
       const secret = fromBase32(res.body.secret);
       expect(secret).toHaveLength(20);
       bytes.push(...secret);
     }
-    // Printable characters run from 0x21 to 0x7e. 200 random bytes all
-    // falling below 0x80 has odds of one in 2 to the 200th.
+    // Printable characters run from 0x21 to 0x7e. 60 random bytes all
+    // falling below 0x80 has odds of one in 2 to the 60th.
     expect(bytes.some((b) => b >= 0x80)).toBe(true);
-  });
+  }, 20000);
 });
 
 describe('POST /api/auth/mfa/verify', () => {
