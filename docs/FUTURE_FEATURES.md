@@ -147,11 +147,14 @@ _Nothing at present._
   Express and React are a major version or more behind. React Router 6 has
   two moderate advisories that cannot be reached in CozyVTT, a single-page
   app with no server rendering that never navigates to an address taken
-  from a link; version 7 clears them. Everything inside the current major
-  versions, ESLint 10 and the failing advisory check are done. **Do** in
-  1.5.3, a release of its own: Prisma to its newest stable major first, with
-  a full upgrade rehearsal, then Vite and Vitest, Express 5, and React 19
-  with React Router 7. **Defer** Tailwind CSS 4 and TypeScript 7.
+  from a link; version 7.18 or later clears them. 1.5.2 updates every
+  package within its current major version, moves to ESLint 10, and fails CI
+  on a high or critical advisory in what an instance runs. **Do** in 1.5.3, a
+  release of its own: Prisma to its newest stable major first, with a full
+  upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
+  React Router 7. Dependabot holds back major versions of npm packages until
+  then, and its automatic security pull requests are turned on once 1.5.3
+  ships. **Defer** Tailwind CSS 4 and TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
   on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's
@@ -294,11 +297,14 @@ _Nothing at present._
   wants either their own token back as a vision source, or a message saying why
   the map is empty.
 
-- **CI reports, it does not block.** `.github/workflows/ci.yml` runs typecheck,
-  lint, tests and build on both projects, but GitHub Actions only reports
-  failures. Making them binding needs branch protection with required status
-  checks on `dev` and `main`, which is a repository setting rather than a file.
-  Worth doing the first time the workflow actually runs.
+- **CI holds back only pull requests into `main`.** `.github/workflows/ci.yml`
+  runs on every push to `dev` and `main` and on pull requests into them. A
+  ruleset in the repository's settings keeps a pull request into `main` from
+  merging until the Frontend, Backend, Docs, Dependency advisories and
+  production images jobs pass. A push to `dev` is not held: CI only reports
+  a failure there. Holding `dev` too would need a ruleset like `main`'s and
+  every change landing through a pull request. **Revisit if** more people
+  start pushing to `dev`.
 
 - **Serving the frontend from a folder, like `example.com/cozyvtt/`.** Asked for
   in #36 by a Traefik user; a subdomain works today and is what the deployment
