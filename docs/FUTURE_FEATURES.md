@@ -201,16 +201,21 @@ _Nothing at present._
 
 - **Two or more DMs in one campaign at the same time.** Raised alongside #33,
   which asked to *move* the DM seat and got that; sharing it is a different and
-  much larger job. The schema already permits it — nothing enforces one DM but
-  route code — so the cheap part is removing a guard. The expensive part is that
-  "the DM" is assumed to be singular in roughly 32 socket checks and ~168
-  frontend branches, and in places where singular is load-bearing rather than
-  incidental: who controls initiative, who secret rolls are revealed to, who the
-  fog is drawn for, and which single person a "DM rolled" attribution names.
-  Ownership would need rethinking too, since `Campaign.ownerId` is what a
-  transfer deliberately leaves alone. **Revisit if** people actually ask to
-  co-run games — the handover added for #33 covers the cases reported so far
-  (handing off, stepping back, an agent DM narrating while the owner plays).
+  much larger job. The schema has no rule against it: one DM is kept by route
+  code, which since 1.5.2 reads and changes the seat in one serializable
+  transaction (`backend/src/utils/serializable.ts`). Promoting a second DM is
+  refused, a hand-over steps down every DM, and a DM cannot be demoted,
+  removed or have their account deleted. Relaxing those checks is the cheap
+  part. The expensive part is the code that treats the DM as one person. The
+  live table compares the DM role on about 60 lines and the frontend on about
+  170, and most of those are checks any DM would pass, but some are not: who
+  controls initiative, who the fog is drawn for, which single person a "DM
+  rolled" attribution names, and `campaignDmMembership` in
+  `frontend/src/utils/campaignRoles.ts`, which returns one DM. Ownership would
+  need rethinking too, since a hand-over leaves `Campaign.ownerId` as it was.
+  **Revisit if** people actually ask to co-run games. The hand-over added for
+  #33 covers the cases reported so far (handing off, stepping back, an agent DM
+  narrating while the owner plays).
 
 - **Advantage on initiative.** Initiative is worked out per system in
   `utils/rules/initiative.ts`, but nothing expresses *advantage* on the roll — a
@@ -219,40 +224,45 @@ _Nothing at present._
   the resolver rather than new dice work. Left out of 1.2.2 to keep that change
   to the modifier.
 
-- **Shadowrun 6e initiative base is taken as stored.** The resolver reads
-  `derivedStats.initiative.meatspace.base` rather than deriving it from Reaction
-  + Intuition, so it shares the "displayed but never calculated" weakness that
-  D&D 5e and Pathfinder 2e were just fixed for. Doing it properly means the same
-  derive-and-display treatment on the Shadowrun sheet.
+- **Shadowrun 6e initiative base is taken as stored.** The resolver in
+  `utils/rules/initiative.ts` reads `derivedStats.initiative.meatspace.base`
+  and does not work it out from Reaction + Intuition. Nothing shows or edits
+  that value today, since the Shadowrun 6e sheet is a placeholder and the
+  system cannot be chosen yet. When the sheet is built, it should work the base
+  out the way the D&D 5e and Pathfinder 2e sheets work out initiative.
 
 - **Call of Cthulhu 7e and Shadowrun 6e creature stat blocks.** Creature rolls are
-  now dispatched per game system, and these two deliberately offer nothing rather
-  than the wrong dice — a d100 game and a dice-pool game have no d20 rolls,
-  ability modifiers or proficiency bonus to compute from. Their NPC tokens fall
-  back to the free-form custom roll input, which works but leaves the DM doing
-  the arithmetic. Doing this properly means a per-system creature shape:
-  characteristics and percentile skill values for CoC, attribute + skill dice
-  pools and limits for Shadowrun, plus their own stat block editors and viewers.
-  Neither has SRD seed data to test against. See the "Creature and NPC stat
-  blocks" section of `docs/GAME_SYSTEMS.md` for where the branch points are.
+  dispatched per game system (`buildNpcRolls` in `frontend/src/utils/npcRolls.ts`),
+  and these two offer no rolls at all, since a d100 game and a dice-pool game
+  have no d20 rolls, ability modifiers or proficiency bonus to compute from.
+  Their NPC tokens fall back to the free-form custom roll input, which works but
+  leaves the DM doing the arithmetic. Doing this properly means a per-system
+  creature shape: characteristics and percentile skill values for CoC, attribute
+  + skill dice pools and limits for Shadowrun, plus their own stat block editors
+  and viewers. Neither has SRD seed data to test against. See the "Creature and
+  NPC stat blocks" section of `docs/GAME_SYSTEMS.md` for where the branch points
+  are.
 
-- **A shared character-sheet header / action bar.** Each per-system editor
-  copy-pastes its own header: the Save and Cancel cluster, the palette button,
-  the colour dropdown and the name and token fields are duplicated four times
-  over, with no shared component between them. 1.2.2 fixed three separate
-  duplicate-control bugs that all had the same shape — a page or modal drawing
-  Save, Cancel or Edit that the sheet already draws — plus an overlap that had
-  to be corrected in three files rather than one. The rule that resolved them is
-  worth keeping: **the sheet owns Save, Cancel and Edit; whatever hosts it does
-  not repeat them.** Extracting a shared header would make that structural
-  instead of a convention, and would stop the next system added from inheriting
-  the same layout bugs. `frontend/src/components/character-sheets/types.ts` holds
-  the props contract the extraction would build on.
+- **A shared character-sheet header / action bar.** Each system editor (D&D 5e,
+  Pathfinder 2e, Call of Cthulhu) draws its own header: the Save and Cancel
+  cluster, the palette button, the colour presets and the name and token
+  picture fields, with no shared component between them. The Flexible editor
+  repeats Save, Cancel and the token picture, and each editor and its view
+  declare their own `COLOR_PRESETS`. 1.2.2 fixed three separate
+  duplicate-control bugs that all had the same shape, a page or modal drawing
+  Save, Cancel or Edit that the sheet already draws, plus an overlap that had
+  to be corrected in three files where one should have done. The rule that
+  resolved them is worth keeping: **the sheet owns Save, Cancel and Edit;
+  whatever hosts it does not repeat them.** Extracting a shared header would
+  make that structural instead of a convention, and would stop the next system
+  added from inheriting the same layout bugs.
+  `frontend/src/components/character-sheets/types.ts` holds the props contract
+  the extraction would build on.
 
 - **Reassigning a character to a different player.** The roster's right-click
   menu carried a "Reassign to Player" entry that only ever showed "not yet
-  available"; it was removed on 2026-09-01 rather than left advertising a
-  control that did not exist. There is no endpoint behind it either —
+  available"; it was removed in 1.3.0 so that it no longer advertised a control
+  that did not exist. There is no endpoint behind it either:
   `POST /api/characters/:id/assign` moves a character between *campaigns*, not
   between owners. Building it means a new route (DM only, target must be a
   member of the same campaign), moving the character between both memberships'
@@ -261,42 +271,47 @@ _Nothing at present._
 - **Call of Cthulhu `pulpTalents` has no UI.** Declared in the type and the
   backend schema, shown and editable nowhere. It belongs to Pulp Cthulhu, a
   supplement the app does not otherwise support, so it was left alone when the
-  rest of the CoC sheet was completed on 2026-09-01. Either build it with the
+  rest of the CoC sheet was completed in 1.3.0. Since 1.5.2 the server holds it
+  to 500 entries, like every other list on the sheet. Either build it with the
   rest of Pulp, or drop the field.
 
-- **A D&D 5e sheet records a Player Name it never displays.** The editor writes
-  `playerName`; the read-only view does not read it. The only edit/view gap left
-  in 5e after the 2026-09-01 parity pass, and small enough that it was not worth
-  its own commit at the time.
+- **A D&D 5e sheet shows its Player Name only in the editor.** The server fills
+  `playerName` from the owner's display name when the character is made, and
+  the editor shows it without letting it be changed. The read-only view
+  (`DnD5eCharacterView.tsx`) does not show it, while the Pathfinder 2e and
+  Call of Cthulhu views do.
 
-- **Pathfinder Class DC assumes Intelligence.** When a sheet has no
-  `classDC.keyAttribute` stored, the editor falls back to Intelligence, but the
-  key attribute is class-dependent — Strength for a fighter, Charisma for a
-  sorcerer. Only affects sheets that never set it, and the DM can correct it by
-  hand, so it is a default worth improving rather than a miscalculation.
+- **Pathfinder Class DC assumes Intelligence.** When a sheet has no `classDC`
+  stored, the editor fills one in with Intelligence as its key attribute, but
+  the key attribute depends on the class: Strength for a fighter, Charisma for
+  a sorcerer. Until such a sheet is saved, the editor shows 10 plus the
+  Intelligence modifier while the read-only view shows a plain 10. Only sheets
+  that never set it are affected, and the DM can correct it by hand.
 
-- **`docs/API_REFERENCE.md` covers 81 of 154 routes.** Deliberate after the
-  2026-09-01 documentation pass: it is a hand-written guide to the endpoints
-  people ask about, and `backend/docs/API_DOCUMENTATION.yaml` is the complete
-  list. `scripts/spec-coverage.py` enforces the split — the spec must be
-  complete, the guide must not invent routes. Worth revisiting only if the guide
-  starts being treated as exhaustive again.
+- **`docs/API_REFERENCE.md` covers 84 of the 161 routes.** Deliberate: it is a
+  hand-written guide to the endpoints people ask about, and
+  `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
+  `scripts/spec-coverage.py` enforces the split and prints the current counts:
+  the spec must be complete, and the guide must not invent routes. Worth
+  revisiting only if the guide starts being treated as exhaustive again.
 
 - **Campaign creation is uncapped, so the per-campaign notes limit is not a real
   ceiling.** A personal note is capped at 100,000 characters and 200 notes per
-  campaign, but nothing limits how many campaigns one account can create, so the
-  storage bound can be walked around by making more of them. True of every
-  per-campaign limit rather than notes specifically, and capping campaign
-  creation is a product decision — it would affect legitimate users — so it was
-  left alone when notes were added.
+  person per campaign, but nothing limits how many campaigns one account can
+  create, so the storage bound can be walked around by making more of them.
+  1.5.2 caps characters (1,000) and published character templates (500) per
+  account, and leaves campaigns uncapped. The same holds for every
+  per-campaign limit, notes included, and capping campaign creation is a
+  product decision, since it would affect legitimate users, so it was left
+  alone when notes were added.
 
 - **A lit map is black for a player in the spirit realm.** Dynamic lighting draws
   vision from the player's own tokens, and a player in the spirit realm receives
-  none unless they control a spirit-layer token — so the map renders fully dark
-  with no explanation. Currently documented in `DM_GUIDE.md` as a troubleshooting
-  note rather than fixed. A spirit-realm player with no spirit token arguably
-  wants either their own token back as a vision source, or a message saying why
-  the map is empty.
+  none unless they control a spirit-layer token, so the map renders fully dark
+  with no explanation. Documented in `docs/DM_GUIDE.md` under "The Spirit Layer
+  and dynamic lighting", and not fixed. A spirit-realm player with no spirit
+  token arguably wants either their own token back as a vision source, or a
+  message saying why the map is empty.
 
 - **CI holds back only pull requests into `main`.** `.github/workflows/ci.yml`
   runs on every push to `dev` and `main` and on pull requests into them. A
@@ -310,20 +325,22 @@ _Nothing at present._
 - **Serving the frontend from a folder, like `example.com/cozyvtt/`.** Asked for
   in #36 by a Traefik user; a subdomain works today and is what the deployment
   guide now points people at. The easy 10% is Vite's `base` and a router
-  `basename`. The other 90% is that asset addresses are *stored in the database*
-  as `/api/assets/{type}/{id}` (`backend/src/utils/asset-urls.ts`) and read raw at
-  roughly 35 render sites. Writing the prefix into storage puts deployment
-  configuration into user data — a backup restored onto a root-mounted instance
-  would have every picture broken — and it breaks `normalizeAssetUrl`'s
-  `startsWith('/api/assets/')` guard. Adding it at render time instead leaves a
-  rule spread across 35 places that can only be violated silently, on a layout
-  nobody here runs. Note also that `base` is **build-time**, so the runtime env
-  var the issue asked for cannot do it, and the path would end up recorded in
-  four or five places that fail as a blank page whenever two disagree. Roughly
-  4-6 days including browser tests of the prefixed layout on top of the smoke
-  tests in `frontend/e2e/`. **Revisit if** more people ask, or if asset storage is reworked
-  for another reason — the prerequisite is storing bare UUIDs rather than URLs,
-  for which `extractAssetId` already exists on both sides and
+  `basename`. The other 90% is that asset addresses are mostly *stored in the
+  database* as `/api/assets/{type}/{id}` (`backend/src/utils/asset-urls.ts`;
+  token templates keep a bare id) and read raw at roughly 35 render sites.
+  Writing the prefix into storage puts deployment configuration into user data:
+  a backup restored onto a root-mounted instance would have every picture
+  broken. It also breaks `normalizeAssetUrl`'s `startsWith('/api/assets/')`
+  guard. Adding it at render time leaves a rule spread across 35 places that
+  can only be violated silently, on a layout nobody here runs. Note also that
+  `base` is **build-time**, so the runtime env var the issue asked for cannot
+  do it, and the path would end up recorded in four or five places that fail
+  as a blank page whenever two disagree. Roughly 4-6 days including browser
+  tests of the prefixed layout on top of the smoke tests in `frontend/e2e/`.
+  **Revisit if** more people ask, or if asset storage is reworked for another
+  reason. The prerequisite is storing bare UUIDs in place of URLs, for which
+  `extractAssetId` already exists on both sides (the backend's checks for a
+  UUID, the frontend's takes the last part of the path) and
   `backend/src/scripts/migrate-asset-urls.ts` is the precedent, in the opposite
   direction.
 
