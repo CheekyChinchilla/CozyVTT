@@ -42,6 +42,7 @@ cozyvtt/
 │   │   ├── game-systems/  Game system type definitions
 │   │   ├── middleware/     Auth and role guards, the sign-in and other limiters, upload checks
 │   │   ├── routes/        Express route handlers
+│   │   ├── scripts/       Scripts run by hand: data migrations, checks, the SRD creature seed
 │   │   ├── services/      Business logic layer
 │   │   ├── types/         Shared TypeScript types
 │   │   ├── utils/         Helpers (dice parser, asset URLs, etc.)
@@ -55,8 +56,10 @@ cozyvtt/
 │
 ├── frontend/              React + Vite client
 │   ├── src/
+│   │   ├── assets/fonts/  The bundled typefaces and their licences
 │   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
+│   │   ├── constants/     Game system labels, and limits copied from the backend (keepInStep.test.ts compares them)
 │   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Theme, Toast)
 │   │   ├── stores/        Zustand store for live session state
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
@@ -66,9 +69,12 @@ cozyvtt/
 │   │   ├── styles/        Global CSS and effect stylesheets
 │   │   ├── types/         TypeScript type definitions
 │   │   └── utils/         Client-side helpers
+│   ├── e2e/               Playwright smoke tests against a running instance
 │   └── public/            Static assets
 │
 ├── docs/                  User and developer documentation
+├── nginx/                 The bundled reverse proxy's configuration
+├── scripts/               The doc, nginx and coverage checks (Python)
 ├── docker-compose.yml     Production Docker stack (default)
 ├── docker-compose.dev.yml Development Docker stack (hot-reload, exposed ports)
 └── .env.example           Environment variable template
