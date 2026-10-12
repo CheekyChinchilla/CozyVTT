@@ -148,7 +148,7 @@ left running after the account's password was changed keeps adding wrong
 passwords, so the lock never lifts for as long as it runs, and the person cannot
 sign in on any device. A browser that is already signed in carries on. Stop
 the script first. Then either wait out the hour, or set a new password, which
-lifts the lock at once: use **Forgot your password?**, ask an administrator for
+lifts the lock at once: use **Forgot password?** on the sign-in page, ask an administrator for
 a temporary password, or change it from a browser that is still signed in. Give
 the script the new password before it runs again, and have it stop on a `401`
 from this route in place of trying again.

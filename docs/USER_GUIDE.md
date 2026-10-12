@@ -64,13 +64,13 @@ Once setup is complete, you'll be logged in as the administrator and taken to yo
 
 Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password. If you opened a link to a page, such as a campaign, while signed out, signing in takes you on to that page.
 
-**Too many wrong passwords locks sign-in for a while.** Five wrong passwords in fifteen minutes from your device, or ten in an hour for your account from anywhere, and the sign-in page says "Too many failed sign-ins for this account, please try again later" (or "Too many authentication attempts"). Wait, or set a new password: a new password opens the account at once, whether you set it with **Forgot password** (if your instance sends email) or an administrator gives you a temporary one. A correct password never counts, so signing in normally cannot lock you out. The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three ask you to wait.
+**Too many wrong passwords locks sign-in for a while.** Five wrong passwords in fifteen minutes from your device, or ten in an hour for your account from anywhere, and the sign-in page says "Too many failed sign-ins for this account, please try again later" (or "Too many authentication attempts"). Wait, or set a new password: a new password opens the account at once, whether you set it with the **Forgot password?** link (if your instance sends email) or an administrator gives you a temporary one. A correct password never counts, so signing in normally cannot lock you out. The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three ask you to wait.
 
 **A sign-in lasts at most 30 days**, however much you use it (your administrator can change the length). When it runs out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
 
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. On an instance that cannot send email the **Forgot password** page says "Password reset by email is not available" and offers no form. If the page says "Your request could not be completed, so no email was sent", try again in a few minutes. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
+**Forgot your password?** If your instance has email configured, use the **Forgot password?** link on the sign-in page; it opens a page headed **Forgot your password?**. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. On an instance that cannot send email, the page the link opens says "Password reset by email is not available" and offers no form. If the page says "Your request could not be completed, so no email was sent", try again in a few minutes. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
 
 **First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 
@@ -801,7 +801,7 @@ If you are the instance's only admin, the deletion is refused with a message say
 
 ### I forgot my password
 
-Use **Forgot password** on the sign-in page if your instance sends email. Otherwise contact your platform administrator; they can reset your password from the Admin Panel and give you a temporary password to log in with.
+Use the **Forgot password?** link on the sign-in page if your instance sends email. Otherwise contact your platform administrator; they can reset your password from the Admin Panel and give you a temporary password to log in with.
 
 ---
 
