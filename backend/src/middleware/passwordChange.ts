@@ -21,6 +21,9 @@ export const PASSWORD_CHANGE_REQUIRED = 'PASSWORD_CHANGE_REQUIRED';
  * Paths that stay reachable while a password change is pending.
  * Relative to the /api mount point.
  */
+// TODO(accounts): middleware/adminMfa.ts keeps its own copy of these paths and
+// nothing keeps the two in step; build one from the other or add a
+// keepInStep check.
 const ALLOWED_PATHS = new Set([
   '/auth/change-password', // the one thing a gated session may do
   '/auth/logout',

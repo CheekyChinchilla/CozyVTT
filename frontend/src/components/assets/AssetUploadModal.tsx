@@ -163,6 +163,8 @@ export default function AssetUploadModal({
     const allowedTypes: Record<AssetType, string[]> = {
       [AssetType.MAP]: ['image/jpeg', 'image/png', 'image/webp'],
       [AssetType.TOKEN]: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      // TODO(assets): audio/mp4 (M4A) passes here but the server refuses it
+      // (ALLOWED_MIME_TYPES in backend/src/utils/fileUtils.ts); use the server's list.
       [AssetType.AUDIO]: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'],
       [AssetType.AVATAR]: ['image/jpeg', 'image/png', 'image/webp'],
       [AssetType.DOCUMENT]: ['application/pdf', 'text/plain', 'text/markdown'],

@@ -38,6 +38,8 @@ export function registerPingHandlers(io: Server, socket: AuthenticatedSocket): v
       const { mapId, x, y } = data ?? {};
 
       if (!mapId || typeof mapId !== 'string') return;
+      // TODO(play): the map is not checked to be one of this campaign's, as the
+      // other handlers check it; refuse a map from outside the campaign.
       if (typeof x !== 'number' || typeof y !== 'number') return;
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 

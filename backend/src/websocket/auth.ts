@@ -88,6 +88,10 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
 
     // Same gate the REST API applies: an account that still has to replace an
     // admin-issued password cannot play over the socket either
+    // TODO(accounts): the handshake and socketSessionIsLive apply the password
+    // gate but not the administrator two-factor deadline, so an admin past it,
+    // refused on almost every REST route, can still connect and act at tables.
+    // Check adminMfaDeadline here as middleware/adminMfa.ts does.
     if (user.mustChangePassword) {
       logger.warn('WebSocket rejected: password change required', { userId: user.id });
       return false;

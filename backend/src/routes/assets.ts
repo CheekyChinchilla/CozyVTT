@@ -58,6 +58,8 @@ const router = Router();
 // this ceiling instead of keeping a second one that could drift.
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
+  // TODO(assets): a value that is not a number gives NaN and turns this limit
+  // off; read it with positiveIntegerFromEnv as app.ts reads the general limit.
   max: parseInt(process.env.ASSET_UPLOAD_RATE_LIMIT || '30'),
   standardHeaders: true,
   legacyHeaders: false,
@@ -558,6 +560,9 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
+    // TODO(assets): a CAMPAIGN asset whose campaign is gone passes this check, so
+    // anyone signed in reads its details; decide with canReadAsset, as the file
+    // routes do.
     // CAMPAIGN-scoped assets: only campaign members can access
     if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isAdmin) {
       const membership = await prisma.campaignMembership.findUnique({
