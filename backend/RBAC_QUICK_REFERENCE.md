@@ -524,8 +524,9 @@ ending their sessions failed. Nothing re-reads the role of anyone else.
 Sessions roll on every response and the client sends a keepalive, so one that
 stays in use ends only `REMEMBER_ME_MAX_AGE` (30 days) after it was made: the
 guards then answer 401 with `code: SIGN_IN_EXPIRED` and destroy it
-(`middleware/auth.ts`, `services/signedIn.ts`), and the socket handshake refuses
-it too. An account keeps at most 20 sign-ins (`capLoginSessions`).
+(`middleware/auth.ts`, `services/signedIn.ts`), `GET /api/auth/me` answers it
+the same way (`withinSignInLimitOr401`), and the socket handshake refuses it
+too. An account keeps at most 20 sign-ins (`capLoginSessions`).
 
 `PUT /api/users/:id` therefore also calls `destroyUserLoginSessions(id)` when the role
 actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call
@@ -600,7 +601,11 @@ banner. Past it, `middleware/adminMfa.ts` answers 403 with
 password-change gate allows (`change-password`, `logout`, `me`, `ping`,
 `appearance` and `/api/config`). On every admin request it re-reads the role
 from the database into the session. A database error lets the request
-through, so a passing fault does not lock every admin out.
+through, so a passing fault does not lock every admin out. The live
+connection applies the same deadline (`pastAdminMfaDeadline`): the socket
+handshake and every `authenticate` (`websocket/auth.ts`) refuse such an admin
+with `Unauthorized` and close the connection, and a database error while the
+deadline is checked lets the connection through there too.
 
 The admin reset routes, `POST /api/users/:id/reset-password` and
 `POST /api/admin/users/:id/reset-mfa`, ask for no password because the admin
@@ -688,7 +693,7 @@ written:
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
-The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
 
 | Route | Which sockets end |
 |---|---|

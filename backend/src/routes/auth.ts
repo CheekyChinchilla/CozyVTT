@@ -11,7 +11,7 @@ import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { generateBackupCodes, hashBackupCodes, verifyBackupCode } from '../utils/backupCodes';
 import { regenerateSession } from '../utils/session';
 import { verifyTotpOnce, forgetTotpSteps, newTotpSecret, totpSetupUri } from '../utils/totp';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, withinSignInLimitOr401 } from '../middleware/auth';
 import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
@@ -385,15 +385,15 @@ router.post('/logout', (req: Request, res: Response) => {
  * Get current authenticated user (fetches from DB to include avatarUrl and other profile fields)
  */
 router.get('/me', async (req: Request, res: Response) => {
-  // TODO(accounts): a sign-in past REMEMBER_ME_MAX_AGE still gets 200 here,
-  // while every guarded route answers 401 SIGN_IN_EXPIRED; apply
-  // sessionHasAgedOut as signedInOr401 in middleware/auth.ts does.
   if (!req.session.userId) {
     return res.status(401).json({
       error: 'Unauthorized',
       message: 'Not authenticated',
     });
   }
+  // A sign-in past REMEMBER_ME_MAX_AGE is answered and ended as the guarded
+  // routes do.
+  if (!withinSignInLimitOr401(req, res)) return;
 
   try {
     const user = await prisma.user.findUnique({

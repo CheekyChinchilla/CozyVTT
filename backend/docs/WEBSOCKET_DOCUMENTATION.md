@@ -172,17 +172,22 @@ accepted and then ended, as the next paragraph says.
 
 The handshake accepts a sign-in with no two-factor step left to finish, made
 less than 30 days ago (`REMEMBER_ME_MAX_AGE`, 30 days unless set otherwise),
-whose account still exists and has no password change due. Anything else is refused with
+whose account still exists, has no password change due and is not an
+administrator past their 7 days without two-factor authentication. Anything else is refused with
 `error { message: 'Unauthorized' }` and disconnected: a session that has passed
 the password step but not the code, a sign-in older than 30 days, one whose
-account must set a new password or no longer exists, one that has ended, and a
+account must set a new password, must set up two-factor authentication or no
+longer exists, one that has ended, and a
 connection with no session cookie at all. The connection itself is accepted
 first: the client sees `connect`, then the `error` event, then `disconnect`
 with the reason `io server disconnect`. It never sees `connected`. Every
 `authenticate` reads the sign-in from the session store again (still there,
-past the two-factor step, under 30 days old, and the same user's), so a
-sign-in that ends later (signing out, expiry, a password change elsewhere)
-cannot join a campaign.
+past the two-factor step, under 30 days old, and the same user's) and the
+account's two-factor deadline, so a sign-in that ends later (signing out,
+expiry, a password change elsewhere) cannot join a campaign, nor can an
+administrator whose 7 days ran out while the connection was open. A database
+error while the deadline is checked lets the connection through, as the HTTP
+API lets the request through.
 
 While an administrator restores a backup, from the moment the database starts
 being replaced until the restore ends, every open connection is sent
@@ -239,6 +244,8 @@ socket.on('error', (data) => {
      in the session store, past the two-factor step and under 30 days old
      (checked on every `authenticate`, not only when the connection opened);
      if not, the server answers `error` "Unauthorized" and closes the connection
+   - The account is not an administrator past their 7 days without two-factor
+     authentication; if it is, the same "Unauthorized" and close
    - The campaign exists ("Campaign not found") and the user is a member of
      it ("You are not a member of this campaign")
 3. The socket leaves every other campaign room it is in; each of those
@@ -303,7 +310,7 @@ For every other event, see the [Event Inventory](#event-inventory).
   campaignId: string;  // UUID of campaign to join
 }
 ```
-**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, older than 30 days, or ended by a password change); sign in again. The other refusals leave the connection open: "Campaign ID required", "Campaign not found", "You are not a member of this campaign", and "Authentication failed" or "Internal server error" for a failure inside the server. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
+**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, older than 30 days, or ended by a password change), or the account is an administrator past their 7 days without two-factor authentication, who must set it up first; sign in again. The other refusals leave the connection open: "Campaign ID required", "Campaign not found", "You are not a member of this campaign", and "Authentication failed" or "Internal server error" for a failure inside the server. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
 
 #### `authenticated`
 **Direction:** Server → Client
@@ -423,7 +430,7 @@ push and would otherwise show everyone offline until somebody moved.
 ```
 
 **Common Errors:**
-- "Unauthorized" - Not signed in, or the sign-in has ended or is older than 30 days; the server then closes the connection
+- "Unauthorized" - Not signed in, or the sign-in has ended or is older than 30 days, or the account is an administrator past the two-factor deadline; the server then closes the connection
 - "Not authenticated to a campaign" - Must call `authenticate` first
 - "You do not have permission to move this token" - Permission denied
 - "Token position out of bounds" - Invalid coordinates
@@ -1284,7 +1291,7 @@ _Who may send it is read from the shared permission predicates each handler call
 ### Connection Issues
 
 **Problem:** An `error` event with "Unauthorized" right after connecting, then a disconnect
-**Solution:** Sign in via REST first and send the session cookie with the handshake; the sign-in may also have ended or the account may still have a two-factor step or a password change to finish
+**Solution:** Sign in via REST first and send the session cookie with the handshake; the sign-in may also have ended or the account may still have a two-factor step or a password change to finish, or, as an administrator past their 7 days, two-factor authentication to set up
 
 **Problem:** Socket connects but can't authenticate to campaign
 **Solution:** Verify user is a member of the campaign

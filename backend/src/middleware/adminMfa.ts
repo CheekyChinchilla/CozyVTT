@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
-import { adminMfaDeadline } from '../services/adminMfaPolicy';
+import { pastAdminMfaDeadline } from '../services/adminMfaPolicy';
 import { sessionIsSignedIn } from '../services/signedIn';
 
 /**
@@ -10,7 +10,9 @@ import { sessionIsSignedIn } from '../services/signedIn';
  * For a signed-in administrator, every request reads the account once: an
  * administrator without MFA whose deadline (services/adminMfaPolicy) has
  * passed may do nothing but enrol, sign out, or the few things the password
- * gate allows too. Ordinary users are not read, so they pay nothing.
+ * gate allows too. Ordinary users are not read, so they pay nothing. The
+ * live connection asks the same question (websocket/auth), so such an
+ * administrator cannot play at a table either.
  *
  * The read also refreshes the session's copy of the role, which nothing else
  * re-reads: an administrator demoted while signed in loses the admin guards
@@ -70,14 +72,7 @@ export async function requireAdminMfa(req: Request, res: Response, next: NextFun
     return next();
   }
 
-  let deadline: Date | null;
-  try {
-    deadline = await adminMfaDeadline(user);
-  } catch (error) {
-    logger.error('Error reading the administrator two-factor policy start', { err: error });
-    return next();
-  }
-  if (deadline !== null && deadline.getTime() <= Date.now()) {
+  if (await pastAdminMfaDeadline(user)) {
     res.status(403).json({
       error: 'MFA Required',
       code: MFA_ENROLMENT_REQUIRED,

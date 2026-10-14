@@ -838,16 +838,26 @@ paths:
                     $ref: '#/components/schemas/User'
         '401':
           description: >-
-            No signed-in session (`Not authenticated`), or the session's
-            account no longer exists (`User not found`), in which case the
-            session is also destroyed.
+            No signed-in session (`Not authenticated`); a sign-in made more
+            than `REMEMBER_ME_MAX_AGE` ago (30 days by default), answered with
+            `code: SIGN_IN_EXPIRED` as every route that needs a session
+            answers it, the day count following the setting; or the session's
+            account no longer exists (`User not found`). In the last two cases
+            the session is also destroyed.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                error: Unauthorized
-                message: Not authenticated
+              examples:
+                notSignedIn:
+                  value:
+                    error: Unauthorized
+                    message: Not authenticated
+                signInExpired:
+                  value:
+                    error: Unauthorized
+                    code: SIGN_IN_EXPIRED
+                    message: Your sign-in has reached its 30-day limit. Sign in again.
 
   /api/auth/forgot-password:
     post:
