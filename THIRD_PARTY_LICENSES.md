@@ -34,7 +34,7 @@ The SIL Open Font License (OFL) allows fonts to be used, studied, modified, and 
 
 ## Game Content
 
-CozyVTT includes creature data from the [Open5e](https://open5e.com/) SRD API, which is based on the Systems Reference Document 5.1 published by Wizards of the Coast under the Creative Commons Attribution 4.0 International License (CC BY 4.0).
+CozyVTT ships no game content. An administrator can import creature data from the [Open5e](https://open5e.com/) SRD API into an instance's own database; it comes from the System Reference Document 5.1, published by Wizards of the Coast under the Creative Commons Attribution 4.0 International License (CC BY 4.0). See [SRD_ATTRIBUTION.md](SRD_ATTRIBUTION.md).
 
 ## Icons
 
