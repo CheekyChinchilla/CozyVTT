@@ -36,7 +36,7 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 - **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
 - **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it. The bundled nginx passes that header on only from a proxy listed in `NGINX_TRUSTED_PROXIES` in `.env`
-- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again." and `code: "SIGN_IN_EXPIRED"`; an account keeps at most 20 live sessions, the oldest ending at the next sign-in
+- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again." and `code: "SIGN_IN_EXPIRED"`; an account keeps at most 20 live sessions, and each sign-in ends those beyond 20 that are due to end soonest
 
 ### Error Responses for Unauthenticated Requests
 
@@ -121,24 +121,27 @@ Authenticate a user and create a session.
 **Response (success):**
 ```json
 {
+  "message": "Login successful",
   "user": {
-    "id": "cuid...",
+    "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
     "email": "user@example.com",
     "displayName": "Merric Thorngage",
     "platformRole": "USER",
     "mfaEnabled": false,
     "mustChangePassword": false
-  }
+  },
+  "mustChangePassword": false
 }
 ```
 
 **Response (MFA required):**
 ```json
 {
-  "mfaRequired": true
+  "mfaRequired": true,
+  "message": "MFA verification required. Please enter your TOTP code."
 }
 ```
-HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login`.
+HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login` within 5 minutes, sending the code as `token`: exactly six digits, with nothing before, after or between them, or it is answered as a wrong code.
 
 **A script that keeps sending a wrong password locks the account.** Ten wrong
 passwords in an hour for one email address, counted from every address together,
@@ -162,7 +165,7 @@ dropped with it; another sign-in of the same account (another device) is untouch
 
 **Response:**
 ```json
-{ "message": "Logged out successfully" }
+{ "message": "Logout successful" }
 ```
 
 ---
@@ -183,6 +186,7 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 **Response (success):**
 ```json
 {
+  "message": "User registered successfully",
   "user": { ... }
 }
 ```
@@ -191,9 +195,11 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 ```json
 {
   "pendingApproval": true,
-  "message": "Account created. An administrator must approve your account before you can log in."
+  "message": "Registration submitted. Your account is pending admin approval."
 }
 ```
+
+`displayName` is cleaned before it is stored: control and invisible formatting characters are removed (bar the joiners and flag tags that emoji and some scripts need), it is put in Unicode NFC, and angle brackets and surrounding spaces are removed. It must then be 1 to 50 characters; one left empty is refused with `400` "Display name is required".
 
 ---
 
@@ -207,7 +213,7 @@ sent. `adminMfaDeadline` is set only for an administrator without MFA.
 ```json
 {
   "user": {
-    "id": "cuid...",
+    "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
     "email": "user@example.com",
     "displayName": "Merric Thorngage",
     "platformRole": "USER",
@@ -242,6 +248,8 @@ once even when two requests carry it at the same moment.
 }
 ```
 
+A wrong `currentPassword` answers `401`. Ten wrong passwords in 15 minutes for the account, counted together with `DELETE /api/auth/account` and a change of your own email, answer `429` "Too many wrong passwords, please try again later" until the oldest is 15 minutes old.
+
 ---
 
 ### `DELETE /api/auth/account`
@@ -261,8 +269,7 @@ with nobody in the DM seat, until they hand the seat on or delete it.
 **Request:**
 ```json
 {
-  "password": "your-current-password",
-  "confirmation": "DELETE"
+  "password": "your-current-password"
 }
 ```
 
@@ -1406,15 +1413,22 @@ carried in the session; it is written to the admins' activity log, and a user
 made an admin has 7 days to set up two-factor authentication. Setting it to `USER` for the instance's only admin is
 refused with `409`. There is no approval field to set here.
 
-`displayName` is trimmed and must then be 1 to 50 characters of text; anything
-else is refused with `400`. Registration applies the same rule.
+`displayName` is cleaned as registration cleans it (invisible characters, angle
+brackets and surrounding spaces removed, Unicode NFC) and must then be 1 to 50
+characters of text; one left empty is refused with `400` "Display name is
+required", and one that is too long or not text with `400` too.
 
 `avatarUrl` must be `/api/assets/avatars/<id>` for the user being updated,
 which is what the web client sets after uploading the picture, or `null` to
-clear it. Anything else is refused with `400`.
+clear it. Anything else is refused with `400`. `null` also deletes the user's
+avatar pictures, keeping any that a map, token or anything else still uses.
 
 Changing **your own** `email` needs `currentPassword` in the same request (`400`
 without it, `401` when it is wrong); an admin changing someone else's does not.
+A wrong one counts against 10 wrong passwords per 15 minutes for the account,
+shared with `POST /api/auth/change-password` and `DELETE /api/auth/account`,
+then `429` "Too many wrong passwords, please try again later". An address
+another account has is refused with `400` "Email already in use".
 When the address changes, any unused password-reset or invitation link for the
 account stops working, and the old address is emailed a notice if the instance
 has SMTP configured.
@@ -1426,13 +1440,15 @@ has SMTP configured.
 Generate a temporary password for a user. The account is flagged `mustChangePassword`, and **any
 sessions the user currently has open are signed out** — otherwise they would keep browsing on the
 old session and the forced change would only apply at their next login. Any reset or invitation
-link the user has not used stops working.
+link the user has not used stops working. An admin naming their own id is refused with `400`: they
+change their own password with `POST /api/auth/change-password`, which asks for the current one.
 
 **Response:**
 ```json
 {
-  "message": "Password reset successfully.",
-  "temporaryPassword": "Temp-abc123"
+  "message": "Password reset successfully",
+  "temporaryPassword": "aB3d-Ef9h-Jk2m-Np4q",
+  "mustChangePassword": true
 }
 ```
 
@@ -1442,7 +1458,7 @@ link the user has not used stops working.
 
 Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A campaign they own passes to its sitting DM.
 
-**409** while they are the DM of a campaign they own. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again:
+**409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 
 ```json
 {
@@ -1483,7 +1499,7 @@ Partial-merge update of the user's preferences. Send any subset of fields — th
 
 **Allowed fields:**
 - `themeId` — one of the 16 preset theme ids (`cozy-default`, `obsidian-night`, etc.) or the sentinel `"custom"`
-- `customThemeColors` — `{ primary, accent, background, text }` as `#RRGGBB`; required when `themeId === "custom"`, ignored otherwise (frontend sends `null` to clear)
+- `customThemeColors` — `{ primary, accent, background, text }`, each `#RRGGBB`, or `null` to clear. The server stores it whatever `themeId` is and does not require it for `"custom"`; the web client sends it with `"custom"`. Another key inside it is refused with `400`
 - `fontId` — one of the 8 font ids (`default`, `medieval`, `elegant`, `modern`, `handwritten`, `clean`, `scholarly`, `gothic`)
 
 **Request:**
@@ -1581,7 +1597,7 @@ every other API request answers `503` until the restore ends.
 
 ### `GET /api/config`
 
-Public. Returns the upload limits the server enforces, derived from the `MAX_<TYPE>_SIZE_MB` environment variables, and whether the instance can send email. The SPA reads these at runtime, so changing a limit takes a restart rather than a frontend rebuild.
+Public. Returns the upload limits the server enforces, derived from the `MAX_<TYPE>_SIZE_MB` environment variables, and whether the instance can send email. The SPA reads these at runtime, so a changed limit takes effect when the backend next starts with it, with no frontend rebuild. Under Docker that is `docker compose up -d`: a plain restart keeps the environment the container was created with.
 
 **Response:**
 ```json
