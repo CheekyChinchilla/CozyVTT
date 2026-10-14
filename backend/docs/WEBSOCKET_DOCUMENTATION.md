@@ -1,6 +1,6 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-10-11
+**Last Updated:** 2026-10-13
 
 > **This is not a public API.** These events are the ones CozyVTT's own web
 > client sends and receives. They are not versioned, carry no compatibility
@@ -166,15 +166,18 @@ a browser sends no such header and connects as above. That refusal is what makes
 the client's `connect_error` fire; a connection with no usable sign-in is
 accepted and then ended, as the next paragraph says.
 
-The handshake accepts exactly the sessions the HTTP guards accept: a sign-in
-with no two-factor step left to finish, and no password change due. A session
-that has passed the password step but not the code is refused with
-`error { message: 'Unauthorized' }` and disconnected, as is one whose account
-must set a new password, one that has ended, and a connection with no session
-cookie at all. The connection itself is accepted first: the client sees
-`connect`, then the `error` event, then `disconnect` with the reason
-`io server disconnect`. It never sees `connected`. The same check runs again on every `authenticate`,
-so a sign-in that ends later (signing out, expiry, a password change elsewhere)
+The handshake accepts a sign-in with no two-factor step left to finish, made
+less than 30 days ago (`REMEMBER_ME_MAX_AGE`), whose account still exists and
+has no password change due. Anything else is refused with
+`error { message: 'Unauthorized' }` and disconnected: a session that has passed
+the password step but not the code, a sign-in older than 30 days, one whose
+account must set a new password or no longer exists, one that has ended, and a
+connection with no session cookie at all. The connection itself is accepted
+first: the client sees `connect`, then the `error` event, then `disconnect`
+with the reason `io server disconnect`. It never sees `connected`. Every
+`authenticate` reads the sign-in from the session store again (still there,
+past the two-factor step, under 30 days old, and the same user's), so a
+sign-in that ends later (signing out, expiry, a password change elsewhere)
 cannot join a campaign.
 
 While an administrator restores a backup, from the moment the database starts
@@ -182,8 +185,12 @@ being replaced until the restore ends, every open connection is sent
 `campaign.access.revoked` with reason `signed-out` and the message "The instance is being
 restored from a backup. Sign in again once it has finished." and closed, and a new connection is sent `error` with the message "The instance
 is being restored from a backup. Try again in a minute; everyone signs in again
-once it has finished." and closed. The restored database holds no sign-ins, so
-a client signs in again afterwards. The HTTP API answers 503 for the same span.
+once it has finished." and closed. A connection whose handshake was still
+under way when the restore began, and that got in regardless, is ended the same
+way once the backup is loaded, with the message "The instance was restored from
+a backup. Sign in again." The restored database holds no sign-ins, so a client
+signs in again afterwards, and the initiative order kept in memory is cleared.
+The HTTP API answers 503 for the same span.
 
 ---
 
@@ -215,10 +222,13 @@ socket.on('error', (data) => {
 ```
 1. Client emits 'authenticate' with campaignId
 2. Server validates:
-   - The sign-in the connection was opened under still exists (checked on
-     every `authenticate`, not only when the connection opened); if it has
-     ended, the server answers `error` "Unauthorized" and closes the connection
-   - User is member of campaign
+   - `campaignId` is given, as text ("Campaign ID required" otherwise)
+   - The sign-in the connection was opened under is still signed in: still
+     in the session store, past the two-factor step and under 30 days old
+     (checked on every `authenticate`, not only when the connection opened);
+     if not, the server answers `error` "Unauthorized" and closes the connection
+   - The campaign exists ("Campaign not found") and the user is a member of
+     it ("You are not a member of this campaign")
 3. The socket leaves every other campaign room it is in; each of those
    campaigns gets 'user.left' and a fresh 'presence.state'
 4. Server joins socket to campaign room
@@ -281,7 +291,7 @@ For every other event, see the [Event Inventory](#event-inventory).
   campaignId: string;  // UUID of campaign to join
 }
 ```
-**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, or ended by a password change); sign in again. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
+**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, older than 30 days, or ended by a password change); sign in again. The other refusals leave the connection open: "Campaign ID required", "Campaign not found", "You are not a member of this campaign", and "Authentication failed" or "Internal server error" for a failure inside the server. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
 
 #### `authenticated`
 **Direction:** Server → Client
@@ -298,7 +308,7 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `campaign.access.revoked`
 **Direction:** Server → Client
-**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, a platform role changed, the account deleted, or the instance restored from a backup)
+**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that expires, reaches its 30 days, or is removed to keep the account at 20 sign-ins sends nothing: the connection stays open until its next `authenticate` is refused
 **Payload:**
 ```typescript
 {
@@ -401,7 +411,7 @@ push and would otherwise show everyone offline until somebody moved.
 ```
 
 **Common Errors:**
-- "Unauthorized" - Not logged in
+- "Unauthorized" - Not signed in, or the sign-in has ended or is older than 30 days; the server then closes the connection
 - "Not authenticated to a campaign" - Must call `authenticate` first
 - "You do not have permission to move this token" - Permission denied
 - "Token position out of bounds" - Invalid coordinates
