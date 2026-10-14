@@ -37,9 +37,10 @@ router.put('/api/campaigns/:campaignId', campaignDM, handler);
 is the DM's alone and every route any member may use, and fails when a
 route's guard differs from its list, so a new campaign route, or a guard
 changed from `campaignDM` to `campaignMember`, needs that list changed too.
-It then checks each route refuses players, spectators, members of other
-campaigns (403) and callers who are not signed in (401). A campaign route
-with neither guard must decide in its handler and be named in that file.
+It then checks that each DM-only route refuses players and spectators (403),
+and that every listed route refuses members of other campaigns (403) and
+callers who are not signed in (401). A campaign route with neither guard must
+decide in its handler and be named in that file.
 
 #### Characters in a campaign
 Any member may read a character assigned to the campaign, and the DM may edit
@@ -181,7 +182,7 @@ write goes into `restrictedFields`.
 const canDelete = await canDeleteCampaign(userId, campaignId, platformRole);
 
 if (!canDelete) {
-  return res.status(403).json({ error: 'Only owner or admin can delete' });
+  return res.status(403).json({ error: 'Forbidden', message: 'Only the campaign owner or admin can delete this campaign' });
 }
 ```
 
@@ -213,8 +214,10 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | 403 | Forbidden | User logged in but lacks permission |
 | 404 | Not Found | Resource doesn't exist |
 | 400 | Bad Request | Invalid input data |
-| 409 | Conflict | The map's own setting refuses the action, such as a fog operation while fog is off |
+| 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
+| 429 | Too Many Requests | A rate limit: the general `/api` limiter or a route's own |
 | 500 | Internal Server Error | Unexpected error |
+| 503 | Service Unavailable | A restore is replacing the database (the restore gate), email is needed and SMTP is not set up, or a Universal VTT import could not start or finish in time |
 
 ---
 
@@ -237,7 +240,7 @@ router.get('/api/campaigns/:campaignId/data', campaignMember, handler);
 
 ### Pattern 4: DM-Only Campaign Route
 ```typescript
-router.put('/api/campaigns/:campaignId/maps', campaignDM, handler);
+router.post('/api/campaigns/:campaignId/maps', campaignDM, handler);
 ```
 
 ### Pattern 5: Complex Permission Check
@@ -272,14 +275,17 @@ router.put('/api/characters/:id', authenticated, async (req: AuthenticatedReques
 
 ## Per-user permission flags
 
-Four booleans on `User` gate things the role system does not. None is carried in
-the session, so each is read from the database at the point of use — do not
-assume `req.session` knows about them.
+Four booleans on `User` gate things the role system does not. `globalAssetManager`
+and `templateEditor` are not carried in the session, so each is read from the
+database at the point of use; do not assume `req.session` knows about them.
+`mustChangePassword` is copied into the session at sign-in and the gate trusts
+that copy (it reads the database only for a session from before the field
+existed), and `isApproved` is read at sign-in only.
 
 | Flag | Default | What it gates |
 |---|---|---|
-| `globalAssetManager` | `false` | Uploading or managing GLOBAL-scope assets. Checked in `routes/assets.ts` alongside `platformRole === 'ADMIN'`; either is sufficient. |
-| `templateEditor` | `false` | Publishing, editing and deleting shared character sheets (`/api/character-templates`). Checked in `routes/characterTemplates.ts`; platform ADMIN also passes. |
+| `globalAssetManager` | `false` | Placing an asset at GLOBAL scope (an upload, `POST /api/assets/documents`, a move to GLOBAL): a platform ADMIN or a user with the flag (`canPlaceAssetAtScope`). Deleting a global asset, moving it out of the library or rewriting a global document: an ADMIN, or its uploader while they keep the flag (`mayChangeAsset`, `services/permissions.ts`). |
+| `templateEditor` | `false` | Editing and deleting other people's shared character sheets (`PUT` and `DELETE /api/character-templates/:id`). Any signed-in user may publish one and edit or delete their own. Checked in `routes/characterTemplates.ts` (`canModifyTemplate`); platform ADMIN also passes. |
 | `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
 | `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
 
@@ -379,7 +385,7 @@ sound. Every player's browser then fetches
 what decides whether the table hears anything, and a personal track was silent
 for everyone but the DM until `assetUsedInUserCampaign` learned about it.
 
-Two consequences to keep in mind when touching this:
+Three things to keep in mind when touching this:
 
 - **Setting a track is an act of sharing, not of reading.** It makes the file
   readable by every member of the campaign for as long as it is set, so the
@@ -470,7 +476,7 @@ Two things to get right when adding a check of this kind:
   stays open to campaign members and says in `canSeed` whether the caller may
   run it. The command-line seed script needs shell access to the server.
 
-### Platform role is the one thing the session carries
+### Platform role: the session's copy, re-read only for admins
 
 `requireAdmin` reads `req.session.platformRole`, which is written at login.
 Only `middleware/adminMfa.ts` re-reads it: on every request of a signed-in
@@ -478,12 +484,15 @@ administrator it reads the account and refreshes the session's copy, so a
 demoted administrator loses the admin guards on their next request even if
 ending their sessions failed. Nothing re-reads the role of anyone else.
 Sessions roll on every response and the client sends a keepalive, so one that
-stays in use does not expire on its own.
+stays in use ends only `REMEMBER_ME_MAX_AGE` (30 days) after it was made: the
+guards then answer 401 with `code: SIGN_IN_EXPIRED` and destroy it
+(`middleware/auth.ts`, `services/signedIn.ts`), and the socket handshake refuses
+it too. An account keeps at most 20 sign-ins (`capLoginSessions`).
 
 `PUT /api/users/:id` therefore also calls `destroyUserLoginSessions(id)` when the role
 actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call
-it too, because the session outlives the row it points at and nothing checks the
-user still exists. The same
+it too, because the session outlives the row it points at and nothing checks that
+the user still exists on a non-admin's REST requests. The same
 helper ends a user's other sessions on a self-service password change and on
 turning MFA on or off, with `exceptSessionId` keeping the device making the
 request signed in.
@@ -529,16 +538,22 @@ then on also asks for the current password:
 | Password | `POST /api/auth/change-password` | `currentPassword` |
 | Own email address | `PUT /api/users/:id` with `email`, when `:id` is the caller | `currentPassword` |
 | Start MFA enrolment | `POST /api/auth/mfa/setup` | `password` |
-| Turn MFA off | `POST /api/auth/mfa/disable` | `password` |
+| Turn MFA off | `POST /api/auth/mfa/disable` | `password`, and a current code in `token`; refused (403) for an admin |
 | Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
-An `ADMIN` account must have MFA on: past a 7-day deadline, counted from the
-latest of the policy start, the account's creation, its promotion and a Reset
-MFA by another admin, each an activity-log row (`services/adminMfaPolicy.ts`),
-`middleware/adminMfa.ts` answers 403
-`MFA_ENROLMENT_REQUIRED` to everything but enrolment, and on every admin
-request it re-reads the role from the database into the session.
+An `ADMIN` account must have MFA on. Its 7-day deadline is counted from the
+latest of the policy start, the account's `createdAt`, its promotion and a
+Reset MFA by another admin; all but `createdAt` are activity-log rows
+(`services/adminMfaPolicy.ts`). Until the deadline nothing is refused, and
+`GET /api/auth/me` and the sign-in reply carry `adminMfaDeadline` for the
+banner. Past it, `middleware/adminMfa.ts` answers 403 with
+`code: MFA_ENROLMENT_REQUIRED` to every `/api` request except
+`POST /api/auth/mfa/setup` and `POST /api/auth/mfa/verify` and the paths the
+password-change gate allows (`change-password`, `logout`, `me`, `ping`,
+`appearance` and `/api/config`). On every admin request it re-reads the role
+from the database into the session. A database error lets the request
+through, so a passing fault does not lock every admin out.
 
 The admin reset routes, `POST /api/users/:id/reset-password` and
 `POST /api/admin/users/:id/reset-mfa`, ask for no password because the admin
@@ -546,8 +561,9 @@ does not have the target's. They refuse the caller's own id (400), so a stolen
 admin session cannot use them to get round the two rows above for its own
 account. Wrong passwords on `POST /api/auth/change-password`, `DELETE /api/auth/account` and the own-email change are limited to 10 per 15 minutes per
 account (`passwordCheckLimiter`); the two-factor routes in the table keep their
-per-address limiters (`credentialLimiter` on disable and backup codes, the MFA
-setup limiter on enrolment), with no per-account count.
+per-address limiters (`credentialLimiter` on `POST /api/auth/mfa/setup`, disable
+and backup codes; `mfaSetupLimiter` on enrolment's code step,
+`POST /api/auth/mfa/verify`), with no per-account count.
 
 An admin changing someone else's email gives no password, since they do not
 have it. The email check runs before the new address is looked up, so a
@@ -649,7 +665,7 @@ only to those still in the room, so a socket that switches campaigns mid-way
 is not sent the old campaign's view under its new role.
 
 REST needs no equivalent for campaign roles; its middleware reads the membership
-per request. Platform role is a different matter, see below.
+per request. Platform role is a different matter, see above.
 
 ### A removed member's own notes and macros
 
