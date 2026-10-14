@@ -14,6 +14,9 @@ change with upgrades.
   sends the same paths to the backend and the frontend as the plain-HTTP
   server, by including `/etc/nginx/cozyvtt/locations.conf`, so upgrades reach
   it too.
+- **Let's Encrypt** writes its check files into `nginx/conf.d/acme/`, a folder
+  the same guide has you make. nginx reads only the `.conf` files directly in
+  this folder, so nothing in `acme/` is read as configuration.
 - **A proxy in front of nginx**, such as a Cloudflare Tunnel, needs no file
   here: it is one line in `.env`, `NGINX_TRUSTED_PROXIES`. See "Visitor
   addresses and sign-in limits" in the same guide.
