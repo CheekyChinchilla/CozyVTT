@@ -17,6 +17,8 @@ git pull origin main
 docker compose up -d --build
 ```
 
+Coming from 1.5.0 or earlier, read the **Upgrading** notes of every release in between too, oldest first. The commands are the same, and each release's notes say what it needs from you.
+
 **If a Cloudflare Tunnel or another proxy sits in front of CozyVTT, change `.env` before you pull or straight after.** The bundled nginx now believes only the proxies you list about who each visitor is. Until now it believed any machine on a private network, so anything that could reach nginx from such an address, an ordinary visitor over IPv6 included, could choose the address CozyVTT counts it as. For a tunnel or proxy on the same server, add:
 
 ```env
