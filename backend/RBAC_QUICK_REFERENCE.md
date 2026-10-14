@@ -524,8 +524,9 @@ ending their sessions failed. Nothing re-reads the role of anyone else.
 Sessions roll on every response and the client sends a keepalive, so one that
 stays in use ends only `REMEMBER_ME_MAX_AGE` (30 days) after it was made: the
 guards then answer 401 with `code: SIGN_IN_EXPIRED` and destroy it
-(`middleware/auth.ts`, `services/signedIn.ts`), and the socket handshake refuses
-it too. An account keeps at most 20 sign-ins (`capLoginSessions`).
+(`middleware/auth.ts`, `services/signedIn.ts`), `GET /api/auth/me` answers it
+the same way (`withinSignInLimitOr401`), and the socket handshake refuses it
+too. An account keeps at most 20 sign-ins (`capLoginSessions`).
 
 `PUT /api/users/:id` therefore also calls `destroyUserLoginSessions(id)` when the role
 actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call

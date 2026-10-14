@@ -209,6 +209,10 @@ Get the currently authenticated user. `mfaBackupCodesRemaining` is how many
 MFA backup codes the account has left (`null` with MFA off); only the count is
 sent. `adminMfaDeadline` is set only for an administrator without MFA.
 
+With no sign-in it answers `401` with the message `Not authenticated`. A sign-in
+that has reached its 30-day limit is answered `401` with `code: "SIGN_IN_EXPIRED"`
+and ended, as on every route that needs a sign-in.
+
 **Response:**
 ```json
 {

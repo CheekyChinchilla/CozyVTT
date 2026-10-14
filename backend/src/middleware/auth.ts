@@ -12,12 +12,13 @@ import { sessionIsSignedIn, notSignedInMessage, sessionHasAgedOut, agedOutMessag
 /** The code on the 401 for a sign-in older than the remember-me window. */
 export const SIGN_IN_EXPIRED = 'SIGN_IN_EXPIRED';
 
-/** 401 unless the session is signed in; true when the guard may go on. */
-function signedInOr401(req: Request, res: Response): boolean {
-  if (!sessionIsSignedIn(req.session)) {
-    res.status(401).json({ error: 'Unauthorized', message: notSignedInMessage(req.session) });
-    return false;
-  }
+/**
+ * For a session that is signed in: 401, ending the session, once the sign-in
+ * is older than the remember-me window; true when the request may go on. The
+ * guards below ask it, and so does GET /api/auth/me, which answers a session
+ * that is not signed in by itself.
+ */
+export function withinSignInLimitOr401(req: Request, res: Response): boolean {
   // A sign-in ends REMEMBER_ME_MAX_AGE after it was made, however active.
   // One from before the field existed is stamped now, so an upgrade signs
   // nobody out; it then has the full window from here.
@@ -31,6 +32,15 @@ function signedInOr401(req: Request, res: Response): boolean {
     return false;
   }
   return true;
+}
+
+/** 401 unless the session is signed in; true when the guard may go on. */
+function signedInOr401(req: Request, res: Response): boolean {
+  if (!sessionIsSignedIn(req.session)) {
+    res.status(401).json({ error: 'Unauthorized', message: notSignedInMessage(req.session) });
+    return false;
+  }
+  return withinSignInLimitOr401(req, res);
 }
 
 /**
