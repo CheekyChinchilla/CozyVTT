@@ -60,6 +60,8 @@ export default function RegisterPage() {
     if (!displayName) {
       errors.displayName = 'Display name is required';
     } else if (displayName.length < 2) {
+      // TODO(accounts): the server accepts names of 1 to 50 characters
+      // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
       errors.displayName = 'Display name must be at least 2 characters';
     } else if (displayName.length > 50) {
       errors.displayName = 'Display name must be less than 50 characters';

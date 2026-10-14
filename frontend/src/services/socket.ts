@@ -297,6 +297,9 @@ class SocketClient {
       });
 
       // Reconnection attempt
+      // TODO(play): socket.io-client 4 emits reconnect_attempt, reconnect and
+      // reconnect_failed on the manager (this.socket.io), never on the socket, so
+      // these three never run; move them there or remove them.
       this.socket.on('reconnect_attempt', (attemptNumber) => {
         this.reconnectAttempts = attemptNumber;
       });

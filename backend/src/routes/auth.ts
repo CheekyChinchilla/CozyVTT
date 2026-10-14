@@ -385,6 +385,9 @@ router.post('/logout', (req: Request, res: Response) => {
  * Get current authenticated user (fetches from DB to include avatarUrl and other profile fields)
  */
 router.get('/me', async (req: Request, res: Response) => {
+  // TODO(accounts): a sign-in past REMEMBER_ME_MAX_AGE still gets 200 here,
+  // while every guarded route answers 401 SIGN_IN_EXPIRED; apply
+  // sessionHasAgedOut as signedInOr401 in middleware/auth.ts does.
   if (!req.session.userId) {
     return res.status(401).json({
       error: 'Unauthorized',

@@ -577,6 +577,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                       Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
                     </p>
                   )}
+                  {/* TODO(ui): this is the app's only SRD 5.1 CC BY 4.0 credit, and it shows
+                      only before the import, to an administrator; show it wherever SRD
+                      creatures are listed. */}
                   {!searchQuery && srdCount === 0 && canSeed && (
                     <div className="mt-4 space-y-2">
                       <p className="text-xs text-stone-gray/60">

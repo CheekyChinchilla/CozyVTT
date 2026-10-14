@@ -72,9 +72,7 @@ class TemplateLimitReached extends Error {}
  *
  * The DB read is deliberately gated on "could it still change the answer",
  * because templateEditor is not carried in the session. This is the shape used
- * by the asset scope-change handler — NOT the one used by asset delete, which
- * gates its read on `!isOwner` and then only uses the result when `isOwner`,
- * so the flag there can never actually take effect.
+ * by the asset scope-change handler.
  */
 async function canModifyTemplate(
   req: AuthenticatedRequest,

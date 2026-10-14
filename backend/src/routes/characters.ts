@@ -1229,6 +1229,9 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
       return tx.character.create({
         data: {
           userId,
+          // TODO(sheets): the copied sheet keeps the original's name, and the name
+          // sync on save then renames the copy back, dropping " (Copy)"; write the
+          // copy's name into the sheet too.
           name: copyName(originalCharacter.name),
           data: toJson(sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data)),
           tokenImageUrl: originalCharacter.tokenImageUrl,

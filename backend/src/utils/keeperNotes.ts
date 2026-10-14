@@ -11,7 +11,8 @@
  * into a campaign they run would otherwise be its Keeper and read them.
  *
  * The notes stay inside the stored sheet, so the schema, exports and imports
- * are unchanged; the DM's campaign export carries them.
+ * are unchanged. A database backup keeps them; a campaign export carries no
+ * character sheets.
  */
 
 import type { GameSystem, Prisma } from '@prisma/client';
