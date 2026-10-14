@@ -76,6 +76,7 @@ info:
       wrong answers (per account, password checks, the MFA code step). That covers the password step of a
       sign-in only: the two-factor code step keeps its own limit, below. An
       unknown email counts and answers exactly as a wrong password does. The 429
+      says `Too many authentication attempts, please try again later` and
       carries `Retry-After`, the seconds until the oldest counted failure leaves
       the window
     - `POST /api/auth/login`, per account as well: 10 wrong passwords per hour
@@ -99,19 +100,27 @@ info:
       a request that sends no password (a profile edit) is neither held to it
       nor counted
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
-      they succeed, since creating the account is what is being limited
+      they succeed, since creating the account is what is being limited; then
+      429 `Too many accounts created from this address, please try again later`
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
       or not they succeed. That endpoint answers identically for a known and an
       unknown address, so successes cannot be skipped without removing the limit
-      on the mail it sends
-    - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
+      on the mail it sends. Then 429 `Too many password reset requests, please
+      try again later`
+    - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts
+      per 15 minutes per address, any answer of 400 or more counting, then 429
+      `Too many MFA verification attempts, please try again later`
     - MFA login verification (`POST /api/auth/mfa/verify-login`), the two-factor
       code step of a sign-in: 5 wrong codes per 15 minutes per address, and
       separately 5 wrong codes per 15 minutes for the account, from any address.
       Only a wrong code or backup code counts (a 401 `Invalid Code`), recorded
       once the route has checked it, as the password step does: correct codes
       sent together from one address all pass, and a request with no sign-in
-      pending, an expired one or a malformed body is neither held nor counted
+      pending, an expired one or a malformed body is not counted (with no
+      sign-in pending it is not held to the account limit either). Past the
+      address limit the answer is 429 `Too many MFA login attempts, please try
+      again later`, and past the account limit `Too many MFA login attempts
+      for this account, please try again later`
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`).
