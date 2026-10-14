@@ -122,7 +122,7 @@ Until the wizard has run, whoever submits it becomes the instance's administrato
 
    You should see one line containing a 32-character code, such as (in production the line is JSON, with the timestamp after the message)
    `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
-   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line. If it is still missing (the backend could not read its settings while it started, or `LOG_LEVEL` hides warnings), open the wizard and press the button with any token typed in: the wizard refuses it, and the backend prints the token again, as `The setup wizard was refused: the setup token was missing or wrong. The setup wizard asks for this setup token: ...`, in a line every `LOG_LEVEL` shows.
+   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line. If it is still missing (the backend could not read its settings while it started, or `LOG_LEVEL` hides warnings), go through the wizard with anything typed into **Setup token** and press **Complete Setup** on the last step: the wizard refuses it, and the backend prints the token again, as `The setup wizard was refused: the setup token was missing or wrong. The setup wizard asks for this setup token: ...`, in a line every `LOG_LEVEL` shows.
 
 2. Navigate to `http://your-server` (or `http://localhost` if testing locally). The wizard opens by itself on a fresh install.
 
@@ -743,7 +743,7 @@ A line with a time under `NEXT` means it is. Two more things make renewal comple
    docker compose logs --tail 5 nginx
    ```
 
-   The first command prints nothing when it works, and the log shows nginx starting again.
+   When it works, the first command ends with Docker's `Container cozyvtt-nginx  Started` line, and the log shows nginx starting again. If it says `cp: cannot stat` instead, the domain in its path is not the one certbot used: `sudo ls /etc/letsencrypt/live` lists the right one.
 
 If the dry run fails, it names the domain and the reason; the table under "Obtain a certificate" lists the usual ones. One more:
 
@@ -1703,7 +1703,7 @@ Before going live:
 - [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
 - [ ] **Setup finished** — The setup wizard has been completed, so `curl -s https://your-domain.com/api/setup/status` prints `"setupCompleted":true`. Until then the wizard, protected by the setup token, is the only thing the instance offers
-- [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
+- [ ] **Registration** — **Enable Public Registration** is **off** for private instances. You choose this in the setup wizard, and can change it later with **Allow Public Registration** in **Admin → Settings**
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can only set it up, change their password or sign out
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
@@ -1746,10 +1746,11 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    cloudflared tunnel create cozyvtt
    cloudflared tunnel route dns cozyvtt cozyvtt.example.com
    ```
-5. Create `~/.cloudflared/config.yml`:
+   `tunnel create` prints the path of the file it wrote, after `Tunnel credentials written to`, and the tunnel's id. Step 5 needs both.
+5. Create `~/.cloudflared/config.yml`, with the id and the path from step 4:
    ```yaml
    tunnel: <tunnel-id-from-step-4>
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   credentials-file: /home/you/.cloudflared/<tunnel-id>.json
 
    ingress:
      - hostname: cozyvtt.example.com
