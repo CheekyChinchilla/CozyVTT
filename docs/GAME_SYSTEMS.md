@@ -76,7 +76,7 @@ A sheet is read by the whole table, its player included, so a field meant for th
 - **Writing.** Only the Keeper can change it. A save by anyone else (the owner, a script) keeps the stored value, whatever it sent for the field. A character created by anyone but the DM of the campaign it is created in is stored without it.
 - **Moving.** A character entering a campaign it was not in (assigned to another campaign, or brought in when its owner accepts an invitation) loses it, and so does a copy. The notes were the last campaign's Keeper's, and a player who moved their investigator into a campaign they run would otherwise be its Keeper and read them.
 
-The DM's campaign export carries the notes. To give another system such a field, add it to `KEEPER_ONLY_FIELD`; every route already goes through the helpers.
+The notes stay inside the stored sheet, so an instance backup keeps them. A campaign export carries no character sheets at all, and a character's JSON export, made from `GET /api/characters/:id`, holds the notes only when the person exporting is the character's Keeper. To give another system such a field, add it to `KEEPER_ONLY_FIELD`; every route already goes through the helpers.
 
 ### Flexible sheets
 
