@@ -401,11 +401,12 @@ DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
 DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest src/routes/__tests__/auth.e2e.test.ts
 ```
 
-Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration tests use Supertest against an in-process server.
+Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`. Unit tests use Jest; integration tests use Supertest against an in-process server.
 
 > **The run refuses a database without `test` in its name.** The suites
-> write to the database freely: they add accounts and campaigns, one changes
-> the instance's settings, and two create and drop schemas of their own. So
+> write to the database freely: they add accounts and campaigns, several
+> change the instance's settings, and five create and drop schemas of their
+> own. So
 > jest stops before any suite starts unless the database `DATABASE_URL` names
 > has `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
 > `cozyvtt` does not. With `DATABASE_URL` unset it checks the database
@@ -447,7 +448,7 @@ E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run tes
 The first test finishes the setup wizard, so point them at an instance you
 can throw away; on one already set up, it is skipped and the others sign in
 as `E2E_ADMIN_EMAIL` with `E2E_ADMIN_PASSWORD`. The settings are listed in
-`frontend/e2e/instance.ts`. One test checks the page's security headers and
+`frontend/e2e/instance.ts`. One test's check of the page's security headers
 runs only with `E2E_PRODUCTION=1`, since the development server sends none.
 
 ### Checking sign-in by hand
@@ -476,7 +477,7 @@ developer tools open on the Network tab:
 # Backend
 cd backend && npx tsc --noEmit
 
-# Frontend
+# Frontend: the app, then e2e/ and playwright.config.ts (e2e/tsconfig.json)
 cd frontend && npm run typecheck
 ```
 
@@ -501,7 +502,7 @@ python3 scripts/websocket-events.py --check
 python3 -m unittest discover -s scripts/tests
 ```
 
-Two of those deserve a note:
+Some of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
@@ -522,7 +523,8 @@ Two of those deserve a note:
   crafted upload bodies and check that the server answers and is still up.
 - **A test that needs a brand new instance gets a schema of its own.** The
   suites share one database and run at once, so none can count on it being
-  empty. The setup wizard suite and the first-admin race test need exactly
+  empty. The setup wizard suite, the first-admin and last-admin race tests,
+  the admin settings log suite and the global setup's own test need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
   end. The file sets `DATABASE_URL` to that schema before it imports the app,
@@ -555,9 +557,28 @@ Two of those deserve a note:
   (`backend/src/validators/inviteSearchLimits.ts`, copied as
   `frontend/src/constants/inviteSearchLimits.ts` for the Invite Player
   dialog) differs between the two or the dialog writes either number itself,
-  and when a flood ceiling in the WebSocket guide's table
+  when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
-  applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
+  applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when
+  `campaign.access.revoked` has different fields or reasons on the two sides,
+  when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
+  example in an example file or a guide would start a production server,
+  when the themes and fonts the server accepts differ from those the app
+  offers, when the `DATABASE_URL` block differs between
+  `backend/scripts/backup.sh` and `restore.sh`, when the kinds of thing that
+  can use an asset differ between the two sides or the API document, when
+  either image's `.dockerignore` lets an env file other than `.env.example`
+  into its build, and when the Node.js major differs between `.nvmrc`, a
+  Dockerfile stage, a CI job, an `engines` field, `@types/node` and the
+  guides.
+- **What the guides claim is tested where a claim once drifted.**
+  `backend/src/__tests__/documentedFacts.test.ts` checks the guides' own
+  statements against the code and the shipped files: the deployment guide's
+  Let's Encrypt, HSTS, SMTP and nginx steps, the entity diagram and the
+  middleware list in `docs/ARCHITECTURE.md`, the files the RBAC reference
+  names, the counts in the schema documents, the branches and seed data this
+  guide names, and others. `deploymentDefaults.test.ts` checks what the
+  shipped deployment files offer. Change a claim and its check together.
 - **The tests drive the server's own app.** `createApp` in
   `backend/src/app.ts` puts every middleware, gate, router and error handler
   in order; `server.ts` builds its app with it and starts it, and the
@@ -595,13 +616,15 @@ Two of those deserve a note:
   as YAML when PyYAML is installed (`pip install pyyaml`; CI installs it), since
   the route check does not care whether the file loads and three unquoted
   colons once made it unloadable. It also fails when a request the
-  frontend's API client sends is not in the file;
+  frontend's API client sends is not in the file, and when
+  `docs/API_REFERENCE.md` describes a route that does not exist;
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with
   `python3 scripts/websocket-events.py --write`. Both fail on a route or
   event declared in a form they cannot read, so nothing is left out of them
-  unnoticed; `python3 -m unittest discover -s scripts/tests` tests that.
+  unnoticed; `python3 -m unittest discover -s scripts/tests` tests that, and
+  tests `nginx-check.py` and `coverage-summary.py` too.
 
 `.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
 and on pull requests into them (a push to any other branch runs nothing). It
@@ -617,7 +640,8 @@ also does what self-hosters run and a developer usually does not:
   summary, per folder under `src/`. A report only: no threshold fails yet.
 - **Builds both production images** with `docker compose build`, after
   reading `docker-compose.yml` with the example settings, then starts the
-  stack and runs the browser smoke tests against it (below).
+  stack and runs the browser smoke tests against it (see Browser smoke tests
+  above).
 - **Checks the bundled nginx's configuration** with
   `python3 scripts/nginx-check.py`: it renders `nginx/nginx.conf` with the
   image's own entrypoint, the environment and mounts `docker-compose.yml`
@@ -644,8 +668,9 @@ advisories are on; its automatic security pull requests are off for now,
 because GitHub opens those against `main`, which only takes releases.
 
 A pull request into `main` cannot merge until the Frontend, Backend, Docs,
-Dependency advisories and production images jobs pass (a ruleset in the
-repository's settings). Pushes to `dev` are not blocked: CI reports there.
+Dependency advisories, and Production images, nginx and smoke tests jobs pass
+(a ruleset in the repository's settings). Pushes to `dev` are not blocked: CI
+reports there.
 
 ### Before a release: rehearse the upgrade
 
