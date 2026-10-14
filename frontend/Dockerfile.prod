@@ -1,5 +1,5 @@
 # Production Dockerfile — builds the React SPA
-# Output: frontend/dist/ (consumed by the backend static middleware or an Nginx container)
+# Output: frontend/dist/, served by the nginx stage below
 FROM node:26-alpine AS builder
 
 WORKDIR /app

@@ -549,8 +549,8 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
 
     // Count the user's personal assets before deletion. The avatar and those
-    // nothing uses go with the account; the rest stay, owned by no one, which
-    // leaves them readable by admins alone.
+    // nothing uses go with the account; the rest stay, owned by no one,
+    // readable by admins and by any campaign they were shared into.
     const userAssetCount = await prisma.asset.count({
       where: { uploadedById: id, scope: 'USER' },
     });

@@ -2,8 +2,8 @@
  * Whether a database is one the test suite may write to.
  *
  * The suites write to the database freely, on the understanding that it is a
- * throwaway one: they add accounts and campaigns, one changes the instance's
- * settings, and two create and drop schemas of their own. With DATABASE_URL
+ * throwaway one: they add accounts and campaigns, some change the instance's
+ * settings, and some create and drop schemas of their own. With DATABASE_URL
  * unset, Prisma and dotenv fall back to backend/.env, which the development
  * guide points at the development database. So the run is refused unless the
  * database's name has `test` in it as a word: `cozyvtt_test`,
