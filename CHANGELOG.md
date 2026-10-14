@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [1.5.2] - 2026-10-14
 
 ### Upgrading from 1.5.1
 
@@ -16,6 +16,8 @@ The upgrade is the usual one. Back up first, as always (see [Database Backups](d
 git pull origin main
 docker compose up -d --build
 ```
+
+Coming from 1.5.0 or earlier, read the **Upgrading** notes of every release in between too, oldest first. The commands are the same, and each release's notes say what it needs from you.
 
 **If a Cloudflare Tunnel or another proxy sits in front of CozyVTT, change `.env` before you pull or straight after.** The bundled nginx now believes only the proxies you list about who each visitor is. Until now it believed any machine on a private network, so anything that could reach nginx from such an address, an ordinary visitor over IPv6 included, could choose the address CozyVTT counts it as. For a tunnel or proxy on the same server, add:
 
@@ -227,9 +229,9 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 
 - **An error the backend cannot recover from is now written to its log files.** Such an error ends the backend, and Docker starts it again. Its report used to appear only in `docker compose logs backend`. It is now also written to `backend/logs/error.log`, with a message ending in `; stopping` and the stack trace to attach to a bug report.
 
-- **The API guide shows what the server really sends.** Its examples gave the answer to a request with no sign-in, the campaign list and the campaign roster in forms the server does not use, and its asset list described search and sort options that do not exist and the wrong number of assets a page (it is 50, at most 100). Each now matches its route. The guide also warns that a script or bridge left running on an old password keeps its account locked under the new per-account sign-in limit.
+- **The API guide shows what the server really sends.** Its examples gave the answer to a request with no sign-in, the campaign list and the campaign roster in forms the server does not use, and its asset list described search and sort options that do not exist and the wrong number of assets a page (it is 50, at most 100). Each now matches its route. The guide also warns that a script or bridge left running on an old password keeps its account locked under the new per-account sign-in limit. Both API guides were then checked against the server route by route, and each status code, limit and message they give is one the server sends.
 
-- **The WebSocket guide for scripts and integrations is corrected.** It listed creating, editing and deleting tokens and starting and ending sessions as socket features, though both are ordinary requests and the socket only announces a session's changes. It told programs to wait for a connection error when signed out, though the server accepts the connection, sends an `Unauthorized` error and disconnects. It said the server passes on one token move per 16 ms from a connection and drops what a user sends past 150 a second, yet told programs not to throttle and that a client could send as fast as it liked, and it did not say that a move off the map is answered with an error on every frame, before the permission check. It pointed to a test page and a default account that do not exist, and showed a permission check that was replaced when spectators were stopped from moving tokens. Each now says what the server does, and the guide has a connection example that works.
+- **The WebSocket guide for scripts and integrations is corrected.** It listed creating, editing and deleting tokens and starting and ending sessions as socket features, though both are ordinary requests and the socket only announces a session's changes. It told programs to wait for a connection error when signed out, though the server accepts the connection, sends an `Unauthorized` error and disconnects. It said the server passes on one token move per 16 ms from a connection and drops what a user sends past 150 a second, yet told programs not to throttle and that a client could send as fast as it liked, and it did not say that a move off the map is answered with an error on every frame, before the permission check. It pointed to a test page and a default account that do not exist, and showed a permission check that was replaced when spectators were stopped from moving tokens. Each now says what the server does, and the guide has a connection example that works. Its examples now wait for `connected` before sending `authenticate`, since the server starts listening for `authenticate` only once it has checked the sign-in, and an earlier one goes unanswered; and it says who may send each event and who receives it.
 
 - **The restore script says plainly which address to check afterwards.** On a Docker install it ended with `curl http://localhost:PORT/health` and "where PORT is HTTP_PORT from your .env", which reads oddly when `HTTP_PORT` is `127.0.0.1:80`, as it is for a tunnel on the same server. It now prints `curl http://localhost/health` and says to put the port number after `localhost` when `HTTP_PORT` sets one.
 
@@ -238,6 +240,10 @@ There are two new settings for `.env`, both optional. `NGINX_TRUSTED_PROXIES` li
 - **The Let's Encrypt steps in the deployment guide now keep the certificate renewing.** They had you stop nginx and ask for the certificate with a method that needs port 80 to itself, so the certificate was issued and every renewal after it failed. The certificate then expired about 90 days later, and players saw a certificate error. The steps now use the method that works while nginx runs, with a small file in `nginx/conf.d/` to answer Let's Encrypt's check, a script that copies each renewed certificate to nginx, and `sudo certbot renew --dry-run` to test it. A guide section for certificates obtained the old way says how to fix them. The comments in `nginx/nginx.conf` now describe these steps, and say that the check location in that file is not used by them.
 
 - **The deployment guide now says that browsers remember HTTPS for your instance's name.** It said the `Strict-Transport-Security` header was off until you turned it on, but the backend sends it with every answer, for 180 days and including every name under yours. A browser that loads the app over HTTPS, through a tunnel or with a real certificate, therefore refuses plain `http://` for that name until the time runs out, even if you meant to try HTTPS briefly. The guide explains this where it describes HTTPS and the Cloudflare Tunnel, and the Hardening Checklist no longer calls HSTS something you add yourself.
+
+- **The deployment guide's steps for an install without Docker work as written.** Step 4 changed into `backend` from inside `frontend`, which fails, and installed pm2 without `sudo`. Step 3 did not have you set `CORS_ORIGIN` and `APP_URL`, so the links in emails pointed at `localhost:3000`, and the settings table said `NODE_ENV` defaults to `production`, where an unset `NODE_ENV` runs the backend in development mode, which only warns about a weak secret and writes no log files. Each is corrected, the contents list names every section, and **Troubleshooting** says what to do when the backend keeps restarting over its secret or the database password.
+
+- **The User, Player and DM Guides were checked against the app and corrected.** Buttons and boxes are named as the app shows them, limits are given where a guide said there were none, and the DM Guide now describes the **Campaign Settings** tabs, the door menu (**Open Door**, **Close Door**, **Lock Door**, **Unlock Door**) and, for Call of Cthulhu, **Keeper's Notes**.
 
 - **The User Guide says how a token is moved.** Moving a token was described as dragging it, but the map picks a token up on one click and puts it down on the next, so a drag leaves it held until you click again. Shadowrun was said to be "on the roadmap"; it is now described as planned and not yet available.
 
