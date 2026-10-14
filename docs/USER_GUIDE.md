@@ -700,12 +700,12 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 ### Updating Your Profile
 
-Click **Edit** next to your display name or bio to change them. Click **Save Changes** when you're done.
+Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is shown there but cannot be changed (see [How do I change my email address?](#how-do-i-change-my-email-address)).
 
-A display name is 1 to 50 characters. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
+The Profile page takes a display name of 2 to 50 characters, and a bio of up to 500. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
 
 **Uploading an Avatar:**
-Click on your current avatar (or the placeholder) to open the avatar uploader. Choose an image file, then use the crop tool to frame it perfectly. The zoom slider lets you dial in exactly the right framing. Click **Upload** to save.
+Click on your current avatar (or the placeholder) to choose an image file (JPEG, PNG or WebP). The **Crop Avatar** window opens: drag the picture to frame it and use the zoom slider to dial in exactly the right framing, then click **Apply & Upload** to save.
 
 A new avatar replaces the old one: the old picture is deleted from the server. **Remove Avatar**, under your avatar, takes it away and deletes the picture, and you are shown with the placeholder again. Deleting your avatar picture from the **Asset Library** does the same. A picture you have also used somewhere else, such as a token's picture, is kept until nothing uses it, but it is no longer your avatar.
 
@@ -744,7 +744,7 @@ You'll also receive 10 **backup codes** when you set up MFA: store these somewhe
 
 From the **Appearance** section of your profile, pick the color theme and font *you* want to see across the app:
 
-- Browse 16 built-in themes across light, warm, cool, dark, neutral, and vibrant categories
+- Browse 16 built-in themes in warm, cool, dark, neutral and vibrant palettes
 - Pick from 8 open-source font families
 - Or click **Custom** to dial in your own primary / accent / background / text colors
 
@@ -801,7 +801,7 @@ Email addresses cannot be changed from the app. Contact your platform administra
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server, a moment after the page says your account is gone.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, enter your password, and click **Delete My Account**. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server, a moment after the page says your account is gone.
 
 Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner, but the campaign can no longer show it until an administrator moves it into the campaign. To keep it showing, move it into the campaign from your asset library before you delete your account, if your role there allows it.
 
