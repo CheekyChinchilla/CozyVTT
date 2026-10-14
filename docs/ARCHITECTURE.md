@@ -103,8 +103,10 @@ src/
 │   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
 │   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
-│   ├── auth.ts        Login, logout, register, password reset
-│   ├── users.ts       User CRUD (admin only)
+│   ├── auth.ts        Sign-in, sign-out, registration, password reset and change, MFA,
+│   │                  account deletion
+│   ├── users.ts       A user's profile and preferences (their own, or anyone's for an
+│   │                  admin); the user list, deletion and reset actions are admin only
 │   ├── campaigns.ts   Campaign CRUD + membership
 │   ├── campaignMacros.ts Saved dice macros per campaign
 │   ├── leftCampaigns.ts A removed member's own notes and macros, read only
@@ -119,17 +121,23 @@ src/
 │   ├── setup.ts       First-run setup wizard; asks for the setup token (services/setupToken.ts)
 │   │                  and runs services/setup.ts, one transaction for the first admin and the settings
 │   ├── config.ts      Public client config (upload limits)
-│   ├── admin.ts       Admin: stats, settings, users, backups, logs
+│   ├── admin.ts       Admin: stats, health, settings, accounts, activity log, SMTP test,
+│   │                  backups and restore
 │   └── adminStorage.ts Admin: files in the uploads folder that no asset names
 ├── services/          Business logic (called by routes and WebSocket handlers)
 ├── validators/        Zod validation schemas (one per domain, incl. game-systems/)
 ├── websocket/
+│   ├── index.ts       initializeWebSocket: the Socket.io server, the Express session
+│   │                  shared with it, and the origin check at the handshake
 │   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
 │   │                  registration of every per-domain handler module
 │   ├── shared.ts      Rate limiters and the per-user socket ceilings, the
 │   │                  Token shape, fog helpers
 │   ├── auth.ts        Socket session + campaign-membership authentication
 │   ├── utils.ts       System-message / broadcast helpers
+│   ├── initiativeState.ts  Each campaign's combat order and round, kept in memory
+│   ├── opId.ts        The id a page attaches to a wall or light edit, echoed back so it
+│   │                  can tell its own edit from anyone else's
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,
 │                      vibe, maps, atmosphere, characters, initiative,
 │                      walls, fog, lights, exploration, pings
@@ -143,10 +151,19 @@ src/
 │   ├── styleAllowlists.ts CSS-bound values the server accepts and the client re-checks (shared)
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
+│   ├── sharpInput.ts     The only module that imports sharp: PNG, JPEG, WebP and GIF
+│   │                     readers only (see Decoding pictures)
+│   ├── thumbnails.ts     Map and token thumbnails, through sharpInput.ts
+│   ├── totp.ts           Authenticator codes through otplib, each accepted once (see MFA)
+│   ├── throttle.ts       Paces live drags: the first call at once, the last one after the
+│   │                     wait, timed on a clock that cannot be set back
+│   ├── serialQueue.ts    Work run one piece at a time across the server (the UVTT queue)
+│   ├── keeperNotes.ts    Keeps a Call of Cthulhu sheet's Keeper's Notes to its campaign's DM
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming
 │   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let a dashboard backup finish
-│   │                     (up to 10 minutes, services/backupsInProgress.ts), close sockets,
+│   │                     (up to 10 minutes, services/backupsInProgress.ts) and a deleted
+│   │                     account's file removal (up to 4 seconds), close sockets,
 │   │                     database and session store, then exit; an error nothing caught is
 │   │                     logged before the process exits 1
 │   └── logger.ts         Winston logger configuration
@@ -157,18 +174,36 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 
 ### Request Flow
 
+`createApp` (`app.ts`) mounts everything in the order a request meets it:
+
+1. `trust proxy` set to one hop (the bundled nginx), so the limiters read the visitor's address and the cookie is marked Secure over HTTPS
+2. helmet's headers, then CORS for `CORS_ORIGIN`
+3. `originCheck`: a change a browser sent from another site is refused
+4. `bodyParsers`: JSON up to 1 MB
+5. On `/api`, the restore gate (`restoreGate.ts`), ahead of the session lookup
+6. The session (`express-session` over the PostgreSQL store)
+7. The setup gate, which lets only `/health` and `/api/setup` through until setup has run
+8. `GET /health`, answered here, with no rate limit
+9. On `/api`, the general rate limiter (`RATE_LIMIT_MAX_REQUESTS` a minute per address, 300 by default)
+10. On `/api`, the password-change gate, then the administrator MFA gate
+11. The routers: setup, config, auth, users, admin, campaigns (with macros and documents), characters, character templates, invitations, assets, and the maps, creatures and token templates nested under `/api/campaigns/:campaignId`
+12. A JSON 404 for anything no router answered, then `errorHandler`
+
+Inside a router, each route names its own guards (`middleware/compose.ts`) and any limiter of its own, then checks its body with Zod.
+
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant M as Middleware
+    participant M as App middleware
     participant R as Route Handler
     participant S as Service
     participant DB as Prisma / PostgreSQL
 
     C->>M: HTTP Request
-    M->>M: requireAuth (session check)
-    M->>M: Rate limiter
-    M->>R: req, res, next
+    M->>M: Headers, origin check, body, restore gate
+    M->>M: Session, setup gate, general rate limiter
+    M->>M: Password-change and admin MFA gates
+    M->>R: Route guards (requireAuth, campaignDM, ...) and route limiters
     R->>R: Zod schema.parse(req.body)
     R->>S: business logic call
     S->>DB: Prisma query
@@ -205,7 +240,8 @@ src/
 │   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
-│   └── admin/         Admin panel tabs
+│   └── admin/         Parts of the Admin Panel (activity details, deletion blockers, the
+│                      leftover files panel); the tabs themselves are in pages/AdminPage.tsx
 ├── services/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
@@ -218,6 +254,8 @@ src/
 │   └── queries/       React Query hooks wrapping the REST services (useCampaign, useCharacters, useAssets, …)
 ├── types/             TypeScript type definitions mirroring backend types
 ├── utils/             Client-side helpers (validation, formatting)
+├── assets/fonts/      The bundled typefaces: fonts.css, one @font-face per family and
+│                      character range, and their OFL.txt
 └── styles/            Global CSS, Tailwind directives, effect stylesheets
 ```
 
