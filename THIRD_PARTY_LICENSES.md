@@ -69,5 +69,5 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
 | [Zod](https://zod.dev/) | Runtime validation | MIT |
-| [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes | MIT |
+| [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |
 | [sharp](https://github.com/lovell/sharp) | Picture thumbnails, and picture sizes for Universal VTT export | Apache-2.0 |
