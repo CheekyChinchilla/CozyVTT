@@ -1753,7 +1753,9 @@ deadline, every endpoint except `POST /api/auth/mfa/setup`, `POST /api/auth/mfa/
 }
 ```
 
-Status `403`. A script signed in as an administrator stops at the deadline until two-factor
+Status `403`. The live-table connection is refused too: the handshake, and any `authenticate`
+on a connection opened before the deadline, answer `error` "Unauthorized" and close the connection.
+A script signed in as an administrator stops at the deadline until two-factor
 authentication is set up on the account, and then has to send a code at every sign-in.
 
 ---

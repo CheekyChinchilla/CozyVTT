@@ -146,3 +146,21 @@ export async function adminMfaDeadline(user: {
   const from = Math.max(start.getTime(), user.createdAt.getTime(), restart?.getTime() ?? 0);
   return new Date(from + ADMIN_MFA_GRACE_MS);
 }
+
+/**
+ * Whether this account's deadline has passed, so that it may do nothing but
+ * set MFA up: the question the REST gate (middleware/adminMfa) and the live
+ * connection (websocket/auth) both ask. When the policy cannot be read the
+ * answer is no, so a transient database error never locks every
+ * administrator out.
+ */
+export async function pastAdminMfaDeadline(user: Parameters<typeof adminMfaDeadline>[0]): Promise<boolean> {
+  let deadline: Date | null;
+  try {
+    deadline = await adminMfaDeadline(user);
+  } catch (error) {
+    logger.error('Error reading the administrator two-factor policy start', { err: error });
+    return false;
+  }
+  return deadline !== null && deadline.getTime() <= Date.now();
+}
