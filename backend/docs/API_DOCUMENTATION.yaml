@@ -453,7 +453,8 @@ paths:
                     and invisible formatting characters (zero-width spaces,
                     bidirectional marks, overrides and isolates, the byte-order
                     mark, tag characters, line and paragraph separators) are
-                    removed, bar the tags of a Scotland, Wales or England flag
+                    removed, bar the tags of a subdivision flag such as
+                    Scotland's, Wales's or England's
                     and the zero-width joiner and non-joiner; the name is put
                     in Unicode NFC; a joiner or non-joiner is kept only between
                     two characters that are neither ASCII nor whitespace; angle
@@ -568,6 +569,7 @@ paths:
                 password:
                   type: string
                   minLength: 12
+                  maxLength: 1024
                 displayName:
                   type: string
                   minLength: 1
@@ -577,7 +579,8 @@ paths:
                     and invisible formatting characters (zero-width spaces,
                     bidirectional marks, overrides and isolates, the byte-order
                     mark, tag characters, line and paragraph separators) are
-                    removed, bar the tags of a Scotland, Wales or England flag
+                    removed, bar the tags of a subdivision flag such as
+                    Scotland's, Wales's or England's
                     and the zero-width joiner and non-joiner; the name is put
                     in Unicode NFC; a joiner or non-joiner is kept only between
                     two characters that are neither ASCII nor whitespace; angle
@@ -602,6 +605,9 @@ paths:
                     properties:
                       message:
                         type: string
+                      message:
+                        type: string
+                        example: Registration submitted. Your account is pending admin approval.
                       pendingApproval:
                         type: boolean
                         example: true
@@ -685,8 +691,10 @@ paths:
                     `REMEMBER_ME_MAX_AGE` after it was made, however active, with
                     401 `{ error: 'Unauthorized', code: 'SIGN_IN_EXPIRED',
                     message: 'Your sign-in has reached its 30-day limit. Sign in
-                    again.' }`, and each sign-in removes the account's oldest
-                    sessions beyond 20.
+                    again.' }`. Each completed sign-in also removes the
+                    account's sessions beyond 20, those due to end soonest
+                    first, sign-ins waiting for their two-factor code
+                    included.
             example:
               email: dm@example.com
               password: hunter2-correct-horse-battery
@@ -854,6 +862,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
       responses:
         '200':
           description: Response (always 200 to prevent enumeration)
@@ -1038,6 +1047,22 @@ paths:
               example:
                 error: Not Found
                 message: User not found
+        '429':
+          description: >-
+            The account has had 10 wrong passwords in 15 minutes, counted with
+            `DELETE /api/auth/account` and an email change (`Too many wrong
+            passwords, please try again later`, with `Retry-After`), or the
+            request waited 15 seconds behind other password checks for the
+            account (`Other attempts are still being checked. Please try again
+            in a moment.`, with `Retry-After: 5`; not counted). Nothing was
+            changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Rate Limited
+                message: Too many wrong passwords, please try again later
 
   # ============================================
   # MFA
@@ -1048,7 +1073,7 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password counts here).
       operationId: mfaSetup
       security:
         - cookieAuth: []
@@ -1063,6 +1088,7 @@ paths:
               properties:
                 password:
                   type: string
+                  maxLength: 1024
                   description: The user's current password
       responses:
         '200':
@@ -1082,8 +1108,9 @@ paths:
                     description: TOTP secret for manual entry, 20 random bytes in base32 (32 characters)
         '400':
           description: >-
-            The password is missing or not a string, or MFA is already enabled
-            (checked before the password).
+            `Validation Error` when the password is missing, empty, not text
+            or over 1,024 characters (`Password is required`); `Bad Request`
+            when MFA is already enabled (checked before the password).
           content:
             application/json:
               schema:
@@ -1132,6 +1159,7 @@ paths:
               properties:
                 token:
                   type: string
+                  maxLength: 64
                   description: The 6-digit TOTP code from the authenticator app. Anything but exactly six digits is answered as a wrong code.
       responses:
         '200':
@@ -1150,8 +1178,11 @@ paths:
                     description: 10 backup codes in XXXX-XXXX format (shown only once)
         '400':
           description: >-
-            The code is missing, no setup is in progress (call
-            `/api/auth/mfa/setup` first), or MFA is already enabled.
+            `Validation Error` when the code is missing, empty, not text or
+            over 64 characters (`Verification code is required`); `Bad
+            Request` when no setup is in progress (call `/api/auth/mfa/setup`
+            first) or MFA is already enabled. Every answer of 400 or more
+            counts against this route's 5 failures.
           content:
             application/json:
               schema:
@@ -1202,9 +1233,11 @@ paths:
               properties:
                 token:
                   type: string
+                  maxLength: 64
                   description: The 6-digit TOTP code. Anything but exactly six digits is answered as a wrong code.
                 backupCode:
                   type: string
+                  maxLength: 64
                   description: Backup code in XXXX-XXXX format
       responses:
         '200':
@@ -1232,7 +1265,8 @@ paths:
         '400':
           description: >-
             Neither a token nor a backup code was sent, or one that was sent is
-            not a string. Checked only once a sign-in is pending.
+            not a string or is over 64 characters. Checked only once a sign-in
+            is pending and has not timed out.
           content:
             application/json:
               schema:
@@ -1263,7 +1297,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused once the body has been checked, before the account's MFA state, the password or the code. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -1279,8 +1313,10 @@ paths:
               properties:
                 password:
                   type: string
+                  maxLength: 1024
                 token:
                   type: string
+                  maxLength: 64
                   description: The 6-digit TOTP code. Anything but exactly six digits is answered as a wrong code.
       responses:
         '200':
@@ -1293,7 +1329,10 @@ paths:
                   message:
                     type: string
         '400':
-          description: Password or token missing, or MFA is not enabled on the account.
+          description: >-
+            `Validation Error` when the password or code is missing, empty,
+            not text or over its ceiling (`Authentication code is required`);
+            `Bad Request` when MFA is not enabled on the account.
           content:
             application/json:
               schema:
@@ -1339,7 +1378,7 @@ paths:
       tags:
         - MFA
       summary: Regenerate backup codes
-      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password counts here).
       operationId: mfaRegenerateBackupCodes
       security:
         - cookieAuth: []
@@ -1354,6 +1393,7 @@ paths:
               properties:
                 password:
                   type: string
+                  maxLength: 1024
       responses:
         '200':
           description: New backup codes generated
@@ -1371,8 +1411,9 @@ paths:
                     description: 10 backup codes in XXXX-XXXX format (shown only once)
         '400':
           description: >-
-            Password missing, or MFA is not enabled on the account (checked
-            before the password).
+            `Validation Error` when the password is missing, empty, not text
+            or over 1,024 characters; `Bad Request` when MFA is not enabled on
+            the account (checked before the password).
           content:
             application/json:
               schema:
@@ -1722,7 +1763,8 @@ paths:
                     and invisible formatting characters (zero-width spaces,
                     bidirectional marks, overrides and isolates, the byte-order
                     mark, tag characters, line and paragraph separators) are
-                    removed, bar the tags of a Scotland, Wales or England flag
+                    removed, bar the tags of a subdivision flag such as
+                    Scotland's, Wales's or England's
                     and the zero-width joiner and non-joiner; the name is put
                     in Unicode NFC; a joiner or non-joiner is kept only between
                     two characters that are neither ASCII nor whitespace; angle
@@ -1781,11 +1823,17 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           description: >-
-            Invalid display name, an avatarUrl other than this user's
-            avatar address or null, invalid email, email already in use,
-            missing current password for an email change, invalid
-            platformRole, or `globalAssetManager`/`templateEditor` sent as
-            something other than a boolean.
+            `Bad Request` for a refused display name (`Display name is
+            required`, `Display name must be 50 characters or fewer`, `Display
+            name must be text`), an avatarUrl other than this user's avatar
+            address or null (`avatarUrl must be /api/assets/avatars/{id} or
+            null`), an invalid email (`Invalid email format`), an email
+            another account has (`Email already in use`, also when another
+            account takes it at the same moment), an invalid platformRole, or
+            `globalAssetManager`/`templateEditor` sent as something other than
+            a boolean; `Validation Error` when changing your own email without
+            `currentPassword` (`Enter your current password to change your
+            email address`).
           content:
             application/json:
               schema:
@@ -1820,6 +1868,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            Only for a request carrying `currentPassword` (or `password`) as
+            text: the account has had
+            10 wrong passwords in 15 minutes, counted with
+            `POST /api/auth/change-password` and `DELETE /api/auth/account`
+            (`Too many wrong passwords, please try again later`, with
+            `Retry-After`), or the request waited 15 seconds behind other
+            password checks for the account (`Other attempts are still being
+            checked. Please try again in a moment.`, with `Retry-After: 5`).
+            Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Rate Limited
+                message: Too many wrong passwords, please try again later
         '500':
           description: Unexpected server error.
           content:
@@ -1956,6 +2022,17 @@ paths:
                     example: true
                   notice:
                     type: string
+        '400':
+          description: >-
+            The calling admin named their own id. Checked after the admin
+            check, so a non-admin gets 403 instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
