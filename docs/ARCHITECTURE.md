@@ -596,7 +596,7 @@ erDiagram
 - **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
 - **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included. Removing a member keeps both kinds of row; `GET /api/campaigns/left`, `/left/:campaignId`, `/left/:campaignId/notes` and `/left/:campaignId/notes/:noteId` let the author read their own afterwards, only while they are not a member, and deleting the campaign deletes them. The lists carry titles only. A note's text comes from `/notes/:noteId` one note at a time, or from `/left/:campaignId/notes` for all of a campaign's notes in one answer, which the Download button uses: it is written out ten notes at a time, since a campaign can hold 200 notes of 100,000 characters, and limited to 60 requests an hour per user.
 - **`CreatureFavorite` is a per-campaign, per-user join table** — with a unique constraint on `(campaignId, userId, creatureId)` to prevent duplicate favorites. Cascade deletes ensure cleanup when creatures, users, or campaigns are removed.
-- **`CampaignDocument` shares a document with a campaign without copying it.** A document is an ordinary `Asset` of type `DOCUMENT`; the join row, unique on `(campaignId, assetId)`, is what lets a `USER`-scoped rulebook be read by the members of every campaign it is linked to. It is the one place the asset read rule looks beyond scope: `canReadAsset` is the single function both the serving route and the linking route consult, so a DM cannot link a file they could not read themselves; and linking further requires the document to be the DM's own or `GLOBAL`, so a share into one campaign cannot be forwarded by a member of it who runs another. Unlinking revokes access; deleting the asset removes its links, and deleting the campaign leaves the document intact.
+- **`CampaignDocument` shares a document with a campaign without copying it.** A document is an ordinary `Asset` of type `DOCUMENT`; the join row, unique on `(campaignId, assetId)`, is what lets a `USER`-scoped rulebook be read by the members of every campaign it is linked to. It is the one place the asset read rule looks beyond scope: `canReadAsset` is the single function both the serving route and the linking route consult, so a DM cannot link a file they could not read themselves; and linking further requires the document to be the DM's own or `GLOBAL`, so a share into one campaign cannot be forwarded by a member of it who runs another. A DM who is a platform admin passes both checks and may link any document. Unlinking revokes access; deleting the asset removes its links, and deleting the campaign leaves the document intact.
 
 ---
 
@@ -653,10 +653,13 @@ out "the DM" by looking up the owner, and only diverged once the DM seat became
 movable (`PUT /api/campaigns/:id/dm`).
 
 Decide **"is this user the DM?"** from the membership, never from `ownerId`.
-Ownership gates exactly one thing, deleting the campaign, so that the
-destructive power stays with whoever created it and a handover can never lock an
-owner out. The frontend asks `src/utils/campaignRoles.ts`, which exists so the
-answer has one home rather than five.
+Ownership decides three things: only the owner (or an admin) may delete the
+campaign, so that the destructive power stays with whoever created it; the
+owner may always hand the DM seat on; and the owner cannot be removed from the
+campaign, so a handover can never lock an owner out. Ownership moves only when
+the owner's account is deleted, to the sitting DM. The frontend asks
+`src/utils/campaignRoles.ts`, which exists so the answer has one home rather
+than five.
 
 ### Roles are a snapshot on an open socket
 

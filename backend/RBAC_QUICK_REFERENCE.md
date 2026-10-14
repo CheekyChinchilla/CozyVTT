@@ -319,7 +319,9 @@ own character's, and a spectator adds nothing. Every route that stores a
 reference to an asset checks it with `canReferenceAsset` first: map create and
 update (image and spirit layer), token create and update, token and creature
 templates, and a character's `tokenImageUrl`. So pointing at an asset never
-grants the right to read it. An update may send back the address already
+grants the right to read it. A map's picture and spirit layer must also be
+an asset uploaded as a map picture (`isMapPicture`, asked by the map routes
+after `canReferenceAsset`). An update may send back the address already
 stored even if it can no longer be read, and an address naming an asset that
 does not exist is accepted, since it grants nothing. So is a picture a record
 of the same campaign already stores (a copy: Duplicate, Save as Template,
@@ -342,9 +344,10 @@ server's. A map's spirit-layer image is listed to a member, and served, only
 when that member may see the spirit plane there (`getSpiritVisibility`), which
 is what the map itself does with it.
 
-The five asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
-`/documents/:id`, `/audio/:id`, `/avatars/:userId`) decide read access from the
-asset's **scope**. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
+The asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
+`/documents/:id`, `/audio/:id` and `/:id/download`) decide read access from the
+asset's **scope**; `/avatars/:userId` serves a user's avatar to anyone signed
+in. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
 campaign's members, and `USER` by its uploader. A `CAMPAIGN` asset with no
 campaign recorded (the foreign key nulls it when a campaign row goes) is read
 as a `USER` one, so a way of removing campaigns that forgets to turn their
@@ -365,7 +368,8 @@ when a DM has linked the document to a campaign the caller belongs to
 (`CampaignDocument`). The linking route runs the same `canReadAsset` against
 the DM first, so a link can only ever grant what the DM could already read,
 and then requires the document to be the DM's own or `GLOBAL`, so a document
-shared into one campaign cannot be passed on by a member who runs another.
+shared into one campaign cannot be passed on by a member who runs another. A
+DM who is a platform admin passes both checks, so may share any document.
 
 Three things this deliberately does **not** do:
 
@@ -433,11 +437,14 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   while they keep `globalAssetManager`; a personal one its uploader's and an
   admin's. A campaign asset with no campaign recorded is an admin's alone.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
-  and sharing is limited to the DM's own documents and global ones. A DM may
-  read a document shared with a table they play at; they may not re-share it.
-  Unlinking revokes read for the whole campaign at once.
-- **Refusals are `404`, not `403`**, on the serving, edit and link routes, so
-  no reply confirms that a private id exists.
+  and sharing is limited to the DM's own documents and global ones, unless the
+  DM is a platform admin, who may share any document. A DM may read a document
+  shared with a table they play at; they may not re-share it. Unlinking
+  revokes read for the whole campaign at once.
+- **Refusals are `404`, not `403`**, on the serving and edit routes, and on
+  the link route for a document the DM cannot read, so no reply confirms that
+  a private id exists. A document the DM can read but may not share is refused
+  with `403`.
 
 Two things to get right when adding a check of this kind:
 
@@ -454,18 +461,22 @@ Two things to get right when adding a check of this kind:
 
 - **Assets with no uploader.** `uploadedById` is set to null when the uploader's
   account is deleted, and a null uploader grants no one anything through
-  `assetUsedInUserCampaign`. A `USER` asset in that state is readable, movable
-  and deletable by platform admins alone. `GET /api/assets?uploadedBy=none`
-  lists them; like any `uploadedBy` value it is honoured for admins only and
-  ignored for everyone else.
+  `assetUsedInUserCampaign`. A `USER` asset in that state is movable and
+  deletable by platform admins alone, and readable by them alone, except a
+  document still shared into a campaign, which that campaign's members go on
+  reading. `GET /api/assets?uploadedBy=none` lists every asset with no
+  uploader, campaign assets among them; like any `uploadedBy` value it is
+  honoured for admins only and ignored for everyone else.
 - **Leftover files.** `GET /api/admin/orphaned-files` lists files in the
   uploads folder's asset folders that no asset row names, and
   `DELETE /api/admin/orphaned-files` deletes the ones named in its body that
   still are, at that moment (`services/orphanedFiles.ts`). Both sit in
   `routes/adminStorage.ts`, mounted under `/api/admin` and guarded by
   `requireAuth` and `requireAdmin`, as every `/api/admin` route is. A player
-  gets `403`, someone signed out `401`. The delete looks each name up in a
-  fresh scan, so a name outside the asset folders reaches nothing.
+  gets `403`, someone signed out `401`. Files changed in the last hour are left
+  out. The delete looks each name up in a fresh scan, so a name outside the
+  asset folders reaches nothing, and writes what it deleted to the activity
+  log.
 - **The SRD creature import.** `POST /api/campaigns/:campaignId/creatures/seed`
   fills the creature library every campaign shares and fetches from Open5e on
   every run, so it is guarded by `requireAuth` and a platform admin check in
@@ -594,7 +605,7 @@ Two separate facts, and they are only the same person by default:
 
 | Fact | Where it lives | Moves? |
 | --- | --- | --- |
-| Campaign owner | `Campaign.ownerId` | No — a DM transfer leaves it alone |
+| Campaign owner | `Campaign.ownerId` | Only when the owner's account is deleted, to the sitting DM; a DM transfer leaves it alone |
 | DM | `CampaignMembership.role === 'DM'` | Yes — see below |
 
 Decide **"is this user the DM?"** from the membership, never from `ownerId`.
@@ -603,8 +614,12 @@ actual DM and keeps privileges with someone who no longer runs the game. In
 socket handlers that means `socket.role`; in routes, `req.campaignMembership`
 or the `campaignDM` middleware.
 
-`ownerId` gates exactly one thing — deleting the campaign (`canDeleteCampaign`),
-which is deliberate: the destructive power stays with whoever created it.
+`ownerId` decides three things. Only the owner (or an admin) may delete the
+campaign (`canDeleteCampaign`), which is deliberate: the destructive power
+stays with whoever created it. The owner may always hand the DM seat on
+(`canTransferDM`). And the owner cannot be removed from the campaign
+(`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`), since
+only the DM can add a membership and the owner could not get back in.
 
 ### Transferring the DM role
 
