@@ -16,11 +16,14 @@ This guide covers deploying CozyVTT to a **production server** using Docker Comp
 6. [Manual Deployment](#manual-deployment)
 7. [Environment Configuration](#environment-configuration)
 8. [File Storage](#file-storage)
-9. [Database Backups](#database-backups)
-10. [Monitoring and Logs](#monitoring-and-logs)
-11. [Troubleshooting](#troubleshooting)
-12. [Updating CozyVTT](#updating-cozyvtt)
-13. [Hardening Checklist](#hardening-checklist)
+9. [Per-User Permissions](#per-user-permissions)
+10. [Database Backups](#database-backups)
+11. [Monitoring and Logs](#monitoring-and-logs)
+12. [Troubleshooting](#troubleshooting)
+13. [Updating CozyVTT](#updating-cozyvtt)
+14. [Hardening Checklist](#hardening-checklist)
+15. [Cloudflare Tunnel (Recommended for Public Instances)](#cloudflare-tunnel-recommended-for-public-instances)
+16. [The API Documentation](#the-api-documentation)
 
 ---
 
