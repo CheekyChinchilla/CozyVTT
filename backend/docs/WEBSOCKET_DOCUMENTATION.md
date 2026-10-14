@@ -783,7 +783,7 @@ network failure or a browser handshake refused as coming from another site.
 socket.on('error', (data) => {
   if (data.message === 'Unauthorized') {
     // Not logged in - sign in again over REST, then connect again
-    window.location.href = '/login';
+    window.location.href = '/auth/login';
   }
 });
 
@@ -950,18 +950,17 @@ export function useTokenMovement(socket: Socket | null, mapId: string) {
     if (!socket) return;
 
     socket.on('token.moved', (data) => {
-      // Update token position in state
-      updateTokenPosition(data.tokenId, data.x, data.y);
-    });
-
-    socket.on('token.moved', (data) => {
-      // Final position confirmed
-      confirmTokenPosition(data.tokenId, data.x, data.y);
+      if (data.dragging) {
+        // A drag frame: draw the token where it is being carried
+        updateTokenPosition(data.tokenId, data.x, data.y);
+      } else {
+        // A drop, or a correction after a refused one: where it now stands
+        confirmTokenPosition(data.tokenId, data.x, data.y);
+      }
     });
 
     return () => {
       socket.off('token.moved');
-      socket.off('token.move.end');
     };
   }, [socket]);
 
@@ -1023,14 +1022,19 @@ a refused sign-in in a loop.
 
 ### Multi-Tab Testing
 
-1. Open two browser tabs
-2. Tab 1: Login as DM
-3. Tab 2: Login as Player
-4. Both: Connect to WebSocket
-5. Both: Authenticate to same campaign
-6. Tab 1: Move token → Tab 2 should see update
-7. Tab 2: Try to move DM's token → Should get error
-8. Tab 2: Move own token → Tab 1 should see update
+Tabs of one browser share one session cookie, so two tabs cannot be signed in
+as two people at once. Use two browsers, or one browser and a private window
+of it.
+
+1. Window 1: Login as DM
+2. Window 2: Login as Player
+3. Both: Open the same campaign (the page connects and authenticates)
+4. Window 1: Move token → Window 2 should see update
+5. Window 2: Try to pick up a token the player does not control → the page
+   does not let them; a scripted `token.move.start` for it answers `error`
+   "You do not have permission to move this token"
+6. Window 2: Move own token → Window 1 should see update (a player cannot
+   move tokens while the session is paused or has ended)
 
 ---
 
@@ -1075,14 +1079,15 @@ function onMouseMove(event) {
 
 4. **Optimistic UI updates:**
 ```javascript
-function moveToken(tokenId, x, y) {
+function dropToken(tokenId, x, y) {
   // Update UI immediately
   updateTokenPositionLocally(tokenId, x, y);
 
   // Send to server
-  socket.emit('token.move', { tokenId, mapId, x, y });
+  socket.emit('token.move.end', { tokenId, mapId, x, y });
 
-  // Server will confirm via broadcast
+  // The drop's token.moved comes back to the sender too, with the stored
+  // position. Drag frames (token.move) are never sent back to their sender.
 }
 ```
 
