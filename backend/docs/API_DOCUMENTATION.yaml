@@ -9219,7 +9219,7 @@ paths:
                         nullable: true
                       campaignExportSizeLimit:
                         type: integer
-                        description: Largest campaign archive accepted on import, in bytes. Exports are not limited by it. Not changeable through this route.
+                        description: Largest campaign archive, in bytes, that this server imports or exports; a stored value above 524288000 (500 MB) counts as 500 MB. Not changeable through this route.
                       createdAt:
                         type: string
                         format: date-time
@@ -9414,9 +9414,10 @@ paths:
                           type: object
                           nullable: true
                           description: |
-                            What the line is about. A change to an account has targetUserId and
-                            changes, each field as { from, to }; a settings change has changes with
-                            the new values only.
+                            What the line is about, or null. A change an administrator made to an
+                            account has targetUserId and changes, each field as { from, to } (bio as
+                            { changed: true }); a settings change has changes, each changed setting
+                            as { from, to }, and lines written before 1.5.2 hold the new values only.
                         createdAt:
                           type: string
                   recentUsers:
@@ -9870,7 +9871,9 @@ paths:
         login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
         image, which the Docker image provides; answers 500 when it is missing or
         the dump fails. The archive can be fetched with the download route and
-        loaded back with the restore route. Refused with 409 while a restore runs.
+        loaded back with the restore route. Refused with 409 while a restore
+        takes its upload or writes its safety backup, and with 503, as every
+        /api route is, while the restore replaces the database.
         Backups are never deleted automatically: each stays until it is deleted
         with the delete route.
       security:
@@ -10114,7 +10117,19 @@ paths:
                     items:
                       type: string
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `paths` missing or not a list (`List the files to delete in
+            paths`), empty (`List at least one file to delete`), longer than
+            5,000 entries (`Delete at most 5000 files at a time`), or holding
+            an entry that is not text of 1 to 1,024 characters. `error` is
+            `Validation Error`. Nothing is deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: List at least one file to delete
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -11052,9 +11067,10 @@ paths:
         statements, so it restores under this instance's database user whatever
         user the archive came from. The login sessions are not restored: new
         archives carry none, and an older archive's are emptied in the same
-        transaction. Before the load starts, every live socket is sent an
-        `error` and disconnected, and until the restore ends a new socket is
-        refused and every other API request answers 503, so no change made
+        transaction. Before the load starts, every live socket is sent
+        `campaign.access.revoked` (reason `signed-out`) and disconnected, and
+        until the restore ends a new socket is sent an `error` and closed and
+        every other API request answers 503 with `Retry-After: 60`, so no change made
         during the load lands on the restored rows; once the load commits the
         in-memory combat state is dropped, and everyone signs in again. After a
         successful load the migrations run, so an archive from an older release
@@ -11090,11 +11106,21 @@ paths:
                     description: Filename, in the backup list, of the backup of the database as it was before the restore
         '400':
           description: >-
-            No file; a filename not ending in `.zip`; a file that is not a ZIP
-            archive; an archive listing more than 100,000 entries or holding an
-            unsafe path; or a ZIP that is not a complete CozyVTT backup
-            (`Invalid Backup`). The message gives the reason and ends "Nothing
-            was changed." (Before 1.5.2 all but the last answered 500.)
+            `Bad Request` `No backup file provided` when the request holds no
+            file. Every other refusal is `Invalid Backup`: a filename not
+            ending in `.zip`; a multipart body over the field limits every
+            upload route shares (more than 100 text fields, a field name over
+            100 bytes, a field value over 16 KB, 16,384 bytes), a file sent
+            under a name other than `backup`, or a second file, answered `The
+            upload could not be read: <reason>. Nothing was changed.`; a file
+            that is not a ZIP archive; an archive listing more than 100,000
+            entries or holding an unsafe path; or a ZIP that is not a complete
+            CozyVTT backup. A ZIP without `database.sql` answers `This file
+            does not appear to be a valid CozyVTT backup (database.sql not
+            found inside ZIP)`; the other `Invalid Backup` messages give the
+            reason and end "Nothing was changed." None of these changes
+            anything. Before 1.5.2 every refusal here but the missing file and
+            the incomplete backup answered 500.
           content:
             application/json:
               schema:
@@ -11134,6 +11160,11 @@ paths:
           description: >-
             Another restore is replacing the database; every API request is
             refused until it ends.
+          headers:
+            Retry-After:
+              description: Seconds to wait before trying again (60).
+              schema:
+                type: integer
           content:
             application/json:
               schema:
