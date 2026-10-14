@@ -6427,8 +6427,9 @@ paths:
         describes: only the tokens on their plane that are not hidden (and on
         a lit map only those in their sight plus their own), each cut down to
         the fields they may see; `spiritLayerUrl` null unless the spirit layer
-        is visible to them; `fogData` always null. Walls, lights and
-        annotations are sent to everyone.
+        is visible to them; `fogData` always null; every wall, with a
+        `door-locked` door sent as `door-closed`; and only the lights whose
+        `enabled` is true. Annotations are sent to everyone.
 
 
         A player or spectator may fetch only the campaign's current map; any
@@ -6775,8 +6776,10 @@ paths:
       description: |
         Update a token. The DM may update any token and any field. A player may
         update only a token that names them in `controlledBy`, and only its
-        `position`, `rotation` and `conditions`; every other field, `size` and
-        `sightRadius` included, answers 403 for a player. A spectator may not
+        `position`, `rotation` and `conditions`; every other field of the body
+        below, `size` and `sightRadius` included, answers 403 for a player
+        (`Only DM can update token field: <field>`, or `Only DM can change
+        token layer`). A spectator may not
         update a token at all, even one that still names them from before they
         were demoted. While the session is paused or has ended (campaign status
         `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
@@ -6859,12 +6862,12 @@ paths:
                 position:
                   type: object
                   required: [x, y]
-                  description: Grid square, within the map (400 otherwise). Only x and y are stored.
+                  description: Grid square, in whole squares, within the map (400 otherwise). Only x and y are stored.
                   properties:
                     x:
-                      type: number
+                      type: integer
                     y:
-                      type: number
+                      type: integer
                 size:
                   type: object
                   required: [width, height]
@@ -10699,7 +10702,9 @@ paths:
         When the file would fit without its furniture walls, the message says
         so. A
         light's `range` becomes its dim radius, so a range over 100 squares,
-        or under 0.5, answers 400. Its bright radius is the light's
+        or above 0 and under 0.5, answers 400; a light without a numeric
+        position, or without a `range` above 0, is left out. Its bright
+        radius is the light's
         `bright_range` when that is a number of 0 or more, capped at the dim
         radius (CozyVTT's own export writes it), and otherwise half the
         range. A light with `enabled: false` is imported switched off. A
@@ -10715,9 +10720,11 @@ paths:
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
         upload does, and a user may run one import at a time: a second sent
-        while the first is still being read answers **429** with `Another
-        import is still running`. Imports sent one after another are never
-        held back. The upload waits on disk, in the uploads folder's
+        before the first has been answered, while it is still uploading,
+        waiting its turn or being read, answers **429** with `Another import
+        is still running. Wait for it to finish, then import this file.` and
+        no `Retry-After`. Imports sent one after another are never held
+        back. The upload waits on disk, in the uploads folder's
         `temp/uvtt`, and is removed as soon as it is read; imports from
         different users are read one at a time across the server, in the
         order they arrived, so an import sent while another user's is being
@@ -10747,13 +10754,21 @@ paths:
 
 
         A refused upload answers with its reason, as `POST /api/assets/upload`
-        does: **400** for a file whose name does not end in `.uvtt`, `.dd2vtt`
-        or `.df2vtt` (unless it is sent as `application/json`), a file sent
-        under a field other than `file`, more than one file, or a body that is
-        cut off or malformed or breaks the field limits; and **413** for a file
-        over the size limit, which is the map size limit plus a third for the
-        base64 text and 8 MB for the walls and lights (75 MB at the default
-        50 MB).
+        does: **400** for a request with no file (`Validation Error`, `No UVTT
+        file uploaded`), a file sent under a field other than `file`
+        (`Send one file, in a form field called "file".`), more than one
+        file, and, with `error: Upload Error` and the reason, a file whose
+        name does not
+        end in `.uvtt`, `.dd2vtt` or `.df2vtt` (unless it is sent as
+        `application/json`) or a body that is cut off or malformed or breaks
+        the field limits every upload route shares (at most 100 text fields,
+        field names of at most 100 bytes, each value at most 16 KB, 16,384
+        bytes); and **413** for a file over the size limit, which is the map
+        size limit plus a third for the base64 text and 8 MB for the walls
+        and lights (75 MB at the default 50 MB). Behind the bundled nginx, a
+        request larger than `NGINX_MAX_BODY_SIZE` (55 MB by default) is
+        refused by nginx with its own 413 page before it reaches the
+        backend.
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -10850,8 +10865,9 @@ paths:
                   objectWalls:
                     type: integer
                     description: >-
-                      Wall segments the file keeps for its furniture, offered
-                      but not imported. Zero when it has none.
+                      Wall segments the file keeps for its furniture, counted
+                      whether or not `includeObjectWalls` was sent. Zero when
+                      it has none.
               example:
                 error: Confirmation Required
                 code: UVTT_IMPORT_NEEDS_CONFIRMATION
@@ -10870,7 +10886,20 @@ paths:
                 error: File Too Large
                 message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
-          $ref: '#/components/responses/RateLimited'
+          description: >-
+            The upload rate limit was reached (`Upload rate limit reached.
+            Please slow down and try again in a minute.`, with `Retry-After`
+            and the `RateLimit-*` headers), or this user already has an import
+            that has not been answered (`Another import is still running. Wait
+            for it to finish, then import this file.`, with no `Retry-After`).
+            Both send `error: Too Many Requests`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another import is still running. Wait for it to finish, then import this file.
         '503':
           description: >-
             The import could not start within 20 seconds because other
@@ -10904,7 +10933,7 @@ paths:
         DM only. Downloads the map as a Universal VTT file (format 0.3): a
         JSON attachment named after the map (`<name>.uvtt`, with characters
         other than letters, digits, spaces, `_` and `-` removed) holding the
-        map's picture as base64, its size in squares, its walls and windows as
+        map's picture as base64, its size in squares, its walls as
         `line_of_sight`, its doors as `portals` (a locked door is written as
         closed), its windows as open portals (a window does not block sight, so
         it is not written as a wall), and every light, switched off ones
@@ -10915,9 +10944,11 @@ paths:
         spirit layer are not included.
 
 
-        Answers 422 when the picture cannot be put in the file: the map's
-        image address names no asset, an asset that no longer exists, or one
-        the caller may not read (`Map image asset not found`), the file is
+        Answers 422 when the picture cannot be put in the file: the map has
+        no picture at all (`Map has no image`), as happens when a campaign
+        import leaves its picture off; its image address names no asset, an
+        asset that no longer exists, or one the caller may not read (`Map
+        image asset not found`); the file is
         missing from disk (`Map image file not found on disk`), or its
         content is not a PNG, JPEG, WebP or GIF image (`This map's picture is
         not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a
@@ -11899,7 +11930,7 @@ components:
       properties:
         id:
           type: string
-          format: uuid
+          description: A UUID, except on older maps, which can hold ids from before tokens were given UUIDs.
         characterId:
           type: string
           format: uuid
