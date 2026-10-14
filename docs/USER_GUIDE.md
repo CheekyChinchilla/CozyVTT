@@ -404,12 +404,14 @@ The Asset Library is where all your campaign media lives — maps, token images,
 
 ### Asset Types
 
-| Type | What it's for |
-|------|--------------|
-| **Map** | Battle maps, dungeon layouts, world maps |
-| **Token** | Character portraits, monster icons, object images |
-| **Audio** | Ambient soundscapes, background music |
-| **Avatar** | Your personal profile picture |
+| Type | What it's for | Files it takes |
+|------|--------------|----------------|
+| **Map** | Battle maps, dungeon layouts, world maps | PNG, JPEG or WebP |
+| **Token** | Character portraits, monster icons, object images | PNG, JPEG, WebP or GIF |
+| **Audio** | Ambient soundscapes, background music | MP3, Ogg or WAV |
+| **Avatar** | Your personal profile picture | PNG, JPEG or WebP |
+
+An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again.
 
 Rulebooks and handouts are not here. They have their own **Documents** section, described below, so a PDF never sits among your map thumbnails.
 
@@ -429,11 +431,11 @@ Click **Upload Asset** to add a new asset. You'll choose:
 
 ### Finding Assets
 
-Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date or name. Click a tag chip to filter to just assets with that tag.
+Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size. Click a tag chip to filter to just assets with that tag.
 
 ### Viewing and Managing Assets
 
-Click any asset card to open its **detail panel** on the right. From there you can see full metadata, edit tags, or delete the asset.
+Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. If you uploaded the asset, the panel also lets you move it to another library with **Move to…** (an avatar always stays in your personal library) and delete it.
 
 **Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
 
@@ -447,10 +449,12 @@ Two kinds of file can end up reachable by administrators alone. Both are found o
 
 **Leftover files.** These are files in the uploads folder that no asset names at all: for example a file that could not be removed when its asset was deleted, or one that a restored backup brought back although the restored database does not know it. Nothing in CozyVTT shows or uses them; they only take up disk space.
 
-1. Under **Leftover Files**, press **Check for Leftover Files**. You see the list, each file's size and when it last changed, and the total. Checking deletes nothing.
+1. Under **Leftover Files**, press **Check for Leftover Files**. You see the list, each file's size and when it last changed, and the total. Checking deletes nothing. At most 5,000 files are listed at a time; once those are deleted, check again for the rest.
 2. If you want them gone, press **Delete *N* Files** and confirm. Each file is checked again first and kept if an asset names it by then. You are told how many were deleted and how many were kept.
 
 A file changed in the last hour is not listed, since an upload may still be finishing; the check tells you how many it left out, and checking again later lists them. A deleted file cannot be brought back without a backup of the uploads folder. Only the folders CozyVTT writes uploads to are looked at; anything else you keep in the uploads folder is left alone. Do not run the check while a backup is being restored.
+
+**How full the disk is.** CozyVTT does not limit how much one account uploads in total, so keep an eye on the disk. The **System Overview** on the Admin Panel's **Dashboard** tab shows, under **Storage**, how much space is free on the disk that holds the uploads. Once that disk is more than 80% full, a red warning at the top of the page says how full it is and what to do: delete files nobody needs from the **Assets** tab, delete old backups, or move the uploads folder to a larger disk (see [File Storage](DEPLOYMENT.md#file-storage)).
 
 ---
 
@@ -502,7 +506,7 @@ What you type is saved exactly as typed, and replaces the old text all at once: 
 
 Uploads are checked rather than trusted. A PDF must really be a PDF, and a text or Markdown file must really be text; a program renamed to `.md` is refused. Documents are always shown as text or as a PDF, never as a web page, so a file that contains HTML or a script is displayed as-is and nothing in it can run. There is no need to avoid typing `<` or `>` in a document; they show as typed.
 
-Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it.
+Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description (or *image not shown*, when it has none) is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it.
 
 Links in a document or note open in a new tab, so following one never takes you away from the table.
 
