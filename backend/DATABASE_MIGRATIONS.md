@@ -56,7 +56,7 @@ npm run prisma:studio
 
 ## Migration Files
 
-Migration files are located in `backend/prisma/migrations/`. Each migration is stored in a timestamped folder with SQL files.
+Migration files are located in `backend/prisma/migrations/`. Each migration is a timestamped folder holding one `migration.sql`.
 
 `backend/prisma/migrations/` is the authoritative list — the folder names are in
 order and `npx prisma migrate status` tells you what a given database has
@@ -66,7 +66,7 @@ about; the list is not exhaustive.
 - `20260211040616_init` - Initial database schema
 - `20260211043730_add_system_settings` - System settings table for setup wizard
 - `20260215000000_add_password_reset` - Password reset tokens
-- `20260220041038_add_game_system_support` - Game system support for characters
+- `20260220041038_add_game_system_support` - The `GameSystem` enum, and a `gameSystem` column on campaigns and characters
 - `20260417000000_migrate_light_bright_dim` - Rewrites the `lights` of every map
   from the old radius-and-intensity form to a bright radius and a dim radius
   (bright is half the old radius, dim is the old radius, so the area lit stays
@@ -119,6 +119,7 @@ itself like any other: see `20260417000000_migrate_light_bright_dim` above.)
 | `npm run migrate:characters` | Guesses a game system for characters stored before game systems existed. Not for a current instance; see below. | `docker compose exec backend node dist/scripts/migrate-characters.js` |
 | `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. | `docker compose exec backend node dist/scripts/migrate-avatar-scope.js` |
 | `npm run validate:characters` | Changes nothing. Lists the characters the server would refuse when next saved. See below. | `docker compose exec backend node dist/scripts/validate-characters.js` |
+| `npx ts-node src/scripts/backfillCreatureProficiency.ts` | Records which saves and skills each seeded SRD creature is proficient in, worked out from its printed bonuses, and renames Open5e's snake_case skill keys. No bonus changes, and custom creatures are not touched. `--dry-run` reports only; `--verbose` lists each creature. | `docker compose exec backend node dist/scripts/backfillCreatureProficiency.js` |
 
 The `npm run` forms run the TypeScript source and need a development checkout.
 In the production image, which has no source and no `ts-node`, run the compiled
@@ -299,6 +300,11 @@ This will:
 1. Generate a new migration file
 2. Apply it to your development database
 3. Regenerate the Prisma client
+
+On a database the backend has already run against, `prisma migrate dev`
+reports drift, because of the sign-in `session` table no migration creates,
+and offers a reset that deletes the database: answer no, and generate the
+migration as `docs/DEVELOPMENT.md` (Running Migrations) shows.
 
 ## Production Deployment
 

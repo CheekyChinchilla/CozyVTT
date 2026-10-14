@@ -103,8 +103,10 @@ src/
 │   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
 │   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
-│   ├── auth.ts        Login, logout, register, password reset
-│   ├── users.ts       User CRUD (admin only)
+│   ├── auth.ts        Sign-in, sign-out, registration, password reset and change, MFA,
+│   │                  account deletion
+│   ├── users.ts       A user's profile and preferences (their own, or anyone's for an
+│   │                  admin); the user list, deletion and reset actions are admin only
 │   ├── campaigns.ts   Campaign CRUD + membership
 │   ├── campaignMacros.ts Saved dice macros per campaign
 │   ├── leftCampaigns.ts A removed member's own notes and macros, read only
@@ -119,17 +121,23 @@ src/
 │   ├── setup.ts       First-run setup wizard; asks for the setup token (services/setupToken.ts)
 │   │                  and runs services/setup.ts, one transaction for the first admin and the settings
 │   ├── config.ts      Public client config (upload limits)
-│   ├── admin.ts       Admin: stats, settings, users, backups, logs
+│   ├── admin.ts       Admin: stats, health, settings, accounts, activity log, SMTP test,
+│   │                  backups and restore
 │   └── adminStorage.ts Admin: files in the uploads folder that no asset names
 ├── services/          Business logic (called by routes and WebSocket handlers)
 ├── validators/        Zod validation schemas (one per domain, incl. game-systems/)
 ├── websocket/
+│   ├── index.ts       initializeWebSocket: the Socket.io server, the Express session
+│   │                  shared with it, and the origin check at the handshake
 │   ├── events.ts      Connection orchestrator: auth, disconnect, ping, and
 │   │                  registration of every per-domain handler module
 │   ├── shared.ts      Rate limiters and the per-user socket ceilings, the
 │   │                  Token shape, fog helpers
 │   ├── auth.ts        Socket session + campaign-membership authentication
 │   ├── utils.ts       System-message / broadcast helpers
+│   ├── initiativeState.ts  Each campaign's combat order and round, kept in memory
+│   ├── opId.ts        The id a page attaches to a wall or light edit, echoed back so it
+│   │                  can tell its own edit from anyone else's
 │   └── handlers/      One module per domain — tokens, dice, chat, spirit,
 │                      vibe, maps, atmosphere, characters, initiative,
 │                      walls, fog, lights, exploration, pings
@@ -143,10 +151,19 @@ src/
 │   ├── styleAllowlists.ts CSS-bound values the server accepts and the client re-checks (shared)
 │   ├── asset-urls.ts     Asset URL normalization
 │   ├── fileUtils.ts      Upload paths + MAX_*_SIZE_MB limit resolution
+│   ├── sharpInput.ts     The only module that imports sharp: PNG, JPEG, WebP and GIF
+│   │                     readers only (see Decoding pictures)
+│   ├── thumbnails.ts     Map and token thumbnails, through sharpInput.ts
+│   ├── totp.ts           Authenticator codes through otplib, each accepted once (see MFA)
+│   ├── throttle.ts       Paces live drags: the first call at once, the last one after the
+│   │                     wait, timed on a clock that cannot be set back
+│   ├── serialQueue.ts    Work run one piece at a time across the server (the UVTT queue)
+│   ├── keeperNotes.ts    Keeps a Call of Cthulhu sheet's Keeper's Notes to its campaign's DM
 │   ├── proxyLimits.ts    Proxy body-cap parsing and startup warnings
 │   ├── byteRange.ts      HTTP Range header reading for audio streaming
 │   ├── shutdown.ts       SIGTERM/SIGINT: stop taking requests, let a dashboard backup finish
-│   │                     (up to 10 minutes, services/backupsInProgress.ts), close sockets,
+│   │                     (up to 10 minutes, services/backupsInProgress.ts) and a deleted
+│   │                     account's file removal (up to 4 seconds), close sockets,
 │   │                     database and session store, then exit; an error nothing caught is
 │   │                     logged before the process exits 1
 │   └── logger.ts         Winston logger configuration
@@ -157,18 +174,36 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 
 ### Request Flow
 
+`createApp` (`app.ts`) mounts everything in the order a request meets it:
+
+1. `trust proxy` set to one hop (the bundled nginx), so the limiters read the visitor's address and the cookie is marked Secure over HTTPS
+2. helmet's headers, then CORS for `CORS_ORIGIN`
+3. `originCheck`: a change a browser sent from another site is refused
+4. `bodyParsers`: JSON up to 1 MB
+5. On `/api`, the restore gate (`restoreGate.ts`), ahead of the session lookup
+6. The session (`express-session` over the PostgreSQL store)
+7. The setup gate, which lets only `/health` and `/api/setup` through until setup has run
+8. `GET /health`, answered here, with no rate limit
+9. On `/api`, the general rate limiter (`RATE_LIMIT_MAX_REQUESTS` a minute per address, 300 by default)
+10. On `/api`, the password-change gate, then the administrator MFA gate
+11. The routers: setup, config, auth, users, admin, campaigns (with macros and documents), characters, character templates, invitations, assets, and the maps, creatures and token templates nested under `/api/campaigns/:campaignId`
+12. A JSON 404 for anything no router answered, then `errorHandler`
+
+Inside a router, each route names its own guards (`middleware/compose.ts`) and any limiter of its own, then checks its body with Zod.
+
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant M as Middleware
+    participant M as App middleware
     participant R as Route Handler
     participant S as Service
     participant DB as Prisma / PostgreSQL
 
     C->>M: HTTP Request
-    M->>M: requireAuth (session check)
-    M->>M: Rate limiter
-    M->>R: req, res, next
+    M->>M: Headers, origin check, body, restore gate
+    M->>M: Session, setup gate, general rate limiter
+    M->>M: Password-change and admin MFA gates
+    M->>R: Route guards (requireAuth, campaignDM, ...) and route limiters
     R->>R: Zod schema.parse(req.body)
     R->>S: business logic call
     S->>DB: Prisma query
@@ -205,7 +240,8 @@ src/
 │   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
-│   └── admin/         Admin panel tabs
+│   └── admin/         Parts of the Admin Panel (activity details, deletion blockers, the
+│                      leftover files panel); the tabs themselves are in pages/AdminPage.tsx
 ├── services/
 │   ├── api.ts         Axios-based REST API client (singleton)
 │   ├── socket.ts      Socket.io client wrapper (singleton)
@@ -218,6 +254,9 @@ src/
 │   └── queries/       React Query hooks wrapping the REST services (useCampaign, useCharacters, useAssets, …)
 ├── types/             TypeScript type definitions mirroring backend types
 ├── utils/             Client-side helpers (validation, formatting)
+├── assets/fonts/      The bundled typefaces: fonts.css, one @font-face per family and
+│                      character range (and weight, where a family has no variable
+│                      font), and their OFL.txt
 └── styles/            Global CSS, Tailwind directives, effect stylesheets
 ```
 
@@ -262,11 +301,12 @@ re-rendering anything. Tailwind maps each token with `rgb(var(--color-x) / <alph
    dark theme. Use the state tokens, or the `.alert-*` / `.badge-*` classes in
    [index.css](../frontend/src/index.css).
 
-Both rules are enforced by tests rather than review:
-`utils/__tests__/themes.contrast.test.ts` checks every preset theme against every text/background
-pair the UI renders, and `utils/__tests__/themeTokens.test.ts` fails if raw palette colors appear
-outside the two exempt areas (character sheets, which are deliberately styled as light "paper" cards,
-and the dark DM map overlays).
+The second rule is enforced by a test: `utils/__tests__/themeTokens.test.ts` fails if raw palette
+colors appear outside the two exempt areas (character sheets, which are deliberately styled as light
+"paper" cards, and the dark DM map overlays). The first is not. `utils/__tests__/themes.contrast.test.ts`
+checks that every preset theme's text tokens, the `-ink` ones included, meet AA on the backgrounds
+they are used on, but nothing fails when text uses a plain fill token such as `text-danger`, so
+review has to catch that.
 
 ### Data Flow (Campaign Page)
 
@@ -552,12 +592,13 @@ erDiagram
 - **Token data is stored as JSON inside `Map.tokens`** — tokens are not a separate table. This simplifies real-time updates (the whole token list is atomically replaced on moves).
 - **Walls, lights and fog are JSON on the map row too** (`Map.wallSegments`, `Map.lights`, `Map.fogData`). A write to any of these columns, or to `Map.tokens`, reads the whole value, changes it and writes it back, so it runs inside `withMapsLocked` (`utils/mapTokens.ts`): a transaction holding a PostgreSQL advisory lock on the map, which reads the value through the transaction after taking the lock. Edits sent together, from the socket or the REST routes, then apply one after another instead of the later write dropping the earlier change. Every other edit of the map waits while the lock is held, so slow work belongs before it is taken, and so does any read through the global `prisma` client, which would hold a second connection while the transaction holds one. A player's door toggle, for instance, works out their line of sight first (`doorSightFor` in `websocket/handlers/walls.ts`), then judges the door as it reads it under the lock.
 - **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas (a Flexible sheet, with no game system, by `flexible.schema.ts`) but stored untyped in Postgres. This allows flexible incremental saves. Every text field a sheet stores has a length limit, from `validators/game-systems/sheetLimits.ts`, which the frontend keeps an identical copy of for its editors. Counts are limited where a list could grow without bound in play: Flexible sections, stats, list entries, table rows, columns and cells; D&D 5e spell slots (0 to 20 a level); the D&D 5e manual bonuses (-30 to +30); every list on a D&D 5e, Pathfinder 2e, Call of Cthulhu or Shadowrun 6e sheet (500 entries, `SHEET_LIST_MAX`, through `sheetList` in `sheetLists.ts`; the editors turn an add button off at the limit); and Pathfinder 2e spell slots (0 to 20 a rank) and item bonuses (-30 to +30).
+- **A Call of Cthulhu sheet's Keeper's Notes are its campaign DM's alone.** They are the sheet's top-level `notes`, kept inside `Character.data`, so the schema, exports and imports are unchanged. `utils/keeperNotes.ts` holds the rule: every route and event that sends a sheet passes it through `characterForReader`, which leaves the field out for anyone but the DM of the character's campaign; a save by anyone else keeps the stored notes (`sheetKeepingKeeperNotes`); and a character that enters another campaign has them cleared, since they were the last campaign's Keeper's.
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
 - **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
 - **`PersonalNote` is private to its author** — every query is scoped by both `campaignId` and the signed-in `userId`, and a note belonging to someone else answers 404 rather than 403 so the response cannot confirm that it exists. Nobody reads these but the person who wrote them, the DM included. Removing a member keeps both kinds of row; `GET /api/campaigns/left`, `/left/:campaignId`, `/left/:campaignId/notes` and `/left/:campaignId/notes/:noteId` let the author read their own afterwards, only while they are not a member, and deleting the campaign deletes them. The lists carry titles only. A note's text comes from `/notes/:noteId` one note at a time, or from `/left/:campaignId/notes` for all of a campaign's notes in one answer, which the Download button uses: it is written out ten notes at a time, since a campaign can hold 200 notes of 100,000 characters, and limited to 60 requests an hour per user.
 - **`CreatureFavorite` is a per-campaign, per-user join table** — with a unique constraint on `(campaignId, userId, creatureId)` to prevent duplicate favorites. Cascade deletes ensure cleanup when creatures, users, or campaigns are removed.
-- **`CampaignDocument` shares a document with a campaign without copying it.** A document is an ordinary `Asset` of type `DOCUMENT`; the join row, unique on `(campaignId, assetId)`, is what lets a `USER`-scoped rulebook be read by the members of every campaign it is linked to. It is the one place the asset read rule looks beyond scope: `canReadAsset` is the single function both the serving route and the linking route consult, so a DM cannot link a file they could not read themselves; and linking further requires the document to be the DM's own or `GLOBAL`, so a share into one campaign cannot be forwarded by a member of it who runs another. Unlinking revokes access; deleting the asset removes its links, and deleting the campaign leaves the document intact.
+- **`CampaignDocument` shares a document with a campaign without copying it.** A document is an ordinary `Asset` of type `DOCUMENT`; the join row, unique on `(campaignId, assetId)`, is what lets a `USER`-scoped rulebook be read by the members of every campaign it is linked to. It is the one place the asset read rule looks beyond scope: `canReadAsset` is the single function both the serving route and the linking route consult, so a DM cannot link a file they could not read themselves; and linking further requires the document to be the DM's own or `GLOBAL`, so a share into one campaign cannot be forwarded by a member of it who runs another. A DM who is a platform admin passes both checks and may link any document. Unlinking revokes access; deleting the asset removes its links, and deleting the campaign leaves the document intact.
 
 ---
 
@@ -614,10 +655,13 @@ out "the DM" by looking up the owner, and only diverged once the DM seat became
 movable (`PUT /api/campaigns/:id/dm`).
 
 Decide **"is this user the DM?"** from the membership, never from `ownerId`.
-Ownership gates exactly one thing, deleting the campaign, so that the
-destructive power stays with whoever created it and a handover can never lock an
-owner out. The frontend asks `src/utils/campaignRoles.ts`, which exists so the
-answer has one home rather than five.
+Ownership decides three things: only the owner (or an admin) may delete the
+campaign, so that the destructive power stays with whoever created it; the
+owner may always hand the DM seat on; and the owner cannot be removed from the
+campaign, so a handover can never lock an owner out. Ownership moves only when
+the owner's account is deleted, to the sitting DM. The frontend asks
+`src/utils/campaignRoles.ts`, which exists so the answer has one home rather
+than five.
 
 ### Roles are a snapshot on an open socket
 
@@ -644,6 +688,12 @@ unless an editor holds unsaved changes.
 
 MFA uses the `otplib` library for TOTP secrets, setup links and verification. A new secret is 20 random bytes written in base32; the secrets stored before 1.5.2, made by an earlier library as 20 printable characters in base32, are read the same way. A code must be exactly six digits, and anything else is refused before it is checked. One 30-second step either side of the current one is accepted, for clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
 
+### Administrators must use MFA
+
+An administrator cannot turn MFA off (`POST /api/auth/mfa/disable` answers 403), and one without it has seven days to set it up (`ADMIN_MFA_GRACE_MS` in `services/adminMfaPolicy.ts`). The seven days run from the latest of four moments: when the rule started on this instance, when the account was created, when it was made an administrator, and when another administrator last reset its MFA. All but the account's creation are read from the activity log, so the rule needs no column. The first time the rule is needed, a line is written there, and the earliest such line is its start, which gives an upgraded instance's administrators a full week. A promotion and a Reset MFA are logged with a mark that starts the account's week again.
+
+Until the deadline, the signed-in user the server returns carries `adminMfaDeadline`, which the pages show as a banner. After it, `middleware/adminMfa.ts`, mounted on `/api` after the password-change gate, answers every request 403 with `code: 'MFA_ENROLMENT_REQUIRED'`, except MFA setup and its verification, change password, sign-out, `/auth/me`, `/auth/ping`, `/auth/appearance` and `/config`; the API client then sends the browser to the MFA setup page. The gate reads the account once on each request a signed-in administrator makes, and ordinary users are not read. That read also refreshes the role the session holds: an administrator demoted while signed in loses the admin guards on their next request, and a session whose account is gone ends there. A database error lets the request through, so a passing fault cannot lock every administrator out.
+
 ---
 
 ## WebSocket Architecture
@@ -655,13 +705,14 @@ sequenceDiagram
     participant C as Client (socket.ts)
     participant S as Server (websocket/)
 
-    C->>S: socket.connect()
+    C->>S: socket.connect() (the handshake carries the session cookie)
+    S->>S: Verify the session (authenticateSocket)
+    S->>S: socket.join(userId)
     S-->>C: emit('connected')
     C->>S: emit('authenticate', { campaignId })
-    S->>S: Verify session + campaign membership
-    S-->>C: emit('authenticated')
-    S->>S: socket.join(campaignId)
-    S->>S: socket.join(userId)
+    S->>S: Verify the sign-in is still live + campaign membership
+    S->>S: socket.join(campaignId), leaving any other campaign room
+    S-->>C: emit('authenticated', { role })
 
     Note over C,S: Session active
 
@@ -717,13 +768,13 @@ Dynamic lighting asks one question of every point on the map: how well does this
 
 The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
 
-Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts, the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
+Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts (it holds `vibeAudio.ts`, the rule for which track a vibe period names, in step too), the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
 A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all, a Huge token against a wall). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
 
 ### WebSocket Event Reference
 
-See [API_REFERENCE.md](API_REFERENCE.md#websocket-events) for the full event listing.
+See [`backend/docs/WEBSOCKET_DOCUMENTATION.md`](../backend/docs/WEBSOCKET_DOCUMENTATION.md) for the handshake, the payloads and the generated inventory of every event.
 
 ---
 
@@ -805,7 +856,8 @@ is why the page had no protection until the second file existed.
 The page's policy is the wider of the two, since it also covers the page's
 stylesheets, fonts and the document reader's frame. Nothing it allows is on
 another site: the typefaces are part of the app (`frontend/src/assets/fonts`,
-one `@font-face` per family and character range, so a browser fetches only
+one `@font-face` per family and character range, and per weight where a family
+has no variable font, so a browser fetches only
 what the page uses), and the build inlines the smallest as `data:` addresses.
 It is strict where it counts, `script-src 'self'` with no
 `unsafe-inline`, which the built page allows because Vite emits no inline
@@ -901,6 +953,23 @@ The checks sit where the bytes are read because a stored row can name any
 file, a map stored before the rule above included. The export answers such a
 map 422; a thumbnail that cannot be made is left out, as before.
 
+### Universal VTT imports
+
+Reading a Universal VTT import holds the file and its decoded picture in
+memory, well over 50 MB for the largest, so imports are read one at a time
+across the server (`uvttImportQueue` in `services/uvttImportQueue.ts`, over
+`utils/serialQueue.ts`), and a user may have only one under way. Each upload
+waits its turn on disk in `uploads/temp/uvtt/` and is removed when its import
+ends, however it ends. The queue always moves on:
+
+- An import that runs past 30 seconds is answered 503, is stopped at its next
+  step, removes what it had saved, and the next one starts.
+- An import that cannot start within 20 seconds is refused with 503 and
+  `Retry-After`. Waiting and running together then stay under the 60 seconds
+  the bundled nginx gives an API request, so the DM sees the reason.
+- An import whose request has closed while it waits is dropped without being
+  read.
+
 ### Asset Scoping
 
 Assets have three scopes:
@@ -910,6 +979,14 @@ Assets have three scopes:
 | `GLOBAL` | All users on the platform | Admins and Global Asset Managers |
 | `USER` | The uploading user only, plus members of any campaign that is *using* the asset: a map on the table, token art, or the track it is currently playing, and for a document, one shared with it | Any user |
 | `CAMPAIGN` | All campaign members | Campaign DM, players (tokens only) |
+
+Deleting an asset, moving it out of its scope and rewriting a document's text
+follow one rule, `mayChangeAsset` in `services/permissions.ts`, so a right the
+delete route takes away cannot be kept through another route. An admin may
+change any asset. A `GLOBAL` asset may also be changed by its uploader while
+they still manage global assets, a `USER` asset by its uploader, and a
+`CAMPAIGN` asset by its uploader while they are still a member, or by the
+campaign's DM. A campaign asset with no campaign recorded is an admin's alone.
 
 ---
 

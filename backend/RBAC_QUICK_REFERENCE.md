@@ -1,8 +1,19 @@
 # RBAC Quick Reference Guide
 
-_Last verified against the code on 2026-10-11: the files and helpers it names exist (a backend test checks that), and the sections on character edits, the campaign guards, the platform role and the checklist were read against the routes. Re-date it only after reading the rest the same way._
+_Last verified against the code on 2026-10-13: the files and helpers it names exist (a backend test checks that), and every section was read against the routes and middleware except these, which were spot-checked: what a player is sent of a token, the map broadcasts, copies and exports, the atmosphere audio import and the socket room fan-out. Re-date it only after reading those the same way._
 
 ## Middleware Cheat Sheet
+
+### Before the route guards
+
+`createApp` (`app.ts`) puts every `/api` request through these gates before a
+router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
+
+1. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
+2. The session lookup
+3. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
+4. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address
+5. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
 
 ### Import Statement
 ```typescript
@@ -37,9 +48,10 @@ router.put('/api/campaigns/:campaignId', campaignDM, handler);
 is the DM's alone and every route any member may use, and fails when a
 route's guard differs from its list, so a new campaign route, or a guard
 changed from `campaignDM` to `campaignMember`, needs that list changed too.
-It then checks each route refuses players, spectators, members of other
-campaigns (403) and callers who are not signed in (401). A campaign route
-with neither guard must decide in its handler and be named in that file.
+It then checks that each DM-only route refuses players and spectators (403),
+and that every listed route refuses members of other campaigns (403) and
+callers who are not signed in (401). A campaign route with neither guard must
+decide in its handler and be named in that file.
 
 #### Characters in a campaign
 Any member may read a character assigned to the campaign, and the DM may edit
@@ -49,18 +61,34 @@ campaign in the same transaction; a character left naming a campaign by a
 removal from before that is its owner's alone, and its saves are not sent to
 that campaign.
 
+The top-level `notes` of a `CALL_OF_CTHULHU_7E` sheet, which the editor calls
+Keeper's Notes, belong to the Keeper: the DM of the character's campaign alone
+reads and writes them, and the owner only when they are that DM; a character
+in no campaign has no Keeper (`utils/keeperNotes.ts`). Every reply that carries a sheet, and
+`character.updated`, passes it through `characterForReader`, which leaves the
+field out for anyone else. A save by anyone else keeps the stored notes
+(`sheetKeepingKeeperNotes`), and a create by anyone but the Keeper drops
+them. They are cleared when the character enters another campaign, by
+`POST /api/characters/:id/assign` or by accepting an invitation with it, and
+a copy has none.
+
 #### 5. Campaign DM or Player (Excludes Spectators)
 `campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
 today. Where spectators are refused, the handler does it: `dice.roll` (socket)
 through `canRollDice`, token control through `canControlToken`, and doors
 through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
-and size they send being ignored). Chat is a socket event (`chat.message`)
+and size they send being ignored, and on a lit map only a door one of their
+tokens can see, or the answer is "You cannot see that door"). Anyone but the
+DM is sent a locked door as `door-closed`, and no light that is off.
+Chat is a socket event (`chat.message`)
 and spectators may send it. `character.hp.update`, `character.hitdice.spend`
 and `PUT /api/characters/:id` refuse a spectator outright, even for a
 character they own, because a token bound to it follows the sheet on every
-screen; the token-image sync that route runs skips any campaign where the
-editor is a spectator. `controlledBy` may only name a player
+screen. The token-image sync that route runs repaints tokens only where the
+editor may: the owner's change reaches every campaign bound to the character
+except one where the owner is a spectator, and a DM's change to a player's
+character reaches only the campaigns that DM runs. `controlledBy` may only name a player
 (`canHoldTokens`): a token cannot be created for or handed to a spectator, a
 spectator's character is placed with no controller, and what a spectator is
 sent never treats a token as theirs (`viewerIdFor` in `utils/spirit-layer.ts`),
@@ -181,7 +209,7 @@ write goes into `restrictedFields`.
 const canDelete = await canDeleteCampaign(userId, campaignId, platformRole);
 
 if (!canDelete) {
-  return res.status(403).json({ error: 'Only owner or admin can delete' });
+  return res.status(403).json({ error: 'Forbidden', message: 'Only the campaign owner or admin can delete this campaign' });
 }
 ```
 
@@ -213,8 +241,10 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | 403 | Forbidden | User logged in but lacks permission |
 | 404 | Not Found | Resource doesn't exist |
 | 400 | Bad Request | Invalid input data |
-| 409 | Conflict | The map's own setting refuses the action, such as a fog operation while fog is off |
+| 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
+| 429 | Too Many Requests | A rate limit: the general `/api` limiter or a route's own |
 | 500 | Internal Server Error | Unexpected error |
+| 503 | Service Unavailable | A restore is replacing the database (the restore gate), email is needed and SMTP is not set up, or a Universal VTT import could not start or finish in time |
 
 ---
 
@@ -237,7 +267,7 @@ router.get('/api/campaigns/:campaignId/data', campaignMember, handler);
 
 ### Pattern 4: DM-Only Campaign Route
 ```typescript
-router.put('/api/campaigns/:campaignId/maps', campaignDM, handler);
+router.post('/api/campaigns/:campaignId/maps', campaignDM, handler);
 ```
 
 ### Pattern 5: Complex Permission Check
@@ -272,14 +302,17 @@ router.put('/api/characters/:id', authenticated, async (req: AuthenticatedReques
 
 ## Per-user permission flags
 
-Four booleans on `User` gate things the role system does not. None is carried in
-the session, so each is read from the database at the point of use — do not
-assume `req.session` knows about them.
+Four booleans on `User` gate things the role system does not. `globalAssetManager`
+and `templateEditor` are not carried in the session, so each is read from the
+database at the point of use; do not assume `req.session` knows about them.
+`mustChangePassword` is copied into the session at sign-in and the gate trusts
+that copy (it reads the database only for a session from before the field
+existed), and `isApproved` is read at sign-in only.
 
 | Flag | Default | What it gates |
 |---|---|---|
-| `globalAssetManager` | `false` | Uploading or managing GLOBAL-scope assets. Checked in `routes/assets.ts` alongside `platformRole === 'ADMIN'`; either is sufficient. |
-| `templateEditor` | `false` | Publishing, editing and deleting shared character sheets (`/api/character-templates`). Checked in `routes/characterTemplates.ts`; platform ADMIN also passes. |
+| `globalAssetManager` | `false` | Placing an asset at GLOBAL scope (an upload, `POST /api/assets/documents`, a move to GLOBAL): a platform ADMIN or a user with the flag (`canPlaceAssetAtScope`). Deleting a global asset, moving it out of the library or rewriting a global document: an ADMIN, or its uploader while they keep the flag (`mayChangeAsset`, `services/permissions.ts`). |
+| `templateEditor` | `false` | Editing and deleting other people's shared character sheets (`PUT` and `DELETE /api/character-templates/:id`). Any signed-in user may publish one and edit or delete their own. Checked in `routes/characterTemplates.ts` (`canModifyTemplate`); platform ADMIN also passes. |
 | `mustChangePassword` | `false` | When true, **every** endpoint returns 403 with `code: PASSWORD_CHANGE_REQUIRED` except `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`, `GET /api/auth/appearance` and `GET /api/config`. WebSocket connections are refused on the same basis. Set when an admin creates an account or resets a password. |
 | `isApproved` | `true` | Sign-in. An unapproved account authenticates but is refused at `routes/auth.ts`. New registrations are created unapproved when the instance requires approval. |
 
@@ -313,7 +346,9 @@ own character's, and a spectator adds nothing. Every route that stores a
 reference to an asset checks it with `canReferenceAsset` first: map create and
 update (image and spirit layer), token create and update, token and creature
 templates, and a character's `tokenImageUrl`. So pointing at an asset never
-grants the right to read it. An update may send back the address already
+grants the right to read it. A map's picture and spirit layer must also be
+an asset uploaded as a map picture (`isMapPicture`, asked by the map routes
+after `canReferenceAsset`). An update may send back the address already
 stored even if it can no longer be read, and an address naming an asset that
 does not exist is accepted, since it grants nothing. So is a picture a record
 of the same campaign already stores (a copy: Duplicate, Save as Template,
@@ -336,9 +371,10 @@ server's. A map's spirit-layer image is listed to a member, and served, only
 when that member may see the spirit plane there (`getSpiritVisibility`), which
 is what the map itself does with it.
 
-The five asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
-`/documents/:id`, `/audio/:id`, `/avatars/:userId`) decide read access from the
-asset's **scope**. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
+The asset-serving routes (`/api/assets/maps/:id`, `/tokens/:id`,
+`/documents/:id`, `/audio/:id` and `/:id/download`) decide read access from the
+asset's **scope**; `/avatars/:userId` serves a user's avatar to anyone signed
+in. `GLOBAL` is readable by anyone signed in, `CAMPAIGN` by that
 campaign's members, and `USER` by its uploader. A `CAMPAIGN` asset with no
 campaign recorded (the foreign key nulls it when a campaign row goes) is read
 as a `USER` one, so a way of removing campaigns that forgets to turn their
@@ -359,7 +395,8 @@ when a DM has linked the document to a campaign the caller belongs to
 (`CampaignDocument`). The linking route runs the same `canReadAsset` against
 the DM first, so a link can only ever grant what the DM could already read,
 and then requires the document to be the DM's own or `GLOBAL`, so a document
-shared into one campaign cannot be passed on by a member who runs another.
+shared into one campaign cannot be passed on by a member who runs another. A
+DM who is a platform admin passes both checks, so may share any document.
 
 Three things this deliberately does **not** do:
 
@@ -379,7 +416,7 @@ sound. Every player's browser then fetches
 what decides whether the table hears anything, and a personal track was silent
 for everyone but the DM until `assetUsedInUserCampaign` learned about it.
 
-Two consequences to keep in mind when touching this:
+Three things to keep in mind when touching this:
 
 - **Setting a track is an act of sharing, not of reading.** It makes the file
   readable by every member of the campaign for as long as it is set, so the
@@ -427,11 +464,14 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   while they keep `globalAssetManager`; a personal one its uploader's and an
   admin's. A campaign asset with no campaign recorded is an admin's alone.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
-  and sharing is limited to the DM's own documents and global ones. A DM may
-  read a document shared with a table they play at; they may not re-share it.
-  Unlinking revokes read for the whole campaign at once.
-- **Refusals are `404`, not `403`**, on the serving, edit and link routes, so
-  no reply confirms that a private id exists.
+  and sharing is limited to the DM's own documents and global ones, unless the
+  DM is a platform admin, who may share any document. A DM may read a document
+  shared with a table they play at; they may not re-share it. Unlinking
+  revokes read for the whole campaign at once.
+- **Refusals are `404`, not `403`**, on the serving and edit routes, and on
+  the link route for a document the DM cannot read, so no reply confirms that
+  a private id exists. A document the DM can read but may not share is refused
+  with `403`.
 
 Two things to get right when adding a check of this kind:
 
@@ -448,18 +488,22 @@ Two things to get right when adding a check of this kind:
 
 - **Assets with no uploader.** `uploadedById` is set to null when the uploader's
   account is deleted, and a null uploader grants no one anything through
-  `assetUsedInUserCampaign`. A `USER` asset in that state is readable, movable
-  and deletable by platform admins alone. `GET /api/assets?uploadedBy=none`
-  lists them; like any `uploadedBy` value it is honoured for admins only and
-  ignored for everyone else.
+  `assetUsedInUserCampaign`. A `USER` asset in that state is movable and
+  deletable by platform admins alone, and readable by them alone, except a
+  document still shared into a campaign, which that campaign's members go on
+  reading. `GET /api/assets?uploadedBy=none` lists every asset with no
+  uploader, campaign assets among them; like any `uploadedBy` value it is
+  honoured for admins only and ignored for everyone else.
 - **Leftover files.** `GET /api/admin/orphaned-files` lists files in the
   uploads folder's asset folders that no asset row names, and
   `DELETE /api/admin/orphaned-files` deletes the ones named in its body that
   still are, at that moment (`services/orphanedFiles.ts`). Both sit in
   `routes/adminStorage.ts`, mounted under `/api/admin` and guarded by
   `requireAuth` and `requireAdmin`, as every `/api/admin` route is. A player
-  gets `403`, someone signed out `401`. The delete looks each name up in a
-  fresh scan, so a name outside the asset folders reaches nothing.
+  gets `403`, someone signed out `401`. Files changed in the last hour are left
+  out. The delete looks each name up in a fresh scan, so a name outside the
+  asset folders reaches nothing, and writes what it deleted to the activity
+  log.
 - **The SRD creature import.** `POST /api/campaigns/:campaignId/creatures/seed`
   fills the creature library every campaign shares and fetches from Open5e on
   every run, so it is guarded by `requireAuth` and a platform admin check in
@@ -470,7 +514,7 @@ Two things to get right when adding a check of this kind:
   stays open to campaign members and says in `canSeed` whether the caller may
   run it. The command-line seed script needs shell access to the server.
 
-### Platform role is the one thing the session carries
+### Platform role: the session's copy, re-read only for admins
 
 `requireAdmin` reads `req.session.platformRole`, which is written at login.
 Only `middleware/adminMfa.ts` re-reads it: on every request of a signed-in
@@ -478,12 +522,15 @@ administrator it reads the account and refreshes the session's copy, so a
 demoted administrator loses the admin guards on their next request even if
 ending their sessions failed. Nothing re-reads the role of anyone else.
 Sessions roll on every response and the client sends a keepalive, so one that
-stays in use does not expire on its own.
+stays in use ends only `REMEMBER_ME_MAX_AGE` (30 days) after it was made: the
+guards then answer 401 with `code: SIGN_IN_EXPIRED` and destroy it
+(`middleware/auth.ts`, `services/signedIn.ts`), and the socket handshake refuses
+it too. An account keeps at most 20 sign-ins (`capLoginSessions`).
 
 `PUT /api/users/:id` therefore also calls `destroyUserLoginSessions(id)` when the role
 actually changes, and `DELETE /api/users/:id` and `DELETE /api/auth/account` call
-it too, because the session outlives the row it points at and nothing checks the
-user still exists. The same
+it too, because the session outlives the row it points at and nothing checks that
+the user still exists on a non-admin's REST requests. The same
 helper ends a user's other sessions on a self-service password change and on
 turning MFA on or off, with `exceptSessionId` keeping the device making the
 request signed in.
@@ -503,6 +550,15 @@ instance), so an instance that lost its last admin could not get one back.
 `DELETE /api/users/:id` asks it too: the admin calling it is normally the
 admin who remains, but not when that admin is being demoted at the same
 moment.
+
+Deleting an account is also refused, with `409`, while it holds the DM seat
+of any campaign, owned or not, or owns a campaign with nobody in the DM seat
+(`deleteAccount` in `services/accountDeletion.ts`). The answer names those
+campaigns, and the admin route's adds each one's other members, so the seat
+can be handed on first. A campaign the account owns while someone else is its
+DM passes to that DM, and the documents the account shared into a campaign
+stay shared, the share passing to the campaign's DM, or to its owner when the
+seat is empty.
 
 Each of the three asks inside the serializable transaction that makes its
 write (`inSerializableTransaction`, `utils/serializable.ts`; the account
@@ -529,16 +585,22 @@ then on also asks for the current password:
 | Password | `POST /api/auth/change-password` | `currentPassword` |
 | Own email address | `PUT /api/users/:id` with `email`, when `:id` is the caller | `currentPassword` |
 | Start MFA enrolment | `POST /api/auth/mfa/setup` | `password` |
-| Turn MFA off | `POST /api/auth/mfa/disable` | `password` |
+| Turn MFA off | `POST /api/auth/mfa/disable` | `password`, and a current code in `token`; refused (403) for an admin |
 | Regenerate backup codes | `POST /api/auth/mfa/backup-codes` | `password` |
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
-An `ADMIN` account must have MFA on: past a 7-day deadline, counted from the
-latest of the policy start, the account's creation, its promotion and a Reset
-MFA by another admin, each an activity-log row (`services/adminMfaPolicy.ts`),
-`middleware/adminMfa.ts` answers 403
-`MFA_ENROLMENT_REQUIRED` to everything but enrolment, and on every admin
-request it re-reads the role from the database into the session.
+An `ADMIN` account must have MFA on. Its 7-day deadline is counted from the
+latest of the policy start, the account's `createdAt`, its promotion and a
+Reset MFA by another admin; all but `createdAt` are activity-log rows
+(`services/adminMfaPolicy.ts`). Until the deadline nothing is refused, and
+`GET /api/auth/me` and the sign-in reply carry `adminMfaDeadline` for the
+banner. Past it, `middleware/adminMfa.ts` answers 403 with
+`code: MFA_ENROLMENT_REQUIRED` to every `/api` request except
+`POST /api/auth/mfa/setup` and `POST /api/auth/mfa/verify` and the paths the
+password-change gate allows (`change-password`, `logout`, `me`, `ping`,
+`appearance` and `/api/config`). On every admin request it re-reads the role
+from the database into the session. A database error lets the request
+through, so a passing fault does not lock every admin out.
 
 The admin reset routes, `POST /api/users/:id/reset-password` and
 `POST /api/admin/users/:id/reset-mfa`, ask for no password because the admin
@@ -546,8 +608,9 @@ does not have the target's. They refuse the caller's own id (400), so a stolen
 admin session cannot use them to get round the two rows above for its own
 account. Wrong passwords on `POST /api/auth/change-password`, `DELETE /api/auth/account` and the own-email change are limited to 10 per 15 minutes per
 account (`passwordCheckLimiter`); the two-factor routes in the table keep their
-per-address limiters (`credentialLimiter` on disable and backup codes, the MFA
-setup limiter on enrolment), with no per-account count.
+per-address limiters (`credentialLimiter` on `POST /api/auth/mfa/setup`, disable
+and backup codes; `mfaSetupLimiter` on enrolment's code step,
+`POST /api/auth/mfa/verify`), with no per-account count.
 
 An admin changing someone else's email gives no password, since they do not
 have it. The email check runs before the new address is looked up, so a
@@ -578,7 +641,7 @@ Two separate facts, and they are only the same person by default:
 
 | Fact | Where it lives | Moves? |
 | --- | --- | --- |
-| Campaign owner | `Campaign.ownerId` | No — a DM transfer leaves it alone |
+| Campaign owner | `Campaign.ownerId` | Only when the owner's account is deleted, to the sitting DM; a DM transfer leaves it alone |
 | DM | `CampaignMembership.role === 'DM'` | Yes — see below |
 
 Decide **"is this user the DM?"** from the membership, never from `ownerId`.
@@ -587,8 +650,12 @@ actual DM and keeps privileges with someone who no longer runs the game. In
 socket handlers that means `socket.role`; in routes, `req.campaignMembership`
 or the `campaignDM` middleware.
 
-`ownerId` gates exactly one thing — deleting the campaign (`canDeleteCampaign`),
-which is deliberate: the destructive power stays with whoever created it.
+`ownerId` decides three things. Only the owner (or an admin) may delete the
+campaign (`canDeleteCampaign`), which is deliberate: the destructive power
+stays with whoever created it. The owner may always hand the DM seat on
+(`canTransferDM`). And the owner cannot be removed from the campaign
+(`DELETE /api/campaigns/:campaignId/members/:userId` answers `400`), since
+only the DM can add a membership and the owner could not get back in.
 
 ### Transferring the DM role
 
@@ -649,25 +716,28 @@ only to those still in the room, so a socket that switches campaigns mid-way
 is not sent the old campaign's view under its new role.
 
 REST needs no equivalent for campaign roles; its middleware reads the membership
-per request. Platform role is a different matter, see below.
+per request. Platform role is a different matter, see above.
 
 ### A removed member's own notes and macros
 
 Removing a member deletes none of their `PersonalNote` or `DiceMacro` rows, and
-every notes and macros route asks for membership. Three read-only routes,
+every notes and macros route asks for membership. Four read-only routes,
 guarded by `authenticated` alone, let the author still read their own
 (`routes/leftCampaigns.ts`): `GET /api/campaigns/left` lists the campaigns the
 caller has no membership in and still has notes or macros in,
 `GET /api/campaigns/left/:campaignId` returns their note titles and macros in
-one such campaign, and `GET /api/campaigns/left/:campaignId/notes/:noteId`
-returns one note with its text. Every query is scoped to the session's user id
-and to a campaign the caller has no membership in, so a member is answered
-`404` and uses the member routes. The second and third answer `404` where the
-caller has nothing, so they reveal nothing about a campaign they were never in.
-Note text goes out one note at a time, as it does for a member: a campaign can
-hold 200 notes of 100,000 characters each. Nothing lets a non-member change
-them. Rejoining puts them back behind the member routes, and deleting the
-campaign cascades them away.
+one such campaign, `GET /api/campaigns/left/:campaignId/notes/:noteId`
+returns one note with its text, and `GET /api/campaigns/left/:campaignId/notes`
+returns all their notes in that campaign with their text, for the Download
+button. Every query is scoped to the session's user id and to a campaign the
+caller has no membership in, so a member is answered `404` and uses the member
+routes. The last three answer `404` where the caller has nothing, so they
+reveal nothing about a campaign they were never in. The lists carry titles
+only. A campaign can hold 200 notes of 100,000 characters each, so the
+download is written out ten notes at a time and is limited to 60 requests an
+hour per user (`middleware/leftNotesDownloadLimiter.ts`, `429` past it).
+Nothing lets a non-member change them. Rejoining puts them back behind the
+member routes, and deleting the campaign cascades them away.
 
 ---
 
