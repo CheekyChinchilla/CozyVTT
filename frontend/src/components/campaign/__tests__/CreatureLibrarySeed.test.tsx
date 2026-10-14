@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CreatureLibrary from '../CreatureLibrary';
 
@@ -52,5 +52,22 @@ describe('the SRD import in an empty library', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Import D&D 5e SRD Creatures' }));
 
     expect(await screen.findByText('api.open5e.com did not answer within 15 seconds.')).toBeInTheDocument();
+  });
+
+  it('keeps the server\'s reason on screen when the list reloads after it', async () => {
+    // The library loads its list again 300 ms after it opens (the search
+    // box's debounce), and a list load cleared the one error box, so a failure
+    // shown in that time vanished.
+    api.getSeedStatus.mockResolvedValue({ srdCount: 0, customCount: 0, seedInProgress: false, canSeed: true });
+    api.seedSrdCreatures.mockRejectedValue({
+      response: { status: 502, data: { error: 'Bad Gateway', message: 'api.open5e.com did not answer within 15 seconds.' } },
+    });
+    render(<CreatureLibrary isOpen onClose={() => {}} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Import D&D 5e SRD Creatures' }));
+    expect(await screen.findByText('api.open5e.com did not answer within 15 seconds.')).toBeInTheDocument();
+
+    await waitFor(() => expect(api.listCreatures.mock.calls.length).toBeGreaterThan(1), { timeout: 2000 });
+    expect(screen.getByText('api.open5e.com did not answer within 15 seconds.')).toBeInTheDocument();
   });
 });

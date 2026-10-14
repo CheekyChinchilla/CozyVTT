@@ -149,6 +149,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [canSeed, setCanSeed] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
+  // Kept apart from `error`, which every list load clears: the list loads
+  // again 300 ms after the library opens, and a failed import's reason shown
+  // in that time vanished with it.
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -222,7 +226,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     if (!campaign || isSeeding) return;
     setIsSeeding(true);
     setSeedResult(null);
-    setError(null);
+    setSeedError(null);
 
     try {
       const result = await api.seedSrdCreatures(campaign.id);
@@ -234,7 +238,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       // Refresh the list
       fetchCreatures(true);
     } catch (err) {
-      setError(apiErrorMessage(err) || 'Failed to seed SRD creatures. Check that the server can reach api.open5e.com.');
+      setSeedError(apiErrorMessage(err) || 'Failed to seed SRD creatures. Check that the server can reach api.open5e.com.');
     } finally {
       setIsSeeding(false);
     }
@@ -514,11 +518,11 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
             </div>
 
             {/* ── Error ── */}
-            {error && (
-              <div className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
-                {error}
+            {[error, seedError].filter(Boolean).map((message) => (
+              <div key={message} className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
+                {message}
               </div>
-            )}
+            ))}
 
             {/* ── Favorites Section ── */}
             {favoriteCreatures.length > 0 && (
