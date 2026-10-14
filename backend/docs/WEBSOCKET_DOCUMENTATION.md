@@ -171,8 +171,8 @@ the client's `connect_error` fire; a connection with no usable sign-in is
 accepted and then ended, as the next paragraph says.
 
 The handshake accepts a sign-in with no two-factor step left to finish, made
-less than 30 days ago (`REMEMBER_ME_MAX_AGE`), whose account still exists and
-has no password change due. Anything else is refused with
+less than 30 days ago (`REMEMBER_ME_MAX_AGE`, 30 days unless set otherwise),
+whose account still exists and has no password change due. Anything else is refused with
 `error { message: 'Unauthorized' }` and disconnected: a session that has passed
 the password step but not the code, a sign-in older than 30 days, one whose
 account must set a new password or no longer exists, one that has ended, and a
@@ -190,8 +190,8 @@ being replaced until the restore ends, every open connection is sent
 restored from a backup. Sign in again once it has finished." and closed, and a new connection is sent `error` with the message "The instance
 is being restored from a backup. Try again in a minute; everyone signs in again
 once it has finished." and closed. A connection whose handshake was still
-under way when the restore began, and that got in regardless, is ended the same
-way once the backup is loaded, with the message "The instance was restored from
+under way as the database began to be replaced, and that got in regardless, is
+ended the same way once the backup is loaded, with the message "The instance was restored from
 a backup. Sign in again." The restored database holds no sign-ins, so a client
 signs in again afterwards, and the initiative order kept in memory is cleared.
 The HTTP API answers 503 for the same span.
@@ -276,7 +276,7 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `connected`
 **Direction:** Server → Client
-**When:** After successful WebSocket connection
+**When:** After successful WebSocket connection, once the sign-in and the per-account connection limit have been checked; on every new connection, a reconnect included. Send `authenticate` after it
 **Payload:**
 ```typescript
 {
