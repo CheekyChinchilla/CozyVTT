@@ -16,11 +16,14 @@ This guide covers deploying CozyVTT to a **production server** using Docker Comp
 6. [Manual Deployment](#manual-deployment)
 7. [Environment Configuration](#environment-configuration)
 8. [File Storage](#file-storage)
-9. [Database Backups](#database-backups)
-10. [Monitoring and Logs](#monitoring-and-logs)
-11. [Troubleshooting](#troubleshooting)
-12. [Updating CozyVTT](#updating-cozyvtt)
-13. [Hardening Checklist](#hardening-checklist)
+9. [Per-User Permissions](#per-user-permissions)
+10. [Database Backups](#database-backups)
+11. [Monitoring and Logs](#monitoring-and-logs)
+12. [Troubleshooting](#troubleshooting)
+13. [Updating CozyVTT](#updating-cozyvtt)
+14. [Hardening Checklist](#hardening-checklist)
+15. [Cloudflare Tunnel (Recommended for Public Instances)](#cloudflare-tunnel-recommended-for-public-instances)
+16. [The API Documentation](#the-api-documentation)
 
 ---
 
@@ -69,7 +72,7 @@ NODE_ENV=production
 
 **Use letters and digits only in `DATABASE_PASSWORD`**, which is what `openssl rand -hex 16` gives you. The stack writes the password into the database's address, so a character such as `/`, `#`, `?` or `%` breaks that address. The database container still starts and looks healthy, but the backend cannot connect: `docker compose logs backend` shows `Database connection successful`, because that first check does not use the password, and then `Migration failed`, and the container keeps restarting. If you see that, check the password's characters first. A `$` has a different problem: Docker Compose reads a `$` in `.env` as the start of a variable name, so the password it uses is not the one you typed.
 
-`CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. With the bundled nginx the app and its API share one address, so this needs nothing from you; if you serve the frontend from a separate address, `CORS_ORIGIN` must be exactly that address (`https://`, host and any port).
+`CORS_ORIGIN` is also the only other address a browser page may make changes from. A page on any other address, another port on the same server included, is refused if it tries to sign in, save or delete anything as whoever is signed in. CozyVTT serves the app and its API from one address, as the bundled nginx and every setup in this guide do, so that check needs nothing from you. Set `CORS_ORIGIN` to the address your players type, `https://`, host and any port included: email links are built from it unless you set `APP_URL`.
 
 ### Changing the database password
 
@@ -119,7 +122,7 @@ Until the wizard has run, whoever submits it becomes the instance's administrato
 
    You should see one line containing a 32-character code, such as (in production the line is JSON, with the timestamp after the message)
    `Setup is not complete. The setup wizard asks for this setup token: 3f9c2a7d1b8e4c6f0a5d9e2b7c1f4a8d`.
-   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line. If it is still missing (the backend could not read its settings while it started, or `LOG_LEVEL` hides warnings), open the wizard and press the button with any token typed in: the wizard refuses it, and the backend prints the token again, as `The setup wizard was refused: the setup token was missing or wrong. The setup wizard asks for this setup token: ...`, in a line every `LOG_LEVEL` shows.
+   If the line is missing, the backend may still be starting; wait a few seconds and run it again. The token is new on every start of the backend until setup is complete, so copy it from the latest line. If it is still missing (the backend could not read its settings while it started, or `LOG_LEVEL` hides warnings), go through the wizard with anything typed into **Setup token** and press **Complete Setup** on the last step: the wizard refuses it, and the backend prints the token again, as `The setup wizard was refused: the setup token was missing or wrong. The setup wizard asks for this setup token: ...`, in a line every `LOG_LEVEL` shows.
 
 2. Navigate to `http://your-server` (or `http://localhost` if testing locally). The wizard opens by itself on a fresh install.
 
@@ -179,7 +182,11 @@ HTTP_PORT=8080
 HTTPS_PORT=8443
 ```
 
-The defaults (`80`/`443`) apply if these variables are not set.
+The defaults (`80`/`443`) apply if these variables are not set. Run `docker compose up -d` after changing them.
+
+Put the port in `CORS_ORIGIN` too, for example `CORS_ORIGIN=http://yourserver:8080`: email links are built from it, and without the port they lead to port 80. With HTTPS on another port, put that port in the `return 301` line of your `nginx/conf.d/https.conf` as well (`return 301 https://$host:8443$request_uri;`), or visitors who type `http://` are sent to port 443.
+
+A value can also start with an address, which publishes the port on that address alone. `HTTP_PORT=127.0.0.1:80` keeps it to this server, which is what a tunnel on the same server wants (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)).
 
 ---
 
@@ -443,6 +450,8 @@ Whatever proxy you use, it must:
 - For importing campaigns: allow `/api/campaigns/import` (which also covers `/api/campaigns/import/preview`) a request body of at least **505 MB**, the 500 MB largest archive plus overhead, and give it about **300 seconds** to answer, since a large archive takes minutes to unpack. The bundled nginx allows 512 MB there whatever `NGINX_MAX_BODY_SIZE` says. Without this, importing an archive bigger than your body limit shows "This archive is larger than the server accepts", and a slow import shows an error while the backend carries on and finishes it. Where your proxy can, pass the upload straight through instead of saving it first (`proxy_request_buffering off` in nginx)
 - For the Admin Dashboard's backups: allow `/api/admin/backups/restore` a request body as large as your biggest backup (the bundled nginx allows 4 GB), and give both `/api/admin/backups` and `/api/admin/backups/restore` about **600 seconds** to answer (most proxies wait 60). Making or restoring a backup, uploaded files and all, happens inside that one request. Without this, restoring a backup bigger than your body limit fails with **413**, and making a backup that takes longer than your proxy waits shows **504**; the backend carries on, and the backup appears in the list when it is done. Where your proxy can, have it pass the restore upload straight through instead of saving it first (`proxy_request_buffering off` in nginx), so a stranger cannot fill its disk
 - Let a large campaign import or backup restore take its time to arrive on a slow connection. CozyVTT itself waits up to an hour for an upload, so it is your proxy's limits that count: give these paths a body timeout that drops a client that **stops** sending, not one that ends a slow but steady upload. nginx's `client_body_timeout` works that way (60 seconds between two pieces of the upload, by default), and the bundled nginx relies on it
+
+Optional: have your proxy compress the backend's answers (gzip for `application/json`), as the bundled nginx does. A map's tokens, walls and fog travel as JSON and shrink to a fraction of their size. The frontend container already compresses the app's own scripts and styles.
 
 > ⚠️ **A proxy that only serves the web pages looks like it works.** If `/api` isn't routed to the backend, those requests come back as the CozyVTT web page itself with a success code, so the site loads normally while every API call quietly fails. Symptoms: a brand-new install shows the login page instead of the setup wizard, and `/setup` bounces straight back to the home page. The `curl` check above tells you in one command.
 
@@ -734,7 +743,7 @@ A line with a time under `NEXT` means it is. Two more things make renewal comple
    docker compose logs --tail 5 nginx
    ```
 
-   The first command prints nothing when it works, and the log shows nginx starting again.
+   When it works, the first command ends with Docker's `Container cozyvtt-nginx  Started` line, and the log shows nginx starting again. If it says `cp: cannot stat` instead, the domain in its path is not the one certbot used: `sudo ls /etc/letsencrypt/live` lists the right one.
 
 If the dry run fails, it names the domain and the reason; the table under "Obtain a certificate" lists the usual ones. One more:
 
@@ -802,7 +811,9 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cozyvtt TO cozyvtt;"
 # Backend
 cd backend
 cp .env.example .env
-# Edit .env — set DATABASE_URL, SESSION_SECRET, NODE_ENV=production
+# Edit .env: set DATABASE_URL, SESSION_SECRET (openssl rand -hex 32) and
+# NODE_ENV=production, and put your site's address, such as
+# https://your-domain.com, in CORS_ORIGIN and APP_URL (email links use APP_URL)
 npm install
 npx prisma migrate deploy
 npm run build
@@ -818,13 +829,17 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 
 ### 4. Run the backend with pm2
 
+Step 3 ended in the `frontend` folder, so this goes back to `backend` first. pm2 is installed for every account on the machine, which is why it needs `sudo`:
+
 ```bash
-npm install -g pm2
-cd backend
+sudo npm install -g pm2
+cd ../backend
 pm2 start dist/server.js --name cozyvtt-backend
 pm2 save
 pm2 startup  # Follow the printed instructions to enable autostart
 ```
+
+`pm2 status` should then list `cozyvtt-backend` as `online`. If it says `errored`, or the restart count under `↺` keeps rising, `pm2 logs cozyvtt-backend` shows why; a line containing `[FATAL]` names the setting in `backend/.env` to fix.
 
 ### 5. Serve with Nginx
 
@@ -1113,7 +1128,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
 | `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
-| `NODE_ENV` | `production` | `production` or `development` | No: the compose file sets `production` |
+| `NODE_ENV` | none, which runs the backend as `development` | Set it to `production` on a real instance. Anything else accepts a weak `SESSION_SECRET` with only a warning and writes no files to `backend/logs/` | No: the compose file sets `production` |
 | `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.override.yml` instead; [Database Backups](#database-backups) shows how that file works |
 | `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
 | `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
@@ -1542,6 +1557,21 @@ Same root cause as above: the browser reached the wizard (served by the frontend
 
 If you removed the bundled `nginx` service, the usual culprit is a missing `ports` entry on the **backend** service — it is `expose`-only by default, which means "reachable from other containers" but not from your proxy.
 
+### The backend keeps restarting, and its log says `[FATAL]`
+
+`docker compose ps` shows the backend as `Restarting`, and nobody can sign in. A production instance refuses to start on a secret anyone could guess. Find the reason:
+
+```bash
+docker compose logs backend | grep FATAL
+```
+
+| The line says | What to do |
+|---|---|
+| `SESSION_SECRET is shorter than 32 characters`, `SESSION_SECRET is a placeholder value` or `SESSION_SECRET is not set` | Run `openssl rand -hex 32`, put what it prints in `.env` after `SESSION_SECRET=`, and run `docker compose up -d`. Everyone is signed out once |
+| `DATABASE_URL uses the placeholder password from .env.example` | Follow [Changing the database password](#changing-the-database-password). The database keeps the password it was made with, so it has to be changed inside the database first |
+
+Use `docker compose up -d`, which reads `.env` again; `docker compose restart` keeps the old value. Once the backend starts, `docker compose ps` shows it as `healthy` within a minute.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
@@ -1575,6 +1605,8 @@ docker compose logs backend | grep -i "upload limits"
 ---
 
 ## Updating CozyVTT
+
+Read the new version's **Upgrading** notes at the top of `CHANGELOG.md` first, on GitHub before you pull or in your CozyVTT folder straight after. They say whether that release needs anything from you. 1.5.2 does if a Cloudflare Tunnel or another proxy sits in front of CozyVTT: it needs `NGINX_TRUSTED_PROXIES` in `.env`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains, or every visitor counts as the proxy's one address. Then:
 
 ```bash
 git pull origin main
@@ -1635,6 +1667,22 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Static files in frontend/dist/ are now updated — Nginx serves them immediately
 ```
 
+Coming from 1.5.1 or earlier, also bring your Nginx site file, `/etc/nginx/sites-available/cozyvtt`, up to date with the example in [Serve with Nginx](#5-serve-with-nginx). Copy these lines from the example into the same places in your file:
+
+1. In the `server` block for port 443: the five `gzip` lines and `server_tokens off;`.
+2. In `location /`: the `if (-d $request_filename)` block, `try_files $uri /index.html;` in place of your `try_files` line, and the six `add_header` lines below it.
+3. In `location /socket.io/`: the `X-Forwarded-For` and `X-Forwarded-Proto` lines.
+4. In `location = /health`: the `X-Real-IP`, `X-Forwarded-For` and `X-Forwarded-Proto` lines.
+
+Without them the app page has no Content-Security-Policy, the app and the backend's answers are not compressed, and reloading or bookmarking the Asset Library page (`/assets`) shows "403 Forbidden". Then check and apply the file:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+`sudo nginx -t` should print `syntax is ok` and `test is successful`, and the `curl` check under [Serve with Nginx](#5-serve-with-nginx) should print three lines.
+
 Coming from 1.4.0 or earlier, also make the database role the owner of the database and its `public` schema once, so a backup can be restored (see [Database Backups](#database-backups)); use your own names if you changed them:
 
 ```bash
@@ -1655,8 +1703,8 @@ Before going live:
 - [ ] **Proxies listed** — If a tunnel or proxy passes visitors to the bundled nginx, `NGINX_TRUSTED_PROXIES` in `.env` lists it, and `docker compose logs --tail 5 nginx` shows visitors' own addresses (see [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits)). With a tunnel on the same server, `HTTP_PORT` and `HTTPS_PORT` start with `127.0.0.1:`
 - [ ] **CORS_ORIGIN** — Set to your specific domain, not a wildcard
 - [ ] **Setup finished** — The setup wizard has been completed, so `curl -s https://your-domain.com/api/setup/status` prints `"setupCompleted":true`. Until then the wizard, protected by the setup token, is the only thing the instance offers
-- [ ] **Registration** — `allowRegistration` is **off** for private instances. You choose this in the setup wizard, and can change it later in **Admin → Settings**
-- [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can do nothing but set it up
+- [ ] **Registration** — **Enable Public Registration** is **off** for private instances. You choose this in the setup wizard, and can change it later with **Allow Public Registration** in **Admin → Settings**
+- [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can only set it up, change their password or sign out
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
 - [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS**: the backend already sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer from `/api`, so a browser that has used the instance over HTTPS keeps that name on HTTPS for 180 days (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)). The app page itself carries it only if you turn on the commented line in the `nginx/conf.d/https.conf` example
@@ -1698,10 +1746,11 @@ If CozyVTT is reachable from the internet, fronting it with a **[Cloudflare Tunn
    cloudflared tunnel create cozyvtt
    cloudflared tunnel route dns cozyvtt cozyvtt.example.com
    ```
-5. Create `~/.cloudflared/config.yml`:
+   `tunnel create` prints the path of the file it wrote, after `Tunnel credentials written to`, and the tunnel's id. Step 5 needs both.
+5. Create `~/.cloudflared/config.yml`, with the id and the path from step 4:
    ```yaml
    tunnel: <tunnel-id-from-step-4>
-   credentials-file: /root/.cloudflared/<tunnel-id>.json
+   credentials-file: /home/you/.cloudflared/<tunnel-id>.json
 
    ingress:
      - hostname: cozyvtt.example.com

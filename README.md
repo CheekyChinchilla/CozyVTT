@@ -23,8 +23,8 @@ CozyVTT is a self-hosted, community-maintained project run **by you** on **your 
 - Run on a small VPS rather than your home network
 - Front it with a **[Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)** (free, hides your origin IP, no open ports needed, automatic DDoS protection) or a similar reverse proxy / WAF
 - Keep the instance updated as security patches land — watch this repo
-- Set a strong `SESSION_SECRET` (32+ char random) and your own `DATABASE_PASSWORD` — the production build refuses to start while either is still the placeholder
-- Use the built-in MFA on the admin account at minimum
+- Set a strong `SESSION_SECRET` (32+ char random) and your own `DATABASE_PASSWORD` — the production build refuses to start while either is still the placeholder, or while `SESSION_SECRET` is shorter than 32 characters
+- Use the built-in MFA: every administrator account must turn it on within 7 days, and it is worth having on every account
 - Configure regular database backups (`backend/scripts/backup.sh` + cron — see [DEPLOYMENT.md](docs/DEPLOYMENT.md))
 - Review the **Hardening Checklist** in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) before flipping public
 
@@ -40,12 +40,12 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Multi-campaign** — one server, unlimited campaigns, isolated from each other
 - **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign
 - **Setup wizard** — guided first-run initialization; no manual database seeding required. It asks for a one-time setup token printed in the backend log, so only the person running the server can create the first administrator
-- **Admin dashboard** — user management, system settings, activity logs, database backups
+- **Admin dashboard** — user management, system settings, activity logs, uploaded files, database backups
 
 ### Campaign Tools
 - **Interactive map canvas** — upload map images, place tokens, click a token to pick it up and click a square to put it down, with every move shown to the table in real time
 - **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); colored-letter placeholders for tokens without images; the DM can hide a token from players or obscure what it is, and players are sent only what they may see of each token
-- **Creature library** — browse, search, and place creatures from the SRD bestiary (auto-imported from Open5e) or custom campaign-specific templates; per-campaign favorites with star toggle; duplicate SRD creatures to customize; edit custom creatures in-place; save token images back to templates
+- **Creature library** — browse, search, and place creatures from the SRD bestiary (imported from Open5e by an administrator, with one button) or custom campaign-specific templates; per-campaign favorites with star toggle; duplicate SRD creatures to customize; edit custom creatures in-place; save token images back to templates
 - **Token templates** — save reusable token configurations (image, stats, HP, size, disposition, full NPC stat block); place from library or save from map context menu; copy templates between campaigns the DM owns
 - **NPC right-click rolls** — DMs right-click any NPC token to roll abilities, saves, skills, attacks, and damage parsed from its stat block; advantage/disadvantage selector for d20 systems; free-form custom roll fallback for non-5e systems
 - **Campaign export/import** — export campaigns as portable `.cozyvtt` archives; import on any CozyVTT instance; includes maps, tokens, creatures, templates, and assets; multi-step preview flow; optional audio toggle; secured against path traversal, zip bombs, and malicious files
@@ -91,8 +91,8 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 ### Security
 - **Argon2id password hashing** (64 MB memory cost, timeCost 3)
-- **TOTP multi-factor authentication** with hashed backup codes
-- **Session-based authentication** with rolling expiry and "remember me"
+- **TOTP multi-factor authentication** with hashed backup codes, required on administrator accounts
+- **Session-based authentication** with rolling expiry, "remember me", and a 30-day limit on any sign-in
 - **Password reset** via email (SMTP configurable)
 - **Admin-approval registration** (optional)
 - **File upload validation** — magic-byte content checks (not just MIME header), size limits by type; text uploads must genuinely be text, and documents are served as plain text or PDF, never as a web page
@@ -100,7 +100,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use. The Docker setup sends them; an install without Docker gets them from the Nginx example in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#5-serve-with-nginx)
 - **WebSocket campaign isolation** — server-authenticated campaign membership; no client-spoofing
 - **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs. In the two nginx containers the master process runs as root, as nginx's own image does, and the worker processes that handle requests run as the unprivileged `nginx` user. The database container runs PostgreSQL as the unprivileged `postgres` user, as its official image does. Every container runs with `no-new-privileges`, and the one serving the app's files has a read-only filesystem
-- **Production refuses to start** with a placeholder `SESSION_SECRET` or `DATABASE_PASSWORD`
+- **Production refuses to start** with a placeholder `SESSION_SECRET` or `DATABASE_PASSWORD`, or a `SESSION_SECRET` shorter than 32 characters
 - See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy
 
 ---
@@ -189,7 +189,7 @@ Most runtime configuration is managed through the Admin dashboard after setup. E
 | Users | Invite User | Email someone a link to join and choose their own password (needs SMTP; link valid 7 days) |
 | Users | Create User | Generate a temporary password to hand over yourself — for instances without email |
 | Settings | Instance Name | Displayed in the browser title and emails |
-| Settings | Allow Registration | Whether new users can self-register |
+| Settings | Allow Public Registration | Whether new users can self-register |
 | Settings | Require Admin Approval | New registrations must be approved before login |
 | Settings | SMTP | Shows the email settings from `.env`, with **Send Test Email** |
 | Settings | Upload Limits | Shows the per-type file size limits from `.env` (maps, tokens, audio, avatars, documents) |
@@ -251,7 +251,8 @@ Set these in `.env` and apply them with `docker compose up -d`; no rebuild is ne
 | [Future Features](docs/FUTURE_FEATURES.md) | Backlog of planned work |
 | [Security Policy](SECURITY.md) | How to report vulnerabilities |
 | [Changelog](CHANGELOG.md) | Release history |
-| [Third-Party Licenses](THIRD_PARTY_LICENSES.md) | Font and content license attributions |
+| [Third-Party Licenses](THIRD_PARTY_LICENSES.md) | Licences of the fonts, icons, libraries and game content CozyVTT uses |
+| [SRD Attribution](SRD_ATTRIBUTION.md) | Attribution for the D&D 5e SRD creatures an administrator can import |
 
 ---
 
