@@ -53,6 +53,8 @@ cozyvtt/
 │   │   ├── schema.prisma  Database schema
 │   │   ├── migrations/    Migration history
 │   │   └── seed.ts        Placeholder for development seed data (creates nothing yet)
+│   ├── scripts/           start.sh (the images' entrypoint: waits for the database,
+│   │                      applies migrations), backup.sh and restore.sh
 │   └── docs/              Backend-specific docs (OpenAPI YAML, WS docs)
 │
 ├── frontend/              React + Vite client
@@ -73,7 +75,10 @@ cozyvtt/
 │   ├── e2e/               Playwright smoke tests against a running instance
 │   └── public/            Static assets
 │
+├── .github/               The CI workflow, Dependabot's settings and the issue templates
+├── assets/                The logo the README shows
 ├── docs/                  User and developer documentation
+├── Examples/              Example character sheets for each game system, as JSON
 ├── nginx/                 The bundled reverse proxy's configuration
 ├── scripts/               The doc, nginx and coverage checks (Python)
 ├── docker-compose.yml     Production Docker stack (default)
@@ -739,9 +744,10 @@ cd frontend && npm run lint
 
 The rules are in each package's `eslint.config.js` (ESLint 10, flat config):
 ESLint's recommended rules, typescript-eslint's recommended rules and, in the
-frontend, the React hooks rules. Only TypeScript files are linted. A rule that
-is switched off says why beside it, and the ones waiting to be turned on are
-marked `TODO(ratchet)`.
+frontend, the React hooks rules. Only TypeScript files are linted, apart from
+the frontend's `vite.config.ts`. A rule that is switched off says why beside
+it. In the frontend the ones waiting to be turned on are marked
+`TODO(ratchet)`; the backend's three are listed in the comment above them.
 
 There is no enforced code formatter (Prettier), but follow the existing style in the file you're editing:
 - 2-space indentation
@@ -753,12 +759,12 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 - **Routes** handle HTTP parsing and response formatting only — business logic goes in `services/`
 - **Middleware** in `src/middleware/` — authentication and role guards (named in the route declaration, composed in `compose.ts`), rate limiting, file uploads
 - **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails. A key that may be left out says `.optional()`, a `z.unknown()` key included: since zod 4.4 a missing `z.unknown()` key is an error
-- **WebSocket handlers** in `src/websocket/handlers/` — one module per domain (tokens, dice, chat, fog, …), each registering its events for a connection; `events.ts` only wires them together
+- **WebSocket handlers** in `src/websocket/handlers/` — one module per domain (tokens, dice, chat, fog, …), each registering its events for a connection; `events.ts` handles the connection itself (joining a campaign, presence, disconnect) and registers the domain modules
 
 ### Frontend Patterns
 
 - **Pages** in `src/pages/` — one file per route, thin orchestration layer
-- **Components** in `src/components/` — reusable UI; no direct API calls
+- **Components** in `src/components/` — reusable UI; they reach the API through the clients in `src/services/` (the document reader's `fetch` of a document's text is the one exception)
 - **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Theme, Toast)
 - **Services** in `src/services/` — all API calls go through `api.ts` or `auth.service.ts`
 - **No `any`** — if you need to escape the type system, use `unknown` and narrow it
@@ -787,6 +793,7 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 - `fix/<name>` — bug fixes
 - `docs/<name>` — documentation only
 - `test/<name>` — tests and CI only
+- `chore/<name>` — version bumps and other housekeeping
 - `release/<version>` — a release being tested, cut from `dev`
 
 CI runs on pushes to `dev` and `main` and on pull requests into them; a branch of your own runs nothing until it is pushed as a pull request.
