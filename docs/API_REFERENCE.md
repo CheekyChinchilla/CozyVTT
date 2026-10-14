@@ -568,11 +568,15 @@ All token template endpoints are scoped under a campaign and require DM role.
 
 ### `GET /api/campaigns/:campaignId/token-templates`
 
-List all token templates for a campaign.
+List this campaign's token templates, ordered by name, a page at a time.
 
 **Query params:**
 - `search` — filter by name (optional)
-- `type` — filter by token type: `npc`, `player`, `object` (optional)
+- `type` — filter by token type: `npc`, `player`, `object` (optional; any other value is ignored)
+- `limit` — templates per page (default 50, at most 100)
+- `offset` — templates to skip (default 0)
+
+**Response:** `{ templates, total, limit, offset }`, where `total` counts every match.
 
 ---
 
@@ -627,13 +631,7 @@ Save a token from the map as a new template. Accepts the same body as create, bu
 
 Copy a token template to another campaign. Requires DM role in both the source and target campaigns.
 
-**Response:**
-```json
-{
-  "message": "Template copied successfully",
-  "template": { ... }
-}
-```
+**Response:** `201` with the new token template itself, in the target campaign and created by you, in the same shape as `GET /api/campaigns/:campaignId/token-templates/:id`.
 
 ---
 
@@ -729,24 +727,35 @@ the most one account can. Delete one you no longer need to make room."
   "name": "Thorin Ironforge",
   "gameSystem": "DND_5E",
   "data": {
-    "name": "Thorin Ironforge",
     "class": "Fighter",
-    "level": 1
+    "level": 1,
+    "race": "Dwarf",
+    "proficiencyBonus": 2,
+    "stats": {
+      "strength": { "score": 16, "modifier": 3 },
+      "dexterity": { "score": 12, "modifier": 1 },
+      "constitution": { "score": 16, "modifier": 3 },
+      "intelligence": { "score": 10, "modifier": 0 },
+      "wisdom": { "score": 12, "modifier": 1 },
+      "charisma": { "score": 8, "modifier": -1 }
+    }
   }
 }
 ```
+
+`name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
 
 ---
 
 ### `GET /api/characters/:id`
 
-Get a single character. Returns full character data including the JSON sheet data.
+Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `403`. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
 
 ---
 
 ### `PUT /api/characters/:id`
 
-Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved.
+Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved. On a Call of Cthulhu sheet, a save by anyone but the DM of the character's campaign keeps the stored `notes` (Keeper's Notes), whatever it sends for them.
 
 Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is refused with **409 Conflict** if the character has changed since (another save, or hit points changed at the table). Nothing is written; load the character again and make the change on the new version. Leave `updatedAt` out and the save is made whatever changed in between. A successful save returns the character with its new `updatedAt`.
 
@@ -862,6 +871,8 @@ into a character or editing it.
 }
 ```
 
+(`data` stands for a whole sheet here. It is checked as sent: the template's `name` is not copied into it, so a D&D 5e template's `data` needs `characterName`, `class`, `level`, `race`, `proficiencyBonus` and `stats`, and `{}` answers `400`.)
+
 - `name` is required; `gameSystem` may be null for a flexible template.
 - `data` is validated against the game system's schema exactly as a character's
   is, and stored as the schema returns it, so a field the sheet does not define
@@ -897,10 +908,12 @@ author.
 
 All creature endpoints are mounted under `/api/campaigns/:campaignId/creatures`.
 
-**`imageUrl` on create, update and duplicate** accepts either a bare asset id or a full
-`/api/assets/tokens/:id` path, and is stored normalised to the full path — the same treatment
-characters, maps and map tokens already receive. Send `""` to clear it. Rows written before this
-normalisation may still hold a bare id, so clients should tolerate both when reading.
+**`imageUrl` on create and update** accepts a bare asset id, stored as `/api/assets/tokens/:id`, or
+an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, an address on another
+site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
+that exact address. Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
+as the full path. Rows written before this normalisation may still hold a bare id, so clients should
+tolerate both when reading.
 
 ### `GET /api/campaigns/:id/creatures`
 
@@ -1036,7 +1049,7 @@ Delete a custom creature template (DM only). Cannot delete SRD creatures — ret
 
 ### `POST /api/campaigns/:id/creatures/:creatureId/duplicate`
 
-Duplicate any creature (including SRD) as a new custom creature in this campaign (DM only). The duplicate gets `source: 'custom'` and `(Custom)` appended to the name.
+Duplicate a creature of this campaign, or an SRD creature, as a new custom creature in this campaign (DM only); a creature of another campaign answers `404`. The duplicate gets `source: 'custom'` and ` (Custom)` appended to the name.
 
 **Response:** `201` with the new creature template.
 
@@ -1069,22 +1082,25 @@ Toggle favorite for the current user in this campaign (DM only). If already favo
 
 ### `GET /api/campaigns/:id/creatures/seed/status`
 
-Check whether SRD creatures have been seeded. Any campaign member can check.
+Check whether SRD creatures have been seeded, and whether you may run the import. Any campaign member can check.
 
 **Response:**
 ```json
 {
-  "seeded": true,
-  "count": 325,
-  "seedInProgress": false
+  "srdCount": 325,
+  "customCount": 4,
+  "seedInProgress": false,
+  "canSeed": false
 }
 ```
+
+`srdCount` counts the SRD creatures on the whole server, `customCount` the custom creatures this campaign's library shows, and `canSeed` is `true` for a platform administrator alone.
 
 ---
 
 ### `POST /api/campaigns/:id/creatures/seed`
 
-Seed SRD creatures from Open5e (DM only). Safe to call multiple times — existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress.
+Seed SRD creatures from Open5e. Administrators only: anyone else, a campaign's DM included, gets `403` with "Only an administrator can import the SRD creatures, because every campaign on this server shares them. Ask an administrator to import them." The campaign in the address plays no part, and the creatures appear in every campaign's library. Safe to call multiple times; existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress, and `502`, having written nothing, when Open5e cannot be read, does not answer a page within 15 seconds, or answers something the import will not follow; the `message` says which. A creature whose stat block the Creature Library would refuse is left out and counted in `rejected`.
 
 SRD creatures stored before hit points were tracked are updated in place with `hpMax` and `hitDice`; only those missing keys are added, and custom creatures are never modified.
 
@@ -1096,7 +1112,8 @@ SRD creatures stored before hit points were tracked are updated in place with `h
   "created": 0,
   "updated": 322,
   "skipped": 0,
-  "alreadyExisted": 322
+  "alreadyExisted": 322,
+  "rejected": 0
 }
 ```
 

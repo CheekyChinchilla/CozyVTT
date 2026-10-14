@@ -4675,9 +4675,10 @@ paths:
             The body fails its shape check (`name` missing, empty or over 200
             characters, an unknown `gameSystem`, a non-string `campaignId` or
             `tokenImageUrl`), answered with `message` alone; or `data` does not
-            match the game system's sheet schema, or for a Flexible character
-            the `FlexibleCharacterData` layout (message `Character data does
-            not match the Flexible sheet layout`), answered with
+            match the game system's sheet schema (message `Character data does
+            not match game system schema`), or for a Flexible character the
+            `FlexibleCharacterData` layout (message `Character data does not
+            match the Flexible sheet layout`), answered with
             `validationErrors` listing each problem; or the caller already
             owns 1,000 characters.
           content:
@@ -4759,8 +4760,12 @@ paths:
           current value: the same value is accepted and ignored, a different
           one (or null on a typed character) answers 400. A character's game
           system cannot change. This comparison happens after the permission
-          check, so a caller who may not edit the character gets 403 whatever
-          they send.
+          check, so a caller who may not edit the character gets 403 for any
+          of the four values or null. The body's shape is checked before the
+          character is looked up: a `name` that is empty or over 200
+          characters, a `gameSystem` that is not one of the four values or
+          null, a `tokenImageUrl` that is not text, or a malformed `updatedAt`
+          answers 400 to anyone, even for an id that does not exist.
         - If the character has a `gameSystem`, `data` is validated against
           that system's sheet schema (after moving sheet fields from before
           version 1.3.0 to their current names) and stored as the schema's
@@ -4856,7 +4861,8 @@ paths:
             UTC ISO timestamp ending in `Z`), answered with `message` alone;
             `gameSystem` differs from the character's, answered with `error:
             Bad Request`; or `data` does not match the game system's sheet
-            schema, or for a Flexible character the `FlexibleCharacterData`
+            schema (message `Character data does not match game system
+            schema`), or for a Flexible character the `FlexibleCharacterData`
             layout (message `Character data does not match the Flexible sheet
             layout`), answered with `validationErrors`. Nothing is saved.
           content:
@@ -10151,9 +10157,11 @@ paths:
         Any signed-in user may publish a template, and becomes its author.
         `name` is trimmed, 1 to 200 characters. `description` is trimmed, up
         to 2000 characters. When `gameSystem` is given, `data` must pass that
-        system's sheet schema (an omitted `data` is checked as `{}` and so
-        fails), and is stored as the schema's parsed output, so a key the
-        schema does not declare is dropped, as it is for a character. Sheet
+        system's sheet schema (message `Template data does not match game
+        system schema`, with `validationErrors`, otherwise; an omitted `data`
+        is checked as `{}` and so fails), and is stored as the schema's parsed
+        output, so a key the schema does not declare is dropped, as it is
+        for a character. Sheet
         fields from before version 1.3.0 are moved to their current names
         first, as they are for a character. Without
         a `gameSystem`, `data` must be an object
@@ -10291,7 +10299,8 @@ paths:
         whole sheet; it is checked against the template's game system (after
         moving sheet fields from before version 1.3.0 to their current names),
         or against `FlexibleCharacterData` if it has none, and stored as
-        parsed; a refused sheet answers 400 with `validationErrors`.
+        parsed; a refused sheet answers 400 with `validationErrors` and the
+        message the create route gives.
         `tokenImageUrl` follows the
         rule on create, and null or an empty string removes the image.
       operationId: updateCharacterTemplate
@@ -10445,7 +10454,7 @@ paths:
                     nullable: true
                   data:
                     type: object
-                    description: The sheet, in the shape that game system's data takes (null gameSystem is free-form JSON).
+                    description: The sheet, in the shape that game system's data takes; for a flexible template (null gameSystem), the `FlexibleCharacterData` layout.
         '400':
           description: '`gameSystem` is neither `null`/`undefined` nor a recognised game system.'
         '401':
