@@ -839,7 +839,7 @@ pm2 save
 pm2 startup  # Follow the printed instructions to enable autostart
 ```
 
-`pm2 status` should then list `cozyvtt-backend` as `online`. If it says `errored`, `pm2 logs cozyvtt-backend` shows why; a line containing `[FATAL]` names the setting in `backend/.env` to fix.
+`pm2 status` should then list `cozyvtt-backend` as `online`. If it says `errored`, or the restart count under `↺` keeps rising, `pm2 logs cozyvtt-backend` shows why; a line containing `[FATAL]` names the setting in `backend/.env` to fix.
 
 ### 5. Serve with Nginx
 
