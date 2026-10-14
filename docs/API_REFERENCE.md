@@ -1659,7 +1659,7 @@ Most errors are JSON in this shape:
 Not all of them. The invitation routes (`/api/invitations/...`) send `message`
 alone, and the character check (`GET /api/characters/:id/validate`) answers with
 `isValid` and a list of `errors`. Some errors add a `code` for a program to act on, such as
-`PASSWORD_CHANGE_REQUIRED`. Read the status code first, then `code` if there is
+`PASSWORD_CHANGE_REQUIRED`, `MFA_ENROLMENT_REQUIRED` and `SIGN_IN_EXPIRED`. Read the status code first, then `code` if there is
 one, then `message`.
 
 ### Common HTTP Status Codes
@@ -1676,7 +1676,7 @@ one, then `message`.
 | `429` | Rate limit exceeded |
 | `500` | Server error — check server logs |
 | `502` | Upstream failure — e.g., an invitation email could not be delivered |
-| `503` | Feature unavailable — e.g., an email-dependent endpoint with no SMTP configured |
+| `503` | Feature unavailable — e.g., an email-dependent endpoint with no SMTP configured. Every endpoint also answers `503` with `Retry-After: 60` while a backup restore replaces the database |
 
 ### Password change required
 
@@ -1698,6 +1698,27 @@ Status `403`. Still reachable while in this state: `POST /api/auth/change-passwo
 Clients should route on `code`, not the message — the web app redirects to its change-password screen
 when it sees it.
 
+### Two-factor authentication required for administrators
+
+An administrator account must use two-factor authentication. One without it has 7 days to set it
+up, given as `adminMfaDeadline` on the `user` that `GET /api/auth/me` and the sign-in replies return
+(`null` for everyone else). The 7 days run from the latest of when the rule started on the instance,
+the account's creation, its promotion to admin, and an administrator's **Reset MFA** on it. Past the
+deadline, every endpoint except `POST /api/auth/mfa/setup`, `POST /api/auth/mfa/verify`,
+`POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
+`GET /api/auth/appearance` and `GET /api/config` returns:
+
+```json
+{
+  "error": "MFA Required",
+  "code": "MFA_ENROLMENT_REQUIRED",
+  "message": "Administrator accounts must use two-factor authentication. Set it up to continue."
+}
+```
+
+Status `403`. A script signed in as an administrator stops at the deadline until two-factor
+authentication is set up on the account, and then has to send a code at every sign-in.
+
 ---
 
 ## Rate Limits
@@ -1707,11 +1728,14 @@ when it sees it.
 | Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
 | Login, per account (from every address) | 10 wrong passwords | 1 hour | Wrong passwords only; each lock is noted in the admins' activity log |
 | Two-factor code at sign-in | 5 wrong codes per address, and 5 per account | 15 minutes | Wrong codes and backup codes only |
+| Checking the code when turning two-factor on | 5 failures | 15 minutes | Every answer that is not a success |
 | Change password, delete account, change own email (per account) | 10 wrong passwords | 15 minutes | Wrong current passwords only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
-| File upload, and writing a document | 30 requests | 1 minute | Every request |
+| File upload, a new typed document, Universal VTT map import (per user) | 30 requests | 1 minute | Every request |
 | Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
+| Invitation emails (per DM) | 20 emails | 1 hour | Invitations sent with `sendEmail: true` on an instance with SMTP; a refused invitation is not counted |
+| All the notes of a campaign you have left (per user) | 60 requests | 1 hour | Every request |
 | General API | 300 requests | 1 minute | Every request |
 | Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
 | Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
@@ -1744,7 +1768,10 @@ The upload, campaign-archive and general-API limits are configurable with the
 `RATE_LIMIT_MAX_REQUESTS` environment variables; the rest are fixed.
 
 Rate limit responses return HTTP `429` with a `Retry-After` header giving the
-seconds until the limit resets. The one-at-a-time refusals (a second campaign
+seconds until the limit resets. Where only wrong answers count, a request that
+has waited 15 seconds behind others still being checked answers `429` "Other
+attempts are still being checked. Please try again in a moment." with
+`Retry-After: 5`, and is not counted. The one-at-a-time refusals (a second campaign
 import, preview or export while one of yours is running, and a second Universal
 VTT map import while one is running) also answer `429`, with no `Retry-After`:
 send the request again once the first has finished. The WebSocket limits are not
