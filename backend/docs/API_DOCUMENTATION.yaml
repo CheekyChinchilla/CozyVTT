@@ -128,8 +128,9 @@ info:
       answering 429 `Too Many Requests` past that
     - Invitation emails (`POST /api/campaigns/{campaignId}/invite` with
       `sendEmail: true`, on an instance with SMTP configured): 20 per hour per
-      DM, then 429 `Too Many Requests`. An invitation the route refuses is not
-      counted, and one sent without the email is never limited
+      DM, then 429 `Too Many Requests`. An invitation the route creates is
+      counted whether or not its email goes out; one the route refuses is
+      not counted, and one sent without the email is never limited
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
@@ -2396,7 +2397,11 @@ paths:
       summary: Update campaign
       description: |
         Update campaign settings (DM only). Every field is optional and is
-        validated when present; a bad value is a 400 with a message naming it.
+        validated when present; a bad value is a 400 whose message describes
+        the first problem found. Most messages name the field; a value of the
+        wrong type for `name` or `description`, a `spiritLayerStyle` over 100
+        characters and most `vibeSettings` problems get a generic message
+        such as `Invalid input: expected string, received number`.
         Unknown fields are ignored. Changing `gameSystem` after characters
         have been created logs a warning, but the change is still allowed.
         Nothing is broadcast; open pages see the change on their next fetch.
@@ -2604,7 +2609,8 @@ paths:
       description: |
         Searches, by part of the display name and ignoring case, the users who
         are *not* already a member of the campaign, have no pending
-        invitation to it, and are not waiting for an administrator's
+        invitation to it (one past its `expiresAt` included), and are not
+        waiting for an administrator's
         approval. Used by the DM-side invite picker. DM only.
 
         A `search` of 2 or more characters (after trimming) finds display
@@ -2676,7 +2682,9 @@ paths:
         `POST /api/invitations/{id}/accept`. An account still waiting for an
         administrator's approval is answered 404, as for no account. 400 when `userId` is missing or
         not text, `expiresInDays` is not a whole number up to 365, the user is
-        already a member, or they already have a pending invitation.
+        already a member, or they already have a pending invitation ("User
+        already has a pending invitation to this campaign"). One whose
+        `expiresAt` has passed is still pending until the invitee declines it.
         A user whose earlier invitation was accepted or declined (and who is
         no longer a member) gets that same invitation back as PENDING, with a
         new `createdAt` and expiry. The invited user's open connections
@@ -2715,8 +2723,8 @@ paths:
                   description: >-
                     Email the invitation if the instance has SMTP configured.
                     Anything other than exactly `true` is treated as no email.
-                    Each DM may have 20 invitation emails sent an hour; see the
-                    429 response. The email's subject and inbox preview name
+                    Each DM may make 20 invitations an hour that ask for an
+                    email; see the 429 response. The email's subject and inbox preview name
                     the instance only, never the campaign or the DM.
       responses:
         '201':
@@ -2762,10 +2770,13 @@ paths:
         '429':
           description: >-
             `sendEmail` was `true`, SMTP is configured, and this DM has already
-            had 20 invitation emails sent in the last hour. No invitation is
-            created. Requests without `sendEmail`, on an instance without
-            SMTP, or refused with a 400 or 404 are not counted. Counted per
-            signed-in user, with the standard `RateLimit-*` headers.
+            made 20 invitations that asked for an email in the last hour,
+            counted whether or not each email went out (`emailSent: false`
+            counts too). No invitation is created. Requests without
+            `sendEmail`, on an instance without SMTP, or refused with a 400 or
+            404 are not counted. Counted per signed-in user across all their
+            campaigns, with the standard `RateLimit-*` headers and
+            `Retry-After`.
           content:
             application/json:
               schema:
@@ -2781,7 +2792,9 @@ paths:
       summary: Remove member
       description: >-
         Remove a member from campaign (DM only). The sitting DM and the
-        campaign owner cannot be removed; both return 400. The member's
+        campaign owner cannot be removed; both return 400 (`Cannot remove the
+        Dungeon Master from the campaign`, `Cannot remove the campaign owner
+        from their own campaign`). The member's
         characters are taken out of the campaign in the same step (their
         `campaignId` becomes null), and a character still naming a campaign
         its owner has left is readable and editable by its owner alone. The
@@ -2829,9 +2842,13 @@ paths:
       summary: Change member role
       description: >-
         Switch a member between PLAYER and SPECTATOR (DM only). The DM seat
-        cannot be moved here: naming the DM as the member, or asking for
-        `DM`, is always a 400 because the campaign already has its DM; use
-        `PUT /api/campaigns/{campaignId}/dm`. The member keeps their assigned
+        cannot be moved here: naming the DM as the member answers 400 `Cannot
+        change the Dungeon Master's role`, and asking for `DM` answers 400
+        `Campaign already has a Dungeon Master. Only one DM per campaign is
+        allowed.`; use `PUT /api/campaigns/{campaignId}/dm`. Any `role` other
+        than `DM`, `PLAYER` or `SPECTATOR` answers 400 `Role must be DM,
+        PLAYER, or SPECTATOR`, checked before the member is looked up. The
+        member keeps their assigned
         characters. Their open connections take the new role at once, and
         `campaign.role.changed` (`{ campaignId, userId, role }`) goes to
         everyone in the campaign so open pages follow it, with a
@@ -2904,7 +2921,8 @@ paths:
         Who may hand the seat over, who holds it and the change are read and
         made as one serializable transaction, so of two hand-overs at the same
         moment the second sees the first: a sitting DM whose seat was handed
-        on meanwhile is refused with 403. Every DM row is stepped down, so a
+        on meanwhile is refused with 403 unless they own the campaign or are
+        an admin. Every DM row is stepped down, so a
         campaign left with two DMs by an older version comes out with one;
         `previousDmId` names the first of them.
         The response lists every membership with its `user`.
@@ -2941,11 +2959,39 @@ paths:
                     items:
                       $ref: '#/components/schemas/CampaignMembership'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `userId` is missing or not a user id (`Validation Error`, "A
+            campaign member must be named by their user id"), or names the
+            sitting DM (`Bad Request`, "That member is already the Dungeon
+            Master").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: That member is already the Dungeon Master
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller is not the sitting DM, the campaign owner or a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the DM, the campaign owner, or an admin can transfer the DM role
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            The campaign does not exist ("Campaign not found"), checked before
+            who the caller is, or `userId` is not a member of it ("That user
+            is not a member of this campaign").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: That user is not a member of this campaign
 
   /api/campaigns/{campaignId}/vibe:
     put:
@@ -3904,7 +3950,7 @@ paths:
                 error: Not Found
                 message: You have not left that campaign, or have no notes or dice macros in it
         '429':
-          description: 60 downloads in the last hour.
+          description: 60 requests to this route in the last hour, whatever each was answered (a 404 counts too).
           content:
             application/json:
               schema:

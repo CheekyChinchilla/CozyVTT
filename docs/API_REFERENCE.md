@@ -359,7 +359,7 @@ Get a single campaign's details. The embedded `maps` and `characters` arrays con
 
 ### `PUT /api/campaigns/:id`
 
-Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status`, `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` names the field.
+Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status`, `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
 
 **Request:** Partial campaign fields.
 
@@ -497,15 +497,15 @@ link to remove; delete the asset instead.
 Invite a user to the campaign. **Requires DM role.**
 
 **Body:**
-- `userId` *(required)* — the user to invite; they must already have an account
+- `userId` *(required)* — the user to invite. They must already have an account, approved by an administrator if the instance asks for approval; an unknown or unapproved account answers `404` "User not found"
 - `sendEmail` *(optional, default `false`)* — whether to email them as well. Only an explicit `true` counts
-- `expiresInDays` *(optional)* — invitation lifetime; omitted means it does not expire
+- `expiresInDays` *(optional)* — a whole number of days, at most 365. Omitted, `null`, zero or negative means it does not expire; anything else answers `400`
 
 **Response `201`:** `{ message, invitation, emailSent }`
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
-Each DM may have 20 invitation emails sent an hour. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
+Each DM may make 20 invitations an hour that ask for an email, counted whether or not the email then goes out. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
 
 ### `PUT /api/campaigns/:campaignId/dm`
 
@@ -525,11 +525,17 @@ removal of a member who has just been handed the seat is refused as for any DM.
 
 **The campaign's owner does not change.** Ownership and the DM role are separate
 facts, which is what allows an owner to hand the game to a co-DM or to an
-automated account and remain at the table as an ordinary player. Deleting a
-campaign stays with the owner; everything else a DM does follows the role.
+automated account and remain at the table as an ordinary player. Deleting the
+campaign stays with the owner, and so does handing the DM seat on, so an owner
+sitting as a player can take the seat back; the owner also cannot be removed
+from the campaign. Everything else a DM does follows the role.
 
-Rejected with `400` if the named member is already the DM, `404` if they are not
-a member of the campaign, and `403` if the caller is none of the three above.
+Rejected with `400` if `userId` is not a user id ("A campaign member must be
+named by their user id") or names the sitting DM ("That member is already the
+Dungeon Master"), `404` if the campaign does not exist ("Campaign not found",
+checked before the caller is) or the named user is not a member ("That user is
+not a member of this campaign"), and `403` if the caller is none of the three
+above ("Only the DM, the campaign owner, or an admin can transfer the DM role").
 Note the generic role endpoint still refuses to change a DM's role or create a
 second one — this is the only supported way to move the seat, so that there is
 one atomic path rather than two.
@@ -1674,7 +1680,8 @@ Most errors are JSON in this shape:
 ```
 
 Not all of them. The invitation routes (`/api/invitations/...`) send `message`
-alone, and the character check (`GET /api/characters/:id/validate`) answers with
+alone, except the `400` `Validation Error` for a malformed `characterIds` on
+accept and the shared `401`, and the character check (`GET /api/characters/:id/validate`) answers with
 `isValid` and a list of `errors`. Some errors add a `code` for a program to act on, such as
 `PASSWORD_CHANGE_REQUIRED`, `MFA_ENROLMENT_REQUIRED` and `SIGN_IN_EXPIRED`. Read the status code first, then `code` if there is
 one, then `message`.
@@ -1751,7 +1758,7 @@ authentication is set up on the account, and then has to send a code at every si
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, a new typed document, Universal VTT map import (per user) | 30 requests | 1 minute | Every request |
 | Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
-| Invitation emails (per DM) | 20 emails | 1 hour | Invitations sent with `sendEmail: true` on an instance with SMTP; a refused invitation is not counted |
+| Invitation emails (per DM) | 20 invitations that ask for an email | 1 hour | Invitations created with `sendEmail: true` on an instance with SMTP, whether or not the email goes out; a refused invitation is not counted |
 | All the notes of a campaign you have left (per user) | 60 requests | 1 hour | Every request |
 | General API | 300 requests | 1 minute | Every request |
 | Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
