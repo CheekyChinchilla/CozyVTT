@@ -367,7 +367,7 @@ The first time you open the Creature Library on a new server, it may be empty. A
 - Seeding takes a few seconds — a progress indicator shows while it runs. If Open5e cannot be reached, or takes more than 15 seconds over a page, the import stops, says why, and adds nothing; try again later
 - SRD creatures are **global** (shared across all campaigns on the instance) and **read-only**
 - You can duplicate any SRD creature to create an editable custom version
-- Running it again is safe: existing creatures are not duplicated. If your library was seeded before CozyVTT 1.1.1, re-running it fills in each SRD creature's hit points; custom creatures are never modified
+- The button is offered only while no SRD creatures have been imported, so it disappears once they are in. An import that runs again adds no creature twice, and on a library seeded before CozyVTT 1.1.1 it fills in each SRD creature's hit points; custom creatures are never modified
 
 ### Browsing and Searching
 
@@ -409,7 +409,7 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Stat Block** — The creature's combat stats (AC, speed, ability scores, attacks, etc.)
 - **HP Max** — Hit points given to tokens placed from this creature
 - **Challenge Rating** — Chosen from a list. Used for filtering, and in D&D 5e it also sets the creature's proficiency bonus — see [Saving Throws and Skills](#saving-throws-and-skills) below
-- **Saving Throws & Skills** — Tick which ones the creature is proficient or expert in; the bonuses are worked out for you
+- **Saves & Skills** — Tick which ones the creature is proficient or expert in; the bonuses are worked out for you
 - **Creature Type** — Optional (e.g., beast, undead, fiend)
 - **Token Image** — Optional. Click **Browse Assets** to pick from token images already in your asset library, or **Upload New** to add one. See [Creature Token Images](#creature-token-images) below
 - **Size** — Grid size (default 1×1)
@@ -656,6 +656,12 @@ Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
 a player and you cannot remove them. Hand the seat back if you want to step away
 (see [Handing the game to someone else](#handing-the-game-to-someone-else)).
+
+### Call of Cthulhu: Keeper's Notes
+
+An investigator's sheet has a **Keeper's Notes** box, on the **Backstory** tab of the sheet's editor, for you alone. Open it with **Edit Character Sheet** from the roster's right-click menu; the box says "Only you, as the Keeper, can see or change these." Only the DM of the campaign the investigator is in sees or changes the notes. The investigator's player and the rest of the table are never sent them, and a save by anyone else leaves them as they are.
+
+The notes stay with your campaign. If the investigator is moved into another campaign, brought into one when its owner accepts an invitation, or copied, the notes are left behind, and an investigator in no campaign shows them to nobody. Notes written before version 1.5.2, including any a player typed into the box, are shown to the Keeper only.
 
 ### Character Assignment
 
@@ -1293,7 +1299,7 @@ Click the **Atmosphere** button in the campaign header.
 
 ### Ambient Audio
 
-Upload audio files to your Asset Library (type: **Audio**), then select them in the Atmosphere panel. All connected players hear the audio automatically.
+Upload audio files to your Asset Library (type: **Audio**; MP3, Ogg or WAV, an Ogg file recorded in Opus included), then select them in the Atmosphere panel. All connected players hear the audio automatically.
 
 - Set a specific audio track for the current scene
 - Audio loops automatically until you change or stop it
