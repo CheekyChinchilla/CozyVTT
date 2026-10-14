@@ -590,6 +590,7 @@ erDiagram
 - **Token data is stored as JSON inside `Map.tokens`** — tokens are not a separate table. This simplifies real-time updates (the whole token list is atomically replaced on moves).
 - **Walls, lights and fog are JSON on the map row too** (`Map.wallSegments`, `Map.lights`, `Map.fogData`). A write to any of these columns, or to `Map.tokens`, reads the whole value, changes it and writes it back, so it runs inside `withMapsLocked` (`utils/mapTokens.ts`): a transaction holding a PostgreSQL advisory lock on the map, which reads the value through the transaction after taking the lock. Edits sent together, from the socket or the REST routes, then apply one after another instead of the later write dropping the earlier change. Every other edit of the map waits while the lock is held, so slow work belongs before it is taken, and so does any read through the global `prisma` client, which would hold a second connection while the transaction holds one. A player's door toggle, for instance, works out their line of sight first (`doorSightFor` in `websocket/handlers/walls.ts`), then judges the door as it reads it under the lock.
 - **Character sheet data is stored as JSON in `Character.data`** — the schema is validated at the API layer by game-system-specific Zod schemas (a Flexible sheet, with no game system, by `flexible.schema.ts`) but stored untyped in Postgres. This allows flexible incremental saves. Every text field a sheet stores has a length limit, from `validators/game-systems/sheetLimits.ts`, which the frontend keeps an identical copy of for its editors. Counts are limited where a list could grow without bound in play: Flexible sections, stats, list entries, table rows, columns and cells; D&D 5e spell slots (0 to 20 a level); the D&D 5e manual bonuses (-30 to +30); every list on a D&D 5e, Pathfinder 2e, Call of Cthulhu or Shadowrun 6e sheet (500 entries, `SHEET_LIST_MAX`, through `sheetList` in `sheetLists.ts`; the editors turn an add button off at the limit); and Pathfinder 2e spell slots (0 to 20 a rank) and item bonuses (-30 to +30).
+- **A Call of Cthulhu sheet's Keeper's Notes are its campaign DM's alone.** They are the sheet's top-level `notes`, kept inside `Character.data`, so the schema, exports and imports are unchanged. `utils/keeperNotes.ts` holds the rule: every route and event that sends a sheet passes it through `characterForReader`, which leaves the field out for anyone but the DM of the character's campaign; a save by anyone else keeps the stored notes (`sheetKeepingKeeperNotes`); and a character that enters another campaign has them cleared, since they were the last campaign's Keeper's.
 - **`vibeSettings` and `Session.savedState` are JSON columns** — used to persist complex nested state that changes frequently.
 - **`CreatureTemplate` uses two scopes** — SRD creatures have `campaignId = null` (global, read-only) while custom creatures have a campaign FK. The `source` field distinguishes them (`'srd'` vs `'custom'`).
 - **`DiceMacro` is private to whoever saved it**, on the same terms as `PersonalNote` and enforced the same way. Its `expression` is validated when written by rolling it and discarding the result, so a stored macro is always one the roller accepts — ordered by `createdAt` rather than `updatedAt` because these are buttons, and editing one must not move it.
@@ -762,7 +763,7 @@ Dynamic lighting asks one question of every point on the map: how well does this
 
 The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
 
-Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts, the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
+Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts (it holds `vibeAudio.ts`, the rule for which track a vibe period names, in step too), the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
 A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all, a Huge token against a wall). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
 
@@ -946,6 +947,23 @@ The checks sit where the bytes are read because a stored row can name any
 file, a map stored before the rule above included. The export answers such a
 map 422; a thumbnail that cannot be made is left out, as before.
 
+### Universal VTT imports
+
+Reading a Universal VTT import holds the file and its decoded picture in
+memory, well over 50 MB for the largest, so imports are read one at a time
+across the server (`uvttImportQueue` in `services/uvttImportQueue.ts`, over
+`utils/serialQueue.ts`), and a user may have only one under way. Each upload
+waits its turn on disk in `uploads/temp/uvtt/` and is removed when its import
+ends, however it ends. The queue always moves on:
+
+- An import that runs past 30 seconds is answered 503, is stopped at its next
+  step, removes what it had saved, and the next one starts.
+- An import that cannot start within 20 seconds is refused with 503 and
+  `Retry-After`. Waiting and running together then stay under the 60 seconds
+  the bundled nginx gives an API request, so the DM sees the reason.
+- An import whose request has closed while it waits is dropped without being
+  read.
+
 ### Asset Scoping
 
 Assets have three scopes:
@@ -955,6 +973,14 @@ Assets have three scopes:
 | `GLOBAL` | All users on the platform | Admins and Global Asset Managers |
 | `USER` | The uploading user only, plus members of any campaign that is *using* the asset: a map on the table, token art, or the track it is currently playing, and for a document, one shared with it | Any user |
 | `CAMPAIGN` | All campaign members | Campaign DM, players (tokens only) |
+
+Deleting an asset, moving it out of its scope and rewriting a document's text
+follow one rule, `mayChangeAsset` in `services/permissions.ts`, so a right the
+delete route takes away cannot be kept through another route. An admin may
+change any asset. A `GLOBAL` asset may also be changed by its uploader while
+they still manage global assets, a `USER` asset by its uploader, and a
+`CAMPAIGN` asset by its uploader while they are still a member, or by the
+campaign's DM. A campaign asset with no campaign recorded is an admin's alone.
 
 ---
 
