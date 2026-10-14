@@ -6,9 +6,10 @@
 # two npm ignore blocks then, and each major comes as a pull request of its
 # own, since it can change behaviour.
 #
-# Version updates only. Alerts and security updates for a published advisory
-# are turned on in the repository's settings, and GitHub opens those against
-# the default branch whatever target-branch says.
+# Version updates only. Alerts for a published advisory are turned on in the
+# repository's settings. Security update pull requests are turned off there
+# until the 1.5.3 platform release, since GitHub opens those against the
+# default branch whatever target-branch says.
 version: 2
 updates:
   - package-ecosystem: npm
