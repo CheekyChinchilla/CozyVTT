@@ -310,20 +310,20 @@ example is shortened; the OpenAPI file has the full shapes.
 {
   "campaigns": [
     {
-      "id": "cuid...",
+      "id": "8d3f6b2a-1c4e-4f7a-b9d2-3e5a7c9f1b04",
       "name": "The Lost Mines",
       "description": "A classic starter adventure.",
       "gameSystem": "DND_5E",
       "status": "ACTIVE",
-      "ownerId": "cuid...",
-      "owner": { "id": "cuid...", "displayName": "Merric Thorngage", "avatarUrl": null },
+      "ownerId": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
+      "owner": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage", "avatarUrl": null },
       "memberships": [
         {
-          "userId": "cuid...",
+          "userId": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
           "role": "DM",
           "characterIds": [],
           "joinedAt": "2025-02-01T10:00:00.000Z",
-          "user": { "id": "cuid...", "displayName": "Merric Thorngage", "avatarUrl": null }
+          "user": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage", "avatarUrl": null }
         }
       ],
       "userRole": "DM",
@@ -377,18 +377,18 @@ points to read.
 {
   "roster": [
     {
-      "userId": "cuid...",
+      "userId": "2b7e9c41-6d8a-4f3e-a5c1-9f0d2e4b6a87",
       "userName": "Alice",
       "userAvatar": null,
       "role": "PLAYER",
       "joinedAt": "2025-02-01T10:00:00.000Z",
       "characters": [
         {
-          "id": "cuid...",
+          "id": "c4a1e8f2-7b3d-4e9a-8c6f-1d2b5a7e9f30",
           "name": "Elara Moonwhisper",
           "tokenImageUrl": null,
           "gameSystem": "DND_5E",
-          "userId": "cuid...",
+          "userId": "2b7e9c41-6d8a-4f3e-a5c1-9f0d2e4b6a87",
           "hp": { "current": 24, "max": 31, "temp": 0 }
         }
       ]
@@ -786,7 +786,7 @@ Assign a character to a campaign.
 
 **Request:**
 ```json
-{ "campaignId": "cuid..." }
+{ "campaignId": "8d3f6b2a-1c4e-4f7a-b9d2-3e5a7c9f1b04" }
 ```
 
 ---
@@ -1148,10 +1148,10 @@ controls only then.
 {
   "assets": [
     {
-      "id": "cuid...",
+      "id": "9a6c3e1f-4b2d-4d8e-b7a5-0c3f1e9d2b68",
       "type": "TOKEN",
       "scope": "USER",
-      "uploadedById": "cuid...",
+      "uploadedById": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
       "campaignId": null,
       "filename": "1f3a.png",
       "originalName": "goblin.png",
@@ -1161,7 +1161,7 @@ controls only then.
       "description": null,
       "tags": [],
       "createdAt": "2025-02-01T10:00:00.000Z",
-      "uploadedBy": { "id": "cuid...", "displayName": "Merric Thorngage" },
+      "uploadedBy": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage" },
       "campaign": null,
       "canChange": true
     }
@@ -1324,7 +1324,7 @@ Accept a campaign invitation and optionally assign characters.
 
 **Request:**
 ```json
-{ "characterIds": ["cuid-1", "cuid-2"] }
+{ "characterIds": ["c4a1e8f2-7b3d-4e9a-8c6f-1d2b5a7e9f30", "e9b2d4f6-0a1c-4b3e-9d5f-7a8c2e4b6d18"] }
 ```
 
 ---

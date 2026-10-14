@@ -12656,7 +12656,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: Forbidden
-            message: You do not have permission to perform this action.
+            message: You do not have permission to access this resource
 
     PasswordChangeRequired:
       description: >-
@@ -12691,7 +12691,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: Conflict
-            message: A creature with this name already exists in this campaign.
+            message: Fog of war is off for this map
 
     UnprocessableEntity:
       description: Unprocessable Entity - The request is valid but the resource cannot be turned into what was asked for.
