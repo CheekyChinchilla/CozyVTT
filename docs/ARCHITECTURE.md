@@ -300,11 +300,12 @@ re-rendering anything. Tailwind maps each token with `rgb(var(--color-x) / <alph
    dark theme. Use the state tokens, or the `.alert-*` / `.badge-*` classes in
    [index.css](../frontend/src/index.css).
 
-Both rules are enforced by tests rather than review:
-`utils/__tests__/themes.contrast.test.ts` checks every preset theme against every text/background
-pair the UI renders, and `utils/__tests__/themeTokens.test.ts` fails if raw palette colors appear
-outside the two exempt areas (character sheets, which are deliberately styled as light "paper" cards,
-and the dark DM map overlays).
+The second rule is enforced by a test: `utils/__tests__/themeTokens.test.ts` fails if raw palette
+colors appear outside the two exempt areas (character sheets, which are deliberately styled as light
+"paper" cards, and the dark DM map overlays). The first is not. `utils/__tests__/themes.contrast.test.ts`
+checks that every preset theme's text tokens, the `-ink` ones included, meet AA on the backgrounds
+they are used on, but nothing fails when text uses a plain fill token such as `text-danger`, so
+review has to catch that.
 
 ### Data Flow (Campaign Page)
 

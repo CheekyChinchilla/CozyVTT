@@ -60,8 +60,8 @@ If you become a collaborator, here's what the codebase expects:
 ### Styling and themes
 
 CozyVTT ships 16 themes, including four dark ones, plus user-defined custom colors. Two rules keep
-every screen working across all of them — both are enforced by tests, so breaking them fails the
-build rather than showing up as an unreadable screen for someone using a theme you didn't try:
+every screen working across all of them. The first is enforced by a test, so breaking it fails the
+build; nothing checks the second, so it falls to you and the review:
 
 - **Never use a raw Tailwind palette color** (`bg-red-50`, `text-stone-500`, `text-blue-600`) in
   themed UI. They keep their light-mode appearance on dark themes. Use the semantic tokens —
