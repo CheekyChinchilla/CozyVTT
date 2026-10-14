@@ -721,6 +721,8 @@ A new avatar replaces the old one: the old picture is deleted from the server. *
 
 In the **Security** section, enter your current password and your new password (twice, to confirm), then click **Change Password**.
 
+A wrong current password is said on the form ("Current password is incorrect"), and what you typed stays in the boxes. The same goes for the password, and the code, asked for when you delete your account, turn MFA off or make new backup codes.
+
 **Changing your password signs you out everywhere else.** Any other browser or
 device still signed in to your account is signed out straight away, and an open
 game table on it is disconnected in the same moment and taken to the sign-in
