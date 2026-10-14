@@ -1551,6 +1551,21 @@ Same root cause as above: the browser reached the wizard (served by the frontend
 
 If you removed the bundled `nginx` service, the usual culprit is a missing `ports` entry on the **backend** service — it is `expose`-only by default, which means "reachable from other containers" but not from your proxy.
 
+### The backend keeps restarting, and its log says `[FATAL]`
+
+`docker compose ps` shows the backend as `Restarting`, and nobody can sign in. A production instance refuses to start on a secret anyone could guess. Find the reason:
+
+```bash
+docker compose logs backend | grep FATAL
+```
+
+| The line says | What to do |
+|---|---|
+| `SESSION_SECRET is shorter than 32 characters`, `SESSION_SECRET is a placeholder value` or `SESSION_SECRET is not set` | Run `openssl rand -hex 32`, put what it prints in `.env` after `SESSION_SECRET=`, and run `docker compose up -d`. Everyone is signed out once |
+| `DATABASE_URL uses the placeholder password from .env.example` | Follow [Changing the database password](#changing-the-database-password). The database keeps the password it was made with, so it has to be changed inside the database first |
+
+Use `docker compose up -d`, which reads `.env` again; `docker compose restart` keeps the old value. Once the backend starts, `docker compose ps` shows it as `healthy` within a minute.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
@@ -1584,6 +1599,8 @@ docker compose logs backend | grep -i "upload limits"
 ---
 
 ## Updating CozyVTT
+
+Read the new version's **Upgrading** notes at the top of `CHANGELOG.md` first, on GitHub before you pull or in your CozyVTT folder straight after. They say whether that release needs anything from you. 1.5.2 does if a Cloudflare Tunnel or another proxy sits in front of CozyVTT: it needs `NGINX_TRUSTED_PROXIES` in `.env`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains, or every visitor counts as the proxy's one address. Then:
 
 ```bash
 git pull origin main
