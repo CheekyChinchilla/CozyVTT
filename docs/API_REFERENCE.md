@@ -471,9 +471,11 @@ campaign membership; `POST` requires the DM role.**
 with `CAMPAIGN` scope inside it, and those a DM has shared from elsewhere. Each
 item carries the asset fields plus `linkedAt`, `linkedBy` and a `shared`
 boolean, which is what tells the two apart, so the client knows whether
-"unshare" is a thing it can offer. A `canEdit` boolean says whether
-`PUT /api/assets/documents/:id/content` would take an edit from the caller,
-by the rule for deleting the document, so the client offers Edit only then.
+"unshare" is a thing it can offer. A `canEdit` boolean says whether the
+caller passes the rule for deleting the document, which is the rule
+`PUT /api/assets/documents/:id/content` applies, so the client offers Edit only
+then. That route edits only plain text and Markdown, so a PDF cannot be edited
+whatever `canEdit` says.
 
 `POST` takes `{ assetId }` and shares an existing document. Two checks, in
 order. The asset must be of type `DOCUMENT` **and readable by the DM making the
@@ -552,7 +554,7 @@ Matching is on `metadata.action` (`user.joined` / `user.left`), **not** on the m
 
 ### `GET /api/campaigns/:campaignId/dice-rolls`
 
-Roll history for a campaign, newest first; rolls with the same timestamp are ordered by id, so paging never skips or repeats one. **Requires campaign membership.**
+Roll history for a campaign, newest first; rolls with the same timestamp are ordered by id, so the order is the same on every request. Paging is by offset: a roll made while someone pages back moves the older rolls down by one, so the next page repeats one. **Requires campaign membership.**
 
 **Query params:**
 - `limit` — rolls to return (default: 50, max: 100)
@@ -564,7 +566,7 @@ Roll history for a campaign, newest first; rolls with the same timestamp are ord
 
 Rolls made before the DM last cleared the history are excluded (see `Campaign.rollHistoryClearedAt`). They remain in the table: clearing hides rolls from this endpoint rather than deleting them, so the secret-roll audit trail survives an accidental Clear.
 
-Note that rolls made while a session is **paused** are evaluated client-side and never persisted, so they never appear here.
+In the web client, a player's rolls while the session is **paused** are made in their own browser and never sent, so they never appear here. The DM's rolls are sent as usual, and the server takes a `dice.roll` whatever the session's state, so a script's rolls while paused are kept and listed.
 
 ---
 
@@ -707,7 +709,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 }
 ```
 
-The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own and listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). A map is left out whole only when its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors and lights left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -1757,7 +1759,7 @@ authentication is set up on the account, and then has to send a code at every si
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
 | File upload, a new typed document, Universal VTT map import (per user) | 30 requests | 1 minute | Every request |
-| Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
+| Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request but one refused for overlapping another; also one of the three at a time per user |
 | Invitation emails (per DM) | 20 invitations that ask for an email | 1 hour | Invitations created with `sendEmail: true` on an instance with SMTP, whether or not the email goes out; a refused invitation is not counted |
 | All the notes of a campaign you have left (per user) | 60 requests | 1 hour | Every request |
 | General API | 300 requests | 1 minute | Every request |

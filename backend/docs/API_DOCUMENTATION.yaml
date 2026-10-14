@@ -147,7 +147,10 @@ info:
     limiters on the sign-in routes answer `{ error: "Rate Limited", message }`.
     The one-at-a-time refusals (a second Universal VTT import, or a second
     campaign archive operation, while one is running) answer 429 with JSON
-    `{ error, message }` and neither header.
+    `{ error: "Too Many Requests", message }` and no `Retry-After`. The
+    `RateLimit-*` headers on them are another limit's: the global API
+    limit's on an archive route, and the upload limit's on a Universal VTT
+    import.
 
     ## Responses every route can give
     These are not repeated on each operation:
@@ -3380,8 +3383,10 @@ paths:
         which is what an offset would allow.
 
         Do not construct a cursor. It is opaque and its shape may change; one
-        this server did not issue is a 400 ("Invalid cursor"), as is a `limit`
-        outside 1 to 100.
+        that is not in the form this server issues, or is longer than 200
+        characters, is a 400 ("Invalid cursor"), as is a `limit` outside 1
+        to 100. A cursor carries no signature: membership is what allows the
+        read, and the cursor only says where the page starts.
 
         Dice rolls are not chat messages and are never returned here — they are
         served by `GET /api/campaigns/{campaignId}/dice-rolls`, which is the
@@ -8707,9 +8712,15 @@ paths:
                 message: "This campaign's files add up to 734 MB, more than the 500 MB a campaign archive can hold on this server. Remove maps or pictures the campaign no longer uses, then export again."
         '429':
           description: >-
-            The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
-            20 by default), or already has a campaign export, import or
-            preview running. Each user may run one of the three at a time.
+            The caller has started that many exports in the last hour
+            (`CAMPAIGN_ARCHIVE_RATE_LIMIT`, 20 by default): `You have exported 20 campaigns
+            in the last hour, the most this server allows. Try again in N
+            minutes.`, where the number is the configured limit and N is
+            rounded up, with `Retry-After` and that limit's `RateLimit-*`
+            headers. Or the caller already has a campaign export, import or
+            preview running, answered as in the example, with no `Retry-After`
+            and not counted against the hour. Each user may run one of the
+            three at a time.
           content:
             application/json:
               schema:
@@ -8739,8 +8750,9 @@ paths:
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
-        instance's `campaignExportSizeLimit` setting (500 MB unless an admin
-        has changed it), list no more than 1,000 files, and have a
+        instance's `campaignExportSizeLimit` setting (500 MB; no route
+        changes it, and a stored value above 500 MB counts as 500 MB), list
+        no more than 1,000 files, and have a
         `manifest.json` that unpacks to no more than 10 MB. The upload is
         written to a temporary file, which is removed before the answer is
         sent.
@@ -8770,11 +8782,17 @@ paths:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
           description: >-
-            No file (`Validation Error`), an upload problem such as a refused
-            file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
-            is damaged, is over the size setting, lists more than 1,000 files, or has a
-            missing, oversized or invalid manifest (`Invalid Archive`, with
-            the reason in `message`).
+            No file (`Validation Error`); an upload problem (`Upload Error`,
+            with the reason in `message`) such as a refused file type, a
+            second file, a file in a field not named `file`, a body that is
+            cut off or malformed, more than 100 text fields, a field name
+            longer than 100 bytes, a text field longer than 16 KB (16,384
+            bytes), or a name such as `a[b][c]` nested more than five levels
+            deep or with a number above 1000 between the brackets; or an
+            archive that is not a ZIP, is damaged, is over the size setting,
+            lists more than 1,000 files, or has a missing, oversized or
+            invalid manifest (`Invalid Archive`, with the reason in
+            `message`).
           content:
             application/json:
               schema:
@@ -8802,9 +8820,15 @@ paths:
                 message: The archive is larger than 500 MB, the most a campaign archive may be.
         '429':
           description: >-
-            The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
-            20 by default), or already has a campaign export, import or
-            preview running. Each user may run one of the three at a time.
+            The caller has started that many previews in the last hour
+            (`CAMPAIGN_ARCHIVE_RATE_LIMIT`, 20 by default): `You have opened 20 campaign archives
+            in the last hour, the most this server allows. Try again in N
+            minutes.`, where the number is the configured limit and N is
+            rounded up, with `Retry-After` and that limit's `RateLimit-*`
+            headers. Or the caller already has a campaign export, import or
+            preview running, answered as in the example, with no `Retry-After`
+            and not counted against the hour. Each user may run one of the
+            three at a time.
           content:
             application/json:
               schema:
@@ -8843,7 +8867,9 @@ paths:
 
         Only MAP, TOKEN and AUDIO assets are imported. Each must be, by its
         content, a format the upload route allows for its type, and is stored
-        under the detected MIME type and extension; its `originalName` is
+        under the MIME type and extension its content shows, an Ogg track of
+        any codec (Opus included) as `audio/ogg` and `.ogg`; its
+        `originalName` is
         kept unless that name's extension is not allowed for the type, when
         the detected extension replaces it. Any other asset is skipped.
         A map's picture and spirit layer keep only an asset imported as MAP:
@@ -8877,9 +8903,11 @@ paths:
         more than 500 squares outside their map. A map keeps its first 1,000
         tokens, 5,000 walls and 200 lights. Fog whose grid does not match its
         map is dropped, as the server would rebuild it anyway. A map is
-        left out whole only when its width, height, grid size or feet per
-        square are outside the map limits (1 to 500 squares, grid size 10 to
-        500, 1 to 100 feet), and is then listed in `skipped` with the reason.
+        left out whole when its width, height, grid size or feet per square
+        are outside the map limits (1 to 500 squares, grid size 10 to 500,
+        1 to 100 feet), when its file is missing from the archive or holds
+        no map object, or when it nests too deeply (above), and is then
+        listed in `skipped` with the reason.
         Creatures, templates and assets that cannot be imported are listed
         in `skipped` too. Each list holds at most 200 entries; a final
         warning counts the rest.
@@ -8961,7 +8989,8 @@ paths:
                         name:
                           type: string
                           description: >-
-                            The item's name in the archive, cut to 80 characters, or a
+                            The item's name in the archive, trimmed, and past 80
+                            characters cut to 80 and followed by `…`; or a
                             description such as `3 tokens on "Cellar"`.
                         reason:
                           type: string
@@ -8999,9 +9028,15 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: >-
-            The caller has started that many imports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
-            20 by default), or already has a campaign export, import or
-            preview running. Each user may run one of the three at a time.
+            The caller has started that many imports in the last hour
+            (`CAMPAIGN_ARCHIVE_RATE_LIMIT`, 20 by default): `You have imported 20 campaigns
+            in the last hour, the most this server allows. Try again in N
+            minutes.`, where the number is the configured limit and N is
+            rounded up, with `Retry-After` and that limit's `RateLimit-*`
+            headers. Or the caller already has a campaign export, import or
+            preview running, answered as in the example, with no `Retry-After`
+            and not counted against the hour. Each user may run one of the
+            three at a time.
           content:
             application/json:
               schema:
