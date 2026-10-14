@@ -29,6 +29,7 @@ This guide covers everything you need to run CozyVTT locally **for development w
 | PostgreSQL | 14+ | Or use the Docker Compose stack |
 | npm | 11+ | Comes with Node.js 26 |
 | Docker + Docker Compose | Any recent | Optional — needed for the containerized setup |
+| Python | 3 | For the documentation checks; `pip install pyyaml` for the YAML and nginx checks |
 
 ---
 
@@ -92,16 +93,16 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `SESSION_SECRET` | Yes | — | Random string for session signing (32+ chars) |
-| `NODE_ENV` | Yes | `development` | `development` or `production` |
+| `NODE_ENV` | No | `development` | `development` or `production` |
 | `PORT` | No | `4000` | Port the API server listens on |
 | `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed origin for CORS |
 | `SMTP_HOST` | No | — | SMTP server hostname. Email is on only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are all set (`isSmtpConfigured`) |
 | `SMTP_PORT` | No | `587` | SMTP server port |
 | `SMTP_USER` | For email | — | SMTP login username; without it email is off, because the transport always sends a login |
 | `SMTP_PASS` | For email | — | SMTP login password; without it email is off |
-| `SMTP_FROM` | No | — | From address for outbound email |
+| `SMTP_FROM` | No | `SMTP_USER` | From address for outbound email |
 | `SMTP_SECURE` | No | `false` | Use TLS (`true`) or STARTTLS (`false`) |
-| `APP_URL` | No | — | Public URL used in email links |
+| `APP_URL` | No | `http://localhost:3000` | Public URL used in email links |
 | `FRONTEND_URL` | No | — | An older name for `APP_URL`, read only when `APP_URL` is not set |
 | `INSTANCE_NAME` | No | — | The name emails use while the name in Admin > Settings is empty or still CozyVTT |
 | `SETUP_TOKEN` | No | — | The token the setup wizard asks for; unset, the backend makes one and prints it in its log until setup has run |
@@ -117,7 +118,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | `MAX_AUDIO_SIZE_MB` | No | `20` | Upload size limit for audio files |
 | `MAX_AVATAR_SIZE_MB` | No | `2` | Upload size limit for avatar images |
 | `MAX_DOCUMENT_SIZE_MB` | No | `50` | Upload size limit for PDF, text and Markdown documents |
-| `NGINX_MAX_BODY_SIZE` | No | `55M` | Request body cap for the bundled Nginx (`client_max_body_size`); must cover the largest limit above |
+| `NGINX_MAX_BODY_SIZE` | No | — | Request body cap for the bundled Nginx (`client_max_body_size`, `55M` in `docker-compose.yml`); must cover the largest limit above. The backend only reads it for a startup warning, so leave it unset here: unset, it takes it that a proxy of your own is in front and says what that proxy must allow |
 | `ASSET_UPLOAD_RATE_LIMIT` | No | `30` | Asset uploads per minute per user |
 
 The `MAX_*_SIZE_MB` values are read at startup by `backend/src/utils/fileUtils.ts` and served to the SPA by `GET /api/config`, so a restart is enough to change them — no rebuild. Non-numeric or non-positive values are ignored with a startup warning.
@@ -145,7 +146,7 @@ dev stack sets both (`VITE_ALLOWED_HOSTS` from the root `.env`). Outside Docker,
 put them before the command, for example
 `VITE_ALLOWED_HOSTS=mybox.local npm run dev`.
 
-The app asks its own address for the API and the live connection, and the Vite dev server proxies `/api` and `/socket.io` to the backend, so in development as in production everything is served from one address. Serving the backend from a different address than the page is not supported: the code still reads `VITE_API_URL` and `VITE_SOCKET_URL`, but with them set every picture, sound and document is refused by the page's security policy and the backend's resource policy. What it would take is a backlog entry in [FUTURE_FEATURES.md](./FUTURE_FEATURES.md).
+The app asks its own address for the API and the live connection, and the Vite dev server proxies `/api` and `/socket.io` to the backend, so in development as in production everything is served from one address. Serving the backend from a different address than the page is not supported: the code still reads `VITE_API_URL` and `VITE_SOCKET_URL`, but with them set every picture, sound and PDF document is refused by the page's security policy and the backend's resource policy. What it would take is a backlog entry in [FUTURE_FEATURES.md](./FUTURE_FEATURES.md).
 
 ---
 
@@ -179,10 +180,14 @@ out. `dependencySources.test.ts` fails until the list matches the lockfile.
 Create a database and user:
 
 ```sql
-CREATE DATABASE cozyvtt;
-CREATE USER cozyvtt WITH PASSWORD 'cozyvtt';
-GRANT ALL PRIVILEGES ON DATABASE cozyvtt TO cozyvtt;
+CREATE USER cozyvtt WITH PASSWORD 'cozyvtt' CREATEDB;
+CREATE DATABASE cozyvtt OWNER cozyvtt;
 ```
+
+The user owns the database so the migrations can create tables in its `public`
+schema, which PostgreSQL 15 and later no longer lets every user do, and
+`CREATEDB` lets `prisma migrate dev` make the scratch database it compares the
+schema in.
 
 ### 3. Configure environment
 
@@ -245,7 +250,7 @@ docker compose -f docker-compose.dev.yml -f docker-compose.dev.local.yml up
 
 Then open `http://<this computer's address>:3001` on the other device; a name rather than an address also needs adding to `VITE_ALLOWED_HOSTS` in `.env`. Anyone on that network can reach it too, so do this only on a network you trust.
 
-The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. Migrations run automatically on first start via Prisma.
+The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. The backend's start script (`backend/scripts/start.sh`) applies any pending migrations with `prisma migrate deploy` each time the container starts.
 
 **Each container has its own `node_modules` and its own generated Prisma client.** Source is bind-mounted, `node_modules` is not, so after adding a dependency or changing `schema.prisma` the running container does not see it until you tell it to. Vite answers a missing package with a 500 and the app shows "Something went wrong"; the backend throws on the first query that touches a new table:
 
@@ -258,7 +263,7 @@ docker compose -f docker-compose.dev.yml exec --user root backend npm install
 docker compose -f docker-compose.dev.yml exec --user root backend npx prisma generate
 ```
 
-`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image (`docker compose -f docker-compose.dev.yml up --build`) does the same thing more slowly.
+`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`.
 
 ### Security headers are production-only
 
@@ -364,7 +369,7 @@ npm run build
 # Output in frontend/dist/ — serve with Nginx or any static file server
 
 # Compile the backend
-cd backend
+cd ../backend
 npm run build
 # Output in backend/dist/
 node dist/server.js
@@ -435,7 +440,7 @@ phone. CI runs them against the production stack it has just built. To run
 them yourself, start an instance, then from `frontend/`:
 
 ```bash
-npx playwright install chromium     # once, to fetch the browser
+npx playwright install chromium     # once, to fetch the browser (add --with-deps on Linux, as CI does)
 E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run test:e2e
 ```
 
