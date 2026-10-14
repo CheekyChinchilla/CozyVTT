@@ -1142,8 +1142,10 @@ List assets accessible to the authenticated user (Global + their own User scope 
 - `limit` — items per page (default: 50, at most 100)
 
 The newest upload comes first. There is no sort order to ask for. An
-administrator can also send `uploadedBy` (a user id, or `none`) to list one
-person's uploads, and `usable=true` to see only what they could put on a map.
+administrator can also send `uploadedBy`, a user id to list one person's
+uploads or `none` to list the uploads of deleted accounts, and `usable=true`
+to see only what they could put on a map. Anyone else's `uploadedBy` is
+ignored.
 
 Each asset carries a `canChange` boolean: whether the caller may delete it,
 move it out of its scope, or rewrite it if it is a text or Markdown
@@ -1161,7 +1163,7 @@ controls only then.
       "scope": "USER",
       "uploadedById": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
       "campaignId": null,
-      "filename": "1f3a.png",
+      "filename": "b7e4d2c1-9a8f-4b3e-8d6c-2f1e0a9b8c7d.png",
       "originalName": "goblin.png",
       "mimeType": "image/png",
       "fileSize": 18432,
@@ -1195,7 +1197,7 @@ Upload a new asset. Uses `multipart/form-data`.
 
 A `name`, `description` or `tags` over its limit, or sent more than once, is refused with `400` and a message naming the field, and the file is not kept.
 
-A request may carry at most 100 text fields. A field name is at most 100 bytes, a field's value at most 16 KB, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+A request may carry at most 100 text fields. A field name is at most 100 bytes, a field's value at most 16 KB, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits: the campaign import and its preview, the Universal VTT import and a backup restore. A body that breaks them is refused with `400` and `error: "Upload Error"` (`"Invalid Backup"` on a restore), and so is one that is cut off or malformed, on every route but the restore.
 
 ---
 
@@ -1211,7 +1213,8 @@ Stream an audio file, with HTTP range requests supported so a browser can seek.
 
 Read access is the shared `canReadAsset` rule: `GLOBAL` for anyone signed in,
 `CAMPAIGN` for that campaign's members, `USER` for its uploader, **plus anyone
-in a campaign that is currently playing this track** as its atmosphere. That
+in a campaign that is currently playing this track** as its atmosphere, while
+its uploader is a member of that campaign too. That
 last clause is what lets a DM play a track from their personal library, since
 the sound is fetched by each player's browser rather than relayed by the server.
 It covers that one track and lasts only while it is set. Anyone else gets `404`,
@@ -1231,7 +1234,10 @@ ignored and the whole file is sent with `200`.
 
 ### `GET /api/assets/avatars/:userId`
 
-Get the current avatar for a user. Returns the image file directly.
+Get the current avatar for a user. Returns the image file directly, or `404`
+while the user's `avatarUrl` is null, whatever pictures are stored. Uploading
+an avatar does not set `avatarUrl`; the web client sets it with
+`PUT /api/users/:id` straight after the upload.
 
 ---
 
@@ -1240,8 +1246,8 @@ Get the current avatar for a user. Returns the image file directly.
 Serve a document's file: a PDF, or the text of a `.txt` or `.md`. The reader
 overlay and the "open in a new tab" link both use this URL.
 
-Who may read it is one rule, `canReadAsset`, shared with every other route that
-touches an asset: a `GLOBAL` document is readable by everyone signed in; a
+Who may read it is one rule, `canReadAsset`, shared with the other routes that
+serve an asset's file: a `GLOBAL` document is readable by everyone signed in; a
 `USER` one by its uploader and by the members of any campaign it is shared
 with; a `CAMPAIGN` one by that campaign's members. Anyone else gets `404`, not
 `403`, so the reply cannot confirm the id exists.
@@ -1268,7 +1274,7 @@ Write a text or Markdown document without uploading a file.
 **Body:**
 - `name` *(required)* — up to 200 characters
 - `format` *(required)* — `txt` or `md`
-- `content` *(required)* — the text, up to 900 KB; must be plain text (UTF-8, no control bytes)
+- `content` *(required)* — the text, up to 900 KB; must be UTF-8 plain text, with no NUL, DEL or other ASCII control character except tab, line feed, form feed and carriage return
 - `scope` *(optional, default `USER`)* — `GLOBAL`, `USER` or `CAMPAIGN`
 - `campaignId` — required when `scope` is `CAMPAIGN`
 - `description` *(optional)*
@@ -1309,7 +1315,8 @@ Who may delete depends on the asset's scope:
 session, so revoking it takes effect immediately.
 
 While a map, a token, a character, a character template, a creature, a token
-template or a campaign's atmosphere track still uses the asset, the route
+template, a campaign's atmosphere track or the sound of one of a campaign's
+times of day still uses the asset, the route
 answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
 nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
 what the caller may see: an admin sees everything, anyone else sees only the

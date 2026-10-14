@@ -5221,13 +5221,15 @@ paths:
         rule. A personal asset that is only *used* in one of the caller's
         campaigns is not listed, though the file routes serve it to them.
 
-        Except for an admin naming a campaign, a spirit-layer image of a map
-        in a campaign where the caller is not the DM, and whose spirit plane
-        is still closed to them, is left out.
+        For anyone but a platform admin, and for an admin who sends
+        `usable=true` without `campaignId`, a spirit-layer image of a map in
+        a campaign where the caller is not the DM, and whose spirit plane is
+        still closed to them, is left out.
 
         A `type` or `scope` outside its enum, or either sent more than once,
-        answers 400. A `page` below 1 is treated as 1, and `limit` is clamped
-        into 1-100.
+        answers 400. A `page` below 1, or one that is not a number, is
+        treated as 1. `limit` is clamped into 1-100, and 0 or a non-number
+        gives the default of 50.
 
         Each asset says in `canChange` whether the caller may change it where
         it is: delete it (`DELETE /api/assets/{id}`), move it out of its
@@ -5369,8 +5371,11 @@ paths:
         sent: an avatar is always personal. A new avatar deletes the
         uploader's earlier AVATAR assets, rows and files, apart from any that
         a map, token, character, template, creature or campaign setting
-        still names. A `campaignId` sent with a USER
-        or GLOBAL upload is ignored.
+        still names. The upload does not set the account's `avatarUrl`:
+        `GET /api/assets/avatars/{userId}` answers 404 until
+        `PUT /api/users/{id}` sets it to `/api/assets/avatars/<user id>`, as
+        the web client does straight after uploading. A `campaignId` sent
+        with a USER or GLOBAL upload is ignored.
 
         **Accepted content per asset type**, decided by what the bytes are,
         not by the filename:
@@ -5386,17 +5391,18 @@ paths:
         cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
         and a DOCUMENT named `.txt` or `.md` whose bytes are valid UTF-8 text
-        with no control characters besides tab, line feed, form feed and
-        carriage return. "Ogg audio" includes Ogg FLAC and Speex, stored as
-        `.oga` and `.spx`, and MPEG audio includes layers I and II, stored as
-        `.mp1` and `.mp2`; these upload successfully but
-        `GET /api/assets/audio/{id}` answers 404 for them. Ogg Opus is
-        refused.
+        with no NUL, DEL or other ASCII control character besides tab, line
+        feed, form feed and carriage return. "Ogg audio" is any Ogg track,
+        whatever it was recorded in (Vorbis, Opus, FLAC or Speex); each is
+        stored as `.ogg` and played by `GET /api/assets/audio/{id}`. MPEG
+        audio includes layers I and II, stored as `.mp1` and `.mp2`; these
+        upload successfully but `GET /api/assets/audio/{id}` answers 404 for
+        them.
 
         The stored row's `mimeType` is the detected type, whatever the client
-        declared for the file part: `audio/mpeg` for an MP3 accepted on its
-        header, and `text/markdown` or `text/plain` for a text document, by
-        its extension. Assets uploaded before 1.5.1 keep the type the client
+        declared for the file part: `audio/ogg` for every Ogg track,
+        `audio/mpeg` for an MP3 accepted on its header, and `text/markdown`
+        or `text/plain` for a text document, by its extension. Assets uploaded before 1.5.1 keep the type the client
         declared. The file routes do not use it.
 
         **File size limits** — set per type with the `MAX_<TYPE>_SIZE_MB`
@@ -5410,9 +5416,9 @@ paths:
         | AVATAR | `MAX_AVATAR_SIZE_MB` | 2 MB |
         | DOCUMENT | `MAX_DOCUMENT_SIZE_MB` | 50 MB |
 
-        A MAP or TOKEN upload whose declared content type starts with
-        `image/` also gets a thumbnail stored beside the file, scaled to fit
-        inside 512×512 with its aspect ratio kept and never enlarged. A
+        Every MAP or TOKEN upload, whose bytes have to be a picture, also gets
+        a thumbnail stored beside the file, scaled to fit inside 512×512 with
+        its aspect ratio kept and never enlarged. A
         thumbnail that cannot be made does not fail the upload. No route
         serves thumbnails and no response mentions them; deleting the asset
         deletes its thumbnail.
@@ -5562,7 +5568,14 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -5583,8 +5596,9 @@ paths:
 
         While a map (its image, base layer or spirit layer), a token on a map,
         a character's token picture, a character template, a creature, a token
-        template or a campaign's atmosphere track still names the asset, the
-        route answers **409** with `code: ASSET_IN_USE` and the list of uses,
+        template, a campaign's atmosphere track or the sound of one of a
+        campaign's times of day still names the asset, the route answers
+        **409** with `code: ASSET_IN_USE` and the list of uses,
         and deletes nothing. Those records are not told when an asset goes, so
         deleting one anyway leaves them pointing at nothing. Send
         `force=true` to delete it regardless; any other value of `force` is
@@ -5627,9 +5641,28 @@ paths:
                     type: string
                     example: Asset deleted successfully
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller may not delete this asset. The message names the rule
+            for its scope: "Only admins or the uploading global asset manager
+            can delete global assets", "Only the owner can delete personal
+            assets" or "Only the uploader while a member of the campaign, its
+            DM, or an admin can delete campaign assets".
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the owner can delete personal assets
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No asset with this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Asset not found
         '409':
           description: >-
             Something still uses the asset, and the request did not carry
@@ -5647,6 +5680,7 @@ paths:
                     example: ASSET_IN_USE
                   message:
                     type: string
+                    example: This asset is still in use. Deleting it leaves those places without it. Send force=true to delete it anyway.
                   usage:
                     type: array
                     description: >-
@@ -5714,10 +5748,12 @@ paths:
 
         An unknown `scope` answers 400 "scope must be GLOBAL, USER, or
         CAMPAIGN", and a `campaignId` that is not a UUID answers 400
-        "campaignId must be a campaign id". When `scope: CAMPAIGN`,
-        `campaignId` is required and the campaign must exist (404 otherwise,
-        checked before the ownership and placement rows); for
-        any other scope `campaignId` is ignored and cleared. The asset's file
+        "campaignId must be a campaign id", whatever the scope. When
+        `scope: CAMPAIGN`, `campaignId` is required (400 "campaignId is
+        required when scope is CAMPAIGN") and the campaign must exist (404
+        "Campaign not found", checked before the ownership and placement
+        rows); for any other scope a valid `campaignId` is ignored and the
+        asset's campaign is cleared. The asset's file
         does not move on disk: only the DB record's scope and `campaignId` are
         updated, and the uploader stays as recorded. Moving an asset to USER
         therefore makes it personal to its uploader, who may not be the
@@ -5738,7 +5774,8 @@ paths:
                 campaignId:
                   type: string
                   format: uuid
-                  description: Required when scope is CAMPAIGN
+                  nullable: true
+                  description: Required when scope is CAMPAIGN. Checked to be a UUID whatever the scope.
               required: [scope]
             examples:
               userToCampaign:
@@ -5764,11 +5801,45 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            "scope must be GLOBAL, USER, or CAMPAIGN", "campaignId must be a
+            campaign id" (any scope), or "campaignId is required when scope is
+            CAMPAIGN".
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: campaignId must be a campaign id
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            A move to or from GLOBAL by someone who is neither an admin nor a
+            global asset manager ("Only administrators or global asset
+            managers can change scope to or from Global"); a move out of the
+            current scope by someone who may not delete the asset there ("Only
+            admins or the uploading global asset manager can move a global
+            asset out of the library", "Only the asset owner can move personal
+            assets" or "Only the asset owner or campaign DM can move this
+            asset"); or a move into a campaign the caller may not upload this
+            type to ("You do not have access to this campaign" or "Only the
+            Dungeon Master can upload campaign assets").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the asset owner can move personal assets
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: '"Asset not found", or, for `scope: CAMPAIGN`, "Campaign not found".'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Asset not found
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5806,7 +5877,14 @@ paths:
                 type: string
                 format: binary
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -5824,8 +5902,9 @@ paths:
         A PDF cannot be typed. Counts against the upload rate limit, since it
         creates a file on disk exactly as an upload does. The new asset's
         `originalName` is `<name>.<format>` and its `mimeType` is
-        `text/plain` or `text/markdown`. A `campaignId` sent with a USER or
-        GLOBAL document is ignored.
+        `text/plain` or `text/markdown`. A `campaignId` must be a UUID
+        whatever the scope (400 otherwise), and is ignored for a USER or
+        GLOBAL document.
       operationId: createDocument
       security:
         - cookieAuth: []
@@ -5855,9 +5934,9 @@ paths:
                 content:
                   type: string
                   description: >-
-                    At most 900 KB once encoded as UTF-8, with no NUL or
-                    control characters besides tab, line feed, form feed and
-                    carriage return.
+                    At most 900 KB once encoded as UTF-8, with no NUL, DEL or
+                    other ASCII control character besides tab, line feed, form
+                    feed and carriage return.
                 scope:
                   type: string
                   enum: [USER, CAMPAIGN, GLOBAL]
@@ -5961,11 +6040,34 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`: `content` missing or not a string;
+            content that is not plain text ("The text contains characters that
+            do not belong in a document."); content over 900 KB ("That is too
+            long to save as typed text. Upload it as a file instead."); or the
+            document is a PDF ("Only plain text and Markdown documents can be
+            edited. Upload a new file to replace a PDF."). The body is checked
+            before the document is looked up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Only plain text and Markdown documents can be edited. Upload a new file to replace a PDF.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No document with this id, one the caller may not edit, or one
+            deleted while this save was being written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Document not found
 
   /api/assets/documents/{id}:
     get:
@@ -6079,7 +6181,14 @@ paths:
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           description: No MAP asset with this id, or its file is missing from disk.
           content:
@@ -6116,7 +6225,14 @@ paths:
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           description: No TOKEN asset with this id, or its file is missing from disk.
           content:
@@ -6141,9 +6257,10 @@ paths:
         Content-Type comes from the file's extension (`audio/mpeg`,
         `audio/ogg` or `audio/wav`), never from the type declared at upload,
         and the response carries `X-Content-Type-Options: nosniff`. A track
-        stored under any other extension (`.oga`, `.spx`, `.mp1`, `.mp2`,
-        which the upload accepts) answers 404. No caching headers or ETag
-        are sent.
+        stored under any other extension answers 404: an MPEG layer I or II
+        file (`.mp1`, `.mp2`), which the upload accepts, and an Ogg FLAC or
+        Speex track uploaded before 1.5.2 (`.oga`, `.spx`). No caching
+        headers or ETag are sent.
 
         One byte range is served, as RFC 9110 describes. `bytes=<start>-<end>`
         with the end optional, or `bytes=-<n>` for the last n bytes, answers
@@ -11788,7 +11905,11 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: Null once the uploader's account is deleted; the asset stays.
+          description: >-
+            Null once the uploader's account is deleted, on the assets that
+            outlive it: their campaign and global uploads, documents they
+            shared, and personal uploads something still uses. Their avatar
+            and their other personal uploads are deleted with the account.
         campaignId:
           type: string
           format: uuid
