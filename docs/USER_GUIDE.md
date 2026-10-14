@@ -569,7 +569,7 @@ keep the list to open rolls, which changes nothing for anyone else.
 
 ### Your Own Notes
 
-The **Notes** tab is yours alone. Keep as many as you like for each campaign — a
+The **Notes** tab is yours alone. Keep up to 200 for each campaign — a
 plan for next session, what the party has worked out about the villain, a
 running list of who owes whom money.
 

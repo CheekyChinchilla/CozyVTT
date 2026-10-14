@@ -285,7 +285,7 @@ If your token ends up underneath another one anyway — your DM can place tokens
 
 ## Your Own Notes
 
-The **Notes** tab is yours alone. Keep as many notes as you like for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
+The **Notes** tab is yours alone. Keep up to 200 notes for a campaign — a plan for next session, what you've worked out about the villain, who owes whom money.
 
 **Nobody else can read them.** Not the other players, and not your DM. That's enforced by the server, not just hidden from view.
 
