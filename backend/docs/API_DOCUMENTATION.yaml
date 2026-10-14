@@ -57,8 +57,8 @@ info:
     proxy in front of it only when that connects from an address listed in
     `NGINX_TRUSTED_PROXIES` (or from loopback). Behind a proxy that is not
     listed, or that does not pass the visitor's address on, every client shares
-    one allowance. Uploads, campaign archives and the WebSocket limits are counted
-    per user.
+    one allowance. Uploads, campaign archives, invitation emails, the notes of
+    a campaign you have left and the WebSocket limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
       `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong
@@ -126,6 +126,10 @@ info:
     - All the notes of a campaign you have left
       (`GET /api/campaigns/left/{campaignId}/notes`): 60 per hour per user,
       answering 429 `Too Many Requests` past that
+    - Invitation emails (`POST /api/campaigns/{campaignId}/invite` with
+      `sendEmail: true`, on an instance with SMTP configured): 20 per hour per
+      DM, then 429 `Too Many Requests`. An invitation the route refuses is not
+      counted, and one sent without the email is never limited
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
@@ -148,7 +152,9 @@ info:
     These are not repeated on each operation:
     - **401** `{ error: 'Unauthorized', message }` from any route that needs a
       session, when there is none or when the MFA step of a sign-in is still
-      pending.
+      pending. A sign-in made more than `REMEMBER_ME_MAX_AGE` ago (30 days by
+      default) is ended by the first such route it reaches, and that answer
+      adds `code: SIGN_IN_EXPIRED`.
     - **403** `{ error: 'Forbidden', message: 'You are not a member of this campaign' }`
       from any `/api/campaigns/{campaignId}/...` route that needs membership,
       including for a campaign id that does not exist. Such routes never answer
@@ -159,6 +165,10 @@ info:
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
     - **500** `{ error, message }` on an unexpected error. In production the
       message does not describe the failure.
+    - **503** `{ error: 'Service Unavailable', message }` with `Retry-After: 60`
+      from every `/api` route while a backup restore replaces the database,
+      checked before the session is read (see `POST /api/admin/backups/restore`).
+      `/health` is not refused.
 
     ## Forced password changes
     Accounts an admin created, or whose password an admin reset, are flagged
@@ -12292,8 +12302,8 @@ components:
           type: string
           description: >
             Machine-readable code, sent only where a client has to act on it:
-            PASSWORD_CHANGE_REQUIRED, SIGN_IN_EXPIRED, CHARACTER_CHANGED,
-            no_game_system, UVTT_IMPORT_NEEDS_CONFIRMATION.
+            PASSWORD_CHANGE_REQUIRED, MFA_ENROLMENT_REQUIRED, SIGN_IN_EXPIRED,
+            CHARACTER_CHANGED, ASSET_IN_USE, UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.
@@ -12306,11 +12316,6 @@ components:
                 type: string
               code:
                 type: string
-        errors:
-          type: array
-          description: Unmet password rules, from first-time setup.
-          items:
-            type: string
         details:
           type: object
           nullable: true
@@ -12615,10 +12620,16 @@ components:
     RateLimited:
       description: |
         Too Many Requests - Rate limit exceeded. Response includes
-        `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers.
-        Every limiter answers with JSON, `{ error: "Rate Limited", message }`,
-        where `message` says what was limited and to try again later.
+        `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining`,
+        `RateLimit-Reset` and `Retry-After` headers. Every limiter answers
+        with JSON `{ error, message }`, where `message` says what was limited
+        and when to try again. The sign-in, password, two-factor and
+        registration limiters send `error: "Rate Limited"`; the others send
+        `Too Many Requests`.
       headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the request may be sent again
         RateLimit-Limit:
           schema: { type: integer }
           description: Maximum requests permitted in the current window
