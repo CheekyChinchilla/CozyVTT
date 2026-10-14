@@ -51,7 +51,7 @@ Either way you end up with a password only you know. Pick something you'll actua
 
 ## Accepting a Campaign Invitation
 
-Your DM invites you by picking your account from a list of the people on your instance. Here's what happens next:
+Your DM invites you by typing part of your display name into a search and picking your account from the people who match. Two people can have the same display name, and your profile picture is how your DM tells you apart. Here's what happens next:
 
 1. **Log in** to CozyVTT
 2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards
@@ -168,7 +168,7 @@ You can keep documents of your own too, from **Documents** on your dashboard: up
 
 When you first load the campaign page, CozyVTT connects to the live session. Look for the **connection indicator** in the header — it turns green when you're successfully connected. If you see a loading spinner, just wait a moment.
 
-If you lose connection (WiFi hiccup, etc.), CozyVTT will automatically try to reconnect. If it can't, the indicator turns red and shows a **Retry** button; click it to reconnect.
+If you lose connection (WiFi hiccup, a server restart), CozyVTT keeps trying to reconnect by itself for as long as it takes: every few seconds at first, then every 30 seconds, and at once when you come back to the tab. The indicator shows **Connecting...** while it tries. When it shows **Disconnected** or **Connection Error** in red, the **Retry** button beside it tries straight away.
 
 ### If your DM hands you the game
 
@@ -295,7 +295,7 @@ Notes save themselves a moment after you stop typing — there's no Save button 
 
 A single note can hold about fifty pages of text, so a long campaign journal is fine. If you paste in something enormous the counter under the note turns red and it won't save until you trim it.
 
-**If you are removed from the campaign,** an open campaign page says "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
+**If you are removed from the campaign,** an open campaign page says "You were removed from this campaign." and takes you to your dashboard (if a character sheet there has unsaved changes, it stays open so you can save them first). Your notes and saved rolls for it are not deleted, and you can still read them. They appear on your dashboard under **Notes From Campaigns You Have Left**: press **Open** beside the campaign to read each note and see your saved rolls, and **Download** in that window to save them all as one Markdown file (plain text you can open in any text editor). The download fetches all the notes in one go, so with many long notes it can take a few seconds. It can be used 60 times an hour; past that it says how many minutes to wait. You can no longer change them. If you are invited back, they are in the campaign's **Notes** tab and **Saved** list again. If the campaign is deleted, they are deleted with it, so download anything you want to keep.
 
 ### Catching up on last time
 
@@ -477,7 +477,7 @@ You don't control this — only the DM does. Just let it color your roleplaying.
 
 ### Your Character Library
 
-The **Characters** page shows all your characters across every campaign and system. You can have as many characters as you like.
+The **Characters** page shows all your characters across every campaign and system. You can have up to 1,000 characters, copies included; past that, creating, copying or importing another says so, and deleting one you no longer need makes room.
 
 *Screenshot pending — Characters page with multiple characters.*
 
@@ -489,7 +489,7 @@ The card's menu (**⋮**) holds the rest:
 
 - **Edit Character** — Skip straight to the character editor
 - **Copy/Duplicate** — Duplicate a character (handy for making variants or backups)
-- **Assign to Campaign** — Add a character to a campaign, move it to another, or unassign it
+- **Assign to Campaign** — Add a character to a campaign. For a character already in one it reads **Reassign Campaign**, which moves it to another or unassigns it
 - **Export as JSON** — Download your character as a JSON file (great for backups or sharing builds)
 - **Delete Character** — Remove a character permanently (you'll be asked to confirm)
 
@@ -519,34 +519,36 @@ Renaming a character on its sheet renames it everywhere: the card in your librar
 
 ## Your Profile
 
-Click your name or avatar at the top of the dashboard to reach your **Profile & Settings** page.
+Click your avatar (the round picture at the top right of the dashboard) to reach your **Profile & Settings** page.
 
 *Screenshot pending — Profile page.*
 
 ### Setting Up Your Profile
 
-**Display Name:** Click **Edit** next to your name to change it. This is what everyone else sees.
+**Display Name:** Click **Edit** beside **Profile Information** to change it, then **Save Changes**. This is what everyone else sees, and it can be 2 to 50 characters.
 
-**Avatar:** Click your avatar (or the placeholder) to upload a profile picture. Use the built-in crop tool to frame it:
+**Avatar:** Click your avatar (or the placeholder) to upload a profile picture, a JPEG, PNG or WebP image. Use the built-in crop tool to frame it:
 - Drag the image to reposition
 - Use the zoom slider to zoom in/out
-- Click **Upload** when you're happy
+- Click **Apply & Upload** when you're happy
+
+A new avatar replaces the old one, and the old picture is deleted. **Remove Avatar**, under your avatar, takes it away and deletes the picture, and you are shown with the placeholder again.
 
 *GIF pending — Avatar upload and crop.*
 
-**Bio:** Add an optional bio in the bio field. Great for introducing your character roster or your player persona.
+**Bio:** Add an optional bio of up to 500 characters, with the same **Edit** button. Great for introducing your character roster or your player persona.
 
 ### Security Settings
 
 **Change Password:** In the Security section, enter your current password and your new password (twice), then click **Change Password**.
 
-**Multi-Factor Authentication (MFA):** For extra security, enable MFA. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Enter your current password to begin, scan the QR code shown during setup, verify the code to confirm, and save the backup codes somewhere safe. Turning MFA on signs out your other devices.
+**Multi-Factor Authentication (MFA):** For extra security, press **Enable** beside **Two-Factor Authentication**. You'll need an authenticator app (Google Authenticator, Authy, 1Password, etc.). Enter your current password to begin, scan the QR code shown during setup, verify the code to confirm, and save the 10 backup codes somewhere safe. Turning MFA on signs out your other devices. The Profile page then shows how many backup codes you have left, and **Backup Codes** makes new ones.
 
 *Screenshot pending — MFA setup with QR code.*
 
 ### Themes & Fonts
 
-The **Appearance** section of your profile lets you pick the color theme and font *you* see across the app. 16 built-in themes (light, warm, cool, dark, neutral, vibrant) plus 8 open-source font families. There's also a **Custom** option for picking your own primary/accent/background/text colors. Your choice saves to your account and persists across logout/login — when you sign back in, your theme is restored.
+The **Appearance** section of your profile lets you pick the color theme and font *you* see across the app. 16 built-in themes (warm, cool, dark, neutral, vibrant) plus 8 open-source font families. There's also a **Custom** option for picking your own primary/accent/background/text colors. Your choice saves to your account and persists across logout/login — when you sign back in, your theme is restored.
 
 ---
 
@@ -591,7 +593,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 **I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
 
-**I lost connection.** Click **Retry** beside the connection indicator in the header. Your session state is saved on the server.
+**I lost connection.** CozyVTT reconnects by itself; **Retry** beside the connection indicator in the header tries at once. Your session state is saved on the server.
 
 **Someone edited my character.** Only you and your campaign's DM can edit your characters. If you have concerns, speak with your platform administrator.
 
