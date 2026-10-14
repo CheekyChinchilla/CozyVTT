@@ -36,7 +36,7 @@ CozyVTT uses **session-based authentication**. The session cookie is set on logi
 
 - **Cookie name:** `cozyvtt.sid`, always. It is signed with `SESSION_SECRET`, which does not change the name
 - **Flags:** `httpOnly` and `sameSite: lax`. `Secure` is added only when the request reached the server over HTTPS, directly or through a proxy that sends `X-Forwarded-Proto: https`, so an install served over plain HTTP sends the cookie without it. The bundled nginx passes that header on only from a proxy listed in `NGINX_TRUSTED_PROXIES` in `.env`
-- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again." and `code: "SIGN_IN_EXPIRED"`; an account keeps at most 20 live sessions, the oldest ending at the next sign-in
+- **Duration:** the session ends after `SESSION_MAX_AGE` (default 1 hour) with no request, and every request starts that count again. With "remember me" the window is `REMEMBER_ME_MAX_AGE` (default 30 days). Every session also ends `REMEMBER_ME_MAX_AGE` after it was made, however active, with 401 "Your sign-in has reached its 30-day limit. Sign in again." and `code: "SIGN_IN_EXPIRED"`; an account keeps at most 20 live sessions, and each sign-in ends those beyond 20 that are due to end soonest
 
 ### Error Responses for Unauthenticated Requests
 
@@ -121,24 +121,27 @@ Authenticate a user and create a session.
 **Response (success):**
 ```json
 {
+  "message": "Login successful",
   "user": {
-    "id": "cuid...",
+    "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
     "email": "user@example.com",
     "displayName": "Merric Thorngage",
     "platformRole": "USER",
     "mfaEnabled": false,
     "mustChangePassword": false
-  }
+  },
+  "mustChangePassword": false
 }
 ```
 
 **Response (MFA required):**
 ```json
 {
-  "mfaRequired": true
+  "mfaRequired": true,
+  "message": "MFA verification required. Please enter your TOTP code."
 }
 ```
-HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login`.
+HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login` within 5 minutes, sending the code as `token`: exactly six digits, with nothing before, after or between them, or it is answered as a wrong code.
 
 **A script that keeps sending a wrong password locks the account.** Ten wrong
 passwords in an hour for one email address, counted from every address together,
@@ -162,7 +165,7 @@ dropped with it; another sign-in of the same account (another device) is untouch
 
 **Response:**
 ```json
-{ "message": "Logged out successfully" }
+{ "message": "Logout successful" }
 ```
 
 ---
@@ -183,6 +186,7 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 **Response (success):**
 ```json
 {
+  "message": "User registered successfully",
   "user": { ... }
 }
 ```
@@ -191,9 +195,11 @@ Create a new user account. Only available when `allowRegistration` is enabled in
 ```json
 {
   "pendingApproval": true,
-  "message": "Account created. An administrator must approve your account before you can log in."
+  "message": "Registration submitted. Your account is pending admin approval."
 }
 ```
+
+`displayName` is cleaned before it is stored: control and invisible formatting characters are removed (bar the joiners and flag tags that emoji and some scripts need), it is put in Unicode NFC, and angle brackets and surrounding spaces are removed. It must then be 1 to 50 characters; one left empty is refused with `400` "Display name is required".
 
 ---
 
@@ -207,7 +213,7 @@ sent. `adminMfaDeadline` is set only for an administrator without MFA.
 ```json
 {
   "user": {
-    "id": "cuid...",
+    "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
     "email": "user@example.com",
     "displayName": "Merric Thorngage",
     "platformRole": "USER",
@@ -242,6 +248,8 @@ once even when two requests carry it at the same moment.
 }
 ```
 
+A wrong `currentPassword` answers `401`. Ten wrong passwords in 15 minutes for the account, counted together with `DELETE /api/auth/account` and a change of your own email, answer `429` "Too many wrong passwords, please try again later" until the oldest is 15 minutes old.
+
 ---
 
 ### `DELETE /api/auth/account`
@@ -261,8 +269,7 @@ with nobody in the DM seat, until they hand the seat on or delete it.
 **Request:**
 ```json
 {
-  "password": "your-current-password",
-  "confirmation": "DELETE"
+  "password": "your-current-password"
 }
 ```
 
@@ -303,20 +310,20 @@ example is shortened; the OpenAPI file has the full shapes.
 {
   "campaigns": [
     {
-      "id": "cuid...",
+      "id": "8d3f6b2a-1c4e-4f7a-b9d2-3e5a7c9f1b04",
       "name": "The Lost Mines",
       "description": "A classic starter adventure.",
       "gameSystem": "DND_5E",
       "status": "ACTIVE",
-      "ownerId": "cuid...",
-      "owner": { "id": "cuid...", "displayName": "Merric Thorngage", "avatarUrl": null },
+      "ownerId": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
+      "owner": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage", "avatarUrl": null },
       "memberships": [
         {
-          "userId": "cuid...",
+          "userId": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
           "role": "DM",
           "characterIds": [],
           "joinedAt": "2025-02-01T10:00:00.000Z",
-          "user": { "id": "cuid...", "displayName": "Merric Thorngage", "avatarUrl": null }
+          "user": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage", "avatarUrl": null }
         }
       ],
       "userRole": "DM",
@@ -352,7 +359,7 @@ Get a single campaign's details. The embedded `maps` and `characters` arrays con
 
 ### `PUT /api/campaigns/:id`
 
-Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status`, `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` names the field.
+Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status`, `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
 
 **Request:** Partial campaign fields.
 
@@ -370,18 +377,18 @@ points to read.
 {
   "roster": [
     {
-      "userId": "cuid...",
+      "userId": "2b7e9c41-6d8a-4f3e-a5c1-9f0d2e4b6a87",
       "userName": "Alice",
       "userAvatar": null,
       "role": "PLAYER",
       "joinedAt": "2025-02-01T10:00:00.000Z",
       "characters": [
         {
-          "id": "cuid...",
+          "id": "c4a1e8f2-7b3d-4e9a-8c6f-1d2b5a7e9f30",
           "name": "Elara Moonwhisper",
           "tokenImageUrl": null,
           "gameSystem": "DND_5E",
-          "userId": "cuid...",
+          "userId": "2b7e9c41-6d8a-4f3e-a5c1-9f0d2e4b6a87",
           "hp": { "current": 24, "max": 31, "temp": 0 }
         }
       ]
@@ -464,9 +471,11 @@ campaign membership; `POST` requires the DM role.**
 with `CAMPAIGN` scope inside it, and those a DM has shared from elsewhere. Each
 item carries the asset fields plus `linkedAt`, `linkedBy` and a `shared`
 boolean, which is what tells the two apart, so the client knows whether
-"unshare" is a thing it can offer. A `canEdit` boolean says whether
-`PUT /api/assets/documents/:id/content` would take an edit from the caller,
-by the rule for deleting the document, so the client offers Edit only then.
+"unshare" is a thing it can offer. A `canEdit` boolean says whether the
+caller passes the rule for deleting the document, which is the rule
+`PUT /api/assets/documents/:id/content` applies, so the client offers Edit only
+then. That route edits only plain text and Markdown, so a PDF cannot be edited
+whatever `canEdit` says.
 
 `POST` takes `{ assetId }` and shares an existing document. Two checks, in
 order. The asset must be of type `DOCUMENT` **and readable by the DM making the
@@ -490,15 +499,15 @@ link to remove; delete the asset instead.
 Invite a user to the campaign. **Requires DM role.**
 
 **Body:**
-- `userId` *(required)* — the user to invite; they must already have an account
+- `userId` *(required)* — the user to invite. They must already have an account, approved by an administrator if the instance asks for approval; an unknown or unapproved account answers `404` "User not found"
 - `sendEmail` *(optional, default `false`)* — whether to email them as well. Only an explicit `true` counts
-- `expiresInDays` *(optional)* — invitation lifetime; omitted means it does not expire
+- `expiresInDays` *(optional)* — a whole number of days, at most 365. Omitted, `null`, zero or negative means it does not expire; anything else answers `400`
 
 **Response `201`:** `{ message, invitation, emailSent }`
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
-Each DM may have 20 invitation emails sent an hour. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
+Each DM may make 20 invitations an hour that ask for an email, counted whether or not the email then goes out. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
 
 ### `PUT /api/campaigns/:campaignId/dm`
 
@@ -518,11 +527,17 @@ removal of a member who has just been handed the seat is refused as for any DM.
 
 **The campaign's owner does not change.** Ownership and the DM role are separate
 facts, which is what allows an owner to hand the game to a co-DM or to an
-automated account and remain at the table as an ordinary player. Deleting a
-campaign stays with the owner; everything else a DM does follows the role.
+automated account and remain at the table as an ordinary player. Deleting the
+campaign stays with the owner, and so does handing the DM seat on, so an owner
+sitting as a player can take the seat back; the owner also cannot be removed
+from the campaign. Everything else a DM does follows the role.
 
-Rejected with `400` if the named member is already the DM, `404` if they are not
-a member of the campaign, and `403` if the caller is none of the three above.
+Rejected with `400` if `userId` is not a user id ("A campaign member must be
+named by their user id") or names the sitting DM ("That member is already the
+Dungeon Master"), `404` if the campaign does not exist ("Campaign not found",
+checked before the caller is) or the named user is not a member ("That user is
+not a member of this campaign"), and `403` if the caller is none of the three
+above ("Only the DM, the campaign owner, or an admin can transfer the DM role").
 Note the generic role endpoint still refuses to change a DM's role or create a
 second one — this is the only supported way to move the seat, so that there is
 one atomic path rather than two.
@@ -539,7 +554,7 @@ Matching is on `metadata.action` (`user.joined` / `user.left`), **not** on the m
 
 ### `GET /api/campaigns/:campaignId/dice-rolls`
 
-Roll history for a campaign, newest first; rolls with the same timestamp are ordered by id, so paging never skips or repeats one. **Requires campaign membership.**
+Roll history for a campaign, newest first; rolls with the same timestamp are ordered by id, so the order is the same on every request. Paging is by offset: a roll made while someone pages back moves the older rolls down by one, so the next page repeats one. **Requires campaign membership.**
 
 **Query params:**
 - `limit` — rolls to return (default: 50, max: 100)
@@ -551,7 +566,7 @@ Roll history for a campaign, newest first; rolls with the same timestamp are ord
 
 Rolls made before the DM last cleared the history are excluded (see `Campaign.rollHistoryClearedAt`). They remain in the table: clearing hides rolls from this endpoint rather than deleting them, so the secret-roll audit trail survives an accidental Clear.
 
-Note that rolls made while a session is **paused** are evaluated client-side and never persisted, so they never appear here.
+In the web client, a player's rolls while the session is **paused** are made in their own browser and never sent, so they never appear here. The DM's rolls are sent as usual, and the server takes a `dice.roll` whatever the session's state, so a script's rolls while paused are kept and listed.
 
 ---
 
@@ -561,11 +576,15 @@ All token template endpoints are scoped under a campaign and require DM role.
 
 ### `GET /api/campaigns/:campaignId/token-templates`
 
-List all token templates for a campaign.
+List this campaign's token templates, ordered by name, a page at a time.
 
 **Query params:**
 - `search` — filter by name (optional)
-- `type` — filter by token type: `npc`, `player`, `object` (optional)
+- `type` — filter by token type: `npc`, `player`, `object` (optional; any other value is ignored)
+- `limit` — templates per page (default 50, at most 100)
+- `offset` — templates to skip (default 0)
+
+**Response:** `{ templates, total, limit, offset }`, where `total` counts every match.
 
 ---
 
@@ -620,13 +639,7 @@ Save a token from the map as a new template. Accepts the same body as create, bu
 
 Copy a token template to another campaign. Requires DM role in both the source and target campaigns.
 
-**Response:**
-```json
-{
-  "message": "Template copied successfully",
-  "template": { ... }
-}
-```
+**Response:** `201` with the new token template itself, in the target campaign and created by you, in the same shape as `GET /api/campaigns/:campaignId/token-templates/:id`.
 
 ---
 
@@ -696,7 +709,7 @@ Import a `.cozyvtt` archive and create a new campaign. Requires authentication; 
 }
 ```
 
-The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own and listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). A map is left out whole only when its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
+The counts are of what was created. Everything is held to what the app's own routes store: text over its limit is cut to it and described in `warnings`, and anything that cannot be stored is left out on its own. A map, token, creature, token template or asset left out is listed in `skipped` (`kind` is `map`, `token`, `creature`, `tokenTemplate` or `asset`). Walls, doors and lights left out are counted in `warnings`, and so is a map picture or spirit layer picture that was not uploaded as a map picture: the picture is still imported into the campaign's assets, and its map arrives without it. A map is left out whole when its file is missing, it nests more than 32 levels deep, it is not a map at all, or its size is outside the map limits. The import is all or nothing: a refused archive answers `400` with the reason, a failure of the server's own answers `500`, and either way nothing is kept.
 
 ---
 
@@ -722,24 +735,35 @@ the most one account can. Delete one you no longer need to make room."
   "name": "Thorin Ironforge",
   "gameSystem": "DND_5E",
   "data": {
-    "name": "Thorin Ironforge",
     "class": "Fighter",
-    "level": 1
+    "level": 1,
+    "race": "Dwarf",
+    "proficiencyBonus": 2,
+    "stats": {
+      "strength": { "score": 16, "modifier": 3 },
+      "dexterity": { "score": 12, "modifier": 1 },
+      "constitution": { "score": 16, "modifier": 3 },
+      "intelligence": { "score": 10, "modifier": 0 },
+      "wisdom": { "score": 12, "modifier": 1 },
+      "charisma": { "score": 8, "modifier": -1 }
+    }
   }
 }
 ```
+
+`name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
 
 ---
 
 ### `GET /api/characters/:id`
 
-Get a single character. Returns full character data including the JSON sheet data.
+Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `403`. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
 
 ---
 
 ### `PUT /api/characters/:id`
 
-Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved.
+Save a character. Every field is optional, but `data` is the **whole sheet**: it replaces the stored one. For a character with a game system it is checked against that system's sheet first, and a field the sheet does not define is dropped. A Flexible character's sheet (no game system) must be an object whose `sections` are laid out as the Flexible sheet's are; keys beside `sections` are kept. Either way a sheet that does not pass answers `400` with `validationErrors`, each giving the `path` of a field and what is wrong with it, and nothing is saved. On a Call of Cthulhu sheet, a save by anyone but the DM of the character's campaign keeps the stored `notes` (Keeper's Notes), whatever it sends for them.
 
 Send `updatedAt` exactly as `GET /api/characters/:id` gave it, and the save is refused with **409 Conflict** if the character has changed since (another save, or hit points changed at the table). Nothing is written; load the character again and make the change on the new version. Leave `updatedAt` out and the save is made whatever changed in between. A successful save returns the character with its new `updatedAt`.
 
@@ -770,7 +794,7 @@ Assign a character to a campaign.
 
 **Request:**
 ```json
-{ "campaignId": "cuid..." }
+{ "campaignId": "8d3f6b2a-1c4e-4f7a-b9d2-3e5a7c9f1b04" }
 ```
 
 ---
@@ -800,7 +824,7 @@ Create a new map (DM only).
 
 `width` and `height` are in grid squares, each a whole number from 1 to 500; anything else answers `400`. `name` may be at most 200 characters once trimmed, or the request answers `400`. `gridSize` (pixels per square, 10 to 500) and `feetPerSquare` (1 to 100) are optional, and a value outside those ranges is replaced with the default (50 and 5). `PUT /api/campaigns/:id/maps/:mapId` applies the same limits but answers `400` instead of using a default; a name or size equal to the one already stored is accepted as it is.
 
-`imageUrl` and the optional `spiritLayerUrl` must each name an asset uploaded as a map picture (type `MAP`), whatever folder an address gives; any other asset answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged.
+`imageUrl` and the optional `spiritLayerUrl` may not name an asset of another kind: one that is not a map picture (type `MAP`), whatever folder an address gives, answers `400` with `The map image must be a map picture from the asset library.` or `The spirit layer image must be a map picture from the asset library.` An address naming no existing asset is stored as sent. An asset the caller may not read answers `403` first. `PUT /api/campaigns/:id/maps/:mapId` checks a new picture or spirit layer the same way, and accepts the address already stored, sent back unchanged.
 
 ---
 
@@ -855,6 +879,8 @@ into a character or editing it.
 }
 ```
 
+(`data` stands for a whole sheet here. It is checked as sent: the template's `name` is not copied into it, so a D&D 5e template's `data` needs `characterName`, `class`, `level`, `race`, `proficiencyBonus` and `stats`, and `{}` answers `400`.)
+
 - `name` is required; `gameSystem` may be null for a flexible template.
 - `data` is validated against the game system's schema exactly as a character's
   is, and stored as the schema returns it, so a field the sheet does not define
@@ -890,10 +916,12 @@ author.
 
 All creature endpoints are mounted under `/api/campaigns/:campaignId/creatures`.
 
-**`imageUrl` on create, update and duplicate** accepts either a bare asset id or a full
-`/api/assets/tokens/:id` path, and is stored normalised to the full path — the same treatment
-characters, maps and map tokens already receive. Send `""` to clear it. Rows written before this
-normalisation may still hold a bare id, so clients should tolerate both when reading.
+**`imageUrl` on create and update** accepts a bare asset id, stored as `/api/assets/tokens/:id`, or
+an asset's own `/api/assets/<kind>/:id` address, stored as sent. Anything else, an address on another
+site included, answers `403`, as does an asset the DM may not read unless this campaign already uses
+that exact address. Send `""` or `null` to clear it. Duplicating a creature stores a bare id it copies
+as the full path. Rows written before this normalisation may still hold a bare id, so clients should
+tolerate both when reading.
 
 ### `GET /api/campaigns/:id/creatures`
 
@@ -1029,7 +1057,7 @@ Delete a custom creature template (DM only). Cannot delete SRD creatures — ret
 
 ### `POST /api/campaigns/:id/creatures/:creatureId/duplicate`
 
-Duplicate any creature (including SRD) as a new custom creature in this campaign (DM only). The duplicate gets `source: 'custom'` and `(Custom)` appended to the name.
+Duplicate a creature of this campaign, or an SRD creature, as a new custom creature in this campaign (DM only); a creature of another campaign answers `404`. The duplicate gets `source: 'custom'` and ` (Custom)` appended to the name.
 
 **Response:** `201` with the new creature template.
 
@@ -1062,22 +1090,25 @@ Toggle favorite for the current user in this campaign (DM only). If already favo
 
 ### `GET /api/campaigns/:id/creatures/seed/status`
 
-Check whether SRD creatures have been seeded. Any campaign member can check.
+Check whether SRD creatures have been seeded, and whether you may run the import. Any campaign member can check.
 
 **Response:**
 ```json
 {
-  "seeded": true,
-  "count": 325,
-  "seedInProgress": false
+  "srdCount": 325,
+  "customCount": 4,
+  "seedInProgress": false,
+  "canSeed": false
 }
 ```
+
+`srdCount` counts the SRD creatures on the whole server, `customCount` the custom creatures this campaign's library shows, and `canSeed` is `true` for a platform administrator alone.
 
 ---
 
 ### `POST /api/campaigns/:id/creatures/seed`
 
-Seed SRD creatures from Open5e (DM only). Safe to call multiple times — existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress.
+Seed SRD creatures from Open5e. Administrators only: anyone else, a campaign's DM included, gets `403` with "Only an administrator can import the SRD creatures, because every campaign on this server shares them. Ask an administrator to import them." The campaign in the address plays no part, and the creatures appear in every campaign's library. Safe to call multiple times; existing SRD creatures are not duplicated. Returns `409` if seeding is already in progress, and `502`, having written nothing, when Open5e cannot be read, does not answer a page within 15 seconds, or answers something the import will not follow; the `message` says which. A creature whose stat block the Creature Library would refuse is left out and counted in `rejected`.
 
 SRD creatures stored before hit points were tracked are updated in place with `hpMax` and `hitDice`; only those missing keys are added, and custom creatures are never modified.
 
@@ -1089,7 +1120,8 @@ SRD creatures stored before hit points were tracked are updated in place with `h
   "created": 0,
   "updated": 322,
   "skipped": 0,
-  "alreadyExisted": 322
+  "alreadyExisted": 322,
+  "rejected": 0
 }
 ```
 
@@ -1110,8 +1142,10 @@ List assets accessible to the authenticated user (Global + their own User scope 
 - `limit` — items per page (default: 50, at most 100)
 
 The newest upload comes first. There is no sort order to ask for. An
-administrator can also send `uploadedBy` (a user id, or `none`) to list one
-person's uploads, and `usable=true` to see only what they could put on a map.
+administrator can also send `uploadedBy`, a user id to list one person's
+uploads or `none` to list the uploads of deleted accounts, and `usable=true`
+to see only what they could put on a map. Anyone else's `uploadedBy` is
+ignored.
 
 Each asset carries a `canChange` boolean: whether the caller may delete it,
 move it out of its scope, or rewrite it if it is a text or Markdown
@@ -1124,12 +1158,12 @@ controls only then.
 {
   "assets": [
     {
-      "id": "cuid...",
+      "id": "9a6c3e1f-4b2d-4d8e-b7a5-0c3f1e9d2b68",
       "type": "TOKEN",
       "scope": "USER",
-      "uploadedById": "cuid...",
+      "uploadedById": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93",
       "campaignId": null,
-      "filename": "1f3a.png",
+      "filename": "b7e4d2c1-9a8f-4b3e-8d6c-2f1e0a9b8c7d.png",
       "originalName": "goblin.png",
       "mimeType": "image/png",
       "fileSize": 18432,
@@ -1137,7 +1171,7 @@ controls only then.
       "description": null,
       "tags": [],
       "createdAt": "2025-02-01T10:00:00.000Z",
-      "uploadedBy": { "id": "cuid...", "displayName": "Merric Thorngage" },
+      "uploadedBy": { "id": "5f0c2a8e-3b1d-4c7a-9e2f-6a4b8d1c0e93", "displayName": "Merric Thorngage" },
       "campaign": null,
       "canChange": true
     }
@@ -1163,7 +1197,7 @@ Upload a new asset. Uses `multipart/form-data`.
 
 A `name`, `description` or `tags` over its limit, or sent more than once, is refused with `400` and a message naming the field, and the file is not kept.
 
-A request may carry at most 100 text fields. A field name is at most 100 bytes, a field's value at most 16 KB, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits. A body that breaks them, or is cut off or malformed, is refused with `400` and `error: "Upload Error"`.
+A request may carry at most 100 text fields. A field name is at most 100 bytes, a field's value at most 16 KB, and a name written like `a[b][c]` may go no more than five levels deep, with no number above 1000 between the brackets. The other upload routes share these limits: the campaign import and its preview, the Universal VTT import and a backup restore. A body that breaks them is refused with `400` and `error: "Upload Error"` (`"Invalid Backup"` on a restore), and so is one that is cut off or malformed, on every route but the restore.
 
 ---
 
@@ -1179,7 +1213,8 @@ Stream an audio file, with HTTP range requests supported so a browser can seek.
 
 Read access is the shared `canReadAsset` rule: `GLOBAL` for anyone signed in,
 `CAMPAIGN` for that campaign's members, `USER` for its uploader, **plus anyone
-in a campaign that is currently playing this track** as its atmosphere. That
+in a campaign that is currently playing this track** as its atmosphere, while
+its uploader is a member of that campaign too. That
 last clause is what lets a DM play a track from their personal library, since
 the sound is fetched by each player's browser rather than relayed by the server.
 It covers that one track and lasts only while it is set. Anyone else gets `404`,
@@ -1199,7 +1234,10 @@ ignored and the whole file is sent with `200`.
 
 ### `GET /api/assets/avatars/:userId`
 
-Get the current avatar for a user. Returns the image file directly.
+Get the current avatar for a user. Returns the image file directly, or `404`
+while the user's `avatarUrl` is null, whatever pictures are stored. Uploading
+an avatar does not set `avatarUrl`; the web client sets it with
+`PUT /api/users/:id` straight after the upload.
 
 ---
 
@@ -1208,8 +1246,8 @@ Get the current avatar for a user. Returns the image file directly.
 Serve a document's file: a PDF, or the text of a `.txt` or `.md`. The reader
 overlay and the "open in a new tab" link both use this URL.
 
-Who may read it is one rule, `canReadAsset`, shared with every other route that
-touches an asset: a `GLOBAL` document is readable by everyone signed in; a
+Who may read it is one rule, `canReadAsset`, shared with the other routes that
+serve an asset's file: a `GLOBAL` document is readable by everyone signed in; a
 `USER` one by its uploader and by the members of any campaign it is shared
 with; a `CAMPAIGN` one by that campaign's members. Anyone else gets `404`, not
 `403`, so the reply cannot confirm the id exists.
@@ -1236,7 +1274,7 @@ Write a text or Markdown document without uploading a file.
 **Body:**
 - `name` *(required)* — up to 200 characters
 - `format` *(required)* — `txt` or `md`
-- `content` *(required)* — the text, up to 900 KB; must be plain text (UTF-8, no control bytes)
+- `content` *(required)* — the text, up to 900 KB; must be UTF-8 plain text, with no NUL, DEL or other ASCII control character except tab, line feed, form feed and carriage return
 - `scope` *(optional, default `USER`)* — `GLOBAL`, `USER` or `CAMPAIGN`
 - `campaignId` — required when `scope` is `CAMPAIGN`
 - `description` *(optional)*
@@ -1277,7 +1315,8 @@ Who may delete depends on the asset's scope:
 session, so revoking it takes effect immediately.
 
 While a map, a token, a character, a character template, a creature, a token
-template or a campaign's atmosphere track still uses the asset, the route
+template, a campaign's atmosphere track or the sound of one of a campaign's
+times of day still uses the asset, the route
 answers `409` with `code: "ASSET_IN_USE"` and a `usage` list, and deletes
 nothing. Send `?force=true` to delete it anyway. Names in the list are limited to
 what the caller may see: an admin sees everything, anyone else sees only the
@@ -1300,7 +1339,7 @@ Accept a campaign invitation and optionally assign characters.
 
 **Request:**
 ```json
-{ "characterIds": ["cuid-1", "cuid-2"] }
+{ "characterIds": ["c4a1e8f2-7b3d-4e9a-8c6f-1d2b5a7e9f30", "e9b2d4f6-0a1c-4b3e-9d5f-7a8c2e4b6d18"] }
 ```
 
 ---
@@ -1406,15 +1445,22 @@ carried in the session; it is written to the admins' activity log, and a user
 made an admin has 7 days to set up two-factor authentication. Setting it to `USER` for the instance's only admin is
 refused with `409`. There is no approval field to set here.
 
-`displayName` is trimmed and must then be 1 to 50 characters of text; anything
-else is refused with `400`. Registration applies the same rule.
+`displayName` is cleaned as registration cleans it (invisible characters, angle
+brackets and surrounding spaces removed, Unicode NFC) and must then be 1 to 50
+characters of text; one left empty is refused with `400` "Display name is
+required", and one that is too long or not text with `400` too.
 
 `avatarUrl` must be `/api/assets/avatars/<id>` for the user being updated,
 which is what the web client sets after uploading the picture, or `null` to
-clear it. Anything else is refused with `400`.
+clear it. Anything else is refused with `400`. `null` also deletes the user's
+avatar pictures, keeping any that a map, token or anything else still uses.
 
 Changing **your own** `email` needs `currentPassword` in the same request (`400`
 without it, `401` when it is wrong); an admin changing someone else's does not.
+A wrong one counts against 10 wrong passwords per 15 minutes for the account,
+shared with `POST /api/auth/change-password` and `DELETE /api/auth/account`,
+then `429` "Too many wrong passwords, please try again later". An address
+another account has is refused with `400` "Email already in use".
 When the address changes, any unused password-reset or invitation link for the
 account stops working, and the old address is emailed a notice if the instance
 has SMTP configured.
@@ -1426,13 +1472,15 @@ has SMTP configured.
 Generate a temporary password for a user. The account is flagged `mustChangePassword`, and **any
 sessions the user currently has open are signed out** — otherwise they would keep browsing on the
 old session and the forced change would only apply at their next login. Any reset or invitation
-link the user has not used stops working.
+link the user has not used stops working. An admin naming their own id is refused with `400`: they
+change their own password with `POST /api/auth/change-password`, which asks for the current one.
 
 **Response:**
 ```json
 {
-  "message": "Password reset successfully.",
-  "temporaryPassword": "Temp-abc123"
+  "message": "Password reset successfully",
+  "temporaryPassword": "aB3d-Ef9h-Jk2m-Np4q",
+  "mustChangePassword": true
 }
 ```
 
@@ -1442,7 +1490,7 @@ link the user has not used stops working.
 
 Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A campaign they own passes to its sitting DM.
 
-**409** while they are the DM of a campaign they own. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again:
+**409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 
 ```json
 {
@@ -1483,7 +1531,7 @@ Partial-merge update of the user's preferences. Send any subset of fields — th
 
 **Allowed fields:**
 - `themeId` — one of the 16 preset theme ids (`cozy-default`, `obsidian-night`, etc.) or the sentinel `"custom"`
-- `customThemeColors` — `{ primary, accent, background, text }` as `#RRGGBB`; required when `themeId === "custom"`, ignored otherwise (frontend sends `null` to clear)
+- `customThemeColors` — `{ primary, accent, background, text }`, each `#RRGGBB`, or `null` to clear. The server stores it whatever `themeId` is and does not require it for `"custom"`; the web client sends it with `"custom"`. Another key inside it is refused with `400`
 - `fontId` — one of the 8 font ids (`default`, `medieval`, `elegant`, `modern`, `handwritten`, `clean`, `scholarly`, `gothic`)
 
 **Request:**
@@ -1548,32 +1596,36 @@ rebuilding.
 
 ### `GET /api/admin/backups` *(Admin only)*
 
-List available database backups.
+List the instance backups in the backups folder, newest first.
 
 ---
 
 ### `POST /api/admin/backups` *(Admin only)*
 
 Create a new backup: a ZIP holding a `pg_dump` of the database and every uploaded file.
-Refused with `409` while a restore runs. Backups are never deleted automatically.
+Refused with `409` while a restore takes its upload or writes its safety backup, and with
+`503` while the restore replaces the database. Backups are never deleted automatically.
 
 ---
 
 ### `DELETE /api/admin/backups/:filename` *(Admin only)*
 
-Delete a database backup file.
+Delete a backup file.
 
 ---
 
 ### `POST /api/admin/backups/restore` *(Admin only)*
 
-Restore a database backup. **Destructive — overwrites all current data.**
+Restore the instance from a backup archive. **Destructive: it replaces the whole database**
+and copies the archive's uploaded files over the existing ones. A backup of the database as
+it was is written to the backup list first, and the response names it as `safetyBackup`.
 
-One restore runs at a time: a second answers `409`. A refused file answers `400`
-(not named `.zip`, not a ZIP archive, more than 100,000 entries, or not a complete
-CozyVTT backup) or `413` (over 4 GB, or unpacking to more than 10 GiB), with the
-reason. While the database is being replaced, live connections are closed and
-every other API request answers `503` until the restore ends.
+One restore runs at a time: a second sent while the first takes its upload or writes that
+backup answers `409`. A refused file answers `400` (not named `.zip`, not a ZIP archive,
+more than 100,000 entries, or not a complete CozyVTT backup) or `413` (over 4 GB, or
+unpacking to more than 10 GiB), with the reason. While the database is being replaced,
+live connections are closed and every other API request, a second restore included,
+answers `503` with `Retry-After: 60` until the restore ends.
 
 ---
 
@@ -1581,7 +1633,7 @@ every other API request answers `503` until the restore ends.
 
 ### `GET /api/config`
 
-Public. Returns the upload limits the server enforces, derived from the `MAX_<TYPE>_SIZE_MB` environment variables, and whether the instance can send email. The SPA reads these at runtime, so changing a limit takes a restart rather than a frontend rebuild.
+Public. Returns the upload limits the server enforces, derived from the `MAX_<TYPE>_SIZE_MB` environment variables, and whether the instance can send email. The SPA reads these at runtime, so a changed limit takes effect when the backend next starts with it, with no frontend rebuild. Under Docker that is `docker compose up -d`: a plain restart keeps the environment the container was created with.
 
 **Response:**
 ```json
@@ -1641,9 +1693,10 @@ Most errors are JSON in this shape:
 ```
 
 Not all of them. The invitation routes (`/api/invitations/...`) send `message`
-alone, and the character check (`GET /api/characters/:id/validate`) answers with
+alone, except the `400` `Validation Error` for a malformed `characterIds` on
+accept and the shared `401`, and the character check (`GET /api/characters/:id/validate`) answers with
 `isValid` and a list of `errors`. Some errors add a `code` for a program to act on, such as
-`PASSWORD_CHANGE_REQUIRED`. Read the status code first, then `code` if there is
+`PASSWORD_CHANGE_REQUIRED`, `MFA_ENROLMENT_REQUIRED` and `SIGN_IN_EXPIRED`. Read the status code first, then `code` if there is
 one, then `message`.
 
 ### Common HTTP Status Codes
@@ -1660,7 +1713,7 @@ one, then `message`.
 | `429` | Rate limit exceeded |
 | `500` | Server error — check server logs |
 | `502` | Upstream failure — e.g., an invitation email could not be delivered |
-| `503` | Feature unavailable — e.g., an email-dependent endpoint with no SMTP configured |
+| `503` | Feature unavailable — e.g., an email-dependent endpoint with no SMTP configured. Every endpoint also answers `503` with `Retry-After: 60` while a backup restore replaces the database |
 
 ### Password change required
 
@@ -1682,6 +1735,27 @@ Status `403`. Still reachable while in this state: `POST /api/auth/change-passwo
 Clients should route on `code`, not the message — the web app redirects to its change-password screen
 when it sees it.
 
+### Two-factor authentication required for administrators
+
+An administrator account must use two-factor authentication. One without it has 7 days to set it
+up, given as `adminMfaDeadline` on the `user` that `GET /api/auth/me` and the sign-in replies return
+(`null` for everyone else). The 7 days run from the latest of when the rule started on the instance,
+the account's creation, its promotion to admin, and an administrator's **Reset MFA** on it. Past the
+deadline, every endpoint except `POST /api/auth/mfa/setup`, `POST /api/auth/mfa/verify`,
+`POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
+`GET /api/auth/appearance` and `GET /api/config` returns:
+
+```json
+{
+  "error": "MFA Required",
+  "code": "MFA_ENROLMENT_REQUIRED",
+  "message": "Administrator accounts must use two-factor authentication. Set it up to continue."
+}
+```
+
+Status `403`. A script signed in as an administrator stops at the deadline until two-factor
+authentication is set up on the account, and then has to send a code at every sign-in.
+
 ---
 
 ## Rate Limits
@@ -1691,11 +1765,14 @@ when it sees it.
 | Login, password reset, MFA changes | 5 wrong answers | 15 minutes | Wrong passwords, wrong codes and bad reset links only |
 | Login, per account (from every address) | 10 wrong passwords | 1 hour | Wrong passwords only; each lock is noted in the admins' activity log |
 | Two-factor code at sign-in | 5 wrong codes per address, and 5 per account | 15 minutes | Wrong codes and backup codes only |
+| Checking the code when turning two-factor on | 5 failures | 15 minutes | Every answer that is not a success |
 | Change password, delete account, change own email (per account) | 10 wrong passwords | 15 minutes | Wrong current passwords only |
 | Register | 10 requests | 1 hour | Every request |
 | Forgot password | 5 requests | 15 minutes | Every request |
-| File upload, and writing a document | 30 requests | 1 minute | Every request |
-| Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request; also one of the three at a time per user |
+| File upload, a new typed document, Universal VTT map import (per user) | 30 requests | 1 minute | Every request |
+| Campaign import, import preview, campaign export | 20 of each, per user | 1 hour | Every request but one refused for overlapping another; also one of the three at a time per user |
+| Invitation emails (per DM) | 20 invitations that ask for an email | 1 hour | Invitations created with `sendEmail: true` on an instance with SMTP, whether or not the email goes out; a refused invitation is not counted |
+| All the notes of a campaign you have left (per user) | 60 requests | 1 hour | Every request |
 | General API | 300 requests | 1 minute | Every request |
 | Dice rolls (WebSocket) | 50 rolls, and 200 | 1 second, and 1 minute | Every roll |
 | Chat messages (WebSocket) | 50 messages, and 300 | 1 second, and 1 minute | Every message |
@@ -1728,7 +1805,10 @@ The upload, campaign-archive and general-API limits are configurable with the
 `RATE_LIMIT_MAX_REQUESTS` environment variables; the rest are fixed.
 
 Rate limit responses return HTTP `429` with a `Retry-After` header giving the
-seconds until the limit resets. The one-at-a-time refusals (a second campaign
+seconds until the limit resets. Where only wrong answers count, a request that
+has waited 15 seconds behind others still being checked answers `429` "Other
+attempts are still being checked. Please try again in a moment." with
+`Retry-After: 5`, and is not counted. The one-at-a-time refusals (a second campaign
 import, preview or export while one of yours is running, and a second Universal
 VTT map import while one is running) also answer `429`, with no `Retry-After`:
 send the request again once the first has finished. The WebSocket limits are not

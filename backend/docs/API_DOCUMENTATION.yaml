@@ -57,8 +57,8 @@ info:
     proxy in front of it only when that connects from an address listed in
     `NGINX_TRUSTED_PROXIES` (or from loopback). Behind a proxy that is not
     listed, or that does not pass the visitor's address on, every client shares
-    one allowance. Uploads, campaign archives and the WebSocket limits are counted
-    per user.
+    one allowance. Uploads, campaign archives, invitation emails, the notes of
+    a campaign you have left and the WebSocket limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
       `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong
@@ -76,6 +76,7 @@ info:
       wrong answers (per account, password checks, the MFA code step). That covers the password step of a
       sign-in only: the two-factor code step keeps its own limit, below. An
       unknown email counts and answers exactly as a wrong password does. The 429
+      says `Too many authentication attempts, please try again later` and
       carries `Retry-After`, the seconds until the oldest counted failure leaves
       the window
     - `POST /api/auth/login`, per account as well: 10 wrong passwords per hour
@@ -99,19 +100,27 @@ info:
       a request that sends no password (a profile edit) is neither held to it
       nor counted
     - `POST /api/auth/register`: 10 requests per hour, counted whether or not
-      they succeed, since creating the account is what is being limited
+      they succeed, since creating the account is what is being limited; then
+      429 `Too many accounts created from this address, please try again later`
     - `POST /api/auth/forgot-password`: 5 requests per 15 minutes, counted whether
       or not they succeed. That endpoint answers identically for a known and an
       unknown address, so successes cannot be skipped without removing the limit
-      on the mail it sends
-    - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts per 15 minutes
+      on the mail it sends. Then 429 `Too many password reset requests, please
+      try again later`
+    - MFA setup verification (`POST /api/auth/mfa/verify`): 5 failed attempts
+      per 15 minutes per address, any answer of 400 or more counting, then 429
+      `Too many MFA verification attempts, please try again later`
     - MFA login verification (`POST /api/auth/mfa/verify-login`), the two-factor
       code step of a sign-in: 5 wrong codes per 15 minutes per address, and
       separately 5 wrong codes per 15 minutes for the account, from any address.
       Only a wrong code or backup code counts (a 401 `Invalid Code`), recorded
       once the route has checked it, as the password step does: correct codes
       sent together from one address all pass, and a request with no sign-in
-      pending, an expired one or a malformed body is neither held nor counted
+      pending, an expired one or a malformed body is not counted (with no
+      sign-in pending it is not held to the account limit either). Past the
+      address limit the answer is 429 `Too many MFA login attempts, please try
+      again later`, and past the account limit `Too many MFA login attempts
+      for this account, please try again later`
     - Asset uploads, typed documents and Universal VTT imports (`POST /api/assets/upload`,
       `POST /api/assets/documents`, `POST /api/campaigns/{campaignId}/maps/import-uvtt`):
       30 requests per minute per user (configurable via `ASSET_UPLOAD_RATE_LIMIT`).
@@ -126,6 +135,11 @@ info:
     - All the notes of a campaign you have left
       (`GET /api/campaigns/left/{campaignId}/notes`): 60 per hour per user,
       answering 429 `Too Many Requests` past that
+    - Invitation emails (`POST /api/campaigns/{campaignId}/invite` with
+      `sendEmail: true`, on an instance with SMTP configured): 20 per hour per
+      DM, then 429 `Too Many Requests`. An invitation the route creates is
+      counted whether or not its email goes out; one the route refuses is
+      not counted, and one sent without the email is never limited
     - Chat messages (WebSocket): 50 a second and 300 a minute per user, always.
       The DM can also turn on the campaign's chat cooldown (off by default),
       which allows each member one message per 1 to 300 seconds
@@ -142,13 +156,18 @@ info:
     limiters on the sign-in routes answer `{ error: "Rate Limited", message }`.
     The one-at-a-time refusals (a second Universal VTT import, or a second
     campaign archive operation, while one is running) answer 429 with JSON
-    `{ error, message }` and neither header.
+    `{ error: "Too Many Requests", message }` and no `Retry-After`. The
+    `RateLimit-*` headers on them are another limit's: the global API
+    limit's on an archive route, and the upload limit's on a Universal VTT
+    import.
 
     ## Responses every route can give
     These are not repeated on each operation:
     - **401** `{ error: 'Unauthorized', message }` from any route that needs a
       session, when there is none or when the MFA step of a sign-in is still
-      pending.
+      pending. A sign-in made more than `REMEMBER_ME_MAX_AGE` ago (30 days by
+      default) is ended by the first such route it reaches, and that answer
+      adds `code: SIGN_IN_EXPIRED`.
     - **403** `{ error: 'Forbidden', message: 'You are not a member of this campaign' }`
       from any `/api/campaigns/{campaignId}/...` route that needs membership,
       including for a campaign id that does not exist. Such routes never answer
@@ -159,6 +178,10 @@ info:
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
     - **500** `{ error, message }` on an unexpected error. In production the
       message does not describe the failure.
+    - **503** `{ error: 'Service Unavailable', message }` with `Retry-After: 60`
+      from every `/api` route while a backup restore replaces the database,
+      checked before the session is read (see `POST /api/admin/backups/restore`).
+      `/health` is not refused.
 
     ## Forced password changes
     Accounts an admin created, or whose password an admin reset, are flagged
@@ -443,7 +466,8 @@ paths:
                     and invisible formatting characters (zero-width spaces,
                     bidirectional marks, overrides and isolates, the byte-order
                     mark, tag characters, line and paragraph separators) are
-                    removed, bar the tags of a Scotland, Wales or England flag
+                    removed, bar the tags of a subdivision flag such as
+                    Scotland's, Wales's or England's
                     and the zero-width joiner and non-joiner; the name is put
                     in Unicode NFC; a joiner or non-joiner is kept only between
                     two characters that are neither ASCII nor whitespace; angle
@@ -558,6 +582,7 @@ paths:
                 password:
                   type: string
                   minLength: 12
+                  maxLength: 1024
                 displayName:
                   type: string
                   minLength: 1
@@ -567,7 +592,8 @@ paths:
                     and invisible formatting characters (zero-width spaces,
                     bidirectional marks, overrides and isolates, the byte-order
                     mark, tag characters, line and paragraph separators) are
-                    removed, bar the tags of a Scotland, Wales or England flag
+                    removed, bar the tags of a subdivision flag such as
+                    Scotland's, Wales's or England's
                     and the zero-width joiner and non-joiner; the name is put
                     in Unicode NFC; a joiner or non-joiner is kept only between
                     two characters that are neither ASCII nor whitespace; angle
@@ -592,6 +618,9 @@ paths:
                     properties:
                       message:
                         type: string
+                      message:
+                        type: string
+                        example: Registration submitted. Your account is pending admin approval.
                       pendingApproval:
                         type: boolean
                         example: true
@@ -675,8 +704,10 @@ paths:
                     `REMEMBER_ME_MAX_AGE` after it was made, however active, with
                     401 `{ error: 'Unauthorized', code: 'SIGN_IN_EXPIRED',
                     message: 'Your sign-in has reached its 30-day limit. Sign in
-                    again.' }`, and each sign-in removes the account's oldest
-                    sessions beyond 20.
+                    again.' }`. Each completed sign-in also removes the
+                    account's sessions beyond 20, those due to end soonest
+                    first, sign-ins waiting for their two-factor code
+                    included.
             example:
               email: dm@example.com
               password: hunter2-correct-horse-battery
@@ -844,6 +875,7 @@ paths:
                 email:
                   type: string
                   format: email
+                  maxLength: 254
       responses:
         '200':
           description: Response (always 200 to prevent enumeration)
@@ -1028,6 +1060,22 @@ paths:
               example:
                 error: Not Found
                 message: User not found
+        '429':
+          description: >-
+            The account has had 10 wrong passwords in 15 minutes, counted with
+            `DELETE /api/auth/account` and an email change (`Too many wrong
+            passwords, please try again later`, with `Retry-After`), or the
+            request waited 15 seconds behind other password checks for the
+            account (`Other attempts are still being checked. Please try again
+            in a moment.`, with `Retry-After: 5`; not counted). Nothing was
+            changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Rate Limited
+                message: Too many wrong passwords, please try again later
 
   # ============================================
   # MFA
@@ -1038,7 +1086,7 @@ paths:
       tags:
         - MFA
       summary: Begin MFA setup
-      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
+      description: Generate TOTP secret and QR code for authenticator app. User must not already have MFA enabled. Requires the current password, so a session alone cannot enrol an authenticator. MFA is not on until `/api/auth/mfa/verify` succeeds; calling this again before then replaces the pending secret. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password counts here).
       operationId: mfaSetup
       security:
         - cookieAuth: []
@@ -1053,6 +1101,7 @@ paths:
               properties:
                 password:
                   type: string
+                  maxLength: 1024
                   description: The user's current password
       responses:
         '200':
@@ -1072,8 +1121,9 @@ paths:
                     description: TOTP secret for manual entry, 20 random bytes in base32 (32 characters)
         '400':
           description: >-
-            The password is missing or not a string, or MFA is already enabled
-            (checked before the password).
+            `Validation Error` when the password is missing, empty, not text
+            or over 1,024 characters (`Password is required`); `Bad Request`
+            when MFA is already enabled (checked before the password).
           content:
             application/json:
               schema:
@@ -1122,6 +1172,7 @@ paths:
               properties:
                 token:
                   type: string
+                  maxLength: 64
                   description: The 6-digit TOTP code from the authenticator app. Anything but exactly six digits is answered as a wrong code.
       responses:
         '200':
@@ -1140,8 +1191,11 @@ paths:
                     description: 10 backup codes in XXXX-XXXX format (shown only once)
         '400':
           description: >-
-            The code is missing, no setup is in progress (call
-            `/api/auth/mfa/setup` first), or MFA is already enabled.
+            `Validation Error` when the code is missing, empty, not text or
+            over 64 characters (`Verification code is required`); `Bad
+            Request` when no setup is in progress (call `/api/auth/mfa/setup`
+            first) or MFA is already enabled. Every answer of 400 or more
+            counts against this route's 5 failures.
           content:
             application/json:
               schema:
@@ -1192,9 +1246,11 @@ paths:
               properties:
                 token:
                   type: string
+                  maxLength: 64
                   description: The 6-digit TOTP code. Anything but exactly six digits is answered as a wrong code.
                 backupCode:
                   type: string
+                  maxLength: 64
                   description: Backup code in XXXX-XXXX format
       responses:
         '200':
@@ -1222,7 +1278,8 @@ paths:
         '400':
           description: >-
             Neither a token nor a backup code was sent, or one that was sent is
-            not a string. Checked only once a sign-in is pending.
+            not a string or is over 64 characters. Checked only once a sign-in
+            is pending and has not timed out.
           content:
             application/json:
               schema:
@@ -1253,7 +1310,7 @@ paths:
       tags:
         - MFA
       summary: Disable MFA
-      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused before anything else is checked. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
+      description: Disable MFA for the authenticated user. Requires current password and a valid TOTP code not already used; a backup code is not accepted here. Admin accounts cannot disable MFA, and are refused once the body has been checked, before the account's MFA state, the password or the code. Clears the secret and the backup codes. Ends the user's other login sessions and their live WebSocket connections; the session making the request stays signed in. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
       operationId: mfaDisable
       security:
         - cookieAuth: []
@@ -1269,8 +1326,10 @@ paths:
               properties:
                 password:
                   type: string
+                  maxLength: 1024
                 token:
                   type: string
+                  maxLength: 64
                   description: The 6-digit TOTP code. Anything but exactly six digits is answered as a wrong code.
       responses:
         '200':
@@ -1283,7 +1342,10 @@ paths:
                   message:
                     type: string
         '400':
-          description: Password or token missing, or MFA is not enabled on the account.
+          description: >-
+            `Validation Error` when the password or code is missing, empty,
+            not text or over its ceiling (`Authentication code is required`);
+            `Bad Request` when MFA is not enabled on the account.
           content:
             application/json:
               schema:
@@ -1329,7 +1391,7 @@ paths:
       tags:
         - MFA
       summary: Regenerate backup codes
-      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password or code counts).
+      description: Generate new set of 10 backup codes. Requires current password. Replaces all existing codes, and requires MFA to already be enabled. Signs no one out. Rate limited (5 wrong answers/15min per address, shared with the other credential endpoints; only an incorrect password counts here).
       operationId: mfaRegenerateBackupCodes
       security:
         - cookieAuth: []
@@ -1344,6 +1406,7 @@ paths:
               properties:
                 password:
                   type: string
+                  maxLength: 1024
       responses:
         '200':
           description: New backup codes generated
@@ -1361,8 +1424,9 @@ paths:
                     description: 10 backup codes in XXXX-XXXX format (shown only once)
         '400':
           description: >-
-            Password missing, or MFA is not enabled on the account (checked
-            before the password).
+            `Validation Error` when the password is missing, empty, not text
+            or over 1,024 characters; `Bad Request` when MFA is not enabled on
+            the account (checked before the password).
           content:
             application/json:
               schema:
@@ -1712,7 +1776,8 @@ paths:
                     and invisible formatting characters (zero-width spaces,
                     bidirectional marks, overrides and isolates, the byte-order
                     mark, tag characters, line and paragraph separators) are
-                    removed, bar the tags of a Scotland, Wales or England flag
+                    removed, bar the tags of a subdivision flag such as
+                    Scotland's, Wales's or England's
                     and the zero-width joiner and non-joiner; the name is put
                     in Unicode NFC; a joiner or non-joiner is kept only between
                     two characters that are neither ASCII nor whitespace; angle
@@ -1771,11 +1836,17 @@ paths:
                     $ref: '#/components/schemas/User'
         '400':
           description: >-
-            Invalid display name, an avatarUrl other than this user's
-            avatar address or null, invalid email, email already in use,
-            missing current password for an email change, invalid
-            platformRole, or `globalAssetManager`/`templateEditor` sent as
-            something other than a boolean.
+            `Bad Request` for a refused display name (`Display name is
+            required`, `Display name must be 50 characters or fewer`, `Display
+            name must be text`), an avatarUrl other than this user's avatar
+            address or null (`avatarUrl must be /api/assets/avatars/{id} or
+            null`), an invalid email (`Invalid email format`), an email
+            another account has (`Email already in use`, also when another
+            account takes it at the same moment), an invalid platformRole, or
+            `globalAssetManager`/`templateEditor` sent as something other than
+            a boolean; `Validation Error` when changing your own email without
+            `currentPassword` (`Enter your current password to change your
+            email address`).
           content:
             application/json:
               schema:
@@ -1810,6 +1881,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: >-
+            Only for a request carrying `currentPassword` (or `password`) as
+            text: the account has had
+            10 wrong passwords in 15 minutes, counted with
+            `POST /api/auth/change-password` and `DELETE /api/auth/account`
+            (`Too many wrong passwords, please try again later`, with
+            `Retry-After`), or the request waited 15 seconds behind other
+            password checks for the account (`Other attempts are still being
+            checked. Please try again in a moment.`, with `Retry-After: 5`).
+            Nothing was changed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Rate Limited
+                message: Too many wrong passwords, please try again later
         '500':
           description: Unexpected server error.
           content:
@@ -1946,6 +2035,17 @@ paths:
                     example: true
                   notice:
                     type: string
+        '400':
+          description: >-
+            The calling admin named their own id. Checked after the admin
+            check, so a non-admin gets 403 instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -2309,7 +2409,11 @@ paths:
       summary: Update campaign
       description: |
         Update campaign settings (DM only). Every field is optional and is
-        validated when present; a bad value is a 400 with a message naming it.
+        validated when present; a bad value is a 400 whose message describes
+        the first problem found. Most messages name the field; a value of the
+        wrong type for `name` or `description`, a `spiritLayerStyle` over 100
+        characters and most `vibeSettings` problems get a generic message
+        such as `Invalid input: expected string, received number`.
         Unknown fields are ignored. Changing `gameSystem` after characters
         have been created logs a warning, but the change is still allowed.
         Nothing is broadcast; open pages see the change on their next fetch.
@@ -2517,7 +2621,8 @@ paths:
       description: |
         Searches, by part of the display name and ignoring case, the users who
         are *not* already a member of the campaign, have no pending
-        invitation to it, and are not waiting for an administrator's
+        invitation to it (one past its `expiresAt` included), and are not
+        waiting for an administrator's
         approval. Used by the DM-side invite picker. DM only.
 
         A `search` of 2 or more characters (after trimming) finds display
@@ -2589,7 +2694,9 @@ paths:
         `POST /api/invitations/{id}/accept`. An account still waiting for an
         administrator's approval is answered 404, as for no account. 400 when `userId` is missing or
         not text, `expiresInDays` is not a whole number up to 365, the user is
-        already a member, or they already have a pending invitation.
+        already a member, or they already have a pending invitation ("User
+        already has a pending invitation to this campaign"). One whose
+        `expiresAt` has passed is still pending until the invitee declines it.
         A user whose earlier invitation was accepted or declined (and who is
         no longer a member) gets that same invitation back as PENDING, with a
         new `createdAt` and expiry. The invited user's open connections
@@ -2628,8 +2735,8 @@ paths:
                   description: >-
                     Email the invitation if the instance has SMTP configured.
                     Anything other than exactly `true` is treated as no email.
-                    Each DM may have 20 invitation emails sent an hour; see the
-                    429 response. The email's subject and inbox preview name
+                    Each DM may make 20 invitations an hour that ask for an
+                    email; see the 429 response. The email's subject and inbox preview name
                     the instance only, never the campaign or the DM.
       responses:
         '201':
@@ -2675,10 +2782,13 @@ paths:
         '429':
           description: >-
             `sendEmail` was `true`, SMTP is configured, and this DM has already
-            had 20 invitation emails sent in the last hour. No invitation is
-            created. Requests without `sendEmail`, on an instance without
-            SMTP, or refused with a 400 or 404 are not counted. Counted per
-            signed-in user, with the standard `RateLimit-*` headers.
+            made 20 invitations that asked for an email in the last hour,
+            counted whether or not each email went out (`emailSent: false`
+            counts too). No invitation is created. Requests without
+            `sendEmail`, on an instance without SMTP, or refused with a 400 or
+            404 are not counted. Counted per signed-in user across all their
+            campaigns, with the standard `RateLimit-*` headers and
+            `Retry-After`.
           content:
             application/json:
               schema:
@@ -2694,7 +2804,9 @@ paths:
       summary: Remove member
       description: >-
         Remove a member from campaign (DM only). The sitting DM and the
-        campaign owner cannot be removed; both return 400. The member's
+        campaign owner cannot be removed; both return 400 (`Cannot remove the
+        Dungeon Master from the campaign`, `Cannot remove the campaign owner
+        from their own campaign`). The member's
         characters are taken out of the campaign in the same step (their
         `campaignId` becomes null), and a character still naming a campaign
         its owner has left is readable and editable by its owner alone. The
@@ -2742,9 +2854,13 @@ paths:
       summary: Change member role
       description: >-
         Switch a member between PLAYER and SPECTATOR (DM only). The DM seat
-        cannot be moved here: naming the DM as the member, or asking for
-        `DM`, is always a 400 because the campaign already has its DM; use
-        `PUT /api/campaigns/{campaignId}/dm`. The member keeps their assigned
+        cannot be moved here: naming the DM as the member answers 400 `Cannot
+        change the Dungeon Master's role`, and asking for `DM` answers 400
+        `Campaign already has a Dungeon Master. Only one DM per campaign is
+        allowed.`; use `PUT /api/campaigns/{campaignId}/dm`. Any `role` other
+        than `DM`, `PLAYER` or `SPECTATOR` answers 400 `Role must be DM,
+        PLAYER, or SPECTATOR`, checked before the member is looked up. The
+        member keeps their assigned
         characters. Their open connections take the new role at once, and
         `campaign.role.changed` (`{ campaignId, userId, role }`) goes to
         everyone in the campaign so open pages follow it, with a
@@ -2817,7 +2933,8 @@ paths:
         Who may hand the seat over, who holds it and the change are read and
         made as one serializable transaction, so of two hand-overs at the same
         moment the second sees the first: a sitting DM whose seat was handed
-        on meanwhile is refused with 403. Every DM row is stepped down, so a
+        on meanwhile is refused with 403 unless they own the campaign or are
+        an admin. Every DM row is stepped down, so a
         campaign left with two DMs by an older version comes out with one;
         `previousDmId` names the first of them.
         The response lists every membership with its `user`.
@@ -2854,11 +2971,39 @@ paths:
                     items:
                       $ref: '#/components/schemas/CampaignMembership'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `userId` is missing or not a user id (`Validation Error`, "A
+            campaign member must be named by their user id"), or names the
+            sitting DM (`Bad Request`, "That member is already the Dungeon
+            Master").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Bad Request
+                message: That member is already the Dungeon Master
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller is not the sitting DM, the campaign owner or a platform admin.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the DM, the campaign owner, or an admin can transfer the DM role
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            The campaign does not exist ("Campaign not found"), checked before
+            who the caller is, or `userId` is not a member of it ("That user
+            is not a member of this campaign").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: That user is not a member of this campaign
 
   /api/campaigns/{campaignId}/vibe:
     put:
@@ -3247,8 +3392,10 @@ paths:
         which is what an offset would allow.
 
         Do not construct a cursor. It is opaque and its shape may change; one
-        this server did not issue is a 400 ("Invalid cursor"), as is a `limit`
-        outside 1 to 100.
+        that is not in the form this server issues, or is longer than 200
+        characters, is a 400 ("Invalid cursor"), as is a `limit` outside 1
+        to 100. A cursor carries no signature: membership is what allows the
+        read, and the cursor only says where the page starts.
 
         Dice rolls are not chat messages and are never returned here — they are
         served by `GET /api/campaigns/{campaignId}/dice-rolls`, which is the
@@ -3817,7 +3964,7 @@ paths:
                 error: Not Found
                 message: You have not left that campaign, or have no notes or dice macros in it
         '429':
-          description: 60 downloads in the last hour.
+          description: 60 requests to this route in the last hour, whatever each was answered (a 404 counts too).
           content:
             application/json:
               schema:
@@ -4588,9 +4735,10 @@ paths:
             The body fails its shape check (`name` missing, empty or over 200
             characters, an unknown `gameSystem`, a non-string `campaignId` or
             `tokenImageUrl`), answered with `message` alone; or `data` does not
-            match the game system's sheet schema, or for a Flexible character
-            the `FlexibleCharacterData` layout (message `Character data does
-            not match the Flexible sheet layout`), answered with
+            match the game system's sheet schema (message `Character data does
+            not match game system schema`), or for a Flexible character the
+            `FlexibleCharacterData` layout (message `Character data does not
+            match the Flexible sheet layout`), answered with
             `validationErrors` listing each problem; or the caller already
             owns 1,000 characters.
           content:
@@ -4672,8 +4820,12 @@ paths:
           current value: the same value is accepted and ignored, a different
           one (or null on a typed character) answers 400. A character's game
           system cannot change. This comparison happens after the permission
-          check, so a caller who may not edit the character gets 403 whatever
-          they send.
+          check, so a caller who may not edit the character gets 403 for any
+          of the four values or null. The body's shape is checked before the
+          character is looked up: a `name` that is empty or over 200
+          characters, a `gameSystem` that is not one of the four values or
+          null, a `tokenImageUrl` that is not text, or a malformed `updatedAt`
+          answers 400 to anyone, even for an id that does not exist.
         - If the character has a `gameSystem`, `data` is validated against
           that system's sheet schema (after moving sheet fields from before
           version 1.3.0 to their current names) and stored as the schema's
@@ -4769,7 +4921,8 @@ paths:
             UTC ISO timestamp ending in `Z`), answered with `message` alone;
             `gameSystem` differs from the character's, answered with `error:
             Bad Request`; or `data` does not match the game system's sheet
-            schema, or for a Flexible character the `FlexibleCharacterData`
+            schema (message `Character data does not match game system
+            schema`), or for a Flexible character the `FlexibleCharacterData`
             layout (message `Character data does not match the Flexible sheet
             layout`), answered with `validationErrors`. Nothing is saved.
           content:
@@ -5077,13 +5230,15 @@ paths:
         rule. A personal asset that is only *used* in one of the caller's
         campaigns is not listed, though the file routes serve it to them.
 
-        Except for an admin naming a campaign, a spirit-layer image of a map
-        in a campaign where the caller is not the DM, and whose spirit plane
-        is still closed to them, is left out.
+        For anyone but a platform admin, and for an admin who sends
+        `usable=true` without `campaignId`, a spirit-layer image of a map in
+        a campaign where the caller is not the DM, and whose spirit plane is
+        still closed to them, is left out.
 
         A `type` or `scope` outside its enum, or either sent more than once,
-        answers 400. A `page` below 1 is treated as 1, and `limit` is clamped
-        into 1-100.
+        answers 400. A `page` below 1, or one that is not a number, is
+        treated as 1. `limit` is clamped into 1-100, and 0 or a non-number
+        gives the default of 50.
 
         Each asset says in `canChange` whether the caller may change it where
         it is: delete it (`DELETE /api/assets/{id}`), move it out of its
@@ -5225,8 +5380,11 @@ paths:
         sent: an avatar is always personal. A new avatar deletes the
         uploader's earlier AVATAR assets, rows and files, apart from any that
         a map, token, character, template, creature or campaign setting
-        still names. A `campaignId` sent with a USER
-        or GLOBAL upload is ignored.
+        still names. The upload does not set the account's `avatarUrl`:
+        `GET /api/assets/avatars/{userId}` answers 404 until
+        `PUT /api/users/{id}` sets it to `/api/assets/avatars/<user id>`, as
+        the web client does straight after uploading. A `campaignId` sent
+        with a USER or GLOBAL upload is ignored.
 
         **Accepted content per asset type**, decided by what the bytes are,
         not by the filename:
@@ -5242,17 +5400,18 @@ paths:
         cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
         and a DOCUMENT named `.txt` or `.md` whose bytes are valid UTF-8 text
-        with no control characters besides tab, line feed, form feed and
-        carriage return. "Ogg audio" includes Ogg FLAC and Speex, stored as
-        `.oga` and `.spx`, and MPEG audio includes layers I and II, stored as
-        `.mp1` and `.mp2`; these upload successfully but
-        `GET /api/assets/audio/{id}` answers 404 for them. Ogg Opus is
-        refused.
+        with no NUL, DEL or other ASCII control character besides tab, line
+        feed, form feed and carriage return. "Ogg audio" is any Ogg track,
+        whatever it was recorded in (Vorbis, Opus, FLAC or Speex); each is
+        stored as `.ogg` and played by `GET /api/assets/audio/{id}`. MPEG
+        audio includes layers I and II, stored as `.mp1` and `.mp2`; these
+        upload successfully but `GET /api/assets/audio/{id}` answers 404 for
+        them.
 
         The stored row's `mimeType` is the detected type, whatever the client
-        declared for the file part: `audio/mpeg` for an MP3 accepted on its
-        header, and `text/markdown` or `text/plain` for a text document, by
-        its extension. Assets uploaded before 1.5.1 keep the type the client
+        declared for the file part: `audio/ogg` for every Ogg track,
+        `audio/mpeg` for an MP3 accepted on its header, and `text/markdown`
+        or `text/plain` for a text document, by its extension. Assets uploaded before 1.5.1 keep the type the client
         declared. The file routes do not use it.
 
         **File size limits** — set per type with the `MAX_<TYPE>_SIZE_MB`
@@ -5266,9 +5425,9 @@ paths:
         | AVATAR | `MAX_AVATAR_SIZE_MB` | 2 MB |
         | DOCUMENT | `MAX_DOCUMENT_SIZE_MB` | 50 MB |
 
-        A MAP or TOKEN upload whose declared content type starts with
-        `image/` also gets a thumbnail stored beside the file, scaled to fit
-        inside 512×512 with its aspect ratio kept and never enlarged. A
+        Every MAP or TOKEN upload, whose bytes have to be a picture, also gets
+        a thumbnail stored beside the file, scaled to fit inside 512×512 with
+        its aspect ratio kept and never enlarged. A
         thumbnail that cannot be made does not fail the upload. No route
         serves thumbnails and no response mentions them; deleting the asset
         deletes its thumbnail.
@@ -5418,7 +5577,14 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -5439,8 +5605,9 @@ paths:
 
         While a map (its image, base layer or spirit layer), a token on a map,
         a character's token picture, a character template, a creature, a token
-        template or a campaign's atmosphere track still names the asset, the
-        route answers **409** with `code: ASSET_IN_USE` and the list of uses,
+        template, a campaign's atmosphere track or the sound of one of a
+        campaign's times of day still names the asset, the route answers
+        **409** with `code: ASSET_IN_USE` and the list of uses,
         and deletes nothing. Those records are not told when an asset goes, so
         deleting one anyway leaves them pointing at nothing. Send
         `force=true` to delete it regardless; any other value of `force` is
@@ -5483,9 +5650,28 @@ paths:
                     type: string
                     example: Asset deleted successfully
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller may not delete this asset. The message names the rule
+            for its scope: "Only admins or the uploading global asset manager
+            can delete global assets", "Only the owner can delete personal
+            assets" or "Only the uploader while a member of the campaign, its
+            DM, or an admin can delete campaign assets".
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the owner can delete personal assets
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: No asset with this id.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Asset not found
         '409':
           description: >-
             Something still uses the asset, and the request did not carry
@@ -5503,6 +5689,7 @@ paths:
                     example: ASSET_IN_USE
                   message:
                     type: string
+                    example: This asset is still in use. Deleting it leaves those places without it. Send force=true to delete it anyway.
                   usage:
                     type: array
                     description: >-
@@ -5570,10 +5757,12 @@ paths:
 
         An unknown `scope` answers 400 "scope must be GLOBAL, USER, or
         CAMPAIGN", and a `campaignId` that is not a UUID answers 400
-        "campaignId must be a campaign id". When `scope: CAMPAIGN`,
-        `campaignId` is required and the campaign must exist (404 otherwise,
-        checked before the ownership and placement rows); for
-        any other scope `campaignId` is ignored and cleared. The asset's file
+        "campaignId must be a campaign id", whatever the scope. When
+        `scope: CAMPAIGN`, `campaignId` is required (400 "campaignId is
+        required when scope is CAMPAIGN") and the campaign must exist (404
+        "Campaign not found", checked before the ownership and placement
+        rows); for any other scope a valid `campaignId` is ignored and the
+        asset's campaign is cleared. The asset's file
         does not move on disk: only the DB record's scope and `campaignId` are
         updated, and the uploader stays as recorded. Moving an asset to USER
         therefore makes it personal to its uploader, who may not be the
@@ -5594,7 +5783,8 @@ paths:
                 campaignId:
                   type: string
                   format: uuid
-                  description: Required when scope is CAMPAIGN
+                  nullable: true
+                  description: Required when scope is CAMPAIGN. Checked to be a UUID whatever the scope.
               required: [scope]
             examples:
               userToCampaign:
@@ -5620,11 +5810,45 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            "scope must be GLOBAL, USER, or CAMPAIGN", "campaignId must be a
+            campaign id" (any scope), or "campaignId is required when scope is
+            CAMPAIGN".
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: campaignId must be a campaign id
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            A move to or from GLOBAL by someone who is neither an admin nor a
+            global asset manager ("Only administrators or global asset
+            managers can change scope to or from Global"); a move out of the
+            current scope by someone who may not delete the asset there ("Only
+            admins or the uploading global asset manager can move a global
+            asset out of the library", "Only the asset owner can move personal
+            assets" or "Only the asset owner or campaign DM can move this
+            asset"); or a move into a campaign the caller may not upload this
+            type to ("You do not have access to this campaign" or "Only the
+            Dungeon Master can upload campaign assets").
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the asset owner can move personal assets
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: '"Asset not found", or, for `scope: CAMPAIGN`, "Campaign not found".'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Asset not found
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5662,7 +5886,14 @@ paths:
                 type: string
                 format: binary
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -5680,8 +5911,9 @@ paths:
         A PDF cannot be typed. Counts against the upload rate limit, since it
         creates a file on disk exactly as an upload does. The new asset's
         `originalName` is `<name>.<format>` and its `mimeType` is
-        `text/plain` or `text/markdown`. A `campaignId` sent with a USER or
-        GLOBAL document is ignored.
+        `text/plain` or `text/markdown`. A `campaignId` must be a UUID
+        whatever the scope (400 otherwise), and is ignored for a USER or
+        GLOBAL document.
       operationId: createDocument
       security:
         - cookieAuth: []
@@ -5711,9 +5943,9 @@ paths:
                 content:
                   type: string
                   description: >-
-                    At most 900 KB once encoded as UTF-8, with no NUL or
-                    control characters besides tab, line feed, form feed and
-                    carriage return.
+                    At most 900 KB once encoded as UTF-8, with no NUL, DEL or
+                    other ASCII control character besides tab, line feed, form
+                    feed and carriage return.
                 scope:
                   type: string
                   enum: [USER, CAMPAIGN, GLOBAL]
@@ -5817,11 +6049,34 @@ paths:
                   asset:
                     $ref: '#/components/schemas/Asset'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`: `content` missing or not a string;
+            content that is not plain text ("The text contains characters that
+            do not belong in a document."); content over 900 KB ("That is too
+            long to save as typed text. Upload it as a file instead."); or the
+            document is a PDF ("Only plain text and Markdown documents can be
+            edited. Upload a new file to replace a PDF."). The body is checked
+            before the document is looked up.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: Only plain text and Markdown documents can be edited. Upload a new file to replace a PDF.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No document with this id, one the caller may not edit, or one
+            deleted while this save was being written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Document not found
 
   /api/assets/documents/{id}:
     get:
@@ -5935,7 +6190,14 @@ paths:
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           description: No MAP asset with this id, or its file is missing from disk.
           content:
@@ -5972,7 +6234,14 @@ paths:
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may not read this asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: You do not have access to this asset
         '404':
           description: No TOKEN asset with this id, or its file is missing from disk.
           content:
@@ -5997,9 +6266,10 @@ paths:
         Content-Type comes from the file's extension (`audio/mpeg`,
         `audio/ogg` or `audio/wav`), never from the type declared at upload,
         and the response carries `X-Content-Type-Options: nosniff`. A track
-        stored under any other extension (`.oga`, `.spx`, `.mp1`, `.mp2`,
-        which the upload accepts) answers 404. No caching headers or ETag
-        are sent.
+        stored under any other extension answers 404: an MPEG layer I or II
+        file (`.mp1`, `.mp2`), which the upload accepts, and an Ogg FLAC or
+        Speex track uploaded before 1.5.2 (`.oga`, `.spx`). No caching
+        headers or ETag are sent.
 
         One byte range is served, as RFC 9110 describes. `bytes=<start>-<end>`
         with the end optional, or `bytes=-<n>` for the last n bytes, answers
@@ -6283,8 +6553,9 @@ paths:
         describes: only the tokens on their plane that are not hidden (and on
         a lit map only those in their sight plus their own), each cut down to
         the fields they may see; `spiritLayerUrl` null unless the spirit layer
-        is visible to them; `fogData` always null. Walls, lights and
-        annotations are sent to everyone.
+        is visible to them; `fogData` always null; every wall, with a
+        `door-locked` door sent as `door-closed`; and only the lights whose
+        `enabled` is true. Annotations are sent to everyone.
 
 
         A player or spectator may fetch only the campaign's current map; any
@@ -6631,8 +6902,10 @@ paths:
       description: |
         Update a token. The DM may update any token and any field. A player may
         update only a token that names them in `controlledBy`, and only its
-        `position`, `rotation` and `conditions`; every other field, `size` and
-        `sightRadius` included, answers 403 for a player. A spectator may not
+        `position`, `rotation` and `conditions`; every other field of the body
+        below, `size` and `sightRadius` included, answers 403 for a player
+        (`Only DM can update token field: <field>`, or `Only DM can change
+        token layer`). A spectator may not
         update a token at all, even one that still names them from before they
         were demoted. While the session is paused or has ended (campaign status
         `PAUSED` or `INACTIVE`), a player's `position` change answers 403; the
@@ -6715,12 +6988,12 @@ paths:
                 position:
                   type: object
                   required: [x, y]
-                  description: Grid square, within the map (400 otherwise). Only x and y are stored.
+                  description: Grid square, in whole squares, within the map (400 otherwise). Only x and y are stored.
                   properties:
                     x:
-                      type: number
+                      type: integer
                     y:
-                      type: number
+                      type: integer
                 size:
                   type: object
                   required: [width, height]
@@ -8568,9 +8841,15 @@ paths:
                 message: "This campaign's files add up to 734 MB, more than the 500 MB a campaign archive can hold on this server. Remove maps or pictures the campaign no longer uses, then export again."
         '429':
           description: >-
-            The caller has started that many exports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
-            20 by default), or already has a campaign export, import or
-            preview running. Each user may run one of the three at a time.
+            The caller has started that many exports in the last hour
+            (`CAMPAIGN_ARCHIVE_RATE_LIMIT`, 20 by default): `You have exported 20 campaigns
+            in the last hour, the most this server allows. Try again in N
+            minutes.`, where the number is the configured limit and N is
+            rounded up, with `Retry-After` and that limit's `RateLimit-*`
+            headers. Or the caller already has a campaign export, import or
+            preview running, answered as in the example, with no `Retry-After`
+            and not counted against the hour. Each user may run one of the
+            three at a time.
           content:
             application/json:
               schema:
@@ -8600,8 +8879,9 @@ paths:
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
         name ends in `.cozyvtt`. The archive must also be no larger than the
-        instance's `campaignExportSizeLimit` setting (500 MB unless an admin
-        has changed it), list no more than 1,000 files, and have a
+        instance's `campaignExportSizeLimit` setting (500 MB; no route
+        changes it, and a stored value above 500 MB counts as 500 MB), list
+        no more than 1,000 files, and have a
         `manifest.json` that unpacks to no more than 10 MB. The upload is
         written to a temporary file, which is removed before the answer is
         sent.
@@ -8631,11 +8911,17 @@ paths:
                     $ref: '#/components/schemas/CampaignImportPreview'
         '400':
           description: >-
-            No file (`Validation Error`), an upload problem such as a refused
-            file type or a malformed body (`Upload Error`), or an archive that is not a ZIP,
-            is damaged, is over the size setting, lists more than 1,000 files, or has a
-            missing, oversized or invalid manifest (`Invalid Archive`, with
-            the reason in `message`).
+            No file (`Validation Error`); an upload problem (`Upload Error`,
+            with the reason in `message`) such as a refused file type, a
+            second file, a file in a field not named `file`, a body that is
+            cut off or malformed, more than 100 text fields, a field name
+            longer than 100 bytes, a text field longer than 16 KB (16,384
+            bytes), or a name such as `a[b][c]` nested more than five levels
+            deep or with a number above 1000 between the brackets; or an
+            archive that is not a ZIP, is damaged, is over the size setting,
+            lists more than 1,000 files, or has a missing, oversized or
+            invalid manifest (`Invalid Archive`, with the reason in
+            `message`).
           content:
             application/json:
               schema:
@@ -8663,9 +8949,15 @@ paths:
                 message: The archive is larger than 500 MB, the most a campaign archive may be.
         '429':
           description: >-
-            The caller has started that many previews in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
-            20 by default), or already has a campaign export, import or
-            preview running. Each user may run one of the three at a time.
+            The caller has started that many previews in the last hour
+            (`CAMPAIGN_ARCHIVE_RATE_LIMIT`, 20 by default): `You have opened 20 campaign archives
+            in the last hour, the most this server allows. Try again in N
+            minutes.`, where the number is the configured limit and N is
+            rounded up, with `Retry-After` and that limit's `RateLimit-*`
+            headers. Or the caller already has a campaign export, import or
+            preview running, answered as in the example, with no `Retry-After`
+            and not counted against the hour. Each user may run one of the
+            three at a time.
           content:
             application/json:
               schema:
@@ -8704,7 +8996,9 @@ paths:
 
         Only MAP, TOKEN and AUDIO assets are imported. Each must be, by its
         content, a format the upload route allows for its type, and is stored
-        under the detected MIME type and extension; its `originalName` is
+        under the MIME type and extension its content shows, an Ogg track of
+        any codec (Opus included) as `audio/ogg` and `.ogg`; its
+        `originalName` is
         kept unless that name's extension is not allowed for the type, when
         the detected extension replaces it. Any other asset is skipped.
         A map's picture and spirit layer keep only an asset imported as MAP:
@@ -8738,9 +9032,11 @@ paths:
         more than 500 squares outside their map. A map keeps its first 1,000
         tokens, 5,000 walls and 200 lights. Fog whose grid does not match its
         map is dropped, as the server would rebuild it anyway. A map is
-        left out whole only when its width, height, grid size or feet per
-        square are outside the map limits (1 to 500 squares, grid size 10 to
-        500, 1 to 100 feet), and is then listed in `skipped` with the reason.
+        left out whole when its width, height, grid size or feet per square
+        are outside the map limits (1 to 500 squares, grid size 10 to 500,
+        1 to 100 feet), when its file is missing from the archive or holds
+        no map object, or when it nests too deeply (above), and is then
+        listed in `skipped` with the reason.
         Creatures, templates and assets that cannot be imported are listed
         in `skipped` too. Each list holds at most 200 entries; a final
         warning counts the rest.
@@ -8822,7 +9118,8 @@ paths:
                         name:
                           type: string
                           description: >-
-                            The item's name in the archive, cut to 80 characters, or a
+                            The item's name in the archive, trimmed, and past 80
+                            characters cut to 80 and followed by `…`; or a
                             description such as `3 tokens on "Cellar"`.
                         reason:
                           type: string
@@ -8860,9 +9157,15 @@ paths:
                 $ref: '#/components/schemas/Error'
         '429':
           description: >-
-            The caller has started that many imports in the last hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`,
-            20 by default), or already has a campaign export, import or
-            preview running. Each user may run one of the three at a time.
+            The caller has started that many imports in the last hour
+            (`CAMPAIGN_ARCHIVE_RATE_LIMIT`, 20 by default): `You have imported 20 campaigns
+            in the last hour, the most this server allows. Try again in N
+            minutes.`, where the number is the configured limit and N is
+            rounded up, with `Retry-After` and that limit's `RateLimit-*`
+            headers. Or the caller already has a campaign export, import or
+            preview running, answered as in the example, with no `Retry-After`
+            and not counted against the hour. Each user may run one of the
+            three at a time.
           content:
             application/json:
               schema:
@@ -9042,7 +9345,7 @@ paths:
                         nullable: true
                       campaignExportSizeLimit:
                         type: integer
-                        description: Largest campaign archive accepted on import, in bytes. Exports are not limited by it. Not changeable through this route.
+                        description: Largest campaign archive, in bytes, that this server imports or exports; a stored value above 524288000 (500 MB) counts as 500 MB. Not changeable through this route.
                       createdAt:
                         type: string
                         format: date-time
@@ -9237,9 +9540,10 @@ paths:
                           type: object
                           nullable: true
                           description: |
-                            What the line is about. A change to an account has targetUserId and
-                            changes, each field as { from, to }; a settings change has changes with
-                            the new values only.
+                            What the line is about, or null. A change an administrator made to an
+                            account has targetUserId and changes, each field as { from, to } (bio as
+                            { changed: true }); a settings change has changes, each changed setting
+                            as { from, to }, and lines written before 1.5.2 hold the new values only.
                         createdAt:
                           type: string
                   recentUsers:
@@ -9693,7 +9997,9 @@ paths:
         login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
         image, which the Docker image provides; answers 500 when it is missing or
         the dump fails. The archive can be fetched with the download route and
-        loaded back with the restore route. Refused with 409 while a restore runs.
+        loaded back with the restore route. Refused with 409 while a restore
+        takes its upload or writes its safety backup, and with 503, as every
+        /api route is, while the restore replaces the database.
         Backups are never deleted automatically: each stays until it is deleted
         with the delete route.
       security:
@@ -9937,7 +10243,19 @@ paths:
                     items:
                       type: string
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `paths` missing or not a list (`List the files to delete in
+            paths`), empty (`List at least one file to delete`), longer than
+            5,000 entries (`Delete at most 5000 files at a time`), or holding
+            an entry that is not text of 1 to 1,024 characters. `error` is
+            `Validation Error`. Nothing is deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Validation Error
+                message: List at least one file to delete
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -10064,9 +10382,11 @@ paths:
         Any signed-in user may publish a template, and becomes its author.
         `name` is trimmed, 1 to 200 characters. `description` is trimmed, up
         to 2000 characters. When `gameSystem` is given, `data` must pass that
-        system's sheet schema (an omitted `data` is checked as `{}` and so
-        fails), and is stored as the schema's parsed output, so a key the
-        schema does not declare is dropped, as it is for a character. Sheet
+        system's sheet schema (message `Template data does not match game
+        system schema`, with `validationErrors`, otherwise; an omitted `data`
+        is checked as `{}` and so fails), and is stored as the schema's parsed
+        output, so a key the schema does not declare is dropped, as it is
+        for a character. Sheet
         fields from before version 1.3.0 are moved to their current names
         first, as they are for a character. Without
         a `gameSystem`, `data` must be an object
@@ -10204,7 +10524,8 @@ paths:
         whole sheet; it is checked against the template's game system (after
         moving sheet fields from before version 1.3.0 to their current names),
         or against `FlexibleCharacterData` if it has none, and stored as
-        parsed; a refused sheet answers 400 with `validationErrors`.
+        parsed; a refused sheet answers 400 with `validationErrors` and the
+        message the create route gives.
         `tokenImageUrl` follows the
         rule on create, and null or an empty string removes the image.
       operationId: updateCharacterTemplate
@@ -10358,7 +10679,7 @@ paths:
                     nullable: true
                   data:
                     type: object
-                    description: The sheet, in the shape that game system's data takes (null gameSystem is free-form JSON).
+                    description: The sheet, in the shape that game system's data takes; for a flexible template (null gameSystem), the `FlexibleCharacterData` layout.
         '400':
           description: '`gameSystem` is neither `null`/`undefined` nor a recognised game system.'
         '401':
@@ -10522,7 +10843,9 @@ paths:
         When the file would fit without its furniture walls, the message says
         so. A
         light's `range` becomes its dim radius, so a range over 100 squares,
-        or under 0.5, answers 400. Its bright radius is the light's
+        or above 0 and under 0.5, answers 400; a light without a numeric
+        position, or without a `range` above 0, is left out. Its bright
+        radius is the light's
         `bright_range` when that is a number of 0 or more, capped at the dim
         radius (CozyVTT's own export writes it), and otherwise half the
         range. A light with `enabled: false` is imported switched off. A
@@ -10538,9 +10861,11 @@ paths:
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
         upload does, and a user may run one import at a time: a second sent
-        while the first is still being read answers **429** with `Another
-        import is still running`. Imports sent one after another are never
-        held back. The upload waits on disk, in the uploads folder's
+        before the first has been answered, while it is still uploading,
+        waiting its turn or being read, answers **429** with `Another import
+        is still running. Wait for it to finish, then import this file.` and
+        no `Retry-After`. Imports sent one after another are never held
+        back. The upload waits on disk, in the uploads folder's
         `temp/uvtt`, and is removed as soon as it is read; imports from
         different users are read one at a time across the server, in the
         order they arrived, so an import sent while another user's is being
@@ -10570,13 +10895,21 @@ paths:
 
 
         A refused upload answers with its reason, as `POST /api/assets/upload`
-        does: **400** for a file whose name does not end in `.uvtt`, `.dd2vtt`
-        or `.df2vtt` (unless it is sent as `application/json`), a file sent
-        under a field other than `file`, more than one file, or a body that is
-        cut off or malformed or breaks the field limits; and **413** for a file
-        over the size limit, which is the map size limit plus a third for the
-        base64 text and 8 MB for the walls and lights (75 MB at the default
-        50 MB).
+        does: **400** for a request with no file (`Validation Error`, `No UVTT
+        file uploaded`), a file sent under a field other than `file`
+        (`Send one file, in a form field called "file".`), more than one
+        file, and, with `error: Upload Error` and the reason, a file whose
+        name does not
+        end in `.uvtt`, `.dd2vtt` or `.df2vtt` (unless it is sent as
+        `application/json`) or a body that is cut off or malformed or breaks
+        the field limits every upload route shares (at most 100 text fields,
+        field names of at most 100 bytes, each value at most 16 KB, 16,384
+        bytes); and **413** for a file over the size limit, which is the map
+        size limit plus a third for the base64 text and 8 MB for the walls
+        and lights (75 MB at the default 50 MB). Behind the bundled nginx, a
+        request larger than `NGINX_MAX_BODY_SIZE` (55 MB by default) is
+        refused by nginx with its own 413 page before it reaches the
+        backend.
       operationId: importUvttMap
       security:
         - cookieAuth: []
@@ -10673,8 +11006,9 @@ paths:
                   objectWalls:
                     type: integer
                     description: >-
-                      Wall segments the file keeps for its furniture, offered
-                      but not imported. Zero when it has none.
+                      Wall segments the file keeps for its furniture, counted
+                      whether or not `includeObjectWalls` was sent. Zero when
+                      it has none.
               example:
                 error: Confirmation Required
                 code: UVTT_IMPORT_NEEDS_CONFIRMATION
@@ -10693,7 +11027,20 @@ paths:
                 error: File Too Large
                 message: This file is larger than the 75MB a Universal VTT import accepts. The picture inside it can be at most 50MB.
         '429':
-          $ref: '#/components/responses/RateLimited'
+          description: >-
+            The upload rate limit was reached (`Upload rate limit reached.
+            Please slow down and try again in a minute.`, with `Retry-After`
+            and the `RateLimit-*` headers), or this user already has an import
+            that has not been answered (`Another import is still running. Wait
+            for it to finish, then import this file.`, with no `Retry-After`).
+            Both send `error: Too Many Requests`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another import is still running. Wait for it to finish, then import this file.
         '503':
           description: >-
             The import could not start within 20 seconds because other
@@ -10727,7 +11074,7 @@ paths:
         DM only. Downloads the map as a Universal VTT file (format 0.3): a
         JSON attachment named after the map (`<name>.uvtt`, with characters
         other than letters, digits, spaces, `_` and `-` removed) holding the
-        map's picture as base64, its size in squares, its walls and windows as
+        map's picture as base64, its size in squares, its walls as
         `line_of_sight`, its doors as `portals` (a locked door is written as
         closed), its windows as open portals (a window does not block sight, so
         it is not written as a wall), and every light, switched off ones
@@ -10738,9 +11085,11 @@ paths:
         spirit layer are not included.
 
 
-        Answers 422 when the picture cannot be put in the file: the map's
-        image address names no asset, an asset that no longer exists, or one
-        the caller may not read (`Map image asset not found`), the file is
+        Answers 422 when the picture cannot be put in the file: the map has
+        no picture at all (`Map has no image`), as happens when a campaign
+        import leaves its picture off; its image address names no asset, an
+        asset that no longer exists, or one the caller may not read (`Map
+        image asset not found`); the file is
         missing from disk (`Map image file not found on disk`), or its
         content is not a PNG, JPEG, WebP or GIF image (`This map's picture is
         not a PNG, JPEG, WebP or GIF image, so it cannot be exported as a
@@ -10844,9 +11193,10 @@ paths:
         statements, so it restores under this instance's database user whatever
         user the archive came from. The login sessions are not restored: new
         archives carry none, and an older archive's are emptied in the same
-        transaction. Before the load starts, every live socket is sent an
-        `error` and disconnected, and until the restore ends a new socket is
-        refused and every other API request answers 503, so no change made
+        transaction. Before the load starts, every live socket is sent
+        `campaign.access.revoked` (reason `signed-out`) and disconnected, and
+        until the restore ends a new socket is sent an `error` and closed and
+        every other API request answers 503 with `Retry-After: 60`, so no change made
         during the load lands on the restored rows; once the load commits the
         in-memory combat state is dropped, and everyone signs in again. After a
         successful load the migrations run, so an archive from an older release
@@ -10882,11 +11232,21 @@ paths:
                     description: Filename, in the backup list, of the backup of the database as it was before the restore
         '400':
           description: >-
-            No file; a filename not ending in `.zip`; a file that is not a ZIP
-            archive; an archive listing more than 100,000 entries or holding an
-            unsafe path; or a ZIP that is not a complete CozyVTT backup
-            (`Invalid Backup`). The message gives the reason and ends "Nothing
-            was changed." (Before 1.5.2 all but the last answered 500.)
+            `Bad Request` `No backup file provided` when the request holds no
+            file. Every other refusal is `Invalid Backup`: a filename not
+            ending in `.zip`; a multipart body over the field limits every
+            upload route shares (more than 100 text fields, a field name over
+            100 bytes, a field value over 16 KB, 16,384 bytes), a file sent
+            under a name other than `backup`, or a second file, answered `The
+            upload could not be read: <reason>. Nothing was changed.`; a file
+            that is not a ZIP archive; an archive listing more than 100,000
+            entries or holding an unsafe path; or a ZIP that is not a complete
+            CozyVTT backup. A ZIP without `database.sql` answers `This file
+            does not appear to be a valid CozyVTT backup (database.sql not
+            found inside ZIP)`; the other `Invalid Backup` messages give the
+            reason and end "Nothing was changed." None of these changes
+            anything. Before 1.5.2 every refusal here but the missing file and
+            the incomplete backup answered 500.
           content:
             application/json:
               schema:
@@ -10926,6 +11286,11 @@ paths:
           description: >-
             Another restore is replacing the database; every API request is
             refused until it ends.
+          headers:
+            Retry-After:
+              description: Seconds to wait before trying again (60).
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -11549,7 +11914,11 @@ components:
           type: string
           format: uuid
           nullable: true
-          description: Null once the uploader's account is deleted; the asset stays.
+          description: >-
+            Null once the uploader's account is deleted, on the assets that
+            outlive it: their campaign and global uploads, documents they
+            shared, and personal uploads something still uses. Their avatar
+            and their other personal uploads are deleted with the account.
         campaignId:
           type: string
           format: uuid
@@ -11722,7 +12091,7 @@ components:
       properties:
         id:
           type: string
-          format: uuid
+          description: A UUID, except on older maps, which can hold ids from before tokens were given UUIDs.
         characterId:
           type: string
           format: uuid
@@ -12292,8 +12661,8 @@ components:
           type: string
           description: >
             Machine-readable code, sent only where a client has to act on it:
-            PASSWORD_CHANGE_REQUIRED, SIGN_IN_EXPIRED, CHARACTER_CHANGED,
-            no_game_system, UVTT_IMPORT_NEEDS_CONFIRMATION.
+            PASSWORD_CHANGE_REQUIRED, MFA_ENROLMENT_REQUIRED, SIGN_IN_EXPIRED,
+            CHARACTER_CHANGED, ASSET_IN_USE, UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.
@@ -12306,11 +12675,6 @@ components:
                 type: string
               code:
                 type: string
-        errors:
-          type: array
-          description: Unmet password rules, from first-time setup.
-          items:
-            type: string
         details:
           type: object
           nullable: true
@@ -12565,7 +12929,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: Forbidden
-            message: You do not have permission to perform this action.
+            message: You do not have permission to access this resource
 
     PasswordChangeRequired:
       description: >-
@@ -12600,7 +12964,7 @@ components:
             $ref: '#/components/schemas/Error'
           example:
             error: Conflict
-            message: A creature with this name already exists in this campaign.
+            message: Fog of war is off for this map
 
     UnprocessableEntity:
       description: Unprocessable Entity - The request is valid but the resource cannot be turned into what was asked for.
@@ -12615,10 +12979,16 @@ components:
     RateLimited:
       description: |
         Too Many Requests - Rate limit exceeded. Response includes
-        `RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers.
-        Every limiter answers with JSON, `{ error: "Rate Limited", message }`,
-        where `message` says what was limited and to try again later.
+        `RateLimit-Policy`, `RateLimit-Limit`, `RateLimit-Remaining`,
+        `RateLimit-Reset` and `Retry-After` headers. Every limiter answers
+        with JSON `{ error, message }`, where `message` says what was limited
+        and when to try again. The sign-in, password, two-factor and
+        registration limiters send `error: "Rate Limited"`; the others send
+        `Too Many Requests`.
       headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds until the request may be sent again
         RateLimit-Limit:
           schema: { type: integer }
           description: Maximum requests permitted in the current window
