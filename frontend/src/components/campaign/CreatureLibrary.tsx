@@ -58,6 +58,37 @@ const SOURCE_FILTERS = [
   { value: 'custom', label: 'Custom / Homebrew' },
 ];
 
+/**
+ * The credit the SRD 5.1's licence, CC BY 4.0, asks for wherever its material
+ * is shown: beside the import, and at the foot of the library whenever it
+ * lists an SRD creature. SRD_ATTRIBUTION.md has the full notice.
+ */
+function SrdCredit({ className = '' }: { className?: string }) {
+  return (
+    <p className={`text-[10px] text-stone-gray/60 ${className}`}>
+      Includes material from the{' '}
+      <a
+        href="https://dnd.wizards.com/resources/systems-reference-document"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline hover:text-brand-ink"
+      >
+        System Reference Document 5.1
+      </a>{' '}
+      by Wizards of the Coast LLC, licensed under{' '}
+      <a
+        href="https://creativecommons.org/licenses/by/4.0/legalcode"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline hover:text-brand-ink"
+      >
+        CC BY 4.0
+      </a>
+      . Served by Open5e.
+    </p>
+  );
+}
+
 // ============================================
 // Props
 // ============================================
@@ -577,9 +608,6 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                       Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
                     </p>
                   )}
-                  {/* TODO(ui): this is the app's only SRD 5.1 CC BY 4.0 credit, and it shows
-                      only before the import, to an administrator; show it wherever SRD
-                      creatures are listed. */}
                   {!searchQuery && srdCount === 0 && canSeed && (
                     <div className="mt-4 space-y-2">
                       <p className="text-xs text-stone-gray/60">
@@ -596,10 +624,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                           'Import D&D 5e SRD Creatures'
                         )}
                       </Button>
-                      <p className="text-[10px] text-stone-gray/40">
-                        SRD 5.1 content by Wizards of the Coast, used under CC BY 4.0.
-                        Served by Open5e.
-                      </p>
+                      <SrdCredit />
                     </div>
                   )}
                   {!searchQuery && (srdCount === null || srdCount > 0) && (
@@ -649,6 +674,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 </div>
               )}
             </div>
+            {creatures.some((c) => c.source === 'srd') && (
+              <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
+            )}
 
             {/* ── Create / Edit Custom Form (inline) ── */}
             {showCreateForm && (
