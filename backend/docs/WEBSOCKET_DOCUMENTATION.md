@@ -1,6 +1,6 @@
 # CozyVTT WebSocket Documentation
 
-**Last Updated:** 2026-10-11
+**Last Updated:** 2026-10-13
 
 > **This is not a public API.** These events are the ones CozyVTT's own web
 > client sends and receives. They are not versioned, carry no compatibility
@@ -32,7 +32,9 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 - Dice roll synchronization (public and secret rolls)
 - In-game chat
 - Map switching (the DM's `map.change`)
-- Wall segment management (add, remove, bulk operations)
+- Wall segment management (add, remove, bulk operations) and doors
+- Light sources, manual fog of war and explored memory
+- Map pings
 - Spirit layer control and per-token visibility
 - Initiative tracker (combat state, turn advancement)
 - Announcements of the session lifecycle (`session.started`, `session.paused`, `session.resumed`, `session.ended`)
@@ -43,11 +45,13 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 Two things people expect on the socket are not there:
 
 - **Creating, editing and deleting a token** are REST calls (`POST`, `PUT` and
-  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). Those routes do
-  not tell the other connected clients; the web client follows each call with a
+  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). Those routes
+  send the other connected clients no token event (only the initiative order
+  again, while something is in it); the web client follows each call with a
   `map.change` for the map, so the table reloads it. A script that changes a
-  token over REST does the same. Moving a token is the one token change with
-  socket events of its own (below).
+  token over REST does the same, as the DM: `map.change` is the DM's alone.
+  Moving a token is the one token change with socket events of its own
+  (below).
 - **Starting, pausing, resuming and ending a session** are REST calls too
   (`POST /api/campaigns/{campaignId}/sessions`, then `PUT .../sessions/{sessionId}/pause`,
   `PUT /api/campaigns/{campaignId}/resume` and `PUT .../sessions/{sessionId}/end`). The
@@ -166,15 +170,18 @@ a browser sends no such header and connects as above. That refusal is what makes
 the client's `connect_error` fire; a connection with no usable sign-in is
 accepted and then ended, as the next paragraph says.
 
-The handshake accepts exactly the sessions the HTTP guards accept: a sign-in
-with no two-factor step left to finish, and no password change due. A session
-that has passed the password step but not the code is refused with
-`error { message: 'Unauthorized' }` and disconnected, as is one whose account
-must set a new password, one that has ended, and a connection with no session
-cookie at all. The connection itself is accepted first: the client sees
-`connect`, then the `error` event, then `disconnect` with the reason
-`io server disconnect`. It never sees `connected`. The same check runs again on every `authenticate`,
-so a sign-in that ends later (signing out, expiry, a password change elsewhere)
+The handshake accepts a sign-in with no two-factor step left to finish, made
+less than 30 days ago (`REMEMBER_ME_MAX_AGE`, 30 days unless set otherwise),
+whose account still exists and has no password change due. Anything else is refused with
+`error { message: 'Unauthorized' }` and disconnected: a session that has passed
+the password step but not the code, a sign-in older than 30 days, one whose
+account must set a new password or no longer exists, one that has ended, and a
+connection with no session cookie at all. The connection itself is accepted
+first: the client sees `connect`, then the `error` event, then `disconnect`
+with the reason `io server disconnect`. It never sees `connected`. Every
+`authenticate` reads the sign-in from the session store again (still there,
+past the two-factor step, under 30 days old, and the same user's), so a
+sign-in that ends later (signing out, expiry, a password change elsewhere)
 cannot join a campaign.
 
 While an administrator restores a backup, from the moment the database starts
@@ -182,8 +189,12 @@ being replaced until the restore ends, every open connection is sent
 `campaign.access.revoked` with reason `signed-out` and the message "The instance is being
 restored from a backup. Sign in again once it has finished." and closed, and a new connection is sent `error` with the message "The instance
 is being restored from a backup. Try again in a minute; everyone signs in again
-once it has finished." and closed. The restored database holds no sign-ins, so
-a client signs in again afterwards. The HTTP API answers 503 for the same span.
+once it has finished." and closed. A connection whose handshake was still
+under way as the database began to be replaced, and that got in regardless, is
+ended the same way once the backup is loaded, with the message "The instance was restored from
+a backup. Sign in again." The restored database holds no sign-ins, so a client
+signs in again afterwards, and the initiative order kept in memory is cleared.
+The HTTP API answers 503 for the same span.
 
 ---
 
@@ -191,11 +202,19 @@ a client signs in again afterwards. The HTTP API answers 503 for the same span.
 
 ### Campaign Authentication
 
-Before sending/receiving game events, authenticate to a campaign:
+Before sending/receiving game events, authenticate to a campaign. Send
+`authenticate` once `connected` has arrived: the server registers a
+connection's event handlers only after the handshake's sign-in check, which
+reads the database, so an `authenticate` sent on `connect` can reach it first
+and is then dropped without an answer. The server sends `connected` on every
+new connection, an automatic reconnect included, so that is also where a client
+joins again.
 
 ```javascript
-socket.emit('authenticate', {
-  campaignId: 'campaign-uuid-here'
+socket.on('connected', () => {
+  socket.emit('authenticate', {
+    campaignId: 'campaign-uuid-here'
+  });
 });
 
 // Success
@@ -215,10 +234,13 @@ socket.on('error', (data) => {
 ```
 1. Client emits 'authenticate' with campaignId
 2. Server validates:
-   - The sign-in the connection was opened under still exists (checked on
-     every `authenticate`, not only when the connection opened); if it has
-     ended, the server answers `error` "Unauthorized" and closes the connection
-   - User is member of campaign
+   - `campaignId` is given, as text ("Campaign ID required" otherwise)
+   - The sign-in the connection was opened under is still signed in: still
+     in the session store, past the two-factor step and under 30 days old
+     (checked on every `authenticate`, not only when the connection opened);
+     if not, the server answers `error` "Unauthorized" and closes the connection
+   - The campaign exists ("Campaign not found") and the user is a member of
+     it ("You are not a member of this campaign")
 3. The socket leaves every other campaign room it is in; each of those
    campaigns gets 'user.left' and a fresh 'presence.state'
 4. Server joins socket to campaign room
@@ -241,7 +263,7 @@ All game events require campaign authentication:
 Specific events also check role:
 - DM can move any token
 - Player can only move tokens they control
-- Spectator can send chat messages but cannot roll dice, roll initiative or move tokens
+- Spectator can send chat messages and map pings but cannot roll dice, roll initiative, move tokens, open or close doors, or change a character's hit points or hit dice
 
 ---
 
@@ -254,7 +276,7 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `connected`
 **Direction:** Server → Client
-**When:** After successful WebSocket connection
+**When:** After successful WebSocket connection, once the sign-in and the per-account connection limit have been checked; on every new connection, a reconnect included. Send `authenticate` after it
 **Payload:**
 ```typescript
 {
@@ -281,7 +303,7 @@ For every other event, see the [Event Inventory](#event-inventory).
   campaignId: string;  // UUID of campaign to join
 }
 ```
-**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, or ended by a password change); sign in again. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
+**Response:** `authenticated` or `error`. `error` "Unauthorized", followed by the server closing the connection, means the sign-in this connection was opened under has ended (signed out, expired, older than 30 days, or ended by a password change); sign in again. The other refusals leave the connection open: "Campaign ID required", "Campaign not found", "You are not a member of this campaign", and "Authentication failed" or "Internal server error" for a failure inside the server. A socket that joins the campaign it is already in, with the same role, is answered (`authenticated`, then `presence.state` to it alone) without the table being told again. Joins are under a flood ceiling; see [Flood ceilings](#fog-lighting-and-explored-memory).
 
 #### `authenticated`
 **Direction:** Server → Client
@@ -298,7 +320,7 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `campaign.access.revoked`
 **Direction:** Server → Client
-**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, a platform role changed, the account deleted, or the instance restored from a backup)
+**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that expires, reaches its 30 days, or is removed to keep the account at 20 sign-ins sends nothing: the connection stays open until its next `authenticate` is refused
 **Payload:**
 ```typescript
 {
@@ -401,7 +423,7 @@ push and would otherwise show everyone offline until somebody moved.
 ```
 
 **Common Errors:**
-- "Unauthorized" - Not logged in
+- "Unauthorized" - Not signed in, or the sign-in has ended or is older than 30 days; the server then closes the connection
 - "Not authenticated to a campaign" - Must call `authenticate` first
 - "You do not have permission to move this token" - Permission denied
 - "Token position out of bounds" - Invalid coordinates
@@ -445,9 +467,11 @@ subsystem; see the [Event Inventory](#event-inventory) for the full list.
    Client finishes dragging
    Server validates permission & bounds
    Server updates database
-   Server sends the final position: to everyone on an unlit map; on a lit
-   map to each player as token:appeared or token:disappeared, by their sight;
-   a hidden token's position reaches DMs only
+   Server sends the final position as token.moved: on an unlit map to
+   everyone the map fetch would send the token to; on a lit map to the DM
+   and to each player who can see it, followed by token:appeared, while a
+   player who cannot is sent token:disappeared; a hidden token's position
+   reaches DMs only
 ```
 
 ### token.move.start
@@ -645,7 +669,7 @@ socket.on('token.moved', (data) => {
 - Updates `Map.tokens` JSON array
 - Persists final position
 
-**Broadcast:** `token.moved` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender included. On a lit map each player instead gets `token:appeared` (with the token as that player is sent it: never notes or a stat block, hit points only when its bar is on or the token is theirs, darkvision only for their own, and an obscured token as a shape with no identity) or `token:disappeared` as their sight decides; a hidden token's final position reaches DMs only. `movedBy` is null for anyone but the DM and the mover while the token is obscured.
+**Broadcast:** `token.moved` to the members the map fetch would send this token to (every DM; a player only if the token is visible and on a plane they can see), the sender included. On a lit map the DM's sockets get `token.moved`, and each of those players is tested against their sight where the token stopped: one who sees it gets `token.moved` and then `token:appeared` (with the token as that player is sent it: never notes or a stat block, hit points only when its bar is on or the token is theirs, darkvision only for their own, and an obscured token as a shape with no identity), and one who does not gets `token:disappeared`. When the token is one of that player's own, whoever moved it, their sight has moved with it, so they are also sent `token:appeared` or `token:disappeared` for every other token they may have, their own tokens apart, as their new sight decides. A hidden token's final position reaches DMs only. `movedBy` is null for anyone but the DM and the mover while the token is obscured.
 **Broadcast Payload:**
 ```typescript
 {
@@ -710,7 +734,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `token.move.end` | 30 a second, a budget of its own | `error` once |
 | The DM's events: `map.change`, `atmosphere.effect.set`, `atmosphere.audio.set`, `vibe.update`, `spirit_layer.toggle`, `spirit_layer.style_change`, `spirit_layer.token.toggle`, `initiative.add`, `initiative.remove`, `initiative.set`, `initiative.reorder`, `initiative.start`, `initiative.next`, `initiative.end`, the DM's own `initiative.roll`, `dice.clearHistory`, `exploration:reset` | 50 a second, each | `error` once |
 | `token.move` (drag frames) | 150 a second; the server also passes on at most one frame per 16 ms per socket | dropped silently |
-| `dice.roll` | 50 a second and 200 a minute; every `initiative.roll` but the DM's counts against the same budget, and a spectator's is refused before anything is read | `error` once, starting "Rate limit exceeded", which the web client's dice panel waits out |
+| `dice.roll` | 50 a second and 200 a minute; a spectator's roll is counted, then refused before its fields are read. A player's `initiative.roll` counts against the same budget once it is past the spectator check, has a `tokenId` and a `mapId`, and has an `expression` that is text if it has one; one refused before that is not counted | `error` once, starting "Rate limit exceeded", which the web client's dice panel waits out |
 | Wall and light edits (`wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update`, `lights:replace`) | 40 a second between them | dropped silently |
 | `fog:operation` | 10 a second | dropped silently |
 | `exploration:reveal` | 40 a second; what they report is written at most once a second per map and user | dropped silently |
@@ -723,23 +747,25 @@ An `initiative.request_state` while nothing is in the order is answered from mem
 
 **What a dice roll may carry.** `dice.roll` takes `expression` (text; the dice parser allows up to 200 characters), `characterName` (up to 200 characters), `purpose` (up to 300, since the sheets build it from a name, as in "<attack name> Damage (Versatile)") and `secret` (true or false); the three after the expression may be left out. One of these fields of the wrong type or over its length is answered with `error` naming it, and nothing is stored or sent; any other field is ignored. `initiative.roll` refuses an `expression` that is not text the same way.
 
+**A secret roll goes to its roller and the DM.** Every roll is stored. One with `secret: true` is sent as `dice.rolled` to the socket that rolled it alone, and as `dice.rolled.secret` (the same roll with `originalRoller` and `isAuditView: true`) to the sockets of every DM other than the roller, so a DM's own secret roll reaches only the tab it was rolled in. Any other roll goes to the whole campaign as `dice.rolled`, the sender included.
+
 **A map a player may read is the campaign's current one.** `walls:request`, `lights:request`, `fog:request_state` and `exploration:request` answer a player or spectator only for the map the campaign is showing (`currentMapId`); for any other map of the campaign they answer nothing, exactly as for a map outside it. The DM is answered for any map of the campaign. Token moves follow the same rule: a drag or drop on any other map reaches the DM's sockets only. Writes do too: a player's `token.move.start`, `token.move.end`, `wall:update` door toggle and `initiative.roll` on a map other than the current one answer `error` ("Map not found"), and their `token.move` frames and `exploration:reveal` reports there are dropped without an answer, even for a token they control. So do a map's live edits: `wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`, `fog:cells`, `map:settings:updated`, `map.pinged`, `exploration:state` from a reset, and `dm:editing` reach every member for the current map and only the DM's sockets for any other. Some of them also come from the REST map routes, under the same rule: the wall routes send the `wall:*` events and `walls:replaced`, the light routes the `light:*` events and `lights:replaced`, the map update and lighting routes `map:settings:updated`, and the fog operation the fog events. Every path follows the rule, so a map the DM has prepared but not switched to is the DM's alone. `map.change` from the DM is likewise refused (with `error`) for any map but the current one, because `map.changed` puts every client onto the map it carries; moving tokens between maps (`POST .../tokens/move`) sends `map.changed` for whichever of the two maps is current, so no client has to ask.
 
 **Manual fog of war** is per map, switched by `Map.fogEnabled`. While it is on, `fog:request_state` answers a DM with `fog:updated` (the full grid) and everyone else with `fog:cells` (their revealed cell indices plus the grid dimensions). A `fog:cells` payload with an empty `revealedCells` means fog is on and nothing is revealed. While fog is off the handlers answer nothing and refuse `fog:operation`; a client that gets no reply draws no fog. A request from a socket that has not yet authenticated is dropped the same silent way, so a client sends `fog:request_state` only after `authenticated`, and again after a reconnect; the web client waits for that. Switching fog on for a map (`PUT /api/campaigns/:campaignId/maps/:id` with `fogEnabled: true`) pushes the map's fog to every member at once, `fog:updated` or `fog:cells` by role, so no client has to ask. The REST fog operation broadcasts through the same code as the socket one, so a reveal reaches the table the same way whichever path made it. Fog is one cell per grid square, and a map with more than 250,000 squares (500 by 500, the largest a map can now be made) is too large for it; only a map stored before that limit can be. For such a map `fog:request_state` and `fog:operation` answer `error` with a message saying to make the map smaller, and nothing is sent or stored.
 
-**Dynamic lighting** decides which tokens a player is *sent*. The rule lives in `utils/visibilityRule.ts`, shared byte for byte with the client: walls first (nothing outside a controlled token's line of sight is sent, lit or not), then the map's `globalIllumination` flag, then darkvision, the token's own square and light. Sight is judged from the centre of each of the player's tokens, and a token is seen when its centre is; both centres come from `utils/tokenCentre.ts`, shared byte for byte with the client too. Token moves apply the same plane and hidden-token rules as the map fetch before line of sight, so a player never receives on a move what opening the map would not have given them. The frames of a drag (`token.moved` from `token.move`) go, on a lit map, to the DM's sockets and to the players whose tokens can see each frame's position, with `token:disappeared` to a player at the frame that takes the token out of their sight and `token:appeared` at the frame that brings it into it; `token.move.end` then decides, per player, who is sent where it stopped. Any per-map flag change is broadcast as one `map:settings:updated` event carrying every flag. A change to `lightingEnabled` or `globalIllumination` also re-sends `map.changed` to every member with the map as they can now see it, the same event a map switch or a spirit-realm crossing sends, since those two flags decide which tokens a player is sent. So does a light, wall or door change on a lit map the campaign is showing, over the socket or the REST routes, to players only (the DM is sent every token already): one `map.changed` per map, 150 ms after the last change of a burst. A change that sends players no event (see **A locked door and a light that is off are the DM's** below) sends them no `map.changed` either: it changes nothing they can see, and the map arriving would tell them that something had just changed. Revealing or hiding one token with `spirit_layer.token.toggle` works the same way: `spirit_layer.token.toggled`, which carries the token, goes to the DM's own sockets only, and every member then receives `map.changed` with the map as they may see it.
+**Dynamic lighting** decides which tokens a player is *sent*. The rule lives in `utils/visibilityRule.ts`, shared byte for byte with the client: walls first (nothing outside a controlled token's line of sight is sent, lit or not), then the map's `globalIllumination` flag, then darkvision, the token's own square and light. Sight is judged from the centre of each of the player's tokens, and a token is seen when its centre is; both centres come from `utils/tokenCentre.ts`, shared byte for byte with the client too. A player's own tokens are always in their sight. A player who is sent none of their own tokens on a lit map is sent no other token there, and neither is a spectator, who controls none. Token moves apply the same plane and hidden-token rules as the map fetch before line of sight, so a player never receives on a move what opening the map would not have given them. The frames of a drag (`token.moved` from `token.move`) go, on a lit map, to the DM's sockets and to the players whose tokens can see each frame's position, with `token:disappeared` to a player at the frame that takes the token out of their sight and `token:appeared` at the frame that brings it into it; `token.move.end` then decides, per player, who is sent where it stopped. Any per-map flag change is broadcast as one `map:settings:updated` event carrying every flag. A change to `lightingEnabled` or `globalIllumination` on the map the campaign is showing also re-sends `map.changed` to every member with the map as they can now see it, the same event a map switch or a spirit-realm crossing sends, since those two flags decide which tokens a player is sent. So does a light, wall or door change on a lit map the campaign is showing, over the socket or the REST routes, to players only (the DM is sent every token already): one `map.changed` per map, 150 ms after the last change of a burst. A change that sends players no event (see **A locked door and a light that is off are the DM's** below) sends them no `map.changed` either: it changes nothing they can see, and the map arriving would tell them that something had just changed. Revealing or hiding one token with `spirit_layer.token.toggle` works the same way: `spirit_layer.token.toggled`, which carries the token, goes to the DM's own sockets only, and when the token is on the map the campaign is showing, every member then receives `map.changed` with the map as they may see it.
 
-**A character sheet in `character.updated` is sent as each member may read it.** The event goes to the character's campaign after a sheet save over REST and after `character.hitdice.spend`. A Call of Cthulhu sheet's top-level `notes` (Keeper's Notes) is in the copy sent to the campaign's DM, always (an empty string when nothing is written), and left out of everyone else's, the character's owner included. The same rule applies to the REST reads; see `Character.data` in `API_DOCUMENTATION.yaml`.
+**A character sheet in `character.updated` is sent as each member may read it.** The event goes to the character's campaign after a sheet save over REST and after `character.hitdice.spend`. A save that changes the picture of the character's tokens on another campaign's maps sends that campaign `character.updated` with only `characterId` and `tokensChanged: true`, and no sheet. A Call of Cthulhu sheet's top-level `notes` (Keeper's Notes) is in the copy sent to the campaign's DM, always (an empty string when nothing is written), and left out of everyone else's, the character's owner included. The same rule applies to the REST reads; see `Character.data` in `API_DOCUMENTATION.yaml`.
 
 **Walls and lights stay near their map.** `wall:add`, the DM's `wall:update`, `walls:replace`, `light:add`, `light:update` and `lights:replace` answer `error` and store nothing for a wall end or light more than 250,000 pixels from the map's corner either way, or more than 500 of the map's grid squares outside its edges. A wall or light already stored outside the second bound, before it existed, is kept when sent back with the same id and position (both ends, for a wall), whatever its other fields say, so a list holding one still saves. The REST wall and light routes apply the same bounds. Ids are unique within a map's list: `wall:add` and `light:add` answer `error` for an id already on the map, and `walls:replace` and `lights:replace` for a list that repeats one.
 
-**A locked door and a light that is off are the DM's.** Every member who may read a map is sent all of its walls, since a browser works out its own sight from them, but anyone other than the DM is sent a door of type `door-locked` as `door-closed`, and only the lights whose `enabled` is true. This holds on every path: `walls:replaced` and `lights:replaced` (the answers to `walls:request` and `lights:request`, and the bulk edits), `wall:added`, `wall:updated`, `light:added`, the map in `map.changed`, and the REST reads. A light the DM turns on reaches the others as `light:added`, one turned off as `light:removed`, and one added while off, changed while it stays off, or deleted while off reaches them not at all. Nor does a `wall:updated` that would leave their copy as it was, such as a closed door locked or unlocked, on the socket or the REST route. Nor do `walls:replaced` and `lights:replaced` from a bulk edit (`walls:replace`, `lights:replace`, or the REST `PUT` of either list) that leaves the list they are sent as it was, in the same order: closed doors locked or unlocked, or only lights that are off added, changed or removed. The DM is sent the event, with its `opId`, either way. On a lit map none of these is followed by `map.changed` for them. A player's `wall:update` refused because the door is locked, or because the segment is not a door, is answered with `error` and then a `wall:updated` carrying the segment as that player may see it and no `opId`, so a page that drew the door open puts it back.
+**A locked door and a light that is off are the DM's.** Every member who may read a map is sent all of its walls, since a browser works out its own sight from them, but anyone other than the DM is sent a door of type `door-locked` as `door-closed`, and only the lights whose `enabled` is true. This holds on every path: `walls:replaced` and `lights:replaced` (the answers to `walls:request` and `lights:request`, and the bulk edits), `wall:added`, `wall:updated`, `light:added`, the map in `map.changed`, and the REST reads. A light the DM turns on reaches the others as `light:added`, one turned off as `light:removed`, and one added while off, changed while it stays off, or deleted while off reaches them not at all. Nor does a `wall:updated` that would leave their copy as it was, such as a closed door locked or unlocked, on the socket or the REST route. Nor do `walls:replaced` and `lights:replaced` from a bulk edit (`walls:replace`, `lights:replace`, or the REST `PUT` of either list) that leaves the list they are sent as it was, in the same order: closed doors locked or unlocked, or only lights that are off added, changed or removed. The DM is sent the event, with its `opId`, either way. On a lit map none of these is followed by `map.changed` for them. A player's `wall:update` refused because the door is locked or out of their sight, or because the segment is not a door, is answered with `error` and then a `wall:updated` carrying the segment as that player may see it and no `opId`, so a page that drew the door open puts it back.
 
-**A player opens or closes only a door they can see.** A player's `wall:update` is a door toggle and nothing else: the segment must be a door (`Players may only toggle doors`), on a lit map one of their tokens must see its middle, by the visibility rule nudged 2 px toward each token as the client's door filter does (`You cannot see that door`, asked before whether it is locked, so a door in the dark tells nothing), and it must not be locked (`That door is locked`). The player's sight is worked out before the map's lock is taken, and the door is judged as it stands under the lock: one the DM moved out of that sight or locked in the meantime is refused. Each refusal answers `error`, then `wall:updated` with the door as that player may see it and no `opId`. A spectator's toggle answers `Spectators cannot open or close doors`. On a map without dynamic lighting a player may toggle any unlocked door, as before.
+**A player opens or closes only a door they can see.** A player's `wall:update` is a door toggle and nothing else: the segment must be a door (`Players may only toggle doors`), on a lit map one of their tokens must see its middle, by the visibility rule nudged 2 px toward each token as the client's door filter does (`You cannot see that door`, asked before whether it is locked, so a door in the dark tells nothing), and it must not be locked (`That door is locked`). The player's sight is worked out before the map's lock is taken, and the door is judged as it stands under the lock: one the DM moved out of that sight or locked in the meantime is refused. Each of those refusals answers `error`, then `wall:updated` with the door as that player may see it and no `opId`. A segment that is not on the map answers `Wall segment not found`, and a map the player may not read `Map not found`, with no `wall:updated`. A spectator's toggle answers `Spectators cannot open or close doors`. On a map without dynamic lighting a player may toggle any unlocked door, as before.
 
 **Wall and light edits carry an operation id.** `wall:add`, `wall:remove`, `wall:update`, `walls:replace`, `light:add`, `light:remove`, `light:update` and `lights:replace` take an optional `opId`, a string of 1 to 64 letters, digits, dashes and underscores (the web client sends a random UUID). The broadcast that follows (`wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`) carries the same `opId`, to every recipient. The sending page has already drawn its own change, so it skips an event carrying an id it sent and applies every other one; that is how the DM's page sees a player's door toggle without undoing its own newer edits. An edit sent without an `opId`, or with anything else in that field, is stored and broadcast without one, so a client that never sends ids sees no difference. The REST wall and light routes and the answers to `walls:request` and `lights:request` carry no `opId`, so they are never anyone's own echo. Each of these edits, and `fog:operation`, reads and writes the map's stored list (or fog grid) under the map's lock, so edits sent together, such as the remove and adds of a door placed on a wall, apply one after another and none is lost.
 
-**Initiative** is kept in memory per campaign and sent as `initiative.state` to each member as they may see it. The DM gets every combatant with its token as it is now; a player gets only the combatants the role filter keeps for them (a hidden token, one on the other plane, or one on a map the campaign is not showing, is absent, and the turn pointer with it; the lighting rule is not applied, so a combatant out of their sight on a lit or fogged map is still listed), with the name, portrait and hit points exactly as that token is sent to them, so a creature's hit points appear only once its bar is on or they control the token. The order is sent again whenever a token in it changes, over REST or a spirit-plane toggle, so the tracker follows the token, and whenever a member's view of it can change: a map switch, a plane crossing through any token of theirs, a role change, or a bound character's new picture; a deleted token or map leaves the order. A send that a later send to the campaign overtakes is dropped, whether the later one was started by a change to the order or by a change to a combatant's token (its hit points, or hiding it), so the newest state always arrives last. The `dice.rolled` entry an `initiative.roll` makes goes to the same people who are sent the token (every DM, and a player when the token is visible, on their plane and on the map the campaign is showing), named by the server: an obscured token as "Unknown creature", and the `characterName` a client sends along is not used. A token bound to a character rolls from that character's sheet only when the character belongs to the campaign the roll is made in.
+**Initiative** is kept in memory per campaign and sent as `initiative.state` to each member as they may see it. The DM gets every combatant with its token as it is now; a player gets only the combatants the role filter keeps for them (a hidden token, one on the other plane, or one on a map the campaign is not showing, is absent, and the turn pointer with it; the lighting rule is not applied, so a combatant out of their sight on a lit or fogged map is still listed), with the name, portrait and hit points exactly as that token is sent to them, so a creature's hit points appear only once its bar is on or they control the token. The order is sent again whenever a token in it changes, over REST or a spirit-plane toggle, so the tracker follows the token, and whenever a member's view of it can change: a map switch, a plane crossing through any token of theirs, a role change, or a bound character's new picture; a deleted token or map leaves the order. A send that a later send to the campaign overtakes is dropped, whether the later one was started by a change to the order or by a change to a combatant's token (its hit points, or hiding it), so the newest state always arrives last. The `dice.rolled` entry an `initiative.roll` makes goes to the same people who are sent the token (every DM, and a player when the token is visible, on their plane and on the map the campaign is showing), named by the server: an obscured token as "Unknown creature", and the `characterName` a client sends along is not used. No entry is made when no dice are thrown, as for a Call of Cthulhu investigator, whose initiative is their Dexterity. A token bound to a character rolls from that character's sheet only when the character belongs to the campaign the roll is made in.
 
 **Explored memory** is per user, per map, switched by `Map.explorationEnabled`. A client reports the cells its vision has covered with `exploration:reveal`; the server unions them with what it holds, stores them in the fog grid's shape, and sends the user's whole memory as `exploration:state` to that user's sockets in the campaign and to the DM sockets previewing that user, so a DM's Player Preview follows a player's memory as it grows. The reports that arrive within a second are written together, at most once a second per map and user, so the memory a client is sent can trail its reports by up to a second; reports that add no cell the server does not already hold are neither written nor answered. A DM socket is previewing the user its last `exploration:request` named; one that has named nobody is sent no one else's memory, and the web client asks once more naming nobody when a preview closes. A DM may name another member in `exploration:reveal` and write that player's memory on their behalf, which is what Player Preview does as the previewed token moves; anyone else may only write their own. A report for a map the sender may not write to, or one whose memory is off, is dropped without an `error`: the client sends reports on its own, and one can cross a map switch or the DM turning memory off. `exploration:request` returns a user's own memory (a DM may name another user, for Player Preview, and from then on follows that user's), and `exploration:reset` lets the DM forget everyone's memory of a map. On a map too large for fog (see above), `exploration:request` answers `error` with the same message and `exploration:reveal` is dropped without one. **The server never reads explored memory when deciding which tokens to send.** It only greys in map artwork every client already holds, so a forged reveal can show a player nothing they were not already given.
 
@@ -757,7 +783,7 @@ network failure or a browser handshake refused as coming from another site.
 socket.on('error', (data) => {
   if (data.message === 'Unauthorized') {
     // Not logged in - sign in again over REST, then connect again
-    window.location.href = '/login';
+    window.location.href = '/auth/login';
   }
 });
 
@@ -814,7 +840,9 @@ socket.on('campaign.access.revoked', ({ reason, message }) => {
 socket.on('disconnect', (reason) => {
   if (accessRevoked) return; // nothing to reconnect to
   if (reason === 'io server disconnect') {
-    // Server closed the connection without a reason: check the sign-in over REST
+    // The server closed the connection, after an `error` saying why.
+    // socket.io does not reconnect by itself after this: check the sign-in
+    // over REST, then call socket.connect() if it is still good
     checkSignIn();
   } else {
     // Network issue - auto-reconnect
@@ -822,12 +850,11 @@ socket.on('disconnect', (reason) => {
   }
 });
 
-socket.on('reconnect', (attemptNumber) => {
-  console.log('Reconnected after', attemptNumber, 'attempts');
-
-  // Re-authenticate to campaign
+// Every new connection, a reconnect included, starts with `connected`: join
+// the campaign again there. socket.io-client 4 reports reconnects on the
+// manager (socket.io.on('reconnect')), never on the socket itself.
+socket.on('connected', () => {
   socket.emit('authenticate', { campaignId: currentCampaignId });
-
   hideReconnectingIndicator();
 });
 ```
@@ -854,8 +881,11 @@ export function useWebSocket(campaignId: string) {
 
     newSocket.on('connect', () => {
       setConnected(true);
+    });
 
-      // Authenticate to campaign
+    // Authenticate to campaign once the server is listening; it sends
+    // `connected` again after every reconnect
+    newSocket.on('connected', () => {
       newSocket.emit('authenticate', { campaignId });
     });
 
@@ -920,18 +950,17 @@ export function useTokenMovement(socket: Socket | null, mapId: string) {
     if (!socket) return;
 
     socket.on('token.moved', (data) => {
-      // Update token position in state
-      updateTokenPosition(data.tokenId, data.x, data.y);
-    });
-
-    socket.on('token.moved', (data) => {
-      // Final position confirmed
-      confirmTokenPosition(data.tokenId, data.x, data.y);
+      if (data.dragging) {
+        // A drag frame: draw the token where it is being carried
+        updateTokenPosition(data.tokenId, data.x, data.y);
+      } else {
+        // A drop, or a correction after a refused one: where it now stands
+        confirmTokenPosition(data.tokenId, data.x, data.y);
+      }
     });
 
     return () => {
       socket.off('token.moved');
-      socket.off('token.move.end');
     };
   }, [socket]);
 
@@ -993,14 +1022,19 @@ a refused sign-in in a loop.
 
 ### Multi-Tab Testing
 
-1. Open two browser tabs
-2. Tab 1: Login as DM
-3. Tab 2: Login as Player
-4. Both: Connect to WebSocket
-5. Both: Authenticate to same campaign
-6. Tab 1: Move token → Tab 2 should see update
-7. Tab 2: Try to move DM's token → Should get error
-8. Tab 2: Move own token → Tab 1 should see update
+Tabs of one browser share one session cookie, so two tabs cannot be signed in
+as two people at once. Use two browsers, or one browser and a private window
+of it.
+
+1. Window 1: Login as DM
+2. Window 2: Login as Player
+3. Both: Open the same campaign (the page connects and authenticates)
+4. Window 1: Move token → Window 2 should see update
+5. Window 2: Try to pick up a token the player does not control → the page
+   does not let them; a scripted `token.move.start` for it answers `error`
+   "You do not have permission to move this token"
+6. Window 2: Move own token → Window 1 should see update (a player cannot
+   move tokens while the session is paused or has ended)
 
 ---
 
@@ -1017,10 +1051,13 @@ if (socket && socket.connected) {
 
 2. **Handle reconnection:**
 ```javascript
-socket.on('reconnect', () => {
+// `connected` arrives on the first connection and after every reconnect
+socket.on('connected', () => {
   // Re-authenticate to campaign
   socket.emit('authenticate', { campaignId });
+});
 
+socket.on('authenticated', () => {
   // Re-sync game state
   fetchCurrentGameState();
 });
@@ -1042,14 +1079,15 @@ function onMouseMove(event) {
 
 4. **Optimistic UI updates:**
 ```javascript
-function moveToken(tokenId, x, y) {
+function dropToken(tokenId, x, y) {
   // Update UI immediately
   updateTokenPositionLocally(tokenId, x, y);
 
   // Send to server
-  socket.emit('token.move', { tokenId, mapId, x, y });
+  socket.emit('token.move.end', { tokenId, mapId, x, y });
 
-  // Server will confirm via broadcast
+  // The drop's token.moved comes back to the sender too, with the stored
+  // position. Drag frames (token.move) are never sent back to their sender.
 }
 ```
 
@@ -1252,7 +1290,7 @@ _Who may send it is read from the shared permission predicates each handler call
 **Solution:** Verify user is a member of the campaign
 
 **Problem:** Events not received
-**Solution:** Check that you've authenticated to the campaign first
+**Solution:** Check that you've authenticated to the campaign first, and that `authenticate` was sent after `connected` arrived: one sent earlier can be dropped without an answer
 
 ### Performance Issues
 
