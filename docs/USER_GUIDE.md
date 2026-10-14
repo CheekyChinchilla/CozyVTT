@@ -37,8 +37,9 @@ Create the administrator account. This is the most powerful account on the platf
 
 - **Setup token** — Proves you run this server, so a stranger who finds a new instance first cannot make themselves its administrator. The backend prints it in its log when it starts: on the server, `docker compose logs backend | grep "setup token"` shows it. If you set `SETUP_TOKEN` in `.env`, enter that value instead. See [Complete the setup wizard](DEPLOYMENT.md#4-complete-the-setup-wizard)
 - **Display Name** — What other users will see (2–50 characters)
-- **Email** — Your login email address
+- **Email Address** — Your login email address
 - **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character: one of `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; ' : " \ | , . < > / ?` (a space, `~` or an accented letter does not count)
+- **Confirm Password** — The same password again
 - A live password strength meter gives you instant feedback as you type. It shows **Good** or **Strong** only for a password that meets every rule above, so a password it calls **Weak** or **Fair** will be refused
 
 *Screenshot pending — Admin account creation form with password strength indicator.*
@@ -47,7 +48,7 @@ Create the administrator account. This is the most powerful account on the platf
 Give your instance its identity:
 
 - **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Hearthstone Tavern"). You can change it later under **Admin Panel → Settings**.
-- **Public Registration** — Choose whether new users can register themselves. For private groups, leave this **off** and create accounts manually from the Admin Panel
+- **Enable Public Registration** — Tick it to let new users register themselves. For private groups, leave it unticked and create accounts manually from the Admin Panel
 
 Earlier versions also asked for a **Timezone** here and showed it under **Admin Panel → Settings**. Nothing ever used it, so it has been removed; times are shown in each person's own browser time zone, as they always were. An instance that saved one keeps it stored, unused.
 
@@ -64,7 +65,14 @@ Once setup is complete, you'll be logged in as the administrator and taken to yo
 
 Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password. If you opened a link to a page, such as a campaign, while signed out, signing in takes you on to that page.
 
-**Too many wrong passwords locks sign-in for a while.** Five wrong passwords in fifteen minutes from your device, or ten in an hour for your account from anywhere, and the sign-in page says "Too many failed sign-ins for this account, please try again later" (or "Too many authentication attempts"). Wait, or set a new password: a new password opens the account at once, whether you set it with the **Forgot password?** link (if your instance sends email) or an administrator gives you a temporary one. A correct password never counts, so signing in normally cannot lock you out. The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three ask you to wait.
+**Too many wrong passwords locks sign-in for a while.** There are two limits. A correct password never counts towards either, so signing in normally cannot lock you out.
+
+| Limit | What the sign-in page says | When it lifts |
+|---|---|---|
+| Five wrong passwords in 15 minutes from one internet address, such as everyone on your home network (a password reset link that does not work counts too) | "Too many authentication attempts, please try again later" | 15 minutes after the oldest of the five |
+| Ten wrong passwords in an hour for your account, from every device together | "Too many failed sign-ins for this account, please try again later" | An hour after the oldest of the ten, or at once when you get a new password: set it with the **Forgot password?** link (if your instance sends email), or ask an administrator for a temporary one |
+
+When the second limit locks an account, the Admin Panel's **Activity** tab gets a line naming the account and the address the last wrong password came from (see [The activity log](#the-activity-log-admins)). The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three say "Too many wrong passwords, please try again later".
 
 **A sign-in lasts at most 30 days**, however much you use it (your administrator can change the length). When it runs out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
 
@@ -720,7 +728,7 @@ emailed and not used.
 
 ### Multi-Factor Authentication (MFA)
 
-For extra account security, enable **MFA** in the Security section. You'll be asked for your current password first, then use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
+For extra account security, press **Enable** beside **Two-Factor Authentication** in the **Security** section. You'll be asked for your current password first, then use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
 
 **Turning MFA on signs you out everywhere else**, as turning it off does: any other browser or device signed in to your account is signed out, and the one you are using stays where it is.
 
@@ -728,9 +736,9 @@ For extra account security, enable **MFA** in the Security section. You'll be as
 
 **You have five minutes to enter the code** after your password is accepted. After that the page says "Your sign-in timed out at the code step. Sign in again with your password.", and you start again from the sign-in page. Changing or resetting your password also ends any sign-in that was waiting at the code step, on every device. **Back to login** on the code page ends the waiting sign-in too, so you can start again with another account or password.
 
-You'll also receive a set of **backup codes** when you set up MFA: store these somewhere safe. They're your lifeline if you lose access to your authenticator app. They are shown once: until you tick the box saying you have saved them, the browser asks before you reload or close the page. If you lose them anyway, make new ones from **Backup Codes** on your Profile page, with your password. The Profile page shows how many you have left beside **Enabled**, and after you sign in with a backup code the next page says how many remain, with a reminder to make new ones once three or fewer are left.
+You'll also receive 10 **backup codes** when you set up MFA: store these somewhere safe. They're your lifeline if you lose access to your authenticator app: on the code page, **Can't access your app? Use a backup code** takes one in place of the code, and each one works once. They are shown once: until you tick the box saying you have saved them, the browser asks before you reload or close the page. If you lose them anyway, make new ones from **Backup Codes** on your Profile page, with your password. The Profile page shows how many you have left beside **Enabled** (for example "7 of 10 backup codes left"), and after you sign in with a backup code a line at the top of the next page says how many remain, with a reminder to make new ones once three or fewer are left.
 
-**Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule: the upgrade that introduced it, your account's creation or the moment you were made an administrator, whichever is latest) and links to the setup page. After that date the app takes you to the setup page and nothing else works until MFA is on. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
+**Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule: the upgrade that introduced it, your account's creation or the moment you were made an administrator, whichever is latest), with a **Set it up now** link to the setup page. After that date the app takes you to the setup page, and until MFA is on the account can do only three things: set it up, change its password, or sign out. Other accounts are not affected. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
 
 ### Themes & Fonts
 
@@ -759,7 +767,11 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 
 ### A page says "Can't reach the server"
 
-CozyVTT did not answer when the page checked who is signed in, usually because the server is restarting or being upgraded. You are not signed out. The page tries again by itself, after a few seconds and then every 30 seconds, and opens as soon as the server answers; **Try Again** checks at once. If it stays for more than a few minutes, ask your platform administrator whether the server is running.
+CozyVTT did not answer when the page checked who is signed in, usually because the server is restarting, being upgraded or being restored from a backup. A restart or an upgrade does not sign you out. The page tries again by itself, after a few seconds and then every 30 seconds, and opens as soon as the server answers; **Try Again** checks at once. If it stays for more than a few minutes, ask your platform administrator whether the server is running.
+
+### A page says "The instance is being restored from a backup"
+
+An administrator is restoring CozyVTT from a backup. When the restore starts, an open campaign page goes to the sign-in page, which says "The instance is being restored from a backup. Sign in again once it has finished." Until it has finished, signing in answers "The instance is being restored from a backup. Try again in a minute; everyone signs in again once it has finished." and a page you open says "Can't reach the server". Wait a minute or two and sign in again: a finished restore signs everyone out, and everything is as it was when the backup was made.
 
 ### My token disappeared from the map
 
