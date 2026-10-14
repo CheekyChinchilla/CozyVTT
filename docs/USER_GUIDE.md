@@ -193,7 +193,7 @@ As the DM, click **Map Library** (the map icon) in the campaign header.
 *Screenshot pending — Map Library panel.*
 
 From here you can:
-- **Create Map** from an uploaded image in your asset library, or **Import UVTT** from a mapping tool
+- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); or **Import UVTT** from a mapping tool
 - **Set Active** to switch to a different map — this updates the view for all connected players immediately
 - **Edit** a map's settings, export it, or delete it
 
