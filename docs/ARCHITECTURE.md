@@ -255,7 +255,8 @@ src/
 ├── types/             TypeScript type definitions mirroring backend types
 ├── utils/             Client-side helpers (validation, formatting)
 ├── assets/fonts/      The bundled typefaces: fonts.css, one @font-face per family and
-│                      character range, and their OFL.txt
+│                      character range (and weight, where a family has no variable
+│                      font), and their OFL.txt
 └── styles/            Global CSS, Tailwind directives, effect stylesheets
 ```
 
@@ -855,7 +856,8 @@ is why the page had no protection until the second file existed.
 The page's policy is the wider of the two, since it also covers the page's
 stylesheets, fonts and the document reader's frame. Nothing it allows is on
 another site: the typefaces are part of the app (`frontend/src/assets/fonts`,
-one `@font-face` per family and character range, so a browser fetches only
+one `@font-face` per family and character range, and per weight where a family
+has no variable font, so a browser fetches only
 what the page uses), and the build inlines the smallest as `data:` addresses.
 It is strict where it counts, `script-src 'self'` with no
 `unsafe-inline`, which the built page allows because Vite emits no inline
