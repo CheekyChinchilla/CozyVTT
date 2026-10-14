@@ -105,7 +105,8 @@ The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins
 - changes someone else's email address, display name, avatar or bio (the line says the bio changed and keeps none of its text);
 - resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
 - changes the instance's settings or default theme (only the settings whose value changed are listed, and saving without changing anything writes no line);
-- makes, deletes or restores a backup, or deletes leftover files.
+- makes, deletes or restores a backup, or deletes leftover files;
+- sends a test email from the **Settings** tab.
 
 The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line of **Recent Admin Actions** shows:
 
@@ -148,7 +149,7 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 
 *Screenshot pending — Campaign card grid with status indicators.*
 
-**Notes From Campaigns You Have Left** — Shown only if a DM has removed you from a campaign in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
+**Notes From Campaigns You Have Left** — Shown only if a DM has removed you from a campaign in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** in the window it opens saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
 
 **Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
@@ -261,7 +262,7 @@ The **Characters** page (**Manage** beside **Your Characters** on the dashboard)
 From here you can:
 - **Create a new character**
 - **Click a character** to read its sheet — **Edit** is on the sheet when you want to change something
-- From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign**, or unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
+- From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign** (**Reassign Campaign** once it is in one), which is also where you unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
 - **Import** a character from a JSON file
 
 One account can have up to 1,000 characters, copies included. Past that, creating, copying or importing another says so; deleting one you no longer need makes room. A copy's name is the original's with " (Copy)" added, shortened if needed so the whole name stays within 200 characters.
@@ -322,7 +323,7 @@ Templates you publish are visible to everyone on your instance. You can edit or 
 A character has to belong to a campaign before it shows up in that campaign's roster. There are two ways:
 
 - **When you create it** — pick the campaign in the new character dialog. The character joins the roster straight away.
-- **Afterwards** — open a character card's menu on the Characters page, choose **Assign to Campaign**, and pick the campaign.
+- **Afterwards** — open a character card's menu on the Characters page, choose **Assign to Campaign** (**Reassign Campaign** for a character already in one), and pick the campaign.
 
 You can only choose a campaign you are already a member of.
 
@@ -376,7 +377,7 @@ For when the vibes turn from cozy to eldritch:
 - Weapons and attacks
 - Backstory, personal description, and ideals
 - Possessions and important people
-- **Keeper's Notes**, on the Backstory tab, for the Keeper alone: only the DM of the investigator's campaign can see or change them, so the investigator's player and the rest of the table never see them. They stay with the campaign: moving the investigator into another campaign, or copying it, leaves them behind.
+- **Keeper's Notes**, on the Backstory tab, for the Keeper alone: only the DM of the investigator's campaign can see or change them, so the investigator's player and the rest of the table never see them. They stay with the campaign: moving the investigator into another campaign, bringing it into one when you accept an invitation, or copying it, leaves them behind.
 
 *Screenshot pending — Call of Cthulhu 7e character sheet.*
 
@@ -522,7 +523,7 @@ Navigate to your campaign from the dashboard and connect to the session. If the 
 
 *GIF pending — Connecting to an active session.*
 
-The campaign page automatically reconnects if you lose your internet connection briefly — your position is restored when you come back.
+The campaign page reconnects by itself whenever the connection drops, however long it is gone, and your position is restored when you come back (see [I lost connection mid-session](#i-lost-connection-mid-session)).
 
 ### The Chat Panel
 
