@@ -42,11 +42,12 @@ Click **Create Campaign** and you're taken directly to the campaign page.
 
 ### Campaign Settings
 
-Once inside the campaign, click the **Campaign Settings** button (gear icon in the header) to open the Campaign Settings panel.
+Once inside the campaign, click the **Campaign Settings** button (gear icon in the header) to open the Campaign Settings panel. It has four tabs:
 
-From here you can update:
-- Campaign name and description
-- Any campaign-level configuration options
+- **General** — the **Campaign Name** and **Description**, saved with **Save Changes**, and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
+- **Chat** — **Enable message cooldown**, off by default, makes everyone in the chat, you included, wait between messages, for the **Cooldown duration** you set (1 to 300 seconds). While someone waits, the chat box says "Wait 5s before sending another message", counting down
+- **Members** — everyone in the campaign, with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
+- **Danger Zone** — **Delete Campaign**, for the campaign's owner, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
 
 *Screenshot pending — Campaign settings panel.*
 
@@ -54,10 +55,10 @@ From here you can update:
 
 To invite a player to your campaign:
 
-1. Click **Invite Player** in the left sidebar, or open **Campaign Settings**
+1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
 2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. If their whole name is one letter, type that letter: a single letter finds only people whose name is exactly that letter. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
 3. Optionally tick **Also email them an invitation**
-4. The player sees a **Pending Invitation** on their dashboard
+4. The player sees the invitation under **Pending Invitations** on their dashboard
 
 *Screenshot pending — Invite player flow.*
 
@@ -628,7 +629,7 @@ The Campaign Roster in the left sidebar gives you a real-time view of all player
 
 ### Removing a Player
 
-To remove a player from your campaign, open **Campaign Settings** and find the player in the roster. Use the remove option to kick them from the campaign.
+To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**.
 
 **It takes effect at once**, even if they are in the session at that moment.
 They stop being able to chat, roll or move anything, and stop seeing what the
