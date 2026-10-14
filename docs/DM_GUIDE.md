@@ -277,6 +277,8 @@ If a change cannot be saved, for example while the connection is down, a message
 
 The map updates immediately for everyone at the table — no one needs to refresh. This changes only that one token; to change the image every future placement uses, edit the creature template instead (see [Creature Token Images](#creature-token-images)).
 
+A player's character carries a token picture of its own, on its sheet. When its player changes it, every token of that character follows, except in a campaign where they are a spectator. When you change it, with **Edit Character Sheet** from the roster's right-click menu, only the character's tokens on the maps of campaigns you run change; tokens it left in a campaign someone else runs keep their picture.
+
 #### Saving an Image to a Creature Template
 
 After setting a token's image, you can save it back to the creature template so every future placement of that creature uses the same image:
@@ -947,8 +949,10 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Wall | Orange (customizable) | Yes | Standard blocking wall |
 | Door (Closed) | Purple | Yes | Clickable to open |
 | Door (Open) | Green | No | Click to close |
-| Door (Locked) | Red | Yes | DM must unlock |
+| Door (Locked) | Red | Yes | Players cannot open it until you unlock it |
 | Window | Blue | No | Transparent to light |
+
+**Locking and unlocking a door.** Right-click a door on the map, with no wall or fog tool in use, for its menu: **Open Door** or **Close Door**, and for you **Lock Door** or **Unlock Door**. **Change type** in the Walls panel's **Select** mode does the same for every wall selected. Players get the same menu for the doors they are offered, without the lock. A locked door reaches their browser as an ordinary closed door, so it looks like any other until they try to open it and are told it is locked.
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
@@ -1098,7 +1102,7 @@ from can export that section on its own, or export the map as a PNG instead and
 
 Open the **Map Library** and click the **download** button (**Export as .uvtt file**) on the map's card, between the pencil and the bin. Your browser saves the map as a `.uvtt` file named after it. A script or a tool built on the unsupported HTTP surface can fetch the same file (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only). Importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
-A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture an older version of CozyVTT stored as a PDF, cannot be exported: the server refuses the download. Choose a map picture for it in **Edit Map**, then export it again.
+A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture an older version of CozyVTT stored as a PDF, cannot be exported: the server refuses the download, and the browser's download fails with no message from CozyVTT. Choose a map picture for it in **Edit Map**, then export it again.
 
 ### Undo / Redo
 
@@ -1122,6 +1126,8 @@ Dynamic lighting is off on a new map, unless the map was imported from a Univers
 Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
 
 The same goes for a token while you carry it. A player sees it move only while it is somewhere they can see: carry it out of their sight and it leaves their map at that point, carry it into their sight and it appears there.
+
+Sight is worked out from the middle of each token. A Large or Huge token sees from the centre of the squares it covers, and another token counts as seen when the middle of its squares can be seen: a large creature whose middle is behind a wall stays off a player's map even if its edge reaches past the wall.
 
 *Screenshot pending — Map settings with Dynamic Lighting checkbox.*
 
