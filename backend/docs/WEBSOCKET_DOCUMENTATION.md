@@ -198,11 +198,19 @@ The HTTP API answers 503 for the same span.
 
 ### Campaign Authentication
 
-Before sending/receiving game events, authenticate to a campaign:
+Before sending/receiving game events, authenticate to a campaign. Send
+`authenticate` once `connected` has arrived: the server registers a
+connection's event handlers only after the handshake's sign-in check, which
+reads the database, so an `authenticate` sent on `connect` can reach it first
+and is then dropped without an answer. The server sends `connected` on every
+new connection, an automatic reconnect included, so that is also where a client
+joins again.
 
 ```javascript
-socket.emit('authenticate', {
-  campaignId: 'campaign-uuid-here'
+socket.on('connected', () => {
+  socket.emit('authenticate', {
+    campaignId: 'campaign-uuid-here'
+  });
 });
 
 // Success
@@ -824,7 +832,9 @@ socket.on('campaign.access.revoked', ({ reason, message }) => {
 socket.on('disconnect', (reason) => {
   if (accessRevoked) return; // nothing to reconnect to
   if (reason === 'io server disconnect') {
-    // Server closed the connection without a reason: check the sign-in over REST
+    // The server closed the connection, after an `error` saying why.
+    // socket.io does not reconnect by itself after this: check the sign-in
+    // over REST, then call socket.connect() if it is still good
     checkSignIn();
   } else {
     // Network issue - auto-reconnect
@@ -832,12 +842,11 @@ socket.on('disconnect', (reason) => {
   }
 });
 
-socket.on('reconnect', (attemptNumber) => {
-  console.log('Reconnected after', attemptNumber, 'attempts');
-
-  // Re-authenticate to campaign
+// Every new connection, a reconnect included, starts with `connected`: join
+// the campaign again there. socket.io-client 4 reports reconnects on the
+// manager (socket.io.on('reconnect')), never on the socket itself.
+socket.on('connected', () => {
   socket.emit('authenticate', { campaignId: currentCampaignId });
-
   hideReconnectingIndicator();
 });
 ```
@@ -864,8 +873,11 @@ export function useWebSocket(campaignId: string) {
 
     newSocket.on('connect', () => {
       setConnected(true);
+    });
 
-      // Authenticate to campaign
+    // Authenticate to campaign once the server is listening; it sends
+    // `connected` again after every reconnect
+    newSocket.on('connected', () => {
       newSocket.emit('authenticate', { campaignId });
     });
 
@@ -1027,10 +1039,13 @@ if (socket && socket.connected) {
 
 2. **Handle reconnection:**
 ```javascript
-socket.on('reconnect', () => {
+// `connected` arrives on the first connection and after every reconnect
+socket.on('connected', () => {
   // Re-authenticate to campaign
   socket.emit('authenticate', { campaignId });
+});
 
+socket.on('authenticated', () => {
   // Re-sync game state
   fetchCurrentGameState();
 });
@@ -1262,7 +1277,7 @@ _Who may send it is read from the shared permission predicates each handler call
 **Solution:** Verify user is a member of the campaign
 
 **Problem:** Events not received
-**Solution:** Check that you've authenticated to the campaign first
+**Solution:** Check that you've authenticated to the campaign first, and that `authenticate` was sent after `connected` arrived: one sent earlier can be dropped without an answer
 
 ### Performance Issues
 
