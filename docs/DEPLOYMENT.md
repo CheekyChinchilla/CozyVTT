@@ -805,7 +805,9 @@ sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE cozyvtt TO cozyvtt;"
 # Backend
 cd backend
 cp .env.example .env
-# Edit .env — set DATABASE_URL, SESSION_SECRET, NODE_ENV=production
+# Edit .env: set DATABASE_URL, SESSION_SECRET (openssl rand -hex 32) and
+# NODE_ENV=production, and put your site's address, such as
+# https://your-domain.com, in CORS_ORIGIN and APP_URL (email links use APP_URL)
 npm install
 npx prisma migrate deploy
 npm run build
@@ -821,13 +823,17 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 
 ### 4. Run the backend with pm2
 
+Step 3 ended in the `frontend` folder, so this goes back to `backend` first. pm2 is installed for every account on the machine, which is why it needs `sudo`:
+
 ```bash
-npm install -g pm2
-cd backend
+sudo npm install -g pm2
+cd ../backend
 pm2 start dist/server.js --name cozyvtt-backend
 pm2 save
 pm2 startup  # Follow the printed instructions to enable autostart
 ```
+
+`pm2 status` should then list `cozyvtt-backend` as `online`. If it says `errored`, `pm2 logs cozyvtt-backend` shows why; a line containing `[FATAL]` names the setting in `backend/.env` to fix.
 
 ### 5. Serve with Nginx
 
@@ -1116,7 +1122,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
 | `PORT` | `4000` | The port the backend listens on | No: the compose file sets 4000 |
-| `NODE_ENV` | `production` | `production` or `development` | No: the compose file sets `production` |
+| `NODE_ENV` | none, which runs the backend as `development` | Set it to `production` on a real instance. Anything else accepts a weak `SESSION_SECRET` with only a warning and writes no files to `backend/logs/` | No: the compose file sets `production` |
 | `UPLOAD_DIR` | `uploads` | Where uploaded files are stored, relative to the backend folder | No: change the uploads volume in `docker-compose.override.yml` instead; [Database Backups](#database-backups) shows how that file works |
 | `BACKUP_DIR` | `backups` | Where the Admin Dashboard writes backups (see [File Storage](#file-storage)) | No: change the backups volume instead |
 | `INSTANCE_NAME` | none | The name emails use while the **Instance Name** in **Admin → Settings** is empty or still CozyVTT | No |
@@ -1637,6 +1643,22 @@ npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Static files in frontend/dist/ are now updated — Nginx serves them immediately
 ```
+
+Coming from 1.5.1 or earlier, also bring your Nginx site file, `/etc/nginx/sites-available/cozyvtt`, up to date with the example in [Serve with Nginx](#5-serve-with-nginx). Copy these lines from the example into the same places in your file:
+
+1. In the `server` block for port 443: the five `gzip` lines and `server_tokens off;`.
+2. In `location /`: the `if (-d $request_filename)` block, `try_files $uri /index.html;` in place of your `try_files` line, and the six `add_header` lines below it.
+3. In `location /socket.io/`: the `X-Forwarded-For` and `X-Forwarded-Proto` lines.
+4. In `location = /health`: the `X-Real-IP`, `X-Forwarded-For` and `X-Forwarded-Proto` lines.
+
+Without them the app page has no Content-Security-Policy, the app and the backend's answers are not compressed, and reloading or bookmarking the Asset Library page (`/assets`) shows "403 Forbidden". Then check and apply the file:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+`sudo nginx -t` should print `syntax is ok` and `test is successful`, and the `curl` check under [Serve with Nginx](#5-serve-with-nginx) should print three lines.
 
 Coming from 1.4.0 or earlier, also make the database role the owner of the database and its `public` schema once, so a backup can be restored (see [Database Backups](#database-backups)); use your own names if you changed them:
 
