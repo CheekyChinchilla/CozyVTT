@@ -347,6 +347,7 @@ The classic. Covers all the D&D 5e essentials:
 - Skills with proficiency tracking
 - Hit points, armor class, and saving throws
 - Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
+- Initiative, passive Perception, spell save DC and spell attack worked out for you, each with an **Other bonus** box that takes -30 to +30
 - Spells, spell slots (up to 20 of each level), and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info
@@ -785,6 +786,8 @@ Token placement is managed by the DM. If your token isn't on the map, ask your D
 ### I can't see the maps or my character sheet is blank
 
 This is usually a loading issue. Refresh the page. If the problem persists, check the Asset Library to make sure the map image was uploaded correctly.
+
+If a character sheet window says **Error Loading Character Sheet**, that sheet holds something the page cannot show. Only the sheet window is affected: the map and the rest of the page carry on, and **Try Again** draws the sheet again. If it keeps happening, tell your platform administrator which character it is.
 
 ### I lost connection mid-session
 
