@@ -682,6 +682,12 @@ unless an editor holds unsaved changes.
 
 MFA uses the `otplib` library for TOTP secrets, setup links and verification. A new secret is 20 random bytes written in base32; the secrets stored before 1.5.2, made by an earlier library as 20 printable characters in base32, are read the same way. A code must be exactly six digits, and anything else is refused before it is checked. One 30-second step either side of the current one is accepted, for clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
 
+### Administrators must use MFA
+
+An administrator cannot turn MFA off (`POST /api/auth/mfa/disable` answers 403), and one without it has seven days to set it up (`ADMIN_MFA_GRACE_MS` in `services/adminMfaPolicy.ts`). The seven days run from the latest of four moments: when the rule started on this instance, when the account was created, when it was made an administrator, and when another administrator last reset its MFA. All but the account's creation are read from the activity log, so the rule needs no column. The first time the rule is needed, a line is written there, and the earliest such line is its start, which gives an upgraded instance's administrators a full week. A promotion and a Reset MFA are logged with a mark that starts the account's week again.
+
+Until the deadline, the signed-in user the server returns carries `adminMfaDeadline`, which the pages show as a banner. After it, `middleware/adminMfa.ts`, mounted on `/api` after the password-change gate, answers every request 403 with `code: 'MFA_ENROLMENT_REQUIRED'`, except MFA setup and its verification, change password, sign-out, `/auth/me`, `/auth/ping`, `/auth/appearance` and `/config`; the API client then sends the browser to the MFA setup page. The gate reads the account once on each request a signed-in administrator makes, and ordinary users are not read. That read also refreshes the role the session holds: an administrator demoted while signed in loses the admin guards on their next request, and a session whose account is gone ends there. A database error lets the request through, so a passing fault cannot lock every administrator out.
+
 ---
 
 ## WebSocket Architecture
@@ -693,13 +699,14 @@ sequenceDiagram
     participant C as Client (socket.ts)
     participant S as Server (websocket/)
 
-    C->>S: socket.connect()
+    C->>S: socket.connect() (the handshake carries the session cookie)
+    S->>S: Verify the session (authenticateSocket)
+    S->>S: socket.join(userId)
     S-->>C: emit('connected')
     C->>S: emit('authenticate', { campaignId })
-    S->>S: Verify session + campaign membership
-    S-->>C: emit('authenticated')
-    S->>S: socket.join(campaignId)
-    S->>S: socket.join(userId)
+    S->>S: Verify the sign-in is still live + campaign membership
+    S->>S: socket.join(campaignId), leaving any other campaign room
+    S-->>C: emit('authenticated', { role })
 
     Note over C,S: Session active
 
@@ -761,7 +768,7 @@ A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenario
 
 ### WebSocket Event Reference
 
-See [API_REFERENCE.md](API_REFERENCE.md#websocket-events) for the full event listing.
+See [`backend/docs/WEBSOCKET_DOCUMENTATION.md`](../backend/docs/WEBSOCKET_DOCUMENTATION.md) for the handshake, the payloads and the generated inventory of every event.
 
 ---
 
