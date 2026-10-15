@@ -994,6 +994,9 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.file(sqlPath, { name: 'database.sql' });
       if (withUploads) {
         // Under an "uploads/" prefix, skipping the backups subdir older installs had there
+        // TODO(backups): the folder's own entry is named "backups", with no
+        // slash, so the filter keeps it and every backup holds an empty
+        // uploads/backups/ folder. Leave out entry.name === 'backups' too.
         archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
           return entry.name.startsWith('backups/') ? false : entry;
         });
