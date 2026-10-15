@@ -95,6 +95,8 @@ export default function AssetLibraryPage() {
     return Array.from(tagSet).sort();
   }, [assets]);
 
+  // TODO(assets): search filters only the current page of results; send it
+  // to the server so it covers every page.
   // Filter and sort assets (client-side: search + tags)
   const filteredAssets = useMemo(() => {
     let filtered = [...assets];
@@ -436,6 +438,8 @@ export default function AssetLibraryPage() {
       />
 
       {/* Detail Panel */}
+      {/* TODO(ui): mounted outside AnimatePresence, so the panel has no exit
+          animation; wrap it so it slides out as it slides in. */}
       {selectedAsset && (
         <AssetDetailPanel
           asset={selectedAsset}

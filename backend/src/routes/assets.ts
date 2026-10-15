@@ -463,6 +463,9 @@ router.post(
       // What the bytes are (validateFileType), never what the browser said:
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
+      // TODO(upload): multer reads the file name's UTF-8 bytes as latin1, so a
+      // name with non-ASCII characters is stored garbled and downloads with it;
+      // decode it as UTF-8 before storing.
       const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)
@@ -1039,6 +1042,9 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       const etag = `"${asset.id}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
       res.set('Cache-Control', 'private, no-cache');
       res.set('ETag', etag);
+      // TODO(assets): this 304 goes out before the document's sandbox CSP is set,
+      // so it carries the app-wide policy and the browser keeps that one; set the
+      // document's headers first.
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
