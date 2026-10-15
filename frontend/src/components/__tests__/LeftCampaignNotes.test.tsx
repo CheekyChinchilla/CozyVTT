@@ -147,6 +147,9 @@ describe('notes from campaigns you have left', () => {
     expect(noteCalls('n-2')).toBe(0);
   });
 
+  // Renders 200 notes and finds buttons among them by name, which a loaded CI
+  // runner took past the default five seconds to do; the limit is raised for
+  // this test alone.
   it('asks once however many notes there are', async () => {
     const many = Array.from({ length: 200 }, (_, i) => ({
       id: `n-${i}`, title: `Note ${i}`, createdAt: '2026-09-01T10:00:00.000Z', updatedAt: '2026-09-01T10:00:00.000Z',
@@ -159,7 +162,7 @@ describe('notes from campaigns you have left', () => {
     await waitFor(() => expect(download).toHaveBeenCalledTimes(1));
     expect(api.getLeftCampaignNotes).toHaveBeenCalledTimes(1);
     expect(api.getLeftCampaignNote.mock.calls.length).toBeLessThanOrEqual(1);
-  });
+  }, 20_000);
 
   it('asks for no notes when there are none, and still saves the saved rolls', async () => {
     api.getLeftCampaign.mockResolvedValue({ ...detail, notes: [] });
