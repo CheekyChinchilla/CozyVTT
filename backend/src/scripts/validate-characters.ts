@@ -12,6 +12,9 @@
  *   npm run validate:characters -- --verbose            (show every error)
  *   npm run validate:characters -- --export             (write validation-report.json)
  *
+ * The report is written in the working folder, or in the temporary folder
+ * when the working folder is read-only, as the production image's is.
+ *
  * Exits 0 when every character passes, and 1 when one does not, when an
  * argument is not understood, or when the check could not run.
  */
@@ -19,12 +22,15 @@
 // Loads backend/.env, which the database client does not read itself.
 import 'dotenv/config';
 import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { createPrismaClient } from '../config/prismaClient';
 import { ZodError } from 'zod';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData } from '../validators/game-systems';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
+import { errorCode } from '../utils/errors';
 
 interface ValidationIssue {
   characterId: string;
@@ -258,10 +264,15 @@ function getPercentage(part: number, total: number): number {
   return Math.round((part / total) * 100);
 }
 
+/** Errors that mean a folder cannot be written, such as the production image's read-only app folder. */
+const UNWRITABLE = new Set(['EROFS', 'EACCES', 'EPERM']);
+
 /**
- * Export validation issues to JSON
+ * Export validation issues to JSON at `outputPath`, or under the same name in
+ * the temporary folder when its folder cannot be written: in the production
+ * image the app's folder is read-only. Returns the path written.
  */
-function exportValidationIssues(report: ValidationReport, outputPath: string) {
+export function exportValidationIssues(report: ValidationReport, outputPath: string): string {
   const exportData = {
     generatedAt: new Date().toISOString(),
     summary: {
@@ -273,8 +284,18 @@ function exportValidationIssues(report: ValidationReport, outputPath: string) {
     issues: report.issues,
   };
 
-  fs.writeFileSync(outputPath, JSON.stringify(exportData, null, 2));
-  console.log(`\n✓ Validation issues exported to: ${outputPath}\n`);
+  const json = JSON.stringify(exportData, null, 2);
+  let written = outputPath;
+  try {
+    fs.writeFileSync(outputPath, json);
+  } catch (error: unknown) {
+    const code = errorCode(error);
+    if (code === undefined || !UNWRITABLE.has(code)) throw error;
+    written = path.join(os.tmpdir(), path.basename(outputPath));
+    fs.writeFileSync(written, json);
+  }
+  console.log(`\n✓ Validation issues exported to: ${written}\n`);
+  return written;
 }
 
 const HELP = `

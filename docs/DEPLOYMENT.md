@@ -106,7 +106,7 @@ This starts four containers on an isolated internal network:
 - `cozyvtt-frontend` — React SPA served by Nginx on internal port 80
 - `cozyvtt-nginx` — Reverse proxy, the only container with public ports (80 and 443)
 
-Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and the frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user.
+Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and with only the few Linux capabilities (the separate powers root normally holds) that its start-up needs, such as giving a folder to the right owner or switching to an unprivileged user. The frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. So are the proxy's (`cozyvtt-nginx`): it writes its settings, rendered from `nginx/nginx.conf` as it starts, to memory, and keeps large uploads and downloads as they pass on a volume of its own, `nginx_temp`, which Compose creates on the first start and which needs no backup. The backend's files are read-only as well, apart from `backend/uploads`, `backend/backups` and `backend/logs` and its `/tmp`, where a backup or a restore keeps its working copy of the database: a volume of its own, `backend_tmp`, created on the first start like `nginx_temp`, with nothing in it to back up. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user, `appuser`. Commands you run inside the backend container take `-u appuser`, as every one in this guide does: root in that container cannot write the backend's files.
 
 Database migrations run automatically when the backend starts.
 
@@ -142,7 +142,7 @@ docker compose ps
 docker compose logs backend | grep -i migrat
 
 # Health check (returns {"status":"healthy",...})
-docker compose exec backend wget -qO- http://localhost:4000/health
+docker compose exec -u appuser backend wget -qO- http://localhost:4000/health
 
 # The API answers on the same address as the site — this must be JSON, not a web page
 curl -s -w '\n%{http_code} %{content_type}\n' http://localhost/api/setup/status
@@ -637,6 +637,8 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
    sudo cp /etc/letsencrypt/live/your-domain.com/privkey.pem nginx/certs/server.key
    sudo chown $(whoami) nginx/certs/*
    ```
+
+   The key stays readable by your account alone (`ls -l nginx/certs` shows `-rw-------` for `server.key`), which is as it should be: nginx reads it as root when it starts, and the nginx container keeps the one power root needs to read a file that belongs to another account. If nginx cannot open the key, it does not start, and `docker compose logs nginx` ends with `cannot load certificate key "/etc/nginx/certs/server.key"` and `Permission denied`.
 
 2. Take away the temporary file from step 2 of "Obtain a certificate", if you made it. `https.conf` below answers Let's Encrypt's check itself, and two files answering for the same domain on port 80 would leave the first one in charge:
 
@@ -1171,7 +1173,7 @@ On an install without Docker the backend writes them to a `backups` folder in it
 
 Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for its folder and the dumps in it, including any an earlier version left readable. While a backup or a restore runs, the working copy of the database it keeps in the system's temporary folder (`/tmp` unless `TMPDIR` says otherwise) sits in a folder of its own with the same protection, and is removed when it finishes, whether it worked or not. On a Docker host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
 
-If the backend is stopped part-way through a backup or a restore (killed, or the machine loses power), its temporary folder (`cozyvtt-db-…` or `cozyvtt-restore-…`) is left behind: on Docker it stays in the container's `/tmp` until the container is recreated, for example with `docker compose up -d --force-recreate backend`, and on a manual install until you delete it.
+If the backend is stopped part-way through a backup or a restore (killed, or the machine loses power), its temporary folder (`cozyvtt-db-…` or `cozyvtt-restore-…`) is left behind. On Docker, the backend's `/tmp` is a volume of its own, `backend_tmp`, which outlives the container, and the backend removes such a folder each time it starts, for example with `docker compose restart backend`. On a manual install it stays until you delete it.
 
 For large or multi-server deployments, consider mounting an S3-compatible object store (MinIO, AWS S3) as a FUSE filesystem at `backend/uploads/`. No code changes required.
 
@@ -1503,7 +1505,7 @@ curl -s http://localhost/health
 It is also reachable from inside the stack, which works whatever proxy is in front:
 
 ```bash
-docker compose exec backend wget -qO- http://localhost:4000/health
+docker compose exec -u appuser backend wget -qO- http://localhost:4000/health
 ```
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
@@ -1575,6 +1577,24 @@ docker compose logs backend | grep FATAL
 
 Use `docker compose up -d`, which reads `.env` again; `docker compose restart` keeps the old value. Once the backend starts, `docker compose ps` shows it as `healthy` within a minute.
 
+### A container stops with "Permission denied", "Operation not permitted" or "Read-only file system"
+
+Each container gets only the Linux capabilities its start-up needs, and some have read-only files (see [Build and start the stack](#3-build-and-start-the-stack)). Something that needs one of the other capabilities, or writes where nothing may be written, fails, and the container's log says so. Find the line:
+
+```bash
+docker compose logs --tail 30 backend nginx
+```
+
+| Where it happens | What to do |
+|---|---|
+| A command you ran with `docker compose exec backend ...` | Run it as the backend's user: `docker compose exec -u appuser backend ...` |
+| `docker-compose.override.yml` adds a program or a setting that needs a capability, such as a network tool or a mount of a different kind | Give that one back in your override file, under the same service: `cap_add:` followed by `- NET_ADMIN` (for example), one per line, indented like the other settings |
+| A command you ran in the backend container writes a file, and stops with `Read-only file system` | Have it write under `/tmp`, the one folder there that may be written besides uploads, backups and logs, and copy the file out with `docker compose cp backend:/tmp/the-file .` |
+| A file of yours in `nginx/conf.d` writes a log to a file, such as `access_log /var/log/nginx/mysite.log;`, and nginx stops with `Read-only file system` | Send it to nginx's own log instead, `access_log /dev/stdout;`, which `docker compose logs nginx` shows, or mount a folder of your own for it in `docker-compose.override.yml` |
+| nginx cannot read your certificate or key in `nginx/certs` | Check the files are there and not empty with `ls -l nginx/certs`, then copy them again with the steps in [Configure Nginx to use the certificate](#configure-nginx-to-use-the-certificate) |
+
+`docker compose up -d` applies a change to the override file; the container is recreated, and `docker compose ps` shows it running again.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
@@ -1633,13 +1653,13 @@ Characters made from the built-in templates of those versions keep some of their
 
 ```bash
 # See what would change, without writing anything
-docker compose exec backend node dist/scripts/migrate-sheet-fields.js --dry-run
+docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js --dry-run
 
 # Apply
-docker compose exec backend node dist/scripts/migrate-sheet-fields.js
+docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js
 ```
 
-Without Docker, run the same two commands from the `backend` folder, without `docker compose exec backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
+Without Docker, run the same two commands from the `backend` folder, without `docker compose exec -u appuser backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
 
 What to expect:
 

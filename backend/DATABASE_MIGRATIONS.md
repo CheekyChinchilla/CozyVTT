@@ -15,7 +15,7 @@ Docker). The app itself connects through the `pg` driver, with the same
 When you start CozyVTT with Docker Compose, the backend container will automatically:
 
 1. Wait for the PostgreSQL database to be ready
-2. Run all pending migrations using `npx prisma migrate deploy`
+2. Run all pending migrations with `prisma migrate deploy`
 3. Start the application
 
 This ensures that your database schema is always up-to-date.
@@ -31,16 +31,25 @@ If you need to run migrations manually, you can use these commands:
 
 ### Inside Docker Container
 
+Run commands in the backend container as its own user, `appuser`, with
+`-u appuser`. Root in that container holds none of the powers that would let it
+write the backend's files, so a command run as root cannot write the backend's
+logs.
+
 ```bash
 # Enter the backend container
-docker exec -it cozyvtt-backend bash
+docker compose exec -u appuser backend bash
 
 # Run migrations
-npx prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 # View migration status
-npx prisma migrate status
+./node_modules/.bin/prisma migrate status
 ```
+
+In the container, call Prisma from `./node_modules/.bin/` as shown. `npx`
+writes to the home folder, and the backend container's files are read-only
+apart from its data folders and `/tmp`.
 
 ### Local Development
 
@@ -137,15 +146,18 @@ itself like any other: see `20260417000000_migrate_light_bright_dim` above.)
 
 | Script | What it does | In the production image |
 |---|---|---|
-| `npm run migrate:sheet-fields` | Moves character sheets onto the fields the app reads. See below. | `docker compose exec backend node dist/scripts/migrate-sheet-fields.js` |
-| `npm run migrate:characters` | Guesses a game system for characters stored before game systems existed. Not for a current instance; see below. | `docker compose exec backend node dist/scripts/migrate-characters.js` |
-| `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. | `docker compose exec backend node dist/scripts/migrate-avatar-scope.js` |
-| `npm run validate:characters` | Changes nothing. Lists the characters the server would refuse when next saved. See below. | `docker compose exec backend node dist/scripts/validate-characters.js` |
-| `npx ts-node src/scripts/backfillCreatureProficiency.ts` | Records which saves and skills each seeded SRD creature is proficient in, worked out from its printed bonuses, and renames Open5e's snake_case skill keys. No bonus changes, and custom creatures are not touched. `--dry-run` reports only; `--verbose` lists each creature. | `docker compose exec backend node dist/scripts/backfillCreatureProficiency.js` |
+| `npm run migrate:sheet-fields` | Moves character sheets onto the fields the app reads. See below. | `docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js` |
+| `npm run migrate:characters` | Guesses a game system for characters stored before game systems existed. Not for a current instance; see below. | `docker compose exec -u appuser backend node dist/scripts/migrate-characters.js` |
+| `npm run migrate:avatar-scope` | Moves AVATAR assets from GLOBAL to USER scope. | `docker compose exec -u appuser backend node dist/scripts/migrate-avatar-scope.js` |
+| `npm run validate:characters` | Changes nothing. Lists the characters the server would refuse when next saved. See below. | `docker compose exec -u appuser backend node dist/scripts/validate-characters.js` |
+| `npx ts-node src/scripts/backfillCreatureProficiency.ts` | Records which saves and skills each seeded SRD creature is proficient in, worked out from its printed bonuses, and renames Open5e's snake_case skill keys. No bonus changes, and custom creatures are not touched. `--dry-run` reports only; `--verbose` lists each creature. | `docker compose exec -u appuser backend node dist/scripts/backfillCreatureProficiency.js` |
 
 The `npm run` forms run the TypeScript source and need a development checkout.
 In the production image, which has no source and no `ts-node`, run the compiled
-file shown in the last column, with the same options.
+file shown in the last column, with the same options. The image's app folder is
+read-only, so `validate-characters.js --export` writes its report to
+`/tmp/validation-report.json` there and says so; copy it out with
+`docker compose cp backend:/tmp/validation-report.json .`
 
 ### `migrate:sheet-fields`
 
@@ -170,10 +182,10 @@ from it is moved when it is created.
 
 ```bash
 # Report what would change, without writing anything
-docker compose exec backend node dist/scripts/migrate-sheet-fields.js --dry-run
+docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js --dry-run
 
 # Apply
-docker compose exec backend node dist/scripts/migrate-sheet-fields.js
+docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js
 ```
 
 The production image has no `src/` and no `ts-node`, so `npm run
@@ -276,14 +288,14 @@ docker compose down
 docker compose up --build
 
 # Or run migrations manually:
-docker exec -it cozyvtt-backend npx prisma migrate deploy
+docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate deploy
 ```
 
 ### A migration fails on an instance with real data
 
 Do not reset anything. Each migration runs as a single step, so a failed one
 normally leaves your data as it was. Take the last lines of `docker compose logs backend` and the output of
-`docker exec -it cozyvtt-backend npx prisma migrate status`, and open an issue
+`docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status`, and open an issue
 with both. If you have to get back to a working instance first, restore the last
 backup (see [Database Backups](../docs/DEPLOYMENT.md#database-backups)).
 
@@ -305,7 +317,7 @@ docker compose up --build  # Fresh start with migrations
 To see which migrations have been applied:
 
 ```bash
-docker exec -it cozyvtt-backend npx prisma migrate status
+docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status
 ```
 
 ## Creating New Migrations

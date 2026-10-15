@@ -143,6 +143,10 @@ _Nothing at present._
   initialises the new cluster, loads the dump, and deletes nothing until the new
   cluster verifies, rehearsed on a seeded instance the way 1.5.0 was. Prisma's
   supported server range has to be checked for the target major first.
+  The same release is the time to make the database container's filesystem
+  read-only, as the frontend's and the proxy's are, once the new image's first
+  start and the dump-and-reload step are proven to write nowhere but the data
+  volume and `/var/run/postgresql`.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
 - **Move the remaining libraries to their current major versions.** Prisma

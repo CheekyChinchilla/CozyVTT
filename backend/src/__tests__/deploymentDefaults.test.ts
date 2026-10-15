@@ -32,9 +32,23 @@
  * Hardening. Every container runs with no-new-privileges, so nothing in it
  * can gain privileges through a setuid program; the start scripts that drop
  * from root to an unprivileged user (the backend's, Postgres's, nginx's) do
- * not need any. The frontend container, which only serves files, runs on a
- * read-only filesystem with memory-backed folders for nginx's own scratch
- * files. The README says what runs as root, and no more.
+ * not need any. Each also drops every Linux capability and adds back only
+ * what its start script needs while it runs as root: changing owners,
+ * switching user, a port below 1024 for the two nginx, and reading a folder
+ * or file another account keeps private (the backups folder, Postgres's data,
+ * a TLS key copied in by the guide's steps). Without the rest, root in a
+ * container cannot write another account's files, so the maintenance
+ * commands the guides give run as the backend's own user. The frontend
+ * container, which only serves files, runs on a read-only filesystem with
+ * memory-backed folders for nginx's own scratch files. So does the proxy,
+ * whose settings the entrypoint renders into memory as it starts; its
+ * request and response files, which a 50 MB upload fills, are on a volume,
+ * outside its 64 MB memory limit. The backend's filesystem is read-only as
+ * well, apart from its three data folders and /tmp, a volume of its own for
+ * the dump a backup writes and the archive a restore unpacks; its start
+ * script removes what a stopped one left there, and calls Prisma directly,
+ * since npx writes to the home folder. The README says what runs as root,
+ * and no more.
  */
 
 import fs from 'fs';
@@ -162,9 +176,72 @@ describe('the bundled nginx', () => {
   });
 });
 
+/** The items of a service's list setting (`cap_add:`, `tmpfs:`, `volumes:`), comments dropped. */
+function listed(block: string, key: string): string[] {
+  const items = new RegExp(`\\n {4}${key}:\\n((?: {6}(?:- .*|#.*)\\n)+)`).exec(block)?.[1] ?? '';
+  return [...items.matchAll(/^ {6}- ([^#\n]*?)\s*(?:#.*)?$/gm)].map((m) => m[1]);
+}
+
+/**
+ * The capabilities each container adds back once it has dropped them all.
+ * Each is used by the image's start script while it runs as root, and by
+ * nothing after it has switched to its unprivileged user.
+ */
+const CAPABILITIES: Record<string, string[]> = {
+  // The entrypoint gives the data folder to postgres (CHOWN), looks inside
+  // it although it is postgres's alone (DAC_READ_SEARCH), then switches user.
+  database: ['CHOWN', 'DAC_READ_SEARCH', 'SETGID', 'SETUID'],
+  // start.sh gives the mounted folders to appuser, reads the backups folder
+  // (0700, appuser's) and any private folder under uploads on the way
+  // (DAC_READ_SEARCH), sets the backups folder's mode once it is appuser's
+  // (FOWNER), then switches user.
+  backend: ['CHOWN', 'DAC_READ_SEARCH', 'FOWNER', 'SETGID', 'SETUID'],
+  // nginx's master gives its scratch folders to the nginx user, listens on
+  // port 80 and starts its workers as that user.
+  frontend: ['CHOWN', 'NET_BIND_SERVICE', 'SETGID', 'SETUID'],
+  // The same, plus port 443 and reading a TLS key the guide's steps leave
+  // readable by the host account that copied it alone.
+  nginx: ['CHOWN', 'DAC_READ_SEARCH', 'NET_BIND_SERVICE', 'SETGID', 'SETUID'],
+};
+
+/** The named volumes docker-compose.yml declares at its top level. */
+function topLevelVolumes(): string[] {
+  const block = /\nvolumes:\n((?: {2}.*\n|\n)+)/.exec(read('docker-compose.yml'))?.[1] ?? '';
+  return [...block.matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]);
+}
+
+/** Every `docker compose exec` or `docker exec` line the self-hoster guides give for the backend. */
+function backendExecLines(rel: string): string[] {
+  return read(rel)
+    .split('\n')
+    .filter((line) => /docker(?: compose)? exec\b/.test(line))
+    .filter((line) => /docker compose exec(?: -[A-Za-z]+(?: \S+)?)* backend\b|docker exec(?: -\S+)* cozyvtt-backend\b/.test(line));
+}
+
 describe('the containers', () => {
   it.each(['database', 'backend', 'frontend', 'nginx'])('run %s with no-new-privileges', (name) => {
     expect(service('docker-compose.yml', name)).toMatch(/\n {4}security_opt:\n {6}- no-new-privileges:true\n/);
+  });
+
+  it.each(Object.keys(CAPABILITIES))('drop every capability from %s and add back only what its start needs', (name) => {
+    const block = service('docker-compose.yml', name);
+    expect(listed(block, 'cap_drop')).toEqual(['ALL']);
+    expect([...listed(block, 'cap_add')].sort()).toEqual(CAPABILITIES[name]);
+  });
+
+  it.each(['docs/DEPLOYMENT.md', 'backend/DATABASE_MIGRATIONS.md'])(
+    '%s runs every command in the backend container as its own user',
+    (file) => {
+      const lines = backendExecLines(file);
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines.filter((line) => !/docker compose exec(?: -T)? -u appuser backend\b/.test(line))).toEqual([]);
+    }
+  );
+
+  it('name the backend user in the command start.sh suggests when a migration fails', () => {
+    const hint = read('backend/scripts/start.sh').split('\n').filter((line) => /migrate status/.test(line));
+    expect(hint).toHaveLength(1);
+    expect(hint[0]).toMatch(/docker compose exec -u appuser backend /);
   });
 
   it('give the frontend a read-only filesystem, with room for the files nginx writes as it runs', () => {
@@ -175,9 +252,71 @@ describe('the containers', () => {
     expect([...tmpfs.matchAll(/- (\S+)/g)].map((m) => m[1])).toEqual(expect.arrayContaining(['/run', '/var/cache/nginx']));
   });
 
+  it('give the proxy a read-only filesystem, with its rendered settings and pid file in memory', () => {
+    const nginx = service('docker-compose.yml', 'nginx');
+    expect(nginx).toMatch(/\n {4}read_only: true\n/);
+    // The entrypoint renders the template into /etc/nginx/conf.d as it starts.
+    expect([...listed(nginx, 'tmpfs')].sort()).toEqual(['/etc/nginx/conf.d', '/run', '/tmp']);
+  });
+
+  it("keep the proxy's request and response files on a volume, out of its memory limit", () => {
+    // A 50 MB upload passes through /var/cache/nginx; in memory it would
+    // count against the proxy's 64 MB and stop it.
+    const nginx = service('docker-compose.yml', 'nginx');
+    expect(listed(nginx, 'tmpfs')).not.toContain('/var/cache/nginx');
+    expect(listed(nginx, 'volumes')).toContain('nginx_temp:/var/cache/nginx');
+    expect(topLevelVolumes()).toContain('nginx_temp');
+  });
+
+  it("give the backend a read-only filesystem, with /tmp on a volume of its own", () => {
+    const backend = service('docker-compose.yml', 'backend');
+    expect(backend).toMatch(/\n {4}read_only: true\n/);
+    // A backup's dump of the whole database and a restore's unpacked archive
+    // go to /tmp; in memory they would count against the backend's 512 MB.
+    expect(listed(backend, 'tmpfs')).toEqual([]);
+    expect(listed(backend, 'volumes')).toContain('backend_tmp:/tmp');
+    expect(topLevelVolumes()).toContain('backend_tmp');
+  });
+
+  it('turn off the Prisma tools\' update check in the backend image, which writes to the home folder', () => {
+    const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
+    expect(stages[stages.length - 1]).toMatch(/^ENV CHECKPOINT_DISABLE=1$/m);
+  });
+
+  describe('the backend start script', () => {
+    const script = read('backend/scripts/start.sh');
+    const lines = script.split('\n').filter((line) => !line.trimStart().startsWith('#'));
+    /** Where the root phase ends: everything after it runs as appuser. */
+    const appuserPhase = script.slice(script.indexOf('\nfi\n', script.indexOf('if [ "$(id -u)" = "0" ]')));
+
+    it("runs the project's own Prisma, without npx, which writes to the home folder", () => {
+      expect(lines.filter((line) => /\bnpx\b/.test(line))).toEqual([]);
+      expect(script).toMatch(/^if \.\/node_modules\/\.bin\/prisma migrate deploy; then$/m);
+    });
+
+    it('removes the dumps a stopped backup or restore left in /tmp, which outlives the container, before the app starts', () => {
+      // On the backend_tmp volume they would survive an upgrade, and each is a
+      // copy of every credential on the instance.
+      const removal = /\brm -rf ([^;|&\n]*)/.exec(appuserPhase)?.[1] ?? '';
+      expect(removal.split(/\s+/)).toEqual(expect.arrayContaining(['/tmp/cozyvtt-db-*', '/tmp/cozyvtt-restore-*']));
+      expect(appuserPhase.indexOf('rm -rf')).toBeLessThan(appuserPhase.lastIndexOf('exec "$@"'));
+      expect(appuserPhase.indexOf('rm -rf')).toBeGreaterThan(0);
+    });
+  });
+
+  it.each(['docs/DEPLOYMENT.md', 'backend/DATABASE_MIGRATIONS.md'])(
+    "%s runs Prisma in the backend container as the project's own, without npx",
+    (file) => {
+      // The command itself, from `docker` on: a table row also names the development form.
+      const commands = backendExecLines(file).map((line) => line.slice(line.search(/docker(?: compose)? exec/)));
+      expect(commands.filter((command) => /\bnpx\b/.test(command.split('`')[0]))).toEqual([]);
+    }
+  );
+
   it('are described in the README as they run: only the backend is said to drop to an unprivileged user', () => {
     const readme = read('README.md');
     expect(readme).not.toMatch(/non-root Docker containers/i);
     expect(readme).toMatch(/master process runs as root/);
+    expect(readme).toMatch(/drops every Linux capability except the few its start-up needs/);
   });
 });

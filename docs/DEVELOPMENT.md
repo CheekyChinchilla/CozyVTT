@@ -723,7 +723,11 @@ also does what self-hosters run and a developer usually does not:
   image's own entrypoint, the environment and mounts `docker-compose.yml`
   gives the container and `nginx/trusted-proxies.envsh`, and has nginx check
   it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
-  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
+  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate whose
+  key only the account running the check may read, as the guide's steps
+  leave a real one. The container gets the same capabilities,
+  `no-new-privileges`, read-only filesystem and tmpfs folders as the
+  service, so a capability the start needs and the file lacks fails here. It
   needs Docker, openssl and PyYAML, and runs locally too.
 - **Checks known advisories** in the packages an instance runs
   (`npm audit --omit=dev --audit-level=high` in both projects): a high or
