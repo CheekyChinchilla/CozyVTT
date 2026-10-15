@@ -148,7 +148,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 - Docker 24+ with Docker Compose v2, for the recommended install below
 - Node.js 26+ and PostgreSQL 14+, only to install without Docker (see [Manual Deployment](docs/DEPLOYMENT.md#manual-deployment))
-- A modern browser (Chrome, Firefox, Edge, Safari)
+- A browser from 2023 or later: Chrome or Edge 111, Firefox 114, Safari 16.4 (iPadOS 16.4 on an iPad) or newer. An older browser does not load the app
 - SMTP server (optional — required for password reset and invitation emails)
 
 ### Docker (Recommended)

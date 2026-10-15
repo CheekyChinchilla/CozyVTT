@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **The app now needs Chrome or Edge 111, Firefox 114 or Safari 16.4, all released in 2023, or a newer version.** The tool that builds the app's scripts and styles has moved to a new version, which writes them for these browsers; until now Chrome 87, Firefox 78 and Safari 14 were enough. An older browser, such as Safari on an iPad that cannot update past iPadOS 15, no longer loads the app. A phone or computer that installs its browser updates is not affected.
+
+- **For people working on CozyVTT: after this update, start the development stack once with `docker compose -f docker-compose.dev.yml up --build -V`.** The app's build and test tools have moved to new versions, Vite 8 and Vitest 5. The development stack keeps its installed packages between runs, so without `--build -V` its frontend container goes on running the old ones. The production stack is not affected.
+
+---
+
 ## [1.5.2] - 2026-10-14
 
 ### Upgrading from 1.5.1

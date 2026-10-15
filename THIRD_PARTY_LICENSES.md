@@ -71,3 +71,5 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [Zod](https://zod.dev/) | Runtime validation | MIT |
 | [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |
 | [sharp](https://github.com/lovell/sharp) | Picture thumbnails, and picture sizes for Universal VTT export | Apache-2.0 |
+
+The tools that only build the app include [Lightning CSS](https://lightningcss.dev/), which Vite uses to minify the stylesheets, under the Mozilla Public License 2.0 (MPL-2.0). It runs unmodified while the app is built, and none of its code is part of an instance.

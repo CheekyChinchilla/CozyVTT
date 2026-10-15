@@ -20,31 +20,34 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
-  // Strip console.* and debugger statements from production bundles.
-  // `console.error` and `console.warn` are preserved — they communicate real
-  // problems to anyone reading the browser console in production. Dev builds
-  // (`vite` / `vite dev`) are unaffected.
-  esbuild: {
-    drop: ['debugger'],
-    pure: ['console.log', 'console.info', 'console.debug', 'console.trace'],
-  },
   build: {
-    // Raise the warning threshold slightly — vendor chunks are expected to be large
+    // Raise the warning threshold slightly: vendor chunks are expected to be large
     chunkSizeWarningLimit: 600,
-    rollupOptions: {
+    rolldownOptions: {
+      // Remove console.log, info, debug and trace calls from the production
+      // bundle: they print chat messages, secret rolls and token details. console.error and console.warn stay, so real
+      // problems still reach the browser console. The minifier already drops
+      // `debugger` statements. The dev server (`vite`) bundles nothing, so
+      // development keeps every log.
+      treeshake: {
+        manualPureFunctions: ['console.log', 'console.info', 'console.debug', 'console.trace'],
+      },
       output: {
         // Split vendor libraries into named chunks so they are cached independently.
         // Browsers re-download a chunk only when its content changes; app code changes
         // far more often than React or framer-motion, so splitting keeps those cached.
-        manualChunks: {
-          'vendor-react':   ['react', 'react-dom', 'react-router-dom'],
-          'vendor-framer':  ['framer-motion'],
-          'vendor-socket':  ['socket.io-client'],
-          'vendor-lucide':  ['lucide-react'],
-          'vendor-markdown': ['react-markdown'],
+        // A group also takes in the modules its packages import.
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react', test: /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/ },
+            { name: 'vendor-framer', test: /[\\/]node_modules[\\/]framer-motion[\\/]/ },
+            { name: 'vendor-socket', test: /[\\/]node_modules[\\/]socket\.io-client[\\/]/ },
+            { name: 'vendor-lucide', test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },
+            { name: 'vendor-markdown', test: /[\\/]node_modules[\\/]react-markdown[\\/]/ },
+          ],
         },
       },
     },
