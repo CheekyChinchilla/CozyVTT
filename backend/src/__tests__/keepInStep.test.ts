@@ -88,6 +88,13 @@
  * guides ask a reader to install. A move to a new major that misses one runs
  * CI, the images or a manual install on a different Node from the rest.
  * `.nvmrc` holds the major alone and the others are compared with it.
+ *
+ * The backend's npm overrides. Each one holds a package under another at a
+ * newer version than that package asks for, because the version it asks for
+ * has a published advisory. The override names a version, and the package
+ * above it names one too; when an update of that package asks for the same
+ * version or a newer one, the override is no longer needed, and left in place
+ * it would hold the package back.
  */
 
 import crypto from 'crypto';
@@ -540,5 +547,63 @@ describe('the Node.js major', () => {
     const setups = ci.match(/uses: actions\/setup-node@/g) ?? [];
     const versions = ci.match(/^\s*node-version:/gm) ?? [];
     expect(versions.length).toBe(setups.length);
+  });
+});
+
+describe('the npm overrides in backend/package.json', () => {
+  type LockPackage = { version?: string; dependencies?: Record<string, string> };
+  const manifest = JSON.parse(read('backend/package.json')) as { overrides?: Record<string, unknown> };
+  const lock = JSON.parse(read('backend/package-lock.json')) as { packages: Record<string, LockPackage> };
+
+  /** Each override as [package above, package held, version held at]. */
+  const overrides = Object.entries(manifest.overrides ?? {}).flatMap(([parent, held]) => {
+    if (typeof held !== 'object' || held === null) throw new Error(`the override for ${parent} is not a map of packages to versions`);
+    return Object.entries(held).map(([name, version]): [string, string, string] => {
+      if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) {
+        throw new Error(`the override of ${name} under ${parent} is not an exact version`);
+      }
+      return [parent, name, version];
+    });
+  });
+
+  /** The x.y.z a version or a simple range starts from ("^7.1.5" gives 7.1.5). */
+  const numbers = (version: string) => {
+    const m = /(\d+)\.(\d+)\.(\d+)/.exec(version);
+    if (!m) throw new Error(`${version} has no x.y.z version in it`);
+    return [Number(m[1]), Number(m[2]), Number(m[3])];
+  };
+  const newer = (a: string, b: string) => {
+    const [x, y] = [numbers(a), numbers(b)];
+    const i = x.findIndex((n, k) => n !== y[k]);
+    return i !== -1 && x[i] > y[i];
+  };
+
+  /** Where npm installed `name` for the package at `where`: beside it, or higher up. */
+  const installedFor = (where: string, name: string): LockPackage | undefined => {
+    for (let base = where; ; base = base.slice(0, Math.max(base.lastIndexOf('/node_modules/'), 0))) {
+      const found = lock.packages[`${base ? `${base}/` : ''}node_modules/${name}`];
+      if (found || !base) return found;
+    }
+  };
+
+  it('are installed at the version they name, wherever the package above them is', () => {
+    const wrong = overrides.flatMap(([parent, name, version]) => {
+      const parents = Object.keys(lock.packages).filter((where) => where.endsWith(`node_modules/${parent}`));
+      if (parents.length === 0) return [`${parent}: not in the lockfile, so its override of ${name} does nothing`];
+      return parents.flatMap((where) => {
+        const installed = installedFor(where, name)?.version;
+        return installed === version ? [] : [`${name} under ${where}: the lockfile has ${installed ?? 'nothing'}, the override ${version}`];
+      });
+    });
+    expect(wrong).toEqual([]);
+  });
+
+  it('hold each package newer than the package above it asks for, or they are holding it back', () => {
+    const wrong = overrides.flatMap(([parent, name, version]) => {
+      const asked = lock.packages[`node_modules/${parent}`]?.dependencies?.[name];
+      if (!asked) return [`${parent} no longer asks for ${name}: remove the override`];
+      return newer(version, asked) ? [] : [`${parent} asks for ${name} ${asked}, the override holds it at ${version}: remove the override`];
+    });
+    expect(wrong).toEqual([]);
   });
 });

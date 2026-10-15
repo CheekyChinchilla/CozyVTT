@@ -1,80 +1,39 @@
 /**
- * Every run starts with the sign-in table in place.
+ * What the run's global setup does: it refuses a database that is not a test
+ * database, and leaves the database as `prisma db push` laid it out.
  *
- * The server keeps sign-ins in a `session` table that connect-pg-simple makes
- * when the server starts. schema.prisma does not describe it, so the
- * `prisma db push` that brings a test database up to date after a branch
- * switch drops it, and the test app never starts the server. Ending an
- * account's sign-ins (account deletion, a password change or reset, a role
- * change) writes to it, so straight after a push every suite doing one of
- * those failed with "relation "session" does not exist", unless some other
- * file running earlier happened to make the table. The run's global setup
- * now makes it before any file starts, from connect-pg-simple's own
- * definition, so the table is the one a real server has.
+ * The suites that end an account's sign-ins (account deletion, a password
+ * change or reset, a role change) write to the `session` table. The setup
+ * used to make it, because `db push` dropped it; schema.prisma now describes
+ * it, so a pushed database has it (loginSessionTable.test.ts).
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
 import { Client } from 'pg';
 import globalSetup from './helpers/jest.globalSetup';
-import { createIsolatedSchema, type IsolatedSchema } from './helpers/isolatedSchema';
 
-jest.setTimeout(60000);
-
-const SCHEMA = 'global_setup_test';
 const original = process.env.DATABASE_URL;
-let schema: IsolatedSchema;
 
-/** What the schema holds of the sign-in table: whether it exists, and its index names. */
-async function sessionTable(): Promise<{ present: boolean; indexes: string[] }> {
-  const client = new Client({ connectionString: original });
-  await client.connect();
-  try {
-    const present = await client.query<{ present: boolean }>(
-      'SELECT to_regclass($1) IS NOT NULL AS present',
-      [`"${SCHEMA}"."session"`]
-    );
-    const indexes = await client.query<{ indexname: string }>(
-      "SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND tablename = 'session' ORDER BY indexname",
-      [SCHEMA]
-    );
-    return { present: present.rows[0]?.present === true, indexes: indexes.rows.map((r) => r.indexname) };
-  } finally {
-    await client.end();
-  }
-}
-
-beforeAll(() => {
-  // A schema of its own, laid out from schema.prisma alone, as `db push` leaves a database.
-  schema = createIsolatedSchema(SCHEMA);
-});
-
-afterAll(() => {
+afterEach(() => {
   process.env.DATABASE_URL = original;
-  schema.drop();
 });
 
-it('starts from a schema without the table, as a push leaves it', async () => {
-  expect((await sessionTable()).present).toBe(false);
+it('refuses a database without test in its name', async () => {
+  process.env.DATABASE_URL = 'postgresql://cozyvtt:cozyvtt@localhost:5432/cozyvtt';
+  await expect(globalSetup()).rejects.toThrow('The test suite will not run against the database "cozyvtt"');
 });
 
-it('makes the table connect-pg-simple makes, with its key and its expiry index', async () => {
-  process.env.DATABASE_URL = schema.url;
-  await globalSetup();
-
-  expect(await sessionTable()).toEqual({ present: true, indexes: ['IDX_session_expire', 'session_pkey'] });
-});
-
-it('leaves a table that is already there alone', async () => {
-  process.env.DATABASE_URL = schema.url;
+it('lets the test database through, with its sign-in table and the rows in it untouched', async () => {
   const client = new Client({ connectionString: original });
   await client.connect();
   try {
-    await client.query(`INSERT INTO "${SCHEMA}"."session" (sid, sess, expire) VALUES ('kept', '{}', NOW() + interval '1 hour')`);
-    await globalSetup();
-    const rows = await client.query<{ sid: string }>(`SELECT sid FROM "${SCHEMA}"."session"`);
-    expect(rows.rows.map((r) => r.sid)).toEqual(['kept']);
+    await client.query(`INSERT INTO "session" (sid, sess, expire) VALUES ('global-setup-kept', '{}', NOW() + interval '1 hour')`);
+    await expect(globalSetup()).resolves.toBeUndefined();
+    const rows = await client.query<{ sid: string }>(`SELECT sid FROM "session" WHERE sid = 'global-setup-kept'`);
+    expect(rows.rows.map((row) => row.sid)).toEqual(['global-setup-kept']);
   } finally {
+    await client.query(`DELETE FROM "session" WHERE sid = 'global-setup-kept'`);
     await client.end();
   }
 });

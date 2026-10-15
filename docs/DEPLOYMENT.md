@@ -816,7 +816,7 @@ cp .env.example .env
 # https://your-domain.com, in CORS_ORIGIN and APP_URL (email links use APP_URL)
 npm install
 npx prisma migrate deploy
-npm run build
+npm run build   # also prepares the database client (prisma generate)
 
 # Frontend. The page asks its own address for the API, which your Nginx sends
 # to the backend; the two empty settings make sure an old frontend/.env cannot
@@ -826,6 +826,8 @@ npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
+
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file with `sslrootcert=/path/to/ca.crt`, or use `sslmode=no-verify`, which encrypts the connection without checking which server answers.
 
 ### 4. Run the backend with pm2
 
@@ -1454,7 +1456,7 @@ The backend rotates these files itself. When one reaches 10 MB it becomes `combi
 Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
 
 ```json
-{"err":{"name":"PrismaClientInitializationError","message":"Can't reach database server at `database:5432`","stack":"PrismaClientInitializationError: Can't reach database server ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+{"err":{"cause":{"message":"Connection terminated unexpectedly","name":"Error","stack":"Error: Connection terminated unexpectedly\n    at ..."},"clientVersion":"7.10.0","message":"Connection terminated due to connection timeout","name":"Error","stack":"Error: Connection terminated due to connection timeout\n    at ..."},"level":"error","message":"Error checking setup status","timestamp":"2026-10-15T06:16:47.132Z"}
 ```
 
 To see the most recent errors:
@@ -1658,7 +1660,7 @@ git pull origin main
 cd backend
 npm install
 npx prisma migrate deploy
-npm run build
+npm run build   # also prepares the database client (prisma generate)
 pm2 restart cozyvtt-backend
 
 cd ../frontend

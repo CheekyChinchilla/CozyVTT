@@ -97,12 +97,14 @@ jobs:
       # what changed, and then never reaches an upgraded instance. Prisma
       # applies the migrations to an empty database of its own (the shadow)
       # and compares the result with the schema; --exit-code fails on any
-      # difference.
+      # difference. prisma.config.ts reads the shadow's address from
+      # SHADOW_DATABASE_URL.
       - name: Compare schema.prisma with the migrations
+        env:
+          SHADOW_DATABASE_URL: postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_shadow
         run: |
           PGPASSWORD=cozyvtt psql -h localhost -p 55433 -U cozyvtt -d cozyvtt_test -c 'CREATE DATABASE cozyvtt_shadow'
-          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
-            --shadow-database-url postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_shadow --exit-code
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code
       - run: npx prisma migrate deploy
       - run: npx tsc --noEmit
       - run: npm run lint

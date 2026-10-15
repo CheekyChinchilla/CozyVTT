@@ -416,7 +416,7 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Disposition** — Hostile, friendly, or neutral
 - **Display Mode** — Pog, top-down, or full-art
 
-Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
+Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats. A custom creature belongs to the campaign: if the account that made it is deleted, it stays in the campaign's library, and whoever runs the campaign can still edit or delete it.
 
 A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it. The token quick editor's message says why ("Stat block is too large (64 KB maximum)"), but the Creature Library and Token Templates forms show only a general failure such as "Failed to update creature". If a very long stat block will not save there, shorten its text and try again.
 

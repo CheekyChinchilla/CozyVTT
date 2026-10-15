@@ -2,7 +2,13 @@
 
 ## Overview
 
-CozyVTT uses Prisma for database management and migrations. Database migrations are automatically run when the backend container starts.
+CozyVTT uses Prisma 7 for database management and migrations. Database migrations are automatically run when the backend container starts.
+
+The `prisma` commands below read their settings from `backend/prisma.config.ts`:
+where the schema and the migrations are, and the database address, taken from
+`DATABASE_URL` (in the container's environment, or in `backend/.env` outside
+Docker). The app itself connects through the `pg` driver, with the same
+`DATABASE_URL`.
 
 ## Automatic Migrations (Default)
 
@@ -103,6 +109,22 @@ about; the list is not exhaustive.
   `Message.userId` already did. Two `DROP NOT NULL` and the two foreign keys
   dropped and re-added in one transaction. No row is changed or removed; it
   only lets an account with rolls or uploads be deleted.
+- `20261015032229_add_login_session_table` - The `session` table the sign-in
+  store keeps, with its key and its expiry index, exactly as the store makes
+  it. Every instance whose backend has started already has the table, so
+  there `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` find it
+  and change nothing, and no one is signed out. A new install gets it from
+  the migrations. With the table described in the schema, `prisma db push` and
+  `migrate dev` no longer offer to drop it.
+- `20261015033738_creature_template_author_set_null` - `CreatureTemplate.createdById`
+  gets a foreign key to `User` that sets it to null when the author's account
+  is deleted, and an index. This one changes rows, and like every migration it
+  runs by itself when the backend starts: before adding the key, it clears the
+  author id of every creature whose author's account was already deleted,
+  since the key cannot be added while any row names a missing user. Those ids
+  point at nothing, so nothing that can be looked up is lost, and every
+  creature stays. It is safe to run twice: a second run finds nothing to clear
+  and makes the index and the key again only if they are missing.
 
 ## Data migrations (one-off scripts)
 
@@ -299,12 +321,15 @@ npm run prisma:migrate
 This will:
 1. Generate a new migration file
 2. Apply it to your development database
-3. Regenerate the Prisma client
 
-On a database the backend has already run against, `prisma migrate dev`
-reports drift, because of the sign-in `session` table no migration creates,
-and offers a reset that deletes the database: answer no, and generate the
-migration as `docs/DEVELOPMENT.md` (Running Migrations) shows.
+Since Prisma 7 it no longer regenerates the Prisma client; run
+`npx prisma generate` afterwards.
+
+If `prisma migrate dev` reports drift and offers a reset that deletes the
+database, answer no, and generate the migration as `docs/DEVELOPMENT.md`
+(Running Migrations) shows. On a database the backend ran against before
+1.5.3 it does that because of the sign-in `session` table, which no migration
+made until then; starting the backend once applies the one that does.
 
 ## Production Deployment
 

@@ -11,6 +11,8 @@
  * source = 'srd' are touched — custom creatures are never read or written.
  */
 
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
 import { prisma } from '../config/database';
 import { backfillCreatureProficiency } from '../services/creatureProficiencyBackfill';
 

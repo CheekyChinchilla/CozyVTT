@@ -21,7 +21,10 @@
  * the run fails or a character could not be written.
  */
 
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
 import { PrismaClient, Prisma } from '@prisma/client';
+import { createPrismaClient } from '../config/prismaClient';
 import {
   isSheet,
   migrateDnD5e,
@@ -172,7 +175,7 @@ function printReport(report: SheetFieldReport, dryRun: boolean): void {
 
 // Only run when invoked directly.
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   const dryRun = process.argv.includes('--dry-run');
   console.log(dryRun ? 'DRY RUN — nothing will be written\n' : 'Applying changes\n');
   migrateSheetFields(prisma, { dryRun })

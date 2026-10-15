@@ -1,14 +1,15 @@
 // CozyVTT Database Schema
 // Source: docs/STATEMENT_OF_WORK.md Section 4.1
 
+// The database address is not set here: the command-line tools read it from
+// prisma.config.ts, and the app's client from DATABASE_URL in
+// src/config/database.ts.
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============================================
@@ -131,12 +132,33 @@ model User {
   creatureFavorites   CreatureFavorite[]
   tokenTemplates      TokenTemplate[]
   characterTemplates  CharacterTemplate[]    @relation("CharacterTemplateAuthor")
+  creatureTemplates   CreatureTemplate[]     @relation("CreatureTemplateAuthor")
   personalNotes       PersonalNote[]
   diceMacros          DiceMacro[]
   mapExplorations     MapExploration[]
   documentLinks       CampaignDocument[]
 
   @@index([email])
+}
+
+// ============================================
+// SIGN-IN SESSIONS
+// ============================================
+
+// The sign-in store, connect-pg-simple (src/config/session.ts), keeps its
+// rows here and reads and writes them itself, as does
+// services/sessionStore.ts with raw queries. The model is here so the
+// migrations make the table and `prisma db push` keeps it; @@ignore leaves it
+// out of the Prisma client. Its columns, key and index are connect-pg-simple's
+// own table.sql.
+model LoginSession {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+  @@ignore
 }
 
 // ============================================
@@ -640,8 +662,11 @@ model CreatureTemplate {
   disposition  String      @default("hostile")                     // friendly/neutral/hostile
   displayMode  String      @default("pog")                         // pog/top-down/full-art
 
-  // Ownership: null = global SRD, userId = homebrew by that user
+  // Who made it: null for the seeded SRD creatures, and for any whose
+  // author's account has been deleted, which keeps the creature. `source`
+  // says whether it is SRD or homebrew.
   createdById  String?
+  createdBy    User?      @relation("CreatureTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   campaignId   String?    // null = available globally, set = campaign-specific
   campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -655,6 +680,7 @@ model CreatureTemplate {
   @@index([source])
   @@index([campaignId])
   @@index([name])
+  @@index([createdById])
 }
 
 // ============================================

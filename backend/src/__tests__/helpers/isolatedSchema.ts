@@ -7,8 +7,9 @@
  * instance (the setup wizard, the first account becoming the admin) needs
  * exactly that, so it gets its own schema in the same database: dropped if a
  * crashed run left it, created from schema.prisma, and dropped again at the
- * end. Prisma reads the schema from the `schema` parameter of the address,
- * raw queries included.
+ * end. Prisma's command-line tools and the app's client
+ * (config/prismaClient.ts) both read the schema from the `schema` parameter
+ * of the address, raw queries included.
  *
  * The app's database client reads DATABASE_URL when it is first imported, so
  * a file using this sets DATABASE_URL to `url` and only then imports the app,
@@ -38,15 +39,19 @@ export function createIsolatedSchema(name: string): IsolatedSchema {
   const url = address.toString();
 
   const drop = (): void => {
-    execFileSync(PRISMA, ['db', 'execute', '--stdin', '--url', base], {
+    // prisma.config.ts gives the command-line tools DATABASE_URL.
+    execFileSync(PRISMA, ['db', 'execute', '--stdin'], {
       cwd: BACKEND,
+      env: { ...process.env, DATABASE_URL: base },
       input: `DROP SCHEMA IF EXISTS "${name}" CASCADE;`,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   };
 
   drop();
-  execFileSync(PRISMA, ['db', 'push', '--skip-generate', '--accept-data-loss'], {
+  // The schema is empty, so the push has nothing to lose; one that would
+  // lose data stops with an error.
+  execFileSync(PRISMA, ['db', 'push'], {
     cwd: BACKEND,
     env: { ...process.env, DATABASE_URL: url },
     stdio: ['ignore', 'pipe', 'pipe'],

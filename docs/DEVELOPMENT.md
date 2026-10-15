@@ -206,7 +206,13 @@ cp backend/.env.example backend/.env
 ```bash
 cd backend
 npx prisma migrate dev
+npx prisma generate
 ```
+
+The Prisma command-line tools take their settings, the database address
+among them, from `backend/prisma.config.ts`, which loads `backend/.env`.
+Since Prisma 7, `migrate dev` and `db push` no longer generate the client, so
+`npx prisma generate` follows them; `npm run build` runs it too.
 
 ### 5. Create the administrator
 
@@ -268,7 +274,7 @@ docker compose -f docker-compose.dev.yml exec --user root backend npm install
 docker compose -f docker-compose.dev.yml exec --user root backend npx prisma generate
 ```
 
-`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`.
+`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`. Do the same after pulling a change to either `package.json`, such as the move to Prisma 7 in 1.5.3: without `-V`, `up --build` alone leaves the backend on the packages it had before.
 
 ### Security headers are production-only
 
@@ -302,11 +308,14 @@ npx prisma migrate dev
 # Create a new migration after schema changes
 npx prisma migrate dev --name describe_your_change
 
+# Either way, then regenerate the client (migrate dev no longer does)
+npx prisma generate
+
 # Apply migrations in CI / production (no prompts)
 npx prisma migrate deploy
 ```
 
-> ⚠️ **On a database the backend has already run against, `migrate dev` reports drift and offers a reset: answer no.** The sign-in session store creates a table named `session` the first time the backend starts, and no migration creates it, so Prisma finds a table it does not know. `migrate dev` then says the database has drifted and asks to reset it, which deletes everything in it, and `db push` asks to drop the table. To make a migration on such a database, generate it from the existing migrations into a scratch database instead, which never looks at the `session` table. Prisma empties that database each time, so give it one of its own:
+> ⚠️ **If `migrate dev` reports drift and offers a reset, answer no: a reset deletes everything in the database.** The sign-in session store makes a table named `session` the first time the backend starts. Until 1.5.3 no migration made it, so on a database the backend ran against before then, `migrate dev` finds a table it does not know and offers that reset, and `db push` offers to drop the table. Starting the backend once applies the migration that describes it (the start script runs `migrate deploy`), and from then on the database matches the migrations. `migrate dev` also refuses to run where it cannot ask questions, such as from a script. Either way, a migration can be generated from the existing migrations into a scratch database instead. Prisma empties that database each time, so give it one of its own:
 >
 > ```bash
 > # Once, with the dev stack running:
@@ -315,10 +324,17 @@ npx prisma migrate deploy
 > # Each new migration, from backend/ (the folder name is a UTC timestamp and a name):
 > mkdir -p prisma/migrations/20261011120000_describe_your_change
 > npx prisma migrate diff --from-migrations prisma/migrations \
->   --to-schema-datamodel prisma/schema.prisma \
->   --shadow-database-url postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow \
+>   --to-schema prisma/schema.prisma \
 >   --script > prisma/migrations/20261011120000_describe_your_change/migration.sql
 > npx prisma migrate deploy
+> npx prisma generate
+> ```
+>
+> `migrate diff` finds the scratch database through `prisma.config.ts`, which
+> reads its address from `SHADOW_DATABASE_URL`. Add it to `backend/.env`:
+>
+> ```bash
+> SHADOW_DATABASE_URL="postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow"
 > ```
 >
 > A fresh database that the backend has never started against has no `session` table, and `migrate dev` works on it as usual.
@@ -396,8 +412,12 @@ it:
 docker run -d --name cozyvtt-test-pg -e POSTGRES_USER=cozyvtt -e POSTGRES_PASSWORD=cozyvtt \
   -e POSTGRES_DB=cozyvtt_test -p 55500:5432 postgres:15-alpine
 cd backend
-DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push --skip-generate
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push
 ```
+
+Run the same `db push` again after switching to a branch with a different
+schema. It changes only the database; `npx prisma generate` brings the client
+up to date.
 
 Then run the suite, or one file, with the same `DATABASE_URL`:
 
@@ -418,12 +438,13 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
-> **The run makes the sign-in table itself.** The backend keeps sign-ins in a
+> **The sign-in table comes from the push.** The backend keeps sign-ins in a
 > table named `session`, which the session store creates when the server
-> starts. The Prisma schema does not describe it, so `prisma db push` drops
-> it. Before any suite starts, jest makes it again from the session store's
-> own definition (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
-> that end an account's sign-ins pass straight after a push.
+> starts, and the suites that end an account's sign-ins write to it. The
+> Prisma schema describes it, so `prisma db push` lays it out and keeps it.
+> If those suites fail with `relation "session" does not exist`, the test
+> database was last pushed from an older branch: run the `db push` above
+> again.
 
 ### Frontend Tests (Vitest)
 
@@ -529,7 +550,7 @@ Some of those deserve a note:
 - **A test that needs a brand new instance gets a schema of its own.** The
   suites share one database and run at once, so none can count on it being
   empty. The setup wizard suite, the first-admin and last-admin race tests,
-  the admin settings log suite and the global setup's own test need exactly
+  the admin settings log suite and the sign-in table's own test need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
   end. The file sets `DATABASE_URL` to that schema before it imports the app,
@@ -640,7 +661,8 @@ also does what self-hosters run and a developer usually does not:
   migration fails, then applies the migrations to an empty database before
   the backend tests. To run the comparison yourself, give it a database of
   its own, which Prisma empties: the command is in the workflow, and the
-  scratch database is the one "Running Migrations" above creates.
+  scratch database is the one "Running Migrations" above creates, named by
+  `SHADOW_DATABASE_URL`.
 - **Collects test coverage** in both projects and shows it in the job
   summary, per folder under `src/`. A report only: no threshold fails yet.
 - **Builds both production images** with `docker compose build`, after
@@ -660,6 +682,12 @@ also does what self-hosters run and a developer usually does not:
   project's developer tools too, and fails nothing, since those never reach
   an instance. Each of these steps runs whatever the ones before it found,
   so a failing backend audit still shows the frontend's result.
+  When a package an instance runs asks for a dependency at a version with
+  a high advisory, and no release of that package asks for a fixed one yet,
+  the backend's `package.json` holds the dependency at a fixed version under
+  `overrides`, naming the package that asks for it. `keepInStep.test.ts`
+  fails once an update of that package asks for the held version or a newer
+  one, which is when the override has to go.
 
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into

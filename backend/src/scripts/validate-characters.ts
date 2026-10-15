@@ -16,8 +16,11 @@
  * argument is not understood, or when the check could not run.
  */
 
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
 import fs from 'fs';
 import { PrismaClient, type Prisma } from '@prisma/client';
+import { createPrismaClient } from '../config/prismaClient';
 import { ZodError } from 'zod';
 import { GameSystem } from '../game-systems';
 import { validateCharacterData } from '../validators/game-systems';
@@ -321,7 +324,7 @@ async function main(prisma: PrismaClient): Promise<number> {
 
 // Run if called directly
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   main(prisma)
     .then((code) => {
       process.exitCode = code;

@@ -38,8 +38,10 @@ RUN npm ci --omit=dev
 # Copy compiled output
 COPY --from=builder /app/dist ./dist
 
-# Copy Prisma schema and generated client
+# Copy Prisma schema, the command-line tools' settings (start.sh's migrate
+# deploy and the restore read them) and the generated client
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Copy startup script

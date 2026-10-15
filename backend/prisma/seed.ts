@@ -1,6 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
+import { createPrismaClient } from '../src/config/prismaClient';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   console.log('🌱 Seeding database...');

@@ -4,8 +4,10 @@
  * The suites write to the database freely, on the understanding that it is a
  * throwaway one: they add accounts and campaigns, some change the instance's
  * settings, and some create and drop schemas of their own. With DATABASE_URL
- * unset, Prisma and dotenv fall back to backend/.env, which the development
- * guide points at the development database. So the run is refused unless the
+ * unset, dotenv fills it from backend/.env (the server and the scripts load
+ * it, and so does prisma.config.ts for the Prisma command-line tools the
+ * suites run), and the development guide points that file at the development
+ * database. So the run is refused unless the
  * database's name has `test` in it as a word: `cozyvtt_test`,
  * `cozyvtt_test_b10` and `test_cozyvtt` pass, `cozyvtt` and `contest` do not.
  */
@@ -39,8 +41,9 @@ export function testDatabaseRefusal(url: string | undefined): string | null {
 
 /**
  * The database a run would use: DATABASE_URL from the environment, or else
- * the one backend/.env or backend/prisma/.env names, which is where Prisma
- * and dotenv look when the environment has none.
+ * the one backend/.env names, where dotenv looks when the environment has
+ * none. backend/prisma/.env is checked too: Prisma read it before version 7,
+ * so an older checkout may still keep its address there.
  */
 export function effectiveDatabaseUrl(env: NodeJS.ProcessEnv, backendDir: string): string | undefined {
   if (env.DATABASE_URL !== undefined && env.DATABASE_URL !== '') return env.DATABASE_URL;
