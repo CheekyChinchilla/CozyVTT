@@ -1806,9 +1806,8 @@ WebSocket limits are counted per user, across every connection they have open,
 and are set well above what a busy table sends. The other live table events have
 limits of their own, listed in the WebSocket guide.
 
-The general limit and the register, forgot-password and two-factor setup limits
-count a client that connects over IPv6 by its /56 network: every address that
-shares its first 56 bits shares one allowance.
+Every limit counted per address counts a client that connects over IPv6 by its
+/56 network: every address that shares its first 56 bits shares one allowance.
 
 The upload, campaign-archive and general-API limits are configurable with the
 `ASSET_UPLOAD_RATE_LIMIT`, `CAMPAIGN_ARCHIVE_RATE_LIMIT` and

@@ -12,9 +12,13 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
-jest.mock('express-rate-limit', () => {
-  return () => (_req: Request, _res: Response, next: NextFunction) => next();
-});
+// Every limiter lets the request through. The rest of the package stays
+// real: the sign-in limiter keys an address with its ipKeyGenerator.
+jest.mock('express-rate-limit', () => ({
+  ...jest.requireActual<typeof import('express-rate-limit')>('express-rate-limit'),
+  __esModule: true,
+  default: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+}));
 
 // Registration is open here, so the register route reaches registerUser.
 jest.mock('../../services/systemSettings', () => ({

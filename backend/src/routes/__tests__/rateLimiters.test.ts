@@ -222,4 +222,18 @@ describe('IPv6 visitors', () => {
     // The next network along is someone else.
     expect((await hit(app, otherNetwork, 200)).status).toBe(200);
   });
+
+  it('share the wrong-answer limit across one /56 network', async () => {
+    // Its own addresses, since the credential limiter's counts last the module.
+    const network = ['2001:db8:6:100::1', '2001:db8:6:1ff:abcd::2'];
+    const app = appWith(credentialLimiter);
+
+    for (let i = 0; i < 5; i++) {
+      expect((await hit(app, network[i % 2], 401)).status).toBe(401);
+    }
+    expect((await hit(app, network[0], 401)).status).toBe(429);
+    expect((await hit(app, network[1], 401)).status).toBe(429);
+
+    expect((await hit(app, '2001:db8:6:200::1', 401)).status).toBe(401);
+  });
 });

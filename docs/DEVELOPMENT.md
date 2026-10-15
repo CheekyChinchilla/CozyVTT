@@ -649,7 +649,10 @@ Some of those deserve a note:
   allowance. `backend/src/middleware/__tests__/rateLimitValidation.test.ts`
   makes every express-rate-limit limiter, sends a request through each, and
   fails on anything the library writes to the console; add a new limiter to
-  its list.
+  its list. The wrong-answer limiter (`backend/src/middleware/failureLimiter.ts`)
+  keys an address with `ipKeyGenerator` too, so a test that mocks
+  express-rate-limit keeps the rest of the package real with
+  `jest.requireActual`.
 - **A test file may not carry a `TODO(test)` marker.** A test known to be
   flaky or wrong once sat behind one, assigned to nobody, until it failed a
   release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test
