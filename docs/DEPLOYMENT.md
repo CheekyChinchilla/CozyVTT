@@ -1595,6 +1595,16 @@ docker compose logs --tail 30 backend nginx
 
 `docker compose up -d` applies a change to the override file; the container is recreated, and `docker compose ps` shows it running again.
 
+Three lines like these appear each time the stack starts and are harmless: the database tries to set the permissions of its folders, which already have the right ones, and the frontend's image tries to make it listen on IPv6 as well, which nothing needs: the bundled nginx reaches it over Docker's own network.
+
+```
+cozyvtt-database  | chmod: /var/lib/postgresql/data: Operation not permitted
+cozyvtt-database  | chmod: /var/run/postgresql: Operation not permitted
+cozyvtt-frontend  | 10-listen-on-ipv6-by-default.sh: info: can not modify /etc/nginx/conf.d/default.conf (read-only file system?)
+```
+
+If the container keeps running and `docker compose ps` shows the database as `healthy`, there is nothing to fix.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
