@@ -188,7 +188,7 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 9. On `/api`, the general rate limiter (`RATE_LIMIT_MAX_REQUESTS` a minute per address, 300 by default)
 10. On `/api`, the password-change gate, then the administrator MFA gate
 11. The routers: setup, config, auth, users, admin, campaigns (with macros and documents), characters, character templates, invitations, assets, and the maps, creatures and token templates nested under `/api/campaigns/:campaignId`
-12. A JSON 404 for anything no router answered, then `errorHandler`
+12. A JSON 404 for anything no router answered, then `errorHandler`: a JSON 500 for anything a route throws or a promise it returns rejects with, Error or not; when the answer has already started, it logs the error and leaves Express to end the connection
 
 Inside a router, each route names its own guards (`middleware/compose.ts`) and any limiter of its own, then checks its body with Zod.
 
