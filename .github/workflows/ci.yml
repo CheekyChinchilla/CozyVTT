@@ -52,6 +52,25 @@ jobs:
       - name: Coverage summary
         run: python3 ../scripts/coverage-summary.py Frontend coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
+      # The production build removes every console.log, info, debug and trace
+      # call (vite.config.ts), since they print chat messages, secret rolls and
+      # token details. Each of the first four lines below is printed only by
+      # such a call, so finding one in the bundle means the stripping stopped
+      # working. The last is a console.error line, which must stay.
+      - name: Check that debug logging is stripped from the bundle
+        run: |
+          status=0
+          for line in 'Received chat message' 'DM received secret roll audit' 'Tokens changed:' 'Picking up token'; do
+            if grep -rqF "$line" dist/assets; then
+              echo "::error::'$line' is in the built bundle: console.log calls are no longer removed"
+              status=1
+            fi
+          done
+          if ! grep -rqF 'Failed to load roll history' dist/assets; then
+            echo "::error::'Failed to load roll history' is missing from the built bundle: console.error calls were removed too"
+            status=1
+          fi
+          exit $status
 
   backend:
     name: Backend
