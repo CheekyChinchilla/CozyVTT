@@ -515,6 +515,13 @@ Some of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
+- **The production build leaves out `console.log`, `info`, `debug` and
+  `trace`.** `frontend/vite.config.ts` marks them as calls with no effect, so
+  the build removes them; `console.error` and `console.warn` stay. After
+  `npm run build`, CI looks in `dist/assets` for four lines only such calls
+  print and fails if one is there. A misplaced build option only draws a
+  warning from Vite, and `vite.config.ts` is neither linted nor
+  type-checked, so read the build output after changing that file.
 - **The backend run manages its own database connections.** Every test file
   builds its own Prisma clients and jest reuses workers across files, so a
   full run once crept up to PostgreSQL's default ceiling of a hundred
