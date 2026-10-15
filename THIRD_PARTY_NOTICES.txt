@@ -175,7 +175,7 @@ react-dom 18.x
   License: MIT
   https://github.com/facebook/react
 
-react-markdown 9.x
+react-markdown 10.x
   Copyright (c) Espen Hovlandsdal
   License: MIT
   https://github.com/remarkjs/react-markdown
