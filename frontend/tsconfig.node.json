@@ -1,3 +1,10 @@
+// TODO(typing): nothing type-checks vite.config.ts against this file.
+// `npm run typecheck` runs `tsc --noEmit`, which does not build project
+// references, and `tsc -p tsconfig.node.json` fails because the frontend has
+// no @types/node (no `path`, `process` or `import.meta.dirname`). `npm run
+// build` loads the file without checking its types, so only a config that
+// fails to run fails the build. Checking it needs @types/node as a frontend
+// dev dependency.
 {
   "compilerOptions": {
     "composite": true,

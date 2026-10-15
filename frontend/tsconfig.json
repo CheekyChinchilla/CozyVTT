@@ -24,8 +24,7 @@
     "strictFunctionTypes": true,
     "noImplicitReturns": true,
 
-    /* Path aliases */
-    "baseUrl": ".",
+    /* Path aliases, relative to this file */
     "paths": {
       "@/*": ["./src/*"]
     }

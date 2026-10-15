@@ -68,7 +68,7 @@ it('makes exactly one ADMIN when registrations race on an empty instance', async
       },
     },
   });
-  const { registerUser } = await import('../auth');
+  const { registerUser } = require('../auth') as typeof import('../auth');
   const results = await Promise.allSettled(
     emails.map((email) => registerUser({ email, password: 'RaceTest123!Cozy', displayName: 'Race' }))
   );

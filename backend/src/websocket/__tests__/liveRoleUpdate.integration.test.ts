@@ -21,7 +21,7 @@
 import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
-import { applyRoleToLiveSockets } from '../utils';
+import { applyRoleToLiveSockets, broadcastToCampaign } from '../utils';
 import {
   createWsTestServer,
   waitForEvent,
@@ -173,7 +173,6 @@ describe('campaign.dm.transferred', () => {
       waitForEvent<{ newDmId: string }>(playerClient, 'campaign.dm.transferred'),
     ]);
 
-    const { broadcastToCampaign } = await import('../utils');
     broadcastToCampaign(campaignId, 'campaign.dm.transferred', {
       campaignId,
       previousDmId: dmId,

@@ -813,6 +813,29 @@ Both backend and frontend use TypeScript in **strict mode**. The `tsconfig.json`
 in each package enables `strict: true`, which brings `noImplicitAny`,
 `strictNullChecks` and the rest with it.
 
+The backend compiles with `"module": "node20"` and `"moduleResolution":
+"node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
+every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
+package's `"exports"`, and the code can import the packages published only as
+ES modules (archiver, file-type, mathjs), which Node 20 and later load with
+`require`. `"module": "node16"` refuses those imports. Two things follow:
+
+- **No dynamic `import()` of our own files.** Under these settings an
+  `import()` stays a native ES module import, which needs a file extension in
+  `dist/` and fails under ts-node and Jest. Application code imports
+  statically. A test that must load a module late, after setting
+  `DATABASE_URL` or calling `jest.resetModules()`, uses
+  `require('../x') as typeof import('../x')`.
+- **The global types are listed.** `"types": ["node", "jest"]` in
+  `backend/tsconfig.json` names the `@types` packages every file sees; any
+  other comes in when a file imports it.
+
+ts-jest compiles the tests as CommonJS with the older `"node"` resolution,
+whatever the module setting. It warns about `node20` on every file, so
+`backend/jest.config.js` turns that one warning (151002) off, and it does not
+read `"exports"`, so `paths` in `backend/tsconfig.json` points it at
+file-type's types.
+
 `noUncheckedIndexedAccess` is **not** enabled in either package. It is worth
 turning on one day, but it is its own burn-down and mixing it into other work
 would make it impossible to say what caused a regression.

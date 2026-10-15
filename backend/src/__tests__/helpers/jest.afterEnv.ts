@@ -21,6 +21,6 @@ afterAll(async () => {
   if (cached) await cached.$disconnect();
   // The helpers' client, whether or not this file imported it: an unused
   // client has no connections and disconnecting it costs nothing.
-  const helpers = (await import('./db')) as { prisma: { $disconnect(): Promise<void> } };
+  const helpers = require('./db') as typeof import('./db');
   await helpers.prisma.$disconnect();
 });

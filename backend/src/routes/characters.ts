@@ -27,6 +27,8 @@ import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import { withMapsLocked } from '../utils/mapTokens';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
 import { holdOwnerCreates } from '../utils/ownerLimit';
+import { getCharacterTemplate } from '../utils/character-templates';
+import { FLEXIBLE_TEMPLATES } from '../utils/character-templates/flexible-templates';
 
 const router = Router();
 
@@ -333,9 +335,6 @@ router.get(
 
       // Handle flexible templates (no game system)
       if (!gameSystem || gameSystem === 'null' || gameSystem === 'undefined') {
-        const { FLEXIBLE_TEMPLATES } = await import(
-          '../utils/character-templates/flexible-templates'
-        );
         // Only the names defined there: the list is a plain object, so
         // `constructor` or `__proto__` would otherwise find an inherited one.
         const template = Object.hasOwn(FLEXIBLE_TEMPLATES, templateName)
@@ -362,9 +361,6 @@ router.get(
           message: `Invalid game system: ${gameSystem}`,
         });
       }
-
-      // Import template functions
-      const { getCharacterTemplate } = await import('../utils/character-templates');
 
       // Get the template
       const template = getCharacterTemplate(gameSystem as GameSystem, templateName);
