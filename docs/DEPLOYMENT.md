@@ -816,7 +816,7 @@ cp .env.example .env
 # https://your-domain.com, in CORS_ORIGIN and APP_URL (email links use APP_URL)
 npm install
 npx prisma migrate deploy
-npm run build
+npm run build   # also prepares the database client (prisma generate)
 
 # Frontend. The page asks its own address for the API, which your Nginx sends
 # to the backend; the two empty settings make sure an old frontend/.env cannot
@@ -1660,7 +1660,7 @@ git pull origin main
 cd backend
 npm install
 npx prisma migrate deploy
-npm run build
+npm run build   # also prepares the database client (prisma generate)
 pm2 restart cozyvtt-backend
 
 cd ../frontend

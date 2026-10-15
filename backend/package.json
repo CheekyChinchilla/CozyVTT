@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "lint": "eslint . --max-warnings 0",
     "start": "node dist/server.js",
     "test": "jest",

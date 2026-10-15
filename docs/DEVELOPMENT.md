@@ -212,7 +212,7 @@ npx prisma generate
 The Prisma command-line tools take their settings, the database address
 among them, from `backend/prisma.config.ts`, which loads `backend/.env`.
 Since Prisma 7, `migrate dev` and `db push` no longer generate the client, so
-`npx prisma generate` follows them.
+`npx prisma generate` follows them; `npm run build` runs it too.
 
 ### 5. Create the administrator
 
