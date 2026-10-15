@@ -434,6 +434,10 @@ npm run test:run          # Run once (CI mode)
 npm run test:coverage     # Generate coverage report
 ```
 
+The runner is Vitest 5, on Vite 8. On a machine short of memory, cap the
+workers a run starts with `npx vitest run --maxWorkers=2`; Vitest 5 has no
+`--minWorkers` option and stops with "Unknown option" if given one.
+
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
 
 ### Browser smoke tests (Playwright)
@@ -493,7 +497,7 @@ assume you ran:
 
 ```bash
 # Frontend
-cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run build
+cd frontend && npm run typecheck && npm run lint && npx vitest run --maxWorkers=2 && npm run build
 
 # Backend. The Prisma client is generated, not committed: without a fresh one,
 # every column added since the last generate is a type error.

@@ -6,21 +6,20 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
+    },
+  },
+  // Vite serves files from inside frontend/ only. One test reads the proxy's
+  // settings in the repository's nginx/ folder, so that folder is allowed too.
+  server: {
+    fs: {
+      allow: [import.meta.dirname, path.resolve(import.meta.dirname, '../nginx')],
     },
   },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    // Node 26 has a localStorage of its own, which is empty unless Node is
-    // given a file to keep it in, and it hides the browser's localStorage
-    // that jsdom provides, so a test reading localStorage got undefined.
-    // Turning Node's off in the test processes leaves jsdom's in its place.
-    poolOptions: {
-      forks: { execArgv: ['--no-experimental-webstorage'] },
-      threads: { execArgv: ['--no-experimental-webstorage'] },
-    },
     // e2e/ holds the Playwright smoke tests, which run in a real browser
     // against a running instance (npm run test:e2e), not here.
     exclude: [...configDefaults.exclude, 'e2e/**'],
