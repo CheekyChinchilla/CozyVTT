@@ -31,9 +31,9 @@
   "author": "CozyVTT Development Team",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@prisma/client": "5.8",
+    "@prisma/client": "5.22",
     "archiver": "^7.0.1",
-    "argon2": "^0.44.0",
+    "argon2": "^0.45.1",
     "connect-pg-simple": "^9.0.1",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
@@ -44,16 +44,16 @@
     "helmet": "^7.2.0",
     "mathjs": "^12.4.3",
     "multer": "^2.4.0",
-    "nodemailer": "^10.0.16",
+    "nodemailer": "^10.1.0",
     "otplib": "^13.5.0",
     "pg": "^8.23.1",
-    "prisma": "5.8",
+    "prisma": "5.22",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
     "unzipper": "^0.12.5",
     "winston": "^3.19.0",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/archiver": "^6.0.4",
