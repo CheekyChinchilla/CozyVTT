@@ -155,6 +155,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [seedError, setSeedError] = useState<string | null>(null);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  // The search the list last loaded with. Opening the library loads the list
+  // (the effect below); the search box's wait reloads it only for a search
+  // that differs, where it used to fire on opening too and load it twice.
+  const searchedFor = useRef(searchQuery);
 
   // ── Fetch creatures ──
   const fetchCreatures = useCallback(async (resetOffset = false) => {
@@ -192,6 +196,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   // Fetch on open and when filters change
   useEffect(() => {
     if (!isOpen || !campaign) return;
+    searchedFor.current = searchQuery;
     fetchCreatures(true);
     // Also check seed status and load favorites
     api.getSeedStatus(campaign.id)
@@ -212,9 +217,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   // Debounced search
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || searchQuery === searchedFor.current) return;
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
+      searchedFor.current = searchQuery;
       fetchCreatures(true);
     }, 300);
     return () => clearTimeout(searchTimeoutRef.current);
