@@ -718,11 +718,13 @@ describe('the dependency check SECURITY.md describes', () => {
 });
 
 describe('the install-script list the guides describe', () => {
-  // npm 11, which builds the images and runs CI, still runs the install script
-  // of a package that allowScripts does not name, and prints a warning. It
-  // refuses one only when an .npmrc turns on strict-allow-scripts. Turning it
-  // on makes "still runs" untrue: change the guides in the same change.
-  const npmrcs = ['.npmrc', 'backend/.npmrc', 'frontend/.npmrc'].filter((rel) => fs.existsSync(path.join(root, rel)));
+  // Each project's .npmrc turns on strict-allow-scripts, so npm fails an
+  // install that meets a package with an install script allowScripts does not
+  // name. Without the setting, npm 11, which builds the images and runs CI,
+  // runs such a script and prints a warning. The guides say the install
+  // fails; dropping the setting from either file makes that untrue, so change
+  // the guides in the same change. A root .npmrc reaches neither project.
+  const npmrcs = ['backend/.npmrc', 'frontend/.npmrc'];
   const paragraphs = ['SECURITY.md', 'docs/DEVELOPMENT.md'].flatMap((rel) =>
     read(rel)
       .split(/\n\s*\n/)
@@ -730,12 +732,15 @@ describe('the install-script list the guides describe', () => {
       .map((paragraph) => ({ rel, text: paragraph.replace(/\s+/g, ' ') }))
   );
 
-  it('say npm still runs the script of a package not on it, since no .npmrc tells npm to refuse one', () => {
-    expect(npmrcs.filter((rel) => /^\s*strict-allow-scripts\s*=\s*true\b/m.test(read(rel)))).toEqual([]);
+  it('say the install fails at a package not on it, since both projects tell npm to fail it', () => {
+    const strict = (rel: string) =>
+      fs.existsSync(path.join(root, rel)) && /^\s*strict-allow-scripts\s*=\s*true\s*$/m.test(read(rel));
+    expect(npmrcs.filter((rel) => !strict(rel))).toEqual([]);
     expect(paragraphs.map(({ rel }) => rel).sort()).toEqual(['SECURITY.md', 'docs/DEVELOPMENT.md']);
     for (const { rel, text } of paragraphs) {
-      expect(`${rel}: ${text}`).not.toMatch(/only if .*allowScripts/);
-      expect(`${rel}: ${text}`).toMatch(/still runs the script of a package/);
+      expect(`${rel}: ${text}`).toMatch(/strict-allow-scripts/);
+      expect(`${rel}: ${text}`).toMatch(/the install fails/);
+      expect(`${rel}: ${text}`).not.toMatch(/still runs the script of a package|does not turn on/);
     }
   });
 });

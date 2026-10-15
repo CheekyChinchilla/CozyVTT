@@ -13,7 +13,7 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 WORKDIR /app
 
 # Install dependencies as root (need write access to node_modules)
-COPY package*.json ./
+COPY package*.json .npmrc ./
 RUN npm ci
 
 # Copy application code

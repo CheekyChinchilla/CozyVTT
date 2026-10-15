@@ -172,13 +172,18 @@ npm install
 Each project's `package.json` names under `allowScripts` the packages that
 run a script while they install: the Prisma packages fetch the database engines
 that way, argon2 checks for its prebuilt binary, and a few developer tools set
-up their own binaries. npm 11, which builds the images, still runs the
-script of a package that is not listed and prints a warning naming it; npm 12
-is announced to block such a script unless the list names it. When a new
-dependency brings one, `npm install-scripts ls` names it; read what the script
-does, then add it with
-`npm install-scripts approve --no-allow-scripts-pin <package>`, or leave it
-out. `dependencySources.test.ts` fails until the list matches the lockfile.
+up their own binaries. Each project's `.npmrc` turns on npm's
+`strict-allow-scripts` setting, so when a package with such a script is not on
+the list, the install fails before anything is installed, with
+`ESTRICTALLOWSCRIPTS` and the package's name and script. That holds for
+`npm install` and `npm ci`, in the images, in CI and on your machine. Without
+the setting, npm 11 (11.20.0 comes with Node.js 26.12.0, and builds the images
+and CI) runs such a script and prints a warning, and npm 12 (12.2.0 is
+released) skips it and prints a warning. When a new dependency brings one,
+read what its script does, then add `"<package>": true` under `allowScripts`
+in that project's `package.json` and install again; `npm install-scripts ls`
+and `approve` work only on a tree that is already installed.
+`dependencySources.test.ts` fails until the list matches the lockfile.
 
 ### 2. Set up PostgreSQL
 
