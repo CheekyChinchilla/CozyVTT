@@ -36,6 +36,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Two security advisories against the library that moves between the app's pages are cleared.** They were published for React Router 6, which 1.5.2 and earlier releases use. One is about links to an address that starts with a slash and a backslash, which a browser reads as another site; the other affects only apps that build their pages on a server. Neither could be reached in CozyVTT: the one address it takes from a link, the page to go back to after signing in, is followed only when it is a path on this instance with no backslash in it, and every page is built in the browser.
 
+- **Each container keeps only the powers its start-up needs.** Docker gives root inside a container a standard set of Linux capabilities, such as writing any file whatever its owner, making device files and sending raw network packets. The database, the backend and the two nginx containers now drop all of them and get back only what their start scripts use before they switch to an unprivileged user: changing a folder's owner, switching user, reading a folder or a TLS key that only one account may read, and, for nginx, ports 80 and 443. Commands you run in the backend container now take `-u appuser`, such as `docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js`, because root there can no longer write the backend's files. If your `docker-compose.override.yml` adds a program that needs one of the other capabilities, give it back there with `cap_add`, as [the deployment guide](docs/DEPLOYMENT.md#a-container-stops-with-permission-denied-or-operation-not-permitted) shows.
+
 ---
 
 ## [1.5.2] - 2026-10-14

@@ -32,9 +32,16 @@
  * Hardening. Every container runs with no-new-privileges, so nothing in it
  * can gain privileges through a setuid program; the start scripts that drop
  * from root to an unprivileged user (the backend's, Postgres's, nginx's) do
- * not need any. The frontend container, which only serves files, runs on a
- * read-only filesystem with memory-backed folders for nginx's own scratch
- * files. The README says what runs as root, and no more.
+ * not need any. Each also drops every Linux capability and adds back only
+ * what its start script needs while it runs as root: changing owners,
+ * switching user, a port below 1024 for the two nginx, and reading a folder
+ * or file another account keeps private (the backups folder, Postgres's data,
+ * a TLS key copied in by the guide's steps). Without the rest, root in a
+ * container cannot write another account's files, so the maintenance
+ * commands the guides give run as the backend's own user. The frontend
+ * container, which only serves files, runs on a read-only filesystem with
+ * memory-backed folders for nginx's own scratch files. The README says what
+ * runs as root, and no more.
  */
 
 import fs from 'fs';
@@ -162,9 +169,66 @@ describe('the bundled nginx', () => {
   });
 });
 
+/** The items of a service's list setting (`cap_add:`, `tmpfs:`, `volumes:`), comments dropped. */
+function listed(block: string, key: string): string[] {
+  const items = new RegExp(`\\n {4}${key}:\\n((?: {6}(?:- .*|#.*)\\n)+)`).exec(block)?.[1] ?? '';
+  return [...items.matchAll(/^ {6}- ([^#\n]*?)\s*(?:#.*)?$/gm)].map((m) => m[1]);
+}
+
+/**
+ * The capabilities each container adds back once it has dropped them all.
+ * Each is used by the image's start script while it runs as root, and by
+ * nothing after it has switched to its unprivileged user.
+ */
+const CAPABILITIES: Record<string, string[]> = {
+  // The entrypoint gives the data folder to postgres (CHOWN), looks inside
+  // it although it is postgres's alone (DAC_READ_SEARCH), then switches user.
+  database: ['CHOWN', 'DAC_READ_SEARCH', 'SETGID', 'SETUID'],
+  // start.sh gives the mounted folders to appuser, reads the backups folder
+  // (0700, appuser's) and any private folder under uploads on the way
+  // (DAC_READ_SEARCH), sets the backups folder's mode once it is appuser's
+  // (FOWNER), then switches user.
+  backend: ['CHOWN', 'DAC_READ_SEARCH', 'FOWNER', 'SETGID', 'SETUID'],
+  // nginx's master gives its scratch folders to the nginx user, listens on
+  // port 80 and starts its workers as that user.
+  frontend: ['CHOWN', 'NET_BIND_SERVICE', 'SETGID', 'SETUID'],
+  // The same, plus port 443 and reading a TLS key the guide's steps leave
+  // readable by the host account that copied it alone.
+  nginx: ['CHOWN', 'DAC_READ_SEARCH', 'NET_BIND_SERVICE', 'SETGID', 'SETUID'],
+};
+
+/** Every `docker compose exec` or `docker exec` line the self-hoster guides give for the backend. */
+function backendExecLines(rel: string): string[] {
+  return read(rel)
+    .split('\n')
+    .filter((line) => /docker(?: compose)? exec\b/.test(line))
+    .filter((line) => /docker compose exec(?: -[A-Za-z]+(?: \S+)?)* backend\b|docker exec(?: -\S+)* cozyvtt-backend\b/.test(line));
+}
+
 describe('the containers', () => {
   it.each(['database', 'backend', 'frontend', 'nginx'])('run %s with no-new-privileges', (name) => {
     expect(service('docker-compose.yml', name)).toMatch(/\n {4}security_opt:\n {6}- no-new-privileges:true\n/);
+  });
+
+  it.each(Object.keys(CAPABILITIES))('drop every capability from %s and add back only what its start needs', (name) => {
+    const block = service('docker-compose.yml', name);
+    expect(listed(block, 'cap_drop')).toEqual(['ALL']);
+    expect([...listed(block, 'cap_add')].sort()).toEqual(CAPABILITIES[name]);
+  });
+
+  it.each(['docs/DEPLOYMENT.md', 'backend/DATABASE_MIGRATIONS.md'])(
+    '%s runs every command in the backend container as its own user',
+    (file) => {
+      const lines = backendExecLines(file);
+      expect(lines.length).toBeGreaterThan(0);
+      expect(lines.filter((line) => !/docker compose exec(?: -T)? -u appuser backend\b/.test(line))).toEqual([]);
+    }
+  );
+
+  it('name the backend user in the command start.sh suggests when a migration fails', () => {
+    const hint = read('backend/scripts/start.sh').split('\n').filter((line) => /migrate status/.test(line));
+    expect(hint).toHaveLength(1);
+    expect(hint[0]).toMatch(/docker compose exec -u appuser backend /);
   });
 
   it('give the frontend a read-only filesystem, with room for the files nginx writes as it runs', () => {
@@ -179,5 +243,6 @@ describe('the containers', () => {
     const readme = read('README.md');
     expect(readme).not.toMatch(/non-root Docker containers/i);
     expect(readme).toMatch(/master process runs as root/);
+    expect(readme).toMatch(/drops every Linux capability except the few its start-up needs/);
   });
 });

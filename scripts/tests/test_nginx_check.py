@@ -62,13 +62,38 @@ class Mounts(unittest.TestCase):
     def test_reads_the_compose_files_nginx_service(self):
         with open(nc.COMPOSE, encoding='utf-8') as f:
             try:
-                image, environment, volumes = nc.nginx_service(f.read())
+                service = nc.nginx_service(f.read())
             except ImportError:
                 self.skipTest('PyYAML is not installed')
-        self.assertTrue(image.startswith('nginx:'))
-        self.assertEqual(environment['NGINX_MAX_BODY_SIZE'], '55M')
-        self.assertIn('NGINX_ENVSUBST_FILTER', environment)
-        self.assertTrue(any(v.startswith('./nginx/trusted-proxies.envsh:/docker-entrypoint.d/') for v in volumes))
+        self.assertTrue(service.image.startswith('nginx:'))
+        self.assertEqual(service.environment['NGINX_MAX_BODY_SIZE'], '55M')
+        self.assertIn('NGINX_ENVSUBST_FILTER', service.environment)
+        self.assertTrue(any(v.startswith('./nginx/trusted-proxies.envsh:/docker-entrypoint.d/') for v in service.volumes))
+        # nginx -T runs with the capabilities the container has, no more.
+        flags = service.flags
+        self.assertIn(['--cap-drop', 'ALL'], [flags[i:i + 2] for i in range(len(flags))])
+        self.assertIn(['--cap-add', 'DAC_READ_SEARCH'], [flags[i:i + 2] for i in range(len(flags))])
+        self.assertIn(['--security-opt', 'no-new-privileges:true'], [flags[i:i + 2] for i in range(len(flags))])
+
+
+class RunFlags(unittest.TestCase):
+    def test_passes_on_what_limits_the_container(self):
+        self.assertEqual(nc.run_flags({
+            'security_opt': ['no-new-privileges:true'],
+            'cap_drop': ['ALL'],
+            'cap_add': ['CHOWN', 'SETUID'],
+            'read_only': True,
+            'tmpfs': ['/run', '/etc/nginx/conf.d'],
+        }), [
+            '--security-opt', 'no-new-privileges:true',
+            '--cap-drop', 'ALL',
+            '--cap-add', 'CHOWN', '--cap-add', 'SETUID',
+            '--read-only',
+            '--tmpfs', '/run', '--tmpfs', '/etc/nginx/conf.d',
+        ])
+
+    def test_adds_nothing_for_a_service_that_sets_none_of_them(self):
+        self.assertEqual(nc.run_flags({'image': 'nginx:1.30-alpine', 'read_only': False}), [])
 
 
 if __name__ == '__main__':

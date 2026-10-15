@@ -71,7 +71,7 @@ if npx prisma migrate deploy; then
   echo "✅ Migrations completed successfully"
 else
   echo "❌ Error: Migration failed"
-  echo "   Run 'docker exec -it cozyvtt-backend npx prisma migrate status' to diagnose"
+  echo "   Run 'docker compose exec -u appuser backend npx prisma migrate status' to diagnose"
   exit 1
 fi
 

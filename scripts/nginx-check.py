@@ -14,10 +14,14 @@ also prints what it read), three times:
                   range and an IPv6 range, so the lines the script renders for
                   them are checked as well, and must appear;
   with HTTPS      the nginx/conf.d/https.conf example from docs/DEPLOYMENT.md in
-                  nginx/conf.d/, with a throwaway self-signed certificate.
+                  nginx/conf.d/, with a throwaway self-signed certificate whose
+                  key is readable by the account running this check alone, as
+                  the guide's `cp` and `chown` steps leave a real one.
 
-The image, environment and mounts come from the nginx service in
-docker-compose.yml, so the check follows it; each value takes its default, as
+The image, environment, mounts and the settings that limit what the container
+may do (its capabilities, no-new-privileges, a read-only filesystem and its
+tmpfs folders) come from the nginx service in docker-compose.yml, so the check
+follows it and nginx starts as it does there; each value takes its default, as
 on an instance whose .env leaves it out. The repository's own nginx/conf.d/ and
 nginx/certs/ are never mounted: a developer's own HTTPS file stays out of it.
 
@@ -27,6 +31,7 @@ root; exits non-zero when nginx refuses any of the three:
     python3 scripts/nginx-check.py
 """
 
+import collections
 import io
 import os
 import re
@@ -56,14 +61,34 @@ def interpolate(value):
     return re.sub(r'\$\{(\w+)(?::?-([^}]*))?\}', lambda m: m.group(2) or '', str(value))
 
 
+Service = collections.namedtuple('Service', 'image environment volumes flags')
+
+
+def run_flags(service):
+    """docker run arguments for the service's settings that limit what the container may do."""
+    flags = []
+    for option in service.get('security_opt') or []:
+        flags += ['--security-opt', option]
+    for capability in service.get('cap_drop') or []:
+        flags += ['--cap-drop', capability]
+    for capability in service.get('cap_add') or []:
+        flags += ['--cap-add', capability]
+    if service.get('read_only'):
+        flags.append('--read-only')
+    for folder in service.get('tmpfs') or []:
+        flags += ['--tmpfs', folder]
+    return flags
+
+
 def nginx_service(compose_text):
-    """The nginx service's image, environment and mounts from docker-compose.yml."""
+    """The nginx service's image, environment, mounts and run flags from docker-compose.yml."""
     import yaml  # here, so the pure helpers above load without PyYAML
     service = yaml.safe_load(compose_text)['services']['nginx']
     environment = service.get('environment') or {}
     if isinstance(environment, list):
         environment = dict(item.split('=', 1) for item in environment)
-    return service['image'], {key: interpolate(value) for key, value in environment.items()}, service.get('volumes') or []
+    return Service(service['image'], {key: interpolate(value) for key, value in environment.items()},
+                   service.get('volumes') or [], run_flags(service))
 
 
 def https_example(guide_text):
@@ -94,19 +119,20 @@ def mounts(volumes, conf_d, certs):
     return out
 
 
-def nginx_t(image, environment, volumes, conf_d, certs):
+def nginx_t(service, environment, conf_d, certs):
     """nginx -T in a throwaway container, as (passed, everything it printed)."""
-    args = ['docker', 'run', '--rm', '--network', 'none']
+    args = ['docker', 'run', '--rm', '--network', 'none'] + service.flags
     for key, value in environment.items():
         args += ['-e', f'{key}={value}']
-    args += mounts(volumes, conf_d, certs) + [image, 'nginx', '-T']
+    args += mounts(service.volumes, conf_d, certs) + [service.image, 'nginx', '-T']
     run = subprocess.run(args, capture_output=True, text=True)
     printed = run.stdout + run.stderr
     return run.returncode == 0 and 'test is successful' in run.stderr, printed
 
 
 def main():
-    image, environment, volumes = nginx_service(read(COMPOSE))
+    service = nginx_service(read(COMPOSE))
+    image, environment = service.image, service.environment
     failed = False
     with tempfile.TemporaryDirectory() as tmp:
         empty, conf_d, certs = (os.path.join(tmp, name) for name in ('empty', 'conf.d', 'certs'))
@@ -121,8 +147,13 @@ def main():
         )
         for folder in (empty, conf_d, certs):
             os.chmod(folder, 0o755)
-        for name in os.listdir(certs):
-            os.chmod(os.path.join(certs, name), 0o644)
+        # The guide copies the key in with sudo and gives it to the account
+        # that runs CozyVTT: readable by that account alone. nginx reads it as
+        # root, and only the capability the compose file gives it lets it.
+        os.chmod(os.path.join(certs, 'server.crt'), 0o644)
+        os.chmod(os.path.join(certs, 'server.key'), 0o600)
+        if os.geteuid() == 0:
+            os.chown(os.path.join(certs, 'server.key'), 1000, 1000)
 
         runs = (
             ('as shipped', environment, empty, empty, ()),
@@ -130,7 +161,7 @@ def main():
             ('with HTTPS', environment, conf_d, certs, ('listen 443 ssl;', 'include /etc/nginx/cozyvtt/locations.conf;')),
         )
         for label, env, conf, cert, expected in runs:
-            passed, printed = nginx_t(image, env, volumes, conf, cert)
+            passed, printed = nginx_t(service, env, conf, cert)
             missing = [line for line in expected if line not in printed]
             if passed and not missing:
                 print(f'{image} {label}: nginx accepts the configuration')
