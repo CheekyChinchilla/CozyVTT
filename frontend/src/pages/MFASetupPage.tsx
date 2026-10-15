@@ -9,7 +9,7 @@
 // ============================================
 
 import { useState, useEffect } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { Shield, Copy, CheckCircle, AlertTriangle, Loader2, ChevronRight } from 'lucide-react';
 import Button from '@/components/ui/Button';

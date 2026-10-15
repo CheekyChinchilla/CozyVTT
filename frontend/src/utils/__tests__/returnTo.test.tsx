@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { AxiosError, type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
 import { returnPathFrom, safeReturnPath, signInPath } from '../returnTo';
 
@@ -118,6 +118,18 @@ describe('the sign-in page', () => {
   it('goes to the dashboard when the page asked for is on another site', () => {
     auth.mockReturnValue(signedIn);
     renderAt('/auth/login?next=%2F%2Fevil.example');
+
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+
+  // A browser reads `/\host` as another site, and React Router 6 passed such
+  // an address on to the browser as it was.
+  it.each([
+    ['as typed', '/auth/login?next=/\\evil.example'],
+    ['encoded', '/auth/login?next=%2F%5Cevil.example'],
+  ])('goes to the dashboard when the page asked for starts with a backslash, %s', (_name, path) => {
+    auth.mockReturnValue(signedIn);
+    renderAt(path);
 
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });

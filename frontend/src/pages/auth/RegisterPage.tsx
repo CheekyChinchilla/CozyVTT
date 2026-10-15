@@ -5,7 +5,7 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   isValidEmail,

@@ -20,7 +20,7 @@ const fakeSocket = {
 };
 const pingSession = vi.fn();
 
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/services/api', () => ({ default: { pingSession: () => pingSession() } }));
 vi.mock('@/services/socket', () => ({
   default: {

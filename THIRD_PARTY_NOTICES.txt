@@ -165,12 +165,12 @@ lucide-react 1.x
   Note: The icons Lucide derives from Feather are under the MIT License,
   Copyright (c) 2013-present Cole Bemis (https://github.com/feathericons/feather).
 
-react 18.x
+react 19.x
   Copyright (c) Meta Platforms, Inc. and affiliates
   License: MIT
   https://github.com/facebook/react
 
-react-dom 18.x
+react-dom 19.x
   Copyright (c) Meta Platforms, Inc. and affiliates
   License: MIT
   https://github.com/facebook/react
@@ -185,10 +185,13 @@ react-resizable-panels 4.x
   License: MIT
   https://github.com/bvaughn/react-resizable-panels
 
-react-router-dom 6.x
-  Copyright (c) Remix Software Inc.
+react-router 8.x
+  Copyright (c) React Training LLC 2015-2019, Remix Software Inc. 2020-2021,
+  Shopify Inc. 2022-2023
   License: MIT
   https://github.com/remix-run/react-router
+  Note: It brings @remix-run/route-pattern, Copyright (c) 2025 Shopify Inc.,
+  and cookie-es, Copyright (c) Pooya Parsa, both under the MIT License.
 
 remark-breaks 4.x
   Copyright (c) 2017 Titus Wormer

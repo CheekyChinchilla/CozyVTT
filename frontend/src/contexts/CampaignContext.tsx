@@ -13,7 +13,7 @@ import {
   useRef,
   ReactNode,
 } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';

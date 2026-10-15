@@ -1,6 +1,6 @@
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
 import App from './App.tsx';
+import AppRouter from './AppRouter.tsx';
 import './assets/fonts/fonts.css';
 import './index.css';
 
@@ -10,7 +10,7 @@ import './index.css';
 // The WebSocketContext and socketClient are designed to handle connection lifecycle
 // correctly without it.
 ReactDOM.createRoot(document.getElementById('root')!).render(
-  <BrowserRouter>
+  <AppRouter>
     <App />
-  </BrowserRouter>
+  </AppRouter>
 );

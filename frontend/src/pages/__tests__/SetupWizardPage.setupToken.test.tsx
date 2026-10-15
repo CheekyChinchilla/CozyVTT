@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import SetupWizardPage from '../SetupWizardPage';
 
 vi.mock('framer-motion', () => {
@@ -30,8 +30,8 @@ const adoptSession = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ adoptSession }) }));
 
 const navigate = vi.fn();
-vi.mock('react-router-dom', async () => ({
-  ...(await vi.importActual<typeof import('react-router-dom')>('react-router-dom')),
+vi.mock('react-router', async () => ({
+  ...(await vi.importActual<typeof import('react-router')>('react-router')),
   useNavigate: () => navigate,
 }));
 

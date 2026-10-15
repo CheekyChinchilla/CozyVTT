@@ -10,7 +10,7 @@
 
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor, act } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 
 const getCampaign = vi.fn();
 const getMap = vi.fn();

@@ -59,10 +59,14 @@ export default [
       // TODO(ratchet): four of the React Compiler rules that came with
       // eslint-plugin-react-hooks 7, off for the reason exhaustive-deps is.
       // They ask for code the React Compiler can rewrite, and CozyVTT does
-      // not use the compiler. Each of their 120 findings when they arrived
+      // not use the compiler. They find 121 places on React 19
       // (set-state-in-effect 85, refs 26, immutability 5,
-      // preserve-manual-memoization 5) is a change to when an effect or a
-      // render runs, so each needs its own review; revisit with React 19.
+      // preserve-manual-memoization 5), and each fix changes when an effect
+      // or a render runs, so each needs its own review. They come on one at a
+      // time, each in its own branch: immutability and
+      // preserve-manual-memoization first, then refs, moving the refs that
+      // only carry the latest value into an effect to useEffectEvent, then
+      // set-state-in-effect.
       // The plugin's other recommended rules, rules-of-hooks among them, are on.
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/refs': 'off',

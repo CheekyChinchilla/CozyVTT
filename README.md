@@ -130,7 +130,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - Jest for testing
 
 **Frontend**
-- React 18 + TypeScript (strict mode)
+- React 19 + TypeScript (strict mode)
 - Vite build tooling
 - Tailwind CSS with custom design tokens
 - Zustand for live session state; TanStack Query (React Query) for REST data

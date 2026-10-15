@@ -10,7 +10,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useAssetDelete } from '@/hooks/useAssetDelete';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import {
   Users,
   Settings,

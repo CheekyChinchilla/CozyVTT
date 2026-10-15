@@ -55,6 +55,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | Package | Purpose | License |
 |---------|---------|---------|
 | [React](https://react.dev/) | Frontend UI library | MIT |
+| [React Router](https://reactrouter.com/) | Moves between the app's pages (8.x) | MIT |
 | [Vite](https://vitejs.dev/) | Frontend build tooling | MIT |
 | [Playwright](https://playwright.dev/) | Browser smoke tests, for development only; not part of an instance | Apache-2.0 |
 | [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |

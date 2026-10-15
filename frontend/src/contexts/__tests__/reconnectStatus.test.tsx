@@ -24,7 +24,7 @@ const newFakeSocket = () => ({
 });
 let fakeSocket = newFakeSocket();
 
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/services/api', () => ({ default: { pingSession: vi.fn().mockResolvedValue(undefined) } }));
 const clientConnect = vi.fn().mockResolvedValue(undefined);
 const rebuiltCallbacks: Array<() => void> = [];

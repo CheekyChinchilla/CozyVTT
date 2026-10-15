@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterEditorPage from '../CharacterEditorPage';
 import { dnd5eCharacter } from '@/components/character-sheets/dnd5e/__tests__/dnd5eFixture';

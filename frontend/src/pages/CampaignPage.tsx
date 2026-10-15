@@ -9,7 +9,7 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { useAuth } from '@/contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';

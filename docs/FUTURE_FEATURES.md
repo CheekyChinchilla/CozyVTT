@@ -153,18 +153,19 @@ _Nothing at present._
   with a patch release or two. Vite, Vitest,
   Express and React are a major version or more behind. React Router 6 has
   two moderate advisories that cannot be reached in CozyVTT, a single-page
-  app with no server rendering that never navigates to an address taken
-  from a link; version 7.18 or later clears them. 1.5.2 updates every
-  package within its current major version, moves to ESLint 10, and fails CI
-  on a high or critical advisory in what an instance runs. **Do** in 1.5.3, a
-  release of its own: Prisma to its newest stable major first, with a full
-  upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
-  React Router 7. Dependabot holds back major versions of npm packages until
-  then, and its automatic security pull requests are turned on once 1.5.3
-  ships. **Done** for the frontend's build and test tools: Vite 8 with
-  @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7; and for the
-  backend's web framework: Express 5. **Defer**
-  Tailwind CSS 4 and TypeScript 7.
+  app with no server rendering whose one address taken from a link, the page
+  to go back to after signing in, is followed only when it is a path on this
+  site with no backslash in it; version 7.18 or later clears them. 1.5.2
+  updates every package within its current major version, moves to ESLint
+  10, and fails CI on a high or critical advisory in what an instance runs.
+  **Do** in 1.5.3, a release of its own: Prisma to its newest stable major
+  first, with a full upgrade rehearsal, then Vite and Vitest, Express 5, and
+  React 19 with React Router 7. Dependabot holds back major versions of npm
+  packages until then, and its automatic security pull requests are turned
+  on once 1.5.3 ships. **Done** for the frontend's build and test tools:
+  Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7; for
+  the backend's web framework: Express 5. **Done** for React: React 19.3 with React Router 8.4, which clears both
+  advisories. **Defer** Tailwind CSS 4 and TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
   on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's

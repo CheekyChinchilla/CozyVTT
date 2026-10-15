@@ -24,13 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Many of the app's icons are drawn a little differently.** The icon set has moved to a new version, which redraws more than half of the icons CozyVTT uses, such as the ones for saving, deleting and settings. Each still stands for what it did before, so an icon that looks new is expected. Screen readers now pass over icons that are only decoration, and still read out an icon that has a label of its own, such as the loading spinner.
 
-- **The libraries the app is built on are updated.** The one that animates pop-up messages, dialogs, side panels and dice rolls moves to a new version, and they move as before. With your device's reduce motion setting turned on, they still fade in where they stand without sliding or growing. The one that shows personal notes and documents written in Markdown moves to a new version too. Notes and documents look as they did, and the same rules apply: HTML typed into them is shown as text, unsafe links do nothing, and only pictures from this instance's own maps, tokens and avatars are shown. The next `docker compose up -d --build` installs both.
+- **The libraries the app is built on are updated.** The one that animates pop-up messages, dialogs, side panels and dice rolls moves to a new version, and they move as before. With your device's reduce motion setting turned on, they still fade in where they stand without sliding or growing. The one that shows personal notes and documents written in Markdown moves to a new version too. Notes and documents look as they did, and the same rules apply: HTML typed into them is shown as text, unsafe links do nothing, and only pictures from this instance's own maps, tokens and avatars are shown. React, the library that draws every page of the app, moves to version 19, and the one that takes you from page to page is updated with it. The next `docker compose up -d --build` installs them.
 
 ### Security
 
 - **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
 
 - **The check of who belongs to a campaign takes the campaign from the request's address alone.** When the address named no campaign, the check would also read one from the data sent with the request. Every campaign route already names its campaign in the address, so no request could reach this and nothing changes for anyone. A route added later cannot be checked against a campaign the request chooses.
+
+- **Two security advisories against the library that moves between the app's pages are cleared.** They were published for React Router 6, which 1.5.2 and earlier releases use. One is about links to an address that starts with a slash and a backslash, which a browser reads as another site; the other affects only apps that build their pages on a server. Neither could be reached in CozyVTT: the one address it takes from a link, the page to go back to after signing in, is followed only when it is a path on this instance with no backslash in it, and every page is built in the browser.
 
 ---
 

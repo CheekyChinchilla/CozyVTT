@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event';
 
 const { previewCampaignImport, importCampaign } = vi.hoisted(() => ({ previewCampaignImport: vi.fn(), importCampaign: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: { previewCampaignImport, importCampaign } }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
 
 import CampaignImportDialog from '../CampaignImportDialog';
 

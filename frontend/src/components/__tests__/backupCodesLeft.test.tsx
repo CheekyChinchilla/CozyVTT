@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, fireEvent } from '@testing-library/react';
-import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import MFASection from '@/components/profile/MFASection';

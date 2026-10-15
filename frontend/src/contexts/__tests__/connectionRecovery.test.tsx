@@ -61,7 +61,7 @@ vi.mock('socket.io-client', () => ({
     return s;
   },
 }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/services/api', () => ({
   api: { listCampaigns: vi.fn(), pingSession: vi.fn().mockResolvedValue(undefined) },
   default: { listCampaigns: vi.fn(), pingSession: vi.fn().mockResolvedValue(undefined) },

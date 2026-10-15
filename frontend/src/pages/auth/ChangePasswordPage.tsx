@@ -7,7 +7,7 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { KeyRound, AlertCircle, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
