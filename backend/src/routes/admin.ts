@@ -32,7 +32,7 @@ import { writeAdminLog } from '../services/systemLog';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
-import { UPLOAD_LIMITS } from '../utils/fileUtils';
+import { SERVER_BUILT_PATH, UPLOAD_LIMITS } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
 import {
@@ -1121,7 +1121,7 @@ router.get('/backups/:filename/download', async (req, res) => {
     return res.status(404).json({ error: 'Not Found', message: 'Backup file not found' });
   }
 
-  return res.download(filepath, filename);
+  return res.download(filepath, filename, SERVER_BUILT_PATH);
 });
 
 // ============================================

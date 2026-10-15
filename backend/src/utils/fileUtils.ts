@@ -343,6 +343,15 @@ export function isAllowedExtension(assetType: AssetType, extension: string): boo
 }
 
 /**
+ * Options for `res.sendFile` and `res.download` on a path the server built
+ * itself, from a stored row or a name it has checked. Express 5's file sender
+ * refuses any path with a folder whose name starts with a dot, and the
+ * uploads or backups folder may sit inside one, such as
+ * `~/.local/share/cozyvtt`. Never pass this for a path taken from a request.
+ */
+export const SERVER_BUILT_PATH = { dotfiles: 'allow' } as const;
+
+/**
  * The uploads folder as an absolute path: `UPLOAD_DIR`, or `uploads` in the
  * working directory. Read when asked, so a test that sets UPLOAD_DIR is
  * followed.

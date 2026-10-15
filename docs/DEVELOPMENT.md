@@ -653,6 +653,12 @@ Some of those deserve a note:
   `backend/src/middleware/bodyParsers.ts` puts it there.** Express 5 leaves
   it `undefined`, and many handlers destructure it straight away; keep that
   middleware right after the JSON parser.
+- **A file the server sends from its own folders takes `SERVER_BUILT_PATH`**
+  (`backend/src/utils/fileUtils.ts`) as `res.sendFile` or `res.download`
+  options. Express 5 refuses a path with any folder whose name starts with a
+  dot, and a self-hoster's uploads or backups folder can sit inside one;
+  `hiddenStorageFolder.e2e.test.ts` serves every kind of file from such a
+  folder. Never pass it for a path taken from a request.
 - **Every rate limiter is tested where it is attached.**
   `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
   limited route: it sends the limit's worth of failing requests to the real
