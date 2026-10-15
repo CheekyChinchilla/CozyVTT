@@ -60,7 +60,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |
 | [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
 | [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) | Resizable session workspace | MIT |
-| [Framer Motion](https://www.framer.com/motion/) | Animations | MIT |
+| [Framer Motion](https://motion.dev/) | Animations | MIT |
 | [react-markdown](https://github.com/remarkjs/react-markdown) | Renders personal notes and documents written in Markdown | MIT |
 | [remark-gfm](https://github.com/remarkjs/remark-gfm) | Tables, strikethrough, task lists and autolinks in that Markdown | MIT |
 | [remark-breaks](https://github.com/remarkjs/remark-breaks) | A single newline as a line break in that Markdown | MIT |

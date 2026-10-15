@@ -24,6 +24,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Many of the app's icons are drawn a little differently.** The icon set has moved to a new version, which redraws more than half of the icons CozyVTT uses, such as the ones for saving, deleting and settings. Each still stands for what it did before, so an icon that looks new is expected. Screen readers now pass over icons that are only decoration, and still read out an icon that has a label of its own, such as the loading spinner.
 
+- **The libraries the app is built on are updated.** The one that animates pop-up messages, dialogs, side panels and dice rolls moves to a new version, and they move as before. With your device's reduce motion setting turned on, they still fade in where they stand without sliding or growing. The next `docker compose up -d --build` installs it.
+
 ### Security
 
 - **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
