@@ -24,7 +24,7 @@
     "lucide-react": "^1.57.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-markdown": "^9.1.0",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^4.14.5",
     "react-router-dom": "^6.30.6",
     "remark-breaks": "^4.0.0",
