@@ -222,7 +222,7 @@ There is no seed data yet: `backend/prisma/seed.ts` is a stub that logs two line
 
 ## Local Setup (With Docker)
 
-> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which publishes the database, the backend and the frontend on this computer only (`127.0.0.1`), runs the backend under nodemon in development mode with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which publishes the database, the backend and the frontend on this computer only (`127.0.0.1`), runs the backend under Node's watch mode in development mode with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ```bash
 # Copy the root .env template
@@ -261,7 +261,7 @@ docker compose -f docker-compose.dev.yml -f docker-compose.dev.local.yml up
 
 Then open `http://<this computer's address>:3001` on the other device; a name rather than an address also needs adding to `VITE_ALLOWED_HOSTS` in `.env`. Anyone on that network can reach it too, so do this only on a network you trust.
 
-The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. The backend's start script (`backend/scripts/start.sh`) applies any pending migrations with `prisma migrate deploy` each time the container starts.
+The backend container runs `npm run dev`, which restarts the backend when a file it has loaded changes (`node --watch`, below). The frontend container runs `vite` with hot module replacement. The backend's start script (`backend/scripts/start.sh`) applies any pending migrations with `prisma migrate deploy` each time the container starts.
 
 **Each container has its own `node_modules` and its own generated Prisma client.** Source is bind-mounted, `node_modules` is not, so after adding a dependency or changing `schema.prisma` the running container does not see it until you tell it to. Vite answers a missing package with a 500 and the app shows "Something went wrong"; the backend throws on the first query that touches a new table:
 
@@ -286,7 +286,7 @@ The practical consequence: **a CSP violation cannot appear during development**.
 
 | | Production (`docker-compose.yml`) | Development (`docker-compose.dev.yml`) |
 |---|---|---|
-| Backend | Compiled JS, no source on disk | Source mounted, nodemon |
+| Backend | Compiled JS, no source on disk | Source mounted, `node --watch` |
 | Frontend | Pre-built static files via Nginx | Vite dev server with HMR |
 | Database port | **Not exposed to host** | Exposed on `localhost:5432` |
 | Backend port | **Not exposed to host** | Exposed on `localhost:4000` |
@@ -372,6 +372,8 @@ npm run dev
 ```
 
 The Vite dev server proxies all `/api/*` and WebSocket traffic to the backend. You only need to open `http://localhost:3000`.
+
+The backend's `npm run dev` is `node --watch -r ts-node/register src/server.ts`. Node watches every file the backend has loaded and, when one changes, stops the backend with SIGTERM, so it closes its sockets and database connections as it does when Docker stops the production container, and starts it again. A new file is watched once something imports it. A change to a file the backend never loads does not restart it: tests, `.env` and `prisma/schema.prisma` among them. After a type error, the backend stays stopped until the next change to a file it loaded.
 
 ### Building for Production
 
@@ -736,9 +738,10 @@ also does what self-hosters run and a developer usually does not:
   an instance. Each of these steps runs whatever the ones before it found,
   so a failing backend audit still shows the frontend's result.
   When a package an instance runs asks for a dependency at a version with
-  a high advisory, and no release of that package asks for a fixed one yet,
-  the backend's `package.json` holds the dependency at a fixed version under
-  `overrides`, naming the package that asks for it. `keepInStep.test.ts`
+  a high advisory, or a developer tool asks for one with any advisory, and
+  no release of that package asks for a fixed one yet, the backend's
+  `package.json` holds the dependency at a fixed version under `overrides`,
+  naming the package that asks for it. `keepInStep.test.ts`
   fails once an update of that package asks for the held version or a newer
   one, which is when the override has to go.
 

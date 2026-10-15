@@ -3,7 +3,7 @@
 #
 # Publishes every service on this computer only (127.0.0.1), for debugging:
 #   Frontend: http://localhost:3000  (Vite hot-reload)
-#   Backend:  http://localhost:4000  (nodemon watch)
+#   Backend:  http://localhost:4000  (node --watch)
 #   Database: localhost:5432
 # A port published without an address is open on every network interface,
 # and Docker's published ports bypass a host firewall such as UFW.
