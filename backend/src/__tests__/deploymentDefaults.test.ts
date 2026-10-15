@@ -40,8 +40,11 @@
  * container cannot write another account's files, so the maintenance
  * commands the guides give run as the backend's own user. The frontend
  * container, which only serves files, runs on a read-only filesystem with
- * memory-backed folders for nginx's own scratch files. The README says what
- * runs as root, and no more.
+ * memory-backed folders for nginx's own scratch files. So does the proxy,
+ * whose settings the entrypoint renders into memory as it starts; its
+ * request and response files, which a 50 MB upload fills, are on a volume,
+ * outside its 64 MB memory limit. The README says what runs as root, and no
+ * more.
  */
 
 import fs from 'fs';
