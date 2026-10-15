@@ -682,6 +682,12 @@ also does what self-hosters run and a developer usually does not:
   project's developer tools too, and fails nothing, since those never reach
   an instance. Each of these steps runs whatever the ones before it found,
   so a failing backend audit still shows the frontend's result.
+  When a package an instance runs asks for a dependency at a version with
+  a high advisory, and no release of that package asks for a fixed one yet,
+  the backend's `package.json` holds the dependency at a fixed version under
+  `overrides`, naming the package that asks for it. `keepInStep.test.ts`
+  fails once an update of that package asks for the held version or a newer
+  one, which is when the override has to go.
 
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into

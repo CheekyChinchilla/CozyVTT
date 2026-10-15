@@ -25,13 +25,11 @@ type Project = 'frontend' | 'backend';
 
 /**
  * The licence of each production package whose lockfile entry records none.
- * Most declare it in the older `licenses` field of their package.json, which
- * npm does not copy into the lockfile; seq-queue (under the Prisma
- * command-line tool) declares none, and its LICENSE file is the MIT licence.
+ * They declare it in the older `licenses` field of their package.json, which
+ * npm does not copy into the lockfile.
  */
 const LICENCE_NOT_IN_LOCKFILE: Record<string, string> = {
   busboy: 'MIT',
-  'seq-queue': 'MIT',
   streamsearch: 'MIT',
   'xmlhttprequest-ssl': 'MIT',
 };

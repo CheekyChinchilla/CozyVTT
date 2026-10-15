@@ -77,6 +77,14 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3"
   },
+  "overrides": {
+    "prisma": {
+      "mysql2": "3.24.6"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    }
+  },
   "engines": {
     "node": ">=26.0.0"
   },
