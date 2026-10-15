@@ -132,6 +132,7 @@ model User {
   creatureFavorites   CreatureFavorite[]
   tokenTemplates      TokenTemplate[]
   characterTemplates  CharacterTemplate[]    @relation("CharacterTemplateAuthor")
+  creatureTemplates   CreatureTemplate[]     @relation("CreatureTemplateAuthor")
   personalNotes       PersonalNote[]
   diceMacros          DiceMacro[]
   mapExplorations     MapExploration[]
@@ -661,8 +662,11 @@ model CreatureTemplate {
   disposition  String      @default("hostile")                     // friendly/neutral/hostile
   displayMode  String      @default("pog")                         // pog/top-down/full-art
 
-  // Ownership: null = global SRD, userId = homebrew by that user
+  // Who made it: null for the seeded SRD creatures, and for any whose
+  // author's account has been deleted, which keeps the creature. `source`
+  // says whether it is SRD or homebrew.
   createdById  String?
+  createdBy    User?      @relation("CreatureTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   campaignId   String?    // null = available globally, set = campaign-specific
   campaign     Campaign?  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
 
@@ -676,6 +680,7 @@ model CreatureTemplate {
   @@index([source])
   @@index([campaignId])
   @@index([name])
+  @@index([createdById])
 }
 
 // ============================================

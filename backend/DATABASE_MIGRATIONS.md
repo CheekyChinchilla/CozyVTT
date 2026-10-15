@@ -116,6 +116,15 @@ about; the list is not exhaustive.
   and change nothing, and no one is signed out. A new install gets it from
   the migrations. With the table described in the schema, `prisma db push` and
   `migrate dev` no longer offer to drop it.
+- `20261015033738_creature_template_author_set_null` - `CreatureTemplate.createdById`
+  gets a foreign key to `User` that sets it to null when the author's account
+  is deleted, and an index. This one changes rows, and like every migration it
+  runs by itself when the backend starts: before adding the key, it clears the
+  author id of every creature whose author's account was already deleted,
+  since the key cannot be added while any row names a missing user. Those ids
+  point at nothing, so nothing that can be looked up is lost, and every
+  creature stays. It is safe to run twice: a second run finds nothing to clear
+  and makes the index and the key again only if they are missing.
 
 ## Data migrations (one-off scripts)
 

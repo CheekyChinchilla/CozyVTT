@@ -506,6 +506,7 @@ erDiagram
         string disposition
         string displayMode
         string imageUrl
+        string createdById FK
         string campaignId FK
     }
 
@@ -584,6 +585,7 @@ erDiagram
     User ||--o{ Asset : "uploaded"
     Campaign ||--o{ Asset : "scoped to"
     Campaign ||--o{ CreatureTemplate : "scoped to"
+    User ||--o{ CreatureTemplate : "made"
     CreatureTemplate ||--o{ CreatureFavorite : "favorited as"
     User ||--o{ CreatureFavorite : "has favorites"
     Campaign ||--o{ CreatureFavorite : "scoped to"

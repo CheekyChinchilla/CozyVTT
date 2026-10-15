@@ -24,7 +24,7 @@ The schema is in [`schema.prisma`](./schema.prisma) — 22 models grouped by dom
 - `Character` — flexible JSON-backed character sheets, optionally bound to a campaign + game system
 - `Map` — base + spirit layer, tokens, walls, lights, fog, annotations; per-map switches for fog of war, Global Illumination and explored memory (`fogEnabled`, `globalIllumination`, `explorationEnabled`, all default on so existing maps keep their behaviour)
 - `MapExploration` — one player's explored cells on one map; never read when deciding which tokens to send
-- `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global)
+- `CreatureTemplate` — SRD bestiary + custom creatures (campaign-scoped or global). `source` says which; `createdById` is the author, null for SRD creatures and once the author's account is deleted
 - `CreatureFavorite` — DM's per-campaign starred creatures
 - `TokenTemplate` — reusable token configurations copyable across campaigns
 - `CharacterTemplate` — shareable starter sheets any signed-in user can copy
@@ -76,7 +76,7 @@ Note: `AssetType` includes `OTHER`, but the upload route rejects it — only MAP
 - **Cascade deletions** — deleting a campaign removes its memberships, invitations, maps (and their explored memory), sessions, messages, dice rolls, creature templates and favourites, token templates, personal notes, dice macros and document links. Its campaign-scoped assets are kept: the delete route turns each into its uploader's USER asset first, and `Asset.campaignId` is `SetNull`
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
-- **Deleting a user** keeps their chat messages, dice rolls and the uploads that stay (see `Asset` above) with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they hold the DM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
+- **Deleting a user** keeps their chat messages, dice rolls, the uploads that stay (see `Asset` above), their published character templates and the creatures they made, with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they hold the DM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
 
 ## JSON columns
 
