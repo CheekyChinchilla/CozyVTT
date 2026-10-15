@@ -24,6 +24,10 @@ updates:
       # once both support it.
       - dependency-name: typescript
         update-types: [version-update:semver-major]
+      # typescript-eslint accepts TypeScript below 6.1 only, so a grouped
+      # minor update to 6.1 would fail to install. Remove once it accepts 6.1.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
       # @types/node moves with the Node major the images and CI run, by hand
       # and only to an even (long-term support) one; keepInStep.test.ts holds
       # them together. This entry stays.
@@ -59,6 +63,10 @@ updates:
       # supports it.
       - dependency-name: typescript
         update-types: [version-update:semver-major]
+      # typescript-eslint accepts TypeScript below 6.1 only, so a grouped
+      # minor update to 6.1 would fail to install. Remove once it accepts 6.1.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
 
   # The actions CI runs, pinned to commit SHAs; Dependabot moves the SHA and
   # its version comment together.
