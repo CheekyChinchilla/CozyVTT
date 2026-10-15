@@ -32,7 +32,7 @@
     "@prisma/client": "7.10.0",
     "archiver": "^7.0.1",
     "argon2": "^0.44.0",
-    "connect-pg-simple": "^9.0.1",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
     "express": "^4.22.3",
