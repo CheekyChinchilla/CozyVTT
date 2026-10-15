@@ -55,6 +55,7 @@ import { adminService } from '@/services/admin.service';
 import type {
   User,
   SystemStats,
+  AdminHealth,
   AdminSystemSettings,
   AdminActivityData,
   AdminOnlineUser,
@@ -79,9 +80,12 @@ import ThemePicker from '@/components/appearance/ThemePicker';
 import TableSkeleton from '@/components/skeletons/TableSkeleton';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiDeletionBlockers } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiDeletionBlockers } from '@/utils/errors';
+import Modal from '@/components/ui/Modal';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
+import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
+import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -178,6 +182,10 @@ export default function AdminPage() {
   const [stats, setStats] = useState<SystemStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
   const [statsError, setStatsError] = useState('');
+  // What the server says about itself, for the status card; when it could
+  // not be asked, whether the request reached the server at all.
+  const [health, setHealth] = useState<AdminHealth | null>(null);
+  const [healthFailed, setHealthFailed] = useState<{ reachedServer: boolean } | null>(null);
 
   // ---- Users ----
   const [users, setUsers] = useState<User[]>([]);
@@ -236,12 +244,15 @@ export default function AdminPage() {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     instanceName: '',
-    timezone: 'UTC',
     allowRegistration: false,
     requireAdminApproval: true,
   });
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [settingsError, setSettingsError] = useState('');
+  // Why the settings could not be loaded. Until they are, the Settings and
+  // Appearance tabs show this and Retry, never a form: one filled with
+  // placeholders would save them over the real settings.
+  const [settingsLoadError, setSettingsLoadError] = useState('');
 
   // ---- Appearance ----
   const { refreshAppearance } = useTheme();
@@ -298,9 +309,13 @@ export default function AdminPage() {
   const [adminAssetsPage, setAdminAssetsPage] = useState(1);
   const [adminAssetsScope, setAdminAssetsScope] = useState('');
   const [adminAssetsType, setAdminAssetsType] = useState('');
+  // 'none': only assets whose uploader's account was deleted.
+  const [adminAssetsOwner, setAdminAssetsOwner] = useState('');
   const [adminAssetsSearch, setAdminAssetsSearch] = useState('');
   const debouncedAdminAssetsSearch = useDebounce(adminAssetsSearch, 300);
   const [adminCampaigns, setAdminCampaigns] = useState<Campaign[]>([]);
+  // Which asset list request is the newest: an older answer is ignored.
+  const adminAssetsRequestRef = useRef(0);
   // Per-row scope change: if set, this asset's row shows the campaign picker
   const [assetScopePicker, setAssetScopePicker] = useState<{ assetId: string; campaignId: string } | null>(null);
   const [assetScopeChanging, setAssetScopeChanging] = useState<string | null>(null);
@@ -320,17 +335,28 @@ export default function AdminPage() {
   // Data loaders
   // ============================================
 
+  const loadHealth = useCallback(async () => {
+    try {
+      setHealth(await adminService.getHealth());
+      setHealthFailed(null);
+    } catch (err: unknown) {
+      setHealth(null);
+      setHealthFailed({ reachedServer: apiErrorStatus(err) !== undefined });
+    }
+  }, []);
+
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
     setStatsError('');
+    void loadHealth();
     try {
       setStats(await adminService.getStats());
     } catch (err: unknown) {
-      setStatsError(err instanceof Error ? err.message : 'Failed to load stats');
+      setStatsError(apiErrorMessage(err) ?? (err instanceof Error ? err.message : 'Failed to load stats'));
     } finally {
       setStatsLoading(false);
     }
-  }, []);
+  }, [loadHealth]);
 
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
@@ -346,11 +372,11 @@ export default function AdminPage() {
 
   const loadSettings = useCallback(async () => {
     setSettingsLoading(true);
-    setSettingsError('');
+    setSettingsLoadError('');
     try {
       setSettings(await adminService.getSettings());
     } catch (err: unknown) {
-      setSettingsError(err instanceof Error ? err.message : 'Failed to load settings');
+      setSettingsLoadError(apiErrorMessage(err) ?? 'The settings could not be loaded.');
     } finally {
       setSettingsLoading(false);
     }
@@ -396,7 +422,9 @@ export default function AdminPage() {
     scope: string,
     type: string,
     search: string,
+    owner: string,
   ) => {
+    const request = ++adminAssetsRequestRef.current;
     setAdminAssetsLoading(true);
     setAdminAssetsError('');
     try {
@@ -406,14 +434,17 @@ export default function AdminPage() {
         scope: scope || undefined,
         type: type || undefined,
         search: search || undefined,
+        uploadedBy: owner || undefined,
       });
+      if (request !== adminAssetsRequestRef.current) return;
       setAdminAssets(resp.assets);
       setAdminAssetsTotal(resp.pagination.total);
       setAdminAssetsTotalPages(resp.pagination.totalPages);
     } catch (err: unknown) {
-      setAdminAssetsError(err instanceof Error ? err.message : 'Failed to load assets');
+      if (request !== adminAssetsRequestRef.current) return;
+      setAdminAssetsError(apiErrorMessage(err) ?? (err instanceof Error ? err.message : 'Failed to load assets'));
     } finally {
-      setAdminAssetsLoading(false);
+      if (request === adminAssetsRequestRef.current) setAdminAssetsLoading(false);
     }
   }, []);
 
@@ -431,7 +462,6 @@ export default function AdminPage() {
     if (settings) {
       setSettingsForm({
         instanceName: settings.instanceName,
-        timezone: settings.timezone,
         allowRegistration: settings.allowRegistration,
         requireAdminApproval: settings.requireAdminApproval,
       });
@@ -461,7 +491,8 @@ export default function AdminPage() {
     if (activeTab === 'activity' && !activity && !activityLoading) loadActivity();
     if (activeTab === 'backups' && backups.length === 0 && !backupsLoading) loadBackups();
     if (activeTab === 'assets') {
-      loadAdminAssets(1, '', '', '');
+      // With the filters the tab still shows, kept from the last visit.
+      loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
       if (adminCampaigns.length === 0) loadAdminCampaigns();
     }
   }, [activeTab]);  
@@ -469,13 +500,13 @@ export default function AdminPage() {
   // Reload assets when filters/page change
   useEffect(() => {
     if (activeTab !== 'assets') return;
-    loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch);
-  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch]);  
+    loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
+  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);  
 
   // Reset page when filters change
   useEffect(() => {
     setAdminAssetsPage(1);
-  }, [adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch]);
+  }, [adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);
 
   // ============================================
   // User management actions
@@ -592,6 +623,11 @@ export default function AdminPage() {
     if (left.length === 0) setDeleteError('');
   };
 
+  // TODO(ui): navigator.clipboard is undefined over plain HTTP, so on a LAN
+  // instance this copies nothing and says nothing; the temporary password
+  // stays on screen to copy by hand. Use copyText from utils/clipboard, which
+  // falls back to the older copy, and say so when it fails, as the two-factor
+  // Copy buttons do.
   const handleCopyToClipboard = async (text: string, setCopiedFn: (v: boolean) => void) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -627,8 +663,12 @@ export default function AdminPage() {
     setDeletingUserAssetCount(0);
     setLoadingDeleteWarning(u.id);
     try {
-      const resp = await api.listAssets({ uploadedBy: u.id, scope: 'USER', limit: 1 });
-      setDeletingUserAssetCount(resp.pagination.total);
+      // A list with no type leaves documents out, so they are counted apart.
+      const [files, documents] = await Promise.all([
+        api.listAssets({ uploadedBy: u.id, scope: 'USER', limit: 1 }),
+        api.listAssets({ uploadedBy: u.id, scope: 'USER', type: 'DOCUMENT', limit: 1 }),
+      ]);
+      setDeletingUserAssetCount(files.pagination.total + documents.pagination.total);
     } catch {
       // non-fatal — just proceed without warning
     } finally {
@@ -742,8 +782,7 @@ export default function AdminPage() {
       setAssetScopePicker(null);
       showToast('Asset scope updated', 'success');
     } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: string } } };
-      showToast(e.response?.data?.error ?? 'Failed to update scope', 'error');
+      showToast(apiErrorMessage(err) ?? 'Failed to update scope', 'error');
     } finally {
       setAssetScopeChanging(null);
     }
@@ -854,6 +893,8 @@ export default function AdminPage() {
       const updated = await adminService.updateSettings(settingsForm);
       setSettings(updated);
       showToast('Settings saved!', 'success');
+      // The instance name is the browser tab's title.
+      void refreshAppearance();
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
       setSettingsError(apiErrorMessage(e) ?? 'Failed to save settings');
@@ -989,6 +1030,27 @@ export default function AdminPage() {
               </div>
             ) : (
               <div className="space-y-6">
+                {/* No per-user storage quota is enforced: this warning is the
+                    check, before uploads, backups or the database fail. */}
+                {stats?.uploadsDisk?.warning && (
+                  <div
+                    role="alert"
+                    aria-label="Disk nearly full"
+                    className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-4 text-sm flex items-start gap-3"
+                  >
+                    <HardDrive className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                    <div>
+                      <p className="font-semibold">
+                        The disk that holds your uploads is {stats.uploadsDisk.usedPercent}% full ({formatBytes(stats.uploadsDisk.freeBytes)} free).
+                      </p>
+                      <p className="mt-1">
+                        When it fills, uploads fail, and backups and the database stop working too if they are on the same disk.
+                        Delete files nobody needs from the Assets tab, delete old backups, or move the uploads folder to a larger disk.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Stat Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
@@ -1033,21 +1095,14 @@ export default function AdminPage() {
                       {stats ? formatBytes(stats.totalStorageBytes) : '\u2014'}
                     </p>
                     <p className="text-xs text-warm-gray mt-1">Storage</p>
+                    {stats?.uploadsDisk && (
+                      <p className={`text-xs mt-0.5 ${stats.uploadsDisk.warning ? 'text-danger-ink' : 'text-success-ink'}`}>
+                        {formatBytes(stats.uploadsDisk.freeBytes)} free on disk
+                      </p>
+                    )}
                   </div>
 
-                  <div className="glass-panel p-5 flex flex-col items-center text-center">
-                    <Shield className="w-7 h-7 text-success-ink mb-2" />
-                    <p className="text-sm font-bold text-success-ink">Healthy</p>
-                    <p className="text-xs text-warm-gray mt-1">Status</p>
-                    <div className="mt-2 space-y-1 text-left w-full">
-                      {[['API', true], ['DB', true], ['WS', true]].map(([label, ok]) => (
-                        <div key={String(label)} className="flex items-center justify-between text-xs">
-                          <span className="text-stone-gray">{label}</span>
-                          <span className={ok ? 'text-success-ink' : 'text-danger-ink'}>&#9679;</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <HealthCard health={health} failed={healthFailed} />
                 </div>
 
                 {/* Asset Breakdown Table */}
@@ -1324,7 +1379,7 @@ export default function AdminPage() {
                                           }
                                         }}
                                         disabled={isSelf}
-                                        title={isSelf ? 'Cannot reset your own MFA here' : 'Reset MFA — forces re-enrollment'}
+                                        title={isSelf ? 'Cannot reset your own MFA here' : 'Reset MFA'}
                                         className={`text-xs py-1 px-2 flex items-center gap-1 rounded border transition-colors ${
                                           isSelf
                                             ? 'opacity-40 cursor-not-allowed border-warm-gray/20 text-warm-gray'
@@ -1390,7 +1445,7 @@ export default function AdminPage() {
                                         Reset MFA for <strong>{u.displayName}</strong>?
                                       </p>
                                       <p className="text-xs text-warning-ink mb-3">
-                                        This clears their authenticator app enrollment. They will need to re-enroll on next login.
+                                        This clears their authenticator app enrollment. They sign in with their password alone until they set it up again; an administrator is asked to set it up within 7 days.
                                       </p>
                                       {resetMfaError && (
                                         <p className="text-xs text-danger-ink mb-2">{resetMfaError}</p>
@@ -1526,8 +1581,9 @@ export default function AdminPage() {
                                         <div className="flex items-start gap-2 mb-3 p-2.5 bg-warning/10 border border-warning/30 rounded-lg text-xs text-warning-ink">
                                           <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-warning-ink" />
                                           <span>
-                                            This user has <strong>{deletingUserAssetCount}</strong> personal asset{deletingUserAssetCount !== 1 ? 's' : ''}. They stay after the account is deleted, owned by no one, and only admins can see them then.
-                                            To keep them usable by others, promote them to Global scope from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
+                                            This user has <strong>{deletingUserAssetCount}</strong> personal file{deletingUserAssetCount !== 1 ? 's' : ''}. Their avatar, and any of them nothing uses and no campaign shares, are deleted with the account.
+                                            The rest stay, owned by no one, and a file a campaign uses can then be seen by admins alone.
+                                            To keep one usable, move it to Global or into the campaign from the <button onClick={() => { closeDeleteModal(); setActiveTab('assets'); }} className="underline hover:no-underline">Assets tab</button> first.
                                           </span>
                                         </div>
                                       )}
@@ -1587,7 +1643,7 @@ export default function AdminPage() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-brand-ink">Asset Management</h2>
               <Button
-                onClick={() => loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch)}
+                onClick={() => loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner)}
                 disabled={adminAssetsLoading}
                 variant="secondary" className="flex items-center gap-2 text-sm py-1.5 px-3"
               >
@@ -1635,12 +1691,26 @@ export default function AdminPage() {
                 value={adminAssetsType}
                 onChange={e => setAdminAssetsType(e.target.value)}
                 className="input-cozy text-sm"
+                aria-label="Type"
               >
                 <option value="">All Types</option>
                 <option value="MAP">Map</option>
                 <option value="TOKEN">Token</option>
                 <option value="AUDIO">Audio</option>
                 <option value="AVATAR">Avatar</option>
+                <option value="DOCUMENT">Document</option>
+              </select>
+
+              {/* Uploader filter: an asset whose uploader was deleted, in no
+                  campaign, is readable by admins alone */}
+              <select
+                value={adminAssetsOwner}
+                onChange={e => setAdminAssetsOwner(e.target.value)}
+                className="input-cozy text-sm"
+                aria-label="Uploader"
+              >
+                <option value="">Any Uploader</option>
+                <option value="none">No Uploader (account deleted)</option>
               </select>
             </div>
 
@@ -1698,6 +1768,8 @@ export default function AdminPage() {
                                     <img src={thumbUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                   ) : asset.type === AssetType.AUDIO ? (
                                     <FileAudio className="w-5 h-5 text-spirit-purple" />
+                                  ) : asset.type === AssetType.DOCUMENT ? (
+                                    <FileText className="w-5 h-5 text-stone-gray/60" />
                                   ) : (
                                     <ImageIcon className="w-5 h-5 text-stone-gray/40" />
                                   )}
@@ -1719,6 +1791,7 @@ export default function AdminPage() {
                                   {asset.type === AssetType.TOKEN && <UserIcon className="w-3 h-3 text-brand-ink" />}
                                   {asset.type === AssetType.AUDIO && <FileAudio className="w-3 h-3 text-spirit-purple" />}
                                   {asset.type === AssetType.AVATAR && <UserIcon className="w-3 h-3 text-sunset-orange" />}
+                                  {asset.type === AssetType.DOCUMENT && <FileText className="w-3 h-3 text-stone-gray" />}
                                   {asset.type}
                                 </span>
                               </td>
@@ -1739,7 +1812,7 @@ export default function AdminPage() {
                               </td>
                               {/* Uploader */}
                               <td className="px-3 py-2 text-warm-gray text-xs">
-                                {asset.uploadedBy?.displayName ?? '—'}
+                                {asset.uploadedBy?.displayName ?? 'No one'}
                               </td>
                               {/* Campaign */}
                               <td className="px-3 py-2 text-warm-gray text-xs">
@@ -1849,7 +1922,7 @@ export default function AdminPage() {
                 <div className="px-4 py-3 border-t border-warm-gray/10 flex items-center justify-between text-xs text-warm-gray">
                   <span>
                     {adminAssetsTotal} asset{adminAssetsTotal !== 1 ? 's' : ''} total
-                    {(adminAssetsScope || adminAssetsType || adminAssetsSearch) ? ' (filtered)' : ''}
+                    {(adminAssetsScope || adminAssetsType || adminAssetsSearch || adminAssetsOwner) ? ' (filtered)' : ''}
                   </span>
                   {adminAssetsTotalPages > 1 && (
                     <div className="flex items-center gap-2">
@@ -1873,6 +1946,8 @@ export default function AdminPage() {
                 </div>
               )}
             </div>
+
+            <OrphanedFilesPanel />
           </div>
         )}
 
@@ -1885,14 +1960,17 @@ export default function AdminPage() {
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-brand-ink animate-spin" />
               </div>
+            ) : !settings ? (
+              <SettingsLoadFailed message={settingsLoadError} onRetry={loadSettings} />
             ) : (
               <section className="glass-panel p-6 space-y-6">
                 {/* Instance Name */}
                 <div>
-                  <label className="block text-sm font-medium text-stone-gray mb-1">
+                  <label htmlFor="admin-instance-name" className="block text-sm font-medium text-stone-gray mb-1">
                     Instance Name
                   </label>
                   <input
+                    id="admin-instance-name"
                     type="text"
                     value={settingsForm.instanceName}
                     maxLength={100}
@@ -1901,25 +1979,7 @@ export default function AdminPage() {
                     placeholder="CozyVTT"
                   />
                   <p className="text-xs text-warm-gray mt-1">
-                    The name displayed on your platform instance.
-                  </p>
-                </div>
-
-                {/* Timezone */}
-                <div>
-                  <label className="block text-sm font-medium text-stone-gray mb-1">
-                    Timezone
-                  </label>
-                  <input
-                    type="text"
-                    value={settingsForm.timezone}
-                    maxLength={50}
-                    onChange={e => setSettingsForm(f => ({ ...f, timezone: e.target.value }))}
-                    className="input-cozy w-full"
-                    placeholder="UTC"
-                  />
-                  <p className="text-xs text-warm-gray mt-1">
-                    IANA timezone identifier (e.g. UTC, America/New_York).
+                    Shown in the browser tab and in the emails the instance sends.
                   </p>
                 </div>
 
@@ -2163,6 +2223,8 @@ export default function AdminPage() {
               <div className="flex items-center justify-center py-20">
                 <Loader2 className="w-8 h-8 text-brand-ink animate-spin" />
               </div>
+            ) : !settings ? (
+              <SettingsLoadFailed message={settingsLoadError} onRetry={loadSettings} />
             ) : (
               <>
                 <ThemePicker
@@ -2350,12 +2412,13 @@ export default function AdminPage() {
                       <span className="font-mono">{restoreResult.safetyBackup}</span> in the backup list, in case this was
                       the wrong file. Your current session is no longer valid.
                     </p>
-                    <Button
-                      onClick={() => window.location.href = '/login'}
-                      className="text-xs py-1.5 px-4 mt-1"
+                    {/* A full page load: this session went with the old database. */}
+                    <a
+                      href="/auth/login"
+                      className="inline-block text-xs py-1.5 px-4 mt-1 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors font-medium"
                     >
                       Go to Login
-                    </Button>
+                    </a>
                   </div>
                 ) : (
                   <>
@@ -2523,6 +2586,7 @@ export default function AdminPage() {
                           <tr className="border-b border-warm-gray/10 bg-moss-green/5">
                             <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">Time</th>
                             <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">Level</th>
+                            <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">By</th>
                             <th className="text-left px-4 py-2 text-xs font-semibold text-warm-gray uppercase tracking-wide">Action</th>
                           </tr>
                         </thead>
@@ -2535,7 +2599,11 @@ export default function AdminPage() {
                                   {log.level}
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-stone-gray">{log.message}</td>
+                              <td className="px-4 py-2 text-sm"><LogActor log={log} /></td>
+                              <td className="px-4 py-2 text-stone-gray">
+                                {log.message}
+                                <LogChanges context={log.context} />
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -2647,153 +2715,143 @@ export default function AdminPage() {
       </main>
 
       {/* ===== CREATE USER MODAL ===== */}
-      {createUserOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-          onClick={e => { if (e.target === e.currentTarget && !newUserPassword) closeCreateUserModal(); }}
-        >
-          <div className="bg-paper rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between p-5 border-b border-warm-gray/20">
-              <h2 className="text-lg font-semibold text-brand-ink flex items-center gap-2">
-                {createUserMode === 'invite' ? <Mail className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                {createUserMode === 'invite' ? 'Invite User' : 'Create User'}
-              </h2>
-              {!newUserPassword && (
-                <button onClick={closeCreateUserModal} className="text-warm-gray hover:text-stone-gray transition-colors">
-                  <X className="w-5 h-5" />
-                </button>
-              )}
+      {/* While the temporary password is on screen it closes only with Done,
+          so nobody loses the one look they get at it. */}
+      <Modal
+        open={createUserOpen}
+        onClose={closeCreateUserModal}
+        title={createUserMode === 'invite' ? 'Invite User' : 'Create User'}
+        icon={createUserMode === 'invite' ? Mail : UserPlus}
+        closeDisabled={!!newUserPassword || creatingUser}
+        closeOnBackdrop={!newUserPassword}
+      >
+        {createUserSuccess ? (
+          /* Invited, or created with the details emailed — no password to show */
+          <div className="space-y-4">
+            <div className="flex items-start gap-2">
+              <Check className="w-4 h-4 text-success-ink mt-0.5 flex-shrink-0" />
+              <p className="text-sm text-success-ink font-medium">{createUserSuccess}</p>
+            </div>
+            <p className="text-xs text-warm-gray">
+              They choose their own password, so no one else ever sees it.
+            </p>
+            <Button onClick={closeCreateUserModal} className="w-full">
+              Done
+            </Button>
+          </div>
+        ) : newUserPassword ? (
+          /* Success — show temp password */
+          <div>
+            <p className="text-sm text-success-ink font-medium mb-1">User created successfully!</p>
+            <p className="text-xs text-warm-gray mb-4">
+              Share this temporary password securely — it is shown only once, and they will be
+              required to replace it before they can use their account.
+            </p>
+            <div className="flex items-center gap-2 mb-4">
+              <code className="flex-1 bg-warm-amber/10 border border-warm-amber/30 rounded px-3 py-2 text-sm font-mono text-stone-gray select-all">
+                {newUserPassword}
+              </code>
+              <Button
+                onClick={() => handleCopyToClipboard(newUserPassword, setNewUserPasswordCopied)}
+                variant="secondary" className="flex items-center gap-1 text-xs py-2 px-3"
+              >
+                {newUserPasswordCopied ? <Check className="w-3.5 h-3.5 text-success-ink" /> : <Copy className="w-3.5 h-3.5" />}
+                {newUserPasswordCopied ? 'Copied' : 'Copy'}
+              </Button>
+            </div>
+            <Button onClick={closeCreateUserModal} className="w-full">
+              Done
+            </Button>
+          </div>
+        ) : (
+          /* Form */
+          <div className="space-y-4">
+            <p className="text-xs text-warm-gray">
+              {createUserMode === 'invite'
+                ? 'They receive an email with a link to choose their own password. No password is created, so nobody else ever sees one.'
+                : serverConfig?.smtp.configured
+                  ? 'A temporary password is generated and emailed to them. They must replace it before they can use the account.'
+                  : 'A temporary password is generated for you to pass on. They must replace it before they can use the account.'}
+            </p>
+
+            {createUserError && (
+              <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-3 text-sm">
+                {createUserError}
+              </div>
+            )}
+
+            <div>
+              <label htmlFor="create-user-email" className="block text-sm font-medium text-stone-gray mb-1">
+                Email <span className="text-danger-ink">*</span>
+              </label>
+              <input
+                id="create-user-email"
+                type="email"
+                value={createUserForm.email}
+                onChange={e => setCreateUserForm(f => ({ ...f, email: e.target.value }))}
+                className="input-cozy w-full"
+                placeholder="user@example.com"
+                autoFocus
+              />
             </div>
 
-            <div className="p-5">
-              {createUserSuccess ? (
-                /* Invited, or created with the details emailed — no password to show */
-                <div className="space-y-4">
-                  <div className="flex items-start gap-2">
-                    <Check className="w-4 h-4 text-success-ink mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-success-ink font-medium">{createUserSuccess}</p>
-                  </div>
-                  <p className="text-xs text-warm-gray">
-                    They choose their own password, so no one else ever sees it.
-                  </p>
-                  <Button onClick={closeCreateUserModal} className="w-full">
-                    Done
-                  </Button>
-                </div>
-              ) : newUserPassword ? (
-                /* Success — show temp password */
-                <div>
-                  <p className="text-sm text-success-ink font-medium mb-1">User created successfully!</p>
-                  <p className="text-xs text-warm-gray mb-4">
-                    Share this temporary password securely — it is shown only once, and they will be
-                    required to replace it before they can use their account.
-                  </p>
-                  <div className="flex items-center gap-2 mb-4">
-                    <code className="flex-1 bg-warm-amber/10 border border-warm-amber/30 rounded px-3 py-2 text-sm font-mono text-stone-gray select-all">
-                      {newUserPassword}
-                    </code>
-                    <Button
-                      onClick={() => handleCopyToClipboard(newUserPassword, setNewUserPasswordCopied)}
-                      variant="secondary" className="flex items-center gap-1 text-xs py-2 px-3"
-                    >
-                      {newUserPasswordCopied ? <Check className="w-3.5 h-3.5 text-success-ink" /> : <Copy className="w-3.5 h-3.5" />}
-                      {newUserPasswordCopied ? 'Copied' : 'Copy'}
-                    </Button>
-                  </div>
-                  <Button onClick={closeCreateUserModal} className="w-full">
-                    Done
-                  </Button>
-                </div>
-              ) : (
-                /* Form */
-                <div className="space-y-4">
-                  <p className="text-xs text-warm-gray">
-                    {createUserMode === 'invite'
-                      ? 'They receive an email with a link to choose their own password. No password is created, so nobody else ever sees one.'
-                      : serverConfig?.smtp.configured
-                        ? 'A temporary password is generated and emailed to them. They must replace it before they can use the account.'
-                        : 'A temporary password is generated for you to pass on. They must replace it before they can use the account.'}
-                  </p>
+            <div>
+              <label htmlFor="create-user-name" className="block text-sm font-medium text-stone-gray mb-1">
+                Display Name <span className="text-warm-gray text-xs">(optional)</span>
+              </label>
+              <input
+                id="create-user-name"
+                type="text"
+                value={createUserForm.displayName}
+                onChange={e => setCreateUserForm(f => ({ ...f, displayName: e.target.value }))}
+                className="input-cozy w-full"
+                placeholder="Defaults to email username"
+                maxLength={50}
+              />
+            </div>
 
-                  {createUserError && (
-                    <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-3 text-sm">
-                      {createUserError}
-                    </div>
-                  )}
+            <div>
+              <label className="block text-sm font-medium text-stone-gray mb-2">Platform Role</label>
+              <div className="flex gap-2">
+                {(['USER', 'ADMIN'] as const).map(role => (
+                  <button
+                    key={role}
+                    type="button"
+                    onClick={() => setCreateUserForm(f => ({ ...f, platformRole: role }))}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                      createUserForm.platformRole === role
+                        ? role === 'ADMIN'
+                          ? 'bg-moss-green text-white border-moss-green'
+                          : 'bg-stone-gray/20 text-stone-gray border-stone-gray/40'
+                        : 'border-warm-gray/30 text-warm-gray hover:border-warm-gray/60'
+                    }`}
+                  >
+                    {role}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-stone-gray mb-1">
-                      Email <span className="text-danger-ink">*</span>
-                    </label>
-                    <input
-                      type="email"
-                      value={createUserForm.email}
-                      onChange={e => setCreateUserForm(f => ({ ...f, email: e.target.value }))}
-                      className="input-cozy w-full"
-                      placeholder="user@example.com"
-                      autoFocus
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-stone-gray mb-1">
-                      Display Name <span className="text-warm-gray text-xs">(optional)</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={createUserForm.displayName}
-                      onChange={e => setCreateUserForm(f => ({ ...f, displayName: e.target.value }))}
-                      className="input-cozy w-full"
-                      placeholder="Defaults to email username"
-                      maxLength={50}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-stone-gray mb-2">Platform Role</label>
-                    <div className="flex gap-2">
-                      {(['USER', 'ADMIN'] as const).map(role => (
-                        <button
-                          key={role}
-                          type="button"
-                          onClick={() => setCreateUserForm(f => ({ ...f, platformRole: role }))}
-                          className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
-                            createUserForm.platformRole === role
-                              ? role === 'ADMIN'
-                                ? 'bg-moss-green text-white border-moss-green'
-                                : 'bg-stone-gray/20 text-stone-gray border-stone-gray/40'
-                              : 'border-warm-gray/30 text-warm-gray hover:border-warm-gray/60'
-                          }`}
-                        >
-                          {role}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex gap-2">
-                    <Button
-                      onClick={handleCreateUser}
-                      disabled={creatingUser || !createUserForm.email.trim()}
-                      className="flex-1 flex items-center justify-center gap-2"
-                    >
-                      {creatingUser && <Loader2 className="w-4 h-4 animate-spin" />}
-                      {createUserMode === 'invite' ? 'Send Invitation' : 'Create User'}
-                    </Button>
-                    <Button
-                      onClick={closeCreateUserModal}
-                      disabled={creatingUser}
-                      variant="secondary" className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                </div>
-              )}
+            <div className="pt-2 flex gap-2">
+              <Button
+                onClick={handleCreateUser}
+                disabled={creatingUser || !createUserForm.email.trim()}
+                className="flex-1 flex items-center justify-center gap-2"
+              >
+                {creatingUser && <Loader2 className="w-4 h-4 animate-spin" />}
+                {createUserMode === 'invite' ? 'Send Invitation' : 'Create User'}
+              </Button>
+              <Button
+                onClick={closeCreateUserModal}
+                disabled={creatingUser}
+                variant="secondary" className="flex-1"
+              >
+                Cancel
+              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Delete asset confirmation; the in-use question follows if the server asks it */}
       <ConfirmDialog
@@ -2829,7 +2887,7 @@ export default function AdminPage() {
         message={
           roleChangeTarget?.platformRole === PlatformRole.ADMIN
             ? `Remove ${roleChangeTarget.displayName}'s administrator rights? They become a regular user and can no longer open the Admin Panel.`
-            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups.`
+            : `Make ${roleChangeTarget?.displayName ?? ''} an administrator? Administrators can manage every user, campaign, asset and setting on this instance, including deleting other people's work and restoring backups. They will have 7 days to set up two-factor authentication.`
         }
         confirmLabel={roleChangeTarget?.platformRole === PlatformRole.ADMIN ? 'Remove admin rights' : 'Make administrator'}
         variant="warning"
@@ -2849,5 +2907,69 @@ export default function AdminPage() {
         onCancel={() => setShowRestoreConfirm(false)}
       />
     </div>
+  );
+}
+
+// ============================================
+// Status card
+// ============================================
+
+type PartState = 'working' | 'down' | 'not known';
+
+/**
+ * The dashboard's status card, from GET /api/admin/health. When that could
+ * not be asked, the API is down if the request never reached the server, and
+ * the database and live connections are not known.
+ */
+function HealthCard({ health, failed }: { health: AdminHealth | null; failed: { reachedServer: boolean } | null }) {
+  const api: PartState = health || failed?.reachedServer ? 'working' : failed ? 'down' : 'not known';
+  const part = (state: 'ok' | 'error' | undefined): PartState => (state === 'ok' ? 'working' : state === 'error' ? 'down' : 'not known');
+  const parts: [string, PartState][] = [
+    ['API', api],
+    ['DB', part(health?.services.database)],
+    ['WS', part(health?.services.websocket)],
+  ];
+  const status = health ? (health.status === 'healthy' ? 'Healthy' : 'Degraded') : failed ? 'Unknown' : 'Checking…';
+  const tone = status === 'Healthy' ? 'text-success-ink' : status === 'Degraded' ? 'text-danger-ink' : 'text-warm-gray';
+  const colour: Record<PartState, string> = { working: 'text-success-ink', down: 'text-danger-ink', 'not known': 'text-warm-gray' };
+
+  return (
+    <div className="glass-panel p-5 flex flex-col items-center text-center">
+      <Shield className={`w-7 h-7 mb-2 ${tone}`} aria-hidden="true" />
+      <p className={`text-sm font-bold ${tone}`}>{status}</p>
+      <p className="text-xs text-warm-gray mt-1">Status</p>
+      <div className="mt-2 space-y-1 text-left w-full">
+        {parts.map(([label, state]) => (
+          <div key={label} className="flex items-center justify-between text-xs">
+            <span className="text-stone-gray">{label}</span>
+            <span className={colour[state]} aria-label={`${label}: ${state}`} title={state}>
+              {state === 'not known' ? '?' : '\u25CF'}
+            </span>
+          </div>
+        ))}
+      </div>
+      {health && (
+        <p className="text-[10px] text-warm-gray mt-1">
+          {health.connections} live {health.connections === 1 ? 'connection' : 'connections'}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** What the Settings and Appearance tabs show when the settings could not be loaded. */
+function SettingsLoadFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <section className="glass-panel p-6 space-y-3">
+      <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-4 text-sm flex items-start gap-2">
+        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+        <span>{message || 'The settings could not be loaded.'}</span>
+      </div>
+      <p className="text-xs text-warm-gray">Nothing can be changed here until they load, so nothing is saved over them.</p>
+      <Button onClick={onRetry} variant="secondary" className="flex items-center gap-2 text-sm">
+        <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+        Retry
+      </Button>
+    </section>
   );
 }

@@ -1,6 +1,8 @@
 /**
- * A per-address limit on wrong answers: wrong passwords, wrong codes, bad
- * reset links. Nothing else counts, not a correct answer and not a refusal.
+ * A limit on wrong answers: wrong passwords, wrong codes, bad reset links.
+ * Nothing else counts, not a correct answer and not a refusal. Counted per
+ * address unless `key` says otherwise: per account for the sign-in, per
+ * pending sign-in for the code step, per signed-in user for a password check.
  *
  * The limit is checked before the route checks the credential, and the route
  * says when an answer was wrong (`recordFailure`). Counting on arrival and
@@ -11,10 +13,26 @@
  *
  * Answers still being checked are held to the allowance left: with three
  * failures counted, two may be checked at once, and the rest wait their turn
- * rather than being refused. So wrong answers sent together never get more
+ * instead of being refused. So wrong answers sent together never get more
  * than the allowance, and correct ones sent together all get through. Waiting
  * costs little, since the password check is the slow part and the server runs
  * only a few of those at a time anyway.
+ *
+ * A wait has a limit (`waitMs`, 15 seconds unless set). A check that never
+ * finished, such as one whose database stopped answering, held every request
+ * behind it for as long as its connection stayed open. A request that has
+ * waited that long is refused with a message saying to try again, and the
+ * refusal is not counted. A request whose client goes away while it waits
+ * leaves the queue. A route that runs two of these limiters in a row (the
+ * sign-in) gives the request one wait between them: the second limiter lets
+ * it wait only for what the first left, so the two together never hold it
+ * longer than one would.
+ *
+ * A refusal is JSON, `{ error: 'Rate Limited', message }`, like every other
+ * answer the API gives, so the pages can show the message.
+ *
+ * A key's count can be forgotten (`forget`) when the credential the guesses
+ * were at has changed: a new password opens a locked account at once.
  *
  * Kept in memory, like the other limiters: a restart forgets it.
  */
@@ -22,9 +40,47 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 export interface FailureLimiter extends RequestHandler {
-  /** Count one wrong answer against the address this request came from. */
+  /** Count one wrong answer against this request's key (its address, unless `key` says otherwise). */
   recordFailure(req: Request): void;
+  /** Forget the wrong answers counted against `key`, as the `key` option returns it. Requests waiting on it are let through. */
+  forget(key: string): void;
 }
+
+export interface FailureLimiterOptions {
+  windowMs: number;
+  max: number;
+  message: string;
+  /**
+   * What a request is counted against. The default is the client address as
+   * Express reads it with the app's `trust proxy` setting. Returning null
+   * means the request is neither held to the limit nor counted: a sign-in
+   * body with no usable email, a code step with no sign-in pending.
+   */
+  key?: (req: Request) => string | null;
+  /** Called once each time a key's failures reach the limit, with the request that did it. */
+  onLimit?: (req: Request, key: string) => void;
+  /** How long a request may wait for a check ahead of it to finish; 15 seconds unless set. */
+  waitMs?: number;
+}
+
+/**
+ * How long a request waits for the checks ahead of it. A password check takes
+ * well under a second, and a busy server a few; fifteen is many times either,
+ * and still inside the 30 seconds the pages wait for an answer.
+ */
+export const FAILURE_LIMITER_WAIT_MS = 15 * 1000;
+
+/**
+ * When a request's wait ends, set by the first limiter that makes it wait and
+ * read by any limiter after that on the same request.
+ */
+const waitDeadlines = new WeakMap<Request, number>();
+
+/** The refusal for a request that waited `waitMs` without its turn coming. */
+export const STILL_CHECKING_MESSAGE = 'Other attempts are still being checked. Please try again in a moment.';
+
+/** The Retry-After sent with that refusal, in seconds. */
+const STILL_CHECKING_RETRY_SECONDS = 5;
 
 interface AddressState {
   /** When each counted failure happened, oldest first. */
@@ -35,13 +91,15 @@ interface AddressState {
   waiting: Array<() => void>;
 }
 
-export function failureLimiter(options: { windowMs: number; max: number; message: string }): FailureLimiter {
-  const { windowMs, max, message } = options;
+export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
+  const { windowMs, max, message, onLimit } = options;
+  const waitMs = options.waitMs ?? FAILURE_LIMITER_WAIT_MS;
   const addresses = new Map<string, AddressState>();
 
   // The address as Express reads it with the app's `trust proxy` setting,
   // which is what express-rate-limit keyed on.
-  const keyOf = (req: Request): string => req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  const byAddress = (req: Request): string => req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  const keyOf = options.key ?? byAddress;
 
   const stateOf = (key: string): AddressState => {
     let state = addresses.get(key);
@@ -73,22 +131,68 @@ export function failureLimiter(options: { windowMs: number; max: number; message
 
   const limiter = (req: Request, res: Response, next: NextFunction): void => {
     const key = keyOf(req);
+    if (key === null) {
+      next();
+      return;
+    }
     const state = stateOf(key);
+
+    // Set while this request waits in the queue: the timer that ends the
+    // wait, and the listener that takes it out if its client goes away.
+    let waitTimer: ReturnType<typeof setTimeout> | undefined;
+    let onGone: (() => void) | undefined;
+
+    const stopWaiting = (): void => {
+      if (waitTimer !== undefined) clearTimeout(waitTimer);
+      waitTimer = undefined;
+      if (onGone) res.off('close', onGone);
+      onGone = undefined;
+      const queued = state.waiting.indexOf(admit);
+      if (queued !== -1) state.waiting.splice(queued, 1);
+    };
+
+    const startWaiting = (): void => {
+      state.waiting.push(admit);
+      // The wait is timed from when it began, not from each turn it missed, and
+      // from when it began at the first limiter that held this request.
+      if (waitTimer !== undefined) return;
+      const deadline = waitDeadlines.get(req) ?? Date.now() + waitMs;
+      waitDeadlines.set(req, deadline);
+      waitTimer = setTimeout(() => {
+        stopWaiting();
+        if (!res.destroyed && !res.writableEnded) {
+          setHeaders(res, state, Date.now());
+          res.setHeader('Retry-After', String(STILL_CHECKING_RETRY_SECONDS));
+          res.status(429).json({ error: 'Rate Limited', message: STILL_CHECKING_MESSAGE });
+        }
+        forgetIfIdle(key, state);
+      }, Math.max(0, deadline - Date.now()));
+      onGone = () => {
+        stopWaiting();
+        forgetIfIdle(key, state);
+      };
+      res.on('close', onGone);
+    };
 
     const admit = (): void => {
       // Gone while it waited: there is nobody to answer.
-      if (res.destroyed || res.writableEnded) return;
+      if (res.destroyed || res.writableEnded) {
+        stopWaiting();
+        return;
+      }
       const now = Date.now();
       prune(state, now);
+
+      if (state.failures.length < max && state.failures.length + state.checking >= max) {
+        startWaiting();
+        return;
+      }
+      stopWaiting();
 
       if (state.failures.length >= max) {
         setHeaders(res, state, now);
         res.setHeader('Retry-After', String(Math.max(1, Math.ceil((state.failures[0] + windowMs - now) / 1000))));
-        res.status(429).send(message);
-        return;
-      }
-      if (state.failures.length + state.checking >= max) {
-        state.waiting.push(admit);
+        res.status(429).json({ error: 'Rate Limited', message });
         return;
       }
 
@@ -122,7 +226,21 @@ export function failureLimiter(options: { windowMs: number; max: number; message
 
   return Object.assign(limiter, {
     recordFailure(req: Request): void {
-      stateOf(keyOf(req)).failures.push(Date.now());
+      const key = keyOf(req);
+      if (key === null) return;
+      const state = stateOf(key);
+      const now = Date.now();
+      prune(state, now);
+      const before = state.failures.length;
+      state.failures.push(now);
+      if (before < max && state.failures.length >= max) onLimit?.(req, key);
+    },
+    forget(key: string): void {
+      const state = addresses.get(key);
+      if (!state) return;
+      state.failures.length = 0;
+      for (const waiter of state.waiting.splice(0)) waiter();
+      forgetIfIdle(key, state);
     },
   });
 }

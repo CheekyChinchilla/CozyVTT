@@ -49,9 +49,14 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
   }
 
   /** Insert a roll directly — the socket handler is not under test here. */
-  async function addRoll(userId: string, expression: string, secret: boolean) {
+  async function addRoll(
+    userId: string,
+    expression: string,
+    secret: boolean,
+    extra: { id?: string; rolledAt?: Date } = {}
+  ) {
     return prisma.diceRoll.create({
-      data: { campaignId, userId, expression, result: 10, breakdown: {}, secret },
+      data: { campaignId, userId, expression, result: 10, breakdown: {}, secret, ...extra },
     });
   }
 
@@ -97,14 +102,13 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
     await prisma.$disconnect();
   });
 
-  // TODO(test): flaky under a full parallel run. Rolls seeded in the same
-  // millisecond share a createdAt and the route orders by that alone, so the
-  // order of the tie is whatever the database returns. Seed with distinct
-  // timestamps, or give the route a secondary order, in its own commit.
   it('returns rolls newest first', async () => {
-    await addRoll(dmId, '1d4', false);
-    await addRoll(playerId, '1d6', false);
-    await addRoll(playerId, '1d8', false);
+    // Seeded a second apart: three rolls made back to back can share a
+    // millisecond, and then "newest" is not defined by the timestamp.
+    const base = Date.now() - 10_000;
+    await addRoll(dmId, '1d4', false, { rolledAt: new Date(base) });
+    await addRoll(playerId, '1d6', false, { rolledAt: new Date(base + 1000) });
+    await addRoll(playerId, '1d8', false, { rolledAt: new Date(base + 2000) });
 
     const res = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
     expect(res.status).toBe(200);
@@ -114,6 +118,24 @@ describe('GET /api/campaigns/:campaignId/dice-rolls', () => {
       '1d4',
     ]);
     expect(res.body.pagination.total).toBe(3);
+  });
+
+  it('orders rolls made in the same millisecond by id, the same on every request and page', async () => {
+    // Three rolls with one timestamp, inserted in ascending id order so that a
+    // route returning them in insertion order gives the opposite of id order.
+    const at = new Date(Date.now() - 10_000);
+    const ids = ['00000000-0000-4000-8000-00000000000a', '00000000-0000-4000-8000-00000000000b', '00000000-0000-4000-8000-00000000000c'];
+    for (const id of ids) await addRoll(playerId, `tie-${id.slice(-1)}`, false, { id, rolledAt: at });
+
+    const whole = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls`);
+    expect(whole.body.rolls.map((r: { id: string }) => r.id)).toEqual([...ids].reverse());
+
+    const paged: string[] = [];
+    for (const offset of [0, 1, 2]) {
+      const page = await dmAgent.get(`/api/campaigns/${campaignId}/dice-rolls?limit=1&offset=${offset}`);
+      paged.push(page.body.rolls[0].id);
+    }
+    expect(paged).toEqual([...ids].reverse());
   });
 
   describe('secret roll visibility', () => {

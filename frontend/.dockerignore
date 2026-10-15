@@ -1,6 +1,6 @@
 # ============================================================================
 # CozyVTT Frontend — .dockerignore
-# Stage-specific exclusions on top of the root .dockerignore.
+# The image is built from this folder alone, so this file decides what the build sees.
 # ============================================================================
 
 # ---- Dependencies (installed fresh inside the image) ------------------------
@@ -17,6 +17,10 @@ build/
 .env.development
 .env.production
 .env.*.local
+# Any other .env.<name> file stays out too, so a stray one never reaches the
+# image's layers. The example file is the one exception.
+.env.*
+!.env.example
 
 # ---- Test artifacts ---------------------------------------------------------
 coverage/

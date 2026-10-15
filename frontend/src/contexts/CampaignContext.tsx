@@ -454,15 +454,18 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       setCampaign((prev) => (prev && prev.id === campaignId ? withMemberRole(prev, userId, role) : prev));
     };
     // Someone joined, left, or brought a character: the roster refetches, and
-    // so does the member list everything else on the page reads (Duplicate
-    // keeps a token's controller only while they are a player here).
+    // so do the member list everything else on the page reads (Duplicate
+    // keeps a token's controller only while they are a player here) and the
+    // campaign's characters (which tokens offer View Character Sheet and Roll).
     const handleRosterUpdated = (data: { campaignId?: string }) => {
       const campaignId = data?.campaignId;
       if (!campaignId) return;
       campaignService
         .getCampaign(campaignId)
         .then((fresh) => {
-          setCampaign((prev) => (prev && prev.id === fresh.id ? { ...prev, memberships: fresh.memberships } : prev));
+          setCampaign((prev) => (prev && prev.id === fresh.id
+            ? { ...prev, memberships: fresh.memberships, characters: fresh.characters ?? prev.characters }
+            : prev));
         })
         .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', err));
     };

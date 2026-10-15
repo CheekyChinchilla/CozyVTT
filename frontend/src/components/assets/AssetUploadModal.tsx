@@ -10,6 +10,8 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import { apiErrorMessage } from '@/utils/errors';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
+import { ASSET_LIMITS } from '@/constants/assetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -21,13 +23,27 @@ interface AssetUploadModalProps {
   defaultScope?: AssetScope;
   /** When set, pre-selects and locks the campaign, hides the campaign dropdown */
   defaultCampaignId?: string;
+  /**
+   * When set, the only choice is Personal, selected at first, or this
+   * campaign's library, each with a line saying what it means: for a
+   * picture the DM may be preparing in secret, as Create Map's is.
+   */
+  campaignOption?: string;
 }
+
+/** What each choice means, under it, when the dialog offers `campaignOption`. */
+const CAMPAIGN_OPTION_CHOICES = [
+  { scope: AssetScope.USER, icon: User, label: 'Personal', hint: 'Players see it once its map is on screen, while you are in the campaign.' },
+  { scope: AssetScope.CAMPAIGN, icon: Users, label: 'Campaign', hint: 'Everyone in the campaign can browse it now, and it stays if you leave.' },
+] as const;
 
 /**
  * AssetUploadModal Component
  * Upload modal scope selector refactored for three-scope model
  */
-export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultType, defaultScope, defaultCampaignId }: AssetUploadModalProps) {
+export default function AssetUploadModal({
+  isOpen, onClose, onSuccess, defaultType, defaultScope, defaultCampaignId, campaignOption,
+}: AssetUploadModalProps) {
   const { user } = useAuth();
   const { data: serverConfig } = useServerConfigQuery();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -63,7 +79,9 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
   // Campaign selection state
   const [allCampaigns, setAllCampaigns] = useState<Campaign[] | null>(null);
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(defaultCampaignId ?? '');
+  // With campaignOption, the campaign Campaign uploads to; it is sent only
+  // once Campaign is chosen.
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>(defaultCampaignId ?? campaignOption ?? '');
 
   // When type is AVATAR, always force USER scope
   useEffect(() => {
@@ -74,7 +92,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
 
   // Fetch all campaigns the user belongs to (used for scope availability + dropdown)
   useEffect(() => {
-    if (isOpen && !defaultCampaignId) {
+    if (isOpen && !defaultCampaignId && !campaignOption) {
       campaignService.getCampaigns().then((data) => {
         setAllCampaigns(data);
         // Auto-select first campaign if only one and scope is CAMPAIGN
@@ -83,7 +101,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
         }
       });
     }
-  }, [isOpen, defaultCampaignId]);
+  }, [isOpen, defaultCampaignId, campaignOption]);
 
   // Campaigns shown in dropdown: those the server lets this user put this
   // kind of asset into (the DM's for anything, a player's for token art).
@@ -119,7 +137,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     setDescription('');
     setTags([]);
     setTagInput('');
-    setSelectedCampaignId(defaultCampaignId ?? '');
+    setSelectedCampaignId(defaultCampaignId ?? campaignOption ?? '');
     setError(null);
     setUploadProgress(0);
   };
@@ -145,6 +163,8 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     const allowedTypes: Record<AssetType, string[]> = {
       [AssetType.MAP]: ['image/jpeg', 'image/png', 'image/webp'],
       [AssetType.TOKEN]: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+      // TODO(assets): audio/mp4 (M4A) passes here but the server refuses it
+      // (ALLOWED_MIME_TYPES in backend/src/utils/fileUtils.ts); use the server's list.
       [AssetType.AUDIO]: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'],
       [AssetType.AVATAR]: ['image/jpeg', 'image/png', 'image/webp'],
       [AssetType.DOCUMENT]: ['application/pdf', 'text/plain', 'text/markdown'],
@@ -174,7 +194,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     setError(null);
 
     if (!name) {
-      setName(file.name.replace(/\.[^/.]+$/, ''));
+      setName(assetNameFrom(file.name.replace(/\.[^/.]+$/, '')));
     }
   };
 
@@ -198,10 +218,12 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
     }
   };
 
+  const atTagLimit = tags.length >= ASSET_LIMITS.maxTags;
+
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && tagInput.trim()) {
       e.preventDefault();
-      if (!tags.includes(tagInput.trim())) {
+      if (!tags.includes(tagInput.trim()) && !atTagLimit) {
         setTags([...tags, tagInput.trim()]);
       }
       setTagInput('');
@@ -354,8 +376,37 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
               </div>
             )}
 
+            {/* Personal or the one campaign, each saying what it means */}
+            {campaignOption && !defaultScope && !isAvatarType && (
+              <div>
+                <label className="block text-sm font-medium text-brand-ink mb-2">
+                  Save to
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {CAMPAIGN_OPTION_CHOICES.map(({ scope, icon: Icon, label, hint }) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setAssetScope(scope)}
+                      disabled={uploading}
+                      aria-pressed={assetScope === scope}
+                      className={`p-4 rounded-lg border-2 transition-all flex flex-col items-center gap-1 text-center ${
+                        assetScope === scope
+                          ? 'border-moss-green bg-moss-green/10 text-brand-ink'
+                          : 'border-moss-green/20 text-stone-gray hover:border-moss-green/50'
+                      } disabled:opacity-50`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="text-sm font-medium">{label}</span>
+                      <span className="text-xs text-stone-gray/70">{hint}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Scope Selection — hidden when scope is pre-locked OR when type is AVATAR */}
-            {!defaultScope && !isAvatarType && (
+            {!campaignOption && !defaultScope && !isAvatarType && (
               <div>
                 <label className="block text-sm font-medium text-brand-ink mb-2">
                   Scope
@@ -422,7 +473,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
             )}
 
             {/* Campaign Selection — shown only when scope is CAMPAIGN and campaign not pre-locked */}
-            {!defaultCampaignId && assetScope === AssetScope.CAMPAIGN && (
+            {!defaultCampaignId && !campaignOption && assetScope === AssetScope.CAMPAIGN && (
               <div>
                 <label className="block text-sm font-medium text-brand-ink mb-2">
                   Select Campaign
@@ -514,6 +565,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={uploading}
+                maxLength={ASSET_LIMITS.maxNameLength}
                 placeholder="Enter asset name..."
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
@@ -528,6 +580,7 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 disabled={uploading}
+                maxLength={ASSET_LIMITS.maxDescriptionLength}
                 placeholder="Enter asset description..."
                 rows={3}
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray resize-none disabled:opacity-50"
@@ -545,9 +598,15 @@ export default function AssetUploadModal({ isOpen, onClose, onSuccess, defaultTy
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleAddTag}
                 disabled={uploading}
+                maxLength={ASSET_LIMITS.maxTagLength}
                 placeholder="Type a tag and press Enter..."
                 className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
+              {atTagLimit && (
+                <p className="text-xs text-warm-gray mt-1">
+                  An asset can have at most {ASSET_LIMITS.maxTags} tags.
+                </p>
+              )}
               {tags.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap mt-3">
                   {tags.map((tag) => (

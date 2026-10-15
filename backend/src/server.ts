@@ -2,216 +2,35 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import express from 'express';
 import { createServer } from 'http';
-import session from 'express-session';
-import cors from 'cors';
-import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import { sessionConfig, sessionPool } from './config/session';
 import { enforceDatabaseCredential } from './config/databaseGuard';
-import { requireSetupComplete } from './middleware/setup';
-import { requirePasswordChanged } from './middleware/passwordChange';
-import { bodyParsers } from './middleware/bodyParsers';
-import { originCheck } from './middleware/originCheck';
-import { errorHandler } from './middleware/errorHandler';
-import setupRoutes from './routes/setup';
-import authRoutes from './routes/auth';
-import campaignRoutes from './routes/campaigns';
-import campaignMacroRoutes from './routes/campaignMacros';
-import campaignDocumentRoutes from './routes/campaignDocuments';
-import userRoutes from './routes/users';
-import characterRoutes from './routes/characters';
-import characterTemplateRoutes from './routes/characterTemplates';
-import invitationRoutes from './routes/invitations';
-import assetRoutes from './routes/assets';
-import mapRoutes from './routes/maps';
-import creatureRoutes from './routes/creatures';
-import tokenTemplateRoutes from './routes/tokenTemplates';
-import adminRoutes from './routes/admin';
-import configRoutes from './routes/config';
+import { createApp } from './app';
 import { initializeWebSocket } from './websocket';
 import logger from './utils/logger';
 import { prisma } from './config/database';
 import { UPLOAD_LIMITS } from './utils/fileUtils';
 import { getProxyLimitWarnings } from './utils/proxyLimits';
 import { applyRequestTimeouts } from './config/httpServer';
-import { createShutdown, onShutdownSignals } from './utils/shutdown';
+import { createShutdown, onShutdownSignals, onProcessFailure } from './utils/shutdown';
+import { setupState } from './services/systemSettings';
+import { removeLeftoverRestoreUploads } from './services/restoreState';
+import { resolveBackupDir } from './utils/backupDir';
+import { setupTokenHint } from './services/setupToken';
+import { backupsInProgress } from './services/backupsInProgress';
+import { personalFilesBeingRemoved } from './services/accountDeletion';
+
+// An error nothing caught is written to the log before the process ends.
+onProcessFailure();
 
 // A production instance on the placeholder database password stops here.
 enforceDatabaseCredential();
 
-const app = express();
+// Every middleware, route and error handler, in order: see app.ts. The
+// integration tests build their app with the same function.
+const app = createApp({ session: sessionConfig });
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 4000;
-
-// Trust the first proxy hop (Nginx).
-// Required so that:
-//   - express-rate-limit can read X-Forwarded-For for accurate IP identification
-//   - Session cookies are issued with secure:true when the request arrives over HTTPS
-//   - req.protocol reflects https rather than http
-app.set('trust proxy', 1);
-
-// ============================================
-// SECURITY MIDDLEWARE
-// ============================================
-
-// Helmet: sets secure HTTP response headers.
-//
-// These cover what this process answers, which in the production stack is
-// /api and /socket.io. The app page is served by the frontend container, so
-// its policy lives in frontend/security-headers.conf. The two describe the
-// same application and should be changed together; the page's is the wider of
-// the two, because the themes load Google Fonts and this one never has to.
-app.use(
-  helmet({
-    contentSecurityPolicy: {
-      directives: {
-        defaultSrc: ["'self'"],
-        scriptSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"], // Required for Framer Motion / Tailwind inline styles
-        imgSrc: ["'self'", 'data:', 'blob:'],    // Canvas exports and base64 avatars
-        connectSrc: ["'self'", 'ws:', 'wss:'],   // WebSocket connections
-        mediaSrc: ["'self'"],                     // Audio playback
-        fontSrc: ["'self'"],
-        objectSrc: ["'none'"],
-        baseUri: ["'self'"],
-        formAction: ["'self'"],
-        frameAncestors: ["'none'"],               // Equivalent to X-Frame-Options: DENY
-      },
-    },
-    crossOriginEmbedderPolicy: false, // Disabled: audio/canvas require cross-origin resource access
-  })
-);
-
-app.use(
-  cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-    credentials: true,
-  })
-);
-
-// A browser request from another site, a same-site page on another port
-// included, changes nothing. See middleware/originCheck.ts.
-app.use(originCheck);
-
-// General API rate limiter — applied to all /api/* routes
-// Stricter per-endpoint limiters (auth, file uploads) are applied inside each router
-const generalApiLimiter = rateLimit({
-  windowMs: 60 * 1000, // 1 minute
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '300'),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too Many Requests', message: 'Rate limit exceeded. Please slow down.' },
-});
-
-// ============================================
-// BODY PARSING
-// ============================================
-
-// Shared with the integration-test app — see middleware/bodyParsers.ts for why
-// the limit is what it is.
-app.use(bodyParsers());
-
-// ============================================
-// SESSION MANAGEMENT
-// ============================================
-
-app.use(session(sessionConfig));
-
-// ============================================
-// SETUP WIZARD GATE
-// ============================================
-
-// Blocks all routes until the one-time setup wizard has been completed.
-// Exceptions: /health and /api/setup/* are always accessible.
-app.use(requireSetupComplete);
-
-// ============================================
-// ROUTES
-// ============================================
-
-// Health check — always accessible, no auth required, not rate-limited
-app.get('/health', async (_req, res) => {
-  let dbStatus = 'ok';
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-  } catch {
-    dbStatus = 'error';
-  }
-
-  const status = dbStatus === 'ok' ? 'healthy' : 'degraded';
-  res.status(dbStatus === 'ok' ? 200 : 503).json({
-    status,
-    timestamp: new Date().toISOString(),
-    services: {
-      api: 'ok',
-      database: dbStatus,
-    },
-  });
-});
-
-// Apply general rate limiter to all API routes
-app.use('/api', generalApiLimiter);
-
-// Accounts flagged `mustChangePassword` (admin-created, or admin-reset) can do
-// nothing but change it until they do — see middleware/passwordChange.ts
-app.use('/api', requirePasswordChanged);
-
-// Setup wizard (accessible before setup is complete)
-app.use('/api/setup', setupRoutes);
-
-// Public client configuration (upload limits)
-app.use('/api/config', configRoutes);
-
-// Authentication: login, register, password reset, MFA
-app.use('/api/auth', authRoutes);
-
-// User management
-app.use('/api/users', userRoutes);
-
-// Admin panel (requires ADMIN platform role)
-app.use('/api/admin', adminRoutes);
-
-// Campaigns
-app.use('/api/campaigns', campaignRoutes);
-app.use('/api/campaigns', campaignMacroRoutes);
-app.use('/api/campaigns', campaignDocumentRoutes);
-
-// Characters
-app.use('/api/characters', characterRoutes);
-// Distinct from GET /api/characters/templates/:system/:name, which serves the
-// hardcoded starter presets rather than these user-published ones.
-app.use('/api/character-templates', characterTemplateRoutes);
-
-// Campaign invitations
-app.use('/api/invitations', invitationRoutes);
-
-// Asset library
-app.use('/api/assets', assetRoutes);
-
-// Maps (nested under campaigns)
-app.use('/api/campaigns/:campaignId/maps', mapRoutes);
-
-// Creature Library (nested under campaigns)
-app.use('/api/campaigns/:campaignId/creatures', creatureRoutes);
-
-// Token Templates (nested under campaigns)
-app.use('/api/campaigns/:campaignId/token-templates', tokenTemplateRoutes);
-
-// 404 catch-all
-app.use('*', (_req, res) => {
-  res.status(404).json({
-    error: 'Not Found',
-    message: 'The requested resource does not exist',
-  });
-});
-
-// ============================================
-// GLOBAL ERROR HANDLER
-// ============================================
-
-app.use(errorHandler);
 
 // ============================================
 // WEBSOCKET
@@ -220,8 +39,10 @@ app.use(errorHandler);
 const io = initializeWebSocket(httpServer);
 
 // Docker's stop, a service manager's stop and Ctrl+C all end the backend
-// here, which closes the sockets, the database and the session store first.
-onShutdownSignals(createShutdown({ io, prisma, sessionPool }));
+// here, which lets a backup being written finish, then closes the sockets,
+// lets the removal of a deleted account's files finish, and closes the
+// database and the session store.
+onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress, files: personalFilesBeingRemoved }));
 
 // ============================================
 // START SERVER
@@ -247,6 +68,21 @@ httpServer.listen(PORT, () => {
   for (const warning of getProxyLimitWarnings()) {
     logger.warn(warning);
   }
+
+  // A backend stopped mid-restore left the uploaded backup in the backups
+  // folder; nothing can finish restoring it now.
+  void removeLeftoverRestoreUploads(resolveBackupDir());
+
+  // Until setup has run, the wizard asks for a token only the owner can
+  // read, so a stranger who finds the instance first cannot become its
+  // administrator. Printed here, where the owner reads the log, unless they
+  // set one themselves in .env.
+  setupState()
+    .then(({ setupCompleted }) => {
+      if (setupCompleted) return;
+      logger.warn(`Setup is not complete. ${setupTokenHint()}`);
+    })
+    .catch((err: unknown) => logger.error('Could not read the setup state at start', { err }));
 });
 
 export default app;

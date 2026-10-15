@@ -1,6 +1,6 @@
 # Production Dockerfile — multi-stage build
 # Stage 1: build TypeScript and generate Prisma client
-FROM node:20-alpine AS builder
+FROM node:26-alpine AS builder
 
 RUN apk add --no-cache bash postgresql16-client openssl
 
@@ -15,7 +15,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Stage 2: production image — only compiled output + production deps
-FROM node:20-alpine AS production
+FROM node:26-alpine AS production
 
 # postgresql16-client, not postgresql-client: the unpinned name follows whatever
 # PostgreSQL this Alpine release ships (18 at the time of writing), and a dump
@@ -33,7 +33,7 @@ WORKDIR /app
 
 # Install only production dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy compiled output
 COPY --from=builder /app/dist ./dist

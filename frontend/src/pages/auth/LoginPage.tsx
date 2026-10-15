@@ -5,15 +5,19 @@
 // ============================================
 
 import { useState, useEffect, FormEvent } from 'react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';
 import Button from '@/components/ui/Button';
-import { apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { readSignInNotice, forgetSignInNotice } from '@/services/signInNotice';
+import { AFTER_SIGN_IN, keepingReturnPath, returnPathFrom } from '@/utils/returnTo';
 
 export default function LoginPage() {
   const { login, authenticated, mfaPending } = useAuth();
+  // The page that sent the visitor here, to go back to once signed in.
+  const { search } = useLocation();
 
   // Form state
   const [email, setEmail] = useState('');
@@ -23,6 +27,13 @@ export default function LoginPage() {
   // UI state
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Why this page was opened, when the server said, such as a sign-in that
+  // reached its 30-day limit. Shown once: read as the page first renders,
+  // and forgotten after.
+  const [notice] = useState<string | null>(readSignInNotice);
+  useEffect(() => {
+    forgetSignInNotice();
+  }, []);
   const [fieldErrors, setFieldErrors] = useState<{
     email?: string;
     password?: string;
@@ -38,12 +49,12 @@ export default function LoginPage() {
 
   // Redirect if already authenticated (use <Navigate> not navigate() to avoid render-phase state update)
   if (authenticated) {
-    return <Navigate to="/dashboard" replace />;
+    return <Navigate to={returnPathFrom(search) ?? AFTER_SIGN_IN} replace />;
   }
 
   // Redirect to MFA verification if MFA is pending
   if (mfaPending) {
-    return <Navigate to="/auth/mfa-verify" replace />;
+    return <Navigate to={keepingReturnPath('/auth/mfa-verify', search)} replace />;
   }
 
   /**
@@ -89,18 +100,16 @@ export default function LoginPage() {
       // If MFA is not required, user is logged in and will be redirected by auth check above
       // If MFA is required, mfaPending will be true and user will be redirected to MFA page
     } catch (err) {
-      // Handle specific error messages
-      // TODO(accounts): apiErrorText returns the reply's short label, such as
-      // "Authentication Failed", so the sentence in its message is never shown
-      // and the branches below never run when the server sends one. Show
-      // apiErrorMessage(err) first.
-      const serverError = apiErrorText(err);
-      if (serverError) {
+      // The reply's sentence (`message`) is for the person; its `error` is a
+      // short label, shown only when there is no sentence.
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
+      if (apiErrorStatus(err) === 429) {
+        // The limiter's answer says what happened and when to come back.
+        setError(apiErrorMessage(err) || 'Too many login attempts. Please try again later.');
+      } else if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 401) {
         setError('Invalid email or password');
-      } else if (apiErrorStatus(err) === 429) {
-        setError('Too many login attempts. Please try again later.');
       } else {
         setError('An error occurred during login. Please try again.');
       }
@@ -121,6 +130,13 @@ export default function LoginPage() {
             Sign in to your CozyVTT account
           </p>
         </div>
+
+        {/* Why the sign-in page was opened */}
+        {notice && !error && (
+          <div role="status" className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
+            <p className="text-sm text-brand-ink">{notice}</p>
+          </div>
+        )}
 
         {/* Error Alert */}
         {error && (

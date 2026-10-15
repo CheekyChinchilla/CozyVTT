@@ -6,6 +6,7 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { TableSection } from '../../../../../types/flexible-character-sheet';
 import { generateId } from '../../utils/section-helpers';
+import { SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 
 interface TableEditorProps {
   section: TableSection;
@@ -13,6 +14,10 @@ interface TableEditorProps {
 }
 
 export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) => {
+  // TODO(sheets): the server keeps at most 50 columns in a table (FLEXIBLE_MAX_COLUMNS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addColumn = () => {
     const newColumn = {
       id: generateId(),
@@ -45,6 +50,10 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
     });
   };
 
+  // TODO(sheets): the server keeps at most 1000 rows in a table (FLEXIBLE_MAX_ROWS) and this
+  // has no limit, so one more makes a sheet that cannot be saved. Turn the
+  // add button off at the limit, as the typed sheets' lists do with listIsFull
+  // and ListLimitNote.
   const addRow = () => {
     const newRow = {
       id: generateId(),
@@ -77,6 +86,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                     type="text"
                     value={column.name}
                     onChange={(e) => updateColumnName(column.id, e.target.value)}
+                    maxLength={SHEET_NAME_MAX}
                     className="flex-1 bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-sm font-semibold text-brand-ink"
                     placeholder="Column name"
                   />
@@ -117,6 +127,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                     type="text"
                     value={row.cells[column.id] || ''}
                     onChange={(e) => updateCell(row.id, column.id, e.target.value)}
+                    maxLength={SHEET_SHORT_TEXT_MAX}
                     className="w-full bg-transparent border-b border-transparent focus:border-moss-green focus:outline-none text-warm-gray"
                     placeholder="-"
                   />

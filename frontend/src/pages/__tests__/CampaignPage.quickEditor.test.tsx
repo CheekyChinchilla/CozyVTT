@@ -53,6 +53,7 @@ vi.mock('@/contexts/WebSocketContext', () => ({
 }));
 vi.mock('@/hooks/useInitiativeSync', () => ({ useInitiativeSync: () => undefined }));
 vi.mock('@/hooks/useOnRejoin', () => ({ useOnRejoin: () => undefined }));
+vi.mock('@/hooks/useAccessRevoked', () => ({ useAccessRevoked: () => undefined }));
 
 const nothing = vi.hoisted(() => () => ({ default: () => null }));
 vi.mock('@/components/campaign/CampaignInfo', nothing);

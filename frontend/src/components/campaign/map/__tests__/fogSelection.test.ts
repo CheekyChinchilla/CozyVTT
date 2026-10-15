@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { fogRectFromDrag, fogCellsInRect, fogRectSize, fogRectToPx, revealedSetFromFogState } from '../fogSelection';
 import type { FogState } from '@/types/walls';
 
-/** 20 cols × 15 rows at 50px — the shape the test instance uses. */
+/** 20 cols × 15 rows at 50px, a common map's shape. */
 const fog: FogState = {
   fogCols: 20,
   fogRows: 15,

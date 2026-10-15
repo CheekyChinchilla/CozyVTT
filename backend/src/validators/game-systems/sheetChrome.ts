@@ -12,5 +12,6 @@ import { THEME_COLOR_PATTERN } from '../../utils/styleAllowlists';
 
 export const themeColorSchema = z
   .string()
+  .max(40)
   .regex(THEME_COLOR_PATTERN, 'themeColor must be a preset name or a #RRGGBB colour')
   .optional();

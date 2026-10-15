@@ -2,14 +2,13 @@
 
 ## Fonts
 
-CozyVTT uses open-source fonts served via [Google Fonts](https://fonts.google.com/). All fonts are licensed under the **SIL Open Font License 1.1** (OFL-1.1) unless noted otherwise.
+CozyVTT bundles the open-source fonts its font choices use, and each instance serves them itself: visitors' browsers do not fetch them from another site. The files are the [Google Fonts](https://fonts.google.com/) builds of each family, kept in `frontend/src/assets/fonts/`. All of them are licensed under the **SIL Open Font License 1.1** (OFL-1.1); each family's copyright notice and the full licence text are in [`frontend/src/assets/fonts/OFL.txt`](frontend/src/assets/fonts/OFL.txt) and in [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
 
 | Font | Designer | License |
 |------|----------|---------|
 | [Quicksand](https://fonts.google.com/specimen/Quicksand) | Andrew Paglinawan | OFL-1.1 |
 | [Inter](https://fonts.google.com/specimen/Inter) | Rasmus Andersson | OFL-1.1 |
 | [JetBrains Mono](https://fonts.google.com/specimen/JetBrains+Mono) | JetBrains | OFL-1.1 |
-| [Comfortaa](https://fonts.google.com/specimen/Comfortaa) | Johan Aakerlund | OFL-1.1 |
 | [MedievalSharp](https://fonts.google.com/specimen/MedievalSharp) | Wojciech Kalinowski | OFL-1.1 |
 | [Merriweather](https://fonts.google.com/specimen/Merriweather) | Sorkin Type | OFL-1.1 |
 | [Playfair Display](https://fonts.google.com/specimen/Playfair+Display) | Claus Eggers Sorensen | OFL-1.1 |
@@ -26,15 +25,16 @@ CozyVTT uses open-source fonts served via [Google Fonts](https://fonts.google.co
 | [EB Garamond](https://fonts.google.com/specimen/EB+Garamond) | Georg Duffner | OFL-1.1 |
 | [UnifrakturMaguntia](https://fonts.google.com/specimen/UnifrakturMaguntia) | j. 'mach' wust | OFL-1.1 |
 | [Crimson Text](https://fonts.google.com/specimen/Crimson+Text) | Sebastian Kosch | OFL-1.1 |
-| [Open Sans](https://fonts.google.com/specimen/Open+Sans) | Steve Matteson | OFL-1.1 |
+
+Comfortaa and Open Sans are named as fallbacks in the default font choice. They are not bundled, and are used only on a device that has them installed.
 
 ### SIL Open Font License 1.1
 
-The SIL Open Font License (OFL) allows fonts to be used, studied, modified, and redistributed freely as long as they are not sold by themselves. The full license text is available at: https://scripts.sil.org/OFL
+The SIL Open Font License (OFL) allows fonts to be used, studied, modified, and redistributed freely as long as they are not sold by themselves. The full licence text is in [`frontend/src/assets/fonts/OFL.txt`](frontend/src/assets/fonts/OFL.txt), and at https://scripts.sil.org/OFL.
 
 ## Game Content
 
-CozyVTT includes creature data from the [Open5e](https://open5e.com/) SRD API, which is based on the Systems Reference Document 5.1 published by Wizards of the Coast under the Creative Commons Attribution 4.0 International License (CC BY 4.0).
+CozyVTT ships no game content. An administrator can import creature data from the [Open5e](https://open5e.com/) SRD API into an instance's own database; it comes from the System Reference Document 5.1, published by Wizards of the Coast under the Creative Commons Attribution 4.0 International License (CC BY 4.0). See [SRD_ATTRIBUTION.md](SRD_ATTRIBUTION.md).
 
 ## Icons
 
@@ -56,6 +56,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 |---------|---------|---------|
 | [React](https://react.dev/) | Frontend UI library | MIT |
 | [Vite](https://vitejs.dev/) | Frontend build tooling | MIT |
+| [Playwright](https://playwright.dev/) | Browser smoke tests, for development only; not part of an instance | Apache-2.0 |
 | [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |
 | [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
 | [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) | Resizable session workspace | MIT |
@@ -68,4 +69,5 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
 | [Zod](https://zod.dev/) | Runtime validation | MIT |
-| [sharp](https://github.com/lovell/sharp) | Lovell Fuller and contributors | Apache-2.0 |
+| [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |
+| [sharp](https://github.com/lovell/sharp) | Picture thumbnails, and picture sizes for Universal VTT export | Apache-2.0 |

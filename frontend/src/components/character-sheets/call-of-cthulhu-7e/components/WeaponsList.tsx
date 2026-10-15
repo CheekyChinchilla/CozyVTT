@@ -7,6 +7,8 @@
 import React from 'react';
 import { Swords, Plus, Trash2, Dices } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import ListLimitNote, { listIsFull } from '../../ListLimitNote';
+import { LIMIT_NOTE_CLASS } from '../limitNoteClass';
 import type { CoC7eWeapon } from '@/types/game-systems';
 
 // The weapon shape lives in types/game-systems. This file used to keep its own
@@ -77,6 +79,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
         {editable && (
           <Button
             onClick={handleAddWeapon}
+            disabled={listIsFull(weapons)}
             variant="secondary" className="text-sm py-1 px-3 flex items-center space-x-1"
           >
             <Plus className="w-4 h-4" />
@@ -84,6 +87,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
           </Button>
         )}
       </div>
+      {editable && <ListLimitNote full={listIsFull(weapons)} className={LIMIT_NOTE_CLASS} />}
 
       {/* Weapons Table */}
       {weapons.length === 0 ? (

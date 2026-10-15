@@ -5,6 +5,7 @@
 import React from 'react';
 import { GripVertical, Trash2 } from 'lucide-react';
 import type { FlexibleSection } from '../../../../types/flexible-character-sheet';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 
 interface SectionEditorProps {
   section: FlexibleSection;
@@ -35,6 +36,7 @@ export const SectionEditor: React.FC<SectionEditorProps> = ({
           type="text"
           value={section.title}
           onChange={(e) => updateTitle(e.target.value)}
+          maxLength={SHEET_NAME_MAX}
           className="flex-1 text-lg font-semibold bg-transparent border-b border-transparent focus:border-moss-green focus:outline-none text-brand-ink"
           placeholder="Section title"
         />

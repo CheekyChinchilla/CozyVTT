@@ -6,8 +6,16 @@
 # Every gate was someone remembering to run it locally, and a rule nobody runs
 # is not a rule.
 #
-# Deliberately modest: the same commands a developer runs, on every push and
-# pull request touching dev or main. No deployment, no publishing, no secrets.
+# The same commands a developer runs, on every push and pull request touching
+# dev or main, plus what self-hosters run and a developer usually does not: the
+# production images, the nginx configuration, a browser walking through the
+# running stack, the migrations against the schema, and an advisory check of
+# the dependencies. No deployment, no
+# publishing, no secrets.
+#
+# Every action is pinned to a commit, with its version in a comment, so a tag
+# moved upstream cannot change what runs here; Dependabot
+# (.github/dependabot.yml) proposes new versions.
 name: CI
 
 on:
@@ -16,30 +24,39 @@ on:
   pull_request:
     branches: [dev, main]
 
+# Read the code, nothing more: no job here writes to the repository.
+permissions:
+  contents: read
+
 jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: 26
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm run lint
-      # `npm test` is watch mode and would hang the runner.
-      - run: npx vitest run
+      # `npm test` is watch mode and would hang the runner. Coverage is
+      # collected as a report, shown in the job summary, with no threshold yet.
+      - run: npx vitest run --coverage --coverage.reporter=text-summary --coverage.reporter=json-summary
+      - name: Coverage summary
+        run: python3 ../scripts/coverage-summary.py Frontend coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
 
   backend:
     name: Backend
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: backend
@@ -62,10 +79,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 20
+          node-version: 26
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
@@ -73,17 +90,128 @@ jobs:
       # it — without this, every column added since the last generate is a
       # compile error.
       - run: npx prisma generate
+      # schema.prisma and the migrations must describe the same database. A
+      # schema change with no migration passes the suite when nothing queries
+      # what changed, and then never reaches an upgraded instance. Prisma
+      # applies the migrations to an empty database of its own (the shadow)
+      # and compares the result with the schema; --exit-code fails on any
+      # difference.
+      - name: Compare schema.prisma with the migrations
+        run: |
+          PGPASSWORD=cozyvtt psql -h localhost -p 55433 -U cozyvtt -d cozyvtt_test -c 'CREATE DATABASE cozyvtt_shadow'
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_shadow --exit-code
       - run: npx prisma migrate deploy
       - run: npx tsc --noEmit
       - run: npm run lint
-      - run: npx jest
+      # Coverage is collected as a report, shown in the job summary, with no
+      # threshold yet.
+      - run: npx jest --coverage --coverageReporters=text-summary --coverageReporters=json-summary
+      - name: Coverage summary
+        run: python3 ../scripts/coverage-summary.py Backend coverage/coverage-summary.json >> "$GITHUB_STEP_SUMMARY"
 
   docs:
     name: Docs
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       # The route check also loads the OpenAPI file as YAML, which needs PyYAML.
       - run: pip install pyyaml
       - run: python3 scripts/spec-coverage.py
       - run: python3 scripts/websocket-events.py --check
+      # The scripts' own tests: every form of route and event the doc checks
+      # read, and what the nginx check and the coverage summary read.
+      - run: python3 -m unittest discover -s scripts/tests
+
+  # Known advisories, from both lockfiles. A high or critical advisory in the
+  # packages an instance runs (--omit=dev) fails the job. The developer
+  # tools, which never reach an instance, are listed after it and fail
+  # nothing: their advisories wait for the tools' next major versions. Each
+  # audit runs whatever the ones before it found, so every result is shown.
+  audit:
+    name: Dependency advisories
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 26
+      - name: Backend, what an instance runs
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Frontend, what an instance runs
+        if: always()
+        working-directory: frontend
+        run: npm audit --omit=dev --audit-level=high
+      - name: Both projects with their developer tools (report only)
+        if: always()
+        continue-on-error: true
+        run: |
+          status=0
+          for project in backend frontend; do
+            echo "::group::$project"
+            (cd "$project" && npm audit --audit-level=high) || status=1
+            echo "::endgroup::"
+          done
+          exit $status
+
+  # What a self-hoster's `docker compose up -d --build` runs: the compose file
+  # read, both production images built, and the bundled nginx's configuration
+  # rendered as its container renders it and checked by nginx, the HTTPS
+  # example from docs/DEPLOYMENT.md included. Then the stack is started and a
+  # browser walks through it (frontend/e2e): the setup wizard, signing in and
+  # out, a campaign opened with its live connection, at desktop and phone
+  # sizes.
+  images:
+    name: Production images, nginx and smoke tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Read docker-compose.yml with the example settings
+        run: cp .env.example .env && docker compose config -q
+      - run: docker compose build
+      - run: pip install pyyaml
+      - run: python3 scripts/nginx-check.py
+      # Throwaway secrets, a port of its own, and a setup token the smoke
+      # tests know; every other setting keeps its default.
+      - name: Start the production stack
+        run: |
+          {
+            echo "DATABASE_PASSWORD=$(openssl rand -hex 16)"
+            echo "SESSION_SECRET=$(openssl rand -hex 32)"
+            echo "SETUP_TOKEN=ci-smoke-setup-token-0123456789"
+            echo "HTTP_PORT=8080"
+            echo "HTTPS_PORT=8443"
+            echo "CORS_ORIGIN=http://localhost:8080"
+          } > .env
+          docker compose up -d --wait --wait-timeout 180
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install the smoke tests and their browser
+        working-directory: frontend
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: Smoke tests in a browser
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:8080
+          E2E_SETUP_TOKEN: ci-smoke-setup-token-0123456789
+          E2E_PRODUCTION: '1'
+        run: npx playwright test
+      - name: The stack's logs, when something failed
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v

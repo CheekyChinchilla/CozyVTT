@@ -56,7 +56,11 @@ async function userWithSocket(label: string) {
  */
 function expectEnding(client: ClientSocket) {
   return {
-    told: waitForEvent<{ message: string }>(client, 'error'),
+    // Told with the typed event, so the page can say why and stop reconnecting.
+    told: waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked').then((told) => {
+      expect(told.reason).toBe('signed-out');
+      return told;
+    }),
     dropped: new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason))),
   };
 }
@@ -201,5 +205,22 @@ describe('which sign-in a live connection belongs to', () => {
     } finally {
       ended.mockRestore();
     }
+  });
+});
+
+// A restore signs everyone out: the restored database holds no sessions.
+describe('ending every live connection', () => {
+  it('tells each one why, with the campaign it was in, and closes it', async () => {
+    const { client } = await userWithSocket('restore');
+    const ending = expectEnding(client);
+
+    await liveSockets.endEveryLiveSocket('The instance was restored from a backup. Sign in again.');
+
+    await expect(ending.told).resolves.toEqual({
+      campaignId: null,
+      reason: 'signed-out',
+      message: 'The instance was restored from a backup. Sign in again.',
+    });
+    expect(await ending.dropped).toBe('io server disconnect');
   });
 });

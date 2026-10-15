@@ -133,6 +133,18 @@ export const ALLOWED_MIME_TYPES = {
 } as const satisfies Record<AssetType, readonly string[]>;
 
 /**
+ * The type a file is stored and served as, from what file-type found in its
+ * bytes. file-type names an Ogg file by the codec inside it: Vorbis as
+ * `audio/ogg` with the extension ogg, but Opus as `audio/ogg; codecs=opus`
+ * with opus, FLAC as oga and Speex as spx. Each is an Ogg track, which the
+ * audio route serves from an .ogg file, so each is stored as one.
+ */
+export function storedFileType(detected: { mime: string; ext: string }): { mime: string; ext: string } {
+  if (detected.mime === 'audio/ogg' || detected.mime.startsWith('audio/ogg;')) return { mime: 'audio/ogg', ext: 'ogg' };
+  return { mime: detected.mime, ext: detected.ext };
+}
+
+/**
  * Allowed file extensions for each asset type
  */
 export const ALLOWED_EXTENSIONS = {
@@ -258,6 +270,34 @@ export async function deleteFile(filePath: string): Promise<boolean> {
 }
 
 /**
+ * Replace a file's contents so that a reader, or the server after a crash,
+ * finds either the old contents or the new, never part of either.
+ *
+ * Writing over a file empties it before the new bytes go in. Here they go to
+ * a new file beside it, which is flushed to disk and then renamed over the
+ * original; a rename within one directory takes effect all at once. Two saves
+ * at the same moment each rename a complete file, so the later one wins whole.
+ * If anything fails, the new file is removed and the original is untouched.
+ */
+export async function writeFileAtomically(filePath: string, data: Buffer): Promise<void> {
+  const temporary = path.join(path.dirname(filePath), `.${path.basename(filePath)}.${randomUUID()}.tmp`);
+  try {
+    // `wx`: a new file, never one that is already there.
+    await fs.writeFile(temporary, data, { flag: 'wx' });
+    const handle = await fs.open(temporary, 'r+');
+    try {
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(temporary, filePath);
+  } catch (error) {
+    await fs.rm(temporary, { force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
  * Ensure a directory exists, creating it if necessary
  * @param dirPath Directory path
  */
@@ -300,6 +340,15 @@ export function isAllowedMimeType(assetType: AssetType, mimeType: string): boole
 export function isAllowedExtension(assetType: AssetType, extension: string): boolean {
   const ext = extension.startsWith('.') ? extension.toLowerCase() : `.${extension.toLowerCase()}`;
   return (ALLOWED_EXTENSIONS[assetType] as readonly string[]).includes(ext);
+}
+
+/**
+ * The uploads folder as an absolute path: `UPLOAD_DIR`, or `uploads` in the
+ * working directory. Read when asked, so a test that sets UPLOAD_DIR is
+ * followed.
+ */
+export function getUploadsDirectory(): string {
+  return path.resolve(process.env.UPLOAD_DIR || 'uploads');
 }
 
 /**

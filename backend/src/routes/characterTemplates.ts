@@ -17,19 +17,52 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
 import { readEnumQuery } from '../utils/queryEnum';
-import { validateCharacterData } from '../validators/game-systems';
+import { validateCharacterData, validateFlexibleSheet, sheetIssues } from '../validators/game-systems';
+import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import {
   CreateCharacterTemplateSchema,
   UpdateCharacterTemplateSchema,
 } from '../validators/characterTemplates';
 import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils/asset-urls';
 import { toJson } from '../utils/prisma-json';
+import { holdOwnerCreates } from '../utils/ownerLimit';
 import logger from '../utils/logger';
 
 const router = Router();
 
 /** Author fields returned alongside a template, minus anything private. */
 const AUTHOR_SELECT = { id: true, displayName: true } as const;
+
+/**
+ * What the list returns for each template: everything but the sheet, which
+ * GET /:id serves. A page holds up to 100 templates and every user's browser
+ * loads it, so it carried up to 100 full sheets.
+ */
+const TEMPLATE_SUMMARY_SELECT = {
+  id: true,
+  name: true,
+  description: true,
+  gameSystem: true,
+  tokenImageUrl: true,
+  createdById: true,
+  createdAt: true,
+  updatedAt: true,
+  createdBy: { select: AUTHOR_SELECT },
+} as const;
+
+/**
+ * The most templates one account may publish. Every template is shown to
+ * every user, so this bounds what one account can add to everyone's list. A
+ * user curating a library for their table publishes tens; 500 is far above
+ * that, and a template editor can still edit and delete anyone's.
+ */
+export const MAX_TEMPLATES_PER_USER = 500;
+const TEMPLATE_LIMIT_REACHED =
+  `You have already published ${MAX_TEMPLATES_PER_USER} character templates, the most one account can. ` +
+  'Delete one you no longer need to make room.';
+
+/** Refused inside the create's transaction when the author is at the ceiling. */
+class TemplateLimitReached extends Error {}
 
 /**
  * May this user modify this template?
@@ -39,9 +72,7 @@ const AUTHOR_SELECT = { id: true, displayName: true } as const;
  *
  * The DB read is deliberately gated on "could it still change the answer",
  * because templateEditor is not carried in the session. This is the shape used
- * by the asset scope-change handler — NOT the one used by asset delete, which
- * gates its read on `!isOwner` and then only uses the result when `isOwner`,
- * so the flag there can never actually take effect.
+ * by the asset scope-change handler.
  */
 async function canModifyTemplate(
   req: AuthenticatedRequest,
@@ -102,21 +133,32 @@ async function resolveTemplateImage(
 
 /**
  * Validate sheet data against its game system, mirroring how characters are
- * checked. Flexible templates (gameSystem null) hold free-form JSON, which is
- * the same latitude Character already allows.
+ * checked, and return the sheet to store: the schema's parsed output, so a key
+ * the sheet does not declare never reaches the database. A Flexible template
+ * (gameSystem null) is checked against the Flexible layout, as a Flexible
+ * character is; no sheet at all is an empty one.
+ *
+ * Templates were published before 1.3.0, and `migrate:sheet-fields` moves only
+ * characters, so a sheet still carrying that version's fields has them moved
+ * where the sheet reads them first, as a character's are. Validation would
+ * otherwise drop their content.
  */
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
   data: unknown
-): { ok: true } | { ok: false; message: string; issues?: unknown[] } {
-  if (gameSystem === null || gameSystem === undefined) return { ok: true };
+): { ok: true; data: unknown } | { ok: false; message: string; issues?: unknown[] } {
+  if (gameSystem === null || gameSystem === undefined) {
+    const flexible = validateFlexibleSheet(data === undefined ? {} : data);
+    if (flexible.success) return { ok: true, data: flexible.data };
+    return {
+      ok: false,
+      message: 'Template data does not match the Flexible sheet layout',
+      issues: sheetIssues(flexible.errors),
+    };
+  }
 
-  // TODO(sheets): the parsed sheet is thrown away, so the create and update
-  // routes store the template exactly as sent, fields the schema would strip
-  // included, while a character is stored as the schema's output. Return
-  // result.data and store that, as the character routes do.
-  const result = validateCharacterData(gameSystem, (data as object) || {});
-  if (result.success) return { ok: true };
+  const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, data || {}));
+  if (result.success) return { ok: true, data: result.data };
 
   return {
     ok: false,
@@ -151,6 +193,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const where: Record<string, unknown> = {};
 
     if (search && typeof search === 'string') {
+      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
       where.name = { contains: search, mode: 'insensitive' };
     }
     if (gameSystem !== undefined) {
@@ -166,7 +209,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         orderBy: { name: 'asc' },
         take,
         skip,
-        include: { createdBy: { select: AUTHOR_SELECT } },
+        select: TEMPLATE_SUMMARY_SELECT,
       }),
       prisma.characterTemplate.count({ where: where as never }),
     ]);
@@ -234,21 +277,30 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       return res.status(400).json({ error: 'Validation Error', message: image.error });
     }
 
-    const template = await prisma.characterTemplate.create({
-      data: {
-        id: randomUUID(),
-        name,
-        description: description ?? null,
-        gameSystem: gameSystem ?? null,
-        tokenImageUrl: image.url,
-        data: toJson(data || {}),
-        createdById: userId,
-      },
-      include: { createdBy: { select: AUTHOR_SELECT } },
+    const template = await prisma.$transaction(async (tx) => {
+      await holdOwnerCreates(tx, 'character-templates', userId);
+      if ((await tx.characterTemplate.count({ where: { createdById: userId } })) >= MAX_TEMPLATES_PER_USER) {
+        throw new TemplateLimitReached();
+      }
+      return tx.characterTemplate.create({
+        data: {
+          id: randomUUID(),
+          name,
+          description: description ?? null,
+          gameSystem: gameSystem ?? null,
+          tokenImageUrl: image.url,
+          data: toJson(sheet.data),
+          createdById: userId,
+        },
+        include: { createdBy: { select: AUTHOR_SELECT } },
+      });
     });
 
     return res.status(201).json(template);
   } catch (error) {
+    if (error instanceof TemplateLimitReached) {
+      return res.status(400).json({ error: 'Validation Error', message: TEMPLATE_LIMIT_REACHED });
+    }
     logger.error('Error creating character template', { err: error });
     return res
       .status(500)
@@ -286,6 +338,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     // The game system is fixed at creation, exactly as it is for a character —
     // the sheet data is only meaningful against the system it was built for.
+    let sheetData: unknown;
     if (data.data !== undefined) {
       const sheet = validateSheet(existing.gameSystem as GameSystem | null, data.data);
       if (!sheet.ok) {
@@ -295,6 +348,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           validationErrors: sheet.issues,
         });
       }
+      sheetData = sheet.data;
     }
 
     let imageUrl: string | null | undefined;
@@ -311,7 +365,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description ?? null }),
-        ...(data.data !== undefined && { data: toJson(data.data) }),
+        ...(sheetData !== undefined && { data: toJson(sheetData) }),
         ...(imageUrl !== undefined && { tokenImageUrl: imageUrl }),
       },
       include: { createdBy: { select: AUTHOR_SELECT } },

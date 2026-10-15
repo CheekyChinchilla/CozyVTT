@@ -63,7 +63,7 @@ import {
   ArchiveRefusedError,
   UnpackedTotal,
 } from '../utils/archive';
-import { getFileSizeLimit, getTempDirectory, isAllowedMimeType, isAllowedExtension, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
+import { getFileSizeLimit, getTempDirectory, isAllowedMimeType, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
 import { errorMessage } from '../utils/errors';
 import { startsWithMp3Header } from '../middleware/fileValidation';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
@@ -271,8 +271,11 @@ async function identifyAsset(
   type: ImportableAssetType,
   originalName: string
 ): Promise<{ mime: string; ext: string } | null> {
-  const detected = await fileTypeFromFile(filePath);
-  if (detected) return isAllowedMimeType(type, detected.mime) ? { mime: detected.mime, ext: detected.ext } : null;
+  const found = await fileTypeFromFile(filePath);
+  if (found) {
+    const detected = storedFileType(found);
+    return isAllowedMimeType(type, detected.mime) ? detected : null;
+  }
   const named = path.extname(originalName).toLowerCase();
   if (type === 'AUDIO' && named === '.mp3' && (await startsWithMp3Header(filePath))) return { mime: 'audio/mpeg', ext: 'mp3' };
   return null;
@@ -622,6 +625,8 @@ export async function importCampaign(
 
     /** Remap an asset reference from the archive to the new URL. */
     const remapAsset = (ref: string | null | undefined): string | null => (ref ? (assetRefMap.get(ref) ?? null) : null);
+    const mapPictureIds = new Set(assets.filter((a) => a.type === 'MAP').map((a) => a.oldId));
+    const isMapPicture = (ref: string): boolean => mapPictureIds.has(ref);
 
     // The same presets a new campaign gets, so an archive with no atmosphere
     // settings imports with the atmosphere the allowlists accept.
@@ -708,7 +713,7 @@ export async function importCampaign(
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);
               continue;
             }
-            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, report });
+            const prepared = prepareMap(mapRaw, { index: i, importTokens, remapAsset, isMapPicture, report });
             if (!prepared) continue;
 
             const mapId = randomUUID();

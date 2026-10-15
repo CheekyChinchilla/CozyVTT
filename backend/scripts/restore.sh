@@ -110,11 +110,16 @@ gunzip -c "$BACKUP_FILE" | LC_ALL=C awk -v key="$RESTRICT_KEY" -v trailer="$REST
     }
     if (line == "-- PostgreSQL database dump complete") complete = 1
     if (line ~ /^SET transaction_timeout = /) next
-    # TODO(restore): this pattern backtracks on a long crafted line (mawk took
-    # 12 s on two 100 KB lines). Match it in one pass, as isOwnershipStatement
-    # in backend/src/utils/pgRestore.ts now does; awk has no lookahead, so
-    # check the closing semicolon and find the first " OWNER TO " with index().
-    if (line ~ /^ALTER [A-Z][A-Z ]* .+ OWNER TO .+;$/) next
+    # ALTER <kind> <name> OWNER TO <role>; on one line, the same lines
+    # isOwnershipStatement in backend/src/utils/pgRestore.ts drops. Read in
+    # one pass: a pattern that let the kind and the name overlap backtracked
+    # on a long crafted line. The name is at least one character, up to the
+    # first " OWNER TO ", and the role at least one before the semicolon.
+    if (line ~ /;$/ && match(line, /^ALTER [A-Z]+ /)) {
+      rest = substr(line, RLENGTH + 1)
+      at = index(substr(rest, 2), " OWNER TO ")
+      if (at > 0 && length(rest) - at - 10 >= 2) next
+    }
     if (line ~ /^(GRANT|REVOKE) /) next
     if (line == "CREATE TABLE public.\"User\" (") has_user = 1
     if (line == "CREATE TABLE public._prisma_migrations (") has_migrations = 1
@@ -206,8 +211,9 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
       echo "    It brings an older backup up to this version and ends the game connections"
       echo "    still open, which keep the identity and role they had before the restore"
       echo "    until the backend restarts."
-      echo "  - Verify the app:           curl http://localhost:PORT/health"
-      echo "    where PORT is HTTP_PORT from your .env (80 if it is not set)."
+      echo "  - Verify the app:           curl http://localhost/health"
+      echo "    If HTTP_PORT is set in .env, put its port number after localhost:"
+      echo "    curl http://localhost:8080/health for HTTP_PORT=8080 or HTTP_PORT=127.0.0.1:8080."
       exit 0
     else
       report_failure
@@ -216,13 +222,31 @@ if [[ -z "${DATABASE_URL:-}" ]] && command -v docker >/dev/null 2>&1; then
   fi
 fi
 
-# Parse DATABASE_URL if set, otherwise fall back to individual vars
+# Parse DATABASE_URL if set, otherwise fall back to individual vars.
+# The address is scheme://user:password@host:port/name?options. A user name
+# or password holding characters an address cannot carry as they are is
+# percent-encoded in it (%40 for @), and is decoded here, as the backend
+# decodes it. An address that names no port uses 5432. This block is the same
+# in backup.sh and restore.sh; keepInStep.test.ts fails if they differ.
+url_decode() {
+  local s="${1//\\/\\\\}"
+  printf '%b' "${s//%/\\x}"
+}
 if [[ -n "${DATABASE_URL:-}" ]]; then
-  DB_USER=$(echo "$DATABASE_URL" | sed -E 's|.*://([^:]+):.*|\1|')
-  DB_PASS=$(echo "$DATABASE_URL" | sed -E 's|.*://[^:]+:([^@]+)@.*|\1|')
-  DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
-  DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
-  DB_NAME=$(echo "$DATABASE_URL" | sed -E 's|.*/([^?]+).*|\1|')
+  AUTHORITY="${DATABASE_URL#*://}"
+  DB_NAME="${AUTHORITY#*/}"
+  DB_NAME="${DB_NAME%%\?*}"
+  AUTHORITY="${AUTHORITY%%/*}"
+  HOST_PORT="${AUTHORITY##*@}"
+  USER_INFO=""
+  if [[ "$AUTHORITY" == *@* ]]; then USER_INFO="${AUTHORITY%@*}"; fi
+  DB_USER=$(url_decode "${USER_INFO%%:*}")
+  DB_USER="${DB_USER:-cozyvtt}"
+  DB_PASS=""
+  if [[ "$USER_INFO" == *:* ]]; then DB_PASS=$(url_decode "${USER_INFO#*:}"); fi
+  DB_HOST="${HOST_PORT%%:*}"
+  DB_PORT=5432
+  if [[ "$HOST_PORT" == *:* ]]; then DB_PORT="${HOST_PORT##*:}"; fi
 else
   DB_USER="${DB_USER:-cozyvtt}"
   DB_PASS="${DB_PASS:-}"

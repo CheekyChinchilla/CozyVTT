@@ -24,5 +24,9 @@ Thumbs.db
 # Test coverage
 coverage/
 
+# Playwright's results and HTML report, written by npm run test:e2e
+test-results/
+playwright-report/
+
 # Vite
 .vite/

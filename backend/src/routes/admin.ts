@@ -13,7 +13,6 @@ import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
 import archiver from 'archiver';
-import unzipper from 'unzipper';
 import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -24,16 +23,33 @@ import {
   updateSystemSettings,
 } from '../services/systemSettings';
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
+import { UpdateSystemSettingsSchema } from '../validators/systemSettings';
+import { parseDisplayName, MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
 import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
+import { writeAdminLog } from '../services/systemLog';
+import { toJson } from '../utils/prisma-json';
+import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
 import { UPLOAD_LIMITS } from '../utils/fileUtils';
-import { extractArchiveSafely } from '../utils/archive';
+import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
+import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
+import {
+  startRestore,
+  startReplacingDatabase,
+  endRestore,
+  restoreRunning,
+  restoreUploadName,
+  removeLeftoverRestoreUploads,
+} from '../services/restoreState';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
-import { getSocketInstance } from '../websocket/utils';
+import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
+import { forgetSetupComplete } from '../middleware/setup';
+import { backupsInProgress } from '../services/backupsInProgress';
+import { uploadsDiskUsage } from '../services/uploadsDisk';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
@@ -50,6 +66,13 @@ const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?
 const RESTORE_MAX_FILES = 100_000;
 const RESTORE_MAX_TOTAL_BYTES = 10 * 1024 * 1024 * 1024;
 
+/** A restore's upload whose name does not end in .zip. */
+class NotAZipName extends Error {
+  constructor() {
+    super('Only .zip backup files are accepted');
+  }
+}
+
 // Multer storage for restore uploads — saves the uploaded ZIP to BACKUP_DIR temporarily
 const restoreStorage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -58,7 +81,7 @@ const restoreStorage = multer.diskStorage({
       .catch((err) => cb(err, BACKUP_DIR));
   },
   filename: (_req, _file, cb) => {
-    cb(null, `restore-temp-${Date.now()}.zip`);
+    cb(null, restoreUploadName());
   },
 });
 const restoreUpload = multer({
@@ -68,7 +91,7 @@ const restoreUpload = multer({
     if (file.originalname.toLowerCase().endsWith('.zip')) {
       cb(null, true);
     } else {
-      cb(new Error('Only .zip backup files are accepted'));
+      cb(new NotAZipName());
     }
   },
 });
@@ -82,32 +105,41 @@ router.use(requireAuth, requireAdmin);
 // Helpers
 // ============================================
 
-async function writeAdminLog(
-  adminUserId: string,
-  message: string,
-  level: 'INFO' | 'WARNING' | 'ERROR' | 'CRITICAL' = 'INFO',
-  context?: Prisma.InputJsonObject
-): Promise<void> {
-  try {
-    await prisma.systemLog.create({
-      data: {
-        level,
-        message,
-        userId: adminUserId,
-        context: context ?? Prisma.JsonNull,
-      },
-    });
-  } catch (e) {
-    logger.error('Failed to write system log', { err: e });
-  }
-}
-
 /**
  * How long an invitation link stays valid. Longer than the 1-hour password
  * reset window on purpose — an invitation has to survive someone not checking
  * email over a weekend.
  */
 const INVITE_EXPIRY_DAYS = 7;
+
+/**
+ * The address and display name a new account is made with, as Create User
+ * and Invite User take them. The address is trimmed and lowercased, and one
+ * holding `<` or `>` is refused rather than stripped, so the address checked
+ * for a duplicate is the one stored and the one the email goes to. The name
+ * is checked as sign-up checks it (parseDisplayName); with none given, it is
+ * the part of the address before the @.
+ */
+function newAccountFields(
+  email: unknown,
+  displayName: unknown
+): { ok: true; email: string; displayName: string } | { ok: false; message: string } {
+  if (!email || typeof email !== 'string') return { ok: false, message: 'Email is required' };
+  const address = email.trim().toLowerCase();
+  if (!validateEmail(address) || /[<>]/.test(address)) return { ok: false, message: 'Invalid email address' };
+
+  const given = displayName !== undefined && displayName !== null && !(typeof displayName === 'string' && displayName.trim() === '');
+  const name = parseDisplayName(given ? displayName : address.split('@')[0].slice(0, MAX_DISPLAY_NAME_LENGTH));
+  if (!name.ok) return { ok: false, message: name.message };
+  return { ok: true, email: address, displayName: name.name };
+}
+
+/** A write refused because another account already has the address. */
+function isAddressTaken(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
+}
+
+const ADDRESS_TAKEN = { error: 'Conflict', message: 'Email is already in use' } as const;
 
 function generateTemporaryPassword(): string {
   const bytes = crypto.randomBytes(16);
@@ -133,6 +165,7 @@ router.get('/stats', async (_req, res) => {
       characterCount,
       mapCount,
       assetBreakdownRaw,
+      uploadsDisk,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.campaign.count(),
@@ -147,6 +180,9 @@ router.get('/stats', async (_req, res) => {
         _count: { id: true },
         _sum: { fileSize: true },
       }),
+      // How full the uploads' disk is, for the dashboard's warning. Null when
+      // it cannot be read. No per-user quota is enforced; this is the check.
+      uploadsDiskUsage(),
     ]);
 
     const assetBreakdown = assetBreakdownRaw.map((row) => ({
@@ -165,11 +201,40 @@ router.get('/stats', async (_req, res) => {
       characterCount,
       mapCount,
       assetBreakdown,
+      uploadsDisk,
     });
   } catch (error) {
     logger.error('Error fetching admin stats', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch stats' });
   }
+});
+
+// ============================================
+// GET /api/admin/health
+// Whether the database answers and the live-connection server is running,
+// for the dashboard's status card. Answers 200 with each part's state; a
+// request that cannot reach this route at all tells the card the API is down.
+// ============================================
+router.get('/health', async (_req, res) => {
+  let database: 'ok' | 'error' = 'ok';
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch (error) {
+    logger.warn('Health check: the database did not answer', { err: error });
+    database = 'error';
+  }
+  let websocket: 'ok' | 'error' = 'ok';
+  let connections = 0;
+  try {
+    connections = getSocketInstance().engine.clientsCount;
+  } catch {
+    websocket = 'error';
+  }
+  return res.json({
+    status: database === 'ok' && websocket === 'ok' ? 'healthy' : 'degraded',
+    services: { api: 'ok', database, websocket },
+    connections,
+  });
 });
 
 // ============================================
@@ -186,47 +251,66 @@ router.get('/settings', async (_req, res) => {
   }
 });
 
+/** Whether two stored settings are the same value, however their object keys are ordered. */
+function sameSetting(a: unknown, b: unknown): boolean {
+  const canonical = (value: unknown): string =>
+    JSON.stringify(value ?? null, (_key, v: unknown) =>
+      typeof v === 'object' && v !== null && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v).sort(([x], [y]) => x.localeCompare(y)))
+        : v
+    );
+  return canonical(a) === canonical(b);
+}
+
 // ============================================
 // PUT /api/admin/settings
 // Updates system settings.
 // ============================================
 router.put('/settings', async (req, res) => {
+  const parsed = UpdateSystemSettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return res.status(400).json({
+      error: 'Validation Error',
+      message: issue ? `${issue.path.join('.') || 'settings'}: ${issue.message}` : 'Invalid settings',
+    });
+  }
   try {
     const {
       instanceName, timezone, allowRegistration, requireAdminApproval,
       themeId, customThemeColors, fontId,
       customLogoUrl, customFaviconUrl, customMascotUrl,
-    } = req.body;
+    } = parsed.data;
 
     const updateData: Parameters<typeof updateSystemSettings>[0] = {};
 
-    if (typeof instanceName === 'string') {
+    if (instanceName !== undefined) {
       updateData.instanceName = sanitizeInput(instanceName).slice(0, 100);
     }
-    if (typeof timezone === 'string') {
+    if (timezone !== undefined) {
       updateData.timezone = sanitizeInput(timezone).slice(0, 50);
     }
-    if (typeof allowRegistration === 'boolean') {
+    if (allowRegistration !== undefined) {
       updateData.allowRegistration = allowRegistration;
     }
-    if (typeof requireAdminApproval === 'boolean') {
+    if (requireAdminApproval !== undefined) {
       updateData.requireAdminApproval = requireAdminApproval;
     }
-    if (typeof themeId === 'string') {
-      updateData.themeId = sanitizeInput(themeId).slice(0, 50);
+    if (themeId !== undefined) {
+      updateData.themeId = themeId;
     }
     if (customThemeColors !== undefined) {
       updateData.customThemeColors = customThemeColors;
     }
-    if (typeof fontId === 'string') {
-      updateData.fontId = sanitizeInput(fontId).slice(0, 50);
+    if (fontId !== undefined) {
+      updateData.fontId = fontId;
     }
     // Branding images are files this instance serves. See isSameOriginPath.
     const branding = {
       customLogoUrl,
       customFaviconUrl,
       customMascotUrl,
-    } satisfies Record<string, unknown>;
+    } satisfies Record<string, string | null | undefined>;
     for (const [field, value] of Object.entries(branding)) {
       if (value === undefined) continue;
       if (typeof value === 'string' && value !== '' && !isSameOriginPath(value)) {
@@ -239,14 +323,24 @@ router.put('/settings', async (req, res) => {
       updateData[field as 'customLogoUrl' | 'customFaviconUrl' | 'customMascotUrl'] = stored;
     }
 
+    // The page sends every setting it shows, so the log lists the ones whose
+    // value differs from what was stored, with that value before and after,
+    // and a save that changes nothing writes nothing.
+    const before = await getSystemSettings();
     const settings = await updateSystemSettings(updateData);
 
-    await writeAdminLog(
-      req.session.userId!,
-      `Updated system settings: ${Object.keys(updateData).join(', ')}`,
-      'INFO',
-      { changes: updateData }
-    );
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const field of Object.keys(updateData) as (keyof typeof updateData)[]) {
+      if (!sameSetting(before[field], updateData[field])) changes[field] = { from: before[field], to: updateData[field] };
+    }
+    if (Object.keys(changes).length > 0) {
+      await writeAdminLog(
+        req.session.userId!,
+        `Updated system settings: ${Object.keys(changes).join(', ')}`,
+        'INFO',
+        { changes: toJson(changes) }
+      );
+    }
 
     return res.json({ message: 'Settings updated successfully', settings });
   } catch (error) {
@@ -261,41 +355,37 @@ router.put('/settings', async (req, res) => {
 // ============================================
 router.post('/users', async (req, res) => {
   try {
-    const { email, displayName, platformRole } = req.body;
-
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'Bad Request', message: 'Email is required' });
-    }
-    if (!validateEmail(email)) {
-      return res.status(400).json({ error: 'Bad Request', message: 'Invalid email address' });
+    const { platformRole } = req.body;
+    const fields = newAccountFields(req.body.email, req.body.displayName);
+    if (!fields.ok) {
+      return res.status(400).json({ error: 'Bad Request', message: fields.message });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const existing = await prisma.user.findUnique({ where: { email: fields.email } });
     if (existing) {
-      return res.status(409).json({ error: 'Conflict', message: 'Email is already in use' });
+      return res.status(409).json(ADDRESS_TAKEN);
     }
 
     const role = platformRole === 'ADMIN' ? 'ADMIN' : 'USER';
     const temporaryPassword = generateTemporaryPassword();
     const passwordHash = await hashPassword(temporaryPassword);
 
-    // TODO(accounts): this name skips parseDisplayName, the check sign-up and
-    // profile edits use, and is stored sanitised and cut to 50 characters, so a
-    // name typed as "<>" is saved empty. Validate it with parseDisplayName and
-    // answer 400 when it fails, here and in the invite route below.
-    const rawName = typeof displayName === 'string' && displayName.trim()
-      ? displayName
-      : email.split('@')[0];
-
-    const user = await prisma.user.create({
-      data: {
-        email: sanitizeInput(email).toLowerCase(),
-        displayName: sanitizeInput(rawName).slice(0, 50),
-        passwordHash,
-        platformRole: role,
-        mustChangePassword: true,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: fields.email,
+          displayName: fields.displayName,
+          passwordHash,
+          platformRole: role,
+          mustChangePassword: true,
+        },
+      });
+    } catch (error) {
+      // Another request made an account with this address since the check.
+      if (isAddressTaken(error)) return res.status(409).json(ADDRESS_TAKEN);
+      throw error;
+    }
 
     await writeAdminLog(
       req.session.userId!,
@@ -349,24 +439,18 @@ router.post('/users/invite', async (req, res) => {
       });
     }
 
-    const { email, displayName, platformRole } = req.body;
-
-    if (!email || typeof email !== 'string') {
-      return res.status(400).json({ error: 'Bad Request', message: 'Email is required' });
-    }
-    if (!validateEmail(email)) {
-      return res.status(400).json({ error: 'Bad Request', message: 'Invalid email address' });
+    const { platformRole } = req.body;
+    const fields = newAccountFields(req.body.email, req.body.displayName);
+    if (!fields.ok) {
+      return res.status(400).json({ error: 'Bad Request', message: fields.message });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    const existing = await prisma.user.findUnique({ where: { email: fields.email } });
     if (existing) {
-      return res.status(409).json({ error: 'Conflict', message: 'Email is already in use' });
+      return res.status(409).json(ADDRESS_TAKEN);
     }
 
     const role = platformRole === 'ADMIN' ? 'ADMIN' : 'USER';
-    const rawName = typeof displayName === 'string' && displayName.trim()
-      ? displayName
-      : email.split('@')[0];
 
     // The account is created with an unusable password: a hash of random bytes
     // that are discarded immediately. Nobody — including this admin — holds a
@@ -374,26 +458,27 @@ router.post('/users/invite', async (req, res) => {
     const unusablePassword = crypto.randomBytes(32).toString('hex');
     const passwordHash = await hashPassword(unusablePassword);
 
-    const user = await prisma.user.create({
-      data: {
-        email: sanitizeInput(email).toLowerCase(),
-        displayName: sanitizeInput(rawName).slice(0, 50),
-        passwordHash,
-        platformRole: role,
-        // The invitation link sets the password, so there is nothing to force
-        // a change of afterwards
-        mustChangePassword: false,
-      },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: {
+          email: fields.email,
+          displayName: fields.displayName,
+          passwordHash,
+          platformRole: role,
+          // The invitation link sets the password, so there is nothing to force
+          // a change of afterwards
+          mustChangePassword: false,
+        },
+      });
+    } catch (error) {
+      // Another request made an account with this address since the check.
+      if (isAddressTaken(error)) return res.status(409).json(ADDRESS_TAKEN);
+      throw error;
+    }
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: user.id,
-        token,
-        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-      },
-    });
+    // Stored as its hash; the token itself goes only into the email.
+    const token = await issueResetToken(user.id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     const inviter = await prisma.user.findUnique({
       where: { id: req.session.userId! },
@@ -458,17 +543,22 @@ router.post('/users/:id/resend-invite', async (req, res) => {
       return res.status(404).json({ error: 'Not Found', message: 'User not found' });
     }
 
+    // An invitation is for an account nobody has signed in to yet, as the
+    // Admin Panel offers it. Anyone else has a password of their own, and a
+    // reset link (POST /api/users/:id/send-reset-link) lasts an hour, not 7 days.
+    if (user.lastLoginAt !== null) {
+      // TODO(accounts): the button this names reads "Send Reset Link" in the
+      // Admin Panel; the message should spell it the same way.
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.',
+      });
+    }
+
     // Invalidate outstanding links so only the newest one works
     await voidOutstandingResetLinks(id);
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: id,
-        token,
-        expiresAt: new Date(Date.now() + INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000),
-      },
-    });
+    const token = await issueResetToken(id, INVITE_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
     const inviter = await prisma.user.findUnique({
       where: { id: req.session.userId! },
@@ -547,6 +637,15 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
   try {
     const { id } = req.params;
 
+    // Turning off one's own MFA asks for the current password and a code
+    // (POST /api/auth/mfa/disable); a session alone must not get round that.
+    if (id === req.session.userId) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You cannot reset your own MFA from here. Use the two-factor settings on your profile, which ask for your password.',
+      });
+    }
+
     const target = await prisma.user.findUnique({
       where: { id },
       select: { id: true, email: true, mfaEnabled: true },
@@ -568,14 +667,16 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
       },
     });
 
-    await writeAdminLog(
-      req.session.userId!,
-      `Reset MFA for user ${target.email}`,
-      'WARNING',
-      { targetUserId: id }
-    );
+    // The activity-log line for the reset; its time also starts the account's
+    // 7 days to set MFA up again, should it be an administrator.
+    await restartAdminMfaGrace({
+      targetUserId: id,
+      byUserId: req.session.userId!,
+      level: 'WARNING',
+      message: `Reset MFA for user ${target.email}`,
+    });
 
-    return res.json({ message: 'MFA has been reset. The user must re-enroll on next login.' });
+    return res.json({ message: 'MFA has been reset. The user signs in with their password alone until they turn it on again; an administrator is asked to set it up again within 7 days.' });
   } catch (error) {
     logger.error('Error resetting MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to reset MFA' });
@@ -585,21 +686,24 @@ router.post('/users/:id/reset-mfa', async (req, res) => {
 // ============================================
 // GET /api/admin/activity
 // Returns recent user registrations, game sessions, currently-online users,
-// and recent admin action logs.
-// Note: SystemLog table is written by admin actions. Activity tab now surfaces it.
+// and the newest 100 lines of the activity log (SystemLog), each with the
+// administrator who acted.
 // Online users are queried from the connect-pg-simple session table.
 // ============================================
 router.get('/activity', async (_req, res) => {
   try {
-    // Query the connect-pg-simple session table for active sessions.
-    // Only userId and expiry are extracted — no tokens or sensitive session data.
+    // Who is signed in, from the connect-pg-simple session table: one row per
+    // user with their latest expiry, worked out by the database. Loading every
+    // live session into Node and searching them per user grew with the table,
+    // which a sign-in script could make very large.
     const rawSessions = await prisma.$queryRaw<{ userId: string; expire: Date }[]>`
-      SELECT sess->>'userId' AS "userId", expire
+      SELECT DISTINCT ON (sess->>'userId') sess->>'userId' AS "userId", expire
       FROM session
       WHERE expire > NOW() AND sess->>'userId' IS NOT NULL
+      ORDER BY sess->>'userId', expire DESC
     `;
-
-    const onlineUserIds = [...new Set(rawSessions.map((s) => s.userId))];
+    const latestExpiry = new Map(rawSessions.map((s) => [s.userId, s.expire]));
+    const onlineUserIds = [...latestExpiry.keys()];
 
     const [recentUsers, recentSessions, onlineUsersData, recentLogs] = await Promise.all([
       prisma.user.findMany({
@@ -652,10 +756,26 @@ router.get('/activity', async (_req, res) => {
 
     const onlineUsers = onlineUsersData.map((u) => ({
       ...u,
-      sessionExpiry: rawSessions.find((s) => s.userId === u.id)?.expire ?? null,
+      sessionExpiry: latestExpiry.get(u.id) ?? null,
     }));
 
-    return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs });
+    // The administrator who wrote each line, looked up now: a line keeps only
+    // the account's id, so one whose account has since been deleted, like the
+    // instance's own lines, names no one (actor null).
+    const actorIds = [...new Set(recentLogs.flatMap((log) => (log.userId ? [log.userId] : [])))];
+    const actors = actorIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, email: true, displayName: true },
+        })
+      : [];
+    const actorById = new Map(actors.map((a) => [a.id, a]));
+    const logs = recentLogs.map((log) => ({
+      ...log,
+      actor: (log.userId && actorById.get(log.userId)) || null,
+    }));
+
+    return res.json({ recentUsers, recentSessions, onlineUsers, recentLogs: logs });
   } catch (error) {
     logger.error('Error fetching admin activity', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch activity' });
@@ -670,8 +790,8 @@ router.get('/activity', async (_req, res) => {
 router.get('/config', (_req, res) => {
   return res.json({
     uploadLimits: { ...UPLOAD_LIMITS },
-    sessionTimeoutMs: parseInt(process.env.SESSION_MAX_AGE || '3600000'),
-    rememberMeTimeoutMs: parseInt(process.env.REMEMBER_ME_MAX_AGE || '2592000000'),
+    sessionTimeoutMs: sessionMaxAge,
+    rememberMeTimeoutMs: rememberMeMaxAge,
     smtp: {
       configured: isSmtpConfigured(),
       host: process.env.SMTP_HOST || null,
@@ -826,12 +946,7 @@ async function openNewBackup(): Promise<{ filename: string; handle: FileHandle }
   }
 }
 
-/**
- * Backups being written now, by name. Each is written to its name plus
- * PARTIAL, which the list never shows, and renamed once it is complete, so a
- * backup the backend is stopped partway through never appears as a backup.
- */
-const backupsInProgress = new Set<string>();
+/** What a backup is written to until it is complete; see services/backupsInProgress.ts. */
 const PARTIAL = '.partial';
 
 const exists = (file: string) => fs.access(file).then(() => true, () => false);
@@ -912,6 +1027,13 @@ router.post('/backups', async (req, res) => {
   if (!dbUrl) {
     return res.status(500).json({ error: 'Configuration Error', message: 'DATABASE_URL is not set' });
   }
+  // A backup taken while a restore replaces the database would hold neither.
+  if (restoreRunning()) {
+    return res.status(409).json({
+      error: 'Conflict',
+      message: 'A restore is running. Make the backup once it has finished.',
+    });
+  }
 
   try {
     const { filename, sizeBytes } = await writeBackupZip(dbUrl, true);
@@ -951,9 +1073,9 @@ router.get('/backups', async (_req, res) => {
   try {
     await ensureBackupDir(BACKUP_DIR);
     const files = await fs.readdir(BACKUP_DIR);
-    // TODO(restore): a restore's upload is saved here as restore-temp-<ms>.zip
-    // and removed only when the request ends, so a backend stopped mid-restore
-    // leaves it behind for good. Clear stale restore-temp files here too.
+    // A restore's upload waits here until the restore ends; with none running,
+    // one still here was left by a backend stopped mid-restore.
+    if (!restoreRunning()) await removeLeftoverRestoreUploads(BACKUP_DIR, files);
     // A partial file no backup here is writing was left by a backend stopped
     // partway through one; it can never be finished, and it is the size of a
     // backup.
@@ -1041,11 +1163,18 @@ router.delete('/backups/:filename', async (req, res) => {
 const takeRestoreUpload: RequestHandler = (req, res, next) => {
   restoreUpload.single('backup')(req, res, (error?: unknown) => {
     if (!error) return next();
+    // The restore never started, so it ends here.
+    endRestore();
+    if (error instanceof NotAZipName) {
+      return res.status(400).json({ error: 'Invalid Backup', message: 'Only .zip backup files are accepted. Nothing was changed.' });
+    }
+    if (error instanceof multer.MulterError) {
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'Backup Too Large', message: 'The backup is larger than 4 GB, the most a restore accepts. Nothing was changed.' });
+      }
+      return res.status(400).json({ error: 'Invalid Backup', message: `The upload could not be read: ${error.message}. Nothing was changed.` });
+    }
     const folderError = inBackupsFolder(error);
-    // TODO(restore): the file filter's refusal of a name not ending in .zip,
-    // and the parser's refusal of a malformed or over-limit body, take this
-    // path to the generic error handler, which answers 500 "An unexpected
-    // error occurred" in production. Answer 400 with the refusal's own message.
     if (!(folderError instanceof BackupFolderUnusable)) return next(error);
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');
@@ -1053,8 +1182,25 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
   });
 };
 
-router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
+/**
+ * One restore at a time (services/restoreState.ts), claimed before the
+ * upload is taken: two at once each loaded their dump in turn and copied
+ * their uploaded files over each other's. Released when the restore ends,
+ * by takeRestoreUpload when the upload is refused and by the route otherwise.
+ */
+const oneRestoreAtATime: RequestHandler = (_req, res, next) => {
+  if (!startRestore()) {
+    return res.status(409).json({
+      error: 'Conflict',
+      message: 'A restore is already running. Wait for it to finish, then try again if you still need to.',
+    });
+  }
+  return next();
+};
+
+router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req, res) => {
   if (!req.file) {
+    endRestore();
     return res.status(400).json({ error: 'Bad Request', message: 'No backup file provided' });
   }
 
@@ -1084,19 +1230,25 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
     }
 
     // 1. Extract ZIP to temp directory.
+    // openArchiveFile refuses a file that is not a ZIP, and one listing more
+    // entries than a backup may hold, before reading its directory;
     // extractArchiveSafely rejects path-traversal (zip-slip) entries and caps
-    // the entry count and total decompressed size (zip-bomb protection).
-    // TODO(restore): a file named .zip that is not a ZIP throws here and
-    // reaches the catch at the end, which answers "An unexpected error occurred
-    // during restore". Answer 400 saying the file is not a ZIP archive, as the
-    // database.sql check below does for a ZIP that is not a backup.
-    const directory = await unzipper.Open.file(uploadedZip);
+    // the total decompressed size (zip-bomb protection). Each refusal says why,
+    // with 400, or 413 for a size limit.
     try {
+      const directory = await openArchiveFile(uploadedZip, RESTORE_MAX_FILES);
       await extractArchiveSafely(directory, tempDir, {
         maxFiles: RESTORE_MAX_FILES,
         maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
       });
     } catch (error) {
+      if (error instanceof ArchiveRefusedError) {
+        logger.warn('Restore refused the uploaded backup', { reason: error.message });
+        return res.status(error instanceof ArchiveLimitError ? 413 : 400).json({
+          error: error instanceof ArchiveLimitError ? 'Backup Too Large' : 'Invalid Backup',
+          message: `${error.message} Nothing was changed.`,
+        });
+      }
       const code = errorCode(error);
       if (code !== undefined && FOLDER_ERRORS.has(code)) return tempFolderRefused(error);
       throw error;
@@ -1177,6 +1329,15 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
 
     // 5. Load the prepared dump. One transaction, stopped at the first
     // failure, so a load that fails leaves the existing database as it was.
+    //
+    // Nothing else may act on the database while it is replaced: a write
+    // waiting behind the load's locks would land on the restored rows. So
+    // every live connection ends now, before the load, and until the restore
+    // ends a new connection and every API request are refused
+    // (services/restoreState.ts). Each socket is told with campaign.access.revoked;
+    // best-effort, since a socket layer that is not up has none to end.
+    startReplacingDatabase();
+    await endEveryLiveSocket('The instance is being restored from a backup. Sign in again once it has finished.');
     try {
       await execFileAsync('psql', buildRestoreArgs(dbUrl, restorePath), { env: pgConnection(dbUrl).env });
     } catch (execError: unknown) {
@@ -1194,20 +1355,17 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
       });
     }
 
-    // 6. Everyone is signed out, as soon as the load has committed: the
-    // database is the backup's from here on, whatever the steps below do. The
-    // restored database holds no login sessions, and a socket that stayed open
-    // would keep the identity and campaign role it cached before the restore.
-    // Best-effort: the load itself is done. The in-memory combat state
-    // belonged to the old data.
-    try {
-      const io = getSocketInstance();
-      io.emit('error', { message: 'The instance was restored from a backup. Sign in again.' });
-      io.disconnectSockets(true);
-    } catch (error) {
-      logger.warn('Restore: live sockets could not be ended', { err: error });
-    }
+    // 6. The database is the backup's from here on, whatever the steps below
+    // do. It holds no login sessions, so everyone signs in again. The live
+    // connections ended before the load and new ones are refused until the
+    // restore ends; ending any that got in regardless is a cheap safety net,
+    // since such a socket would keep the identity and campaign role it cached
+    // from the replaced database. The in-memory combat state belonged to the
+    // old data.
+    await endEveryLiveSocket('The instance was restored from a backup. Sign in again.');
     clearAllCombatState();
+    // The restored database may be one that was never set up.
+    forgetSetupComplete();
 
     // 7. Copy the archive's uploaded files over the existing ones. A backup
     // without any is fine; a copy that fails is not, and is reported after the
@@ -1267,6 +1425,9 @@ router.post('/backups/restore', takeRestoreUpload, async (req, res) => {
     logger.error('Restore error', { err: error });
     return res.status(500).json({ error: 'Restore Failed', message: 'An unexpected error occurred during restore' });
   } finally {
+    // The restore is over once it has answered; its files are removed after,
+    // each under a name of its own.
+    endRestore();
     // Always clean up temp files
     await fs.unlink(uploadedZip).catch(() => {});
     if (tempDir !== null) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});

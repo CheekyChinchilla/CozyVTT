@@ -58,6 +58,37 @@ const SOURCE_FILTERS = [
   { value: 'custom', label: 'Custom / Homebrew' },
 ];
 
+/**
+ * The credit the SRD 5.1's licence, CC BY 4.0, asks for wherever its material
+ * is shown: beside the import, and at the foot of the library whenever it
+ * lists an SRD creature. SRD_ATTRIBUTION.md has the full notice.
+ */
+function SrdCredit({ className = '' }: { className?: string }) {
+  return (
+    <p className={`text-[10px] text-stone-gray/60 ${className}`}>
+      Includes material from the{' '}
+      <a
+        href="https://dnd.wizards.com/resources/systems-reference-document"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline hover:text-brand-ink"
+      >
+        System Reference Document 5.1
+      </a>{' '}
+      by Wizards of the Coast LLC, licensed under{' '}
+      <a
+        href="https://creativecommons.org/licenses/by/4.0/legalcode"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline hover:text-brand-ink"
+      >
+        CC BY 4.0
+      </a>
+      . Served by Open5e.
+    </p>
+  );
+}
+
 // ============================================
 // Props
 // ============================================
@@ -114,10 +145,20 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   // ── SRD seed state ──
   const [srdCount, setSrdCount] = useState<number | null>(null);
+  // Only an administrator may import the SRD creatures; the server says who.
+  const [canSeed, setCanSeed] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
+  // Kept apart from `error`, which every list load clears: the list loads
+  // again 300 ms after the library opens, and a failed import's reason shown
+  // in that time vanished with it.
+  const [seedError, setSeedError] = useState<string | null>(null);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  // The search the list last loaded with. Opening the library loads the list
+  // (the effect below); the search box's wait reloads it only for a search
+  // that differs, where it used to fire on opening too and load it twice.
+  const searchedFor = useRef(searchQuery);
 
   // ── Fetch creatures ──
   const fetchCreatures = useCallback(async (resetOffset = false) => {
@@ -155,10 +196,11 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   // Fetch on open and when filters change
   useEffect(() => {
     if (!isOpen || !campaign) return;
+    searchedFor.current = searchQuery;
     fetchCreatures(true);
     // Also check seed status and load favorites
     api.getSeedStatus(campaign.id)
-      .then((s) => setSrdCount(s.srdCount))
+      .then((s) => { setSrdCount(s.srdCount); setCanSeed(s.canSeed === true); })
       .catch(() => {}); // non-critical
     setIsLoadingFavorites(true);
     api.listCreatureFavorites(campaign.id)
@@ -175,9 +217,10 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   // Debounced search
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || searchQuery === searchedFor.current) return;
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => {
+      searchedFor.current = searchQuery;
       fetchCreatures(true);
     }, 300);
     return () => clearTimeout(searchTimeoutRef.current);
@@ -189,7 +232,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     if (!campaign || isSeeding) return;
     setIsSeeding(true);
     setSeedResult(null);
-    setError(null);
+    setSeedError(null);
 
     try {
       const result = await api.seedSrdCreatures(campaign.id);
@@ -200,8 +243,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       setSrdCount((result.alreadyExisted || 0) + result.created);
       // Refresh the list
       fetchCreatures(true);
-    } catch {
-      setError('Failed to seed SRD creatures. Check that the server can reach api.open5e.com.');
+    } catch (err) {
+      setSeedError(apiErrorMessage(err) || 'Failed to seed SRD creatures. Check that the server can reach api.open5e.com.');
     } finally {
       setIsSeeding(false);
     }
@@ -459,7 +502,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 {/* The label names the system it imports: this seeds the D&D 5e
                     bestiary whatever the campaign's system, which was not
                     obvious from a bare "Import SRD Creatures". */}
-                {srdCount === 0 && (
+                {srdCount === 0 && canSeed && (
                   <button
                     onClick={handleSeedSrd}
                     disabled={isSeeding}
@@ -481,11 +524,11 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
             </div>
 
             {/* ── Error ── */}
-            {error && (
-              <div className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
-                {error}
+            {[error, seedError].filter(Boolean).map((message) => (
+              <div key={message} className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
+                {message}
               </div>
-            )}
+            ))}
 
             {/* ── Favorites Section ── */}
             {favoriteCreatures.length > 0 && (
@@ -569,10 +612,16 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                       to browse creatures from other systems.
                     </p>
                   )}
-                  {!searchQuery && srdCount === 0 && (
+                  {!searchQuery && srdCount === 0 && !canSeed && (
+                    <p className="mt-4 text-xs text-stone-gray/60">
+                      The ~320 official D&amp;D 5e SRD creatures have not been imported on this server.
+                      Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
+                    </p>
+                  )}
+                  {!searchQuery && srdCount === 0 && canSeed && (
                     <div className="mt-4 space-y-2">
                       <p className="text-xs text-stone-gray/60">
-                        Import ~320 official D&D 5e SRD creatures with full stat blocks.
+                        Import ~320 official D&D 5e SRD creatures with full stat blocks, for every campaign on this server.
                       </p>
                       <Button
                         onClick={handleSeedSrd}
@@ -585,10 +634,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                           'Import D&D 5e SRD Creatures'
                         )}
                       </Button>
-                      <p className="text-[10px] text-stone-gray/40">
-                        SRD 5.1 content by Wizards of the Coast, used under CC BY 4.0.
-                        Served by Open5e.
-                      </p>
+                      <SrdCredit />
                     </div>
                   )}
                   {!searchQuery && (srdCount === null || srdCount > 0) && (
@@ -638,6 +684,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 </div>
               )}
             </div>
+            {creatures.some((c) => c.source === 'srd') && (
+              <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
+            )}
 
             {/* ── Create / Edit Custom Form (inline) ── */}
             {showCreateForm && (

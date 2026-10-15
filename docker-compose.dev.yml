@@ -1,10 +1,12 @@
 # Development Docker Compose
 # Usage: docker compose -f docker-compose.dev.yml up
 #
-# Exposes all services directly to the host for easy debugging:
+# Publishes every service on this computer only (127.0.0.1), for debugging:
 #   Frontend: http://localhost:3000  (Vite hot-reload)
 #   Backend:  http://localhost:4000  (nodemon watch)
 #   Database: localhost:5432
+# A port published without an address is open on every network interface,
+# and Docker's published ports bypass a host firewall such as UFW.
 #
 # For production, use: docker compose up -d --build  (uses docker-compose.yml)
 
@@ -18,7 +20,7 @@ services:
       POSTGRES_USER: ${DATABASE_USER}
       POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -38,9 +40,13 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${DATABASE_USER}:${DATABASE_PASSWORD}@database:5432/${DATABASE_NAME}
-      NODE_ENV: ${NODE_ENV}
+      # Development whatever .env says: .env.example sets production, for the
+      # production stack, and in production mode the backend refuses the
+      # example secrets, logs as JSON and hides error details.
+      NODE_ENV: development
       PORT: 4000
       SESSION_SECRET: ${SESSION_SECRET}
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
       CORS_ORIGIN: ${CORS_ORIGIN}
       APP_URL: ${APP_URL:-http://localhost:3000}
       SMTP_HOST: ${SMTP_HOST}
@@ -64,7 +70,7 @@ services:
       REMEMBER_ME_MAX_AGE: ${REMEMBER_ME_MAX_AGE:-2592000000}
       LOG_LEVEL: ${LOG_LEVEL:-}
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     volumes:
       - ./backend:/app
       - /app/node_modules
@@ -82,11 +88,12 @@ services:
     depends_on:
       - backend
     environment:
-      VITE_API_URL: http://localhost:4000
+      # The page asks its own address, and Vite proxies /api and /socket.io to
+      # the backend container, as nginx does in production.
       VITE_PROXY_TARGET: http://backend:4000
       VITE_ALLOWED_HOSTS: ${VITE_ALLOWED_HOSTS}
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     volumes:
       - ./frontend:/app
       - /app/node_modules

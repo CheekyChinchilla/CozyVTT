@@ -54,9 +54,6 @@
     --font-heading: 'Quicksand', 'Comfortaa', sans-serif;
     --font-body: 'Inter', 'Open Sans', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
-
-    /* ── Google Fonts import URL (dynamically swapped by ThemeProvider) ── */
-    --font-import-url: '';
   }
 
   body {

@@ -19,7 +19,7 @@ let email: string;
 
 const sidOf = (res: request.Response): string | undefined => {
   const set = res.headers['set-cookie'] as unknown as string[] | undefined;
-  const cookie = set?.find((c) => c.startsWith('connect.sid='));
+  const cookie = set?.find((c) => c.startsWith('cozyvtt.sid='));
   return cookie?.split(';')[0].split('=')[1];
 };
 

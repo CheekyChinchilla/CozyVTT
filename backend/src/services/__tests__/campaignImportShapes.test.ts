@@ -22,11 +22,6 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-shapes-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-jest.mock('file-type', () => ({
-  fileTypeFromBuffer: async () => undefined,
-  fileTypeFromFile: async () => undefined,
-}));
-
 import { importCampaign, jsonNestsDeeperThan } from '../campaignImporter';
 import { NpcStatBlockSchema } from '../../validators/statBlock';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';

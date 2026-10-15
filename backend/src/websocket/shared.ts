@@ -478,6 +478,12 @@ export async function broadcastMapData(
  * appears at once, and one whose light goes out leaves their browser. Only
  * for the map the table is on, since players are sent no other.
  *
+ * Callers ask for it only after a change to the walls or lights players are
+ * sent (wallChangeReachesPlayers, lightReachesPlayers and the like in
+ * utils/spirit-layer.ts). A closed door locked or unlocked, or a light that
+ * is off and stays off, changes nothing a player can see, and the map
+ * arriving would tell them that something had just changed.
+ *
  * Changes come in bursts (a wall drawn as two segments, a replace after a
  * drag), so one re-send per map follows the last change of a burst by
  * SIGHT_RESEND_MS. Best-effort: the change is saved by then, so a failure is

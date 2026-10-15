@@ -40,6 +40,9 @@ function clearLegacyPrefs() {
   try { localStorage.removeItem(LEGACY_PREFS_KEY); } catch { /* noop */ }
 }
 
+/** How long a dragged custom colour has to stay put before it is saved. */
+const PREFS_SAVE_DELAY_MS = 400;
+
 // ============================================
 // Avatar Crop Modal
 // Canvas-based square crop with pan + zoom
@@ -323,6 +326,13 @@ export default function ProfilePage() {
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [prefsError, setPrefsError] = useState('');
   const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The preferences as last set here, for a save made before React re-renders.
+  const prefsRef = useRef<UserPreferences>({});
+  // Changes not yet sent, and the timer that sends them (see savePref).
+  const unsentPrefsRef = useRef<Partial<UserPreferences>>({});
+  const sendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Which save is the latest: an answer to an older one is ignored.
+  const saveCountRef = useRef(0);
 
   // ── Delete account ──
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
@@ -365,6 +375,8 @@ export default function ProfilePage() {
 
   const saveProfile = async () => {
     const trimmedName = displayName.trim();
+    // TODO(accounts): the server accepts names of 1 to 50 characters
+    // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
     if (trimmedName.length < 2) {
       setProfileError('Display name must be at least 2 characters');
       return;
@@ -452,6 +464,23 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    setAvatarError('');
+    setAvatarSuccess('');
+    setAvatarUploading(true);
+    try {
+      await profileService.removeAvatar(user!.id);
+      setAvatarPreview(null);
+      await refreshUser();
+      setAvatarSuccess('Avatar removed');
+      setTimeout(() => setAvatarSuccess(''), 3000);
+    } catch (err) {
+      setAvatarError(apiErrorMessage(err) || 'Failed to remove avatar');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
   // ──────────────────────────────────────────
   // Change password
   // ──────────────────────────────────────────
@@ -493,7 +522,8 @@ export default function ProfilePage() {
         const fetched = await api.getUserPreferences(user.id);
         if (cancelled) return;
         clearLegacyPrefs();
-        setPrefs(fetched ?? {});
+        prefsRef.current = fetched ?? {};
+        setPrefs(prefsRef.current);
       } catch (err) {
         if (!cancelled) setPrefsError(apiErrorMessage(err) || 'Failed to load preferences');
       } finally {
@@ -504,42 +534,79 @@ export default function ProfilePage() {
   }, [user?.id]);
 
   /**
-   * Persist a partial preferences update. Optimistically applies the new
-   * values locally (so the UI is instant + the theme repaints immediately),
-   * then sends the patch to the backend. On failure we surface an error but
-   * keep the optimistic value — re-loading the page will reconcile.
+   * Send preferences to the server. Only the latest save's answer is used:
+   * one that comes back after a newer save was sent would put an older value
+   * back on screen.
    */
-  const savePref = useCallback(
+  const sendPrefs = useCallback(
     async (updates: Partial<UserPreferences>) => {
       if (!user?.id) return;
-      setPrefsError('');
-      const merged: UserPreferences = { ...prefs, ...updates };
-      setPrefs(merged);
-      // Theme/font changes should repaint immediately even before the API
-      // call resolves — applyUserPreferences also updates the localStorage
-      // cache so reloads paint without flash.
-      applyUserPreferences(merged);
-
+      const count = ++saveCountRef.current;
       setPrefsSaving(true);
       try {
         const persisted = await api.updateUserPreferences(user.id, updates);
+        if (count !== saveCountRef.current) return;
+        prefsRef.current = persisted;
         setPrefs(persisted);
         // Refresh AuthContext so user.preferences in /auth/me stays in sync —
         // ThemeSyncBridge will see the new value but treat it as a no-op
-        // since applyUserPreferences was already called above.
+        // since applyUserPreferences was already called when it changed.
         await refreshUser();
 
         setPrefsSaved(true);
         if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
         savedTimerRef.current = setTimeout(() => setPrefsSaved(false), 2000);
       } catch (err) {
-        setPrefsError(apiErrorMessage(err) || 'Failed to save preferences');
+        if (count === saveCountRef.current) setPrefsError(apiErrorMessage(err) || 'Failed to save preferences');
       } finally {
-        setPrefsSaving(false);
+        if (count === saveCountRef.current) setPrefsSaving(false);
       }
     },
-    [user?.id, prefs, applyUserPreferences, refreshUser]
+    [user?.id, refreshUser]
   );
+
+  /** Send the changes waiting on the timer now, if there are any. */
+  const sendUnsentPrefs = useCallback(() => {
+    if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+    sendTimerRef.current = null;
+    const unsent = unsentPrefsRef.current;
+    unsentPrefsRef.current = {};
+    if (Object.keys(unsent).length > 0) void sendPrefs(unsent);
+  }, [sendPrefs]);
+
+  /**
+   * Apply a partial preferences update at once (the UI and the theme repaint
+   * immediately, and applyUserPreferences updates the localStorage cache so
+   * reloads paint without flash), then save it. A colour being dragged in
+   * the colour picker changes many times a second, so `wait` holds the save
+   * until the changes stop for PREFS_SAVE_DELAY_MS, and sends them as one.
+   * On failure the error is shown and the value kept; reloading the page
+   * reconciles.
+   */
+  const savePref = useCallback(
+    (updates: Partial<UserPreferences>, { wait = false }: { wait?: boolean } = {}) => {
+      if (!user?.id) return;
+      setPrefsError('');
+      const merged: UserPreferences = { ...prefsRef.current, ...updates };
+      prefsRef.current = merged;
+      setPrefs(merged);
+      applyUserPreferences(merged);
+
+      unsentPrefsRef.current = { ...unsentPrefsRef.current, ...updates };
+      if (sendTimerRef.current) clearTimeout(sendTimerRef.current);
+      if (wait) {
+        sendTimerRef.current = setTimeout(sendUnsentPrefs, PREFS_SAVE_DELAY_MS);
+      } else {
+        sendUnsentPrefs();
+      }
+    },
+    [user?.id, applyUserPreferences, sendUnsentPrefs]
+  );
+
+  // Leaving the page sends a change still waiting on the timer.
+  const sendUnsentPrefsRef = useRef(sendUnsentPrefs);
+  sendUnsentPrefsRef.current = sendUnsentPrefs;
+  useEffect(() => () => sendUnsentPrefsRef.current(), []);
 
   useEffect(() => {
     return () => {
@@ -649,6 +716,16 @@ export default function ProfilePage() {
                 onChange={handleAvatarFileChange}
                 className="hidden"
               />
+              {avatarDisplayUrl && !avatarPreview && (
+                <button
+                  type="button"
+                  onClick={handleRemoveAvatar}
+                  disabled={avatarUploading}
+                  className="mt-2 block w-20 text-center text-xs text-stone-gray hover:text-danger-ink underline disabled:opacity-50"
+                >
+                  Remove Avatar
+                </button>
+              )}
               {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-[5rem]">{avatarError}</p>}
               {avatarSuccess && (
                 <p className="mt-1 text-xs text-brand-ink flex items-center gap-1">
@@ -871,7 +948,10 @@ export default function ProfilePage() {
                 // Only persist customThemeColors when 'custom' is selected;
                 // for preset themes, explicitly clear to keep storage tidy.
                 updates.customThemeColors = next.themeId === 'custom' ? next.customColors : null;
-                void savePref(updates);
+                // A custom colour changing while the theme and font stay is
+                // the colour picker being dragged: saved once it stops.
+                const colourOnly = next.themeId === 'custom' && prefs.themeId === 'custom' && next.fontId === (prefs.fontId ?? next.fontId);
+                savePref(updates, { wait: colourOnly });
               }}
             />
           )}
@@ -897,7 +977,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-medium text-danger-ink">Delete Account</h3>
                 <p className="text-xs text-warm-gray">
-                  Permanently delete your account, characters and personal notes. This cannot be undone.
+                  Permanently delete your account, characters, personal notes and personal files. This cannot be undone.
                 </p>
               </div>
               {!deleteConfirmOpen && (
@@ -919,9 +999,15 @@ export default function ProfilePage() {
                     <ul className="list-disc list-inside text-xs space-y-0.5">
                       <li>Your account and profile</li>
                       <li>Your characters, personal notes and saved rolls</li>
+                      <li>Your avatar, and the personal files you uploaded that nothing uses</li>
                     </ul>
                     <p className="text-xs">
-                      Your chat messages, dice rolls and uploaded files stay where they are, no longer linked to you.
+                      Your chat messages and dice rolls stay where they are, and the files you uploaded into a campaign
+                      and documents you shared into one stay there, no longer linked to you. A personal file a campaign
+                      still uses stays on the server with no owner, and the campaign cannot show it again until an
+                      administrator moves it there.
+                      Character templates you published stay in the shared library, and token templates and creatures
+                      you made stay in their campaigns, no longer linked to you; delete any you want gone first.
                       A campaign you own passes to whoever is running it as DM; one you run yourself has to be handed
                       to another DM, or deleted, first.
                     </p>

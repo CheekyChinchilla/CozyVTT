@@ -25,7 +25,7 @@ This guide covers everything you need to get started, from the setup wizard to a
 
 ### First-Time Setup (Admin Only)
 
-When you first navigate to your CozyVTT instance, you'll be greeted by the **Setup Wizard** — a short four-step process that configures the platform before anyone else can log in.
+When you first navigate to your CozyVTT instance, you'll be greeted by the **Setup Wizard** — a short four-step process that creates the administrator account and configures the platform. Nobody else has an account until it is done, so run it before you share the address with anyone.
 
 *Screenshot pending — Setup wizard welcome screen.*
 
@@ -35,19 +35,22 @@ Read the brief intro and click **Next** to begin. The whole process takes about 
 **Step 2 — Admin Account**
 Create the administrator account. This is the most powerful account on the platform — keep these credentials safe!
 
+- **Setup token** — Proves you run this server, so a stranger who finds a new instance first cannot make themselves its administrator. The backend prints it in its log when it starts: on the server, `docker compose logs backend | grep "setup token"` shows it. If you set `SETUP_TOKEN` in `.env`, enter that value instead. See [Complete the setup wizard](DEPLOYMENT.md#4-complete-the-setup-wizard)
 - **Display Name** — What other users will see (2–50 characters)
-- **Email** — Your login email address
+- **Email Address** — Your login email address
 - **Password** — Must be at least 12 characters with an uppercase letter, a lowercase letter, a number and a special character: one of `! @ # $ % ^ & * ( ) _ + - = [ ] { } ; ' : " \ | , . < > / ?` (a space, `~` or an accented letter does not count)
-- A live password strength meter gives you instant feedback as you type
+- **Confirm Password** — The same password again
+- A live password strength meter gives you instant feedback as you type. It shows **Good** or **Strong** only for a password that meets every rule above, so a password it calls **Weak** or **Fair** will be refused
 
 *Screenshot pending — Admin account creation form with password strength indicator.*
 
 **Step 3 — System Configuration**
 Give your instance its identity:
 
-- **Instance Name** — Appears in browser tabs and the page title (e.g., "The Hearthstone Tavern")
-- **Timezone** — Used for timestamps across the platform; you can auto-detect or pick from a list
-- **Public Registration** — Choose whether new users can register themselves. For private groups, leave this **off** and create accounts manually from the Admin Panel
+- **Instance Name** — Appears in the browser tab and in every email the instance sends (e.g., "The Hearthstone Tavern"). You can change it later under **Admin Panel → Settings**.
+- **Enable Public Registration** — Tick it to let new users register themselves. For private groups, leave it unticked and create accounts manually from the Admin Panel
+
+Earlier versions also asked for a **Timezone** here and showed it under **Admin Panel → Settings**. Nothing ever used it, so it has been removed; times are shown in each person's own browser time zone, as they always were. An instance that saved one keeps it stored, unused.
 
 *Screenshot pending — System configuration step.*
 
@@ -60,11 +63,22 @@ Once setup is complete, you'll be logged in as the administrator and taken to yo
 
 ### Logging In
 
-Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password.
+Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor Authentication (MFA) is enabled on your account, you'll be prompted for your authenticator code after entering your password. If you opened a link to a page, such as a campaign, while signed out, signing in takes you on to that page.
+
+**Too many wrong passwords locks sign-in for a while.** There are two limits. A correct password never counts towards either, so signing in normally cannot lock you out.
+
+| Limit | What the sign-in page says | When it lifts |
+|---|---|---|
+| Five wrong passwords in 15 minutes from one internet address, such as everyone on your home network (a password reset link that does not work counts too) | "Too many authentication attempts, please try again later" | 15 minutes after the oldest of the five |
+| Ten wrong passwords in an hour for your account, from every device together | "Too many failed sign-ins for this account, please try again later" | An hour after the oldest of the ten, or at once when you get a new password: set it with the **Forgot password?** link (if your instance sends email), or ask an administrator for a temporary one |
+
+When the second limit locks an account, the Admin Panel's **Activity** tab gets a line naming the account and the address the last wrong password came from (see [The activity log](#the-activity-log-admins)). The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three say "Too many wrong passwords, please try again later".
+
+**A sign-in lasts at most 30 days**, however much you use it (your administrator can change the length). When it runs out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
 
 *GIF pending — Login flow with MFA step.*
 
-**Forgot your password?** If your instance has email configured, use **Forgot password** on the login page. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. Only the newest link works: asking for another one cancels the one before, and each link can be used once.
+**Forgot your password?** If your instance has email configured, use the **Forgot password?** link on the sign-in page; it opens a page headed **Forgot your password?**. Otherwise contact your platform administrator, who can email you a reset link or generate a temporary password from the Admin Panel. On an instance that cannot send email, the page the link opens says "Password reset by email is not available" and offers no form. If the page says "Your request could not be completed, so no email was sent", try again in a few minutes. Only the newest link works: asking for another one cancels the one before, and each link can be used once. Asking again within five minutes sends nothing new, and the link you already have keeps working; if it has not arrived after five minutes, ask again.
 
 **First time signing in?** An account someone else created for you always ends its first sign-in with you choosing your own password. Until you do, the temporary password you were given won't open anything else — so nobody, including the admin who created the account, keeps a way in.
 
@@ -80,6 +94,30 @@ CozyVTT has two platform-level roles:
 | **User** | Create campaigns (as DM), join campaigns (as player), manage characters |
 
 Your role badge is visible on your profile page.
+
+### The activity log (admins)
+
+The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins' activity log. A line is written each time an administrator:
+
+- creates, invites, approves or deletes an account;
+- makes someone an administrator, or takes the role away;
+- grants or takes away **Global Assets** or template editing;
+- changes someone else's email address, display name, avatar or bio (the line says the bio changed and keeps none of its text);
+- resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
+- changes the instance's settings or default theme (only the settings whose value changed are listed, and saving without changing anything writes no line);
+- makes, deletes or restores a backup, or deletes leftover files;
+- sends a test email from the **Settings** tab.
+
+The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line of **Recent Admin Actions** shows:
+
+| Column | What it shows |
+|---|---|
+| **Time** | How long ago it happened |
+| **Level** | INFO, or WARNING for the more serious actions, such as deleting an account or changing someone's email address |
+| **By** | The administrator who acted, by display name and email address. **The instance** for a line the instance wrote itself |
+| **Action** | What was done, naming the account it was done to by its email address. Under a change to an account or to the settings, **What changed** opens a list of each value before and after, except a bio, which shows only **Bio: changed**. Lines about the settings written by earlier versions list every setting that was sent, with its new value only |
+
+**What the log keeps, and for how long.** Lines are kept for as long as the instance exists: nothing removes them, and there is no control to clear them. A line names the account it was about by its email address, and deleting that account leaves the line as it is. **By** is looked up each time the tab opens, so if the administrator's own account is deleted later, their lines stay and **By** shows **Deleted account**. **What a line stores about an account change:** the email address, display name and avatar address before and after, and whether Global Assets and template editing were granted or taken away. For a bio it stores only that the bio changed: none of the old or new text is kept, so nothing a person wrote about themselves stays in the log. Lines written by earlier versions of CozyVTT still hold the bio text they stored; they are not rewritten. The log is part of every backup.
 
 ### Campaign Roles
 
@@ -110,6 +148,8 @@ After logging in, the **Dashboard** is your home base. From here you can see eve
 **Your Campaigns** — A grid of campaign cards. Each card shows the campaign name, description, your role, and the current session status. Click any campaign card to jump right in.
 
 *Screenshot pending — Campaign card grid with status indicators.*
+
+**Notes From Campaigns You Have Left** — Shown only if a DM has removed you from a campaign in which you kept personal notes or saved rolls. **Open** beside a campaign shows each note and your saved rolls, and **Download** in the window it opens saves them all as one Markdown file. They cannot be changed here. If the campaign is deleted, they are deleted with it.
 
 **Your Characters**, **Asset Library**, **Documents** and **Character Templates** — each section has a button that takes you to that page in one click.
 
@@ -153,7 +193,7 @@ As the DM, click **Map Library** (the map icon) in the campaign header.
 *Screenshot pending — Map Library panel.*
 
 From here you can:
-- **Create Map** from an uploaded image in your asset library, or **Import UVTT** from a mapping tool
+- **Create Map** from an uploaded image in your asset library, or one you upload there with **Upload New**, which goes to your **Personal** library unless you choose **Campaign** (see [Adding Maps to Your Campaign](DM_GUIDE.md#adding-maps-to-your-campaign)); or **Import UVTT** from a mapping tool
 - **Set Active** to switch to a different map — this updates the view for all connected players immediately
 - **Edit** a map's settings, export it, or delete it
 
@@ -169,7 +209,7 @@ Players join your campaign by accepting an invitation. Once they're in, they app
 
 To invite someone:
 1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
-2. Pick them from the list of people on your instance (they need an account first)
+2. Type at least 2 letters of their display name in **Search by display name**, or the whole name if it is one letter long, and pick them from the people who match (they need an account first). See [Inviting Players](DM_GUIDE.md#inviting-players)
 3. They'll see a pending invitation on their dashboard
 
 **Handing the campaign to someone else.** A campaign has one DM, and that seat
@@ -205,9 +245,9 @@ Each token has:
 
 **Colored-letter placeholders:** Tokens without an assigned image display a colored circle with the first letter of their name. Player tokens are blue; for creatures the color reflects the disposition, and objects are grey.
 
-**Moving tokens:** During a session, drag tokens around the map. Everyone connected sees the movement as it happens.
+**Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
 
-*GIF pending — Dragging a token across the map.*
+*GIF pending — Picking up a token and putting it down across the map.*
 
 ---
 
@@ -222,8 +262,10 @@ The **Characters** page (**Manage** beside **Your Characters** on the dashboard)
 From here you can:
 - **Create a new character**
 - **Click a character** to read its sheet — **Edit** is on the sheet when you want to change something
-- From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign**, or unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
+- From a card's menu (**⋮**): **Edit Character** directly, skipping the reading step; **Copy/Duplicate** it (great for variants or backup sheets); **Assign to Campaign** (**Reassign Campaign** once it is in one), which is also where you unassign it if they've hung up their boots; **Export as JSON** (for backups or sharing); or **Delete Character** (with a confirmation prompt — we know how precious they are)
 - **Import** a character from a JSON file
+
+One account can have up to 1,000 characters, copies included. Past that, creating, copying or importing another says so; deleting one you no longer need makes room. A copy's name is the original's with " (Copy)" added, shortened if needed so the whole name stays within 200 characters.
 
 ### Creating a Character
 
@@ -241,7 +283,11 @@ The Character Editor is where you fill in every detail about your character — 
 
 Click **Save** to save your progress. A timestamp in the header shows when your character was last saved. If you try to leave with changes you haven't saved, you'll be asked to confirm first — that covers the back arrow and closing or reloading the browser tab. After a save, leaving is silent. Anything you type while a save is still going through stays in the editor, which then stays open with it, counted as unsaved, until you press **Save** again.
 
+**If a save is refused because a box is too long or a list has too many entries**, a message starting "Not saved." names the first five boxes at fault and what is wrong with each, such as `backstory: Can be at most 100,000 characters`, and says how many more there are. Nothing you typed is lost; the editor stays open. Shorten or remove what the message names, then press **Save** again. A sheet saved before a limit existed still opens as it was; the limit is checked the next time you save. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
+
 **If the character changed while you were editing it**, for example your DM took hit points at the table or you saved it from another window, your save is refused so that it cannot put the old values back. Nothing you typed is lost. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the newest version of the character. Press **Save my changes** to save them, or **Keep editing** to go back to the editor without saving anything. If you changed something that was also changed in the newer version, it is listed under **Changed in both places** with both values; pick the one to keep for each, and **Save my changes** becomes available. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
+
+**Lists on a sheet stop at 500 entries.** On a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet that covers inventory or possessions, attacks, strikes or weapons, spells, cantrips, features, feats and the other lists, and the boxes that take a list, such as languages, senses and possessions; the traits of one Pathfinder 2e strike stop at 50. At 500 the **+ Add** button is greyed out and a note under it says the list is full; remove an entry to add another. The Cantrips box and the boxes that take a list stop taking entries at the limit. On a Pathfinder 2e sheet an item bonus is from -30 to +30 and a spell rank has at most 20 slots; the boxes correct a number outside that when you leave them. A sheet saved with more entries opens with all of them, and cannot be saved until the list is shortened; the message after **Save** names the list.
 
 While a sheet has changes you haven't saved, you stay signed in however long you take. **If you are signed out anyway**, for example because your computer slept for over an hour or your password was changed on another device, your changes are not lost. Pressing **Save** shows "You've been signed out" above the sheet and keeps everything you typed. Click **Sign in in a new tab**, sign in there, come back to the editor and press **Save** again. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
@@ -262,7 +308,7 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 - while creating a character, if you want to keep the character and share it at the same time
 - **Import** on the templates page, which publishes a character JSON file as a template
 
-Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time.
+Templates you publish are visible to everyone on your instance. You can edit or delete your own at any time while you have an account; if you delete your account, they stay in the library for everyone, no longer linked to you. One account can publish up to 500 templates; past that, publishing another says so, and deleting one you no longer need makes room.
 
 **Editing one.** The pencil on one of your templates opens **Edit Template**, with the name and description at the top and the sheet below. **Save Details** saves the name and description and closes the dialog; the sheet's own **Save** saves the sheet, and the dialog stays open showing it. If the sheet has changes you haven't saved, closing the dialog asks first, and **Save Details** keeps it open so you can save them. A token picture chosen on the sheet is not used for a template, because a template's picture has to be a global asset (see the note below).
 
@@ -277,7 +323,7 @@ Templates you publish are visible to everyone on your instance. You can edit or 
 A character has to belong to a campaign before it shows up in that campaign's roster. There are two ways:
 
 - **When you create it** — pick the campaign in the new character dialog. The character joins the roster straight away.
-- **Afterwards** — open a character card's menu on the Characters page, choose **Assign to Campaign**, and pick the campaign.
+- **Afterwards** — open a character card's menu on the Characters page, choose **Assign to Campaign** (**Reassign Campaign** for a character already in one), and pick the campaign.
 
 You can only choose a campaign you are already a member of.
 
@@ -291,6 +337,8 @@ Once assigned, that character becomes available as a token in the campaign, and 
 
 CozyVTT includes sheets for several popular game systems. Here's a quick overview of what each one covers:
 
+Every box on a sheet has a length limit, far above what a sheet needs: a character's name can be up to 200 characters, notes, descriptions, backstories and features up to 100,000, the D&D 5e proficiency boxes up to 2,000, and any other box up to 1,000.
+
 #### Dungeons & Dragons 5th Edition
 
 The classic. Covers all the D&D 5e essentials:
@@ -299,7 +347,8 @@ The classic. Covers all the D&D 5e essentials:
 - Skills with proficiency tracking
 - Hit points, armor class, and saving throws
 - Skill and saving throw bonuses worked out from your scores, with an **Other** box beside each for anything else that adds to it
-- Spells, spell slots, and spellcasting stats
+- Initiative, passive Perception, spell save DC and spell attack worked out for you, each with an **Other bonus** box that takes -30 to +30
+- Spells, spell slots (up to 20 of each level), and spellcasting stats
 - Equipment, weapons, and inventory
 - Features, traits, and background info
 
@@ -329,6 +378,7 @@ For when the vibes turn from cozy to eldritch:
 - Weapons and attacks
 - Backstory, personal description, and ideals
 - Possessions and important people
+- **Keeper's Notes**, on the Backstory tab, for the Keeper alone: only the DM of the investigator's campaign can see or change them, so the investigator's player and the rest of the table never see them. They stay with the campaign: moving the investigator into another campaign, bringing it into one when you accept an invitation, or copying it, leaves them behind.
 
 *Screenshot pending — Call of Cthulhu 7e character sheet.*
 
@@ -336,11 +386,13 @@ For when the vibes turn from cozy to eldritch:
 
 Street magic meets corporate dystopia:
 
-> **Note:** Shadowrun 6e support is on the roadmap for a future release. Stay tuned!
+> **Note:** Shadowrun 6th Edition is planned, not available yet. CozyVTT has groundwork for its rules, but no character sheet, so it is left out of the lists you pick a game system from.
 
 #### Flexible System
 
 Running a homebrew game or a system that doesn't have a dedicated sheet? The **Flexible** sheet is a customizable, free-form character sheet where you define your own fields and sections. Perfect for rules-light games, narrative systems, or anything in between.
+
+A Flexible sheet can hold up to 100 sections. A stats section holds up to 200 stats, a list or a table up to 1,000 rows, a table up to 50 columns, and a text section up to 100,000 characters.
 
 *Screenshot pending — Flexible character sheet.*
 
@@ -354,12 +406,14 @@ The Asset Library is where all your campaign media lives — maps, token images,
 
 ### Asset Types
 
-| Type | What it's for |
-|------|--------------|
-| **Map** | Battle maps, dungeon layouts, world maps |
-| **Token** | Character portraits, monster icons, object images |
-| **Audio** | Ambient soundscapes, background music |
-| **Avatar** | Your personal profile picture |
+| Type | What it's for | Files it takes |
+|------|--------------|----------------|
+| **Map** | Battle maps, dungeon layouts, world maps | PNG, JPEG or WebP |
+| **Token** | Character portraits, monster icons, object images | PNG, JPEG, WebP or GIF |
+| **Audio** | Ambient soundscapes, background music | MP3, Ogg or WAV |
+| **Avatar** | Your personal profile picture | PNG, JPEG or WebP |
+
+An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again.
 
 Rulebooks and handouts are not here. They have their own **Documents** section, described below, so a PDF never sits among your map thumbnails.
 
@@ -367,26 +421,42 @@ Rulebooks and handouts are not here. They have their own **Documents** section, 
 
 Click **Upload Asset** to add a new asset. You'll choose:
 - The file to upload
-- A name for the asset
+- A name for the asset, up to 200 characters (the file's own name is filled in for you)
+- An optional description, up to 1,000 characters
 - The **scope** — where this asset lives:
   - **Personal** — Only you can see and use it
-  - **Campaign** — Shared with everyone in a specific campaign
+  - **Campaign** — Shared with everyone in a specific campaign: one you run, or, for a token picture, one you play in
   - **Global** — Available platform-wide (Admin/Global Asset Manager only)
-- Optional tags for easy filtering later
+- Optional tags for easy filtering later: up to 50, each up to 50 characters
 
 *GIF pending — Uploading a new map asset.*
 
 ### Finding Assets
 
-Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date or name. Click a tag chip to filter to just assets with that tag.
+Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size. Click a tag chip to filter to just assets with that tag.
 
 ### Viewing and Managing Assets
 
-Click any asset card to open its **detail panel** on the right. From there you can see full metadata, edit tags, or delete the asset.
+Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. If you uploaded the asset, the panel also lets you move it to another library with **Move to…** (an avatar always stays in your personal library) and delete it.
 
-**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template or a campaign's ambient sound still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
+**Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
 
 *Screenshot pending — Asset detail panel.*
+
+### Files with no owner, and leftover files (admins)
+
+Two kinds of file can end up reachable by administrators alone. Both are found on the **Assets** tab of the Admin Panel.
+
+**Files with no owner.** When an account is deleted, its avatar and the personal files nothing uses are deleted with it, and the files it uploaded that a campaign still uses stay, with no owner. A campaign's own files that outlive their uploader and then their campaign end up the same way. To list them, set the **Uploader** filter to **No Uploader (account deleted)**. Documents are listed only when the **Type** filter is set to **Document**. From there each one can be moved to Global or into a campaign, so people can use it again, or deleted.
+
+**Leftover files.** These are files in the uploads folder that no asset names at all: for example a file that could not be removed when its asset was deleted, or one that a restored backup brought back although the restored database does not know it. Nothing in CozyVTT shows or uses them; they only take up disk space.
+
+1. Under **Leftover Files**, press **Check for Leftover Files**. You see the list, each file's size and when it last changed, and the total. Checking deletes nothing. At most 5,000 files are listed at a time; once those are deleted, check again for the rest.
+2. If you want them gone, press **Delete *N* Files** and confirm. Each file is checked again first and kept if an asset names it by then. You are told how many were deleted and how many were kept.
+
+A file changed in the last hour is not listed, since an upload may still be finishing; the check tells you how many it left out, and checking again later lists them. A deleted file cannot be brought back without a backup of the uploads folder. Only the folders CozyVTT writes uploads to are looked at; anything else you keep in the uploads folder is left alone. Do not run the check while a backup is being restored.
+
+**How full the disk is.** CozyVTT does not limit how much one account uploads in total, so keep an eye on the disk. The **System Overview** on the Admin Panel's **Dashboard** tab shows, under **Storage**, how much space is free on the disk that holds the uploads. Once that disk is more than 80% full, a red warning at the top of the page says how full it is and what to do: delete files nobody needs from the **Assets** tab, delete old backups, or move the uploads folder to a larger disk (see [File Storage](DEPLOYMENT.md#file-storage)).
 
 ---
 
@@ -399,8 +469,8 @@ Rulebooks, house rules, handouts: the things a table reads rather than looks at.
 | Format | How it gets here | Editable later? |
 |--------|------------------|-----------------|
 | **PDF** | Upload | No, it is a file; upload a new one to replace it |
-| **Plain text** (`.txt`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it |
-| **Markdown** (`.md`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it |
+| **Plain text** (`.txt`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it (see [Editing](#editing)) |
+| **Markdown** (`.md`) | Upload, or **Write one** | Yes, by whoever uploaded or wrote it (see [Editing](#editing)) |
 
 Markdown documents render headings, lists, emphasis, tables, task lists and links. A single press of Enter starts a new line, the way it does in a chat message, so notes read the way you typed them.
 
@@ -424,13 +494,23 @@ Click a document's name or its **Read** button to open it in a full-screen reade
 
 ### Editing
 
-Open a text or Markdown document you uploaded or wrote and press **Edit**. What you type is saved exactly as typed. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
+Open a text or Markdown document and press **Edit**. Who can edit a document is who can delete it, and **Edit** in the reader and the bin button on the **Documents** page show only for someone who can:
+
+| Scope | Who can edit it |
+|-------|-----------------|
+| **Personal** | You, and an administrator. |
+| **Campaign** | Whoever wrote or uploaded it while they are still in the campaign, the campaign's DM, and an administrator. Someone who leaves or is removed from the campaign can no longer edit what they put there. |
+| **Global** | An administrator, and whoever wrote or uploaded it while they are still a global asset manager. |
+
+What you type is saved exactly as typed, and replaces the old text all at once: a save the server cannot finish, because it was restarted for example, leaves the document as it was before. If a save is refused, your text stays in the box and the reason is shown. Closing the editor or the **New document** window with Escape, the X or Cancel asks first once there is something typed or changed, and **Keep writing** or **Keep editing** takes you back to the text. Nothing is asked when there is nothing to lose.
 
 ### Safety
 
 Uploads are checked rather than trusted. A PDF must really be a PDF, and a text or Markdown file must really be text; a program renamed to `.md` is refused. Documents are always shown as text or as a PDF, never as a web page, so a file that contains HTML or a script is displayed as-is and nothing in it can run. There is no need to avoid typing `<` or `>` in a document; they show as typed.
 
-Pictures in a Markdown document or note only load from your own CozyVTT. An image that points at another website would make every reader's browser contact that site, revealing who opened the document; instead its description is shown and nothing is fetched. To show a picture, upload it to your asset library and link to it from there.
+Pictures in a Markdown document or note only load from your own CozyVTT, and only a map, token or avatar picture from the asset library. An image that points at another website would make every reader's browser contact that site, revealing who opened the document, and one that points anywhere else on your CozyVTT would make every reader's browser ask for that page as them; instead its description (or *image not shown*, when it has none) is shown and nothing is fetched. To show a picture, upload it to your asset library as a map or token image and use its address, which looks like `/api/assets/maps/` or `/api/assets/tokens/` followed by a long id: for example `![The old mill](/api/assets/maps/bc5f19c0-158b-4330-a5cc-6133666a4fec)`. To find it, right-click the picture in the **Asset Library** and choose your browser's **Open image in new tab**: the address bar of the new tab shows it.
+
+Links in a document or note open in a new tab, so following one never takes you away from the table.
 
 ---
 
@@ -444,7 +524,7 @@ Navigate to your campaign from the dashboard and connect to the session. If the 
 
 *GIF pending — Connecting to an active session.*
 
-The campaign page automatically reconnects if you lose your internet connection briefly — your position is restored when you come back.
+The campaign page reconnects by itself whenever the connection drops, however long it is gone, and your position is restored when you come back (see [I lost connection mid-session](#i-lost-connection-mid-session)).
 
 ### The Chat Panel
 
@@ -489,7 +569,7 @@ keep the list to open rolls, which changes nothing for anyone else.
 
 ### Your Own Notes
 
-The **Notes** tab is yours alone. Keep as many as you like for each campaign — a
+The **Notes** tab is yours alone. Keep up to 200 for each campaign — a
 plan for next session, what the party has worked out about the villain, a
 running list of who owes whom money.
 
@@ -514,7 +594,7 @@ still appears, marked as having no notes.
 
 ### Moving Your Token
 
-When the DM has placed your character's token on the map, you can **drag it** to move around. Just click and drag to your destination.
+When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, or move the pointer off the map, to put it back where it was.
 
 *GIF pending — Moving a player token.*
 
@@ -626,10 +706,14 @@ Click your avatar (the round picture at the top right of the dashboard) to reach
 
 ### Updating Your Profile
 
-Click **Edit** next to your display name or bio to change them. Click **Save Changes** when you're done.
+Click **Edit** beside **Profile Information** to change your display name or bio, then click **Save Changes**. Your email address is shown there but cannot be changed (see [How do I change my email address?](#how-do-i-change-my-email-address)).
+
+The Profile page takes a display name of 2 to 50 characters, and a bio of up to 500. Invisible characters, such as zero-width spaces and the marks that turn text round to read right to left, are removed when it is saved, so a name cannot look blank or pretend to be someone else's by reversing part of it. The invisible joiners that emoji such as families and skin tones, and Persian, Urdu and Indic names, need are kept only where the characters on both sides are neither spaces nor plain ASCII (the unaccented English letters, digits and punctuation of a US keyboard), so a joiner between two accented letters such as é is kept too; next to a plain ASCII character or a space, at either end, or two in a row, they are removed. The invisible tags that make up the Scotland, Wales and England flags are kept in those flags and removed anywhere else. Display names are not unique: someone else on your instance can have the same one.
 
 **Uploading an Avatar:**
-Click on your current avatar (or the placeholder) to open the avatar uploader. Choose an image file, then use the crop tool to frame it perfectly. The zoom slider lets you dial in exactly the right framing. Click **Upload** to save.
+Click on your current avatar (or the placeholder) to choose an image file (JPEG, PNG or WebP). The **Crop Avatar** window opens: drag the picture to frame it and use the zoom slider to dial in exactly the right framing, then click **Apply & Upload** to save.
+
+A new avatar replaces the old one: the old picture is deleted from the server. **Remove Avatar**, under your avatar, takes it away and deletes the picture, and you are shown with the placeholder again. Deleting your avatar picture from the **Asset Library** does the same. A picture you have also used somewhere else, such as a token's picture, is kept until nothing uses it, but it is no longer your avatar.
 
 *GIF pending — Avatar crop and upload flow.*
 
@@ -637,10 +721,12 @@ Click on your current avatar (or the placeholder) to open the avatar uploader. C
 
 In the **Security** section, enter your current password and your new password (twice, to confirm), then click **Change Password**.
 
+A wrong current password is said on the form ("Current password is incorrect"), and what you typed stays in the boxes. The same goes for the password, and the code, asked for when you delete your account, turn MFA off or make new backup codes.
+
 **Changing your password signs you out everywhere else.** Any other browser or
 device still signed in to your account is signed out straight away, and an open
 game table on it is disconnected in the same moment and taken to the sign-in
-page, unless a character sheet is open there with unsaved changes, which stays
+page, which says why, unless a character sheet is open there with unsaved changes, which stays
 open and says how to sign in again; the one you are using stays where it is. If you ever think somebody else has got into your account, changing
 your password is what removes them. Turning off MFA does the same thing, and so
 does resetting your password from the sign-in page's **Forgot password?** link,
@@ -650,23 +736,27 @@ emailed and not used.
 
 ### Multi-Factor Authentication (MFA)
 
-For extra account security, enable **MFA** in the Security section. You'll be asked for your current password first, then use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
+For extra account security, press **Enable** beside **Two-Factor Authentication** in the **Security** section. You'll be asked for your current password first, then use an authenticator app (like Google Authenticator, Authy, or 1Password) to scan a QR code. After that, every login will ask for a one-time code.
 
 **Turning MFA on signs you out everywhere else**, as turning it off does: any other browser or device signed in to your account is signed out, and the one you are using stays where it is.
 
 **Each code works once.** If you sign in on two devices within the same half-minute, the second one will refuse the code you just used; wait for your app to show the next one. After five wrong codes in 15 minutes, the code step is locked for your account for a while, from every device.
 
-You'll also receive a set of **backup codes** when you set up MFA — store these somewhere safe. They're your lifeline if you lose access to your authenticator app.
+**You have five minutes to enter the code** after your password is accepted. After that the page says "Your sign-in timed out at the code step. Sign in again with your password.", and you start again from the sign-in page. Changing or resetting your password also ends any sign-in that was waiting at the code step, on every device. **Back to login** on the code page ends the waiting sign-in too, so you can start again with another account or password.
+
+You'll also receive 10 **backup codes** when you set up MFA: store these somewhere safe. They're your lifeline if you lose access to your authenticator app: on the code page, **Can't access your app? Use a backup code** takes one in place of the code, and each one works once. They are shown once: until you tick the box saying you have saved them, the browser asks before you reload or close the page. If you lose them anyway, make new ones from **Backup Codes** on your Profile page, with your password. The Profile page shows how many you have left beside **Enabled** (for example "7 of 10 backup codes left"), and after you sign in with a backup code a line at the top of the next page says how many remain, with a reminder to make new ones once three or fewer are left.
+
+**Administrators must use MFA.** If your account is a platform administrator and MFA is off, a banner on every page says by which date it has to be on (7 days from when your account became subject to the rule: the upgrade that introduced it, your account's creation or the moment you were made an administrator, whichever is latest), with a **Set it up now** link to the setup page. After that date the app takes you to the setup page, and until MFA is on the account can do only three things: set it up, change its password, or sign out. Other accounts are not affected. An administrator cannot turn MFA off; if you lose your authenticator and your backup codes, another administrator can reset it from **Admin → Users**, which gives you 7 days to set it up again.
 
 ### Themes & Fonts
 
 From the **Appearance** section of your profile, pick the color theme and font *you* want to see across the app:
 
-- Browse 16 built-in themes across light, warm, cool, dark, neutral, and vibrant categories
+- Browse 16 built-in themes in warm, cool, dark, neutral and vibrant palettes
 - Pick from 8 open-source font families
 - Or click **Custom** to dial in your own primary / accent / background / text colors
 
-Your choice is saved to your account and applies immediately. It also persists across logout — when you log back in, your theme is restored. Unauthenticated visitors and brand-new users see whatever theme the platform admin has set as the instance default.
+Your choice is saved to your account and applies immediately. While you drag one of the **Custom** colours, the page follows the colour as it changes and saves it once you let go for a moment. It also persists across logout — when you log back in, your theme is restored. Unauthenticated visitors and brand-new users see whatever theme the platform admin has set as the instance default.
 
 ### Signing Out
 
@@ -683,6 +773,14 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 - Try refreshing the page — CozyVTT will reconnect automatically
 - If the problem persists, check with your platform administrator that the server is running
 
+### A page says "Can't reach the server"
+
+CozyVTT did not answer when the page checked who is signed in, usually because the server is restarting, being upgraded or being restored from a backup. A restart or an upgrade does not sign you out. The page tries again by itself, after a few seconds and then every 30 seconds, and opens as soon as the server answers; **Try Again** checks at once. If it stays for more than a few minutes, ask your platform administrator whether the server is running.
+
+### A page says "The instance is being restored from a backup"
+
+An administrator is restoring CozyVTT from a backup. When the restore starts, an open campaign page goes to the sign-in page, which says "The instance is being restored from a backup. Sign in again once it has finished." Until it has finished, signing in answers "The instance is being restored from a backup. Try again in a minute; everyone signs in again once it has finished." and a page you open says "Can't reach the server". Wait a minute or two and sign in again: a finished restore signs everyone out, and everything is as it was when the backup was made.
+
 ### My token disappeared from the map
 
 Token placement is managed by the DM. If your token isn't on the map, ask your DM to place it. Character assignment to a campaign must happen before a token can be placed.
@@ -691,9 +789,13 @@ Token placement is managed by the DM. If your token isn't on the map, ask your D
 
 This is usually a loading issue. Refresh the page. If the problem persists, check the Asset Library to make sure the map image was uploaded correctly.
 
+If a character sheet window says **Error Loading Character Sheet**, that sheet holds something the page cannot show. Only the sheet window is affected: the map and the rest of the page carry on, and **Try Again** draws the sheet again. If it keeps happening, tell your platform administrator which character it is.
+
 ### I lost connection mid-session
 
-CozyVTT will automatically try to reconnect if you lose connection briefly. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away appear once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If reconnection fails, refresh the page — everything should be right where you left it.
+CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, and the map the table moved to are all brought up to date once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
+
+If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard.
 
 ### Someone else is editing my character
 
@@ -709,15 +811,19 @@ Email addresses cannot be changed from the app. Contact your platform administra
 
 ### How do I delete my account?
 
-Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, and enter your password. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. Your chat messages, the dice rolls you made and the files you uploaded stay in the campaigns that use them, no longer linked to you, and documents you shared into a campaign stay shared, so the table's history, its handouts and the art on its maps are not lost. Every other browser or device signed in to the account is signed out at the same moment.
+Go to your **Profile** page and scroll to the **Danger Zone** section. Click **Delete Account**, type `DELETE` to confirm, enter your password, and click **Delete My Account**. This is permanent. It removes your account, your characters, your personal notes and your saved dice rolls. It also deletes your avatar, and every personal file you uploaded that nothing uses: a file in your own library that no map, token, character, template, creature or campaign sound uses, and that you have not shared into a campaign, is removed from the server, a moment after the page says your account is gone.
 
-> **If you run a campaign,** hand the DM seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
+Your chat messages and the dice rolls you made stay in their campaigns, no longer linked to you. So do the files you uploaded into a campaign, and documents you shared into a campaign stay shared, so the table's history, its handouts and its own art are not lost. Character templates you published stay in the shared library for everyone to use, and token templates and custom creatures you made as a DM stay in their campaigns, all no longer linked to you. Once your account is gone you cannot edit or delete them: a published template can then be removed by an administrator or someone allowed to edit templates, and a token template or creature by the campaign's DM. Delete any you want gone before you delete your account. A personal file that a campaign still uses, such as a map picture you chose from your own library, stays on the server with no owner, but the campaign can no longer show it until an administrator moves it into the campaign. To keep it showing, move it into the campaign from your asset library before you delete your account, if your role there allows it.
+
+Every other browser or device signed in to the account is signed out at the same moment.
+
+> **If you run a campaign,** whether you created it or were handed the DM seat, hand the seat to someone else in the campaign's settings, or delete the campaign, before you delete your account; until then the deletion is refused and tells you which campaigns are in the way. A campaign you created but someone else now runs as DM passes to them automatically.
 
 If you are the instance's only admin, the deletion is refused with a message saying so: an instance must always have an admin. Promote another user to admin from the Admin Panel first, then delete your account.
 
 ### I forgot my password
 
-Use **Forgot password** on the sign-in page if your instance sends email. Otherwise contact your platform administrator; they can reset your password from the Admin Panel and give you a temporary password to log in with.
+Use the **Forgot password?** link on the sign-in page if your instance sends email. Otherwise contact your platform administrator; they can reset your password from the Admin Panel and give you a temporary password to log in with.
 
 ---
 

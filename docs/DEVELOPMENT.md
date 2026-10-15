@@ -25,10 +25,11 @@ This guide covers everything you need to run CozyVTT locally **for development w
 
 | Tool | Minimum Version | Notes |
 |------|----------------|-------|
-| Node.js | 20.x | Use `nvm` or `fnm` to manage versions |
+| Node.js | 26.x | Use `nvm` or `fnm` to manage versions |
 | PostgreSQL | 14+ | Or use the Docker Compose stack |
-| npm | 10+ | Comes with Node.js 20 |
+| npm | 11+ | Comes with Node.js 26 |
 | Docker + Docker Compose | Any recent | Optional — needed for the containerized setup |
+| Python | 3 | For the documentation checks; `pip install pyyaml` for the YAML and nginx checks |
 
 ---
 
@@ -40,8 +41,9 @@ cozyvtt/
 │   ├── src/
 │   │   ├── config/        Configuration loading and validation
 │   │   ├── game-systems/  Game system type definitions
-│   │   ├── middleware/     Auth, rate limiting, upload middleware
+│   │   ├── middleware/     Auth and role guards, the sign-in and other limiters, upload checks
 │   │   ├── routes/        Express route handlers
+│   │   ├── scripts/       Scripts run by hand: data migrations, checks, the SRD creature seed
 │   │   ├── services/      Business logic layer
 │   │   ├── types/         Shared TypeScript types
 │   │   ├── utils/         Helpers (dice parser, asset URLs, etc.)
@@ -50,14 +52,18 @@ cozyvtt/
 │   ├── prisma/
 │   │   ├── schema.prisma  Database schema
 │   │   ├── migrations/    Migration history
-│   │   └── seed.ts        Development seed data
+│   │   └── seed.ts        Placeholder for development seed data (creates nothing yet)
+│   ├── scripts/           start.sh (the images' entrypoint: waits for the database,
+│   │                      applies migrations), backup.sh and restore.sh
 │   └── docs/              Backend-specific docs (OpenAPI YAML, WS docs)
 │
 ├── frontend/              React + Vite client
 │   ├── src/
+│   │   ├── assets/fonts/  The bundled typefaces and their licences
 │   │   ├── components/    Reusable UI components (incl. ui/ primitives)
 │   │   │   └── character-sheets/  Game system sheet components
-│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign)
+│   │   ├── constants/     Game system labels, and limits copied from the backend (keepInStep.test.ts compares them)
+│   │   ├── contexts/      React context providers (Auth, WebSocket, Campaign, Theme, Toast)
 │   │   ├── stores/        Zustand store for live session state
 │   │   ├── hooks/         Custom React hooks (incl. queries/ for React Query)
 │   │   ├── lib/           React Query client setup
@@ -66,9 +72,15 @@ cozyvtt/
 │   │   ├── styles/        Global CSS and effect stylesheets
 │   │   ├── types/         TypeScript type definitions
 │   │   └── utils/         Client-side helpers
+│   ├── e2e/               Playwright smoke tests against a running instance
 │   └── public/            Static assets
 │
+├── .github/               The CI workflow, Dependabot's settings and the issue templates
+├── assets/                The logo the README shows
 ├── docs/                  User and developer documentation
+├── Examples/              Example character sheets for each game system, as JSON
+├── nginx/                 The bundled reverse proxy's configuration
+├── scripts/               The doc, nginx and coverage checks (Python)
 ├── docker-compose.yml     Production Docker stack (default)
 ├── docker-compose.dev.yml Development Docker stack (hot-reload, exposed ports)
 └── .env.example           Environment variable template
@@ -86,22 +98,32 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
 | `SESSION_SECRET` | Yes | — | Random string for session signing (32+ chars) |
-| `NODE_ENV` | Yes | `development` | `development` or `production` |
+| `NODE_ENV` | No | `development` | `development` or `production` |
 | `PORT` | No | `4000` | Port the API server listens on |
 | `CORS_ORIGIN` | No | `http://localhost:3000` | Allowed origin for CORS |
-| `SMTP_HOST` | No | — | SMTP server hostname |
+| `SMTP_HOST` | No | — | SMTP server hostname. Email is on only when `SMTP_HOST`, `SMTP_USER` and `SMTP_PASS` are all set (`isSmtpConfigured`) |
 | `SMTP_PORT` | No | `587` | SMTP server port |
-| `SMTP_USER` | No | — | SMTP login username |
-| `SMTP_PASS` | No | — | SMTP login password |
-| `SMTP_FROM` | No | — | From address for outbound email |
+| `SMTP_USER` | For email | — | SMTP login username; without it email is off, because the transport always sends a login |
+| `SMTP_PASS` | For email | — | SMTP login password; without it email is off |
+| `SMTP_FROM` | No | `SMTP_USER` | From address for outbound email |
 | `SMTP_SECURE` | No | `false` | Use TLS (`true`) or STARTTLS (`false`) |
-| `APP_URL` | No | — | Public URL used in email links |
+| `APP_URL` | No | `http://localhost:3000` | Public URL used in email links |
+| `FRONTEND_URL` | No | — | An older name for `APP_URL`, read only when `APP_URL` is not set |
+| `INSTANCE_NAME` | No | — | The name emails use while the name in Admin > Settings is empty or still CozyVTT |
+| `SETUP_TOKEN` | No | — | The token the setup wizard asks for; unset, the backend makes one and prints it in its log until setup has run |
+| `UPLOAD_DIR` | No | `uploads` | Where uploaded files are stored, relative to the backend folder |
+| `BACKUP_DIR` | No | `backups` | Where the Admin Dashboard writes backups; must not be inside the uploads folder |
+| `SESSION_MAX_AGE` | No | `3600000` | Milliseconds a sign-in lasts without a request |
+| `REMEMBER_ME_MAX_AGE` | No | `2592000000` | Milliseconds a **Remember me** sign-in lasts, and the longest any sign-in lasts |
+| `RATE_LIMIT_MAX_REQUESTS` | No | `300` | Requests per minute to `/api` from one address |
+| `CAMPAIGN_ARCHIVE_RATE_LIMIT` | No | `20` | Campaign previews, imports and exports per user per hour, counted apart |
+| `LOG_LEVEL` | No | `debug` in development, `info` in production | `debug`, `info`, `warn` or `error` |
 | `MAX_MAP_SIZE_MB` | No | `50` | Upload size limit for map images |
 | `MAX_TOKEN_SIZE_MB` | No | `5` | Upload size limit for token images |
 | `MAX_AUDIO_SIZE_MB` | No | `20` | Upload size limit for audio files |
 | `MAX_AVATAR_SIZE_MB` | No | `2` | Upload size limit for avatar images |
 | `MAX_DOCUMENT_SIZE_MB` | No | `50` | Upload size limit for PDF, text and Markdown documents |
-| `NGINX_MAX_BODY_SIZE` | No | `55M` | Request body cap for the bundled Nginx (`client_max_body_size`); must cover the largest limit above |
+| `NGINX_MAX_BODY_SIZE` | No | — | Request body cap for the bundled Nginx (`client_max_body_size`, `55M` in `docker-compose.yml`); must cover the largest limit above. The backend only reads it for a startup warning, so leave it unset here: unset, it takes it that a proxy of your own is in front and says what that proxy must allow |
 | `ASSET_UPLOAD_RATE_LIMIT` | No | `30` | Asset uploads per minute per user |
 
 The `MAX_*_SIZE_MB` values are read at startup by `backend/src/utils/fileUtils.ts` and served to the SPA by `GET /api/config`, so a restart is enough to change them — no rebuild. Non-numeric or non-positive values are ignored with a startup warning.
@@ -116,15 +138,20 @@ PORT=4000
 CORS_ORIGIN="http://localhost:3000"
 ```
 
-### Frontend (`frontend/.env`)
+### Frontend dev server
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `VITE_API_URL` | No | (relative) | Backend API URL (leave empty to use Vite proxy in dev) |
-| `VITE_SOCKET_URL` | No | (relative) | WebSocket server URL (leave empty to use Vite proxy in dev) |
 | `VITE_ALLOWED_HOSTS` | No | — | Comma-separated allowed hostnames for the Vite server |
+| `VITE_PROXY_TARGET` | No | `http://localhost:4000` | Where the Vite dev server sends `/api` and `/socket.io` |
 
-In development, leave both `VITE_API_URL` and `VITE_SOCKET_URL` **empty** — the Vite dev server proxies `/api` and socket connections to `http://localhost:4000` automatically.
+The dev server reads these two from the environment it is started in, not from
+`frontend/.env`: `vite.config.ts` is read before Vite loads a `.env` file. The
+dev stack sets both (`VITE_ALLOWED_HOSTS` from the root `.env`). Outside Docker,
+put them before the command, for example
+`VITE_ALLOWED_HOSTS=mybox.local npm run dev`.
+
+The app asks its own address for the API and the live connection, and the Vite dev server proxies `/api` and `/socket.io` to the backend, so in development as in production everything is served from one address. Serving the backend from a different address than the page is not supported: the code still reads `VITE_API_URL` and `VITE_SOCKET_URL`, but with them set every picture, sound and PDF document is refused by the page's security policy and the backend's resource policy. What it would take is a backlog entry in [FUTURE_FEATURES.md](./FUTURE_FEATURES.md).
 
 ---
 
@@ -142,15 +169,30 @@ cd ../frontend
 npm install
 ```
 
+Each project's `package.json` names under `allowScripts` the packages that
+run a script while they install: the Prisma packages fetch the database engines
+that way, argon2 checks for its prebuilt binary, and a few developer tools set
+up their own binaries. npm 11, which builds the images, still runs the
+script of a package that is not listed and prints a warning naming it; npm 12
+is announced to block such a script unless the list names it. When a new
+dependency brings one, `npm install-scripts ls` names it; read what the script
+does, then add it with
+`npm install-scripts approve --no-allow-scripts-pin <package>`, or leave it
+out. `dependencySources.test.ts` fails until the list matches the lockfile.
+
 ### 2. Set up PostgreSQL
 
 Create a database and user:
 
 ```sql
-CREATE DATABASE cozyvtt;
-CREATE USER cozyvtt WITH PASSWORD 'cozyvtt';
-GRANT ALL PRIVILEGES ON DATABASE cozyvtt TO cozyvtt;
+CREATE USER cozyvtt WITH PASSWORD 'cozyvtt' CREATEDB;
+CREATE DATABASE cozyvtt OWNER cozyvtt;
 ```
+
+The user owns the database so the migrations can create tables in its `public`
+schema, which PostgreSQL 15 and later no longer lets every user do, and
+`CREATEDB` lets `prisma migrate dev` make the scratch database it compares the
+schema in.
 
 ### 3. Configure environment
 
@@ -166,20 +208,15 @@ cd backend
 npx prisma migrate dev
 ```
 
-### 5. (Optional) Seed the database
+### 5. Create the administrator
 
-```bash
-cd backend
-npm run prisma:seed
-```
-
-This creates a sample admin account and some test data. Check `prisma/seed.ts` for the credentials.
+There is no seed data yet: `backend/prisma/seed.ts` is a stub that logs two lines and creates nothing, so `npm run prisma:seed` does nothing useful. A fresh database starts with the setup wizard, which creates the administrator account. Start the backend and the frontend (below), open the app and complete the wizard. It asks for a setup token that the backend prints in its log; see [DEPLOYMENT.md](DEPLOYMENT.md#4-complete-the-setup-wizard).
 
 ---
 
 ## Local Setup (With Docker)
 
-> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which intentionally exposes the database to localhost, runs the backend under nodemon with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which publishes the database, the backend and the frontend on this computer only (`127.0.0.1`), runs the backend under nodemon in development mode with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ```bash
 # Copy the root .env template
@@ -195,12 +232,30 @@ docker compose -f docker-compose.dev.yml up
 > the first `up`: `mkdir -p backend/uploads backend/backups`. Docker would otherwise
 > create a missing one as root and the backend could not write to it.
 
-Services (all exposed on localhost for easy debugging):
+Services, each published on `127.0.0.1` so that only this computer can reach them:
 - Frontend: `http://localhost:3000`
 - Backend API: `http://localhost:4000`
 - PostgreSQL: `localhost:5432`
 
-The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. Migrations run automatically on first start via Prisma.
+The backend always runs with `NODE_ENV=development` here, whatever `.env` says (`.env.example` sets `production`, for the production stack), so the example secrets only draw a warning and errors show their details. The browser reaches the backend through Vite's proxy on `localhost:3000`, the page's own address, as it reaches it through nginx in production.
+
+To open the dev stack from another device, such as a phone on your network, publish the frontend on a second port open to every interface, with a compose file of your own that git ignores (`*.local.yml`):
+
+```yaml
+# docker-compose.dev.local.yml
+services:
+  frontend:
+    ports:
+      - "3001:3000"
+```
+
+```bash
+docker compose -f docker-compose.dev.yml -f docker-compose.dev.local.yml up
+```
+
+Then open `http://<this computer's address>:3001` on the other device; a name rather than an address also needs adding to `VITE_ALLOWED_HOSTS` in `.env`. Anyone on that network can reach it too, so do this only on a network you trust.
+
+The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. The backend's start script (`backend/scripts/start.sh`) applies any pending migrations with `prisma migrate deploy` each time the container starts.
 
 **Each container has its own `node_modules` and its own generated Prisma client.** Source is bind-mounted, `node_modules` is not, so after adding a dependency or changing `schema.prisma` the running container does not see it until you tell it to. Vite answers a missing package with a 500 and the app shows "Something went wrong"; the backend throws on the first query that touches a new table:
 
@@ -213,7 +268,7 @@ docker compose -f docker-compose.dev.yml exec --user root backend npm install
 docker compose -f docker-compose.dev.yml exec --user root backend npx prisma generate
 ```
 
-`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image (`docker compose -f docker-compose.dev.yml up --build`) does the same thing more slowly.
+`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`.
 
 ### Security headers are production-only
 
@@ -250,6 +305,23 @@ npx prisma migrate dev --name describe_your_change
 # Apply migrations in CI / production (no prompts)
 npx prisma migrate deploy
 ```
+
+> ⚠️ **On a database the backend has already run against, `migrate dev` reports drift and offers a reset: answer no.** The sign-in session store creates a table named `session` the first time the backend starts, and no migration creates it, so Prisma finds a table it does not know. `migrate dev` then says the database has drifted and asks to reset it, which deletes everything in it, and `db push` asks to drop the table. To make a migration on such a database, generate it from the existing migrations into a scratch database instead, which never looks at the `session` table. Prisma empties that database each time, so give it one of its own:
+>
+> ```bash
+> # Once, with the dev stack running:
+> docker compose -f docker-compose.dev.yml exec database createdb -U cozyvtt cozyvtt_shadow
+>
+> # Each new migration, from backend/ (the folder name is a UTC timestamp and a name):
+> mkdir -p prisma/migrations/20261011120000_describe_your_change
+> npx prisma migrate diff --from-migrations prisma/migrations \
+>   --to-schema-datamodel prisma/schema.prisma \
+>   --shadow-database-url postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow \
+>   --script > prisma/migrations/20261011120000_describe_your_change/migration.sql
+> npx prisma migrate deploy
+> ```
+>
+> A fresh database that the backend has never started against has no `session` table, and `migrate dev` works on it as usual.
 
 ### Exploring the Database
 
@@ -302,7 +374,7 @@ npm run build
 # Output in frontend/dist/ — serve with Nginx or any static file server
 
 # Compile the backend
-cd backend
+cd ../backend
 npm run build
 # Output in backend/dist/
 node dist/server.js
@@ -316,16 +388,42 @@ See [docs/DEPLOYMENT.md](DEPLOYMENT.md) for full production deployment instructi
 
 ### Backend Tests (Jest)
 
+The integration tests need a PostgreSQL database of their own, which they fill
+and empty as they run. Start a throwaway one in Docker and load the schema into
+it:
+
 ```bash
+docker run -d --name cozyvtt-test-pg -e POSTGRES_USER=cozyvtt -e POSTGRES_PASSWORD=cozyvtt \
+  -e POSTGRES_DB=cozyvtt_test -p 55500:5432 postgres:15-alpine
 cd backend
-npm test                  # Run all tests
-npm run test:watch        # Watch mode
-npm run test:coverage     # Generate coverage report
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push --skip-generate
 ```
 
-Tests live in `backend/src/**/__tests__/`. Unit tests use Jest; integration tests use Supertest against an in-process server.
+Then run the suite, or one file, with the same `DATABASE_URL`:
 
-> **Note:** Integration tests require a running PostgreSQL database. Set `DATABASE_URL` in your test environment. Test data is cleaned up after each suite.
+```bash
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest src/routes/__tests__/auth.e2e.test.ts
+```
+
+Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`. Unit tests use Jest; integration tests use Supertest against an in-process server.
+
+> **The run refuses a database without `test` in its name.** The suites
+> write to the database freely: they add accounts and campaigns, several
+> change the instance's settings, and five create and drop schemas of their
+> own. So
+> jest stops before any suite starts unless the database `DATABASE_URL` names
+> has `test` in its name as a word: `cozyvtt_test` and `cozyvtt_test_2` pass,
+> `cozyvtt` does not. With `DATABASE_URL` unset it checks the database
+> `backend/.env` names, which is your development database, and refuses it.
+> The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
+
+> **The run makes the sign-in table itself.** The backend keeps sign-ins in a
+> table named `session`, which the session store creates when the server
+> starts. The Prisma schema does not describe it, so `prisma db push` drops
+> it. Before any suite starts, jest makes it again from the session store's
+> own definition (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
+> that end an account's sign-ins pass straight after a push.
 
 ### Frontend Tests (Vitest)
 
@@ -338,13 +436,53 @@ npm run test:coverage     # Generate coverage report
 
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
 
+### Browser smoke tests (Playwright)
+
+`frontend/e2e/` holds a handful of end-to-end tests that drive a real browser
+(Chromium, at a desktop and a phone size) through a running instance: the
+setup wizard on a fresh one, signing in and out, creating a campaign and
+opening it with its live connection, and nothing wider than the screen on a
+phone. CI runs them against the production stack it has just built. To run
+them yourself, start an instance, then from `frontend/`:
+
+```bash
+npx playwright install chromium     # once, to fetch the browser (add --with-deps on Linux, as CI does)
+E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run test:e2e
+```
+
+The first test finishes the setup wizard, so point them at an instance you
+can throw away; on one already set up, it is skipped and the others sign in
+as `E2E_ADMIN_EMAIL` with `E2E_ADMIN_PASSWORD`. The settings are listed in
+`frontend/e2e/instance.ts`. One test's check of the page's security headers
+runs only with `E2E_PRODUCTION=1`, since the development server sends none.
+
+### Checking sign-in by hand
+
+The automated suites cover sign-in from both ends: the backend's route tests
+(`backend/src/routes/__tests__/auth.e2e.test.ts`, the MFA and limiter suites)
+and the browser's session handling (`frontend/src/contexts/__tests__/`, such
+as `adoptSession.test.tsx` and `sessionKeepalive.test.tsx`). After a change to
+sign-in, also click through it once on a running instance, with the browser's
+developer tools open on the Network tab:
+
+| Do this | You should see |
+|---|---|
+| Open the app signed out | The sign-in page, and `GET /api/auth/me` answered 401 |
+| Sign in with a wrong password | "Invalid email or password", and you stay on the sign-in page |
+| Sign in correctly | The dashboard; `GET /api/auth/me` now answers 200 with your account |
+| Sign in with **Remember me** ticked, then reload the page | Still signed in, with no sign-in page in between |
+| Create an account on **Create Account** (registration must be open) | The dashboard, signed in, or **Registration Submitted** when an admin must approve new accounts |
+| Sign in to an account with two-factor sign-in on | The code page; **Verify Code** with a code from the authenticator app signs you in |
+| **Change Password** on the profile page, then sign out and back in | The new password works and the old one does not |
+| **Sign Out** on the profile page | The sign-in page; `GET /api/auth/me` answers 401 again |
+
 ### Type Checking
 
 ```bash
 # Backend
 cd backend && npx tsc --noEmit
 
-# Frontend
+# Frontend: the app, then e2e/ and playwright.config.ts (e2e/tsconfig.json)
 cd frontend && npm run typecheck
 ```
 
@@ -359,15 +497,17 @@ cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run bu
 
 # Backend. The Prisma client is generated, not committed: without a fresh one,
 # every column added since the last generate is a type error.
-cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && npx jest
+cd backend && npx prisma generate && npx tsc --noEmit && npm run lint && \
+  DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx jest
 
 # Documentation, from the repository root (on Windows the command is usually
 # `python`)
 python3 scripts/spec-coverage.py
 python3 scripts/websocket-events.py --check
+python3 -m unittest discover -s scripts/tests
 ```
 
-Two of those deserve a note:
+Some of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
@@ -386,9 +526,19 @@ Two of those deserve a note:
   `src/__tests__/helpers/serve-test-app.ts` starts the test app on a free
   port in a child process, and `malformedUpload.e2e.test.ts` uses it to send
   crafted upload bodies and check that the server answers and is still up.
+- **A test that needs a brand new instance gets a schema of its own.** The
+  suites share one database and run at once, so none can count on it being
+  empty. The setup wizard suite, the first-admin and last-admin race tests,
+  the admin settings log suite and the global setup's own test need exactly
+  that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
+  schema in the same test database from `schema.prisma`, and drops it at the
+  end. The file sets `DATABASE_URL` to that schema before it imports the app,
+  with a dynamic import, because the app's database client reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
-  fails when `nginx/nginx.conf` changes without `NGINX_CONF_STAMP` in
-  `docker-compose.yml` being set to the value it prints (the file's hash, which
+  fails when a file the nginx service mounts on its own (`nginx/nginx.conf`,
+  `nginx/locations.conf`, `nginx/trusted-proxies.envsh`, read from the
+  service's volumes) changes without `NGINX_CONF_STAMP` in
+  `docker-compose.yml` being set to the value it prints (their hash, which
   is what makes an upgrade recreate the web server), and when the PostgreSQL
   client the backend image installs is older than the server image the compose
   files and CI pin, when any line in either Dockerfile that installs it names the
@@ -402,25 +552,130 @@ Two of those deserve a note:
   `MAX_EMAIL_LENGTH` in each), when the map limits file
   (`backend/src/validators/mapLimits.ts`, copied as
   `frontend/src/constants/mapLimits.ts` for the map dialogs) differs between
-  the two, and when a flood ceiling in the WebSocket guide's table
+  the two, when the character sheet limits file
+  (`backend/src/validators/game-systems/sheetLimits.ts`, copied as
+  `frontend/src/constants/sheetLimits.ts` for the sheet editors) differs
+  between the two, when the upload limits file for an asset's name,
+  description and tags (`backend/src/validators/assetLimits.ts`, copied as
+  `frontend/src/constants/assetLimits.ts` for the Upload Asset dialog)
+  differs between the two, when the Invite Player search limits file
+  (`backend/src/validators/inviteSearchLimits.ts`, copied as
+  `frontend/src/constants/inviteSearchLimits.ts` for the Invite Player
+  dialog) differs between the two or the dialog writes either number itself,
+  when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
-  applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`).
+  applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when
+  `campaign.access.revoked` has different fields or reasons on the two sides,
+  when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
+  example in an example file or a guide would start a production server,
+  when the themes and fonts the server accepts differ from those the app
+  offers, when the `DATABASE_URL` block differs between
+  `backend/scripts/backup.sh` and `restore.sh`, when the kinds of thing that
+  can use an asset differ between the two sides or the API document, when
+  either image's `.dockerignore` lets an env file other than `.env.example`
+  into its build, and when the Node.js major differs between `.nvmrc`, a
+  Dockerfile stage, a CI job, an `engines` field, `@types/node` and the
+  guides.
+- **What the guides claim is tested where a claim once drifted.**
+  `backend/src/__tests__/documentedFacts.test.ts` checks the guides' own
+  statements against the code and the shipped files: the deployment guide's
+  Let's Encrypt, HSTS, SMTP and nginx steps, the entity diagram and the
+  middleware list in `docs/ARCHITECTURE.md`, the files the RBAC reference
+  names, the counts in the schema documents, the branches and seed data this
+  guide names, and others. `deploymentDefaults.test.ts` checks what the
+  shipped deployment files offer. Change a claim and its check together.
+- **The tests drive the server's own app.** `createApp` in
+  `backend/src/app.ts` puts every middleware, gate, router and error handler
+  in order; `server.ts` builds its app with it and starts it, and the
+  integration tests' app (`src/__tests__/helpers/test-app.ts`) is built with
+  it too. The test app differs in three settings only: sessions kept in
+  memory, no general request limit, and no setup gate. So a security header,
+  gate or router moved or dropped in `app.ts` fails the suites;
+  `src/__tests__/appAssembly.e2e.test.ts` checks the headers, the session
+  cookie and the order. Mount nothing in `server.ts` itself.
+- **Every route has a test, or is listed as not having one.**
+  `backend/src/routes/__tests__/routeInventory.test.ts` reads every method and
+  path from the app `createApp` builds. It fails when a route is in neither of
+  its two lists: `TESTED`, which names a test file that sends a request to the
+  route, and `UNTESTED`, the known gaps, which should only shrink. It also
+  fails when a test file sends a request to a route still listed in
+  `UNTESTED`, so the list cannot go on claiming a gap that has closed. Add a
+  new route's test, then its line in `TESTED`.
+- **Every rate limiter is tested where it is attached.**
+  `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
+  limited route: it sends the limit's worth of failing requests to the real
+  route and expects the next to be answered 429. It also reads the routers
+  and fails when a route carries a limiter with no row, so a newly limited
+  route needs one line in its `ROWS`. The server-wide limit on every `/api`
+  request is mounted by `createApp` ahead of every router; the same file
+  checks it is there and fires it.
+- **A test file may not carry a `TODO(test)` marker.** A test known to be
+  flaky or wrong once sat behind one, assigned to nobody, until it failed a
+  release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test
+  files of both packages and fails on the marker, so fix the test or open an
+  issue for it. Markers for other areas (`TODO(maps)`, `TODO(ui)`) are fine
+  in a test.
 - **The doc checks are gates, not formalities.** `spec-coverage.py` compares
   `backend/docs/API_DOCUMENTATION.yaml` against the routes the server actually
   mounts and fails when they disagree in either direction, and loads the file
   as YAML when PyYAML is installed (`pip install pyyaml`; CI installs it), since
   the route check does not care whether the file loads and three unquoted
-  colons once made it unloadable;
+  colons once made it unloadable. It also fails when a request the
+  frontend's API client sends is not in the file, and when
+  `docs/API_REFERENCE.md` describes a route that does not exist;
   `websocket-events.py --check` regenerates the WebSocket event table from
   the handlers and fails on any difference from the one in the doc, a
   changed permission column included. Regenerate that table with
-  `python3 scripts/websocket-events.py --write`.
+  `python3 scripts/websocket-events.py --write`. Both fail on a route or
+  event declared in a form they cannot read, so nothing is left out of them
+  unnoticed; `python3 -m unittest discover -s scripts/tests` tests that, and
+  tests `nginx-check.py` and `coverage-summary.py` too.
 
 `.github/workflows/ci.yml` runs the same commands on pushes to `dev` and `main`
-and on pull requests into them (a push to any other branch runs nothing), and
-applies the migrations to an empty database before the backend tests. Note that it **reports** failures rather than blocking a merge —
-blocking needs branch protection with required status checks, which is a
-setting in the repository rather than a file in it.
+and on pull requests into them (a push to any other branch runs nothing). It
+also does what self-hosters run and a developer usually does not:
+
+- **Compares `schema.prisma` with the migrations** (`prisma migrate diff
+  --exit-code`, against an empty shadow database), so a schema change with no
+  migration fails, then applies the migrations to an empty database before
+  the backend tests. To run the comparison yourself, give it a database of
+  its own, which Prisma empties: the command is in the workflow, and the
+  scratch database is the one "Running Migrations" above creates.
+- **Collects test coverage** in both projects and shows it in the job
+  summary, per folder under `src/`. A report only: no threshold fails yet.
+- **Builds both production images** with `docker compose build`, after
+  reading `docker-compose.yml` with the example settings, then starts the
+  stack and runs the browser smoke tests against it (see Browser smoke tests
+  above).
+- **Checks the bundled nginx's configuration** with
+  `python3 scripts/nginx-check.py`: it renders `nginx/nginx.conf` with the
+  image's own entrypoint, the environment and mounts `docker-compose.yml`
+  gives the container and `nginx/trusted-proxies.envsh`, and has nginx check
+  it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
+  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
+  needs Docker, openssl and PyYAML, and runs locally too.
+- **Checks known advisories** in the packages an instance runs
+  (`npm audit --omit=dev --audit-level=high` in both projects): a high or
+  critical one fails the job. A last step lists the advisories in each
+  project's developer tools too, and fails nothing, since those never reach
+  an instance. Each of these steps runs whatever the ones before it found,
+  so a failing backend audit still shows the frontend's result.
+
+Every action the workflow uses is pinned to a commit, with its version in a
+comment, and `.github/dependabot.yml` asks for a weekly pull request into
+`dev` for each project's minor and patch updates (grouped), the actions and
+the Docker base images. Major versions of npm packages are held back until
+the 1.5.3 platform release takes them by hand; after it, each major comes as
+a pull request of its own. Node and nginx move to a new major or stable line
+by hand, and PostgreSQL's major version never through Dependabot, since its
+data has to be dumped and restored. Dependabot alerts for published
+advisories are on; its automatic security pull requests are off for now,
+because GitHub opens those against `main`, which only takes releases.
+
+A pull request into `main` cannot merge until the Frontend, Backend, Docs,
+Dependency advisories, and Production images, nginx and smoke tests jobs pass
+(a ruleset in the repository's settings). Pushes to `dev` are not blocked: CI
+reports there.
 
 ### Before a release: rehearse the upgrade
 
@@ -487,6 +742,13 @@ cd backend && npm run lint
 cd frontend && npm run lint
 ```
 
+The rules are in each package's `eslint.config.js` (ESLint 10, flat config):
+ESLint's recommended rules, typescript-eslint's recommended rules and, in the
+frontend, the React hooks rules. Only TypeScript files are linted, apart from
+the frontend's `vite.config.ts`. A rule that is switched off says why beside
+it. In the frontend the ones waiting to be turned on are marked
+`TODO(ratchet)`; the backend's three are listed in the comment above them.
+
 There is no enforced code formatter (Prettier), but follow the existing style in the file you're editing:
 - 2-space indentation
 - Single quotes for strings
@@ -495,15 +757,15 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 ### Backend Patterns
 
 - **Routes** handle HTTP parsing and response formatting only — business logic goes in `services/`
-- **Middleware** in `src/middleware/` — authentication, rate limiting, file uploads
-- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.parse(req.body)`
-- **WebSocket handlers** in `src/websocket/events.ts` — one handler per socket event namespace
+- **Middleware** in `src/middleware/` — authentication and role guards (named in the route declaration, composed in `compose.ts`), rate limiting, file uploads
+- **Validators** in `src/validators/` use Zod schemas; validate at the route level with `schema.safeParse(req.body)` and answer `400` with the first issue's message when it fails. A key that may be left out says `.optional()`, a `z.unknown()` key included: since zod 4.4 a missing `z.unknown()` key is an error
+- **WebSocket handlers** in `src/websocket/handlers/` — one module per domain (tokens, dice, chat, fog, …), each registering its events for a connection; `events.ts` handles the connection itself (joining a campaign, presence, disconnect) and registers the domain modules
 
 ### Frontend Patterns
 
 - **Pages** in `src/pages/` — one file per route, thin orchestration layer
-- **Components** in `src/components/` — reusable UI; no direct API calls
-- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign)
+- **Components** in `src/components/` — reusable UI; they reach the API through the clients in `src/services/` (the document reader's `fetch` of a document's text is the one exception)
+- **Contexts** in `src/contexts/` — global state (Auth, WebSocket, Campaign, Theme, Toast)
 - **Services** in `src/services/` — all API calls go through `api.ts` or `auth.service.ts`
 - **No `any`** — if you need to escape the type system, use `unknown` and narrow it
 
@@ -511,13 +773,13 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 | Thing | Convention | Example |
 |-------|-----------|---------|
-| Files | kebab-case | `campaign-card.tsx` |
+| Files | Components, pages and contexts: PascalCase, named for what they export. Hooks: `useThing.ts`. Backend modules and other helpers: camelCase, with a few older kebab-case names (`dice-parser.ts`). Tests: `name.test.ts` beside the code or in `__tests__/` | `CampaignCard.tsx`, `useMapControls.ts`, `campaignMacros.ts` |
 | React components | PascalCase | `CampaignCard` |
 | Functions / variables | camelCase | `fetchCampaigns` |
 | Types / Interfaces | PascalCase | `CampaignCardProps` |
 | Constants | UPPER_SNAKE_CASE | `MAX_FILE_SIZE` |
 | Database models | PascalCase | `Campaign` |
-| API route paths | kebab-case | `/api/campaign-invitations` |
+| API route paths | kebab-case | `/api/character-templates` |
 
 ---
 
@@ -525,11 +787,16 @@ There is no enforced code formatter (Prettier), but follow the existing style in
 
 ### Branches
 
-- `main` — production-ready code; protected
-- `develop` — integration branch for features
-- `feature/<name>` — new features
+- `main` — what self-hosters pull; it holds releases only
+- `dev` — where work lands: start each change on a branch off `dev` and merge it back there
+- `feat/<name>` — new features
 - `fix/<name>` — bug fixes
 - `docs/<name>` — documentation only
+- `test/<name>` — tests and CI only
+- `chore/<name>` — version bumps and other housekeeping
+- `release/<version>` — a release being tested, cut from `dev`
+
+CI runs on pushes to `dev` and `main` and on pull requests into them; a branch of your own runs nothing until it is pushed as a pull request.
 
 ### Commit Messages
 

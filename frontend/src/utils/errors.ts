@@ -138,7 +138,7 @@ export function apiDeletionBlockers(err: unknown): DeletionBlocker[] | undefined
 }
 
 const ASSET_USE_KINDS: readonly AssetUseKind[] = [
-  'map', 'token', 'character', 'characterTemplate', 'creature', 'tokenTemplate', 'campaignSetting',
+  'map', 'token', 'character', 'characterTemplate', 'creature', 'tokenTemplate', 'campaignSetting', 'vibePeriod',
 ];
 
 /**
@@ -178,4 +178,16 @@ export function errorMessage(err: unknown): string | undefined {
     if (typeof message === 'string') return message;
   }
   return undefined;
+}
+
+/**
+ * A line to log for a caught error: its status and the server's message, or
+ * the error's own message. Never the error itself, since one the API client
+ * throws carries the request it answered, body included (a password, a code),
+ * and error lines are kept in production builds.
+ */
+export function errorSummary(err: unknown): string {
+  const status = apiErrorStatus(err);
+  const message = apiErrorMessage(err) ?? errorMessage(err) ?? 'Unknown error';
+  return status !== undefined ? `${status} ${message}` : message;
 }

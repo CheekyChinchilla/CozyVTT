@@ -1,6 +1,6 @@
 # Development Dockerfile
 # For production, use Dockerfile.prod (multi-stage, serves via backend static middleware)
-FROM node:20-alpine
+FROM node:26-alpine
 
 # Create non-root user
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup

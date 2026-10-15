@@ -7,6 +7,7 @@
 import React from 'react';
 import { Sparkles, Circle, CircleDot, BookOpen, Zap } from 'lucide-react';
 import { dnd5eSpellSaveDC, dnd5eSpellAttackBonus } from '@/utils/rules/dnd5e';
+import { SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 
 interface SpellSlot {
   total: number;
@@ -21,13 +22,14 @@ interface Spell {
   concentration: boolean;
 }
 
+/** The stored block. The lists are optional there, so they are here. */
 interface Spellcasting {
   class: string;
   ability: string;
   spellSaveDC: number;
   spellAttackBonus: number;
-  cantrips: string[];
-  slots: {
+  cantrips?: string[];
+  slots?: {
     '1': SpellSlot;
     '2': SpellSlot;
     '3': SpellSlot;
@@ -38,7 +40,7 @@ interface Spellcasting {
     '8': SpellSlot;
     '9': SpellSlot;
   };
-  spells: Spell[];
+  spells?: Spell[];
 }
 
 interface SpellcastingBlockProps {
@@ -53,27 +55,41 @@ interface SpellcastingBlockProps {
 
 /**
  * SpellSlotIndicator - Visual representation of spell slots
+ *
+ * One mark per slot, up to the most slots a sheet can now save. A total above
+ * that, stored before the limit, is written as a count alone: drawing a mark
+ * for each of millions froze the browser.
  */
 const SpellSlotIndicator: React.FC<{ slot: SpellSlot }> = ({ slot }) => {
-  const remaining = slot.total - slot.expended;
+  const total = Math.max(0, slot.total);
+  const remaining = Math.min(total, Math.max(0, total - slot.expended));
 
   return (
     <div className="flex items-center space-x-1">
-      {Array.from({ length: slot.total }).map((_, idx) => (
-        <div key={idx}>
-          {idx < remaining ? (
-            <CircleDot className="w-3 h-3 text-blue-600" />
-          ) : (
-            <Circle className="w-3 h-3 text-stone-500" />
-          )}
-        </div>
-      ))}
+      {total <= SPELL_SLOTS_MAX &&
+        Array.from({ length: total }).map((_, idx) => (
+          <div key={idx} data-slot>
+            {idx < remaining ? (
+              <CircleDot className="w-3 h-3 text-blue-600" />
+            ) : (
+              <Circle className="w-3 h-3 text-stone-500" />
+            )}
+          </div>
+        ))}
       <span className="text-xs text-stone-600 ml-1">
-        {remaining}/{slot.total}
+        {remaining}/{total}
       </span>
     </div>
   );
 };
+
+/** A stored slot, or null when it is not one with a usable count. */
+function readSlot(value: unknown): SpellSlot | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { total, expended } = value as Record<string, unknown>;
+  if (typeof total !== 'number' || !Number.isFinite(total)) return null;
+  return { total, expended: typeof expended === 'number' && Number.isFinite(expended) ? expended : 0 };
+}
 
 /**
  * SpellRow - Single spell display
@@ -124,8 +140,17 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
     ? dnd5eSpellAttackBonus(character)
     : spellcasting.spellAttackBonus;
 
+  // Every list is optional on the stored sheet: a block can name an ability
+  // and hold nothing else, and reading the missing lists threw.
+  const spells: Spell[] = Array.isArray(spellcasting.spells) ? spellcasting.spells : [];
+  const cantrips: string[] = Array.isArray(spellcasting.cantrips) ? spellcasting.cantrips : [];
+  const slots = Object.entries(spellcasting.slots ?? {}).flatMap(([level, stored]) => {
+    const slot = readSlot(stored);
+    return slot && slot.total > 0 ? [[level, slot] as const] : [];
+  });
+
   // Group spells by level
-  const spellsByLevel = spellcasting.spells.reduce((acc, spell) => {
+  const spellsByLevel = spells.reduce((acc, spell) => {
     if (!acc[spell.level]) {
       acc[spell.level] = [];
     }
@@ -165,14 +190,14 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
       </div>
 
       {/* Cantrips */}
-      {spellcasting.cantrips && spellcasting.cantrips.length > 0 && (
+      {cantrips.length > 0 && (
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
             <Zap className="w-4 h-4 text-yellow-600" />
             <h5 className="font-semibold text-stone-800">Cantrips</h5>
           </div>
           <div className="flex flex-wrap gap-2">
-            {spellcasting.cantrips.map((cantrip, idx) => (
+            {cantrips.map((cantrip, idx) => (
               <span
                 key={idx}
                 className="px-2 py-1 text-sm bg-yellow-100 text-yellow-800 rounded border border-yellow-300"
@@ -188,14 +213,12 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h5 className="font-semibold text-stone-800 mb-3">Spell Slots</h5>
         <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-          {Object.entries(spellcasting.slots)
-            .filter(([_, slot]) => slot.total > 0)
-            .map(([level, slot]) => (
-              <div key={level} className="text-center">
-                <div className="text-xs text-stone-500 mb-1">Level {level}</div>
-                <SpellSlotIndicator slot={slot} />
-              </div>
-            ))}
+          {slots.map(([level, slot]) => (
+            <div key={level} className="text-center">
+              <div className="text-xs text-stone-500 mb-1">Level {level}</div>
+              <SpellSlotIndicator slot={slot} />
+            </div>
+          ))}
         </div>
       </div>
 

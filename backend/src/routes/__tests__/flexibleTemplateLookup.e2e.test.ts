@@ -1,0 +1,42 @@
+/**
+ * The built-in Flexible starter sheets are looked up by name, and only the
+ * names the server defines are found. The list is a plain object, so a name
+ * such as `constructor` used to find a property every object inherits and
+ * answer 200 with no sheet in it.
+ *
+ * Requires PostgreSQL at DATABASE_URL.
+ */
+
+import request from 'supertest';
+import { createTestApp } from '../../__tests__/helpers/test-app';
+import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+
+const app = createTestApp();
+let userId: string;
+let agent: ReturnType<typeof request.agent>;
+
+beforeAll(async () => {
+  const u = await createTestUser({ displayName: 'Lookup' });
+  userId = u.id;
+  agent = request.agent(app);
+  expect((await agent.post('/api/auth/login').send({ email: u.email, password: TEST_PASSWORD })).status).toBe(200);
+});
+
+afterAll(async () => {
+  await cleanupUsers([userId]);
+  await prisma.$disconnect();
+});
+
+describe('GET /api/characters/templates/null/:templateName', () => {
+  it.each(['constructor', 'toString', '__proto__', 'hasOwnProperty'])('answers 404 for %s', async (name) => {
+    const res = await agent.get(`/api/characters/templates/null/${name}`);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('Template Not Found');
+  });
+
+  it('still finds the starter sheets it defines', async () => {
+    const res = await agent.get('/api/characters/templates/null/basic');
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data.sections)).toBe(true);
+  });
+});

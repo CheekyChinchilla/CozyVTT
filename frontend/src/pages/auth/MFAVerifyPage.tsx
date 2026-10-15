@@ -5,14 +5,17 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
-import { apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
+import { AFTER_SIGN_IN, keepingReturnPath, returnPathFrom } from '@/utils/returnTo';
 
 export default function MFAVerifyPage() {
   const navigate = useNavigate();
-  const { verifyMFA, verifyMFAWithBackupCode, mfaPending, authenticated } =
+  // The page that started the sign-in, to go back to once the code is accepted.
+  const { search } = useLocation();
+  const { verifyMFA, verifyMFAWithBackupCode, cancelMFA, mfaPending, authenticated } =
     useAuth();
 
   // Form state
@@ -24,16 +27,15 @@ export default function MFAVerifyPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect if authenticated (check this first!)
+  // Redirect if authenticated (check this first!). <Navigate>, since a
+  // navigate() during the first render is ignored and left a blank page.
   if (authenticated) {
-    navigate('/dashboard');
-    return null;
+    return <Navigate to={returnPathFrom(search) ?? AFTER_SIGN_IN} replace />;
   }
 
   // Redirect if not in MFA flow
   if (!mfaPending) {
-    navigate('/auth/login');
-    return null;
+    return <Navigate to={keepingReturnPath('/auth/login', search)} replace />;
   }
 
   /**
@@ -59,13 +61,12 @@ export default function MFAVerifyPage() {
 
       // On success, user is logged in and will be redirected
     } catch (err) {
-      console.error('MFA verification error:', err);
+      console.error('MFA verification error:', errorSummary(err));
 
-      // TODO(accounts): apiErrorText returns the reply's short label, such as
-      // "Invalid Code" or "Rate Limited", so the sentence in its message is
-      // never shown, here and in the backup-code handler below. Show
-      // apiErrorMessage(err) first.
-      const serverError = apiErrorText(err);
+      // The reply's sentence (`message`) is for the person, such as the one
+      // for a code step that timed out; its `error` is a short label, shown
+      // only when there is no sentence. The same in the backup-code handler.
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 401) {
@@ -106,9 +107,9 @@ export default function MFAVerifyPage() {
 
       // On success, user is logged in and will be redirected
     } catch (err) {
-      console.error('Backup code verification error:', err);
+      console.error('Backup code verification error:', errorSummary(err));
 
-      const serverError = apiErrorText(err);
+      const serverError = apiErrorMessage(err) || apiErrorText(err);
       if (serverError) {
         setError(serverError);
       } else if (apiErrorStatus(err) === 401) {
@@ -260,9 +261,10 @@ export default function MFAVerifyPage() {
                   // Allow alphanumeric and dashes
                   let value = e.target.value.replace(/[^a-zA-Z0-9-]/g, '');
 
-                  // Auto-format with dash after 4 characters
-                  if (value.length === 4 && !value.includes('-')) {
-                    value = value + '-';
+                  // The dash goes in once a fifth character is typed. Adding
+                  // it at four put it back as soon as Backspace removed it.
+                  if (value.length > 4 && !value.includes('-')) {
+                    value = `${value.slice(0, 4)}-${value.slice(4)}`;
                   }
 
                   setBackupCode(value);
@@ -331,12 +333,14 @@ export default function MFAVerifyPage() {
 
         {/* Back to Login */}
         <div className="text-center pt-4 border-t border-warm-gray/20">
-          {/* TODO(accounts): mfaPending is still true when this navigates,
-             so the login page sends the user straight back to this one. End
-             the pending sign-in first, in AuthContext and on the server,
-             then go to the login page. */}
+          {/* The waiting sign-in is ended first: while it is set, the
+             sign-in page sends the user straight back here. */}
           <button
-            onClick={() => navigate('/auth/login')}
+            onClick={async () => {
+              setLoading(true);
+              await cancelMFA();
+              navigate(keepingReturnPath('/auth/login', search), { replace: true });
+            }}
             className="text-sm text-warm-gray hover:text-brand-ink transition-colors"
             disabled={loading}
           >

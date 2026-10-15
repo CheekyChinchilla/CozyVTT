@@ -27,6 +27,11 @@ export interface AssetPickerProps {
   onSelect: (asset: Asset | null) => void;
   /** Scopes uploads to a campaign. Omit to upload at USER scope. */
   campaignId?: string;
+  /**
+   * Lets an upload go to Personal, selected at first, or this campaign's
+   * library (AssetUploadModal's campaignOption). Not with campaignId.
+   */
+  campaignOption?: string;
   /** Whether the Upload New button is offered. */
   allowUpload?: boolean;
   searchPlaceholder?: string;
@@ -41,6 +46,7 @@ export default function AssetPicker({
   selectedAssetId,
   onSelect,
   campaignId,
+  campaignOption,
   allowUpload = true,
   searchPlaceholder = 'Search assets...',
   emptyMessage,
@@ -99,15 +105,17 @@ export default function AssetPicker({
         </div>
       </div>
 
-      {/* Upload modal — pre-locked to this asset type and campaign */}
+      {/* Upload modal — pre-locked to this asset type, and to the campaign
+          or the personal library unless it offers the choice of both */}
       {allowUpload && (
         <AssetUploadModal
           isOpen={uploadModalOpen}
           onClose={() => setUploadModalOpen(false)}
           onSuccess={handleUploadSuccess}
           defaultType={type}
-          defaultScope={campaignId ? AssetScope.CAMPAIGN : AssetScope.USER}
+          defaultScope={campaignOption ? undefined : campaignId ? AssetScope.CAMPAIGN : AssetScope.USER}
           defaultCampaignId={campaignId}
+          campaignOption={campaignOption}
         />
       )}
 

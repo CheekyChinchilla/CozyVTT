@@ -2,7 +2,7 @@
 
 This guide explains how to add a new tabletop game system to CozyVTT end to end. It reflects the code as it actually ships — file names, the exact functions you extend, and the reference systems to copy from.
 
-CozyVTT currently ships four systems: **D&D 5e**, **Pathfinder 2e**, **Call of Cthulhu 7e**, and **Shadowrun 6e** (backend-complete; its sheet UI is a placeholder — see [Reference systems](#reference-systems)). Adding a fifth means touching a fixed set of registration points, all of which are plain `switch` statements and enums — no dynamic plugin loader, no config file. If you add your system to every switch the compiler and tests point you at, it works.
+CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2e** and **Call of Cthulhu 7e**. A fourth, **Shadowrun 6e**, is in the code as groundwork: its backend is complete and its sheet is a placeholder, so it is left out of the lists a game system is chosen from (see [Reference systems](#reference-systems)). Adding another system means touching a fixed set of registration points, all of which are plain `switch` statements and enums — no dynamic plugin loader, no config file. If you add your system to every switch the compiler and tests point you at, it works.
 
 ---
 
@@ -49,6 +49,47 @@ Each of pieces 2–4 has a per-system file **and** an `index.ts` with a `switch`
 ### Design principle: almost everything is optional
 
 Players fill out sheets incrementally — someone may save a character with just a name. **Make the vast majority of fields optional in your Zod schema.** Require only what genuinely identifies the character (usually just the name). This is why the existing schemas are permissive; match that.
+
+### Limits on every sheet
+
+A sheet is shown to the whole table, so the schemas hold it to sizes a page can draw. The numbers live in `backend/src/validators/game-systems/sheetLimits.ts`, copied byte for byte as `frontend/src/constants/sheetLimits.ts` so the editors stop each box at the same place (`keepInStep.test.ts` fails when the two differ). Use them in a new system's schema and editor; do not write the numbers again.
+
+| Limit | Constant | Where |
+|---|---|---|
+| The character's own name on the sheet: at most 200 characters, the `name` column's limit, since a save copies it there | `SHEET_NAME_MAX` | `sheetCharacterNameSchema` in `sheetText.ts`, used by every system's name field; the editors' name boxes stop there |
+| Any other one-line text: at most 1,000 characters | `SHEET_SHORT_TEXT_MAX` | `sheetShortTextSchema` in `sheetText.ts` |
+| Text that holds paragraphs (notes, descriptions, backstory, personality, a feature, which an older sheet may hold as one long line): at most 100,000 characters | `SHEET_LONG_TEXT_MAX` | `sheetLongTextSchema` in `sheetText.ts` |
+| The name in Allies & Organizations (D&D 5e and Pathfinder 2e): the paragraph limit, since a sheet written before 1.3.0 had its whole allies paragraph moved into it | `SHEET_LONG_TEXT_MAX` | `alliesAndOrganizations.schema.ts`, imported by both schemas |
+| A list on a D&D 5e, Pathfinder 2e, Call of Cthulhu or Shadowrun 6e sheet (inventory or possessions, attacks, strikes or weapons, spells, cantrips, conditions, hit dice, features, feats, languages, contacts and the rest): at most 500 entries, five times what the longest real list holds | `SHEET_LIST_MAX` | `sheetList` in `sheetLists.ts`; `listLimits.test.ts` walks every system's schema and fails on a list without a maximum. The editor turns each add button off at the limit and says why (`ListLimitNote`); a comma-separated box (`ListField`, the cantrips box) turns away the entry that would pass it |
+| Entries in a list inside one row (the traits of one Pathfinder 2e strike, the firing modes of one Shadowrun weapon): at most 50, because it multiplies by the rows around it | `SHEET_ROW_TAGS_MAX` | `pathfinder2e.schema.ts` and `shadowrun6e.schema.ts`; the strike's traits box turns away the 51st |
+| Pathfinder 2e item bonus (saving throws, Perception, skills, lore skills, armor class, strikes, spell attack and spell DC): -30 to +30. The Core Rulebook's run from +4 down to -2 | `PF2E_ITEM_BONUS_MIN`, `PF2E_ITEM_BONUS_MAX` | `itemBonusSchema` in `pathfinder2e.schema.ts`; the editor's boxes clamp to the range when left |
+| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count (D&D 5e: and no more used than the total) | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20 |
+| D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
+
+A sheet stored before a limit existed still loads, with every entry; its next save is refused, with the path of each field over a limit in `validationErrors`, until the list is shortened. The two sheet editors, the Character Editor page and the editor that opens over a sheet at the table or on the Characters page, turn that into one message through `refusedSaveMessage` in `frontend/src/utils/sheetSaveRefusal.ts`: "Not saved." and the first five paths with their reasons, then a count of the rest.
+
+### A field only the DM sees: Keeper's Notes
+
+A sheet is read by the whole table, its player included, so a field meant for the DM alone has to be withheld by the server, never just hidden on the page. Call of Cthulhu has one: the top-level `notes`, shown as **Keeper's Notes**. `backend/src/utils/keeperNotes.ts` lists it in `KEEPER_ONLY_FIELD` and applies these rules:
+
+- **Reading.** Only the DM of the character's campaign (the Keeper) is sent it, on `GET /api/characters/:id`, every save's reply and every `character.updated` event (the character list, `GET /api/characters`, carries no sheets). The Keeper is always sent it, as an empty string when nothing is written, and the editor offers the box exactly when the field arrives; anyone else, the character's owner included, never gets the key.
+- **Writing.** Only the Keeper can change it. A save by anyone else (the owner, a script) keeps the stored value, whatever it sent for the field. A character created by anyone but the DM of the campaign it is created in is stored without it.
+- **Moving.** A character entering a campaign it was not in (assigned to another campaign, or brought in when its owner accepts an invitation) loses it, and so does a copy. The notes were the last campaign's Keeper's, and a player who moved their investigator into a campaign they run would otherwise be its Keeper and read them.
+
+The notes stay inside the stored sheet, so an instance backup keeps them. A campaign export carries no character sheets at all, and a character's JSON export, made from `GET /api/characters/:id`, holds the notes only when the person exporting is the character's Keeper. To give another system such a field, add it to `KEEPER_ONLY_FIELD`; every route already goes through the helpers.
+
+### Flexible sheets
+
+A character or template with no game system has a **Flexible** sheet: a list of sections the player lays out. It has no enum value and no per-system files, but it is checked like the others, by `backend/src/validators/game-systems/flexible.schema.ts`, on create, update, template publish and template update (character import goes through create). The sheet must be an object, and each section's `type` decides the list its page reads:
+
+| `type` | Holds | Limits |
+|---|---|---|
+| `stats` | `fields`: `{ id, name, value, modifier? }` | at most 200; `name` up to 200 characters; `value` and `modifier` numbers |
+| `list` | `items`: `{ id, text, checked? }` | at most 1,000; `text` up to 1,000 characters |
+| `text` | `value` | up to 100,000 characters |
+| `table` | `columns`: `{ id, name, width? }`; `rows`: `{ id, cells }` | at most 50 columns and 1,000 rows; `cells` maps a column id to text of up to 1,000 characters |
+
+Every section also has an `id` (1 to 100 characters), a `title` (up to 200) and an optional `collapsed`; a sheet holds at most 100 sections. Keys beside `sections` are stored as sent, since an import or a program may keep its own there and the editor sends them back. A sheet stored before these checks still loads, and its next save is checked. On the page, `initializeFlexibleData` (`frontend/src/components/character-sheets/flexible/utils/section-helpers.ts`) puts each stored section into the shape its type reads before the view or the editor sees it: a section of an unknown type is left out, a missing list is empty, and a value that is not text is shown as text or as nothing, so an old malformed sheet opens and can be saved in the checked shape.
 
 ---
 
@@ -387,17 +428,22 @@ Create `backend/src/validators/game-systems/mySystem.schema.ts`. This is the **r
 // backend/src/validators/game-systems/mySystem.schema.ts
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
 
 const mySystemSkillSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   value: z.number().min(0).max(100).optional(),
   proficient: z.boolean().optional(),
 });
 
 export const mySystemCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
-  characterName: z.string().min(1).max(100),
-  playerName: z.string().max(100).optional(),
+  characterName: sheetCharacterNameSchema,
+  playerName: shortText.optional(),
 
   stats: z.object({
     strength: z.number().int().optional(),
@@ -411,12 +457,14 @@ export const mySystemCharacterDataSchema = z.object({
   }).optional(),
 
   skills: z.array(mySystemSkillSchema).optional(),
-  notes: z.string().max(5000).optional(),
+  notes: longText.optional(),
 });
 
 export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>;
 ```
 
+> Every text field needs a length limit, from `sheetText.ts`: `sheetCharacterNameSchema` for the character's own name, `shortText` for a one-line box, `longText` for anything that holds paragraphs. `sheetTextLimits.test.ts` walks every system's schema and fails on a string without one, so add your schema to its list. Every list needs a count limit too: build it with `sheetList(entry)` from `sheetLists.ts`, which `listLimits.test.ts` checks the same way. In the editor, turn the list's add button off at the limit with `listIsFull` and `ListLimitNote` from `components/character-sheets/ListLimitNote.tsx`.
+>
 > Every system's schema starts with `themeColor: themeColorSchema` from `sheetChrome.ts`. The header colour the editor saves is not a game-system field, and the routes store the parsed sheet, so a key no schema declares does not survive a save.
 >
 > Match the permissiveness of the existing schemas. Look at `shadowrun6e.schema.ts` before finalizing — the shipped schemas are intentionally lenient so partial and in-progress sheets save cleanly.
@@ -797,12 +845,7 @@ describe('mySystemCharacterDataSchema', () => {
 });
 ```
 
-There is also a template test suite under `backend/src/utils/character-templates/__tests__/` — add coverage there if your templates have non-trivial logic. Then run the gates:
-
-```bash
-cd backend  && npx tsc --noEmit && npm test
-cd frontend && npm run typecheck && npm run lint && npm test && npm run build
-```
+There is also a template test suite under `backend/src/utils/character-templates/__tests__/` — add coverage there if your templates have non-trivial logic. Then run all of the gates in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done), not a subset: the type check, lint, tests and build for the backend and the frontend, and the two documentation checks. The frontend tests run with `npx vitest run`; `npm test` there is watch mode, which waits for a key press and never finishes.
 
 The exhaustive `switch`/`Record` types mean a missed backend registration point shows up as a **compile error**, not a runtime surprise.
 

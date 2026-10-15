@@ -12,6 +12,9 @@ set -e
 # dashboard writes backups there as appuser.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /app/uploads /app/logs /app/backups
+  # TODO(upload): on an uploads folder that refuses an owner change (a NAS,
+  # CIFS or FUSE mount), this stops the backend starting under set -e; the
+  # backups folder below has a fallback, and uploads need one too.
   chown -R appuser:appgroup /app/uploads /app/logs
   # Backups hold every credential on the instance: the directory is the
   # backend user's alone, on the host as in the container. The backups

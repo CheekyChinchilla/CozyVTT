@@ -10,7 +10,7 @@ import type { Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 import { computeVisibility, type VisibilityPolygon } from '@/utils/raycasting';
 import { mapSizePx, type Viewport } from './layers/types';
-import { gridYToCentrePx } from './coords';
+import { tokenCentre } from '@/utils/tokenCentre';
 
 /**
  * A visibility polygon plus its source center. The center is kept so
@@ -54,14 +54,14 @@ export interface VisionOptions {
 
 const NO_REACH: VisibilityPolygon = { points: [] };
 
-/** Token center (canvas px) + sight radius (px) for a viewer token. */
+/**
+ * Token center (canvas px) + sight radius (px) for a viewer token. The centre
+ * is the one the server judges sight from, so what is sent and what is drawn
+ * start from the same point.
+ */
 function tokenSource(token: Token, viewport: Viewport): { cx: number; cy: number; r: number } {
-  // Token grid coords use Y=0 at bottom; canvas pixel coords use Y=0 at top.
-  return {
-    cx: (token.position.x + token.size.width / 2) * viewport.gridSize,
-    cy: gridYToCentrePx(token.position.y, token.size.height, viewport.mapHeight, viewport.gridSize),
-    r: (token.sightRadius ?? 0) * viewport.gridSize,
-  };
+  const { x, y } = tokenCentre(token, viewport.gridSize, viewport.mapHeight);
+  return { cx: x, cy: y, r: (token.sightRadius ?? 0) * viewport.gridSize };
 }
 
 /**

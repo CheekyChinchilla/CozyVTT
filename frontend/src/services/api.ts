@@ -1,7 +1,11 @@
 import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { handleUnauthorized } from '@/services/unsavedWork';
+import { loadPage } from '@/services/pageLoad';
+import { rememberSignInNotice } from '@/services/signInNotice';
+import { signInPath } from '@/utils/returnTo';
 import type {
   User,
+  InvitableUserSearch,
   AuthResponse,
   MFARequiredResponse,
   MFASetupResponse,
@@ -18,6 +22,7 @@ import type {
   CreateCampaignRequest,
   UpdateCampaignRequest,
   Character,
+  CharacterSummary,
   CreateCharacterRequest,
   UpdateCharacterRequest,
   Asset,
@@ -30,6 +35,7 @@ import type {
   Token,
   CreatureTemplate,
   CharacterTemplate,
+  CharacterTemplateSummary,
   TokenTemplate,
   CampaignImportPreview,
   CampaignImportResult,
@@ -43,10 +49,15 @@ import type {
   CampaignInvitation,
   ApiError,
   SystemStats,
+  AdminHealth,
   AdminSystemSettings,
   AdminActivityData,
   AdminServerConfig,
   AdminBackup,
+  OrphanedFilesReport,
+  OrphanedFilesDeletion,
+  LeftCampaignSummary,
+  LeftCampaignDetail,
   AppearanceSettings,
   UserPreferences,
   ServerConfig,
@@ -64,6 +75,20 @@ import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/know
 // Empty string = relative URLs (Nginx proxies /api/* to backend in production,
 // Vite dev server proxies in development)
 const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    /**
+     * A 401 to this request is the caller's to show, not a lost sign-in.
+     * Set on the calls that check the current password or a code while
+     * signed in, which the server answers 401 when it is wrong.
+     */
+    skipAuthRedirect?: boolean;
+  }
+}
+
+/** The request option for a call whose 401 means a wrong password or code. */
+const CREDENTIAL_CHECK = { skipAuthRedirect: true } as const;
 
 /** What a finished restore answers: the safety copy is the backup of the database as it was, in the backup list. */
 export interface RestoreReply {
@@ -113,9 +138,20 @@ class ApiClient {
           // yet. The route list lives in utils/publicRoutes so it can be tested
           // against App.tsx — see the note there on why a missing entry breaks
           // tokenised links rather than merely redirecting them.
-          if (status === 401) {
+          //
+          // A call that checks the current password or a code answers 401 for
+          // a wrong one; that request is marked, and its form says so.
+          //
+          // A sign-in that has reached its 30-day limit says so, and the
+          // sign-in page shows that sentence.
+          if (status === 401 && !error.config?.skipAuthRedirect) {
             handleUnauthorized(window.location.pathname, () => {
-              window.location.href = '/auth/login';
+              const reply = data as { code?: unknown; message?: unknown } | undefined;
+              if (reply?.code === 'SIGN_IN_EXPIRED' && typeof reply.message === 'string') {
+                rememberSignInNotice(reply.message);
+              }
+              // Back to this page once signed in again.
+              loadPage(signInPath(`${window.location.pathname}${window.location.search}`));
             });
           }
 
@@ -126,7 +162,13 @@ class ApiClient {
             const code = (data as { code?: string })?.code;
             if (code === 'PASSWORD_CHANGE_REQUIRED') {
               if (window.location.pathname !== '/auth/change-password') {
-                window.location.href = '/auth/change-password';
+                loadPage('/auth/change-password');
+              }
+            } else if (code === 'MFA_ENROLMENT_REQUIRED') {
+              // An administrator past the two-factor deadline may do nothing
+              // else until it is set up.
+              if (window.location.pathname !== '/auth/mfa-setup') {
+                loadPage('/auth/mfa-setup');
               }
             } else {
               console.error('Permission denied:', data.message);
@@ -205,12 +247,12 @@ class ApiClient {
   }
 
   async changePassword(data: ChangePasswordRequest): Promise<{ message: string }> {
-    const response = await this.client.post('/api/auth/change-password', data);
+    const response = await this.client.post('/api/auth/change-password', data, CREDENTIAL_CHECK);
     return response.data;
   }
 
   async deleteAccount(password: string): Promise<{ message: string }> {
-    const response = await this.client.delete('/api/auth/account', { data: { password } });
+    const response = await this.client.delete('/api/auth/account', { data: { password }, ...CREDENTIAL_CHECK });
     return response.data;
   }
 
@@ -224,11 +266,11 @@ class ApiClient {
   }
 
   async initializeSetup(data: {
+    setupToken: string;
     email: string;
     password: string;
     displayName: string;
     instanceName?: string;
-    timezone?: string;
     allowRegistration?: boolean;
   }): Promise<{ message: string; user: User }> {
     const response = await this.client.post('/api/setup/init', data);
@@ -240,12 +282,12 @@ class ApiClient {
   // ============================================
 
   async mfaSetup(password: string): Promise<MFASetupResponse> {
-    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password });
+    const response = await this.client.post<MFASetupResponse>('/api/auth/mfa/setup', { password }, CREDENTIAL_CHECK);
     return response.data;
   }
 
   async mfaVerifySetup(data: MFAVerifyRequest): Promise<MFAVerifyResponse> {
-    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/verify', data);
+    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/verify', data, CREDENTIAL_CHECK);
     return response.data;
   }
 
@@ -255,12 +297,12 @@ class ApiClient {
   }
 
   async mfaDisable(password: string, token: string): Promise<{ message: string }> {
-    const response = await this.client.post('/api/auth/mfa/disable', { password, token });
+    const response = await this.client.post('/api/auth/mfa/disable', { password, token }, CREDENTIAL_CHECK);
     return response.data;
   }
 
   async mfaRegenerateBackupCodes(password: string): Promise<MFAVerifyResponse> {
-    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/backup-codes', { password });
+    const response = await this.client.post<MFAVerifyResponse>('/api/auth/mfa/backup-codes', { password }, CREDENTIAL_CHECK);
     return response.data;
   }
 
@@ -278,8 +320,20 @@ class ApiClient {
     return response.data;
   }
 
-  async updateUser(id: string, data: Partial<User>): Promise<{ message: string; user: User }> {
-    const response = await this.client.put(`/api/users/${id}`, data);
+  /**
+   * Change an account. A change to your own email address carries
+   * `currentPassword`, and the server answers a wrong one 401, which the
+   * caller shows.
+   */
+  async updateUser(
+    id: string,
+    data: Partial<User> & { currentPassword?: string }
+  ): Promise<{ message: string; user: User }> {
+    const response = await this.client.put(
+      `/api/users/${id}`,
+      data,
+      data.currentPassword !== undefined ? CREDENTIAL_CHECK : undefined
+    );
     return response.data;
   }
 
@@ -326,6 +380,11 @@ class ApiClient {
 
   async getAdminStats(): Promise<SystemStats> {
     const response = await this.client.get<SystemStats>('/api/admin/stats');
+    return response.data;
+  }
+
+  async getAdminHealth(): Promise<AdminHealth> {
+    const response = await this.client.get<AdminHealth>('/api/admin/health');
     return response.data;
   }
 
@@ -418,6 +477,16 @@ class ApiClient {
     return response.data;
   }
 
+  async listOrphanedFiles(): Promise<OrphanedFilesReport> {
+    const response = await this.client.get<OrphanedFilesReport>('/api/admin/orphaned-files');
+    return response.data;
+  }
+
+  async deleteOrphanedFiles(paths: string[]): Promise<OrphanedFilesDeletion> {
+    const response = await this.client.delete<OrphanedFilesDeletion>('/api/admin/orphaned-files', { data: { paths } });
+    return response.data;
+  }
+
   async restoreAdminBackup(file: File): Promise<RestoreReply> {
     const formData = new FormData();
     formData.append('backup', file);
@@ -470,8 +539,18 @@ class ApiClient {
     return response.data;
   }
 
-  async listInvitableUsers(campaignId: string): Promise<{ users: User[] }> {
-    const response = await this.client.get<{ users: User[] }>(`/api/campaigns/${campaignId}/invitable-users`);
+  /**
+   * Search the people who can be invited to a campaign by display name. A
+   * search of INVITE_SEARCH_MIN_LENGTH (in constants/inviteSearchLimits.ts)
+   * or more characters finds names that contain it, and a shorter one finds
+   * only names that are exactly it. The server answers nobody for an empty
+   * search, and at most INVITE_SEARCH_MAX_RESULTS matches, with `hasMore`
+   * when there were more.
+   */
+  async listInvitableUsers(campaignId: string, search: string): Promise<InvitableUserSearch> {
+    const response = await this.client.get<InvitableUserSearch>(`/api/campaigns/${campaignId}/invitable-users`, {
+      params: { search },
+    });
     return response.data;
   }
 
@@ -683,6 +762,38 @@ class ApiClient {
     return response.data;
   }
 
+  /** Campaigns the caller has left that still hold their notes or dice macros. */
+  async listLeftCampaigns(): Promise<{ campaigns: LeftCampaignSummary[] }> {
+    const response = await this.client.get('/api/campaigns/left');
+    return response.data;
+  }
+
+  /** The caller's note titles and dice macros in one campaign they have left. */
+  async getLeftCampaign(campaignId: string): Promise<LeftCampaignDetail> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}`);
+    return response.data;
+  }
+
+  /** One of the caller's notes, with its text, from a campaign they have left. */
+  async getLeftCampaignNote(campaignId: string, noteId: string): Promise<{ note: PersonalNote }> {
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes/${noteId}`);
+    return response.data;
+  }
+
+  /**
+   * Every one of the caller's notes, with its text, from a campaign they have
+   * left, in one request. Up to 200 notes of 100,000 characters, so the
+   * answer can be large; the Download button is the only caller.
+   */
+  async getLeftCampaignNotes(campaignId: string): Promise<{ notes: PersonalNote[] }> {
+    // No limit of the page's own: the shared 30 seconds count the download,
+    // and at the cap the answer is 20 to 40 MB before compression. The server
+    // writes it out as it reads, and the proxy drops a connection that goes
+    // silent for 60 seconds.
+    const response = await this.client.get(`/api/campaigns/left/${campaignId}/notes`, { timeout: 0 });
+    return response.data;
+  }
+
   /** Past sessions and the notes recorded when each ended. Newest first. */
   async listSessions(campaignId: string): Promise<{ sessions: SessionSummary[] }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/sessions`);
@@ -734,8 +845,9 @@ class ApiClient {
   // Characters
   // ============================================
 
-  async listCharacters(): Promise<{ characters: Character[] }> {
-    const response = await this.client.get<{ characters: Character[] }>('/api/characters');
+  /** The user's characters without their sheets; getCharacter fetches one with its sheet. */
+  async listCharacters(): Promise<{ characters: CharacterSummary[] }> {
+    const response = await this.client.get<{ characters: CharacterSummary[] }>('/api/characters');
     return response.data;
   }
 
@@ -793,11 +905,22 @@ class ApiClient {
     return response.data;
   }
 
+  /**
+   * Upload a picture, sound, PDF or other file (up to 50 MB for a map picture
+   * or PDF). Serves map pictures, PDFs, token art, avatars and sheet portraits.
+   */
   async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      // No limit of the page's own: the shared 30 seconds count the upload
+      // itself, so a 50 MB file on a connection slower than about 14 Mbit/s
+      // was cut off with "Failed to upload asset" before it had arrived.
+      // Nothing queues on the server for this route; the proxy drops an upload
+      // that goes silent for 60 seconds, and the backend allows a request an
+      // hour, so those are the limits.
+      timeout: 0,
     });
     return response.data;
   }
@@ -828,6 +951,11 @@ class ApiClient {
 
   getAssetUrl(id: string, type: import('@/utils/assetUrl').AssetDirectory): string {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
+  }
+
+  /** The address that downloads an asset under its original file name. */
+  getAssetDownloadUrl(id: string): string {
+    return `${API_BASE_URL}/api/assets/${encodeURIComponent(id)}/download`;
   }
 
   /**
@@ -893,10 +1021,16 @@ class ApiClient {
     if (gridSize) formData.append('gridSize', String(gridSize));
     if (options?.confirm) formData.append('confirm', 'true');
     if (options?.includeObjectWalls) formData.append('includeObjectWalls', 'true');
+    // Once the upload has arrived, the server answers within 50 seconds: an
+    // import waits up to 20 for its turn behind other DMs' imports and runs
+    // for up to 30, and reaching either limit answers 503 saying which. A
+    // limit of the page's own would count the upload too and give up before
+    // that answer, so there is none; the bundled nginx allows the answer 60
+    // seconds.
     const response = await this.client.post(
       `/api/campaigns/${campaignId}/maps/import-uvtt`,
       formData,
-      { headers: { 'Content-Type': 'multipart/form-data' } },
+      { headers: { 'Content-Type': 'multipart/form-data' }, timeout: 0 },
     );
     return response.data;
   }
@@ -974,7 +1108,8 @@ class ApiClient {
     mine?: boolean;
     limit?: number;
     offset?: number;
-  }): Promise<{ templates: CharacterTemplate[]; total: number; limit: number; offset: number }> {
+  }): Promise<{ templates: CharacterTemplateSummary[]; total: number; limit: number; offset: number }> {
+    // The list carries no sheets; getCharacterTemplate fetches one with its sheet.
     const response = await this.client.get('/api/character-templates', { params });
     return response.data;
   }
@@ -1041,12 +1176,13 @@ class ApiClient {
     return response.data;
   }
 
-  async getSeedStatus(campaignId: string): Promise<{ srdCount: number; customCount: number; seedInProgress: boolean }> {
+  /** `canSeed`: whether the caller may run the SRD import, which only an administrator may. */
+  async getSeedStatus(campaignId: string): Promise<{ srdCount: number; customCount: number; seedInProgress: boolean; canSeed: boolean }> {
     const response = await this.client.get(`/api/campaigns/${campaignId}/creatures/seed/status`);
     return response.data;
   }
 
-  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number }> {
+  async seedSrdCreatures(campaignId: string): Promise<{ message: string; fetched: number; created: number; updated: number; skipped: number; alreadyExisted: number; rejected: number }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/creatures/seed`);
     return response.data;
   }
@@ -1268,7 +1404,7 @@ async function refusalFrom(response: Response): Promise<Error> {
 }
 
 // Export singleton instance
-/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/nginx.conf). */
+/** The bundled nginx's proxy_read_timeout for the backup routes (nginx/locations.conf). */
 const LONG_ADMIN_REQUEST_MS = 600_000;
 
 export const api = new ApiClient();

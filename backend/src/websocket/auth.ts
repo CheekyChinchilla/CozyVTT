@@ -2,6 +2,8 @@ import { Socket } from 'socket.io';
 import type { SessionData, Store } from 'express-session';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
+import { sessionIsSignedIn, sessionHasAgedOut } from '../services/signedIn';
+import { pastAdminMfaDeadline } from '../services/adminMfaPolicy';
 
 /**
  * WebSocket Authentication Middleware
@@ -37,21 +39,50 @@ export interface AuthenticatedSocket extends Socket {
 export type AuthenticatedFields = Pick<AuthenticatedSocket, 'userId' | 'campaignId' | 'role' | 'sessionId'>;
 
 /**
+ * Whether the account has to set up two-factor authentication before it may
+ * use the live table: an administrator past the deadline, whom the REST gate
+ * (middleware/adminMfa) refuses almost everything. Logged as the
+ * password-change refusal is.
+ */
+async function mustSetUpMfaFirst(user: Parameters<typeof pastAdminMfaDeadline>[0]): Promise<boolean> {
+  if (!(await pastAdminMfaDeadline(user))) return false;
+  logger.warn('WebSocket rejected: two-factor authentication required', { userId: user.id });
+  return true;
+}
+
+/**
  * Whether the sign-in this socket was opened under still exists in the session
  * store and is still this user's. The handshake checks the session once; a
  * sign-in that ends later (signing out, expiry, a password change elsewhere)
  * leaves the socket open, and `authenticate` asks this before letting it join
  * a campaign. Read through the socket's own session store, the one the
  * handshake used, so a store error counts as ended.
+ *
+ * The two-factor deadline passes with time, so a socket opened within an
+ * administrator's 7 days is stopped here once they are over. A database
+ * error while the deadline is checked lets the socket through, as the REST
+ * gate lets the request through.
  */
 export async function socketSessionIsLive(socket: AuthenticatedSocket): Promise<boolean> {
   const { sessionStore } = socket.request as { sessionStore?: Store };
   const sessionId = socket.sessionId;
-  if (!sessionStore || !sessionId || !socket.userId) return false;
+  const userId = socket.userId;
+  if (!sessionStore || !sessionId || !userId) return false;
   const stored = await new Promise<Partial<SessionData> | null>((resolve) => {
     sessionStore.get(sessionId, (err, found) => resolve(err ? null : (found ?? null)));
   });
-  return stored?.userId === socket.userId;
+  if (!sessionIsSignedIn(stored) || sessionHasAgedOut(stored) || stored.userId !== userId) return false;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, platformRole: true, mfaEnabled: true, createdAt: true },
+    });
+    return !(user && (await mustSetUpMfaFirst(user)));
+  } catch (error) {
+    logger.error('Error checking the administrator two-factor policy', { err: error });
+    return true;
+  }
 }
 
 /**
@@ -70,23 +101,29 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
     // while the REST routes failed loudly at build time.
     const { session, sessionID } = socket.request as { session?: Partial<SessionData>; sessionID?: string };
 
-    if (!session || !session.userId) {
+    // The same question the REST guards ask (services/signedIn): a session
+    // still at the two-factor step is not signed in, user id or not.
+    if (!sessionIsSignedIn(session) || sessionHasAgedOut(session)) {
       return false;
     }
 
     const user = await prisma.user.findUnique({
       where: { id: session.userId },
-      select: { id: true, mustChangePassword: true },
+      select: { id: true, mustChangePassword: true, platformRole: true, mfaEnabled: true, createdAt: true },
     });
 
     if (!user) {
       return false;
     }
 
-    // Same gate the REST API applies: an account that still has to replace an
-    // admin-issued password cannot play over the socket either
+    // Same gates the REST API applies: an account that still has to replace
+    // an admin-issued password cannot play over the socket either, nor an
+    // administrator past the two-factor deadline.
     if (user.mustChangePassword) {
       logger.warn('WebSocket rejected: password change required', { userId: user.id });
+      return false;
+    }
+    if (await mustSetUpMfaFirst(user)) {
       return false;
     }
 

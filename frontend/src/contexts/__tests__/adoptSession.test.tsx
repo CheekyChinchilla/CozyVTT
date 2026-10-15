@@ -53,7 +53,7 @@ describe('adopting a server-established session', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // The provider checks /api/auth/me on mount; before setup there is nobody.
-    getCurrentUser.mockRejectedValue(new Error('not authenticated'));
+    getCurrentUser.mockRejectedValue(Object.assign(new Error('not authenticated'), { response: { status: 401, data: {} } }));
   });
 
   it('refreshUser does nothing while the context thinks nobody is signed in', async () => {

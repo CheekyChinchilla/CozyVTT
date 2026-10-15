@@ -6,6 +6,7 @@
  */
 
 import type { Character, CharacterData } from '@/types';
+import { downloadTextFile } from '@/utils/download';
 
 export interface ExportMetadata {
   cozyVttVersion: string;
@@ -42,7 +43,6 @@ export function exportCharacterToJSON(character: Character): ExportMetadata {
 export function downloadCharacterJSON(character: Character): void {
   const exportData = exportCharacterToJSON(character);
   const jsonString = JSON.stringify(exportData, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
 
   // Generate filename: character_name_YYYYMMDD.json
   const date = new Date();
@@ -50,15 +50,7 @@ export function downloadCharacterJSON(character: Character): void {
   const safeName = character.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
   const filename = `${safeName}_${dateStr}.json`;
 
-  // Create download link and trigger download
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  downloadTextFile(filename, jsonString, 'application/json');
 }
 
 /**
@@ -149,7 +141,7 @@ export function readJSONFile(file: File): Promise<unknown> {
         const content = e.target?.result as string;
         const parsed = JSON.parse(content);
         resolve(parsed);
-      } catch (error) {
+      } catch {
         reject(new Error('Invalid JSON format'));
       }
     };

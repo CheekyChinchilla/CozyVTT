@@ -16,7 +16,7 @@ jest.mock('express-rate-limit', () => {
 });
 
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSync } from 'otplib';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
@@ -30,7 +30,7 @@ const created: string[] = [];
 
 /** The code for `offset` steps from the step `base`. */
 const codeAt = (secret: string, base: number, offset: number) =>
-  speakeasy.totp({ secret, encoding: 'base32', time: (base + offset) * 30 });
+  generateSync({ secret, epoch: (base + offset) * 30 });
 
 /**
  * Wait out the end of a step, so the codes a test works out stay inside the

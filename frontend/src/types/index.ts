@@ -267,6 +267,15 @@ export interface User {
   isApproved?: boolean;
 }
 
+/** One match from the invite picker's search: never an email address. */
+export type InvitableUser = Pick<User, 'id' | 'displayName' | 'avatarUrl'>;
+
+/** GET /api/campaigns/:campaignId/invitable-users: at most 20 matches, and whether there were more. */
+export interface InvitableUserSearch {
+  users: InvitableUser[];
+  hasMore: boolean;
+}
+
 /**
  * A shareable starter sheet. Visible to everyone; editable by its author, an
  * admin, or a user with `templateEditor`.
@@ -289,6 +298,12 @@ export interface CharacterTemplate {
   updatedAt: string;
 }
 
+/**
+ * A template as the list sends it: everything but the sheet, which
+ * GET /api/character-templates/:id serves.
+ */
+export type CharacterTemplateSummary = Omit<CharacterTemplate, 'data'>;
+
 // ============================================
 // Admin Types
 // ============================================
@@ -297,6 +312,25 @@ export interface AssetTypeStat {
   type: string;
   count: number;
   sizeBytes: number;
+}
+
+/** GET /api/admin/health: whether each part of the server is working. */
+export interface AdminHealth {
+  status: 'healthy' | 'degraded';
+  services: { api: 'ok'; database: 'ok' | 'error'; websocket: 'ok' | 'error' };
+  /** Live connections open now. */
+  connections: number;
+}
+
+/** How full the disk holding the uploads folder is (GET /api/admin/stats). */
+export interface UploadsDisk {
+  totalBytes: number;
+  /** What the server can still write. */
+  freeBytes: number;
+  /** Whole percent used, as `df` counts it. */
+  usedPercent: number;
+  /** More than 80% full. */
+  warning: boolean;
 }
 
 export interface SystemStats {
@@ -309,6 +343,8 @@ export interface SystemStats {
   characterCount: number;
   mapCount: number;
   assetBreakdown: AssetTypeStat[];
+  /** Null when the server could not read the disk. */
+  uploadsDisk?: UploadsDisk | null;
 }
 
 export interface AdminSystemSettings {
@@ -326,6 +362,8 @@ export interface AdminSystemSettings {
 }
 
 export interface AppearanceSettings {
+  /** The instance's name, which the browser tab shows. */
+  instanceName: string;
   themeId: string;
   customThemeColors: Record<string, string> | null;
   fontId: string;
@@ -355,7 +393,10 @@ export interface AdminSystemLog {
   id: string;
   level: string;
   message: string;
+  /** The administrator who acted; null for the instance's own lines. */
   userId: string | null;
+  /** That administrator's account as it is now; null when there is none, or it has been deleted. */
+  actor: { id: string; email: string; displayName: string } | null;
   context: Record<string, unknown> | null;
   createdAt: string;
 }
@@ -418,6 +459,31 @@ export interface AdminBackup {
   filename: string;
   sizeBytes: number;
   createdAt: string;
+}
+
+/** A file in the uploads folder that no asset names (GET /api/admin/orphaned-files). */
+export interface OrphanedFile {
+  /** Relative to the uploads folder. */
+  path: string;
+  size: number;
+  modifiedAt: string;
+}
+
+export interface OrphanedFilesReport {
+  /** At most 5,000, sorted by path; `total` counts them all. */
+  files: OrphanedFile[];
+  total: number;
+  totalBytes: number;
+  /** Files no asset names that changed too recently to judge, and are not listed. */
+  recent: number;
+  minimumAgeMinutes: number;
+}
+
+export interface OrphanedFilesDeletion {
+  deleted: string[];
+  /** Named, but not a leftover file by the time of the delete. */
+  skipped: string[];
+  failed: string[];
 }
 
 export interface AuthResponse {
@@ -598,6 +664,11 @@ export interface CampaignDocument {
    * scope, where there is no link to remove.
    */
   shared: boolean;
+  /**
+   * Whether the server will take an edit of its text from the signed-in
+   * user, by the rule for deleting it. Offer Edit on this alone.
+   */
+  canEdit: boolean;
 }
 
 /**
@@ -621,6 +692,29 @@ export interface DiceMacro {
 /** A note with its Markdown source. */
 export interface PersonalNote extends PersonalNoteSummary {
   content: string;
+}
+
+/**
+ * A campaign the caller is no longer in and still has notes or dice macros
+ * in (GET /api/campaigns/left). Notes are titles only, newest edit first.
+ */
+export interface LeftCampaignSummary {
+  id: string;
+  name: string;
+  notes: PersonalNoteSummary[];
+  macros: DiceMacro[];
+}
+
+/**
+ * One campaign the caller has left (GET /api/campaigns/left/:campaignId):
+ * note titles, newest edit first, and macros. A note's text comes from
+ * GET /api/campaigns/left/:campaignId/notes/:noteId, one note at a time, or
+ * from GET /api/campaigns/left/:campaignId/notes, all of them in one answer.
+ */
+export interface LeftCampaignDetail {
+  campaign: { id: string; name: string };
+  notes: PersonalNoteSummary[];
+  macros: DiceMacro[];
 }
 
 /**
@@ -662,6 +756,14 @@ export interface Character {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * A character as GET /api/characters lists it: everything but the sheet,
+ * which GET /api/characters/:id serves, plus the campaign it is in.
+ */
+export type CharacterSummary = Omit<Character, 'data'> & {
+  campaign?: { id: string; name: string } | null;
+};
 
 /**
  * Character data union type - supports all game systems
@@ -807,7 +909,11 @@ export interface Asset {
   id: string;
   type: AssetType;
   scope: AssetScope;
-  /** Null once the uploader's account is deleted: the file stays, owned by no one. */
+  /**
+   * Null once the uploader's account is deleted, on the files that outlive it:
+   * campaign and global uploads, and personal files something still uses. The
+   * avatar and the personal files nothing uses are deleted with the account.
+   */
   uploadedById: string | null;
   campaignId: string | null;
   filename: string;
@@ -821,6 +927,12 @@ export interface Asset {
   /** Populated by backend include — available in list responses */
   uploadedBy?: { id: string; displayName: string } | null;
   campaign?: { id: string; name: string } | null;
+  /**
+   * In the asset list only: whether the server will let this user delete the
+   * asset, move it out of its scope, or rewrite it if it is a text document,
+   * by the rule those routes apply.
+   */
+  canChange?: boolean;
 }
 
 /** What kind of record uses an asset. */
@@ -831,7 +943,8 @@ export type AssetUseKind =
   | 'characterTemplate'
   | 'creature'
   | 'tokenTemplate'
-  | 'campaignSetting';
+  | 'campaignSetting'
+  | 'vibePeriod';
 
 /**
  * One place an asset is used, from the server's refusal to delete it. `name`
@@ -1242,9 +1355,8 @@ export interface ChatMessageBroadcast {
 }
 
 // Session Events
-export interface SessionStartEvent {
-  // No fields needed - campaign ID comes from server-side socket.campaignId
-}
+// No fields needed - campaign ID comes from server-side socket.campaignId
+export type SessionStartEvent = Record<string, never>;
 
 export interface SessionStartedBroadcast {
   sessionId: string;
@@ -1363,6 +1475,22 @@ export interface CharacterHpUpdatedBroadcast {
  * The DM seat moved to another member. Campaign ownership is a separate thing
  * and does not move with it.
  */
+/** Why a connection lost its campaign, as `campaign.access.revoked` says. */
+export type AccessRevokedReason = 'removed' | 'campaign-deleted' | 'signed-out';
+
+/**
+ * `campaign.access.revoked`: this connection may no longer use its campaign.
+ * Declared on the server too (websocket/utils.ts); keepInStep.test.ts there
+ * fails if the two differ.
+ */
+export interface AccessRevoked {
+  /** The campaign the connection was in, or null when it had not joined one. */
+  campaignId: string | null;
+  reason: AccessRevokedReason;
+  /** A sentence for the person, shown as it is. */
+  message: string;
+}
+
 /** A member's role in a campaign changed (`campaign.role.changed`). */
 export interface MemberRoleChangedBroadcast {
   campaignId: string;

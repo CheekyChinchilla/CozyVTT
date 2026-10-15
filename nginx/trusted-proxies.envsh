@@ -1,0 +1,67 @@
+#!/bin/sh
+# CozyVTT: which addresses may tell the bundled nginx who the visitor is
+# (X-Forwarded-For) and whether they arrived over HTTPS (X-Forwarded-Proto).
+#
+# The nginx image's entrypoint sources this file before it renders
+# nginx/nginx.conf (docker-compose.yml mounts it into /docker-entrypoint.d/).
+# It reads NGINX_TRUSTED_PROXIES from .env, a list of IP addresses and ranges
+# separated by spaces or commas, and exports the two lines the template is
+# rendered with: NGINX_REAL_IP_FROM, one set_real_ip_from per entry, and
+# NGINX_TRUSTED_GEO, one entry each for the geo block that decides whether
+# X-Forwarded-Proto is believed. Loopback (127.0.0.1 and ::1) is written into
+# the template itself and always trusted.
+#
+# An entry that is not an IP address or range is left out, with a warning in
+# `docker compose logs nginx`, so nothing but an address reaches the
+# configuration. Sourced, this runs inside the entrypoint's own shell, which
+# stops at the first failing command: it must fail at nothing, and leave
+# behind only the two variables.
+
+cozyvtt_name="trusted-proxies.envsh"
+cozyvtt_real_ip_from=""
+cozyvtt_trusted_geo=""
+cozyvtt_octet='(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'
+cozyvtt_ipv4="(${cozyvtt_octet}[.]){3}${cozyvtt_octet}"
+cozyvtt_hex='[0-9A-Fa-f]{1,4}'
+
+# An IPv6 address is eight groups of one to four hex digits separated by
+# colons; the last two groups may be written as an IPv4 address, and one run
+# of one or more groups may be left out and written '::'. Each line below
+# takes the addresses that start with a given number of groups and a colon,
+# seven down to none, and allows after them only what makes up eight groups.
+# The first leaves out seven groups followed by '::' (1:2:3:4:5:6:7::), which
+# the standard allows but nginx cannot read.
+cozyvtt_ipv6="(${cozyvtt_hex}:){7}${cozyvtt_hex}"
+cozyvtt_ipv6="${cozyvtt_ipv6}|(${cozyvtt_hex}:){6}(${cozyvtt_ipv4}|:${cozyvtt_hex}|:)"
+cozyvtt_ipv6="${cozyvtt_ipv6}|(${cozyvtt_hex}:){5}(:${cozyvtt_ipv4}|(:${cozyvtt_hex}){1,2}|:)"
+cozyvtt_ipv6="${cozyvtt_ipv6}|(${cozyvtt_hex}:){4}((:${cozyvtt_hex}){0,1}:${cozyvtt_ipv4}|(:${cozyvtt_hex}){1,3}|:)"
+cozyvtt_ipv6="${cozyvtt_ipv6}|(${cozyvtt_hex}:){3}((:${cozyvtt_hex}){0,2}:${cozyvtt_ipv4}|(:${cozyvtt_hex}){1,4}|:)"
+cozyvtt_ipv6="${cozyvtt_ipv6}|(${cozyvtt_hex}:){2}((:${cozyvtt_hex}){0,3}:${cozyvtt_ipv4}|(:${cozyvtt_hex}){1,5}|:)"
+cozyvtt_ipv6="${cozyvtt_ipv6}|${cozyvtt_hex}:((:${cozyvtt_hex}){0,4}:${cozyvtt_ipv4}|(:${cozyvtt_hex}){1,6}|:)"
+cozyvtt_ipv6="${cozyvtt_ipv6}|:((:${cozyvtt_hex}){0,5}:${cozyvtt_ipv4}|(:${cozyvtt_hex}){1,7}|:)"
+
+# An IPv4 address with an optional /0 to /32, or an IPv6 address with an
+# optional /0 to /128. nginx refuses to start on an entry it cannot read.
+cozyvtt_address="^(${cozyvtt_ipv4}(/([0-9]|[12][0-9]|3[0-2]))?|(${cozyvtt_ipv6})(/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))?)\$"
+
+# The list is split on spaces with the shell's file name expansion off, so an
+# entry such as * stays itself; the setting is put back afterwards.
+case $- in
+  *f*) cozyvtt_noglob=1 ;;
+  *) cozyvtt_noglob=0; set -f ;;
+esac
+
+for cozyvtt_entry in $(printf '%s' "${NGINX_TRUSTED_PROXIES:-}" | tr ',' ' '); do
+  if printf '%s' "$cozyvtt_entry" | grep -Eq "$cozyvtt_address"; then
+    cozyvtt_real_ip_from="${cozyvtt_real_ip_from}set_real_ip_from ${cozyvtt_entry}; "
+    cozyvtt_trusted_geo="${cozyvtt_trusted_geo}${cozyvtt_entry} 1; "
+  else
+    echo "${cozyvtt_name}: NGINX_TRUSTED_PROXIES: '${cozyvtt_entry}' is not an IP address or range, so it is ignored" >&2
+  fi
+done
+
+if [ "$cozyvtt_noglob" = 0 ]; then set +f; fi
+
+export NGINX_REAL_IP_FROM="$cozyvtt_real_ip_from"
+export NGINX_TRUSTED_GEO="$cozyvtt_trusted_geo"
+unset cozyvtt_name cozyvtt_real_ip_from cozyvtt_trusted_geo cozyvtt_octet cozyvtt_ipv4 cozyvtt_hex cozyvtt_ipv6 cozyvtt_address cozyvtt_noglob cozyvtt_entry

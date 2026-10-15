@@ -47,6 +47,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
@@ -60,6 +61,15 @@ import {
   newPf2eSpellcasting,
 } from './spellcastingEntries';
 import { withFullSkillAttributes, fullAttributeName, editorTradition, editorCastingType } from './attributeNames';
+import {
+  PF2E_ITEM_BONUS_MAX,
+  PF2E_ITEM_BONUS_MIN,
+  SHEET_LIST_MAX,
+  SHEET_NAME_MAX,
+  SHEET_ROW_TAGS_MAX,
+  SPELL_SLOTS_MAX,
+} from '@/constants/sheetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 /**
  * The sheet as this editor holds it.
@@ -754,7 +764,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${formData.characterName || 'Character'} Token`);
+          assetFormData.append('name', assetNameFrom(`${formData.characterName || 'Character'} Token`));
           assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);
@@ -882,7 +892,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
             </div>
 
             <div className="space-y-2 min-w-0">
-              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
+              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`} />
               <div className="flex items-center flex-wrap gap-2 opacity-90">
                 {/* Read-only: the player name is whoever owns the character,
                     filled from their display name at creation. */}
@@ -971,7 +981,7 @@ min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(
                   <div className="flex items-center space-x-2">
                     <label className="text-xs text-stone-600">Item:</label>
                     <NumberField
-value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
                   </div>
                 </div>
                 <span className="text-2xl font-bold text-blue-700">{formatModifier(saveData.bonus)}</span>
@@ -990,14 +1000,14 @@ value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${
             <div className="flex items-center space-x-2">
               <label className="text-xs text-stone-600">Item:</label>
               <NumberField
-value={formData.perception?.itemBonus} onChange={(v: number) => updateField('perception.itemBonus', v)} className="w-16 px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.itemBonus} onChange={(v: number) => updateField('perception.itemBonus', v)} className="w-16 px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
             </div>
           </div>
           <span className="text-2xl font-bold text-blue-700">{formatModifier(formData.perception?.bonus || 0)}</span>
         </div>
         <div>
           <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
-          <ListField value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <ListField max={SHEET_LIST_MAX} value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
 
@@ -1017,7 +1027,7 @@ value={formData.perception?.itemBonus} onChange={(v: number) => updateField('per
                 <div className="flex items-center space-x-2">
                   {renderProficiencySelector(`skills.${skillName}.proficiencyRank`, skillData.proficiencyRank as ProficiencyRank)}
                   <NumberField
-value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
                   <NumberField
 value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${skillName}.armorPenalty`, v)} placeholder="Penalty" className="w-16 px-2 py-1 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
                 </div>
@@ -1031,11 +1041,12 @@ value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${sk
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-stone-800">Lore Skills</h3>
-          <button onClick={() => { const newLore = [...(formData.loreSkills || []), { name: 'New Lore', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }]; updateField('loreSkills', newLore); }} className="px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1">
+          <button onClick={() => { const newLore = [...(formData.loreSkills || []), { name: 'New Lore', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }]; updateField('loreSkills', newLore); }} disabled={listIsFull(formData.loreSkills)} className={`px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
             <Plus className="w-4 h-4" />
             <span>Add Lore</span>
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.loreSkills)} />
         <div className="space-y-2">
           {(formData.loreSkills || []).map((lore, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
@@ -1048,7 +1059,7 @@ value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${sk
               <div className="flex items-center space-x-2">
                 {renderProficiencySelector(`loreSkills.${index}.proficiencyRank`, lore.proficiencyRank as ProficiencyRank)}
                 <NumberField
-value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
                 <span className="text-lg font-bold text-blue-700 ml-auto">{formatModifier(lore.bonus)}</span>
               </div>
             </div>
@@ -1076,7 +1087,7 @@ value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-24">Item Bonus:</label>
               <NumberField
-value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
             </div>
             <div className="text-center pt-2 border-t border-stone-300">
               <div className="text-xs text-stone-600 mb-1">Total AC</div>
@@ -1131,7 +1142,7 @@ min={0} value={formData.speed?.land} onChange={(v: number) => updateField('speed
             </div>
             <div>
               <label className="text-sm text-stone-700 mb-1 block">Other (comma-separated):</label>
-              <ListField value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <ListField max={SHEET_LIST_MAX} value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
@@ -1169,15 +1180,15 @@ min={0} value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Resistances (comma-sep)</label>
-            <ListField value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField max={SHEET_LIST_MAX} value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Immunities (comma-sep)</label>
-            <ListField value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField max={SHEET_LIST_MAX} value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Weaknesses (comma-sep)</label>
-            <ListField value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <ListField max={SHEET_LIST_MAX} value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
       </div>
@@ -1207,7 +1218,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
       {/* Conditions */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Conditions (comma-separated)</h3>
-        <ListField value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <ListField max={SHEET_LIST_MAX} value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Proficiencies */}
@@ -1241,11 +1252,12 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-stone-800">Strikes & Attacks</h3>
-          <button onClick={() => { const newStrikes = [...(formData.strikes || []), { name: 'New Attack', type: 'melee', attackBonus: 0, damageRoll: '1d6', damageType: 'bludgeoning', attributeModifier: 'strength', proficiencyRank: 'trained', itemBonus: 0, traits: [], range: null, notes: '' }]; updateField('strikes', newStrikes); }} className="px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1">
+          <button onClick={() => { const newStrikes = [...(formData.strikes || []), { name: 'New Attack', type: 'melee', attackBonus: 0, damageRoll: '1d6', damageType: 'bludgeoning', attributeModifier: 'strength', proficiencyRank: 'trained', itemBonus: 0, traits: [], range: null, notes: '' }]; updateField('strikes', newStrikes); }} disabled={listIsFull(formData.strikes)} className={`px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
             <Plus className="w-4 h-4" />
             <span>Add Strike</span>
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.strikes)} />
         <div className="space-y-3">
           {(formData.strikes || []).map((strike, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
@@ -1267,7 +1279,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
                 <input type="text" value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <input type="number" min="0" value={strike.range || ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <ListField value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              <ListField max={SHEET_ROW_TAGS_MAX} value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               <input type="text" value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
@@ -1332,7 +1344,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
-value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-stone-300">
                 <div className="text-xs text-stone-600 mb-1">Total Attack</div>
@@ -1348,7 +1360,7 @@ value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number)
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
-value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-stone-300">
                 <div className="text-xs text-stone-600 mb-1">Total DC</div>
@@ -1362,11 +1374,12 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Cantrips</h3>
-            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} disabled={listIsFull(formData.spellcasting!.cantrips)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
               <Plus className="w-4 h-4" />
               <span>Add Cantrip</span>
             </button>
           </div>
+          <ListLimitNote full={listIsFull(formData.spellcasting!.cantrips)} />
           <div className="space-y-2">
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
@@ -1393,7 +1406,7 @@ value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updat
                   <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
                   <div className="flex flex-col space-y-1">
                     <NumberField
-min={0} max={20} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.total`, v)} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
+min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.total`, v)} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded text-xs text-center focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
                     <NumberField
 min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded text-xs text-center text-purple-700 focus:outline-none focus:ring-1 focus:ring-purple-500" fallback={0} />
                   </div>
@@ -1407,11 +1420,12 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
-            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} disabled={listIsFull(formData.spellcasting!.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
               <Plus className="w-4 h-4" />
               <span>Add Spell</span>
             </button>
           </div>
+          <ListLimitNote full={listIsFull(formData.spellcasting!.spells)} />
           <div className="space-y-2">
             {(formData.spellcasting!.spells || []).map((spell, index) => (
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
@@ -1453,12 +1467,13 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
 min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-purple-500" fallback={0} />
                 <span className="text-sm text-stone-600">/ 3</span>
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
               </button>
             </div>
           </div>
+          <ListLimitNote full={listIsFull(formData.spellcasting!.focusSpells?.spells)} />
           <div className="space-y-2">
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
@@ -1478,11 +1493,12 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Innate Spells</h3>
-            <button onClick={() => { const newInnateSpells = [...(formData.spellcasting!.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting!.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newInnateSpells = [...(formData.spellcasting!.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting!.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} disabled={listIsFull(formData.spellcasting!.innateSpells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
               <Plus className="w-4 h-4" />
               <span>Add Innate Spell</span>
             </button>
           </div>
+          <ListLimitNote full={listIsFull(formData.spellcasting!.innateSpells)} />
           <div className="space-y-2">
             {(formData.spellcasting!.innateSpells || []).map((spell, index) => (
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
@@ -1505,11 +1521,12 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Rituals</h3>
-            <button onClick={() => { const newRituals = [...(formData.spellcasting!.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} className="px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => { const newRituals = [...(formData.spellcasting!.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} disabled={listIsFull(formData.spellcasting!.rituals)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
               <Plus className="w-4 h-4" />
               <span>Add Ritual</span>
             </button>
           </div>
+          <ListLimitNote full={listIsFull(formData.spellcasting!.rituals)} />
           <div className="space-y-2">
             {(formData.spellcasting!.rituals || []).map((ritual, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
@@ -1561,11 +1578,12 @@ min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updat
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-bold text-stone-800">Inventory Items</h3>
-          <button onClick={() => { const newInventory = [...(formData.inventory || []), { name: 'New Item', quantity: 1, bulk: 'L', equippable: false, equipped: false, requiresAttunement: false, attuned: false, invested: false, value: 0, notes: '' }]; updateField('inventory', newInventory); }} className="px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1">
+          <button onClick={() => { const newInventory = [...(formData.inventory || []), { name: 'New Item', quantity: 1, bulk: 'L', equippable: false, equipped: false, requiresAttunement: false, attuned: false, invested: false, value: 0, notes: '' }]; updateField('inventory', newInventory); }} disabled={listIsFull(formData.inventory)} className={`px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
             <Plus className="w-4 h-4" />
             <span>Add Item</span>
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.inventory)} />
         <div className="space-y-3">
           {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
@@ -1618,11 +1636,12 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Class Features</h3>
-            <button onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} className="px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1">
+            <button onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} disabled={listIsFull(classFeatureRows)} className={`px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
               <Plus className="w-4 h-4" />
               <span>Add Feature</span>
             </button>
           </div>
+          <ListLimitNote full={listIsFull(classFeatureRows)} />
           <div className="space-y-2">
             {/* Read through the shared reader, so a sheet still holding plain
                 names — every sheet saved before descriptions existed — opens
@@ -1663,11 +1682,12 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
           <div key={key} className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-stone-800">{label}</h3>
-              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} className={`px-3 py-1 text-sm font-medium text-white bg-${color}-700 hover:bg-${color}-800 rounded-lg transition-colors flex items-center space-x-1`}>
+              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className={`px-3 py-1 text-sm font-medium text-white bg-${color}-700 hover:bg-${color}-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
                 <Plus className="w-4 h-4" />
                 <span>Add Feat</span>
               </button>
             </div>
+            <ListLimitNote full={listIsFull(formData.feats?.[key])} />
             <div className="space-y-3">
               {(formData.feats?.[key] || []).map((feat, index) => (
                 <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
@@ -1735,7 +1755,7 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
       {/* Languages */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Languages (comma-separated)</h3>
-        <ListField value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <ListField max={SHEET_LIST_MAX} value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Backstory */}

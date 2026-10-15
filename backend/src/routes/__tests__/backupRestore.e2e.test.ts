@@ -8,7 +8,8 @@
  * prepared copy of the dump (schema replaced, the setting an older server
  * rejects removed), migrations must run after a successful load and never
  * after a failed one, and a failed load must leave the uploads alone. Live
- * connections end once the load has committed, whatever fails after it.
+ * connections end before the load, and no connection or API request is let
+ * in until the restore ends. One restore runs at a time.
  */
 
 jest.mock('child_process', () => ({
@@ -40,6 +41,9 @@ import { PlatformRole } from '@prisma/client';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent } from '../../__tests__/helpers/websocket-test-server';
+import { io as ioc } from 'socket.io-client';
+import * as archive from '../../utils/archive';
+import { removeLeftoverRestoreUploads } from '../../services/restoreState';
 import { expectFileMode, expectModeBits } from '../../__tests__/helpers/fileModes';
 import {
   clearState as clearCombatState,
@@ -47,6 +51,7 @@ import {
   setState as setCombatState,
 } from '../../websocket/initiativeState';
 import logger from '../../utils/logger';
+import * as setupGate from '../../middleware/setup';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
@@ -117,6 +122,24 @@ async function withSharedTmp(run: (tmp: string) => Promise<void>): Promise<void>
     tmpdir.mockRestore();
     await fs.rm(tmp, { recursive: true, force: true });
   }
+}
+
+/**
+ * Hold `cmd` once it is called, on top of whatever stubTools set up, until
+ * `release` is called: the restore then waits inside that step.
+ */
+function holdTool(cmd: string): { reached: Promise<void>; release: () => void } {
+  const stub = execFileMock.getMockImplementation();
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let arrive = () => {};
+  const reached = new Promise<void>((resolve) => { arrive = resolve; });
+  execFileMock.mockImplementation((called: string, ...rest: unknown[]) => {
+    if (called !== cmd) return stub?.(called, ...rest);
+    arrive();
+    void held.then(() => stub?.(called, ...rest));
+  });
+  return { reached, release };
 }
 
 /** What is left in `dir` once a restore's clean-up, which runs after it has answered, has had time to finish. */
@@ -494,6 +517,21 @@ describe('POST /api/admin/backups/restore', () => {
     clearCombatState(campaignId);
   });
 
+  it('has the setup gate read the restored database again, and only once the load has succeeded', async () => {
+    const forget = jest.spyOn(setupGate, 'forgetSetupComplete');
+    try {
+      stubTools({ cmd: 'psql', stderr: 'ERROR:  syntax error' });
+      expect((await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }))).status).toBe(500);
+      expect(forget).not.toHaveBeenCalled();
+
+      stubTools();
+      expect((await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }))).status).toBe(200);
+      expect(forget).toHaveBeenCalledTimes(1);
+    } finally {
+      forget.mockRestore();
+    }
+  });
+
   it('says the database was restored but not migrated when the migration run fails', async () => {
     const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -505,7 +543,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
   });
 
-  it('ends every live connection once the database has been replaced', async () => {
+  it('ends every live connection when the database is replaced', async () => {
     // The restored database holds whatever accounts and memberships the
     // backup had, and no session at all; a socket that stayed open would keep
     // acting on the cached identity and role it had before.
@@ -513,7 +551,7 @@ describe('POST /api/admin/backups/restore', () => {
     try {
       const cookie = await ws.loginAs(userId);
       const client = await ws.connectClient(cookie);
-      const told = waitForEvent<{ message: string }>(client, 'error');
+      const told = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
       const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
       const calls = stubTools();
       const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -522,7 +560,7 @@ describe('POST /api/admin/backups/restore', () => {
 
       expect(res.status).toBe(200);
       expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-      expect((await told).message).toMatch(/restored/i);
+      expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
     } finally {
       await ws.close();
@@ -539,7 +577,7 @@ describe('POST /api/admin/backups/restore', () => {
     try {
       const cookie = await ws.loginAs(userId);
       const client = await ws.connectClient(cookie);
-      const told = waitForEvent<{ message: string }>(client, 'error');
+      const told = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
       const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
       const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
       const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
@@ -550,7 +588,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.body.error).toBe('Restore Incomplete');
       expect(res.body.message).toMatch(/restart/i);
       expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
-      expect((await told).message).toMatch(/restored/i);
+      expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
       expect(getCombatState(campaignId).active).toBe(false);
     } finally {
@@ -600,6 +638,161 @@ describe('POST /api/admin/backups/restore', () => {
   });
 });
 
+// One restore at a time, and nothing else touches the database while it is
+// replaced. Two restores at once each loaded their dump in turn and copied
+// their uploads over each other's; live connections stayed open while psql
+// replaced the schema, so a token moved during the load was written over the
+// restored rows; and a refused file answered 500 "An unexpected error
+// occurred" with no reason.
+describe('while a restore runs', () => {
+  // Held while it writes its safety copy, before the database is replaced.
+  it('refuses a second restore with 409, and the first finishes', async () => {
+    stubTools();
+    const safetyCopy = holdTool('pg_dump');
+    const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const first = restore(admin, zip).then((res) => res);
+    let second: request.Response | undefined;
+    try {
+      await safetyCopy.reached;
+      second = await restore(admin, zip);
+    } finally {
+      safetyCopy.release();
+    }
+    expect((await first).status).toBe(200);
+    expect(second?.status).toBe(409);
+    expect(second?.body.message).toMatch(/already running/);
+  });
+
+  it('refuses to make a backup with 409', async () => {
+    stubTools();
+    const safetyCopy = holdTool('pg_dump');
+    const restoring = restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT })).then((res) => res);
+    let backup: request.Response | undefined;
+    try {
+      await safetyCopy.reached;
+      backup = await admin.post('/api/admin/backups');
+    } finally {
+      safetyCopy.release();
+    }
+    expect((await restoring).status).toBe(200);
+    expect(backup?.status).toBe(409);
+    expect(backup?.body.message).toMatch(/restore/i);
+  });
+
+  it('ends live connections before the database is replaced, and refuses new ones until it is done', async () => {
+    const ws = await createWsTestServer();
+    try {
+      const cookie = await ws.loginAs(userId);
+      const client = await ws.connectClient(cookie);
+      let dropped = false;
+      client.on('disconnect', () => { dropped = true; });
+      stubTools();
+      const psql = holdTool('psql');
+      const restoring = restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT })).then((res) => res);
+      try {
+        await psql.reached;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        expect(dropped).toBe(true);
+
+        const late = ioc(ws.url, { extraHeaders: { cookie }, transports: ['websocket'], reconnection: false });
+        try {
+          const told = await waitForEvent<{ message: string }>(late, 'error');
+          expect(told.message).toMatch(/being restored/);
+        } finally {
+          late.close();
+        }
+
+        const api = await user.get('/api/auth/me');
+        expect(api.status).toBe(503);
+        expect(api.body.message).toMatch(/being restored/);
+        // A second restore asked for now is refused the same way.
+        expect((await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }))).status).toBe(503);
+      } finally {
+        psql.release();
+      }
+      expect((await restoring).status).toBe(200);
+      expect((await user.get('/api/auth/me')).status).not.toBe(503);
+    } finally {
+      await ws.close();
+    }
+  });
+});
+
+describe('a refused restore', () => {
+  it('says a file whose name does not end in .zip is not taken, with 400', async () => {
+    const calls = stubTools();
+    const res = await admin.post('/api/admin/backups/restore').attach('backup', Buffer.from('not a backup'), 'backup.txt');
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/\.zip/);
+    expect(res.body.message).toMatch(/Nothing was changed/);
+    expect(calls).toEqual([]);
+  });
+
+  it('says a file named .zip that is not one is not a ZIP archive, with 400', async () => {
+    const calls = stubTools();
+    const res = await restore(admin, Buffer.from('plain text pretending to be a zip'));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Invalid Backup');
+    expect(res.body.message).toMatch(/not a ZIP archive/);
+    expect(res.body.message).toMatch(/Nothing was changed/);
+    expect(calls).toEqual([]);
+  });
+
+  it('says an archive that unpacks past the limit is too large, with 413', async () => {
+    const calls = stubTools();
+    const limit = jest.spyOn(archive, 'extractArchiveSafely').mockRejectedValueOnce(
+      new archive.ArchiveLimitError('The archive unpacks to more than the 10 GiB a backup may hold.', 'total')
+    );
+    try {
+      const res = await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }));
+
+      expect(res.status).toBe(413);
+      expect(res.body.message).toMatch(/10 GiB/);
+      expect(res.body.message).toMatch(/Nothing was changed/);
+      expect(calls).toEqual([]);
+    } finally {
+      limit.mockRestore();
+    }
+  });
+
+  it('can be followed by another restore', async () => {
+    stubTools();
+    expect((await restore(admin, Buffer.from('not a zip'))).status).toBe(400);
+    expect((await restore(admin, await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT }))).status).toBe(200);
+  });
+});
+
+// An uploaded backup waits in the backups folder while it is restored, and
+// was removed only when the request ended, so a backend stopped mid-restore
+// left it there for good.
+describe('an uploaded backup a stopped backend left behind', () => {
+  it('is removed when the backups are listed', async () => {
+    const left = path.join(BACKUP_DIR, 'restore-temp-1759999999999.zip');
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    await fs.writeFile(left, 'an upload nobody finished restoring');
+
+    expect((await admin.get('/api/admin/backups')).status).toBe(200);
+
+    await expect(fs.access(left)).rejects.toThrow();
+  });
+
+  it('is removed when the backend starts', async () => {
+    const left = path.join(BACKUP_DIR, 'restore-temp-0b0e6c1e-6f3a-4a59-9d45-2d1f0d3c1a77.zip');
+    const kept = path.join(BACKUP_DIR, 'backup-2026-01-01T00-00-00.zip');
+    await fs.mkdir(BACKUP_DIR, { recursive: true });
+    await fs.writeFile(left, 'an upload nobody finished restoring');
+    await fs.writeFile(kept, 'a finished backup');
+
+    await removeLeftoverRestoreUploads(BACKUP_DIR);
+
+    await expect(fs.access(left)).rejects.toThrow();
+    await expect(fs.access(kept)).resolves.toBeUndefined();
+    await fs.rm(kept, { force: true });
+  });
+});
+
 describe('POST /api/admin/backups', () => {
   /** Every backup in a test is asked for in the same second. */
   let clock: jest.SpyInstance;
@@ -609,7 +802,13 @@ describe('POST /api/admin/backups', () => {
   });
 
   beforeEach(() => {
-    clock = jest.spyOn(Date.prototype, 'toISOString').mockReturnValue('2026-09-27T14:43:06.000Z');
+    // Only the present moment, which is what names a backup. The session
+    // cookie's expiry, an hour on, is stored through toISOString too, and
+    // fixed in the past it would end the admin's sign-in.
+    const real = Date.prototype.toISOString;
+    clock = jest.spyOn(Date.prototype, 'toISOString').mockImplementation(function (this: Date) {
+      return Math.abs(this.getTime() - Date.now()) < 1000 ? '2026-09-27T14:43:06.000Z' : real.call(this);
+    });
   });
 
   afterEach(() => {

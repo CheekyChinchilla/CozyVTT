@@ -112,7 +112,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
 
   // Handle download
   const handleDownload = () => {
-    window.open(`/api/assets/${asset.id}/download`, '_blank');
+    window.open(api.getAssetDownloadUrl(asset.id), '_blank', 'noopener,noreferrer');
   };
 
   const confirmDialog = (

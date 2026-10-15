@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { extractAssetId } from '../utils/asset-urls';
 import { readJsonObject, readTokens } from '../utils/prisma-json';
+import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 
 export type AssetUseKind =
   | 'map'
@@ -25,7 +26,8 @@ export type AssetUseKind =
   | 'characterTemplate'
   | 'creature'
   | 'tokenTemplate'
-  | 'campaignSetting';
+  | 'campaignSetting'
+  | 'vibePeriod';
 
 /**
  * One thing that uses an asset. `name` and the campaign are null when the
@@ -97,9 +99,15 @@ async function findUses(assetId: string): Promise<FoundUse[]> {
         where: { imageUrl: mentions },
         select: { name: true, campaignId: true, imageUrl: true, campaign: { select: { name: true } } },
       }),
-      // The track a campaign is playing, inside its vibe settings.
+      // The track a campaign is playing, and the tracks its time-of-day
+      // periods play when the DM switches to them, inside its vibe settings.
       prisma.campaign.findMany({
-        where: { vibeSettings: { path: ['atmosphereAudio', 'assetId'], equals: assetId } },
+        where: {
+          OR: [
+            { vibeSettings: { path: ['atmosphereAudio', 'assetId'], equals: assetId } },
+            { vibeSettings: { path: ['periods'], array_contains: [{ audio: assetId }] } },
+          ],
+        },
         select: { id: true, name: true, vibeSettings: true },
       }),
     ]);
@@ -153,10 +161,19 @@ async function findUses(assetId: string): Promise<FoundUse[]> {
   }
 
   for (const c of campaigns) {
-    const track = readJsonObject(c.vibeSettings)?.atmosphereAudio;
+    const vibe = readJsonObject(c.vibeSettings);
+    const track = vibe?.atmosphereAudio;
     const trackId = track && typeof track === 'object' ? (track as Record<string, unknown>).assetId : undefined;
     if (trackId === assetId) {
       found({ kind: 'campaignSetting', name: c.name, campaignId: c.id, campaignName: c.name });
+    }
+    // A period's sound counts only as the vibe switch reads it.
+    for (const period of Array.isArray(vibe?.periods) ? vibe.periods : []) {
+      if (!period || typeof period !== 'object' || Array.isArray(period)) continue;
+      const { name, audio } = period as Record<string, unknown>;
+      if (vibePeriodAudioAssetId(audio) === assetId) {
+        found({ kind: 'vibePeriod', name: typeof name === 'string' ? name : null, campaignId: c.id, campaignName: c.name });
+      }
     }
   }
 
@@ -217,4 +234,9 @@ export async function assetUsageFor(
 
   const all = [...visible, ...folded];
   return { usage: all.slice(0, MAX_LISTED_USES), omitted: Math.max(0, all.length - MAX_LISTED_USES) };
+}
+
+/** Whether anything stores an address naming the asset: the places `assetUsageFor` lists. */
+export async function isAssetInUse(assetId: string): Promise<boolean> {
+  return (await findUses(assetId)).length > 0;
 }

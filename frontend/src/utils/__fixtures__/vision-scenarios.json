@@ -504,6 +504,69 @@
           "tier": "dark"
         }
       ]
+    },
+    {
+      "name": "a Huge token sees from the middle of its three squares, against a wall just below it",
+      "globalIllumination": true,
+      "walls": [
+        {
+          "id": "below",
+          "x1": 0,
+          "y1": 1520,
+          "x2": 2000,
+          "y2": 1520,
+          "type": "wall"
+        }
+      ],
+      "lights": [],
+      "tokens": [
+        {
+          "id": "me",
+          "x": 5,
+          "y": 5,
+          "controlledBy": "p1",
+          "size": {
+            "width": 3,
+            "height": 3
+          }
+        },
+        {
+          "id": "room",
+          "x": 6,
+          "y": 12
+        },
+        {
+          "id": "beyond",
+          "x": 6,
+          "y": 2
+        },
+        {
+          "id": "ogre",
+          "x": 12,
+          "y": 4,
+          "size": {
+            "width": 2,
+            "height": 2
+          }
+        }
+      ],
+      "expectVisible": [
+        "me",
+        "room",
+        "ogre"
+      ],
+      "samples": [
+        {
+          "x": 650,
+          "y": 1000,
+          "tier": "bright"
+        },
+        {
+          "x": 650,
+          "y": 1750,
+          "tier": "dark"
+        }
+      ]
     }
   ]
 }

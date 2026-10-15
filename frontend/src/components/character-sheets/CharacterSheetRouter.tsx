@@ -17,7 +17,7 @@ const Pathfinder2eSheet = lazy(() => import('./pathfinder2e/Pathfinder2eCharacte
 const Shadowrun6eSheet = lazy(() => import('./shadowrun6e/Shadowrun6eCharacterSheet'));
 const CallOfCthulhu7eSheet = lazy(() => import('./call-of-cthulhu-7e/CallOfCthulhu7eCharacterSheet'));
 
-export interface CharacterSheetRouterProps extends CharacterSheetProps {}
+export type CharacterSheetRouterProps = CharacterSheetProps;
 
 /**
  * CharacterSheetRouter Component

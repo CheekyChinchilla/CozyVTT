@@ -27,6 +27,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
 import api from '@/services/api';
+import { useGameStore } from '@/stores/gameStore';
 import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/types';
 import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
@@ -34,6 +35,7 @@ import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
+import { assetNameFrom } from '@/utils/assetName';
 
 /** How long typing in the stat block pauses before it is saved. */
 const STAT_BLOCK_SAVE_DELAY_MS = 750;
@@ -91,8 +93,14 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [initiative, setInitiative] = useState<string>(token.initiative !== null && token.initiative !== undefined ? String(token.initiative) : '');
   const [conditions, setConditions] = useState<string[]>(token.conditions ?? []);
   const [notes, setNotes] = useState(token.notes ?? '');
-  const [visible, setVisible] = useState(token.visible);
-  const [obscured, setObscured] = useState(token.obscured ?? false);
+  // Hidden and obscured are read from the token as the table holds it (the
+  // game store), never a copy here: a copy could say "hidden" while every
+  // player still saw the token, after a refused save or a change made from
+  // the token menu.
+  const liveToken = useGameStore((s) => s.tokens[token.id]);
+  const visible = liveToken?.visible ?? token.visible;
+  const obscured = liveToken?.obscured ?? token.obscured ?? false;
+  const [savingVisibility, setSavingVisibility] = useState(false);
   const [controlledBy, setControlledBy] = useState<string | null>(token.controlledBy ?? null);
   const [isRemoving, setIsRemoving] = useState(false);
   // Set while the Remove confirmation is open.
@@ -118,53 +126,63 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const isNpc = tokenType === TokenType.NPC;
 
   // ── Generic update helper ──
-  const saveUpdate = useCallback(async (changes: UpdateTokenRequest) => {
+  // Answers whether the change was stored, so a control that showed it at
+  // once can put itself back when it was not.
+  const saveUpdate = useCallback(async (changes: UpdateTokenRequest): Promise<boolean> => {
     try {
       const result = await api.updateToken(campaignId, mapId, token.id, changes);
       // The DM, the only one this editor opens for, always gets the token back.
       if (result.token) onTokenUpdate(result.token);
       socket?.emitMapChange(mapId);
+      return true;
     } catch (err) {
       // Say why, or the edit stays in the field looking saved. A token from
       // an earlier release can hold more than the server now accepts (notes
       // past 5,000 characters, a name past 200), and the reason names the field.
       console.error('NpcQuickEditor: failed to update token', err);
       showToast(apiErrorMessage(err) || 'Could not save that change to the token', 'error');
+      return false;
     }
   }, [campaignId, mapId, token.id, onTokenUpdate, socket, showToast]);
 
   // ── HP adjustment ──
+  // Each quick control shows its change at once and goes back to what it was
+  // when the save is refused.
   const adjustHp = useCallback(async (delta: number) => {
     if (!hp) return;
     const newCurrent = Math.max(0, Math.min(hp.max, hp.current + delta));
     const newHp = { ...hp, current: newCurrent };
     setHp(newHp);
-    await saveUpdate({ hp: newHp });
+    if (!(await saveUpdate({ hp: newHp }))) setHp(hp);
   }, [hp, saveUpdate]);
 
   const setTempHp = useCallback(async (val: number) => {
     if (!hp) return;
     const newHp = { ...hp, temp: Math.max(0, val) };
     setHp(newHp);
-    await saveUpdate({ hp: newHp });
+    if (!(await saveUpdate({ hp: newHp }))) setHp(hp);
   }, [hp, saveUpdate]);
 
   const toggleShowHpBar = useCallback(async () => {
     const next = !showHpBar;
     setShowHpBar(next);
-    await saveUpdate({ showHpBar: next });
+    if (!(await saveUpdate({ showHpBar: next }))) setShowHpBar(!next);
   }, [showHpBar, saveUpdate]);
 
   const enableHpTracking = useCallback(async () => {
     const max = parseInt(newHpMax, 10);
     if (!max || max <= 0) return;
     const newHp: TokenHp = { current: max, max, temp: 0 };
+    const before = { hp, showHpBar };
     setHp(newHp);
     setShowHpBar(true);
     setEnableHpPrompt(false);
     setNewHpMax('');
-    await saveUpdate({ hp: newHp, showHpBar: true });
-  }, [newHpMax, saveUpdate]);
+    if (!(await saveUpdate({ hp: newHp, showHpBar: true }))) {
+      setHp(before.hp);
+      setShowHpBar(before.showHpBar);
+    }
+  }, [newHpMax, hp, showHpBar, saveUpdate]);
 
   // ── Stat block ──
   // Typed into a field at a time, so it is saved once typing pauses, or at
@@ -183,7 +201,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     const pending = pendingStatBlock.current;
     if (!pending) return;
     pendingStatBlock.current = null;
-    statBlockSaves.current = statBlockSaves.current.then(() => pending.save({ statBlock: pending.statBlock }));
+    // Typed text stays in the fields when a save is refused, with the reason
+    // shown, so it can be put right and saved again.
+    statBlockSaves.current = statBlockSaves.current.then(async () => { await pending.save({ statBlock: pending.statBlock }); });
   }, []);
 
   const dropPendingStatBlock = useCallback(() => {
@@ -211,17 +231,23 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setStatBlock(newBlock);
     setEditingStatBlock(true);
     setShowCreateStatBlock(false);
-    await saveUpdate({ statBlock: newBlock });
+    if (!(await saveUpdate({ statBlock: newBlock }))) {
+      setStatBlock(null);
+      setEditingStatBlock(false);
+    }
   }, [saveUpdate]);
 
   const handleRemoveStatBlock = useCallback(async () => {
     dropPendingStatBlock();
+    const before = statBlock;
     setStatBlock(null);
     setEditingStatBlock(false);
     // After any stat block save still under way, so that one cannot land last.
-    statBlockSaves.current = statBlockSaves.current.then(() => saveUpdate({ statBlock: null }));
+    let removed = false;
+    statBlockSaves.current = statBlockSaves.current.then(async () => { removed = await saveUpdate({ statBlock: null }); });
     await statBlockSaves.current;
-  }, [saveUpdate, dropPendingStatBlock]);
+    if (!removed) setStatBlock(before);
+  }, [statBlock, saveUpdate, dropPendingStatBlock]);
 
   // ── Token image ──
   const loadAssets = useCallback(async () => {
@@ -264,7 +290,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     formData.append('type', AssetType.TOKEN);
     formData.append('scope', AssetScope.CAMPAIGN);
     formData.append('campaignId', campaign.id);
-    formData.append('name', baseName);
+    formData.append('name', assetNameFrom(baseName));
 
     try {
       const { asset } = await api.uploadAsset(formData);
@@ -351,9 +377,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
   // ── Disposition ──
   const setTokenDisposition = useCallback(async (d: TokenDisposition) => {
+    const before = disposition;
     setDisposition(d);
-    await saveUpdate({ disposition: d });
-  }, [saveUpdate]);
+    if (!(await saveUpdate({ disposition: d }))) setDisposition(before);
+  }, [disposition, saveUpdate]);
 
   // ── Conditions ──
   const toggleCondition = useCallback(async (condition: string) => {
@@ -361,7 +388,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       ? conditions.filter((c) => c !== condition)
       : [...conditions, condition];
     setConditions(newConditions);
-    await saveUpdate({ conditions: newConditions });
+    if (!(await saveUpdate({ conditions: newConditions }))) setConditions(conditions);
   }, [conditions, saveUpdate]);
 
   // ── Name save on blur ──
@@ -389,24 +416,27 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, [notes, token.notes, saveUpdate]);
 
   // ── Visibility toggle ──
+  // Shown from the store, so the button changes when the save is stored and
+  // not before; it waits meanwhile.
   const toggleVisible = useCallback(async () => {
-    const next = !visible;
-    setVisible(next);
-    await saveUpdate({ visible: next });
+    setSavingVisibility(true);
+    await saveUpdate({ visible: !visible });
+    setSavingVisibility(false);
   }, [visible, saveUpdate]);
 
   // ── Identity toggle ──
   const toggleObscured = useCallback(async () => {
-    const next = !obscured;
-    setObscured(next);
-    await saveUpdate({ obscured: next });
+    setSavingVisibility(true);
+    await saveUpdate({ obscured: !obscured });
+    setSavingVisibility(false);
   }, [obscured, saveUpdate]);
 
   // ── Controller change ──
   const handleControllerChange = useCallback(async (userId: string | null) => {
+    const before = controlledBy;
     setControlledBy(userId);
-    await saveUpdate({ controlledBy: userId });
-  }, [saveUpdate]);
+    if (!(await saveUpdate({ controlledBy: userId }))) setControlledBy(before);
+  }, [controlledBy, saveUpdate]);
 
   // ── Remove token ──
   const handleRemove = useCallback(async () => {
@@ -436,8 +466,6 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setInitiative(token.initiative !== null && token.initiative !== undefined ? String(token.initiative) : '');
     setConditions(token.conditions ?? []);
     setNotes(token.notes ?? '');
-    setVisible(token.visible);
-    setObscured(token.obscured ?? false);
     setControlledBy(token.controlledBy ?? null);
     setStatBlock((token.statBlock as NpcStatBlock) ?? null);
     setEditingStatBlock(false);
@@ -887,6 +915,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     <button
                       key={d}
                       onClick={() => setTokenDisposition(d)}
+                      aria-pressed={disposition === d}
                       className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                         disposition === d
                           ? activeClass
@@ -1025,6 +1054,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               <div className="flex gap-2">
                 <button
                   onClick={toggleVisible}
+                  disabled={savingVisibility}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
                     visible
                       ? 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
@@ -1037,6 +1067,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
                 <button
                   onClick={toggleObscured}
+                  disabled={savingVisibility}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
                     obscured
                       ? 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'

@@ -362,3 +362,81 @@ describe('parseUVTT', () => {
     });
   });
 });
+
+/**
+ * A map picture can be most of a 54 MB file. Turned into one string, then
+ * parsed as JSON into another, then decoded, the picture was held three times
+ * over, and three such imports at once took the backend close to its memory
+ * limit. The picture is now decoded straight from where it sits in the file,
+ * in pieces, and only the rest of the file is read as JSON.
+ */
+describe('reading a large picture', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  /** A file whose picture is `bytes` of noise behind a PNG signature. */
+  function withPicture(bytes: number, prefix = ''): { file: Buffer; picture: Buffer } {
+    const picture = Buffer.alloc(bytes, 7);
+    Buffer.from(PNG_BASE64, 'base64').copy(picture);
+    const file = Buffer.from(
+      JSON.stringify({
+        format: 0.3,
+        resolution: { map_origin: { x: 0, y: 0 }, map_size: { x: 10, y: 10 }, pixels_per_grid: 140 },
+        line_of_sight: [[{ x: 1, y: 1 }, { x: 2, y: 1 }]],
+        portals: [],
+        lights: [{ position: { x: 3, y: 3 }, range: 4 }],
+        image: `${prefix}${picture.toString('base64')}`,
+      })
+    );
+    return { file, picture };
+  }
+
+  it('never reads the whole file as one string, or the picture as JSON', () => {
+    const { file, picture } = withPicture(6 * 1024 * 1024);
+    const parse = jest.spyOn(JSON, 'parse');
+    const toString = jest.spyOn(Buffer.prototype, 'toString');
+
+    const parsed = parseUVTT(file);
+
+    expect(parsed.imageBuffer.equals(picture)).toBe(true);
+    expect(parsed.wallSegments).toHaveLength(1);
+    expect(parsed.lightSources).toHaveLength(1);
+    const longestParsed = Math.max(...parse.mock.calls.map(([text]) => String(text).length));
+    expect(longestParsed).toBeLessThan(64 * 1024);
+    const longestString = Math.max(...toString.mock.results.map((r) => String(r.value).length));
+    expect(longestString).toBeLessThanOrEqual(64 * 1024);
+  });
+
+  it('reads a picture behind a data: prefix the same way', () => {
+    const { file, picture } = withPicture(64 * 1024, 'data:image/png;base64,');
+    const parse = jest.spyOn(JSON, 'parse');
+    expect(parseUVTT(file).imageBuffer.equals(picture)).toBe(true);
+    expect(Math.max(...parse.mock.calls.map(([text]) => String(text).length))).toBeLessThan(4 * 1024);
+  });
+
+  it('still reads a picture written with escaped slashes', () => {
+    const picture = Buffer.from(PNG_BASE64, 'base64');
+    const escaped = PNG_BASE64.replace(/\//g, '\\/');
+    const file = Buffer.from(
+      `{"resolution":{"map_size":{"x":1,"y":1}},"line_of_sight":[],"image":"${escaped}"}`
+    );
+    expect(parseUVTT(file).imageBuffer.equals(picture)).toBe(true);
+  });
+
+  it('takes the last picture when a file names two, as JSON would', () => {
+    const first = Buffer.from('first picture');
+    const second = Buffer.from(PNG_BASE64, 'base64');
+    const file = Buffer.from(
+      `{"image":"${first.toString('base64')}","resolution":{"map_size":{"x":1,"y":1}},` +
+        `"line_of_sight":[],"image":"${PNG_BASE64}"}`
+    );
+    expect(parseUVTT(file).imageBuffer.equals(second)).toBe(true);
+  });
+
+  it('ignores an "image" that is not the file\'s own', () => {
+    const file = Buffer.from(
+      `{"resolution":{"map_size":{"x":1,"y":1}},"line_of_sight":[],` +
+        `"environment":{"image":"bm90IHRoaXM="},"image":"${PNG_BASE64}"}`
+    );
+    expect(parseUVTT(file).imageBuffer.equals(Buffer.from(PNG_BASE64, 'base64'))).toBe(true);
+  });
+});

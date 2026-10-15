@@ -80,12 +80,13 @@ describe('DELETE /api/campaigns/:campaignId with members connected', () => {
     await expect(crossed).resolves.toMatchObject({ x: 1, y: 1 });
     setState(campaignId, { active: true, round: 3, currentTokenId: null, combatants: [] });
 
-    const dmTold = waitForEvent<{ message: string }>(dm, 'error');
-    const playerTold = waitForEvent<{ message: string }>(player, 'error');
+    const told = { campaignId, reason: 'campaign-deleted', message: 'This campaign was deleted.' };
+    const dmTold = waitForEvent(dm, 'campaign.access.revoked');
+    const playerTold = waitForEvent(player, 'campaign.access.revoked');
     const res = await owner.delete(`/api/campaigns/${campaignId}`);
     expect(res.status).toBe(200);
-    expect((await dmTold).message).toMatch(/deleted/);
-    expect((await playerTold).message).toMatch(/deleted/);
+    await expect(dmTold).resolves.toEqual(told);
+    await expect(playerTold).resolves.toEqual(told);
 
     // Dead after: nothing crosses, and the state is gone.
     const silence = expectNoEvent(player, 'map.pinged', 500);

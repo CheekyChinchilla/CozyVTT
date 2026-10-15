@@ -3,16 +3,19 @@
 > **A historical record, not a current picture.** This captures the schema
 > verification done for the v1.0.0 release on 10 February 2026, against a
 > statement of work that is not in this repository. The schema has grown a lot
-> since: **20 models and 9 enums today**, against the 10 and 7 recorded below.
+> since: **21 models and 9 enums today**, against the 10 and 7 recorded below.
 >
-> Models added since and *not* covered here: `PasswordResetToken`,
+> Models added since and *not* in the February list: `PasswordResetToken`,
 > `CampaignInvitation`, `CharacterTemplate`, `CreatureTemplate`,
 > `CreatureFavorite`, `TokenTemplate`, `SystemSettings`, `PersonalNote`,
-> `DiceMacro`, `CampaignDocument`.
+> `DiceMacro`, `CampaignDocument`, `MapExploration`. The `MapExploration`
+> section and the last four `Map` fields below were added to this file in
+> September 2026, for columns added after v1.0.0.
 >
-> Treat `backend/prisma/schema.prisma` as the source of truth. Kept because the
-> field-level and relationship checks below still describe the original models
-> accurately and are useful when changing them.
+> Treat `backend/prisma/schema.prisma` as the source of truth. Kept because
+> most of the field-level and relationship checks below still hold for the
+> original models and are useful when changing them. The ones that have
+> changed since say so.
 
 ---
 
@@ -32,14 +35,14 @@
 ## Enums (7/7, as verified in February 2026)
 
 - ✅ PlatformRole (ADMIN, USER)
-- ✅ CampaignStatus (PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED)
+- ✅ CampaignStatus (PREPARATION, ACTIVE, PAUSED, COMPLETED, ARCHIVED; `INACTIVE` was added in March 2026, `20260303000000_add_inactive_campaign_status`)
 - ✅ CampaignRole (DM, PLAYER, SPECTATOR)
 - ✅ AssetType (MAP, TOKEN, AUDIO, AVATAR, DOCUMENT, OTHER)
-- ✅ AssetScope (GLOBAL, CAMPAIGN)
+- ✅ AssetScope (GLOBAL, CAMPAIGN; `USER` was added in March 2026, `20260311000000_add_user_asset_scope_and_global_asset_manager`)
 - ✅ MessageType (PLAYER, DM, SYSTEM, DICE_ROLL, CHARACTER_ACTION)
 - ✅ LogLevel (INFO, WARNING, ERROR, CRITICAL)
 
-## Indexes & Constraints (17/17)
+## Indexes & Constraints (18/18)
 
 - ✅ User.email (unique)
 - ✅ User.email (index)
@@ -122,13 +125,13 @@
 - ✅ type: AssetType enum
 - ✅ scope: AssetScope enum
 - ✅ uploadedById: nullable foreign key to User, set to null when the user is deleted
-- ✅ campaignId: nullable foreign key with cascade delete
+- ✅ campaignId: nullable foreign key; it cascaded at v1.0.0, and since `20260304100000_asset_campaign_set_null` it is set to null when the campaign is deleted
 - ✅ filePath: string (relative path)
 - ✅ tags: string array
 
 ## Relationship Verification
 
-### User Relationships (6 total)
+### User Relationships (6 at v1.0.0; 15 today)
 - ✅ ownedCampaigns → Campaign[] (@relation "CampaignOwner")
 - ✅ campaignMemberships → CampaignMembership[]
 - ✅ characters → Character[]
@@ -136,7 +139,7 @@
 - ✅ diceRolls → DiceRoll[]
 - ✅ uploadedAssets → Asset[]
 
-### Campaign Relationships (9 total)
+### Campaign Relationships (9 at v1.0.0; 16 today)
 - ✅ owner → User (@relation "CampaignOwner")
 - ✅ currentMap → Map? (@relation "CurrentMap")
 - ✅ memberships → CampaignMembership[]
@@ -151,7 +154,7 @@
 - ✅ Campaign delete → cascades to memberships
 - ✅ Campaign delete → cascades to maps
 - ✅ Campaign delete → cascades to sessions
-- ✅ Campaign delete → cascades to assets
+- ✅ Campaign delete → cascades to assets (until March 2026: the assets are now kept, turned into their uploaders' USER assets by the delete route, and `Asset.campaignId` is set to null)
 - ✅ User delete → cascades to characters
 - ✅ User delete → cascades to memberships
 - ✅ Character.campaignId → SetNull (preserves character)
@@ -205,5 +208,4 @@ npx prisma format
 
 ---
 
-**Schema Status:** ✅ **VERIFIED AND COMPLETE**
-**Next Phase:** Authentication middleware implementation
+**Schema status at the v1.0.0 verification (February 2026):** every item above checked. This says nothing about the schema as it is today.

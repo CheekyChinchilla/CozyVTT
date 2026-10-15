@@ -19,6 +19,7 @@ const UNSEEN: Record<AssetUseKind, [one: string, many: string]> = {
   creature: ['creature', 'creatures'],
   tokenTemplate: ['token template', 'token templates'],
   campaignSetting: ['campaign ambient sound', 'campaign ambient sounds'],
+  vibePeriod: ['time-of-day sound', 'time-of-day sounds'],
 };
 
 /** One use as a line of text, e.g. `3 tokens on the map "Ambush Road" (Lost Mine)`. */
@@ -45,5 +46,7 @@ export function describeAssetUse(use: AssetUse): string {
       return `Token template ${name}${where}`;
     case 'campaignSetting':
       return `Ambient sound of the campaign ${name}`;
+    case 'vibePeriod':
+      return `Sound of the time of day ${name}${where}`;
   }
 }

@@ -4,30 +4,114 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 CozyVTT incorporates third-party software components. The following notices
 are provided for informational purposes and to comply with license requirements.
 
-Generated: 2026-07-12
+Last brought in line with the lockfiles: 2026-10-11
 
 
 ================================================================================
-SECTION 1: GOOGLE FONTS (loaded via CDN)
+SECTION 1: FONTS (bundled)
 ================================================================================
 
-The following fonts are loaded from Google Fonts (fonts.googleapis.com) and are
-NOT bundled in this distribution. They are subject to their own licenses:
+The following fonts are bundled in the frontend distribution, as Google Fonts
+builds of each family (frontend/src/assets/fonts), and served by the instance
+itself. Each is licensed under the SIL Open Font License 1.1, whose full text
+is at the end of this file and in frontend/src/assets/fonts/OFL.txt:
 
-  Quicksand
-    Copyright (c) Andrew Paglinawan
+  Caveat
+    Copyright 2014 The Caveat Project Authors (https://github.com/googlefonts/caveat)
     License: SIL Open Font License 1.1
-    https://fonts.google.com/specimen/Quicksand
+    https://fonts.google.com/specimen/Caveat
+
+  Cinzel
+    Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Cinzel
+
+  Crimson Text
+    Copyright 2010 The Crimson Text Project Authors (https://github.com/googlefonts/Crimson)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Crimson+Text
+
+  EB Garamond
+    Copyright 2017 The EB Garamond Project Authors (https://github.com/octaviopardo/EBGaramond12)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/EB+Garamond
+
+  Fira Code
+    Copyright 2014-2020 The Fira Code Project Authors (https://github.com/tonsky/FiraCode)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Fira+Code
 
   Inter
-    Copyright (c) Rasmus Andersson
+    Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
     License: SIL Open Font License 1.1
     https://fonts.google.com/specimen/Inter
 
   JetBrains Mono
-    Copyright (c) JetBrains s.r.o.
+    Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
     License: SIL Open Font License 1.1
     https://fonts.google.com/specimen/JetBrains+Mono
+
+  Lora
+    Copyright 2011 The Lora Project Authors (https://github.com/cyrealtype/Lora-Cyrillic), with Reserved Font Name "Lora".
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Lora
+
+  MedievalSharp
+    Copyright (c) 2011, wmk69 (wmk69@o2.pl),
+    with Reserved Font Name MedievalSharp.
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/MedievalSharp
+
+  Merriweather
+    Copyright 2020 The Merriweather Project Authors (https://github.com/EbenSorkin/Merriweather4) with Reserved Font Name "Merriweather".
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Merriweather
+
+  Nunito
+    Copyright 2014 The Nunito Project Authors (https://github.com/googlefonts/nunito)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Nunito
+
+  Patrick Hand
+    Copyright (c) 2010-2012 Patrick Wagesreiter (mail@patrickwagesreiter.at)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Patrick+Hand
+
+  Playfair Display
+    Copyright 2017 The Playfair Display Project Authors (https://github.com/clauseggers/Playfair-Display), with Reserved Font Name "Playfair Display"
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Playfair+Display
+
+  Poppins
+    Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Poppins
+
+  Quicksand
+    Copyright 2011 The Quicksand Project Authors (https://github.com/andrew-paglinawan/QuicksandFamily), with Reserved Font Name “Quicksand”.
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Quicksand
+
+  Raleway
+    Copyright 2010 The Raleway Project Authors (impallari@gmail.com), with Reserved Font Name "Raleway".
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Raleway
+
+  Source Code Pro
+    Copyright 2010, 2012 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name 'Source'. All Rights Reserved. Source is a trademark of Adobe Systems Incorporated in the United States and/or other countries.
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Source+Code+Pro
+
+  Source Sans 3
+    Copyright 2010-2020 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'. All Rights Reserved. Source is a trademark of Adobe in the United States and/or other countries.
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/Source+Sans+3
+
+  UnifrakturMaguntia
+    Copyright (c) 2010, j. 'mach' wust, with Reserved Font Name UnifrakturMaguntia.
+    Copyright (c) 2009, Peter Wiegel.
+    License: SIL Open Font License 1.1
+    https://fonts.google.com/specimen/UnifrakturMaguntia
 
 
 ================================================================================
@@ -52,277 +136,238 @@ See SRD_LICENSE.txt and SRD_ATTRIBUTION.md for full attribution details.
 SECTION 3: FRONTEND DEPENDENCIES
 ================================================================================
 
-The following packages are bundled in the frontend distribution:
+The packages the frontend lists as its dependencies, which the build puts into
+the app the browser loads, and two that much of it is built on. Each is given
+by its major version line (4.x, or 0.35.x below version 1); the exact versions
+are in frontend/package-lock.json.
 
-react 18.3.1
-  Copyright (c) Meta Platforms, Inc. and affiliates
-  License: MIT
-  https://github.com/facebook/react
-
-react-dom 18.3.1
-  Copyright (c) Meta Platforms, Inc. and affiliates
-  License: MIT
-  https://github.com/facebook/react
-
-react-router-dom 6.30.4
-  Copyright (c) Remix Software Inc.
-  License: MIT
-  https://github.com/remix-run/react-router
-
-axios 1.13.5
-  Copyright (c) Matt Zabriskie & Collaborators
-  License: MIT
-  https://github.com/axios/axios
-
-framer-motion 10.18.0
-  Copyright (c) Framer B.V.
-  License: MIT
-  https://github.com/framer/motion
-
-lucide-react 0.316.0
-  Copyright (c) Lucide Contributors
-  License: ISC
-  https://github.com/lucide-icons/lucide
-
-react-markdown 9.1.0
-  Copyright (c) Espen Hovlandsdal
-  License: MIT
-  https://github.com/remarkjs/react-markdown
-
-react-resizable-panels 4.6.4
-  Copyright (c) Brian Vaughn
-  License: MIT
-  https://github.com/bvaughn/react-resizable-panels
-
-zustand 5.0.14
-  Copyright (c) 2019 Paul Henschel
-  License: MIT
-  https://github.com/pmndrs/zustand
-
-@tanstack/react-query 5.101.2
+@tanstack/react-query 5.x
   Copyright (c) 2021-present Tanner Linsley
   License: MIT
   https://github.com/TanStack/query
 
-use-sync-external-store 1.6.0
+axios 1.x
+  Copyright (c) Matt Zabriskie & Collaborators
+  License: MIT
+  https://github.com/axios/axios
+
+framer-motion 10.x
+  Copyright (c) Framer B.V.
+  License: MIT
+  https://github.com/framer/motion
+
+lucide-react 0.316.x
+  Copyright (c) Lucide Contributors
+  License: ISC
+  https://github.com/lucide-icons/lucide
+
+react 18.x
   Copyright (c) Meta Platforms, Inc. and affiliates
   License: MIT
   https://github.com/facebook/react
 
-socket.io-client 4.8.3
+react-dom 18.x
+  Copyright (c) Meta Platforms, Inc. and affiliates
+  License: MIT
+  https://github.com/facebook/react
+
+react-markdown 9.x
+  Copyright (c) Espen Hovlandsdal
+  License: MIT
+  https://github.com/remarkjs/react-markdown
+
+react-resizable-panels 4.x
+  Copyright (c) Brian Vaughn
+  License: MIT
+  https://github.com/bvaughn/react-resizable-panels
+
+react-router-dom 6.x
+  Copyright (c) Remix Software Inc.
+  License: MIT
+  https://github.com/remix-run/react-router
+
+remark-breaks 4.x
+  Copyright (c) 2017 Titus Wormer
+  License: MIT
+  https://github.com/remarkjs/remark-breaks
+
+remark-gfm 4.x
+  Copyright (c) Titus Wormer
+  License: MIT
+  https://github.com/remarkjs/remark-gfm
+
+socket.io-client 4.x
   Copyright (c) Guillermo Rauch
   License: MIT
   https://github.com/socketio/socket.io
 
-tslib 2.8.1
+use-sync-external-store 1.x
+  Copyright (c) Meta Platforms, Inc. and affiliates
+  License: MIT
+  https://github.com/facebook/react
+
+zustand 5.x
+  Copyright (c) 2019 Paul Henschel
+  License: MIT
+  https://github.com/pmndrs/zustand
+
+tslib 2.x
   Copyright (c) Microsoft Corporation
   License: 0BSD
   https://github.com/Microsoft/tslib
 
-unified 11.0.5 (and remark/rehype/micromark ecosystem)
+unified 11.x (and the remark, rehype and micromark packages around it)
   Copyright (c) Titus Wormer
   License: MIT
   https://github.com/unifiedjs/unified
-
-ws 8.21.0
-  Copyright (c) Einar Otto Stangvik
-  License: MIT
-  https://github.com/websockets/ws
 
 
 ================================================================================
 SECTION 4: BACKEND DEPENDENCIES
 ================================================================================
 
-The following packages are used in the backend:
+The packages the backend lists as its dependencies, which its image installs.
+Each is given by its major version line; the exact versions are in
+backend/package-lock.json.
 
-express 4.22.2
+@prisma/client 5.x
+  Copyright (c) Prisma
+  License: Apache-2.0
+  https://github.com/prisma/prisma
+
+archiver 7.x
+  Copyright (c) Chris Talkington
+  License: MIT
+  https://github.com/archiverjs/node-archiver
+
+argon2 0.44.x
+  Copyright (c) Ranieri Althoff
+  License: MIT
+  https://github.com/ranisalt/node-argon2
+
+connect-pg-simple 9.x
+  Copyright (c) Pelle Wessman
+  License: MIT
+  https://github.com/voxpelli/node-connect-pg-simple
+
+cors 2.x
+  Copyright (c) Troy Goode
+  License: MIT
+  https://github.com/expressjs/cors
+
+dotenv 16.x
+  Copyright (c) Scott Motte
+  License: BSD-2-Clause
+  https://github.com/motdotla/dotenv
+
+express 4.x
   Copyright (c) TJ Holowaychuk & Contributors
   License: MIT
   https://github.com/expressjs/express
 
-@prisma/client 5.8.1
-  Copyright (c) Prisma
-  License: Apache-2.0
-  https://github.com/prisma/prisma
-
-prisma 5.8.1
-  Copyright (c) Prisma
-  License: Apache-2.0
-  https://github.com/prisma/prisma
-
-socket.io 4.8.3
-  Copyright (c) Guillermo Rauch
+express-rate-limit 7.x
+  Copyright (c) Nathan Friedly & Contributors
   License: MIT
-  https://github.com/socketio/socket.io
+  https://github.com/express-rate-limit/express-rate-limit
 
-sharp 0.34.5
+express-session 1.x
+  Copyright (c) TJ Holowaychuk & Contributors
+  License: MIT
+  https://github.com/expressjs/session
+
+file-type 21.x
+  Copyright (c) Sindre Sorhus
+  License: MIT
+  https://github.com/sindresorhus/file-type
+
+helmet 7.x
+  Copyright (c) Adam Baldwin & Contributors
+  License: MIT
+  https://github.com/helmetjs/helmet
+
+mathjs 12.x
+  Copyright (c) Jos de Jong
+  License: Apache-2.0
+  https://github.com/josdejong/mathjs
+
+multer 2.x
+  Copyright (c) Hage Yaapa & Contributors
+  License: MIT
+  https://github.com/expressjs/multer
+
+nodemailer 10.x
+  Copyright (c) Andris Reinman
+  License: MIT-0
+  https://github.com/nodemailer/nodemailer
+
+otplib 13.x
+  Copyright (c) 2026 Gerald Yeo
+  License: MIT
+  https://github.com/yeojz/otplib
+  With @noble/hashes and @scure/base, Copyright (c) 2022 Paul Miller (MIT)
+
+pg 8.x
+  Copyright (c) Brian Carlson
+  License: MIT
+  https://github.com/brianc/node-postgres
+
+prisma 5.x
+  Copyright (c) Prisma
+  License: Apache-2.0
+  https://github.com/prisma/prisma
+
+qrcode 1.x
+  Copyright (c) Ryan Day
+  License: MIT
+  https://github.com/soldair/node-qrcode
+
+sharp 0.35.x
   Copyright (c) Lovell Fuller and contributors
   License: Apache-2.0
   https://github.com/lovell/sharp
   Note: Sharp uses libvips (LGPL-3.0-or-later) as a dynamically linked
   dependency. libvips source is available at https://github.com/libvips/libvips
 
-argon2 0.44.0
-  Copyright (c) Ranieri Althoff
+socket.io 4.x
+  Copyright (c) Guillermo Rauch
   License: MIT
-  https://github.com/ranisalt/node-argon2
+  https://github.com/socketio/socket.io
 
-helmet 7.2.0
-  Copyright (c) Adam Baldwin & Contributors
-  License: MIT
-  https://github.com/helmetjs/helmet
-
-cors 2.8.6
-  Copyright (c) Troy Goode
-  License: MIT
-  https://github.com/expressjs/cors
-
-express-session 1.19.0
-  Copyright (c) TJ Holowaychuk & Contributors
-  License: MIT
-  https://github.com/expressjs/session
-
-express-rate-limit 7.5.1
-  Copyright (c) Nathan Friedly & Contributors
-  License: MIT
-  https://github.com/express-rate-limit/express-rate-limit
-
-connect-pg-simple 9.0.1
-  Copyright (c) Pelle Wessman
-  License: MIT
-  https://github.com/voxpelli/node-connect-pg-simple
-
-passport 0.7.0
-  Copyright (c) Jared Hanson
-  License: MIT
-  https://github.com/jaredhanson/passport
-
-passport-local 1.0.0
-  Copyright (c) Jared Hanson
-  License: MIT
-  https://github.com/jaredhanson/passport-local
-
-pg 8.18.0
-  Copyright (c) Brian Carlson
-  License: MIT
-  https://github.com/brianc/node-postgres
-
-multer 2.4.0
-  Copyright (c) Hage Yaapa & Contributors
-  License: MIT
-  https://github.com/expressjs/multer
-
-archiver 7.0.1
-  Copyright (c) Chris Talkington
-  License: MIT
-  https://github.com/archiverjs/node-archiver
-
-unzipper 0.12.3
+unzipper 0.12.x
   Copyright (c) Ziggy Jonsson
   License: MIT
   https://github.com/ZJONSSON/node-unzipper
 
-nodemailer 10.0.12
-  Copyright (c) Andris Reinman
-  License: MIT-0
-  https://github.com/nodemailer/nodemailer
-
-winston 3.19.0
+winston 3.x
   Copyright (c) Charlie Robbins & Contributors
   License: MIT
   https://github.com/winstonjs/winston
 
-mathjs 12.4.3
-  Copyright (c) Jos de Jong
-  License: Apache-2.0
-  https://github.com/josdejong/mathjs
-
-qrcode 1.5.4
-  Copyright (c) Ryan Day
-  License: MIT
-  https://github.com/soldair/node-qrcode
-
-speakeasy 2.0.0
-  Copyright (c) Mark Bao
-  License: MIT
-  https://github.com/speakeasyjs/speakeasy
-
-zod 4.3.6
+zod 4.x
   Copyright (c) Colin McDonnell
   License: MIT
   https://github.com/colinhacks/zod
 
-dotenv 16.6.1
-  Copyright (c) Scott Motte
-  License: BSD-2-Clause
-  https://github.com/motdotla/dotenv
-
-file-type 21.3.2
-  Copyright (c) Sindre Sorhus
-  License: MIT
-  https://github.com/sindresorhus/file-type
-
-fs-extra 11.3.4
-  Copyright (c) JP Richardson
-  License: MIT
-  https://github.com/jprichardson/node-fs-extra
-
-lodash 4.17.23
-  Copyright (c) JS Foundation and other contributors
-  License: MIT
-  https://github.com/lodash/lodash
-
-cross-env 10.1.0
-  Copyright (c) Kent C. Dodds
-  License: MIT
-  https://github.com/kentcdodds/cross-env
-
-archiver 7.0.1
-  Copyright (c) Chris Talkington
-  License: MIT
-  https://github.com/archiverjs/node-archiver
-
-unzipper 0.12.3
-  Copyright (c) Ziggy Jonsson
-  License: MIT
-  https://github.com/ZJONSSON/node-unzipper
-
-file-type 21.3.0
-  Copyright (c) Sindre Sorhus
-  License: MIT
-  https://github.com/sindresorhus/file-type
-
 
 ================================================================================
-SECTION 5: ADDITIONAL TRANSITIVE DEPENDENCIES
+SECTION 5: EVERY LICENCE IN THE PACKAGES AN INSTANCE RUNS
 ================================================================================
 
-The following is a summary of all transitive dependency licenses used in this
-project. All are permissive open-source licenses compatible with commercial use.
+The packages above depend on others in turn. Every package an instance runs,
+listed above or not, is under one of these licences, as the lockfiles record
+them:
 
-  Frontend (130 packages):
-    MIT ............. 126
-    ISC ............... 2
-    0BSD .............. 1
-    UNLICENSED ........ 1 (cozyvtt-frontend itself)
+  Frontend: 0BSD, ISC, MIT
+  Backend:  0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause, ISC,
+            LGPL-3.0-or-later, MIT, MIT-0
 
-  Backend (292 packages):
-    MIT ............. 237
-    ISC .............. 23
-    Apache-2.0 ....... 22
-    BSD-3-Clause ...... 3
-    BlueOak-1.0.0 ..... 3
-    BSD-2-Clause ....... 1
-    MIT-0 .............. 1
-    MIT* ............... 1
-    Apache-2.0 AND
-      LGPL-3.0-or-later  1 (sharp native binary — dynamically linked)
+LGPL-3.0-or-later is the licence of libvips, the image library inside the
+prebuilt binaries sharp loads at run time; it places no requirement on
+CozyVTT's own code. CozyVTT publishes no images: each install downloads those
+binaries from npm when it builds. The libvips source is at
+https://github.com/libvips/libvips. No package is under the GPL or the AGPL.
 
-No copyleft (GPL/AGPL) licenses are present in the dependency tree, with the
-exception of the LGPL-3.0-or-later component in sharp's native image processing
-library (libvips), which is dynamically linked and does not impose copyleft
-requirements on the application code.
+CozyVTT itself is licensed under AGPL-3.0-only (see LICENSE).
 
 For the complete machine-readable license listing, run:
   cd frontend && npx license-checker --production --csv
@@ -440,7 +485,97 @@ Full text available at: https://blueoakcouncil.org/license/1.0.0
 
 SIL Open Font License 1.1
 --------------------------
-Full text available at: https://scripts.sil.org/OFL
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+https://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded, 
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
 
 
 Creative Commons Attribution 4.0 International (CC-BY 4.0)

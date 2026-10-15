@@ -11,9 +11,6 @@
  * carries nosniff and a sandbox CSP; the CSP matters for text opened directly
  * and does nothing for a PDF, which is why the reader sandboxes its own frame.
  *
- * file-type is stubbed to identify PDFs by their header; see
- * documentUpload.e2e.test.ts for why and for what was verified by hand.
- *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
@@ -24,14 +21,6 @@ import request from 'supertest';
 
 const UPLOAD_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-campaigndocs-test-'));
 process.env.UPLOAD_DIR = UPLOAD_DIR;
-
-jest.mock('file-type', () => ({
-  fileTypeFromFile: jest.fn(async (filePath: string) => {
-    const head = fs.readFileSync(filePath).subarray(0, 5);
-    return head.toString('latin1') === '%PDF-' ? { ext: 'pdf', mime: 'application/pdf' } : undefined;
-  }),
-  fileTypeFromBuffer: jest.fn(async () => undefined),
-}));
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import {

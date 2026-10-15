@@ -43,6 +43,7 @@ vi.mock('@/services/socket', () => ({
     on: vi.fn(),
     off: vi.fn(),
     onRebuilt: vi.fn().mockReturnValue(() => {}),
+    onCreated: vi.fn().mockReturnValue(() => {}),
     connect: vi.fn(),
     disconnect: vi.fn(),
     getSocket: vi.fn().mockReturnValue(null),
@@ -52,7 +53,8 @@ vi.mock('@/services/socket', () => ({
 
 vi.mock('@/services/auth.service', () => ({
   authService: {
-    getCurrentUser: vi.fn().mockRejectedValue(new Error('not authenticated')),
+    // The server's answer when nobody is signed in.
+    getCurrentUser: vi.fn().mockRejectedValue(Object.assign(new Error('not authenticated'), { response: { status: 401, data: {} } })),
   },
 }));
 

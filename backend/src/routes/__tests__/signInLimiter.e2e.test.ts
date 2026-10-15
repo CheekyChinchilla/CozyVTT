@@ -17,17 +17,18 @@
  * and is refused if they all failed.
  *
  * The real limiter runs here (this file does not mock it), so each case uses
- * an address of its own through a trusted proxy hop, as server.ts sets up.
+ * an address of its own through a trusted proxy hop, as app.ts sets up.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
 import express from 'express';
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSecret } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { hashPassword } from '../../services/auth';
+import { hashResetToken } from '../../services/passwordResetTokens';
 
 jest.setTimeout(60000);
 
@@ -100,7 +101,8 @@ describe('wrong passwords from one address', () => {
 
     expect(locked.status).toBe(429);
     expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
-    expect(locked.text).toBe('Too many authentication attempts, please try again later');
+    // JSON, as every other refusal: a plain-text body gave the pages nothing to show.
+    expect(locked.body).toEqual({ error: 'Rate Limited', message: 'Too many authentication attempts, please try again later' });
     // Another address is not affected.
     expect((await signIn(freshAddress(), account.email, TEST_PASSWORD)).status).toBe(200);
   });
@@ -148,7 +150,7 @@ describe('what does not count', () => {
     const address = freshAddress();
     const [account] = await users(1);
     const token = `reset-${account.id}`;
-    await prisma.passwordResetToken.create({ data: { token, userId: account.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
+    await prisma.passwordResetToken.create({ data: { token: hashResetToken(token), userId: account.id, expiresAt: new Date(Date.now() + 60 * 60 * 1000) } });
 
     for (let i = 0; i < 6; i += 1) {
       const res = await request(app).post('/api/auth/reset-password').set('X-Forwarded-For', address).send({ token, newPassword: 'short' });
@@ -162,7 +164,7 @@ describe('one allowance for every route that checks a credential', () => {
   it('is spent by a bad reset link, wrong passwords for MFA changes and a wrong MFA code', async () => {
     const address = freshAddress();
     const [plain, enrolled] = await users(2);
-    const secret = speakeasy.generateSecret({ length: 20 }).base32;
+    const secret = generateSecret();
 
     const plainAgent = request.agent(app);
     const enrolledAgent = request.agent(app);

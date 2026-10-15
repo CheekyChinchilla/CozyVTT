@@ -40,6 +40,16 @@ export function canEditCampaign(campaignRole: CampaignRole, platformRole: Platfo
   return isDM(campaignRole) || isAdmin(platformRole);
 }
 
+// TODO(sheets): nothing calls canEditCharacter, and it disagrees with
+// PUT /api/characters/:id, which decides this itself: it lets any admin edit,
+// it takes the campaign id from its caller instead of the character, and it
+// does not refuse a spectator who owns the character. Delete it, or make it
+// match the route and have the route call it, so the rule is declared once.
+// The same goes for the other helpers here that no route calls (isAdmin,
+// isDM, isPlayer, canEditCampaign, canManageMaps, canToggleSpiritLayer,
+// canChangeVibe, canManageSessions, canInvitePlayers, canDeleteMessages,
+// canExportCampaign): each is a second statement of a rule the routes state
+// in their guards.
 /**
  * Check if user can edit a specific character
  * 
@@ -264,13 +274,14 @@ export async function canDeleteCampaign(
 export async function canTransferDM(
   userId: string,
   campaignId: string,
-  platformRole: PlatformRole
+  platformRole: PlatformRole,
+  db: Prisma.TransactionClient = prisma
 ): Promise<boolean> {
   if (isAdmin(platformRole)) {
     return true;
   }
 
-  const campaign = await prisma.campaign.findUnique({
+  const campaign = await db.campaign.findUnique({
     where: { id: campaignId },
     select: { ownerId: true },
   });
@@ -283,7 +294,7 @@ export async function canTransferDM(
     return true;
   }
 
-  const membership = await prisma.campaignMembership.findUnique({
+  const membership = await db.campaignMembership.findUnique({
     where: { userId_campaignId: { userId, campaignId } },
     select: { role: true },
   });
@@ -633,7 +644,11 @@ export async function canReadAsset(
 ): Promise<boolean> {
   if (isAdmin) return true;
 
-  if (asset.scope === 'USER') {
+  // A campaign asset with no campaign recorded is read as a personal one. The
+  // foreign key nulls the campaign when one is deleted; the delete route turns
+  // its assets personal first, and this keeps any other way of removing a
+  // campaign from opening its assets to everyone.
+  if (asset.scope === 'USER' || (asset.scope === 'CAMPAIGN' && !asset.campaignId)) {
     if (asset.uploadedById === userId) return true;
     if (await assetUsedInUserCampaign(asset.id, userId, asset.uploadedById)) return true;
     return documentSharedWithUser(asset.id, userId);
@@ -650,8 +665,69 @@ export async function canReadAsset(
     return documentSharedWithUser(asset.id, userId);
   }
 
-  // GLOBAL, or a campaign asset with no campaign recorded.
+  // GLOBAL.
   return true;
+}
+
+/**
+ * Whether a user may change an asset where it is: delete it, move it out of
+ * its scope, or rewrite a document's text. One rule for all three, so a
+ * right the delete route takes away cannot be kept through another route.
+ *
+ * - GLOBAL: an admin, or its uploader while they still manage global assets.
+ * - USER: its uploader, or an admin.
+ * - CAMPAIGN: its uploader while still a member, the campaign's DM, or an
+ *   admin. A campaign asset stays with the campaign once its uploader leaves.
+ *   One with no campaign recorded is an admin's alone.
+ *
+ * `known` is what the rule reads about the user, read once beforehand
+ * (assetChangeFactsFor) when it is asked of a whole list; without it the
+ * rule reads what it needs.
+ */
+export async function mayChangeAsset(
+  asset: Pick<AssetAccessFacts, 'scope' | 'uploadedById' | 'campaignId'>,
+  userId: string,
+  isAdmin: boolean,
+  known?: AssetChangeFacts
+): Promise<boolean> {
+  if (isAdmin) return true;
+  const isOwner = asset.uploadedById === userId;
+
+  if (asset.scope === 'GLOBAL') {
+    if (!isOwner) return false;
+    if (known) return known.globalAssetManager;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { globalAssetManager: true } });
+    return user?.globalAssetManager === true;
+  }
+
+  if (asset.scope === 'USER') return isOwner;
+
+  if (!asset.campaignId) return false;
+  const role = known
+    ? (known.roles.get(asset.campaignId) ?? null)
+    : ((await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId: asset.campaignId } },
+        select: { role: true },
+      }))?.role ?? null);
+  return (isOwner && role !== null) || role === 'DM';
+}
+
+/** What mayChangeAsset reads about a user: whether they manage global assets, and their role in each campaign. */
+export interface AssetChangeFacts {
+  globalAssetManager: boolean;
+  roles: ReadonlyMap<string, CampaignRole>;
+}
+
+/** A user's AssetChangeFacts, in two reads, for asking mayChangeAsset of many assets. */
+export async function assetChangeFactsFor(userId: string): Promise<AssetChangeFacts> {
+  const [user, memberships] = await Promise.all([
+    prisma.user.findUnique({ where: { id: userId }, select: { globalAssetManager: true } }),
+    prisma.campaignMembership.findMany({ where: { userId }, select: { campaignId: true, role: true } }),
+  ]);
+  return {
+    globalAssetManager: user?.globalAssetManager === true,
+    roles: new Map(memberships.map((m) => [m.campaignId, m.role])),
+  };
 }
 
 /**
@@ -738,6 +814,29 @@ export async function canReferenceAsset(
   // one here grants no one anything, even when the picture can no longer be
   // read (its uploader has left).
   return campaignId !== undefined && (await addressUsedInCampaign(address, campaignId));
+}
+
+/**
+ * May this address be stored as a map's picture or spirit layer, as far as
+ * the kind of asset goes: only an asset uploaded as a map picture. Create
+ * Map and Edit Map offer nothing else, and a Universal VTT import stores its
+ * picture as one. Asked after canReferenceAsset, which decides whether the
+ * caller may use the asset at all.
+ *
+ * An address names its asset by id whatever folder it gives, and a bare id
+ * is given the maps folder, so the asset's own type is read. The address
+ * already stored on the map (`stored`) is taken back as it is, so a map made
+ * before this rule keeps its picture through every edit that leaves it
+ * alone. An address naming no asset, or one that does not exist, is left to
+ * canReferenceAsset, as it shows nothing and grants nothing.
+ */
+export async function isMapPicture(address: string | null | undefined, stored?: string | null): Promise<boolean> {
+  if (!address) return true;
+  if (stored !== undefined && address === stored) return true;
+  const assetId = extractAssetId(address);
+  if (!assetId) return true;
+  const asset = await prisma.asset.findUnique({ where: { id: assetId }, select: { type: true } });
+  return !asset || asset.type === 'MAP';
 }
 
 /** Whether a record of the campaign already stores exactly this picture address. */

@@ -11,7 +11,7 @@
  */
 
 import request from 'supertest';
-import speakeasy from 'speakeasy';
+import { generateSync } from 'otplib';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
@@ -24,7 +24,7 @@ async function enableMfa(agent: ReturnType<typeof request.agent>): Promise<strin
   const setup = await agent.post('/api/auth/mfa/setup').send({ password: TEST_PASSWORD });
   expect(setup.status).toBe(200);
   const secret: string = setup.body.secret;
-  const token = speakeasy.totp({ secret, encoding: 'base32' });
+  const token = generateSync({ secret });
   const verify = await agent.post('/api/auth/mfa/verify').send({ token });
   expect(verify.status).toBe(200);
   return verify.body.backupCodes as string[];

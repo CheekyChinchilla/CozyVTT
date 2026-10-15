@@ -22,10 +22,9 @@ import DocumentReader, { documentFormat, FORMAT_LABEL } from '@/components/docum
 import NewDocumentDialog from '@/components/documents/NewDocumentDialog';
 import { useAssetsQuery } from '@/hooks/queries';
 import { useAssetDelete } from '@/hooks/useAssetDelete';
-import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
-import { AssetType, PlatformRole, type Asset } from '@/types';
+import { AssetType, type Asset } from '@/types';
 import { assetScopeLabel } from '@/utils/assetUrl';
 
 function formatSize(bytes: number): string {
@@ -37,7 +36,6 @@ function formatSize(bytes: number): string {
 export default function DocumentsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
   const { showToast } = useToast();
 
   const [page, setPage] = useState(1);
@@ -51,14 +49,13 @@ export default function DocumentsPage() {
   const documents = query.data?.assets ?? [];
   const pagination = query.data?.pagination;
 
-  const isAdmin = user?.platformRole === PlatformRole.ADMIN;
-
   /**
-   * Whether the delete control is offered. The server decides for real; this
-   * only avoids showing a button that would be refused. Mirrors the asset
-   * delete rules: your own, or anything if you are an admin.
+   * Whether Delete and Edit are offered: exactly when the server will take
+   * them, as the asset list says of each document (canChange). The rule turns
+   * on facts this page does not have, such as whether the uploader still
+   * manages global assets, or who runs the document's campaign.
    */
-  const canDelete = (doc: Asset) => isAdmin || doc.uploadedById === user?.id;
+  const canChange = (doc: Asset) => doc.canChange === true;
 
   // The page asks "delete this?" itself; if the server then says something still
   // uses the document, this shows where and asks again.
@@ -196,7 +193,7 @@ export default function DocumentsPage() {
                     >
                       <ExternalLink className="w-4 h-4" />
                     </a>
-                    {canDelete(doc) && (
+                    {canChange(doc) && (
                       <button
                         type="button"
                         onClick={() => setToDelete(doc)}
@@ -255,7 +252,7 @@ export default function DocumentsPage() {
         documentId={reading?.id ?? null}
         name={reading?.name ?? ''}
         originalName={reading?.originalName ?? ''}
-        canEdit={reading !== null && canDelete(reading)}
+        canEdit={reading !== null && canChange(reading)}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['assets'] })}
       />
 

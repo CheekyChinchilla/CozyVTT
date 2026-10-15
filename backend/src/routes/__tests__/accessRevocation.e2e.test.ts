@@ -27,6 +27,9 @@ import request from 'supertest';
 
 jest.mock('../../services/sessionStore', () => ({
   destroyUserLoginSessions: jest.fn(async () => 1),
+  // Sign-in bookkeeping, not under test here; the real one is tested in
+  // services/__tests__/sessionStoreCap.test.ts.
+  capLoginSessions: jest.fn(async () => 0),
 }));
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
@@ -87,7 +90,8 @@ describe('revoking access ends the sessions already issued', () => {
   it('when an account is deleted', async () => {
     const res = await acting.delete(`/api/users/${doomedId}`);
     expect(res.status).toBe(200);
-    expect(destroyed).toHaveBeenCalledWith(doomedId);
+    // Ended inside the deletion's own transaction (services/accountDeletion).
+    expect(destroyed).toHaveBeenCalledWith(doomedId, undefined, expect.anything());
   });
 
   it('when a user deletes their own account, on every device', async () => {
@@ -101,7 +105,7 @@ describe('revoking access ends the sessions already issued', () => {
 
     const res = await agent.delete('/api/auth/account').send({ password: TEST_PASSWORD });
     expect(res.status).toBe(200);
-    expect(destroyed).toHaveBeenCalledWith(self.id);
+    expect(destroyed).toHaveBeenCalledWith(self.id, undefined, expect.anything());
   });
 });
 

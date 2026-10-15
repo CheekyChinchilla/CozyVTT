@@ -7,8 +7,8 @@ Prisma schema and migrations for CozyVTT. PostgreSQL 14+.
 The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by domain:
 
 **User & auth**
-- `User` — accounts with optional MFA
-- `PasswordResetToken` — short-lived (1h) reset tokens
+- `User` — accounts with optional MFA, which an administrator must turn on within 7 days
+- `PasswordResetToken` — password reset links (1 hour) and admin invitation links (7 days), stored as the SHA-256 of the token (`services/passwordResetTokens.ts`)
 
 **Campaigns & membership**
 - `Campaign` — game-system, vibe settings, spirit-layer config, status
@@ -41,13 +41,13 @@ The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by dom
   document; deleting the asset removes every link to it
 
 **Assets & messages**
-- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN; `uploadedById` becomes null when the uploader's account is deleted, and the file stays
+- `Asset` — file metadata (the actual files live in `backend/uploads/`); scoped GLOBAL / USER / CAMPAIGN. When the uploader's account is deleted, `uploadedById` becomes null on the uploads that stay (those in a campaign or the global library, and personal ones still in use or shared into a campaign); the avatar and every other personal upload are deleted, row and file (`services/accountDeletion.ts`)
 - `Message` — chat history (player, DM, system, dice rolls, character actions)
 - `DiceRoll` — historical dice rolls with breakdowns; `userId` becomes null when the roller's account is deleted, and the roll stays
 
 **Platform**
-- `SystemLog` — admin-visible audit log
-- `SystemSettings` — singleton row holding instance-wide config (theme, branding, registration policy, upload limits)
+- `SystemLog` — admin-visible audit log. The admin MFA rule also reads its rows: the policy's start date and each administrator's 7-day restart are lines there (`services/adminMfaPolicy.ts`)
+- `SystemSettings` — singleton row holding instance-wide config (setup state, instance name and timezone, registration policy, theme and branding, campaign export size limit; upload limits come from the environment)
 
 ## Enums
 
@@ -63,16 +63,16 @@ The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by dom
 | `LogLevel` | `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
 | `InvitationStatus` | `PENDING`, `ACCEPTED`, `DECLINED` |
 
-Note: `AssetType` includes `DOCUMENT` and `OTHER`, but the upload route rejects them — only MAP / TOKEN / AUDIO / AVATAR are accepted from clients. The two extra values are reserved for future use.
+Note: `AssetType` includes `OTHER`, but the upload route rejects it — only MAP / TOKEN / AUDIO / AVATAR / DOCUMENT are accepted from clients. `OTHER` is reserved for future use.
 
 ## Important constraints
 
 - **Email uniqueness** — `User.email` unique index, case-folded to lowercase before insert
-- **One DM per user per campaign** — enforced by application logic, not DB constraint, because the DM role is part of the membership row
-- **Cascade deletions** — deleting a campaign cascades to its memberships, maps, sessions, messages, dice rolls, creature templates, token templates, personal notes, and (campaign-scoped) assets
+- **One DM per campaign** — enforced in `routes/campaigns.ts`, not by a constraint, because the DM role is a value in the membership row. The database enforces one membership per user per campaign (`@@unique([userId, campaignId])`)
+- **Cascade deletions** — deleting a campaign removes its memberships, invitations, maps (and their explored memory), sessions, messages, dice rolls, creature templates and favourites, token templates, personal notes, dice macros and document links. Its campaign-scoped assets are kept: the delete route turns each into its uploader's USER asset first, and `Asset.campaignId` is `SetNull`
 - **Unbounded text is bounded by the validator, not the column** — `PersonalNote.content` is `TEXT`, which Postgres would let grow to a gigabyte. The 100,000-character limit lives in `validators/personalNotes.ts` so the column never has to change if it is revisited, and the list endpoint does not select the column at all
 - **Soft references** — `Character.campaignId` uses `SetNull` so deleting a campaign doesn't kill the player's character
-- **Deleting a user** keeps their chat messages, dice rolls and uploads with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they are that DM
+- **Deleting a user** keeps their chat messages, dice rolls and the uploads that stay (see `Asset` above) with the user column set to null. `Campaign.ownerId` still refuses the deletion: `services/accountDeletion.ts` passes a campaign they own to its sitting DM first, and refuses while they hold the DM seat of any campaign, owned or not, or own one with nobody in the seat. It also refuses the instance's only admin
 
 ## JSON columns
 
@@ -82,7 +82,7 @@ Several models use Prisma's `Json` type for flexibility:
 |---|---|
 | `Campaign.vibeSettings` | Vibe periods with color/audio config |
 | `Map.tokens` | Array of token objects (position, image, HP, conditions, stat block, etc.) |
-| `Map.annotations` | Drawings, markers, fog state |
+| `Map.annotations` | Kept for drawings and markers; always `[]` today (fog is `Map.fogData`) |
 | `Map.wallSegments` | Wall geometry (`WallSegment[]`) |
 | `Map.lights` | Light sources (`LightSource[]`) |
 | `Map.fogData` | Fog-of-war reveal state |
@@ -94,6 +94,11 @@ Several models use Prisma's `Json` type for flexibility:
 | `SystemLog.context` | Free-form context object |
 | `User.preferences` | Per-user theme + font choice |
 | `TokenTemplate.statBlock` | NPC stat block (`NpcStatBlock`) |
+| `TokenTemplate.size`, `CreatureTemplate.size` | Footprint in squares (`{ width, height }`) |
+| `TokenTemplate.hp` | `{ current, max, temp }`, or null |
+| `CreatureTemplate.statBlock` | The creature's stat block |
+| `CharacterTemplate.data` | A published template's sheet, validated as a character's is |
+| `SystemSettings.customThemeColors` | The instance's custom theme colours |
 
 ## Commands
 
@@ -110,21 +115,22 @@ npx prisma migrate deploy
 # Open Prisma Studio (web UI for browsing rows)
 npx prisma studio
 
-# Nuke the local dev DB and re-seed from scratch (DESTRUCTIVE)
+# Drop the local dev DB and rebuild it from the migrations (DESTRUCTIVE);
+# it then runs prisma/seed.ts, which seeds nothing yet
 npx prisma migrate reset
 ```
 
 ## Migration strategy
 
-- **Always** create migrations via `prisma migrate dev`. Never hand-edit migrations in version control.
+- Create schema migrations with Prisma's own tooling (`prisma migrate dev`, or `prisma migrate diff` where `migrate dev` refuses to run; `docs/DEVELOPMENT.md` shows both). A migration that moves data is written by hand in SQL, and has to be safe to run twice and safe to fail half-way: `20260417000000_migrate_light_bright_dim`, which rewrites every map's lights, is the one so far. Never edit a migration that has shipped: a database that already ran it would no longer match the file.
 - **Production deployments** run `npx prisma migrate deploy` on backend startup — this only applies migrations that haven't run on the target DB. It never modifies existing migration history.
 - The `migrations/` directory is **tracked in git**. Every PR that touches `schema.prisma` should also commit the generated migration file alongside it.
 - Migrations are forward-only. There's no `prisma migrate down`. To "revert," write a new migration that undoes the previous change.
 
 ## Security notes
 
-- **No raw queries with user input.** All DB access goes through Prisma, which parameterizes for us. SQL injection is not a vector.
+- **No raw queries with user input.** The application's queries go through Prisma, and its raw SQL only as tagged `$queryRaw` and `$executeRaw` templates, which parameterize; nothing outside the tests uses the `Unsafe` forms. The exceptions are the session store (`connect-pg-simple`, with its own `pg` pool) and backup and restore (`pg_dump` and `psql`).
 - **Password hashing happens at the application layer**, not the database. Argon2id; see `backend/src/services/auth.ts`.
 - **MFA backup codes are hashed** with Argon2id before storage (`backend/src/utils/backupCodes.ts`). Plaintext is shown to the user exactly once, at setup or when they regenerate them.
-- **Session data is stored via `express-session` + `connect-pg-simple`**, in its own `session` table (managed by the session middleware, not this schema).
-- **File paths are stored relatively** (e.g. `uploads/maps/global/<uuid>.png`), never absolute. Path-traversal mitigation lives at the upload layer.
+- **Session data is stored via `express-session` + `connect-pg-simple`**, in its own `session` table (managed by the session middleware, not this schema). Because no migration creates it, `prisma migrate dev` reports drift on a database the backend has run against and offers to reset it, and `prisma db push` offers to drop the table; never accept either. (On the throwaway test database the backend suite uses, the drop does no harm: the jest run makes the table again, as `docs/DEVELOPMENT.md`, Running Tests, says.) `docs/DEVELOPMENT.md` (Running Migrations) shows how to generate a migration without that comparison. `migrate deploy`, which production runs, does not compare and is not affected.
+- **File paths are stored relatively** (e.g. `uploads/maps/global/<uuid>.png`) while `UPLOAD_DIR` is relative, as it is by default. Path-traversal mitigation lives at the upload layer.

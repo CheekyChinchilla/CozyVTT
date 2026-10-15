@@ -41,10 +41,18 @@ export interface SafeExtractOptions {
   maxTotalBytes: number;
 }
 
+/** A byte count in GiB for a message, such as "10 GiB". */
+function gibibytes(bytes: number): string {
+  const gib = bytes / (1024 * 1024 * 1024);
+  return gib >= 1 ? `${Number.isInteger(gib) ? gib : gib.toFixed(1)} GiB` : `${Math.ceil(bytes / (1024 * 1024))} MiB`;
+}
+
 /**
  * Extract every file entry in `directory` beneath `destRoot`, streaming each to
- * disk. Throws if any entry escapes `destRoot`, the entry count exceeds
- * `maxFiles`, or the running decompressed total exceeds `maxTotalBytes`.
+ * disk. Throws ArchiveRefusedError if any entry escapes `destRoot` or the
+ * entry count exceeds `maxFiles`, and ArchiveLimitError ('total') if the
+ * running decompressed total exceeds `maxTotalBytes`, each with a message for
+ * the person who sent the archive.
  *
  * Directory entries are created implicitly from each file's parent path.
  * Symlink entries are not honored — unzipper writes file contents only, so an
@@ -57,7 +65,9 @@ export async function extractArchiveSafely(
 ): Promise<void> {
   const fileEntries = directory.files.filter((f) => f.type === 'File');
   if (fileEntries.length > options.maxFiles) {
-    throw new Error(`Archive contains too many files (${fileEntries.length}, max ${options.maxFiles})`);
+    throw new ArchiveRefusedError(
+      `The archive holds ${fileEntries.length.toLocaleString('en-US')} files, more than the ${options.maxFiles.toLocaleString('en-US')} it may hold.`
+    );
   }
 
   const resolvedRoot = path.resolve(destRoot);
@@ -70,14 +80,14 @@ export async function extractArchiveSafely(
 
   for (const entry of fileEntries) {
     if (!isSafeArchivePath(entry.path)) {
-      throw new Error(`Unsafe file path in archive: ${entry.path}`);
+      throw new ArchiveRefusedError(`The archive has an unsafe file path, which a backup never has: ${entry.path}`);
     }
 
     const destPath = path.resolve(destRoot, entry.path);
     // Defense in depth: the resolved path must stay within destRoot even if the
     // string checks above are ever bypassed by a platform-specific quirk.
     if (destPath !== resolvedRoot && !destPath.startsWith(resolvedRoot + path.sep)) {
-      throw new Error(`Unsafe file path in archive: ${entry.path}`);
+      throw new ArchiveRefusedError(`The archive has an unsafe file path, which a backup never has: ${entry.path}`);
     }
 
     await fs.mkdir(path.dirname(destPath), { recursive: true });
@@ -88,7 +98,7 @@ export async function extractArchiveSafely(
       transform(chunk: Buffer, _enc, cb) {
         totalBytes += chunk.length;
         if (totalBytes > options.maxTotalBytes) {
-          cb(new Error('Archive exceeds maximum decompressed size (possible zip bomb)'));
+          cb(new ArchiveLimitError(`The archive unpacks to more than the ${gibibytes(options.maxTotalBytes)} a backup may hold.`, 'total'));
           return;
         }
         cb(null, chunk);
@@ -97,10 +107,8 @@ export async function extractArchiveSafely(
 
     // TODO(restore): stopping unzipper's entry stream part-way leaves the
     // backup file open, so each refused restore keeps a file handle and the
-    // deleted upload's disk space until the process ends. The caller also
-    // reads the whole directory before the maxFiles check above can run, which
-    // costs over a kilobyte an entry. unpackEntry and openArchiveFile below do
-    // both safely, and the restore should use them.
+    // deleted upload's disk space until the process ends. unpackEntry below
+    // does this safely, and the restore should use it.
     await pipeline(entry.stream(), counter, createWriteStream(destPath));
   }
 }

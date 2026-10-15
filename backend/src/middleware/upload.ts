@@ -13,6 +13,7 @@ import {
   getTempDirectory,
 } from '../utils/fileUtils';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import type { UploadMetadata } from '../validators/assets';
 
 /**
  * Extended request interface to include asset metadata
@@ -27,6 +28,8 @@ export interface UploadRequest extends Request {
    * anything.
    */
   detectedMimeType?: string;
+  /** The upload's name, description and tags, checked (validators/assets). */
+  uploadMetadata?: UploadMetadata;
 }
 
 /**

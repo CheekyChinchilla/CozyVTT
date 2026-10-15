@@ -216,6 +216,24 @@ describe('dice.roll', () => {
     expect(told[0]).toMatch(/^Rate limit exceeded/); // what the dice panel waits out
     client.disconnect();
   });
+
+  // A roll that fails its shape check used to be answered before it was
+  // counted, so a flood of them was never refused and each drew an error.
+  it('counts a malformed roll against the same ceiling', async () => {
+    const player = await newPlayer();
+    const client = await server.connectAndAuth(player.cookie, campaignId);
+    const errors = collect<{ message: string }>(client, 'error');
+
+    for (let i = 0; i < 60; i += 1) client.emit('dice.roll', { expression: 42 });
+    client.emit('dice.roll', { expression: '1d20', purpose: 'after the flood' });
+    await settle(() => errors.length >= 51);
+
+    // Fifty malformed rolls answered, then one notice for the rest and the valid roll.
+    expect(errors.filter((e) => CEILING_REFUSAL.test(e.message))).toHaveLength(1);
+    expect(errors).toHaveLength(51);
+    expect(await stored(player.id)).toBe(0);
+    client.disconnect();
+  });
 });
 
 describe('character.hp.update', () => {

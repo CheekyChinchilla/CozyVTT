@@ -15,6 +15,9 @@
  *
  * Each test uses its own distinct client IP, because the limiter keys on IP and
  * its store is shared for the lifetime of the module.
+ *
+ * Which routes each limiter is attached to is pinned in
+ * limiterWiring.e2e.test.ts, against the real routes.
  */
 
 import express, { Request, RequestHandler, Response } from 'express';
@@ -34,7 +37,7 @@ type Limiter = RequestHandler & { recordFailure?: (req: Request) => void };
  */
 function appWith(limiter: Limiter) {
   const app = express();
-  // Matches server.ts: trust exactly one hop, so `req.ip` is the client address
+  // Matches app.ts: trust exactly one hop, so `req.ip` is the client address
   // from X-Forwarded-For rather than the proxy's. `true` would trust any number
   // of hops, which lets a client spoof its own address — express-rate-limit
   // warns about precisely that, and production does not do it either.

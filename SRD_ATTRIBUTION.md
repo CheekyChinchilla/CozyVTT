@@ -32,7 +32,10 @@ The required notice is in [SRD_LICENSE.txt](SRD_LICENSE.txt) and reads:
 > licensed under the Creative Commons Attribution 4.0 International License,
 > available at https://creativecommons.org/licenses/by/4.0/legalcode.
 
-It is also shown in the app, on the creature library panel.
+The app shows a shorter credit in the creature library, with links to the
+SRD 5.1 and to the licence: at the foot of the library whenever it lists an
+SRD creature, and under the button that imports them, which only an
+administrator is offered, while no SRD creatures are imported.
 
 ## Open5e
 

@@ -18,6 +18,9 @@ When reporting a bug, please include:
 - Steps to reproduce
 - Expected vs actual behavior
 - Console output or screenshots if relevant
+- How it runs (Docker Compose, or installed without Docker), what is in front of it (the bundled nginx alone, a tunnel or another proxy), and whether an earlier version worked
+
+A security problem does not go in an issue, since issues are public: follow [SECURITY.md](../SECURITY.md). Never paste your `.env`, a secret, a backup file or a session cookie into an issue.
 
 ### 🤝 Become a Collaborator
 
@@ -43,10 +46,11 @@ If you become a collaborator, here's what the codebase expects:
   packages, so a diff containing one will not lint. Reach for `unknown` and a
   narrowing helper instead — `frontend/src/utils/errors.ts` and
   `backend/src/utils/prisma-json.ts` cover the two common cases
-- **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix
+- **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix. A new HTTP route fails `backend/src/routes/__tests__/routeInventory.test.ts` until it is listed there, with the file of a test that sends a request to it
 - **No new linter warnings** — `npm run lint` must pass cleanly in **both** `backend/` and `frontend/`; both run with `--max-warnings 0`
-- **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done), and CI runs the same commands
+- **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks with their own tests. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done). CI runs the same commands on every push and pull request into `dev` or `main`, and also checks the advisories in what an instance runs and builds the production images, starting them for the browser smoke tests. A pull request into `main` cannot merge until all five CI jobs pass; a push to `dev` is reported on, not blocked
 - **Documentation is part of the change** — if you alter a route, an event, a sheet field or anything a user sees, update the affected document in the same commit
+- **A dependency comes with its licence entry** — adding, removing or moving a package to a new major version updates `THIRD_PARTY_NOTICES.txt` (every package in a project's `dependencies`, by its major version line, with the licence its lockfile records) and, for a main library, `THIRD_PARTY_LICENSES.md`, in the same commit. `backend/src/__tests__/thirdPartyLicences.test.ts` fails until they match the lockfiles. A package that runs a script when it installs also needs its `allowScripts` entry ([DEVELOPMENT.md](DEVELOPMENT.md#1-install-dependencies)), which `dependencySources.test.ts` checks
 
 ### Security
 
@@ -59,8 +63,8 @@ If you become a collaborator, here's what the codebase expects:
 ### Styling and themes
 
 CozyVTT ships 16 themes, including four dark ones, plus user-defined custom colors. Two rules keep
-every screen working across all of them — both are enforced by tests, so breaking them fails the
-build rather than showing up as an unreadable screen for someone using a theme you didn't try:
+every screen working across all of them. The first is enforced by a test, so breaking it fails the
+build; nothing checks the second, so it falls to you and the review:
 
 - **Never use a raw Tailwind palette color** (`bg-red-50`, `text-stone-500`, `text-blue-600`) in
   themed UI. They keep their light-mode appearance on dark themes. Use the semantic tokens —

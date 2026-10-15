@@ -20,13 +20,20 @@ import { ArchiveRefusedError } from '../utils/archive';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
 import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
+import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
+import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
 import type { Prisma } from '@prisma/client';
 import { errorMessage } from '../utils/errors';
+import { inSerializableTransaction } from '../utils/serializable';
 import { toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
 import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
+import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
+import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validators/inviteSearchLimits';
+import { escapeLikePattern } from '../utils/likePattern';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -102,6 +109,18 @@ async function removeUploadedArchive(file: Express.Multer.File | undefined): Pro
  * Campaign Routes
  * Campaign Endpoints
  */
+
+/**
+ * GET /api/campaigns/left, /left/:campaignId, /left/:campaignId/notes and
+ * /left/:campaignId/notes/:noteId
+ * The caller's notes and dice macros from campaigns they have left (see
+ * routes/leftCampaigns.ts). Before the /:campaignId routes below, which would
+ * read "left" as a campaign id.
+ */
+router.get('/left', authenticated, listLeftCampaigns);
+router.get('/left/:campaignId', authenticated, getLeftCampaign);
+router.get('/left/:campaignId/notes', authenticated, leftNotesDownloadLimiter, getLeftCampaignNotes);
+router.get('/left/:campaignId/notes/:noteId', authenticated, getLeftCampaignNote);
 
 /**
  * GET /api/campaigns
@@ -270,9 +289,9 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
         // PERFORMANCE: return map/character METADATA only. The full
         // token/wall/fog/light blobs and full character sheets are unbounded and
         // were never used from this payload — the active map's full data loads via
-        // GET /api/maps/:id (spirit-filtered) and character sheets via
-        // GET /api/characters/:id. Frontend only reads ids + a few metadata fields
-        // from these arrays (map move-to-map, token ownership).
+        // GET /api/campaigns/:campaignId/maps/:id (spirit-filtered) and character
+        // sheets via GET /api/characters/:id. Frontend only reads ids + a few
+        // metadata fields from these arrays (map move-to-map, token ownership).
         maps: {
           select: {
             id: true,
@@ -661,14 +680,39 @@ router.delete('/:campaignId', authenticated, async (req: AuthenticatedRequest, r
 });
 
 /**
- * GET /api/campaigns/:campaignId/invitable-users
- * List all platform users who can be invited to this campaign.
- * Excludes: existing members and users with a pending invitation.
+ * GET /api/campaigns/:campaignId/invitable-users?search=<part of a name>
+ * Search the accounts that can be invited to this campaign by display name.
+ * A search of INVITE_SEARCH_MIN_LENGTH or more characters finds names that
+ * contain it; a shorter one finds only names that are exactly it, so a
+ * one-character name can still be invited without listing everyone. Answers
+ * nobody for an empty search, and at most INVITE_SEARCH_MAX_RESULTS, with
+ * `hasMore` when there were more.
+ * Excludes: existing members, users with a pending invitation, and accounts
+ * still waiting for an administrator's approval.
  * Requires: Campaign DM role
+ *
+ * Any user can create a campaign and so become a DM, so this must never hand
+ * out the whole user directory: it used to, unpaged.
  */
 router.get('/:campaignId/invitable-users', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
+    const raw: unknown = req.query.search;
+    if (raw !== undefined && typeof raw !== 'string') {
+      return res.status(400).json({ error: 'Validation Error', message: 'Send the search once, as text.' });
+    }
+    // Display names are stored in NFC, so an accent typed as its own mark
+    // still finds the name.
+    const search = (raw ?? '').normalize('NFC').trim();
+    if (search.length > MAX_DISPLAY_NAME_LENGTH) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `A display name is at most ${MAX_DISPLAY_NAME_LENGTH} characters, so search for that many or fewer.`,
+      });
+    }
+    if (search.length === 0) {
+      return res.status(200).json({ users: [], hasMore: false });
+    }
 
     // Find existing member user IDs
     const memberships = await prisma.campaignMembership.findMany({
@@ -691,9 +735,17 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
     // DM can call this endpoint, and `sanitizeUser` only strips password/MFA
     // — it does NOT strip email. Returning emails here would let any DM
     // harvest every account's email address via the invite picker.
-    const users = await prisma.user.findMany({
-      where: { id: { notIn: excludedIds } },
-      orderBy: { displayName: 'asc' },
+    const found = await prisma.user.findMany({
+      where: {
+        id: { notIn: excludedIds },
+        isApproved: true,
+        // Escaped both ways, or a search of `%%`, or `%` alone, would match every name.
+        displayName: search.length < INVITE_SEARCH_MIN_LENGTH
+          ? { equals: escapeLikePattern(search), mode: 'insensitive' }
+          : { contains: escapeLikePattern(search), mode: 'insensitive' },
+      },
+      orderBy: [{ displayName: 'asc' }, { id: 'asc' }],
+      take: INVITE_SEARCH_MAX_RESULTS + 1,
       select: {
         id: true,
         displayName: true,
@@ -701,7 +753,10 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
       },
     });
 
-    return res.status(200).json({ users });
+    return res.status(200).json({
+      users: found.slice(0, INVITE_SEARCH_MAX_RESULTS),
+      hasMore: found.length > INVITE_SEARCH_MAX_RESULTS,
+    });
   } catch (error) {
     logger.error('Error fetching invitable users', { err: error });
     return res.status(500).json({
@@ -716,9 +771,10 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
  * Invite a user to join the campaign.
  * Creates a pending invitation that the user must accept.
  * Requires: Campaign DM role
- * Campaign membership management
+ * An invitation that asks for an email counts against the DM's hourly
+ * ceiling on invitation emails (middleware/invitationEmailLimiter).
  */
-router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
     const parsed = CampaignInviteSchema.safeParse(req.body);
@@ -738,12 +794,14 @@ router.post('/:campaignId/invite', campaignDM, async (req: AuthenticatedRequest,
     // no email.
     const wantsEmail = sendEmail === true;
 
-    // Check if user exists
+    // Check if user exists. An account still waiting for an administrator's
+    // approval cannot sign in to accept, and is answered as no account, so
+    // the invite route does not tell a DM which accounts are waiting.
     const user = await prisma.user.findUnique({
       where: { id: userId },
     });
 
-    if (!user) {
+    if (!user || !user.isApproved) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'User not found',
@@ -911,62 +969,47 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
   try {
     const { campaignId, userId } = req.params;
 
-    // Find the membership
-    const membership = await prisma.campaignMembership.findUnique({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
-        },
-      },
+    // Who the member is, and the removal, in one serializable transaction
+    // (utils/serializable.ts): a DM hand-over landing in between could
+    // otherwise give this member the seat just before they were removed,
+    // leaving the campaign with no DM.
+    const refusal = await inSerializableTransaction(async (tx): Promise<{ status: number; message: string } | null> => {
+      const membership = await tx.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId } },
+        select: { role: true },
+      });
+      if (!membership) {
+        return { status: 404, message: 'User is not a member of this campaign' };
+      }
+
+      // CRITICAL: Cannot remove the DM
+      if (membership.role === 'DM') {
+        return { status: 400, message: 'Cannot remove the Dungeon Master from the campaign' };
+      }
+
+      // Nor the owner, who is often sitting as a player after handing the seat
+      // over. Taking the seat back needs a membership, and only the DM can add
+      // one, so removing the owner would shut them out of their own campaign with
+      // no way in except deleting it.
+      const campaign = await tx.campaign.findUnique({ where: { id: campaignId }, select: { ownerId: true } });
+      if (campaign?.ownerId === userId) {
+        return { status: 400, message: 'Cannot remove the campaign owner from their own campaign' };
+      }
+
+      // Delete the membership, and take their characters out of the campaign
+      // with it: a character that still named the campaign stayed readable by
+      // every member and editable by the DM, and each save the owner made was
+      // still sent to the table they had left.
+      await tx.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } });
+      await tx.campaignMembership.delete({ where: { userId_campaignId: { userId, campaignId } } });
+      return null;
     });
-
-    if (!membership) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'User is not a member of this campaign',
+    if (refusal) {
+      return res.status(refusal.status).json({
+        error: refusal.status === 404 ? 'Not Found' : 'Bad Request',
+        message: refusal.message,
       });
     }
-
-    // CRITICAL: Cannot remove the DM
-    if (membership.role === 'DM') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot remove the Dungeon Master from the campaign',
-      });
-    }
-
-    // Nor the owner, who is often sitting as a player after handing the seat
-    // over. Taking the seat back needs a membership, and only the DM can add
-    // one, so removing the owner would shut them out of their own campaign with
-    // no way in except deleting it.
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { ownerId: true },
-    });
-
-    if (campaign?.ownerId === userId) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot remove the campaign owner from their own campaign',
-      });
-    }
-
-    // Delete the membership, and take their characters out of the campaign
-    // with it: a character that still named the campaign stayed readable by
-    // every member and editable by the DM, and each save the owner made was
-    // still sent to the table they had left.
-    await prisma.$transaction([
-      prisma.character.updateMany({ where: { userId, campaignId }, data: { campaignId: null } }),
-      prisma.campaignMembership.delete({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId,
-          },
-        },
-      }),
-    ]);
 
     // A socket caches the campaign from when it authenticated, so without this
     // the person carries on playing until they close the tab. Best-effort: the
@@ -1026,70 +1069,57 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
       });
     }
 
-    // Find the membership
-    const membership = await prisma.campaignMembership.findUnique({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
-        },
-      },
-    });
-
-    if (!membership) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'User is not a member of this campaign',
+    // The member's role now, and the change, in one serializable transaction
+    // (utils/serializable.ts): a DM hand-over landing in between could
+    // otherwise give this member the seat just before this took it away,
+    // leaving the campaign with no DM, or a second DM could be made.
+    const outcome = await inSerializableTransaction(async (tx) => {
+      const membership = await tx.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId } },
+        select: { role: true },
       });
-    }
-
-    // CRITICAL: Cannot change the DM's role
-    if (membership.role === 'DM') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Cannot change the Dungeon Master\'s role',
-      });
-    }
-
-    // CRITICAL: Cannot promote to DM (only one DM allowed per campaign)
-    if (role === 'DM') {
-      // Check if a DM already exists
-      const existingDM = await prisma.campaignMembership.findFirst({
-        where: {
-          campaignId,
-          role: 'DM',
-        },
-      });
-
-      if (existingDM) {
-        return res.status(400).json({
-          error: 'Bad Request',
-          message: 'Campaign already has a Dungeon Master. Only one DM per campaign is allowed.',
-        });
+      if (!membership) {
+        return { ok: false, refused: { status: 404, error: 'Not Found', message: 'User is not a member of this campaign' } } as const;
       }
-    }
 
-    // Update the role
-    const updatedMembership = await prisma.campaignMembership.update({
-      where: {
-        userId_campaignId: {
-          userId,
-          campaignId,
-        },
-      },
-      data: { role },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            // SECURITY: never embed `email` — this payload is returned to
-            // DM-role users who shouldn't be able to harvest member emails.
+      // CRITICAL: Cannot change the DM's role
+      if (membership.role === 'DM') {
+        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'Cannot change the Dungeon Master\'s role' } } as const;
+      }
+
+      // CRITICAL: Cannot promote to DM while the campaign has one (only one DM per campaign)
+      if (role === 'DM' && (await tx.campaignMembership.findFirst({ where: { campaignId, role: 'DM' }, select: { userId: true } }))) {
+        return {
+          ok: false,
+          refused: {
+            status: 400,
+            error: 'Bad Request',
+            message: 'Campaign already has a Dungeon Master. Only one DM per campaign is allowed.',
+          },
+        } as const;
+      }
+
+      const updated = await tx.campaignMembership.update({
+        where: { userId_campaignId: { userId, campaignId } },
+        data: { role },
+        include: {
+          user: {
+            select: {
+              id: true,
+              displayName: true,
+              avatarUrl: true,
+              // SECURITY: never embed `email` — this payload is returned to
+              // DM-role users who shouldn't be able to harvest member emails.
+            },
           },
         },
-      },
+      });
+      return { ok: true, updated } as const;
     });
+    if (!outcome.ok) {
+      return res.status(outcome.refused.status).json({ error: outcome.refused.error, message: outcome.refused.message });
+    }
+    const updatedMembership = outcome.updated;
 
     // Same reason as the DM transfer below: a socket caches its role from when
     // it authenticated, so a demotion has to reach any open connection or the
@@ -1159,55 +1189,52 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
       });
     }
 
-    if (!(await canTransferDM(callerId, campaignId, platformRole))) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only the DM, the campaign owner, or an admin can transfer the DM role',
+    // Who may hand the seat over, who holds it, and the hand-over itself, in
+    // one serializable transaction (utils/serializable.ts), so the one-DM rule
+    // cannot be caught half-applied. Two hand-overs at once each read the same
+    // sitting DM and each seated their own member, leaving two DMs; now the
+    // second one runs again and sees the first.
+    const transfer = await inSerializableTransaction(async (tx) => {
+      if (!(await canTransferDM(callerId, campaignId, platformRole, tx))) {
+        return {
+          ok: false,
+          refused: { status: 403, error: 'Forbidden', message: 'Only the DM, the campaign owner, or an admin can transfer the DM role' },
+        } as const;
+      }
+
+      const incoming = await tx.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId: incomingId, campaignId } },
+        select: { role: true },
       });
-    }
+      if (!incoming) {
+        return { ok: false, refused: { status: 404, error: 'Not Found', message: 'That user is not a member of this campaign' } } as const;
+      }
+      if (incoming.role === 'DM') {
+        return { ok: false, refused: { status: 400, error: 'Bad Request', message: 'That member is already the Dungeon Master' } } as const;
+      }
 
-    const incoming = await prisma.campaignMembership.findUnique({
-      where: { userId_campaignId: { userId: incomingId, campaignId } },
-      select: { role: true },
-    });
-
-    if (!incoming) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'That user is not a member of this campaign',
+      // Every DM row is stepped down, so a campaign an older version left with
+      // two DMs comes out of this with one. A campaign with no DM row is not
+      // supposed to happen, but it is recoverable and this route is how you
+      // would recover it, so it is seated rather than the transfer refused.
+      const sitting = await tx.campaignMembership.findMany({
+        where: { campaignId, role: 'DM' },
+        select: { userId: true },
       });
-    }
-
-    if (incoming.role === 'DM') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'That member is already the Dungeon Master',
-      });
-    }
-
-    const outgoing = await prisma.campaignMembership.findFirst({
-      where: { campaignId, role: 'DM' },
-      select: { userId: true },
-    });
-
-    // Both writes or neither, so the one-DM rule cannot be caught half-applied.
-    await prisma.$transaction([
-      // A campaign with no DM row is not supposed to happen, but it is
-      // recoverable and this route is how you would recover it, so the demotion
-      // is skipped rather than the whole transfer refused.
-      ...(outgoing
-        ? [
-            prisma.campaignMembership.update({
-              where: { userId_campaignId: { userId: outgoing.userId, campaignId } },
-              data: { role: 'PLAYER' },
-            }),
-          ]
-        : []),
-      prisma.campaignMembership.update({
+      if (sitting.length > 0) {
+        await tx.campaignMembership.updateMany({ where: { campaignId, role: 'DM' }, data: { role: 'PLAYER' } });
+      }
+      await tx.campaignMembership.update({
         where: { userId_campaignId: { userId: incomingId, campaignId } },
         data: { role: 'DM' },
-      }),
-    ]);
+      });
+      return { ok: true, steppedDown: sitting.map((m) => m.userId) } as const;
+    });
+    if (!transfer.ok) {
+      return res.status(transfer.refused.status).json({ error: transfer.refused.error, message: transfer.refused.message });
+    }
+    const steppedDown = transfer.steppedDown;
+    const outgoing = steppedDown.length > 0 ? { userId: steppedDown[0] } : null;
 
     const memberships = await prisma.campaignMembership.findMany({
       where: { campaignId },
@@ -1229,8 +1256,8 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     // incoming one cannot use theirs. Best-effort: a socket layer that is not up
     // must not fail a transfer that is already committed.
     try {
-      if (outgoing) {
-        await applyRoleToLiveSockets(outgoing.userId, campaignId, 'PLAYER');
+      for (const previous of steppedDown) {
+        await applyRoleToLiveSockets(previous, campaignId, 'PLAYER');
       }
       await applyRoleToLiveSockets(incomingId, campaignId, 'DM');
 
@@ -1239,7 +1266,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
         previousDmId: outgoing?.userId ?? null,
         newDmId: incomingId,
       });
-      await followNewRoles(campaignId, outgoing ? [outgoing.userId, incomingId] : [incomingId]);
+      await followNewRoles(campaignId, [...steppedDown, incomingId]);
     } catch (error) {
       logger.error('DM transfer committed but live sockets were not updated', {
         err: error,
@@ -1268,7 +1295,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
 });
 
 /**
- * GET /api/admin/campaigns
+ * GET /api/campaigns/admin/all
  * Get all campaigns in the system (Admin only)
  * Requires: Admin role
  */
@@ -1536,7 +1563,10 @@ router.get('/:campaignId/dice-rolls', campaignMember, async (req: AuthenticatedR
       prisma.diceRoll.findMany({
         where,
         include: { user: { select: { id: true, displayName: true } } },
-        orderBy: { rolledAt: 'desc' },
+        // rolledAt has millisecond precision, so a table rolling at once can
+        // produce ties; the id keeps their order the same on every request
+        // and across pages.
+        orderBy: [{ rolledAt: 'desc' }, { id: 'desc' }],
         take: limitNum,
         skip: offsetNum,
       }),

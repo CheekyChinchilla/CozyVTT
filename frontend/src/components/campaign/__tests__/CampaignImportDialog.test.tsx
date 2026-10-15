@@ -9,6 +9,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const { previewCampaignImport, importCampaign } = vi.hoisted(() => ({ previewCampaignImport: vi.fn(), importCampaign: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: { previewCampaignImport, importCampaign } }));
@@ -113,5 +114,106 @@ describe('CampaignImportDialog done screen', () => {
     expect(screen.getByText('Maps:').nextElementSibling?.textContent).toBe('2');
     expect(screen.queryByText('Left out')).toBeNull();
     expect(screen.queryByText('Changed to fit')).toBeNull();
+  });
+});
+
+/**
+ * The import window is a dialog to assistive technology: announced with its
+ * name when it opens, keeping keyboard focus inside it, and closed by Escape.
+ * It was a plain overlay, so a screen reader was not told it had opened and
+ * Tab walked out of it onto the dashboard behind.
+ */
+describe('CampaignImportDialog as a dialog', () => {
+  it('is announced as a dialog named Import Campaign', () => {
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+    const dialog = screen.getByRole('dialog', { name: 'Import Campaign' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+  });
+
+  it('keeps keyboard focus inside it', async () => {
+    render(
+      <>
+        <button type="button">Behind the dialog</button>
+        <CampaignImportDialog isOpen onClose={() => undefined} />
+      </>
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Import Campaign' });
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+
+    for (let i = 0; i < 4; i++) {
+      await userEvent.tab();
+      expect(dialog.contains(document.activeElement)).toBe(true);
+    }
+    await userEvent.tab({ shift: true });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('lets the keyboard open the file picker', async () => {
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+    const picker = screen.getByRole('button', { name: 'Choose a campaign archive' });
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    const click = vi.spyOn(input, 'click');
+    // The dialog puts focus on its first control as it opens; wait for that.
+    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
+
+    picker.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(click).toHaveBeenCalled();
+  });
+
+  it('closes on Escape', async () => {
+    const onClose = vi.fn();
+    render(<CampaignImportDialog isOpen onClose={onClose} />);
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+/**
+ * While an import runs the dialog cannot be closed. The request carries on
+ * after the window is gone, so the person was left not knowing whether a
+ * campaign had been made, and reopening the window showed the old result.
+ */
+describe('CampaignImportDialog while an import is running', () => {
+  const preview = {
+    formatVersion: 1, exportedAt: '2026-10-06T00:00:00.000Z', exportedFrom: 'CozyVTT v1.5.1', campaignName: 'Keep',
+    gameSystem: 'DND_5E', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0, assetCount: 1,
+    includesAudio: false, totalSizeBytes: 100,
+  };
+
+  async function startImport(onClose: () => void) {
+    previewCampaignImport.mockResolvedValue(preview);
+    let finish: (result: Record<string, unknown>) => void = () => undefined;
+    importCampaign.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
+    render(<CampaignImportDialog isOpen onClose={onClose} />);
+    chooseArchive();
+    fireEvent.click(await screen.findByRole('button', { name: /Import Campaign/ }));
+    await screen.findByText('Importing campaign...');
+    return finish;
+  }
+
+  it('ignores Escape, the backdrop and the X', async () => {
+    const onClose = vi.fn();
+    await startImport(onClose);
+
+    await userEvent.keyboard('{Escape}');
+    const backdrop = document.querySelector('[aria-hidden="true"].fixed.inset-0') as HTMLElement;
+    fireEvent.click(backdrop);
+    fireEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Close dialog' })).toBeDisabled();
+    expect(screen.getByText('Importing campaign...')).toBeTruthy();
+  });
+
+  it('can be closed again once the import has finished', async () => {
+    const onClose = vi.fn();
+    const finish = await startImport(onClose);
+
+    finish({ campaignId: 'c1', campaignName: 'Keep', mapCount: 3, tokenCount: 12, creatureCount: 0, tokenTemplateCount: 0 });
+    await screen.findByText('Import Complete!');
+    await userEvent.keyboard('{Escape}');
+
+    expect(onClose).toHaveBeenCalled();
   });
 });

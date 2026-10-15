@@ -184,6 +184,10 @@ export default function NewCharacterModal({
       return;
     }
 
+    // TODO(sheets): the server and the sheet editors take 200 characters
+    // (SHEET_NAME_MAX), and 100 itself passes here though the message says
+    // "less than 100". The note below also promises a redirect to the editor
+    // that creation does not do.
     if (name.trim().length > 100) {
       setError('Character name must be less than 100 characters');
       return;

@@ -15,11 +15,11 @@
 // CampaignContext `useCampaign()` hook.
 // ============================================
 
-import { useQuery, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, useQuery, type QueryClient } from '@tanstack/react-query';
 import campaignService from '@/services/campaign.service';
 import characterService from '@/services/character.service';
 import { api } from '@/services/api';
-import type { AssetScope, AssetType, Character } from '@/types';
+import type { AssetScope, AssetType, Character, CharacterSummary, PersonalNoteSummary } from '@/types';
 
 export const queryKeys = {
   campaigns: ['campaigns'] as const,
@@ -29,6 +29,9 @@ export const queryKeys = {
   characterTemplates: (params: CharacterTemplateListParams) =>
     ['character-templates', params] as const,
   serverConfig: ['server-config'] as const,
+  leftCampaigns: ['left-campaigns'] as const,
+  leftCampaignNote: (campaignId: string, noteId: string, updatedAt: string) =>
+    ['left-campaign-note', campaignId, noteId, updatedAt] as const,
 };
 
 /**
@@ -53,11 +56,40 @@ export function useCampaignsQuery() {
   });
 }
 
+/** Campaigns the user has left that still hold their notes or dice macros. */
+export function useLeftCampaignsQuery() {
+  return useQuery({
+    queryKey: queryKeys.leftCampaigns,
+    queryFn: async () => (await api.listLeftCampaigns()).campaigns,
+  });
+}
+
+/**
+ * One note, with its text, from a campaign the user has left. Nobody can edit
+ * it while they are out of the campaign, and the key carries its last edit, so
+ * a fetched note is kept and a Download reuses it. No retry: a refusal for too
+ * many requests is shown, and a retry would only add to them.
+ */
+export function leftCampaignNoteQuery(campaignId: string, note: Pick<PersonalNoteSummary, 'id' | 'updatedAt'>) {
+  return queryOptions({
+    queryKey: queryKeys.leftCampaignNote(campaignId, note.id, note.updatedAt),
+    queryFn: async () => (await api.getLeftCampaignNote(campaignId, note.id)).note,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 export function useCharactersQuery() {
   return useQuery({
     queryKey: queryKeys.characters,
     queryFn: () => characterService.getCharacters(),
   });
+}
+
+/** A character as the cached list holds it: without its sheet, as the server lists it. */
+export function toCharacterSummary(character: Character): CharacterSummary {
+  const { data: _sheet, ...summary } = character;
+  return summary;
 }
 
 /**
@@ -66,17 +98,18 @@ export function useCharactersQuery() {
  *
  * A page that saves or creates a character outside the Characters page has to
  * do this. The list is otherwise served from cache when it was fetched less
- * than 30 seconds ago, and a card clicked before a background refetch lands
- * hands its viewer, its export and its editor the old copy. An edit made from
- * that copy is refused as out of date, which reads as the earlier save having
- * been lost. Writing the character first covers that window; the refetch then
- * picks up anything else that changed.
+ * than 30 seconds ago, so a new character would be missing from it and a
+ * renamed one would show its old name. Writing the character first covers
+ * that window; the refetch then picks up anything else that changed. The list
+ * holds no sheets: the Characters page fetches a character's sheet by id each
+ * time it opens or exports one.
  */
 export function storeCharacterInList(client: QueryClient, stored: Character): void {
-  client.setQueryData<Character[]>(queryKeys.characters, (list) =>
+  const listed = toCharacterSummary(stored);
+  client.setQueryData<CharacterSummary[]>(queryKeys.characters, (list) =>
     list && (list.some((c) => c.id === stored.id)
-      ? list.map((c) => (c.id === stored.id ? stored : c))
-      : [stored, ...list])
+      ? list.map((c) => (c.id === stored.id ? listed : c))
+      : [listed, ...list])
   );
   void client.invalidateQueries({ queryKey: queryKeys.characters });
 }

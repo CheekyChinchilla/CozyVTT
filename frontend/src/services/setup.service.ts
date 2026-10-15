@@ -21,6 +21,11 @@ export interface SetupStatusResponse {
 // ============================================
 
 export interface InitializeSetupRequest {
+  /**
+   * The one-time token the backend printed in its log at start, or the
+   * SETUP_TOKEN value from .env. The server refuses the wizard without it.
+   */
+  setupToken: string;
   email: string;
   password: string;
   displayName: string;
@@ -30,7 +35,6 @@ export interface InitializeSetupRequest {
    * not cost an admin their single opportunity to run setup.
    */
   instanceName?: string;
-  timezone?: string;
   allowRegistration?: boolean;
 }
 

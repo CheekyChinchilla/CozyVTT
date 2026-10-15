@@ -51,8 +51,6 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
 
   const { user } = useAuth();
   const isAdmin = user?.platformRole === PlatformRole.ADMIN;
-  /** Edit rights: the uploader or an admin. The server decides for real. */
-  const canEdit = (doc: CampaignDocument) => isAdmin || (doc.uploadedBy !== null && doc.uploadedBy.id === user?.id);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -311,7 +309,10 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         name={reading?.name ?? ''}
         originalName={reading?.originalName ?? ''}
         layer="overlay"
-        canEdit={reading !== null && canEdit(reading)}
+        // Edit rights follow the rule for deleting, which turns on facts this
+        // page does not have, so the list says, per document, whether the
+        // server will take an edit from this user.
+        canEdit={reading?.canEdit === true}
         onSaved={(id, fileSize) => setShared((prev) => prev.map((d) => (d.id === id ? { ...d, fileSize } : d)))}
       />
 

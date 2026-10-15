@@ -58,10 +58,21 @@ import { BackstorySection } from './components/BackstorySection';
 import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
+import { LIMIT_NOTE_CLASS } from './limitNoteClass';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { setCoC7eSkillField } from './skillEdits';
 import { cocDodgeBase, settleDodge } from './dodge';
+import {
+  cocHitPoints,
+  cocMagicPoints,
+  cocDamageBonusAndBuild,
+  cocMoveRate,
+  cocMaxSanity,
+  cocHalfAndFifth,
+} from './derivedStats';
 import { parsePossessions, formatPossessions } from './possessions';
+import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -132,44 +143,6 @@ const COC_APPEARANCE_FIELDS: { key: keyof CoC7eAppearance; label: string }[] = [
   { key: 'skin', label: 'Skin' },
 ];
 
-const calculateDamageBonusAndBuild = (str: number, siz: number): { damageBonus: string; build: number } => {
-  const total = str + siz;
-  if (total <= 64) return { damageBonus: '-2', build: -2 };
-  if (total <= 84) return { damageBonus: '-1', build: -1 };
-  if (total <= 124) return { damageBonus: '0', build: 0 };
-  if (total <= 164) return { damageBonus: '+1d4', build: 1 };
-  if (total <= 204) return { damageBonus: '+1d6', build: 2 };
-  if (total <= 284) return { damageBonus: '+2d6', build: 3 };
-  if (total <= 364) return { damageBonus: '+3d6', build: 4 };
-  if (total <= 444) return { damageBonus: '+4d6', build: 5 };
-  return { damageBonus: '+5d6', build: 6 };
-};
-
-/**
- * Calculate Move Rate from STR, DEX, SIZ
- */
-const calculateMoveRate = (str: number, dex: number, siz: number, age: number): number => {
-  // Standard Move Rate is 8 for most investigators
-  // Reduced if both DEX and STR are less than SIZ
-  // Further reduced for age
-  let moveRate = 8;
-
-  if (str < siz && dex < siz) {
-    moveRate = 7;
-  } else if (str > siz && dex > siz) {
-    moveRate = 9;
-  }
-
-  // Age modifications
-  if (age >= 40 && age <= 49) moveRate -= 1;
-  if (age >= 50 && age <= 59) moveRate -= 2;
-  if (age >= 60 && age <= 69) moveRate -= 3;
-  if (age >= 70 && age <= 79) moveRate -= 4;
-  if (age >= 80) moveRate -= 5;
-
-  return Math.max(1, moveRate);
-};
-
 /**
  * CallOfCthulhu7eCharacterEditor - Editable CoC 7e character sheet
  */
@@ -189,6 +162,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const data = character.data as CoC7eFormData;
+  // The Keeper is sent the notes field always, and nobody else ever is.
+  const keeperNotesShown = typeof data.notes === 'string';
 
   // Form state
   const [formData, setFormData] = useState<CoC7eFormData>(() => ({
@@ -281,8 +256,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     (Object.keys(formData.characteristics) as (keyof CoC7eCharacteristics)[]).forEach((char) => {
       const entry = formData.characteristics[char];
       const regular = entry.regular || 0;
-      const half = Math.floor(regular / 2);
-      const fifth = Math.floor(regular / 5);
+      const { half, fifth } = cocHalfAndFifth(regular);
       if (entry.half !== half || entry.fifth !== fifth) changed = true;
       updated[char] = { ...entry, half, fifth };
     });
@@ -321,17 +295,17 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       const pow = char.POW?.regular || 0;
 
       // HP
-      const maxHP = Math.floor((con + siz) / 10);
+      const maxHP = cocHitPoints(con, siz);
       const majorWoundThreshold = Math.floor(maxHP / 2);
 
       // Magic Points
-      const maxMP = Math.floor(pow / 5);
+      const maxMP = cocMagicPoints(pow);
 
       // Damage Bonus and Build
-      const { damageBonus, build } = calculateDamageBonusAndBuild(str, siz);
+      const { damageBonus, build } = cocDamageBonusAndBuild(str, siz);
 
       // Move Rate
-      const moveRate = calculateMoveRate(str, dex, siz, age);
+      const moveRate = cocMoveRate(str, dex, siz, age);
 
       // Dodge's base is half DEX. Its value is the base plus the skill points
       // and improvements the investigator has put into it, so it is kept.
@@ -342,7 +316,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       // Max Sanity (99 - Cthulhu Mythos)
       const cthulhuMythos = formData.skills?.cthulhuMythos?.currentValue || 0;
-      const maxSanity = 99 - cthulhuMythos;
+      const maxSanity = cocMaxSanity(cthulhuMythos);
 
       setFormData((prev) => {
         const storedDodge = prev.skills?.dodge;
@@ -471,7 +445,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${formData.personalDetails?.name || 'Investigator'} Token`);
+          assetFormData.append('name', assetNameFrom(`${formData.personalDetails?.name || 'Investigator'} Token`));
 
           const uploadResponse = await api.uploadAsset(assetFormData);
           const assetId = uploadResponse.asset.id;
@@ -688,6 +662,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             type="text"
             value={formData.investigatorName || ''}
             onChange={(e) => setFormData({ ...formData, investigatorName: e.target.value })}
+            maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
             className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
@@ -1080,6 +1055,8 @@ value={formData.wealth?.cash}
           onChange={(possessions) => setFormData((prev) => ({ ...prev, possessions }))}
           parse={parsePossessions}
           format={formatPossessions}
+          max={SHEET_LIST_MAX}
+          noteClassName={LIMIT_NOTE_CLASS}
           placeholder="List possessions, one per line. Format: Item Name - Notes"
           rows={8}
           className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sepia-500"
@@ -1167,6 +1144,8 @@ value={formData.wealth?.cash}
               }}
               parse={parseLineList}
               format={formatLineList}
+              max={SHEET_LIST_MAX}
+              noteClassName={LIMIT_NOTE_CLASS}
               placeholder={'Contact Nyarlathotep\nElder Sign'}
               className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
             />
@@ -1174,18 +1153,24 @@ value={formData.wealth?.cash}
         </div>
       </div>
 
-      {/* Keeper's Notes. The sheet has always displayed these when reading it;
-          there was no way to write them. */}
-      <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-3">Keeper&apos;s Notes</h3>
-        <textarea
-          rows={4}
-          value={formData.notes ?? ''}
-          onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-          placeholder="Notes kept by the Keeper about this investigator"
-          className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
-        />
-      </div>
+      {/* Keeper's Notes. The server sends them to the DM of the character's
+          campaign alone, always (empty when nothing is written), and keeps
+          them as stored when anyone else saves, so the box is offered only
+          when the sheet arrived with the field. */}
+      {keeperNotesShown && (
+        <div>
+          <h3 className="text-lg font-bold text-sepia-900 mb-1">Keeper&apos;s Notes</h3>
+          <p className="text-sm text-sepia-700 mb-3">Only you, as the Keeper, can see or change these.</p>
+          <textarea
+            rows={4}
+            value={formData.notes ?? ''}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+            placeholder="Notes kept by the Keeper about this investigator"
+            aria-label="Keeper's Notes"
+            className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+          />
+        </div>
+      )}
     </div>
   );
 

@@ -5,6 +5,12 @@
 
 import { z } from 'zod';
 import { themeColorSchema } from './sheetChrome';
+import {
+  sheetCharacterNameSchema,
+  sheetShortTextSchema as shortText,
+  sheetLongTextSchema as longText,
+} from './sheetText';
+import { sheetList } from './sheetLists';
 
 /**
  * Characteristic
@@ -35,7 +41,7 @@ const characteristicsSchema = z.object({
 const hitPointsSchema = z.object({
   maximum: z.number().int().min(1),
   current: z.number().int(),
-  formula: z.string(),
+  formula: shortText,
   majorWoundThreshold: z.number().int().min(1),
 });
 
@@ -46,7 +52,7 @@ const sanitySchema = z.object({
   starting: z.number().int().min(0).max(99),
   maximum: z.number().int().min(0).max(99),
   current: z.number().int().min(0).max(99),
-  formula: z.string(),
+  formula: shortText,
 });
 
 /**
@@ -55,7 +61,7 @@ const sanitySchema = z.object({
 const magicPointsSchema = z.object({
   maximum: z.number().int().min(0),
   current: z.number().int().min(0),
-  formula: z.string(),
+  formula: shortText,
 });
 
 /**
@@ -64,7 +70,7 @@ const magicPointsSchema = z.object({
  */
 const luckSchema = z.object({
   score: z.number().int().min(0).max(99),
-  notes: z.string().optional(),
+  notes: longText.optional(),
 });
 
 /**
@@ -72,7 +78,7 @@ const luckSchema = z.object({
  */
 const dodgeSchema = z.object({
   value: z.number().int().min(0).max(100),
-  formula: z.string(),
+  formula: shortText,
   improvementChecked: z.boolean(),
 });
 
@@ -84,7 +90,7 @@ const derivedStatsSchema = z.object({
   sanity: sanitySchema,
   magicPoints: magicPointsSchema,
   luck: luckSchema,
-  damageBonus: z.string(),
+  damageBonus: shortText,
   build: z.number().int(),
   moveRate: z.number().int().min(0),
   dodge: dodgeSchema,
@@ -97,8 +103,8 @@ const skillSchema = z.object({
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
-  specialization: z.string().nullable().optional(),
-  notes: z.string().optional(),
+  specialization: shortText.nullable().optional(),
+  notes: longText.optional(),
 });
 
 /**
@@ -115,7 +121,7 @@ const fightingSkillSchema = z.object({
  */
 const fightingSkillsSchema = z.object({
   brawl: fightingSkillSchema,
-  custom: z.array(fightingSkillSchema),
+  custom: sheetList(fightingSkillSchema),
 });
 
 /**
@@ -134,14 +140,14 @@ const firearmsSkillsSchema = z.object({
   handgun: firearmsSkillSchema,
   rifle: firearmsSkillSchema,
   shotgun: firearmsSkillSchema,
-  custom: z.array(firearmsSkillSchema),
+  custom: sheetList(firearmsSkillSchema),
 });
 
 /**
  * Language skill
  */
 const languageSkillSchema = z.object({
-  language: z.string().min(1),
+  language: shortText.min(1),
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
@@ -151,7 +157,7 @@ const languageSkillSchema = z.object({
  * Science skill
  */
 const scienceSkillSchema = z.object({
-  specialization: z.string().min(1),
+  specialization: shortText.min(1),
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
@@ -181,8 +187,8 @@ const skillsSchema = z.object({
   history: skillSchema,
   intimidate: skillSchema,
   jump: skillSchema,
-  languageOwn: skillSchema.extend({ language: z.string().min(1) }),
-  languageOther: z.array(languageSkillSchema),
+  languageOwn: skillSchema.extend({ language: shortText.min(1) }),
+  languageOther: sheetList(languageSkillSchema),
   law: skillSchema,
   libraryUse: skillSchema,
   listen: skillSchema,
@@ -198,7 +204,7 @@ const skillsSchema = z.object({
   psychoanalysis: skillSchema,
   psychology: skillSchema,
   ride: skillSchema,
-  science: z.array(scienceSkillSchema),
+  science: sheetList(scienceSkillSchema),
   sleightOfHand: skillSchema,
   spotHidden: skillSchema,
   stealth: skillSchema,
@@ -208,7 +214,7 @@ const skillsSchema = z.object({
   track: skillSchema,
   // A custom skill is named by the player, and the sheet and the roll list
   // show that name.
-  customSkills: z.array(skillSchema.extend({ name: z.string().optional() })),
+  customSkills: sheetList(skillSchema.extend({ name: shortText.optional() })),
 });
 
 /**
@@ -216,23 +222,23 @@ const skillsSchema = z.object({
  * Most fields optional for quick weapon addition
  */
 const weaponSchema = z.object({
-  name: z.string().min(1),
+  name: shortText.min(1),
   // A text box on the sheet; empty when cleared.
-  skill: z.string().optional(),
+  skill: shortText.optional(),
   skillValue: z.number().int().min(0).max(100).optional(),
-  damage: z.string().optional(),
-  range: z.string().optional(),
+  damage: shortText.optional(),
+  range: shortText.optional(),
   attacks: z.number().int().min(1).optional(),
   ammo: z.number().int().min(0).nullable().optional(),
   malfunction: z.number().int().min(0).max(100).nullable().optional(),
-  notes: z.string().optional(),
+  notes: longText.optional(),
 });
 
 /**
  * Combat
  */
 const combatSchema = z.object({
-  weapons: z.array(weaponSchema),
+  weapons: sheetList(weaponSchema),
 });
 
 /**
@@ -251,7 +257,7 @@ const conditionsSchema = z.object({
  */
 const spellsAndMythosSchema = z.object({
   cthulhuMythos: z.number().int().min(0).max(100),
-  spells: z.array(z.string()),
+  spells: sheetList(shortText),
 });
 
 /**
@@ -259,8 +265,8 @@ const spellsAndMythosSchema = z.object({
  * Notes optional
  */
 const possessionSchema = z.object({
-  name: z.string().min(1),
-  notes: z.string().optional(),
+  name: shortText.min(1),
+  notes: longText.optional(),
 });
 
 /**
@@ -268,10 +274,10 @@ const possessionSchema = z.object({
  * All fields optional for progressive wealth tracking
  */
 const wealthSchema = z.object({
-  spendingLevel: z.string().optional(),
+  spendingLevel: shortText.optional(),
   cash: z.number().min(0).optional(),
-  assets: z.string().optional(),
-  notes: z.string().optional(),
+  assets: longText.optional(),
+  notes: longText.optional(),
 });
 
 /**
@@ -279,17 +285,17 @@ const wealthSchema = z.object({
  * All fields optional to allow progressive character development
  */
 const backstorySchema = z.object({
-  description: z.string().optional(),
-  personalDescription: z.string().optional(),
-  ideology: z.string().optional(),
-  significantPeople: z.string().optional(),
-  meaningfulLocations: z.string().optional(),
-  treasuredPossessions: z.string().optional(),
-  traits: z.string().optional(),
-  injuriesAndScars: z.string().optional(),
-  phobiasAndManias: z.string().optional(),
-  arcaneTomesAndSpells: z.string().optional(),
-  encountersWithStrangeEntities: z.string().optional(),
+  description: longText.optional(),
+  personalDescription: longText.optional(),
+  ideology: longText.optional(),
+  significantPeople: longText.optional(),
+  meaningfulLocations: longText.optional(),
+  treasuredPossessions: longText.optional(),
+  traits: longText.optional(),
+  injuriesAndScars: longText.optional(),
+  phobiasAndManias: longText.optional(),
+  arcaneTomesAndSpells: longText.optional(),
+  encountersWithStrangeEntities: longText.optional(),
 });
 
 /**
@@ -297,21 +303,21 @@ const backstorySchema = z.object({
  * Role and notes optional for quick contact addition
  */
 const contactSchema = z.object({
-  name: z.string().min(1),
-  role: z.string().min(1).optional(),
-  notes: z.string().optional(),
+  name: shortText.min(1),
+  role: shortText.min(1).optional(),
+  notes: longText.optional(),
 });
 
 /**
  * Appearance
  */
 const appearanceSchema = z.object({
-  age: z.union([z.string(), z.number()]).transform(v => String(v)).optional(),
-  height: z.string().optional(),
-  weight: z.string().optional(),
-  eyes: z.string().optional(),
-  hair: z.string().optional(),
-  skin: z.string().optional(),
+  age: z.union([shortText, z.number()]).transform(v => String(v)).optional(),
+  height: shortText.optional(),
+  weight: shortText.optional(),
+  eyes: shortText.optional(),
+  hair: shortText.optional(),
+  skin: shortText.optional(),
 });
 
 /**
@@ -327,31 +333,31 @@ const appearanceSchema = z.object({
 export const callOfCthulhu7eCharacterDataSchema = z.object({
   themeColor: themeColorSchema,
   // Required: Core identity
-  investigatorName: z.string().min(1),
-  occupation: z.string().min(1),
-  era: z.string().min(1),
+  investigatorName: sheetCharacterNameSchema,
+  occupation: shortText.min(1),
+  era: shortText.min(1),
   characteristics: characteristicsSchema,
 
   // Optional: Additional details
-  playerName: z.string().min(1).optional(),
-  age: z.union([z.string(), z.number()]).transform(v => String(v)).optional(),
+  playerName: shortText.min(1).optional(),
+  age: z.union([shortText, z.number()]).transform(v => String(v)).optional(),
   // Empty is allowed: these are text boxes on the sheet, and clearing one
   // writes an empty string, which `min(1)` refused along with the whole save.
-  sex: z.string().optional(),
-  residence: z.string().optional(),
-  birthplace: z.string().optional(),
+  sex: shortText.optional(),
+  residence: shortText.optional(),
+  birthplace: shortText.optional(),
   derivedStats: derivedStatsSchema.optional(),
   skills: skillsSchema.optional(),
   combat: combatSchema.optional(),
   conditions: conditionsSchema.optional(),
-  pulpTalents: z.array(z.string()).optional(),
+  pulpTalents: sheetList(shortText).optional(),
   spellsAndMythos: spellsAndMythosSchema.optional(),
-  possessions: z.array(possessionSchema).optional(),
+  possessions: sheetList(possessionSchema).optional(),
   wealth: wealthSchema.optional(),
   backstory: backstorySchema.optional(),
-  contacts: z.array(contactSchema).optional(),
+  contacts: sheetList(contactSchema).optional(),
   appearance: appearanceSchema.optional(),
-  notes: z.string().optional(),
+  notes: longText.optional(),
 });
 
 /**

@@ -9,7 +9,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ListField, { parseCommaList, formatCommaList, parseLineList } from '../ListField';
 
-function Harness({ initial, onList }: { initial: string[]; onList?: (items: string[]) => void }) {
+function Harness({ initial, onList, max }: { initial: string[]; onList?: (items: string[]) => void; max?: number }) {
   const [items, setItems] = useState(initial);
   return (
     <>
@@ -19,6 +19,7 @@ function Harness({ initial, onList }: { initial: string[]; onList?: (items: stri
         onChange={(next) => { setItems(next); onList?.(next); }}
         parse={parseCommaList}
         format={formatCommaList}
+        max={max}
       />
       <button type="button" onClick={() => setItems(['Draconic'])}>Replace</button>
     </>
@@ -59,5 +60,54 @@ describe('ListField', () => {
 
   it('reads one item per line', () => {
     expect(parseLineList('Elder Sign\n\n  Contact Nyarlathotep \n')).toEqual(['Elder Sign', 'Contact Nyarlathotep']);
+  });
+});
+
+describe('ListField with a limit', () => {
+  const box = () => screen.getByLabelText('Languages') as HTMLInputElement;
+
+  it('does not take an entry past the limit, and says why', () => {
+    const onList = vi.fn();
+    render(<Harness initial={['Common', 'Elven']} onList={onList} max={2} />);
+
+    fireEvent.change(box(), { target: { value: 'Common, Elven, Dwarvish' } });
+
+    expect(box().value).toBe('Common, Elven');
+    expect(onList).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toHaveTextContent('a sheet holds at most 2 entries here');
+  });
+
+  it('takes the entries up to the limit, and the comma that follows the last', async () => {
+    render(<Harness initial={[]} max={2} />);
+
+    await userEvent.type(box(), 'Common, Elven, ');
+
+    expect(box().value).toBe('Common, Elven, ');
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+
+  it('says nothing while there is room, and lifts the note once an entry is removed', () => {
+    render(<Harness initial={['Common', 'Elven']} max={3} />);
+    expect(screen.queryByRole('status')).toBeNull();
+
+    fireEvent.change(box(), { target: { value: 'Common, Elven, Dwarvish' } });
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    fireEvent.change(box(), { target: { value: 'Common, Elven' } });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('lets a list stored over the limit be shortened but not grown', () => {
+    render(<Harness initial={['a', 'b', 'c', 'd']} max={2} />);
+
+    fireEvent.change(box(), { target: { value: 'a, b, c, d, e' } });
+    expect(box().value).toBe('a, b, c, d');
+    fireEvent.change(box(), { target: { value: 'a, b, c' } });
+    expect(box().value).toBe('a, b, c');
+  });
+
+  it('has no limit unless it is given one', () => {
+    render(<Harness initial={[]} />);
+    fireEvent.change(box(), { target: { value: Array.from({ length: 600 }, (_unused, i) => `n${i}`).join(', ') } });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 });

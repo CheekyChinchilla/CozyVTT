@@ -11,6 +11,7 @@ import { api } from '@/services/api';
 import type { Character } from '@/types';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import SignedOutNotice from '@/components/common/SignedOutNotice';
+import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 
 // Import editor components
 import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor';
@@ -18,6 +19,7 @@ import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfi
 import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
 import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 import { useStaleSaveReapply } from './StaleSaveDialog';
 import { isSignedOutSave, SIGNED_OUT_NOT_SAVED } from '@/utils/signedOut';
@@ -110,20 +112,17 @@ export default function CharacterSheetEditorModal({
       // The player chose to keep editing; the dialog has said why.
       if (isStaleCharacterSave(error)) throw error;
 
-      // Show detailed error message
-      const message = apiErrorMessage(error) || 'Failed to save character. Please try again.';
+      // Say which boxes the server refused, so the player knows what to fix.
       const validationErrors = apiValidationIssues(error);
-
-      if (validationErrors) {
-        console.error('Validation errors:', validationErrors);
-        // TODO(ui): the message here is "Character data does not match game
-        // system schema" and the issues go only to the console, so the user is
-        // not told which field to fix. List each issue's path and message, as
-        // CharacterEditorPage does.
-        showToast(`Validation Error: ${message}`, 'error');
-      } else {
-        showToast(message, 'error');
-      }
+      if (validationErrors) console.error('Validation errors:', validationErrors);
+      showToast(
+        refusedSaveMessage(
+          validationErrors ?? [],
+          apiErrorMessage(error),
+          'Failed to save character. Please try again.'
+        ),
+        'error'
+      );
       // Thrown on so the sheet knows nothing was saved: it keeps its unsaved
       // changes, and leaving still asks before discarding them.
       throw error;
@@ -251,9 +250,11 @@ export default function CharacterSheetEditorModal({
           Edit Character Sheet: {character.name}
         </h2>
 
-        {/* Editor Content */}
+        {/* Editor Content. A sheet the editor cannot draw fails here, inside
+            the dialog, and not across the whole page. Not reset when the
+            character is refreshed: that would throw away the edits. */}
         <div className="flex-1 overflow-y-auto">
-          {renderCharacterEditor()}
+          <CharacterSheetErrorBoundary>{renderCharacterEditor()}</CharacterSheetErrorBoundary>
         </div>
       </div>
     </div>

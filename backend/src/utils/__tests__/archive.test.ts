@@ -12,6 +12,7 @@ import {
   readArchiveEntry,
   writeArchiveEntry,
   ArchiveLimitError,
+  ArchiveRefusedError,
   UnpackedTotal,
 } from '../archive';
 import { expectFileMode } from '../../__tests__/helpers/fileModes';
@@ -98,7 +99,8 @@ describe('extractArchiveSafely', () => {
     const many = Object.fromEntries(Array.from({ length: LIMITS.maxFiles + 1 }, (_, i) => [`f${i}.txt`, 'x']));
     const directory = await unzipper.Open.buffer(await zipOf(many));
 
-    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/too many files/);
+    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/more than the \d+ it may hold/);
+    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toBeInstanceOf(ArchiveRefusedError);
     await expect(fs.access(dest)).rejects.toThrow();
   });
 
@@ -108,7 +110,9 @@ describe('extractArchiveSafely', () => {
     await writeZip(file, [{ name: 'big.bin', data: () => repeatedBytes(4 * MB) }]);
     const directory = await unzipper.Open.file(file);
 
-    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/maximum decompressed size/);
+    const refusal = extractArchiveSafely(directory, dest, LIMITS);
+    await expect(refusal).rejects.toThrow(/unpacks to more than the .* a backup may hold/);
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveLimitError);
     // Stopped part-way: no more than the limit, and a little of a chunk, reached disk.
     expect((await fs.stat(path.join(dest, 'big.bin'))).size).toBeLessThanOrEqual(LIMITS.maxTotalBytes + 64 * 1024);
   });
@@ -125,7 +129,7 @@ describe('extractArchiveSafely', () => {
     const directory = await unzipper.Open.file(file);
     expect(directory.files.map((f) => f.path)).toContain(crafted);
 
-    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/Unsafe file path/);
+    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/unsafe file path/);
     expect(await filesUnder(root)).toEqual(['slip.zip', path.join('unpacked', 'ok.txt')].sort());
   });
 

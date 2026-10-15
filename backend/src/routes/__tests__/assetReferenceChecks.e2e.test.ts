@@ -40,12 +40,12 @@ let departedId: string | undefined;
 let ownId: string;
 const assetIds: string[] = [];
 
-async function makeAsset(uploadedById: string, label: string) {
+async function makeAsset(uploadedById: string, label: string, type: 'TOKEN' | 'MAP' = 'TOKEN') {
   const filename = `${label}-${randomUUID()}.png`;
   const filePath = path.join(UPLOAD_DIR, filename);
   fs.writeFileSync(filePath, PNG);
   const asset = await prisma.asset.create({
-    data: { type: 'TOKEN', scope: 'USER', uploadedById, filename, originalName: filename, mimeType: 'image/png', fileSize: PNG.length, filePath, name: label },
+    data: { type, scope: 'USER', uploadedById, filename, originalName: filename, mimeType: 'image/png', fileSize: PNG.length, filePath, name: label },
   });
   assetIds.push(asset.id);
   return asset.id;
@@ -64,7 +64,9 @@ beforeAll(async () => {
     ],
   });
   privateId = await makeAsset(playerId, 'player-private');
-  ownId = await makeAsset(dmId, 'dm-own');
+  // A map picture, which a map's picture and spirit layer must be; the token
+  // and template routes take one as well.
+  ownId = await makeAsset(dmId, 'dm-own', 'MAP');
   mapId = (await prisma.map.create({
     data: {
       campaignId, name: 'Refs', imageUrl: `/api/assets/maps/${ownId}`, baseLayerUrl: `/api/assets/maps/${ownId}`,

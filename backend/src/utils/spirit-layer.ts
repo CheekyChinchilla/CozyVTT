@@ -1,6 +1,7 @@
 import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
+import { tokenCentre } from './tokenCentre';
 import type { WallSegment, LightSource } from '../types/walls';
 import { tokenSentTo } from './tokenMask';
 import logger from './logger';
@@ -328,7 +329,86 @@ export function filterTokensByLighting(
   globalIllumination = false
 ): Token[] {
   if (!lightingEnabled) return tokens;
+  const sight = playerSightOnLitMap(tokens, playerUserId, walls, mapWidth, mapHeight, gridSize, lights, globalIllumination);
+  return tokens.filter((t) => sight.seesToken(t));
+}
 
+/**
+ * What each light reaches, by the map read it came from. A fan-out asks for
+ * every player's sight from one read of the map, and the lights' reach does
+ * not depend on the player, so it is raycast once per read and not once per
+ * player. Keyed on the read's own wall and light arrays, so a later read, or
+ * a change, never sees an old answer, and nothing is kept once they go.
+ */
+const litCache = new WeakMap<object, WeakMap<object, { key: string; lits: Lit[] }>>();
+
+function litsFor(
+  walls: unknown,
+  lights: unknown,
+  wallSegs: WallSegment[],
+  enabledLights: LightSource[],
+  mapWidthPx: number,
+  mapHeightPx: number,
+  gridSize: number
+): Lit[] {
+  const key = `${mapWidthPx}x${mapHeightPx}@${gridSize}`;
+  const byWalls = Array.isArray(lights) && Array.isArray(walls) ? litCache.get(lights) : undefined;
+  const hit = byWalls?.get(walls as object);
+  if (hit && hit.key === key) return hit.lits;
+  // Light positions are already in map-space pixels (Y=0 at top), so no flip
+  // is needed.
+  const lits: Lit[] = enabledLights.map((light) => {
+    const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
+    return {
+      cx: light.x,
+      cy: light.y,
+      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
+      brightPx: (light.brightRadius ?? 0) * gridSize,
+      dimPx: dimRadiusPx,
+    };
+  });
+  if (Array.isArray(lights) && Array.isArray(walls)) {
+    const entry = litCache.get(lights) ?? new WeakMap<object, { key: string; lits: Lit[] }>();
+    entry.set(walls, { key, lits });
+    litCache.set(lights, entry);
+  }
+  return lits;
+}
+
+/** What a player's tokens make out on a lit map, built once and asked many times. */
+export interface PlayerSight {
+  /**
+   * Whether a token is seen where it stands: always one the player controls,
+   * otherwise when the visibility rule says its centre is seen. A drag asks
+   * it of the carried token at each frame's position.
+   */
+  seesToken(token: Pick<Token, 'position' | 'size' | 'controlledBy'>): boolean;
+  /**
+   * Whether one of the player's tokens makes out a point in map pixels, such
+   * as a door's middle. Each viewer tests the point nudged 2 px toward
+   * itself, as the client's door filter does: a closed door lies on the edge
+   * of the sight it blocks.
+   */
+  seesPoint(x: number, y: number): boolean;
+}
+
+/**
+ * The sight `filterTokensByLighting` applies, kept so it can be asked again:
+ * the line-of-sight polygons are the expensive part, and a drag tests sixty
+ * positions a second against the same ones. `tokens` are the tokens the
+ * player may have at all (`filterTokensByRole`); the ones they control are
+ * the viewers.
+ */
+export function playerSightOnLitMap(
+  tokens: Token[],
+  playerUserId: string | undefined,
+  walls: unknown,
+  mapWidth: number,
+  mapHeight: number,
+  gridSize: number,
+  lights: unknown,
+  globalIllumination: boolean
+): PlayerSight {
   const wallSegs = (Array.isArray(walls) ? walls : []) as unknown as WallSegment[];
   const lightSources = (Array.isArray(lights) ? lights : []) as unknown as LightSource[];
   const enabledLights = lightSources.filter((l) => l.enabled);
@@ -341,7 +421,7 @@ export function filterTokensByLighting(
   // Lights deliberately do not help here — a light is not a viewer, and a
   // token-less player receiving every visible token was a position leak.
   if (myTokens.length === 0) {
-    return [];
+    return { seesToken: () => false, seesPoint: () => false };
   }
 
   const startMs = Date.now();
@@ -360,11 +440,11 @@ export function filterTokensByLighting(
    */
   const viewers: Viewer[] = myTokens.map((t) => {
     // Token grid coords use Y=0 at bottom (VTT standard); wall pixel coords use
-    // Y=0 at top. Apply the Y-flip so both are in the same pixel space.
+    // Y=0 at top. tokenCentre puts both in the same pixel space, at the point
+    // the client draws sight from.
     const w = t.size?.width ?? 1;
     const h = t.size?.height ?? 1;
-    const cx = (t.position.x + w / 2) * gridSize;
-    const cy = (mapHeight - 1 - t.position.y + h / 2) * gridSize;
+    const { x: cx, y: cy } = tokenCentre(t, gridSize, mapHeight);
     return {
       cx,
       cy,
@@ -376,18 +456,9 @@ export function filterTokensByLighting(
     };
   });
 
-  // What each light reaches, bounded by its own walls. Light positions are
-  // already in map-space pixels (Y=0 at top), so no flip is needed.
-  const lits: Lit[] = enabledLights.map((light) => {
-    const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
-    return {
-      cx: light.x,
-      cy: light.y,
-      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
-      brightPx: (light.brightRadius ?? 0) * gridSize,
-      dimPx: dimRadiusPx,
-    };
-  });
+  // What each light reaches, bounded by its own walls: the same for every
+  // player, so worked out once per map read (litsFor).
+  const lits = litsFor(walls, lights, wallSegs, enabledLights, mapWidthPx, mapHeightPx, gridSize);
   const inside: InsideFn = (p, poly) => isPointVisible(p, poly);
 
   const elapsed = Date.now() - startMs;
@@ -400,14 +471,207 @@ export function filterTokensByLighting(
   // always: a light reveals what you could already have seen; it never sees on
   // your behalf. Then Global Illumination, darkvision, the token's own square,
   // and light.
-  return tokens.filter((t) => {
-    // Always include the player's own tokens
-    if (t.controlledBy === playerUserId) return true;
+  return {
+    seesToken: (t) =>
+      t.controlledBy === playerUserId
+      || isSeen(tokenCentre(t, gridSize, mapHeight), viewers, lits, globalIllumination, inside),
+    seesPoint: (x, y) => viewers.some((v) => {
+      const dx = v.cx - x;
+      const dy = v.cy - y;
+      const d = Math.hypot(dx, dy) || 1;
+      return isSeen({ x: x + (dx / d) * 2, y: y + (dy / d) * 2 }, [v], lits, globalIllumination, inside);
+    }),
+  };
+}
 
-    const cx = (t.position.x + (t.size?.width ?? 1) / 2) * gridSize;
-    const cy = (mapHeight - 1 - t.position.y + (t.size?.height ?? 1) / 2) * gridSize;
-    return isSeen({ x: cx, y: cy }, viewers, lits, globalIllumination, inside);
-  });
+/**
+ * A wall as a member is sent it. Every wall reaches every member who may read
+ * the map, since their browser works out its own sight from them, but a
+ * door's lock is the DM's to reveal: anyone else is sent a locked door as a
+ * closed one, which blocks sight the same way.
+ */
+export function wallSentTo(role: string | undefined, wall: WallSegment): WallSegment {
+  return role === 'DM' ? wall : playersWall(wall);
+}
+
+/** A wall as anyone but the DM is sent it: a locked door as a closed one. */
+function playersWall(wall: WallSegment): WallSegment {
+  return wall.type === 'door-locked' ? { ...wall, type: 'door-closed' } : wall;
+}
+
+/** Whether two walls match in every field a member is sent. */
+function sameWall(a: WallSegment, b: WallSegment): boolean {
+  return a.id === b.id && a.x1 === b.x1 && a.y1 === b.y1 && a.x2 === b.x2 && a.y2 === b.y2 && a.type === b.type;
+}
+
+/**
+ * Whether a wall changing from `before` to `after` changes the copy anyone
+ * but the DM has. A closed door locked or unlocked does not. Such a change is
+ * sent to the DM alone, and players are not sent the map again for it
+ * (resendSightAfterChange), since either would tell them something had just
+ * been done there.
+ */
+export function wallChangeReachesPlayers(before: WallSegment, after: WallSegment): boolean {
+  return !sameWall(playersWall(before), playersWall(after));
+}
+
+/**
+ * What a member is told of one wall changing from `before` to `after`: the
+ * DM `wall:updated`; anyone else the wall as they are sent it (wallSentTo),
+ * and nothing when that is the wall they have already
+ * (wallChangeReachesPlayers). `extra` (an operation id) rides on the event.
+ */
+export function wallChangeSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: WallSegment,
+  after: WallSegment,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !wallChangeReachesPlayers(before, after)) return null;
+  return { event: 'wall:updated', data: { mapId, segment: wallSentTo(role, after), ...extra } };
+}
+
+/** A stored JSON list (a map's walls or lights), or an empty one for anything else. */
+function storedList<T>(value: unknown): T[] {
+  return (Array.isArray(value) ? value : []) as unknown as T[];
+}
+
+/** A map's walls as a member is sent them (wallSentTo). */
+export function wallsSentTo(role: string | undefined, walls: unknown): WallSegment[] {
+  const list = storedList<WallSegment>(walls);
+  return role === 'DM' ? list : list.map(playersWall);
+}
+
+/**
+ * Whether a map's walls replaced, from the stored list `before` to `after`,
+ * changes the list anyone but the DM has. It does not when every wall they
+ * are sent stays as it was, in the same order, as when the Walls panel's
+ * Change type locks or unlocks closed doors.
+ */
+export function wallListChangeReachesPlayers(before: unknown, after: unknown): boolean {
+  const was = storedList<WallSegment>(before).map(playersWall);
+  const now = storedList<WallSegment>(after).map(playersWall);
+  return was.length !== now.length || was.some((wall, i) => !sameWall(wall, now[i]));
+}
+
+/**
+ * What a member is told of a map's walls replaced, from the stored list
+ * `before` to `after`: the DM `walls:replaced`; anyone else the walls as
+ * they are sent them, and nothing when that is the list they have already
+ * (wallListChangeReachesPlayers). `extra` (an operation id) rides on the event.
+ */
+export function wallsReplacedSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: unknown,
+  after: unknown,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !wallListChangeReachesPlayers(before, after)) return null;
+  return { event: 'walls:replaced', data: { mapId, segments: wallsSentTo(role, after), ...extra } };
+}
+
+/**
+ * A map's lights as a member is sent them: the DM every one, anyone else only
+ * those that are on. A light that is off lights nothing anyone can see, the
+ * rule `filterTokensByLighting` applies, so nobody but the DM needs to know
+ * where it is.
+ */
+export function lightsSentTo(role: string | undefined, lights: unknown): LightSource[] {
+  const list = storedList<LightSource>(lights);
+  return role === 'DM' ? list : list.filter(lightReachesPlayers);
+}
+
+/**
+ * Whether anyone but the DM is sent this light: only while it is on. A light
+ * that is off, added, changed while it stays off, or deleted, is sent to the
+ * DM alone, and players are not sent the map again for it
+ * (resendSightAfterChange).
+ */
+export function lightReachesPlayers(light: LightSource | undefined): boolean {
+  return light?.enabled === true;
+}
+
+/** Whether a light changing from `before` to `after` changes the copy anyone but the DM has. */
+export function lightChangeReachesPlayers(before: LightSource, after: LightSource): boolean {
+  return lightReachesPlayers(before) || lightReachesPlayers(after);
+}
+
+/** Whether two lights match in every field a member is sent. */
+function sameLight(a: LightSource, b: LightSource): boolean {
+  return a.id === b.id && a.x === b.x && a.y === b.y && a.brightRadius === b.brightRadius
+    && a.dimRadius === b.dimRadius && a.color === b.color && a.enabled === b.enabled;
+}
+
+/**
+ * Whether a map's lights replaced, from the stored list `before` to `after`,
+ * changes the list anyone but the DM has. It does not when every light that
+ * is on stays as it was, in the same order, whatever happens to those that
+ * are off, as when Clear All in the Lights panel removes only lights that
+ * are off.
+ */
+export function lightListChangeReachesPlayers(before: unknown, after: unknown): boolean {
+  const was = storedList<LightSource>(before).filter(lightReachesPlayers);
+  const now = storedList<LightSource>(after).filter(lightReachesPlayers);
+  return was.length !== now.length || was.some((light, i) => !sameLight(light, now[i]));
+}
+
+/**
+ * What a member is told of a map's lights replaced, from the stored list
+ * `before` to `after`: the DM `lights:replaced`; anyone else the lights that
+ * are on, and nothing when that is the list they have already
+ * (lightListChangeReachesPlayers). `extra` (an operation id) rides on the event.
+ */
+export function lightsReplacedSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: unknown,
+  after: unknown,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !lightListChangeReachesPlayers(before, after)) return null;
+  return { event: 'lights:replaced', data: { mapId, lights: lightsSentTo(role, after), ...extra } };
+}
+
+/**
+ * What a member is told of one light changing from `before` to `after`: the
+ * DM `light:updated`; anyone else, who has only the lights that are on, the
+ * light appearing (`light:added`) when it comes on, going (`light:removed`)
+ * when it goes off, `light:updated` while it stays on, and nothing while it
+ * stays off. `extra` (an operation id) rides on every event.
+ */
+export function lightChangeSentTo(
+  role: string | undefined,
+  mapId: string,
+  before: LightSource,
+  after: LightSource,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !lightChangeReachesPlayers(before, after)) return null;
+  if (role === 'DM' || (lightReachesPlayers(before) && lightReachesPlayers(after))) {
+    return { event: 'light:updated', data: { mapId, light: after, ...extra } };
+  }
+  if (lightReachesPlayers(after)) return { event: 'light:added', data: { mapId, light: after, ...extra } };
+  return { event: 'light:removed', data: { mapId, lightId: after.id, ...extra } };
+}
+
+/**
+ * What a member is told of the light `lightId` deleted, given the light as
+ * it was (`removed`, undefined when the map had no light by that id): the DM
+ * `light:removed`; anyone else only when the light was on
+ * (lightReachesPlayers), since one that was off, or never there, is not a
+ * light they have. `extra` (an operation id) rides on the event.
+ */
+export function lightRemovalSentTo(
+  role: string | undefined,
+  mapId: string,
+  lightId: string,
+  removed: LightSource | undefined,
+  extra: Record<string, unknown> = {}
+): { event: string; data: Record<string, unknown> } | null {
+  if (role !== 'DM' && !lightReachesPlayers(removed)) return null;
+  return { event: 'light:removed', data: { mapId, lightId, ...extra } };
 }
 
 /**
@@ -464,10 +728,12 @@ export function filterMapData(
     tokens: filteredTokens,
     // Remove spirit layer URL if user shouldn't see it
     spiritLayerUrl: (userRole === 'DM' || spiritVisible) ? mapData.spiritLayerUrl : null,
-    // Wall segments are sent to all roles (players need them for visibility rendering)
-    wallSegments: mapData.wallSegments ?? [],
-    // Light sources are sent to all roles (players need them for visibility rendering)
-    lights: mapData.lights ?? [],
+    // Wall segments are sent to all roles (players need them for visibility
+    // rendering), a locked door to anyone but the DM as a closed one
+    wallSegments: wallsSentTo(userRole, mapData.wallSegments),
+    // Light sources that are on are sent to all roles (players need them for
+    // visibility rendering); the DM also gets those that are off
+    lights: lightsSentTo(userRole, mapData.lights),
     // Fog data is DM-only (full state); players receive derived revealed-cells via WebSocket
     fogData: userRole === 'DM' ? mapData.fogData : null,
     lightingEnabled: mapData.lightingEnabled,

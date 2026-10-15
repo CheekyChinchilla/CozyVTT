@@ -1,20 +1,25 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
-import type { Prisma } from '@prisma/client';
+import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
 import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
-import { voidOutstandingResetLinks } from '../services/passwordResetTokens';
+import { voidOutstandingResetLinks, issueResetToken, RESET_LINK_TTL_MS } from '../services/passwordResetTokens';
 import { isOnlyAdmin } from '../services/platformAdmins';
+import { inSerializableTransaction } from '../utils/serializable';
 import { endLiveSockets, announceRosterChange } from '../websocket/utils';
 import { UpdateUserPreferencesSchema, type UserPreferences } from '../validators/userPreferences';
 import { parseDisplayName, parseAvatarUrl } from '../validators/users';
 import crypto from 'crypto';
 import logger from '../utils/logger';
-import { deleteAccount, runsCampaignsMessage } from '../services/accountDeletion';
+import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
+import { removeAvatars } from '../services/avatars';
+import { writeSystemLog, writeAdminLog } from '../services/systemLog';
+import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 
 /**
  * User Management Routes
@@ -96,7 +101,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
  */
-router.put('/:id', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -183,11 +188,10 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
               message: 'Enter your current password to change your email address',
             });
           }
-          // TODO(accounts): a wrong password here counts only against the
-          // general API limit, so a stolen session can guess the password
-          // through this check. Limit failed checks as credentialLimiter does;
-          // see the matching TODO on POST /change-password in auth.ts.
+          // A wrong one counts against passwordCheckLimiter, shared with the
+          // password change and account deletion.
           if (!(await verifyPassword(existingUser.passwordHash, currentPassword))) {
+            passwordCheckLimiter.recordFailure(req);
             return res.status(401).json({
               error: 'Authentication Failed',
               message: 'Current password is incorrect',
@@ -237,16 +241,6 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
         });
       }
 
-      // The instance must keep an admin (see services/platformAdmins).
-      if (platformRole === 'USER' && existingUser.platformRole === 'ADMIN' && (await isOnlyAdmin(id))) {
-        return res.status(409).json({
-          error: 'Conflict',
-          message: id === requestingUserId
-            ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
-            : 'This is the only admin on this instance. Promote another user to admin first.',
-        });
-      }
-
       updateData.platformRole = platformRole;
     }
 
@@ -290,14 +284,56 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
 
     // Perform update. A new address also voids every unused reset or
     // invitation link, in the same transaction, so a link already sent to the
-    // old address cannot set the password afterwards.
-    const updatedUser = emailChangedFrom === null
-      ? await prisma.user.update({ where: { id }, data: updateData })
-      : await prisma.$transaction(async (tx) => {
+    // old address cannot set the password afterwards. A request that sets the
+    // role to USER reads the account again inside a serializable transaction
+    // and decides there whether it takes the admin role away, which must leave
+    // the instance an admin (services/platformAdmins): the read above can be
+    // behind a promotion that landed since.
+    type Written =
+      | { kind: 'written'; before: User; row: User }
+      | { kind: 'only-admin' }
+      | { kind: 'gone' };
+    const written: Written = updateData.platformRole === 'USER'
+      ? await inSerializableTransaction(async (tx): Promise<Written> => {
+        const current = await tx.user.findUnique({ where: { id } });
+        if (!current) return { kind: 'gone' };
+        if (current.platformRole === 'ADMIN' && await isOnlyAdmin(id, tx)) return { kind: 'only-admin' };
         const row = await tx.user.update({ where: { id }, data: updateData });
-        await voidOutstandingResetLinks(id, tx);
-        return row;
+        if (emailChangedFrom !== null) await voidOutstandingResetLinks(id, tx);
+        return { kind: 'written', before: current, row };
+      })
+      : emailChangedFrom === null
+        ? { kind: 'written', before: existingUser, row: await prisma.user.update({ where: { id }, data: updateData }) }
+        : await prisma.$transaction(async (tx): Promise<Written> => {
+          const row = await tx.user.update({ where: { id }, data: updateData });
+          await voidOutstandingResetLinks(id, tx);
+          return { kind: 'written', before: existingUser, row };
+        });
+    if (written.kind === 'gone') {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User not found',
       });
+    }
+    if (written.kind === 'only-admin') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: id === requestingUserId
+          ? 'You are the only admin on this instance. Promote another user to admin before removing your own admin role.'
+          : 'This is the only admin on this instance. Promote another user to admin first.',
+      });
+    }
+    // The account as it was when written: the logging and sign-out below
+    // compare against it, not against the earlier read.
+    const stored = written.before;
+    const updatedUser = written.row;
+
+    // Clearing the avatar removes the pictures too, so none is left to be
+    // served or brought back. The profile is already changed; a picture that
+    // cannot be removed is logged and leaves the request answered.
+    if (updateData.avatarUrl === null) {
+      await removeAvatars(id).catch((err) => logger.error('Avatar cleared, but its pictures were not all removed', { err, userId: id }));
+    }
 
     // Tell the old address, which is the one the owner still reads if the
     // change was not theirs. Best-effort: the change is made either way.
@@ -309,6 +345,23 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
       }
     }
 
+    // What an administrator changed, for the activity log: the permissions on
+    // any account, and the profile of someone else's. A role change has its
+    // own line below. Compared against what was stored, so saving the same
+    // values again writes nothing.
+    if (isAdmin) {
+      const changes = adminChangesTo(stored, updatedUser, id !== requestingUserId);
+      const described = describeAdminChanges(changes);
+      if (described.length > 0) {
+        await writeAdminLog(
+          requestingUserId!,
+          `Changed the account of ${stored.email}: ${described.join('; ')}`,
+          changes.email ? 'WARNING' : 'INFO',
+          { targetUserId: id, changes: toJson(changes) }
+        );
+      }
+    }
+
     // The session carries platformRole from the moment it was created and
     // nothing re-reads it, so a demotion would otherwise leave the person
     // holding admin until they signed out. Compared against what was stored, so
@@ -317,7 +370,24 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
     // globalAssetManager and templateEditor are deliberately not session fields
     // and are read from the database where they are used, so changing one
     // already takes effect on the next request and needs no sign-out.
-    if (updateData.platformRole !== undefined && updateData.platformRole !== existingUser.platformRole) {
+    if (updateData.platformRole !== undefined && updateData.platformRole !== stored.platformRole) {
+      // A role change goes to the admins' activity log. A promotion's line
+      // also starts the account's 7 days to set up MFA (services/adminMfaPolicy).
+      if (updateData.platformRole === 'ADMIN') {
+        await restartAdminMfaGrace({
+          targetUserId: id,
+          byUserId: requestingUserId!,
+          level: 'WARNING',
+          message: `Made ${updatedUser.email} an administrator`,
+        });
+      } else {
+        await writeSystemLog({
+          level: 'WARNING',
+          message: `Removed the administrator role from ${updatedUser.email}`,
+          userId: requestingUserId,
+          context: { targetUserId: id },
+        });
+      }
       await destroyUserLoginSessions(id);
       await endLiveSockets(id, 'Your platform role changed. Sign in again.');
     }
@@ -327,6 +397,10 @@ router.put('/:id', requireAuth, async (req: Request, res: Response) => {
       user: sanitizeUser(updatedUser),
     });
   } catch (error) {
+    // Another account took the new address after the check above.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return res.status(400).json({ error: 'Bad Request', message: 'Email already in use' });
+    }
     logger.error('Error updating user', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -474,14 +548,21 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
       });
     }
 
-    // Count USER-scoped assets before deletion so the frontend can warn admins.
-    // They stay, owned by no one, which leaves them readable by admins alone.
+    // Count the user's personal assets before deletion. The avatar and those
+    // nothing uses go with the account; the rest stay, owned by no one,
+    // readable by admins and by any campaign they were shared into.
     const userAssetCount = await prisma.asset.count({
       where: { uploadedById: id, scope: 'USER' },
     });
 
     // See services/accountDeletion.ts for what stays and what goes.
     const deletion = await deleteAccount(id);
+    if (!deletion.deleted && deletion.refused === 'onlyAdmin') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'This is the only admin on this instance. Promote another user to admin first.',
+      });
+    }
     if (!deletion.deleted) {
       return res.status(409).json({
         error: 'Conflict',
@@ -491,11 +572,16 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
     }
     const campaignIds = deletion.campaignIds;
 
-    // The session outlives the row it refers to, and the guards read the
-    // session, so it has to go too.
-    await destroyUserLoginSessions(id);
+    await writeAdminLog(requestingUserId!, `Deleted the account of ${user.email}`, 'WARNING', {
+      targetUserId: id,
+      displayName: user.displayName,
+    });
+
+    // The deletion ended the account's sign-ins in its own transaction
+    // (services/accountDeletion); the live connections end here.
     await endLiveSockets(id, 'Your account was deleted.');
     announceRosterChange(id, campaignIds, 'member.left');
+    removePersonalFilesAfterwards(deletion.personal);
 
     return res.status(200).json({
       message: 'User deleted successfully',
@@ -519,6 +605,18 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
 router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+
+    // Changing one's own password asks for the current one (POST
+    // /api/auth/change-password); a stolen session must not read a new
+    // temporary password for its own account here instead.
+    if (id === req.session.userId) {
+      // TODO(accounts): the Profile page's button reads "Change Password"; the
+      // message should spell it the same way.
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.',
+      });
+    }
 
     // Check if user exists
     const user = await prisma.user.findUnique({
@@ -550,11 +648,22 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
     // A reset link issued before this would replace the temporary password.
     await voidOutstandingResetLinks(id);
 
+    // The wrong passwords counted against the account were guesses at the
+    // old one; a locked account opens with the temporary password.
+    accountLoginLimiter.forget(accountLoginKey(user.email));
+
     // End any sessions the user already has open — otherwise they keep full
     // access on the old session and the forced-change gate would only take
     // effect at their next login
     await destroyUserLoginSessions(id);
     await endLiveSockets(id, 'An administrator reset your password. Sign in again.');
+
+    await writeSystemLog({
+      level: 'WARNING',
+      message: `Reset the password of ${user.email} to a temporary one`,
+      userId: req.session.userId,
+      context: { targetUserId: id },
+    });
 
     return res.status(200).json({
       message: 'Password reset successfully',
@@ -597,16 +706,12 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     // Invalidate any existing unused tokens for this user
     await voidOutstandingResetLinks(id);
 
-    const token = crypto.randomUUID();
-    await prisma.passwordResetToken.create({
-      data: {
-        userId: id,
-        token,
-        expiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-      },
-    });
+    // Stored as its hash; the token itself goes only into the email.
+    const token = await issueResetToken(id, RESET_LINK_TTL_MS);
 
     await sendPasswordResetEmail(user.email, token, user.displayName);
+
+    await writeAdminLog(req.session.userId!, `Sent a password reset link to ${user.email}`, 'INFO', { targetUserId: id });
 
     return res.status(200).json({
       message: `Password reset link sent to ${user.email}.`,
@@ -619,6 +724,48 @@ router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Reque
     });
   }
 });
+
+/** The account fields an administrator's change is logged for. */
+type LoggedAccountFields = Pick<User, 'email' | 'displayName' | 'avatarUrl' | 'bio' | 'globalAssetManager' | 'templateEditor'>;
+
+/**
+ * What the log keeps of a change: the value before and after, except for the
+ * bio, which is text the person wrote about themselves and is kept for ever
+ * in a log that is part of every backup. The log says the bio changed and
+ * keeps none of it. Lines written by earlier versions keep the text they stored.
+ */
+type AccountChanges = {
+  [K in Exclude<keyof LoggedAccountFields, 'bio'>]?: { from: LoggedAccountFields[K]; to: LoggedAccountFields[K] };
+} & { bio?: { changed: true } };
+
+/**
+ * What changed between two versions of an account: the permissions always,
+ * the profile only when `othersProfile` (an administrator editing someone
+ * else's; their own is not an administrator's action).
+ */
+function adminChangesTo(before: LoggedAccountFields, after: LoggedAccountFields, othersProfile: boolean): AccountChanges {
+  const changes: AccountChanges = {};
+  const fields: (keyof LoggedAccountFields)[] = othersProfile
+    ? ['globalAssetManager', 'templateEditor', 'email', 'displayName', 'avatarUrl', 'bio']
+    : ['globalAssetManager', 'templateEditor'];
+  for (const field of fields) {
+    if (before[field] === after[field]) continue;
+    Object.assign(changes, { [field]: field === 'bio' ? { changed: true } : { from: before[field], to: after[field] } });
+  }
+  return changes;
+}
+
+/** The changes in words, for the activity log's message. */
+function describeAdminChanges(changes: AccountChanges): string[] {
+  const words: string[] = [];
+  if (changes.globalAssetManager) words.push(`Global Assets ${changes.globalAssetManager.to ? 'granted' : 'taken away'}`);
+  if (changes.templateEditor) words.push(`template editing ${changes.templateEditor.to ? 'granted' : 'taken away'}`);
+  if (changes.email) words.push(`email address changed from ${changes.email.from} to ${changes.email.to}`);
+  if (changes.displayName) words.push(`display name changed from "${changes.displayName.from}" to "${changes.displayName.to}"`);
+  if (changes.avatarUrl) words.push(changes.avatarUrl.to ? 'avatar changed' : 'avatar removed');
+  if (changes.bio) words.push('bio changed');
+  return words;
+}
 
 /**
  * Generate a cryptographically random temporary password.

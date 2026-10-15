@@ -1,6 +1,7 @@
 import { types } from 'util';
 import { Server } from 'socket.io';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
+import { databaseBeingReplaced, RESTORING_MESSAGE } from '../services/restoreState';
 import { broadcastPresence, getOnlineUserIds } from './utils';
 import logger from '../utils/logger';
 import { stateRequestAllowed, withinCeiling, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
@@ -36,6 +37,14 @@ import { registerPingHandlers } from './handlers/pings';
 export function registerEventHandlers(io: Server): void {
   io.on('connection', async (socket: AuthenticatedSocket) => {
     logger.debug('ws connection attempt', { socketId: socket.id });
+
+    // While a restore replaces the database, nobody's sign-in is the one in
+    // it, and a write would land on the restored rows (services/restoreState).
+    if (databaseBeingReplaced()) {
+      socket.emit('error', { message: RESTORING_MESSAGE });
+      socket.disconnect(true);
+      return;
+    }
 
     // CRITICAL: Authenticate the socket connection
     const authenticated = await authenticateSocket(socket);

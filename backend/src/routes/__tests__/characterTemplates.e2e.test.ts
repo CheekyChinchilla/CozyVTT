@@ -125,12 +125,15 @@ describe('Character template routes', () => {
     adminAgent = await login(`tpl_admin_${stamp}@test.invalid`);
   });
 
+  // Only this file's templates: other suites share the database.
+  const ownTemplates = () => ({ createdById: { in: [authorId, otherId, editorId, adminId] } });
+
   afterEach(async () => {
-    await prisma.characterTemplate.deleteMany({});
+    await prisma.characterTemplate.deleteMany({ where: ownTemplates() });
   });
 
   afterAll(async () => {
-    await prisma.characterTemplate.deleteMany({});
+    await prisma.characterTemplate.deleteMany({ where: ownTemplates() });
     await prisma.asset.deleteMany({ where: { id: { in: [globalAssetId, personalAssetId] } } });
     await cleanupUsers([authorId, otherId, editorId, adminId]);
     await prisma.$disconnect();
@@ -173,6 +176,35 @@ describe('Character template routes', () => {
     it('refuses an unauthenticated request', async () => {
       const res = await request(app).post('/api/character-templates').send({ name: 'Anon' });
       expect([401, 403]).toContain(res.status);
+    });
+  });
+
+  // A template is stored as its game system's schema returns it, as a
+  // character is: a key the sheet does not declare is dropped on the way in.
+  describe('what is stored', () => {
+    it('drops a key the schema does not declare when a template is published', async () => {
+      const res = await createTemplate(authorAgent, { data: { ...dnd5eSheet, injected: 'nope' } });
+      expect(res.status).toBe(201);
+      expect(res.body.data).not.toHaveProperty('injected');
+
+      const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: res.body.id } });
+      expect(stored.data).not.toHaveProperty('injected');
+      expect(stored.data).toMatchObject({ characterName: 'Template Hero', class: 'Fighter' });
+    });
+
+    it('drops a key the schema does not declare when a template is saved', async () => {
+      const created = await createTemplate(authorAgent);
+      expect(created.status).toBe(201);
+
+      const res = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ data: { ...dnd5eSheet, injected: 'nope', nested: { deeper: 1 } } });
+      expect(res.status).toBe(200);
+
+      const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(stored.data).not.toHaveProperty('injected');
+      expect(stored.data).not.toHaveProperty('nested');
+      expect(stored.data).toMatchObject({ characterName: 'Template Hero' });
     });
   });
 
@@ -286,6 +318,49 @@ describe('Character template routes', () => {
       const res = await otherAgent.get('/api/character-templates?search=grizzled&limit=100');
       expect(res.body.templates).toHaveLength(1);
     });
+
+    // A page of 100 used to carry 100 full sheets, each up to the body limit.
+    it('lists templates without their sheets, and serves the sheet by id', async () => {
+      const created = await createTemplate(authorAgent, { name: 'Summary Only' });
+
+      const list = await otherAgent.get('/api/character-templates?search=summary only&limit=100');
+      expect(list.status).toBe(200);
+      expect(list.body.templates).toHaveLength(1);
+      expect(list.body.templates[0]).not.toHaveProperty('data');
+      expect(list.body.templates[0]).toMatchObject({
+        id: created.body.id,
+        name: 'Summary Only',
+        gameSystem: GameSystem.DND_5E,
+        createdBy: { id: authorId },
+      });
+
+      const one = await otherAgent.get(`/api/character-templates/${created.body.id}`);
+      expect(one.status).toBe(200);
+      expect(one.body.data.characterName).toBe('Template Hero');
+    });
+  });
+
+  describe('how many one account may publish', () => {
+    it('refuses a template past 500, and takes one again after a delete', async () => {
+      await prisma.characterTemplate.createMany({
+        data: Array.from({ length: 500 }, (_, i) => ({
+          id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+          name: `Bulk ${i}`,
+          gameSystem: null,
+          data: {},
+          createdById: otherId,
+        })),
+      });
+
+      const refused = await createTemplate(otherAgent, { name: 'One Too Many' });
+      expect(refused.status).toBe(400);
+      expect(refused.body.message).toBe(
+        'You have already published 500 character templates, the most one account can. Delete one you no longer need to make room.'
+      );
+
+      await prisma.characterTemplate.delete({ where: { id: '00000000-0000-4000-8000-000000000000' } });
+      expect((await createTemplate(otherAgent, { name: 'Room Again' })).status).toBe(201);
+    });
   });
 
   // The heart of the feature.
@@ -393,6 +468,8 @@ describe('Character template routes', () => {
       const still = await prisma.characterTemplate.findUnique({ where: { id: created.body.id } });
       expect(still).not.toBeNull();
       expect(still?.createdById).toBeNull();
+
+      await prisma.characterTemplate.delete({ where: { id: created.body.id } });
     });
   });
 

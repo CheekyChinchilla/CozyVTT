@@ -42,11 +42,12 @@ Click **Create Campaign** and you're taken directly to the campaign page.
 
 ### Campaign Settings
 
-Once inside the campaign, click the **Campaign Settings** button (gear icon in the header) to open the Campaign Settings panel.
+Once inside the campaign, click the **Campaign Settings** button (gear icon in the header) to open the Campaign Settings panel. It has four tabs:
 
-From here you can update:
-- Campaign name and description
-- Any campaign-level configuration options
+- **General** — the **Campaign Name** and **Description**, saved with **Save Changes**, and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
+- **Chat** — **Enable message cooldown**, off by default, makes everyone in the chat, you included, wait between messages, for the **Cooldown duration** you set (1 to 300 seconds). While someone waits, a line under their chat box counts down, such as "Wait 5s before sending another message"
+- **Members** — everyone in the campaign, with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
+- **Danger Zone** — **Delete Campaign**, for the campaign's owner, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
 
 *Screenshot pending — Campaign settings panel.*
 
@@ -54,16 +55,18 @@ From here you can update:
 
 To invite a player to your campaign:
 
-1. Click **Invite Player** in the left sidebar, or open **Campaign Settings**
-2. Pick them from the list — it shows everyone on your instance who isn't already a member or already invited. They must have an account first
+1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
+2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. If their whole name is one letter, type that letter: a single letter finds only people whose name is exactly that letter. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
 3. Optionally tick **Also email them an invitation**
-4. The player sees a **Pending Invitation** on their dashboard
+4. The player sees the invitation under **Pending Invitations** on their dashboard
 
 *Screenshot pending — Invite player flow.*
 
 **About that checkbox.** It's off by default, and the invitation reaches them either way — the dashboard is what they actually accept from. Tick it only when a nudge in their inbox is genuinely useful; if they're sitting across the table from you, it isn't. If your instance has no mail server set up the option is greyed out and says so, rather than pretending to send something.
 
-The list deliberately shows display names and not email addresses, so running a campaign doesn't become a way to collect everyone's address.
+The email's subject line names your instance and nothing else ("You have a new campaign invitation on CozyVTT"); the campaign's name, its description and your display name are in the body. Each DM can have the instance send 20 invitation emails an hour. Past that, **Send Invitation** with the box ticked says so and how many minutes to wait; untick the box and the invitation goes through at once, without the email.
+
+The search deliberately shows display names and profile pictures and not email addresses, and lists nobody until you type, so running a campaign doesn't become a way to collect everyone's address or a list of everyone on the instance. Two people can have the same display name; their profile pictures are how to tell them apart, and if neither has one, ask your player which they are.
 
 When a player accepts, they'll choose which of their characters to bring. Once they've joined, their character appears in the **Campaign Roster** on the left sidebar.
 
@@ -143,8 +146,17 @@ Once your map is in the asset library:
 
 1. Inside your campaign, click **Map Library** (the map icon) in the header
 2. The Map Library panel opens
-3. Click **Create Map**, pick your uploaded image and check the grid settings
+3. Click **Create Map**, pick your uploaded image (or click **Upload New** to add one, choosing where it goes as below) and check the grid settings
 4. The map is now available to switch to at any time
+
+**Where an Upload New picture goes.** The upload window offers two places for the map picture, and for the spirit layer picture, with a line under each saying what it means. **Personal** is selected at first.
+
+| Choice | Who can see the picture | When you leave the campaign or delete your account |
+|---|---|---|
+| **Personal** | You, in your own library. Players see it only once you switch to the map, and whoever is the campaign's DM sees it on every map. | It stays yours, so the table loses it. Once you leave the campaign, or delete your account after handing the DM seat over, nobody in the campaign can load it, the new DM included: maps using it show "Failed to load map image" until the DM picks another picture in **Edit Map**. After an account is deleted the file is kept, owned by no one, and only an administrator can open it. |
+| **Campaign** | Everyone in the campaign, in the campaign's library, at once, before you switch to the map too. | It stays with the campaign, for the table and whoever runs it next. |
+
+Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
 
 You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
 
@@ -176,9 +188,9 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 
 - **Resolution matters** — Maps look best at 70–100 pixels per grid square. Going higher increases load time without visible benefit at normal zoom levels.
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
-- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, and that is where **Upload New** in the Create Map window puts a map image, as uploading a token image from inside the campaign does. To keep a map a surprise, upload its art as **Personal** from the Asset Library first, then pick it with **Browse Assets** when you create the map. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
+- **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign**, so a map you prepare stays a surprise (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, so a map picture you upload as **Campaign** from the Asset Library can be seen there before you switch to the map, as can a token image uploaded from inside the campaign. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
 - **Keep backups** — Export important maps so you can recover them if needed
-- **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature or the campaign's ambient sound still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
+- **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
 ---
 
@@ -194,7 +206,7 @@ Click **Token Manager** (the crossed-swords icon) in the campaign header to open
 
 ### Creating a Token
 
-The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to drag into position.
+The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to move into position.
 
 - **Token Type** — **Player**, **NPC / Creature** or **Object**
 - **Token image** — Upload one, pick a token image from your library, or leave it empty for a placeholder
@@ -220,9 +232,9 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 - **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
 - **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-Everything except a character dragged from the roster lands in the middle of the current map; drag it where it belongs.
+Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
 
-*GIF pending — Placing a token and dragging it into position.*
+*GIF pending — Placing a token and moving it into position.*
 
 ### Token Display Modes
 
@@ -251,6 +263,8 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
 - Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
+If a change cannot be saved, for example while the connection is down, a message says why and the control goes back to what it was. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
+
 *Screenshot pending — NPC quick editor popup with image picker.*
 
 #### Changing a Token's Image
@@ -262,6 +276,8 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 5. Click **None** to remove the image and revert to a colored-letter placeholder
 
 The map updates immediately for everyone at the table — no one needs to refresh. This changes only that one token; to change the image every future placement uses, edit the creature template instead (see [Creature Token Images](#creature-token-images)).
+
+A player's character carries a token picture of its own, on its sheet. When its player changes it, every token of that character follows, except in a campaign where they are a spectator. When you change it, with **Edit Character Sheet** from the roster's right-click menu, only the character's tokens on the maps of campaigns you run change; tokens it left in a campaign someone else runs keep their picture.
 
 #### Saving an Image to a Creature Template
 
@@ -287,7 +303,7 @@ Right-click an NPC token on the map (DM only) and choose **Roll...** to open the
 
 For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage** selector that rewrites the dice expression before rolling (`2d20kh1` / `2d20kl1`). Pathfinder 2e shows the same selector labeled **Fortune / Misfortune**.
 
-> **Tokens linked to a player's character** are the exception. They roll from the character sheet rather than from a stat block, so their menu offers the sheet's own **Roll...** and a **View Character Sheet** entry instead of the NPC picker. Both used to be listed at once, which put two identical-looking **Roll...** entries on the same menu.
+> **Tokens linked to a player's character** are the exception. They roll from the character sheet rather than from a stat block, so their menu offers the sheet's own **Roll...** and a **View Character Sheet** entry instead of the NPC picker. Both used to be listed at once, which put two identical-looking **Roll...** entries on the same menu. Both are offered only while the character is in this campaign: a token keeps its character after the character leaves, and then offers neither. A sheet that cannot be loaded says why.
 
 > **Spending a player's hit dice.** A D&D 5e character's menu includes a **Hit Dice** section, and choosing one rolls a single die plus their Constitution and takes one off their pool — on *their* sheet, not a copy of it. That is deliberate, so you can cover a short rest for someone who isn't at the table, but it is a change to their character rather than just a roll. The hit points are not applied automatically; use the **+** on their roster card for the amount rolled.
 
@@ -300,7 +316,6 @@ For d20 systems (D&D 5e, PF2e) the picker also has an **Advantage / Disadvantage
 | D&D 5e | Full — abilities, saves, skills and combat, with bonuses derived from ability scores and Challenge Rating |
 | Pathfinder 2e | Full — using the modifiers printed on the stat block, with Fortitude/Reflex/Will saves |
 | Call of Cthulhu 7e | Custom Roll only — a percentile system has no d20 rolls to offer |
-| Shadowrun 6e | Custom Roll only — a dice-pool system has no d20 rolls to offer |
 
 If a token doesn't have a stat block, or you're running one of the systems above that offers none, there's a custom roll box at the bottom of the picker — type any valid dice expression (e.g. `3d8+2`) and an optional label, then click **Roll**. The result appears in the **Dice** panel for everyone, with the token's name as context (e.g. *"Goblin: Scimitar Damage = 5"*); an obscured or hidden token, or one on the spirit layer, is named *Unknown creature* there, since the Dice panel reaches players who are not sent it.
 
@@ -336,7 +351,7 @@ Obscuring is a switch you set by hand. It does not follow the light, since the r
 
 ## The Creature Library
 
-The Creature Library is your DM-side catalog of creature templates — stat blocks, images, and metadata ready to drag onto the map as NPC tokens.
+The Creature Library is your DM-side catalog of creature templates — stat blocks, images, and metadata ready to place on the map as NPC tokens.
 
 ### Opening the Creature Library
 
@@ -344,13 +359,15 @@ Click **Creature Library** (the skull icon) in the campaign header's DM toolbar 
 
 ### SRD Creature Seeding
 
-The first time you open the Creature Library in a new campaign, it may be empty. Click **Import D&D 5e SRD** to fetch the full D&D 5e SRD bestiary from Open5e. This is a one-time operation that populates the library with hundreds of ready-to-use creatures.
+The first time you open the Creature Library on a new server, it may be empty. An administrator clicks **Import D&D 5e SRD** to fetch the full D&D 5e SRD bestiary from Open5e. This is a one-time operation that populates the library with hundreds of ready-to-use creatures, for every campaign on the server.
+
+**Only an administrator can run the import**, because every campaign on the server shares what it adds. If you are a DM but not an administrator, the empty library says so instead of offering the button: ask your server's administrator to open the Creature Library in any campaign of theirs and import the creatures, and they appear in yours too.
 
 - The button names the system it imports because it always seeds **D&D 5e** content, whatever system your campaign uses. It stays available in any campaign — a D&D stat block is a reasonable starting point for homebrew — but you'll be importing D&D monsters
-- Seeding takes a few seconds — a progress indicator shows while it runs
+- Seeding takes a few seconds — a progress indicator shows while it runs. If Open5e cannot be reached, or takes more than 15 seconds over a page, the import stops, says why, and adds nothing; try again later
 - SRD creatures are **global** (shared across all campaigns on the instance) and **read-only**
 - You can duplicate any SRD creature to create an editable custom version
-- Running it again is safe: existing creatures are not duplicated. If your library was seeded before CozyVTT 1.1.1, re-running it fills in each SRD creature's hit points; custom creatures are never modified
+- The button is offered only while no SRD creatures have been imported, so it disappears once they are in. An import that runs again adds no creature twice, and on a library seeded before CozyVTT 1.1.1 it fills in each SRD creature's hit points; custom creatures are never modified
 
 ### Browsing and Searching
 
@@ -392,7 +409,7 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Stat Block** — The creature's combat stats (AC, speed, ability scores, attacks, etc.)
 - **HP Max** — Hit points given to tokens placed from this creature
 - **Challenge Rating** — Chosen from a list. Used for filtering, and in D&D 5e it also sets the creature's proficiency bonus — see [Saving Throws and Skills](#saving-throws-and-skills) below
-- **Saving Throws & Skills** — Tick which ones the creature is proficient or expert in; the bonuses are worked out for you
+- **Saves & Skills** — Tick which ones the creature is proficient or expert in; the bonuses are worked out for you
 - **Creature Type** — Optional (e.g., beast, undead, fiend)
 - **Token Image** — Optional. Click **Browse Assets** to pick from token images already in your asset library, or **Upload New** to add one. See [Creature Token Images](#creature-token-images) below
 - **Size** — Grid size (default 1×1)
@@ -557,11 +574,13 @@ A large campaign takes as long to export as your connection needs; nothing gives
 ### Importing a Campaign
 
 1. From the **Dashboard**, click the **Import** button (next to Create Campaign)
-2. Drop or browse for a `.cozyvtt` archive
+2. Drop a `.cozyvtt` archive on the window, or click the drop area (or press Enter on it) to choose one
 3. Review the preview: map count, creature count, token templates, asset count, and total size
 4. Optionally rename the campaign and toggle whether to import tokens
 5. Click **Import Campaign**
 6. Once complete, click **Open Campaign** to jump in
+
+While **Importing campaign...** is showing, the window cannot be closed: Escape, a click outside it and the X do nothing, so you always see how the import ended. The window can be closed again once it says the import is complete or has failed.
 
 An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can preview 20 archives and import 20 campaigns an hour, one at a time. If the import window says the archive is larger than the server accepts, the web proxy in front of the server has a lower size limit than CozyVTT's; whoever runs the server can raise it as the deployment guide describes.
 
@@ -612,11 +631,14 @@ The Campaign Roster in the left sidebar gives you a real-time view of all player
 
 ### Removing a Player
 
-To remove a player from your campaign, open **Campaign Settings** and find the player in the roster. Use the remove option to kick them from the campaign.
+To remove a player from your campaign, open the **Members** tab of **Campaign Settings**, click the remove button (a person with a minus sign) beside them, and confirm with **Remove**.
 
 **It takes effect at once**, even if they are in the session at that moment.
 They stop being able to chat, roll or move anything, and stop seeing what the
-rest of the table is doing, without waiting for them to close the page.
+rest of the table is doing, without waiting for them to close the page. Their
+page says "You were removed from this campaign." and takes them to their
+dashboard. Deleting a campaign does the same for everyone at its table, with
+"This campaign was deleted."
 
 **Their characters leave with them.** Each of their characters is taken out of
 the campaign: it stays theirs, but you and the other players can no longer open
@@ -624,10 +646,22 @@ or edit its sheet, and nothing they change on it reaches your table except its
 picture. A token on the map that was bound to one of those characters stays
 where it is, still shows the character's picture, and follows it if they change it.
 
+**Their personal notes and saved rolls stay theirs.** Nothing they wrote in the
+**Notes** tab or saved under **Saved** is deleted. They can still read it, and
+download it, from their dashboard, and it is back in the campaign if you invite
+them again. You still cannot see any of it. If you delete the campaign, their
+notes and saved rolls for it are deleted with it, along with everyone else's.
+
 Two people cannot be removed: whoever is currently the DM, and whoever owns the
 campaign. If you were handed the DM seat by the owner, they stay at the table as
 a player and you cannot remove them. Hand the seat back if you want to step away
 (see [Handing the game to someone else](#handing-the-game-to-someone-else)).
+
+### Call of Cthulhu: Keeper's Notes
+
+An investigator's sheet has a **Keeper's Notes** box, on the **Backstory** tab of the sheet's editor, for you alone. Open it with **Edit Character Sheet** from the roster's right-click menu; the box says "Only you, as the Keeper, can see or change these." Only the DM of the campaign the investigator is in sees or changes the notes. The investigator's player and the rest of the table are never sent them, and a save by anyone else leaves them as they are.
+
+The notes stay with your campaign. If the investigator is moved into another campaign, brought into one when its owner accepts an invitation, or copied, the notes are left behind, and an investigator in no campaign shows them to nobody. Notes written before version 1.5.2, including any a player typed into the box, are shown to the Keeper only.
 
 ### Character Assignment
 
@@ -645,7 +679,9 @@ The **Campaign documents** button (the book icon to the right of the DM toolbar)
 
 **Stop sharing** removes a shared document from the campaign and leaves the document itself untouched. The campaign's own documents (uploaded or written from here) have no share to remove. The bin button beside one deletes it, for everyone and for good, after asking; if something still uses the document, a second window says where and removes it only if you choose **Delete anyway**. It is also how to remove a document whose uploader has since deleted their account; such a document is listed as shared by "a deleted account".
 
-A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers.
+A player sees the shared list and can read and open everything on it, and nothing else. They cannot share, unshare, or edit a document that is not theirs, and the server refuses those regardless of what the page offers. **Edit** shows in the reader only for someone who can edit that document: who can is who can delete it (see [Editing](USER_GUIDE.md#editing) in the user guide).
+
+As the DM you can edit any of the campaign's own documents, whoever wrote them, for example a co-DM who has since left. A DM who hands the seat on and leaves the campaign can no longer edit the documents they wrote there. A document shared in from someone's own library stays theirs to edit.
 
 **Keeping notes current.** Text and Markdown documents can be edited in place: open one and press **Edit**. This is the natural home for a running session log or a set of house rules that change as the campaign goes on, since the table always reads the latest text and you never re-upload. See [Documents](USER_GUIDE.md#documents) in the user guide for formats, sizes and what is and is not allowed.
 
@@ -773,7 +809,6 @@ You keep everything else: only you decide who is in the fight, drag the order ar
 | **D&D 5e** | `d20 +` Dexterity modifier, plus the sheet's **other bonus** box (Alert, Jack of All Trades, and so on) |
 | **Pathfinder 2e** | `d20 +` the stat named by the sheet's **Uses:** dropdown — Perception by default, Stealth when someone is sneaking |
 | **Call of Cthulhu 7e** | **No roll.** Investigators are ranked in DEX order, so the control reads **Set Initiative** and takes their DEX. Nothing appears in the dice log, because no dice were thrown |
-| **Shadowrun 6e** | The character's initiative dice and base from their sheet |
 | **NPCs** | A D&D 5e stat block rolls from its recorded Dexterity. A token with no sheet or stat block rolls a plain d20 |
 
 Two things worth knowing. **Call of Cthulhu's readied firearms** act at DEX + 50 — that depends on the round rather than the investigator, so click the value and type it in when it applies. And **advantage on initiative** (a Sentinel Shield) isn't automatic; roll `2d20kh1` in the dice panel and enter the result.
@@ -834,7 +869,7 @@ Click **End combat** (the circled ✕ beside **Next Turn**) and confirm with **E
 
 Fog of war covers your map and lets you reveal it a piece at a time, so players discover a dungeon room by room instead of seeing the whole floor plan at once. You control it by hand — nothing is revealed until you say so.
 
-**Under fog, players see nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it.
+**Under fog, players' screens show nothing at all**: not the map artwork, not the tokens standing there, not the walls, doors or light glows. The one exception is a player's own token, which is always drawn wherever it stands. You see fogged areas as a translucent tint instead, so you can keep working under it. Fog hides things on the screen; it does not keep them from the player's browser. [What players' browsers receive](#what-players-browsers-receive) below says exactly what does reach it.
 
 > 💡 **Fog of war and dynamic lighting are two different things.** Fog is manual: you decide what has been revealed, and it stays revealed. Dynamic lighting (the next section) is automatic and depends on where each character is standing and what walls block their view. You can use either on its own, or both together.
 
@@ -876,6 +911,26 @@ A token standing in an unrevealed area is hidden from players entirely, even if 
 
 Worth knowing what fog does *not* do: it hides tokens from view, but the map still sends them to the player's browser, because revealing a square has to be instant. A token you want kept secret from a determined player should be set **hidden** rather than merely left in the dark — a hidden token is never sent at all.
 
+### What players' browsers receive
+
+Fog is drawn over the map in each player's browser, so everything under it has already arrived there. A determined player can read what their browser was sent, with the browser's developer tools, even where their screen shows nothing. For the map you are showing, each player and spectator receives:
+
+| What | What they receive |
+|---|---|
+| **The map picture** | The whole picture, fogged areas included. |
+| **Tokens** | Every token on the plane they are on that is not **hidden**, fog or no fog. With dynamic lighting on, only the tokens their own characters can see. Never your token notes or stat blocks, a creature's hit points only when its HP bar is on, and an obscured token only as a shape. |
+| **Walls, windows and doors** | Every one, because their browser works out what their characters can see from them. Each door arrives open or closed. A **locked** door arrives as an ordinary closed door, so the lock is not given away, and locking or unlocking a closed door sends them nothing at all, whether you change one door or a whole selection with **Change type**; a player who tries it is told it is locked. |
+| **Lights** | Every light that is on: where it is, how far it reaches and its colour. A light you have switched off is not sent until you switch it on, and adding, moving or deleting one that is off sends them nothing at all, **Clear All** included when every light left is off. |
+| **Fog** | Only which squares are revealed to them. |
+
+With dynamic lighting on, a change to a wall, door or light also sends each player the tokens their characters can now see. A change that sends them nothing in the table above, such as locking a closed door, does not, so nothing reaches their browser to say that anything happened.
+
+A map you have prepared but not switched to sends them nothing at all. So, for anything that must stay secret:
+
+- a creature or object: set its token **hidden**;
+- a whole area: keep it on a separate map until the party gets there, since a map's picture arrives whole;
+- a lit room: switch its lights off until it matters.
+
 ---
 
 ## Walls & Dynamic Lighting
@@ -900,8 +955,10 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Wall | Orange (customizable) | Yes | Standard blocking wall |
 | Door (Closed) | Purple | Yes | Clickable to open |
 | Door (Open) | Green | No | Click to close |
-| Door (Locked) | Red | Yes | DM must unlock |
+| Door (Locked) | Red | Yes | Players cannot open it until you unlock it |
 | Window | Blue | No | Transparent to light |
+
+**Locking and unlocking a door.** Right-click a door on the map, with no wall or fog tool in use, for its menu: **Open Door** or **Close Door**, and for you **Lock Door** or **Unlock Door**. **Change type** in the Walls panel's **Select** mode does the same for every wall selected. Players get the same menu for the doors they are offered, without the lock. A locked door reaches their browser as an ordinary closed door, so it looks like any other until they try to open it and are told it is locked.
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
@@ -1017,7 +1074,14 @@ browsing the library can see it.
 
 **Size limits.** The picture inside the file must be a PNG, JPEG or WebP no larger than the map size limit (50 MB unless your host changed it). It travels inside the file as text, which makes the file about a third bigger than the picture, so the import accepts a file of up to the map limit plus a third plus 8 MB (75 MB at 50 MB). A file over that is refused straight away with a message saying so. A map holds at most 5,000 wall segments, doors included, and 200 lights; a file with more is refused before anything is imported, and if it would fit without its furniture walls the message says so. A file holding more than a million points, doors, lights and settings in all, far more than any map uses even with its furniture walls left in the file, is refused straight away. The map's name can be up to 200 characters. A PDF is not accepted as a map picture, here or anywhere else, since a PDF cannot be drawn on the map. If the file is refused although it is under these limits, the proxy in front of CozyVTT may have a smaller limit (your host can raise it; see *Upload Size Limits* in the Deployment guide).
 
-**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down.
+**One import at a time.** Start the next import once the last one has finished. A second file sent while one is still being read is refused with "Another import is still running", and nothing is lost: send it again. Importing a folder of maps one after another is never slowed down. If another DM on the same server is importing a map at the same moment, yours waits until theirs has been read and then goes ahead; with very large files that can add a few seconds. While yours uploads, waits and runs, the **Import UVTT** button shows a spinning circle. Two limits keep one import from holding up everyone else's, and either way the answer comes within a minute of your file finishing its upload, in red at the top of the Map Library:
+
+| What happens | What the Map Library shows | What to do |
+|---|---|---|
+| Your import would have to wait more than 20 seconds for other DMs' imports | "Another map import is running on the server. Try again in a minute." | Import the file again a minute later. Nothing was saved. |
+| Your import takes longer than 30 seconds once it has started | "This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute." | Import the file again a minute later. If it happens every time, the server may be too busy or too slow for a picture that large: export it smaller from your mapping tool. |
+
+If you close the page or lose your connection while your import is waiting its turn, it is dropped and nothing is imported.
 
 **One file is one map.** A Universal VTT holds a single picture, so a dungeon
 with several levels comes as one file per level, and each one becomes its own
@@ -1044,6 +1108,8 @@ from can export that section on its own, or export the map as a PNG instead and
 
 Open the **Map Library** and click the **download** button (**Export as .uvtt file**) on the map's card, between the pencil and the bin. Your browser saves the map as a `.uvtt` file named after it. A script or a tool built on the unsupported HTTP surface can fetch the same file (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only). Importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
+A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture an older version of CozyVTT stored as a PDF, cannot be exported: the server refuses the download, and the browser's download fails with no message from CozyVTT. Choose a map picture for it in **Edit Map**, then export it again.
+
 ### Undo / Redo
 
 Wall edits support full undo/redo:
@@ -1064,6 +1130,10 @@ Dynamic lighting is off on a new map, unless the map was imported from a Univers
 3. Click **Save Changes**
 
 Once enabled, players only see the areas their characters have line of sight to, and within that, only what is lit or within their darkvision. The rest of the map is black.
+
+The same goes for a token while you carry it. A player sees it move only while it is somewhere they can see: carry it out of their sight and it leaves their map at that point, carry it into their sight and it appears there.
+
+Sight is worked out from the middle of each token. A Large or Huge token sees from the centre of the squares it covers, and another token counts as seen when the middle of its squares can be seen: a large creature whose middle is behind a wall stays off a player's map even if its edge reaches past the wall.
 
 *Screenshot pending — Map settings with Dynamic Lighting checkbox.*
 
@@ -1131,7 +1201,7 @@ Two practical consequences when you are building a map:
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
 4. Pick a color from the palette or enter a custom hex
 
-Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way.
+Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see; spectators cannot open or close doors at all.
 
 | Preset | Bright (sq) | Dim (sq) | Typical Use |
 |--------|-------------|----------|-------------|
@@ -1155,7 +1225,7 @@ As DM you always see all walls, all tokens and the full map. To see what a playe
 - Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors they can actually see (in their line of sight and lit, within their darkvision, or under Global Illumination), the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
 - Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
 - The preview is on the plane that viewer is on: a player whose token you have sent to the spirit layer is previewed in the spirit realm, with the spirit layer image, the spirit tint and only spirit-plane tokens, seeing through their spirit token, exactly as their own screen shows it. So is a single token on the spirit layer (the picker marks those *(spirit)*), and every view while the spirit layer is open to everyone. **All player tokens** stays on the material plane unless the spirit layer is open to everyone
-- The preview shows exactly what that viewer is sent, the hover card and a dragged token included: a creature's hit points only once its HP bar is on, and an obscured token as the grey shape. **All player tokens** masks every obscured token, since nobody at a shared screen is its sole controller
+- The preview shows exactly what that viewer is sent, the hover card and a token being moved included: a creature's hit points only once its HP bar is on, and an obscured token as the grey shape. **All player tokens** masks every obscured token, since nobody at a shared screen is its sole controller
 
 **Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now, and moving the token while you preview it adds to that memory, so a game you run alone still builds up each player's explored ground. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
 
@@ -1179,7 +1249,7 @@ It is a **separate plane, not a see-through overlay.** Someone viewing the spiri
 There are two ways a player ends up there:
 
 - **The whole table at once.** Click **Spirit Layer** (the ghost icon) in the campaign header and open the veil with the switch at the top of the panel. Every player is in the spirit realm until you close it again.
-- **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane.
+- **One player at a time.** Give a player control of a token that lives on the spirit layer. Any player controlling a *visible* spirit-layer token on the current map sees the spirit realm; everyone else stays on the material plane. **Hiding that token takes the player back to the material plane:** a hidden token does not count, so hide it only when you mean them to leave. A spectator is never moved by a token, only by the whole-table switch above.
 
 *Screenshot pending — Spirit Layer control panel.*
 
@@ -1229,7 +1299,7 @@ Click the **Atmosphere** button in the campaign header.
 
 ### Ambient Audio
 
-Upload audio files to your Asset Library (type: **Audio**), then select them in the Atmosphere panel. All connected players hear the audio automatically.
+Upload audio files to your Asset Library (type: **Audio**; MP3, Ogg or WAV, an Ogg file recorded in Opus included), then select them in the Atmosphere panel. All connected players hear the audio automatically.
 
 - Set a specific audio track for the current scene
 - Audio loops automatically until you change or stop it

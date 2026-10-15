@@ -39,6 +39,7 @@ import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
 import NumberField from '../../ui/NumberField';
+import ListLimitNote, { ADD_BUTTON_OFF, listChangeAllowed, listIsFull } from '../ListLimitNote';
 import {
   passiveScore,
   dnd5eSpellSaveDC,
@@ -52,6 +53,8 @@ import {
   dnd5eBackfilledSkillOtherBonus,
   dnd5eBackfilledSaveOtherBonus,
   DND5E_ABILITY_NAMES,
+  MIN_BONUS_OVERRIDE,
+  MAX_BONUS_OVERRIDE,
 } from '@/utils/rules/dnd5e';
 import {
   dnd5eInitiativeModifier,
@@ -67,6 +70,8 @@ import {
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { SHEET_LIST_MAX, SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
+import { assetNameFrom } from '@/utils/assetName';
 
 /**
  * The sheet as this editor holds it.
@@ -199,20 +204,39 @@ function withRecordedOtherBonuses<T extends object>(entries: T, backfill: (key: 
 }
 
 /**
- * All nine spell slot levels, from whatever the sheet stored.
+ * All nine spell slot levels, from whatever the sheet stored, each within
+ * what the server stores: a total of at most SPELL_SLOTS_MAX, and no more used
+ * than the total.
  *
  * The schema requires every level once `slots` is present, so a sheet stored
  * with none, or a block the editor makes up for a sheet with no spellcasting,
- * would have its first slot edit, or its first save, refused.
+ * would have its first slot edit, or its first save, refused. A sheet stored
+ * before the limits would have every save refused.
  */
 function withAllSlotLevels(stored: unknown): DnD5eSpellSlots {
   const source = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
-  const count = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : 0);
+  const count = (value: unknown, most: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? Math.min(most, Math.max(0, Math.trunc(value))) : 0;
   const levels = ['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((level) => {
     const slot = (typeof source[level] === 'object' && source[level] !== null ? source[level] : {}) as Record<string, unknown>;
-    return [level, { total: count(slot.total), expended: count(slot.expended) }] as const;
+    const total = count(slot.total, SPELL_SLOTS_MAX);
+    return [level, { total, expended: count(slot.expended, total) }] as const;
   });
   return Object.fromEntries(levels) as unknown as DnD5eSpellSlots;
+}
+
+/**
+ * A manual bonus within the range the server stores (initiative, passive
+ * Perception, the spellcasting adjustments). An older sheet's stored total is
+ * read back into these as a bonus, and could be any number.
+ */
+function withinBonusRange(value: number): number {
+  return Math.min(MAX_BONUS_OVERRIDE, Math.max(MIN_BONUS_OVERRIDE, value));
+}
+
+/** The same, for a bonus that may be absent; absent stays absent. */
+function bonusWithinRange<T>(value: T): T | number {
+  return typeof value === 'number' && Number.isFinite(value) ? withinBonusRange(value) : value;
 }
 
 /**
@@ -242,6 +266,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
+  // Set when the last change to the cantrips box was turned away for adding one entry too many.
+  const [cantripsTurnedAway, setCantripsTurnedAway] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const { data: serverConfig } = useServerConfigQuery();
 
@@ -258,6 +284,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     const own = JSON.parse(JSON.stringify(data ?? {})) as DnD5eFormData;
     return {
       ...withoutOrphanLanguages(withoutOrphanFeatures(own)),
+      // Held to the range the server stores, so a sheet stored with more can
+      // still be saved. Left out when absent, which is what makes the effects
+      // below read an older sheet's totals back into them.
+      ...(own.initiativeBonus != null ? { initiativeBonus: bonusWithinRange(own.initiativeBonus) } : {}),
+      ...(own.passivePerceptionBonus != null
+        ? { passivePerceptionBonus: bonusWithinRange(own.passivePerceptionBonus) }
+        : {}),
       // Ensure nested objects exist.
       //
       // TODO(typing): `{}` is not a valid container — none of these has its keys,
@@ -281,7 +314,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // Same TODO(typing) as the containers above: this default omits `class`,
       // which the type requires. Cast rather than corrected.
       spellcasting: (own.spellcasting
-        ? { ...own.spellcasting, slots: withAllSlotLevels(own.spellcasting.slots) }
+        ? {
+            ...own.spellcasting,
+            slots: withAllSlotLevels(own.spellcasting.slots),
+            ...(own.spellcasting.spellSaveDCOtherBonus != null
+              ? { spellSaveDCOtherBonus: bonusWithinRange(own.spellcasting.spellSaveDCOtherBonus) }
+              : {}),
+            ...(own.spellcasting.spellAttackOtherBonus != null
+              ? { spellAttackOtherBonus: bonusWithinRange(own.spellcasting.spellAttackOtherBonus) }
+              : {}),
+          }
         : {
             ability: '',
             spellSaveDC: 0,
@@ -568,7 +610,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       const backfilledPassiveBonus =
         prev.passivePerceptionBonus === undefined || prev.passivePerceptionBonus === null
           ? (typeof storedTotal === 'number' && Number.isFinite(storedTotal)
-              ? storedTotal - passiveScore(perceptionBonus)
+              ? withinBonusRange(storedTotal - passiveScore(perceptionBonus))
               : 0)
           : null;
       const passiveBonus = backfilledPassiveBonus ?? prev.passivePerceptionBonus ?? 0;
@@ -646,7 +688,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    * somewhere less visible.
    */
   useEffect(() => {
-    const backfilled = dnd5eBackfilledInitiativeBonus(formData);
+    const read = dnd5eBackfilledInitiativeBonus(formData);
+    const backfilled = read === null ? null : withinBonusRange(read);
     const bonus = backfilled ?? formData.initiativeBonus ?? 0;
     const total = dnd5eInitiativeModifier({ ...formData, initiativeBonus: bonus });
 
@@ -685,8 +728,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     // hand-typed, so it records minus the ability's modifier as the other bonus
     // and the DC and attack do not move. The conversion should apply only to a
     // total the sheet was loaded with, never to one this effect wrote.
-    const dcBackfill = dnd5eBackfilledSpellSaveDCBonus(formData);
-    const attackBackfill = dnd5eBackfilledSpellAttackBonus(formData);
+    const dcRead = dnd5eBackfilledSpellSaveDCBonus(formData);
+    const attackRead = dnd5eBackfilledSpellAttackBonus(formData);
+    const dcBackfill = dcRead === null ? null : withinBonusRange(dcRead);
+    const attackBackfill = attackRead === null ? null : withinBonusRange(attackRead);
 
     const withBonuses = {
       ...formData,
@@ -857,10 +902,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // Cantrips, parsed into a new spellcasting block. Written into the one
       // the form holds, the array showed up in the form while the save was in
       // flight, so the sheet still counted as changed once it had gone through.
+      // Slots too: a total lowered below the slots used leaves the used count
+      // as it was while the player types, and it is brought down here.
       if (updatedData.spellcasting) {
         updatedData.spellcasting = {
           ...updatedData.spellcasting,
           cantrips: parseCommaSeparated(updatedData.spellcasting.cantrips),
+          slots: withAllSlotLevels(updatedData.spellcasting.slots),
         };
       }
 
@@ -878,7 +926,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           } else {
             assetFormData.append('scope', 'USER');
           }
-          assetFormData.append('name', `${formData.characterName || 'Character'} Token`);
+          assetFormData.append('name', assetNameFrom(`${formData.characterName || 'Character'} Token`));
           assetFormData.append('file', tokenImageFile);
 
           const uploadResponse = await api.uploadAsset(assetFormData);
@@ -1145,6 +1193,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               type="text"
               value={formData.characterName || ''}
               onChange={(e) => updateField('characterName', e.target.value)}
+              maxLength={SHEET_NAME_MAX}
               placeholder="Character Name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
                 errors.characterName ? 'border-red-300' : 'border-white/20'
@@ -1235,13 +1284,11 @@ min={0}
   const renderStatsTab = () => (
     <div className="space-y-6">
       {/* Character Details */}
-      {/* TODO(ui): these labels are not tied to their inputs (no htmlFor and id),
-          so a screen reader announces each box by its placeholder alone. Give
-          each input an id and its label a matching htmlFor. */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
+          <label htmlFor="dnd5e-alignment" className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
           <input
+            id="dnd5e-alignment"
             type="text"
             value={formData.alignment || ''}
             onChange={(e) => updateField('alignment', e.target.value)}
@@ -1250,8 +1297,9 @@ min={0}
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Background</label>
+          <label htmlFor="dnd5e-background" className="block text-sm font-semibold text-stone-700 mb-1">Background</label>
           <input
+            id="dnd5e-background"
             type="text"
             value={formData.background || ''}
             onChange={(e) => updateField('background', e.target.value)}
@@ -1473,6 +1521,9 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-lg font-semibold text-stone-800">Your Own Skills</h3>
+          {/* TODO(sheets): the schema keeps at most 30 of these and this button
+              has no limit, so a 31st skill makes a sheet that cannot be saved.
+              Turn the button off at the limit, as the lists below do. */}
           <button
             type="button"
             onClick={() =>
@@ -1605,10 +1656,14 @@ min={1}
             )}
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">
+            <label htmlFor="passive-perception-other-bonus" className="block text-xs font-semibold text-stone-600 mb-1">
               Other bonus
             </label>
             <NumberField
+              id="passive-perception-other-bonus"
+              aria-label="Other bonus to passive Perception"
+              min={MIN_BONUS_OVERRIDE}
+              max={MAX_BONUS_OVERRIDE}
               value={formData.passivePerceptionBonus ?? 0}
               onChange={(v: number) => updateField('passivePerceptionBonus', v)}
               className="w-20 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -1680,10 +1735,13 @@ min={0}
           subclasses that swap in Wisdom or Intelligence. */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">
+          <label htmlFor="initiative-other-bonus" className="block text-sm font-semibold text-stone-700 mb-1">
             Initiative — other bonus
           </label>
           <NumberField
+            id="initiative-other-bonus"
+            min={MIN_BONUS_OVERRIDE}
+            max={MAX_BONUS_OVERRIDE}
             value={formData.initiativeBonus ?? 0}
             onChange={(v: number) => updateField('initiativeBonus', v)}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -1745,11 +1803,13 @@ min={0}
               ];
               updateField('hitDice', newHitDice);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.hitDice)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Hit Die
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.hitDice)} />
         <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center mb-1">
           <label className="text-xs font-semibold text-stone-600">Class</label>
           <label className="text-xs font-semibold text-stone-600 text-center">Die</label>
@@ -1952,11 +2012,13 @@ min={0}
               ];
               updateField('attacks', newAttacks);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.attacks)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Attack
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.attacks)} />
         <div className="space-y-4">
           {(formData.attacks || []).map((attack, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
@@ -2114,6 +2176,9 @@ min={0}
                   <label className="block text-xs font-semibold text-stone-600">
                     Other Damage Rolls
                   </label>
+                  {/* TODO(sheets): the schema keeps at most 10 of these per
+                      attack and this button has no limit, so an 11th makes a
+                      sheet that cannot be saved. Turn it off at the limit. */}
                   <button
                     type="button"
                     onClick={() =>
@@ -2202,6 +2267,13 @@ min={0}
   );
 
   // Render Spells tab
+  // The cantrips box as typed. It holds a string while the sheet is open and
+  // becomes a list when it is saved.
+  const cantripsText =
+    typeof formData.spellcasting?.cantrips === 'string'
+      ? formData.spellcasting.cantrips
+      : (formData.spellcasting?.cantrips || []).join(', ');
+
   const renderSpellsTab = () => (
     <div className="space-y-6">
       {/* Spellcasting class and ability */}
@@ -2250,6 +2322,8 @@ min={0}
           </div>
           <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
+            min={MIN_BONUS_OVERRIDE}
+            max={MAX_BONUS_OVERRIDE}
             value={formData.spellcasting?.spellSaveDCOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellSaveDCOtherBonus', v)}
             aria-label="Spell save DC other bonus"
@@ -2267,6 +2341,8 @@ min={0}
           </div>
           <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
+            min={MIN_BONUS_OVERRIDE}
+            max={MAX_BONUS_OVERRIDE}
             value={formData.spellcasting?.spellAttackOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellAttackOtherBonus', v)}
             aria-label="Spell attack other bonus"
@@ -2285,14 +2361,22 @@ min={0}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Cantrips</h3>
         <textarea
-          value={typeof formData.spellcasting?.cantrips === 'string'
-            ? formData.spellcasting.cantrips
-            : (formData.spellcasting?.cantrips || []).join(', ')}
-          onChange={(e) => updateField('spellcasting.cantrips', e.target.value)}
+          value={cantripsText}
+          onChange={(e) => {
+            // The box is turned into a list when the sheet is saved, so the
+            // count is held to the limit here, as a list's add button is.
+            if (!listChangeAllowed(parseCommaSeparated(e.target.value).length, parseCommaSeparated(cantripsText).length)) {
+              setCantripsTurnedAway(true);
+              return;
+            }
+            setCantripsTurnedAway(false);
+            updateField('spellcasting.cantrips', e.target.value);
+          }}
           placeholder="Enter cantrips separated by commas (e.g., Fire Bolt, Mage Hand, Prestidigitation)"
           rows={2}
           className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
         />
+        <ListLimitNote full={cantripsTurnedAway || parseCommaSeparated(cantripsText).length >= SHEET_LIST_MAX} />
       </div>
 
       {/* Spell Slots */}
@@ -2306,23 +2390,30 @@ min={0}
                 <div className="text-sm font-semibold text-stone-700 mb-2 text-center">Level {level}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="block text-xs text-stone-600 mb-1">Total</label>
+                    <label htmlFor={`spell-slots-${level}-total`} className="block text-xs text-stone-600 mb-1">Total</label>
                     <NumberField
-min={0}
+                      id={`spell-slots-${level}-total`}
+                      min={0}
+                      max={SPELL_SLOTS_MAX}
                       value={slotData.total}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.total`, v)}
                       className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-                    fallback={0}
+                      fallback={0}
                     />
                   </div>
                   <div>
-                    <label className="block text-xs text-stone-600 mb-1">Used</label>
+                    <label htmlFor={`spell-slots-${level}-used`} className="block text-xs text-stone-600 mb-1">Used</label>
+                    {/* Shown no higher than the total. The stored count is
+                        brought down on save, so typing a new total digit by
+                        digit does not lose it. */}
                     <NumberField
-min={0}
-                      value={slotData.expended}
+                      id={`spell-slots-${level}-used`}
+                      min={0}
+                      max={slotData.total}
+                      value={Math.min(slotData.expended, slotData.total)}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.expended`, v)}
                       className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
-                    fallback={0}
+                      fallback={0}
                     />
                   </div>
                 </div>
@@ -2344,11 +2435,13 @@ min={0}
               ];
               updateField('spellcasting.spells', newSpells);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.spellcasting?.spells)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Spell
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.spellcasting?.spells)} />
         <div className="space-y-2">
           {(formData.spellcasting?.spells || []).map((spell, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 flex items-center space-x-3">
@@ -2466,11 +2559,13 @@ min={0}
               ];
               updateField('inventory', newInventory);
             }}
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.inventory)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Item
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.inventory)} />
         <div className="space-y-3">
           {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
@@ -2659,11 +2754,13 @@ min={0}
               onClick={() =>
                 updateField('featuresAndTraits', [...featureRows, { name: '', description: '' }])
               }
-              className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm"
+              disabled={listIsFull(featureRows)}
+              className={`px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm ${ADD_BUTTON_OFF}`}
             >
               + Add Feature
             </button>
           </div>
+          <ListLimitNote full={listIsFull(featureRows)} />
           <p className="text-xs text-stone-600 mb-3">
             Class features, racial traits and feats. A description is optional — leave it blank
             for anything that is just a name.

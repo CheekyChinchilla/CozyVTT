@@ -26,6 +26,7 @@ vi.mock('@/services/socket', () => ({
   default: {
     connect: vi.fn().mockResolvedValue(undefined),
     onRebuilt: () => () => {},
+    onCreated: () => () => {},
     isConnectInProgress: () => false,
     disconnect: vi.fn(),
     getSocket: () => fakeSocket,
