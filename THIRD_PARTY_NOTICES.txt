@@ -151,10 +151,12 @@ axios 1.x
   License: MIT
   https://github.com/axios/axios
 
-framer-motion 10.x
+framer-motion 14.x
   Copyright (c) Framer B.V.
   License: MIT
-  https://github.com/framer/motion
+  https://github.com/motiondivision/motion
+  Note: It brings motion-dom and motion-utils from the same project, also
+  under the MIT License, Copyright (c) Motion B.V.
 
 lucide-react 1.x
   Copyright (c) Lucide Icons and Contributors
