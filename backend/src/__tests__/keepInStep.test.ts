@@ -89,6 +89,12 @@
  * CI, the images or a manual install on a different Node from the rest.
  * `.nvmrc` holds the major alone and the others are compared with it.
  *
+ * The npm settings the images install with. Each project's `.npmrc` turns
+ * on strict-allow-scripts, which fails an install at a package with an
+ * install script that `allowScripts` does not name. A Dockerfile stage reads
+ * the file only if it copies it in before it runs npm; one that copies
+ * `package*.json` alone installs as if the setting were off.
+ *
  * The backend's npm overrides. Each one holds a package under another at a
  * newer version than that package asks for, because the version it asks for
  * has a published advisory. The override names a version, and the package
@@ -547,6 +553,30 @@ describe('the Node.js major', () => {
     const setups = ci.match(/uses: actions\/setup-node@/g) ?? [];
     const versions = ci.match(/^\s*node-version:/gm) ?? [];
     expect(versions.length).toBe(setups.length);
+  });
+});
+
+describe('the .npmrc each image installs with', () => {
+  const dockerfiles = ['backend/Dockerfile', 'backend/Dockerfile.prod', 'frontend/Dockerfile', 'frontend/Dockerfile.prod'];
+
+  /** The files a COPY line takes from the build context; none for a copy from another stage. */
+  const copied = (line: string): string[] => {
+    const words = line.trim().split(/\s+/).slice(1);
+    if (words.some((word) => word.startsWith('--from='))) return [];
+    const paths = words.filter((word) => !word.startsWith('--'));
+    return paths.slice(0, -1);
+  };
+
+  it.each(dockerfiles)('is copied into every stage of %s before npm installs there', (rel) => {
+    const stages = instructions(rel).join('\n').split(/^FROM\s/m).slice(1);
+    const installing = stages.filter((stage) => /^RUN\b.*\bnpm (ci|install)\b/m.test(stage));
+    if (installing.length === 0) throw new Error(`${rel} no longer runs npm ci or npm install; update this test with the file`);
+    const late = installing.filter((stage) => {
+      const lines = stage.split('\n');
+      const install = lines.findIndex((line) => /^RUN\b.*\bnpm (ci|install)\b/.test(line));
+      return !lines.slice(0, install).some((line) => /^COPY\s/.test(line) && copied(line).includes('.npmrc'));
+    });
+    expect(late.map((stage) => `${rel}: FROM ${stage.split('\n')[0]}`)).toEqual([]);
   });
 });
 

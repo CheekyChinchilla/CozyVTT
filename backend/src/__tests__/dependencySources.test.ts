@@ -10,12 +10,12 @@
  *
  * A package can also run a script while it is installed: the Prisma packages
  * fetch their database engines that way, and argon2 checks for its prebuilt
- * binary. package.json's `allowScripts` names the packages allowed to; npm
- * 11.20 still runs any other package's script and prints a warning naming it,
- * and npm 12 is announced to block such a script. The list must name exactly
- * the packages whose scripts run today, so a new one is a decision made in a
- * reviewed change, and a forgotten one cannot quietly stop the engines being
- * fetched.
+ * binary. package.json's `allowScripts` names the packages allowed to, and
+ * each project's `.npmrc` turns on strict-allow-scripts, so `npm ci` fails at
+ * any other package with a script, in the images, in CI and on a developer's
+ * machine. The list must name exactly the packages whose scripts run today:
+ * a new one is then a decision made in a reviewed change, and the install of
+ * a released lockfile cannot fail on a package the list forgot.
  */
 
 import fs from 'fs';

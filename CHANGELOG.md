@@ -42,6 +42,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The backend can no longer change its own program files.** Its filesystem is read-only, apart from `backend/uploads`, `backend/backups` and `backend/logs`, and its `/tmp`, where a backup writes its copy of the database and a restore unpacks the archive. `/tmp` is now a volume of its own, `backend_tmp`, which Compose creates by itself and which needs no backup, so a large backup does not count against the backend's memory. A backup or restore that was stopped part-way left its working copy of the database there, with every password hash in it, until the container was recreated; the backend now removes it each time it starts. `validate-characters.js --export`, run in the container, writes its report to `/tmp/validation-report.json` and says so; `docker compose cp backend:/tmp/validation-report.json .` copies it out.
 
+- **Building CozyVTT stops at a package that wants to run a program while it installs, unless CozyVTT has approved it.** A few packages run a program of their own while they are installed, such as the database tools fetching their engines. CozyVTT keeps a list of the ones allowed to. Until now a package missing from the list still ran its program, with a warning in the build output; now the build stops with an error naming the package. Each release's list matches the packages it installs, so `docker compose up -d --build` works as before.
+
 ---
 
 ## [1.5.2] - 2026-10-14
