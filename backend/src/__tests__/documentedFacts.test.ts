@@ -8,8 +8,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import helmet from 'helmet';
 import { isSmtpConfigured } from '../services/email';
+import { createApp } from '../app';
+import { appLayers } from './helpers/routeInventory';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -144,8 +145,11 @@ describe("the changelog's note for installs without Docker", () => {
 });
 
 describe('HSTS, in the deployment guide', () => {
-  /** The Strict-Transport-Security value helmet sets when asked for nothing about it. */
-  function helmetDefault(): string | undefined {
+  /** The Strict-Transport-Security value the app's own security headers set. */
+  function sentByTheApp(): string | undefined {
+    const app = createApp({ session: { secret: 'test-secret-do-not-use-in-production' }, generalApiLimiter: false });
+    const layer = appLayers(app).find((candidate) => candidate.name === 'helmetMiddleware');
+    if (!layer || typeof layer.handle !== 'function') throw new Error('The app no longer sets its security headers with helmet');
     const headers: Record<string, string> = {};
     const response = {
       setHeader: (name: string, value: string) => {
@@ -154,22 +158,25 @@ describe('HSTS, in the deployment guide', () => {
       removeHeader: () => undefined,
       getHeader: () => undefined,
     };
-    helmet()({} as never, response as never, () => undefined);
+    layer.handle({}, response, () => undefined);
     return headers['strict-transport-security'];
   }
 
   // The guide said HSTS was off until the administrator added it. The backend
-  // sends helmet's default with every answer it makes, /api and /socket.io
-  // included, and a browser keeps a host on HTTPS for that long once it has
-  // seen the header over HTTPS.
-  it('says what the backend sends, which is helmet’s default because server.ts leaves it alone', () => {
-    // TODO(docs): helmet is configured in app.ts, so an HSTS option set there
-    // passes this check unnoticed. It should read app.ts.
-    expect(read('backend/src/server.ts')).not.toMatch(/\bhsts\b|strictTransportSecurity/i);
-
-    const sent = helmetDefault();
+  // sends it with every answer it makes, /api and /socket.io included, and a
+  // browser keeps a host on HTTPS for that long once it has seen the header
+  // over HTTPS. The value is read from the app, so an option set in app.ts
+  // counts as much as a change of helmet's default.
+  it('says what the backend sends, and for how many days', () => {
+    const sent = sentByTheApp();
     expect(sent).toMatch(/^max-age=\d+; includeSubDomains$/);
-    expect(read('docs/DEPLOYMENT.md')).toContain(`\`Strict-Transport-Security: ${sent}\``);
+    // Every place the guide quotes the header the backend sends.
+    const quoted = [...read('docs/DEPLOYMENT.md').matchAll(/`Strict-Transport-Security: ([^`]*)`/g)].map((match) => match[1]);
+    expect(quoted.length).toBeGreaterThan(0);
+    expect(quoted.filter((value) => value !== sent)).toEqual([]);
+
+    const days = Number(/max-age=(\d+)/.exec(sent ?? '')?.[1]) / 86400;
+    expect(section('docs/DEPLOYMENT.md', '### HTTPS is remembered by browsers', '### How it works')).toContain(`(${days} days)`);
   });
 
   it('no longer calls HSTS something the administrator adds', () => {
