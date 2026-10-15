@@ -753,13 +753,16 @@ also does what self-hosters run and a developer usually does not:
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into
 `dev` for each project's minor and patch updates (grouped), the actions and
-the Docker base images. Major versions of npm packages are held back until
-the 1.5.3 platform release takes them by hand; after it, each major comes as
-a pull request of its own. Node and nginx move to a new major or stable line
-by hand, and PostgreSQL's major version never through Dependabot, since its
-data has to be dumped and restored. Dependabot alerts for published
-advisories are on; its automatic security pull requests are off for now,
-because GitHub opens those against `main`, which only takes releases.
+the Docker base images. Each major version of an npm package comes as a pull
+request of its own, since it can change behaviour. The packages and versions
+that wait are named under `ignore`, each with a comment giving the reason and
+when to remove the entry: Tailwind CSS 4 and TypeScript 7 among them, and
+`@types/node`, which moves with the Node major. Node and nginx move to a new
+major or stable line by hand, and PostgreSQL's major version never through
+Dependabot, since its data has to be dumped and restored. Dependabot alerts
+for published advisories are on. Its automatic security pull requests are
+turned on in the repository's settings once 1.5.3 is on `main`; GitHub opens
+those against `main` whatever `target-branch` says.
 
 A pull request into `main` cannot merge until the Frontend, Backend, Docs,
 Dependency advisories, and Production images, nginx and smoke tests jobs pass

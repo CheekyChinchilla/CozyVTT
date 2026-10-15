@@ -1,15 +1,14 @@
 # Dependabot: a pull request each week for the dependencies with a newer
 # version, into dev, where work lands (main only takes releases). Minor and
-# patch updates come grouped, one pull request per project. Major versions of
-# npm packages are held back until the 1.5.3 platform release, which takes
-# them by hand (Prisma, Vite, Vitest, Express, React and the rest); remove the
-# two npm ignore blocks then, and each major comes as a pull request of its
-# own, since it can change behaviour.
+# patch updates come grouped, one pull request per project. Each major
+# version of an npm package comes as a pull request of its own, since it can
+# change behaviour, apart from the ones named under ignore below, each with
+# the reason it waits and when to remove it.
 #
-# Version updates only. Alerts for a published advisory are turned on in the
-# repository's settings. Security update pull requests are turned off there
-# until the 1.5.3 platform release, since GitHub opens those against the
-# default branch whatever target-branch says.
+# Alerts for a published advisory are turned on in the repository's
+# settings, and so are security update pull requests once a release is on
+# main. GitHub opens those against the default branch whatever target-branch
+# says.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -21,8 +20,27 @@ updates:
       backend-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      - dependency-name: "*"
+      # TypeScript 7 cannot run under typescript-eslint or ts-jest yet. Remove
+      # once both support it.
+      - dependency-name: typescript
         update-types: [version-update:semver-major]
+      # @types/node moves with the Node major the images and CI run, by hand
+      # and only to an even (long-term support) one; keepInStep.test.ts holds
+      # them together. This entry stays.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+      # argon2 0.45 writes a new hash's parameters in m, p, t order, which
+      # libsodium refuses (https://github.com/ranisalt/node-argon2/issues/559);
+      # the parameter test in services/auth.test.ts fails on it. Later
+      # versions are not held, so that test checks each one. Remove once a
+      # release writes m, t, p again.
+      - dependency-name: argon2
+        versions: ["0.45.x"]
+      # zod 4.6.6 and 4.6.7 change the message a list over its limit gives
+      # inside a union. The fix (https://github.com/colinhacks/zod/pull/6662)
+      # is not in a release yet. Remove once a release carries it.
+      - dependency-name: zod
+        versions: ["4.6.6", "4.6.7"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -33,7 +51,13 @@ updates:
       frontend-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      - dependency-name: "*"
+      # Tailwind CSS 4 changes how the styles are configured and built, a
+      # move of its own. Remove when that work starts.
+      - dependency-name: tailwindcss
+        update-types: [version-update:semver-major]
+      # TypeScript 7 cannot run under typescript-eslint yet. Remove once it
+      # supports it.
+      - dependency-name: typescript
         update-types: [version-update:semver-major]
 
   # The actions CI runs, pinned to commit SHAs; Dependabot moves the SHA and
