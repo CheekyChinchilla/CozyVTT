@@ -69,7 +69,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // ── Search ──
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // ── UI state ──
   const [expandedId, setExpandedId] = useState<string | null>(null);

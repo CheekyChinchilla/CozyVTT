@@ -79,8 +79,7 @@ describe('the session keepalive in an editor', () => {
   it('a ping that succeeds clears a signed-out notice', async () => {
     const { container } = render(<Editor unsaved />);
     await vi.advanceTimersByTimeAsync(0);
-    work.reportSignedOut();
-    await vi.advanceTimersByTimeAsync(0);
+    act(() => work.reportSignedOut());
     expect(container.textContent).toBe('signed out');
 
     await act(async () => {
