@@ -45,12 +45,9 @@ module.exports = {
   // worker once it holds more than this keeps a full run well inside it.
   workerIdleMemoryLimit: '1GB',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
-  // file-type's package.json offers its code only to an ES module import, so
-  // Jest, which resolves as a CommonJS require, is pointed at the file Node
-  // would load. Tests use the real library unless they mock it.
-  moduleNameMapper: {
-    '^file-type$': '<rootDir>/node_modules/file-type/index.js',
-  },
+  // file-type needs no moduleNameMapper: its "exports" give one "default"
+  // file, which Jest's resolver finds, and tests use the real library unless
+  // they mock it. The compiler finds its types through "paths" in tsconfig.json.
   // The packages in ESM_ONLY are compiled to CommonJS for the tests, so the
   // tests check codes and identify files with the real libraries.
   transform: {
