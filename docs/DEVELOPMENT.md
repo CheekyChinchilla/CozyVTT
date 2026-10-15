@@ -823,20 +823,21 @@ The backend compiles with `"module": "node20"` and `"moduleResolution":
 "node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
 every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
 package's `"exports"`, and the code can import the packages published only as
-ES modules (archiver, file-type, mathjs), which Node 20 and later load with
-`require`. `"module": "node16"` refuses those imports. Two things follow:
+ES modules (archiver, file-type, mathjs), which Node 22.12 and later load
+with `require` (the images run Node 26). `"module": "node16"` refuses those imports. Two things follow:
 
 - **No dynamic `import()` of our own files.** Under these settings an
-  `import()` stays a native ES module import, which needs a file extension in
-  `dist/` and fails under ts-node and Jest. Application code imports
-  statically. A test that must load a module late, after setting
+  `import()` stays a native ES module import, which fails in `dist/` and
+  under ts-node, and the type check refuses one without a file extension.
+  Application code imports statically. A test that must load a module late, after setting
   `DATABASE_URL` or calling `jest.resetModules()`, uses
   `require('../x') as typeof import('../x')`.
 - **The global types are listed.** `"types": ["node", "jest"]` in
   `backend/tsconfig.json` names the `@types` packages every file sees; any
   other comes in when a file imports it.
 
-ts-jest compiles the tests as CommonJS whatever the module setting, and
+ts-jest compiles the tests as CommonJS whatever the module setting, finding
+each package's types through its `"exports"` as the type check does, and
 warns about `node20` on every file, so `backend/jest.config.js` turns that one
 warning (151002) off.
 
