@@ -47,6 +47,31 @@ describe('the security headers', () => {
     expect(res.headers['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(res.headers['x-content-type-options']).toBe('nosniff');
   });
+
+  // The deployment guide tells self-hosters how long a browser keeps their
+  // name on HTTPS after seeing this, and the policy has to stay in step with
+  // the app page's. Either changes when the headers library or app.ts does.
+  it('keep a browser on HTTPS for a year and send the policy app.ts sets', async () => {
+    const res = await request(app).get('/api/config');
+
+    expect(res.headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
+    // The order of the directives carries no meaning to a browser.
+    expect(String(res.headers['content-security-policy']).split(';').sort()).toEqual([
+      "base-uri 'self'",
+      "connect-src 'self' ws: wss:",
+      "default-src 'self'",
+      "font-src 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "img-src 'self' data: blob:",
+      "media-src 'self'",
+      "object-src 'none'",
+      "script-src 'self'",
+      "script-src-attr 'none'",
+      "style-src 'self' 'unsafe-inline'",
+      'upgrade-insecure-requests',
+    ]);
+  });
 });
 
 describe('the session cookie', () => {

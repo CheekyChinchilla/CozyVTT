@@ -285,8 +285,8 @@ file-type 21.x
   License: MIT
   https://github.com/sindresorhus/file-type
 
-helmet 7.x
-  Copyright (c) Adam Baldwin & Contributors
+helmet 8.x
+  Copyright (c) Evan Hahn, Adam Baldwin
   License: MIT
   https://github.com/helmetjs/helmet
 

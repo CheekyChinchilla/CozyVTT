@@ -163,6 +163,8 @@ describe('HSTS, in the deployment guide', () => {
   // included, and a browser keeps a host on HTTPS for that long once it has
   // seen the header over HTTPS.
   it('says what the backend sends, which is helmet’s default because server.ts leaves it alone', () => {
+    // TODO(docs): helmet is configured in app.ts, so an HSTS option set there
+    // passes this check unnoticed. It should read app.ts.
     expect(read('backend/src/server.ts')).not.toMatch(/\bhsts\b|strictTransportSecurity/i);
 
     const sent = helmetDefault();
