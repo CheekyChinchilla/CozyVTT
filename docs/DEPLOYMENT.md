@@ -1456,7 +1456,7 @@ The backend rotates these files itself. When one reaches 10 MB it becomes `combi
 Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
 
 ```json
-{"err":{"clientVersion":"7.10.0","code":"P1001","message":"\nInvalid `prisma.map.findUnique()` invocation:\n\n\nCan't reach database server at 172.18.0.2:5432","meta":{"driverAdapterError":{"cause":{"host":"172.18.0.2","kind":"DatabaseNotReachable","port":5432},"message":"DatabaseNotReachable","name":"DriverAdapterError","stack":"DriverAdapterError: DatabaseNotReachable ..."}},"name":"PrismaClientKnownRequestError","stack":"PrismaClientKnownRequestError: ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+{"err":{"cause":{"message":"Connection terminated unexpectedly","name":"Error","stack":"Error: Connection terminated unexpectedly\n    at ..."},"clientVersion":"7.10.0","message":"Connection terminated due to connection timeout","name":"Error","stack":"Error: Connection terminated due to connection timeout\n    at ..."},"level":"error","message":"Error checking setup status","timestamp":"2026-10-15T06:16:47.132Z"}
 ```
 
 To see the most recent errors:
