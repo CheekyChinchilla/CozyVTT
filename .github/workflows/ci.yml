@@ -15,7 +15,9 @@
 #
 # Every action is pinned to a commit, with its version in a comment, so a tag
 # moved upstream cannot change what runs here; Dependabot
-# (.github/dependabot.yml) proposes new versions.
+# (.github/dependabot.yml) proposes new versions. The runner image is pinned
+# the same way, to ubuntu-24.04: a move of ubuntu-latest to a new release
+# should arrive as a change here, tried on its own.
 name: CI
 
 on:
@@ -31,14 +33,14 @@ permissions:
 jobs:
   frontend:
     name: Frontend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
           cache: npm
@@ -55,7 +57,7 @@ jobs:
 
   backend:
     name: Backend
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
       run:
@@ -79,8 +81,8 @@ jobs:
     env:
       DATABASE_URL: postgresql://cozyvtt:cozyvtt@localhost:55433/cozyvtt_test
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
           cache: npm
@@ -112,10 +114,10 @@ jobs:
 
   docs:
     name: Docs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # The route check also loads the OpenAPI file as YAML, which needs PyYAML.
       - run: pip install pyyaml
       - run: python3 scripts/spec-coverage.py
@@ -131,11 +133,11 @@ jobs:
   # audit runs whatever the ones before it found, so every result is shown.
   audit:
     name: Dependency advisories
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
       - name: Backend, what an instance runs
@@ -166,10 +168,10 @@ jobs:
   # sizes.
   images:
     name: Production images, nginx and smoke tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Read docker-compose.yml with the example settings
         run: cp .env.example .env && docker compose config -q
       - run: docker compose build
@@ -188,7 +190,7 @@ jobs:
             echo "CORS_ORIGIN=http://localhost:8080"
           } > .env
           docker compose up -d --wait --wait-timeout 180
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 26
           cache: npm
@@ -206,7 +208,7 @@ jobs:
       - name: The stack's logs, when something failed
         if: failure()
         run: docker compose logs --no-color --tail 200
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-report
