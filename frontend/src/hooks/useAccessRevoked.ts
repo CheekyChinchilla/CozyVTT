@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import socketClient from '@/services/socket';
 import { useToast } from '@/contexts/ToastContext';
 import { handleUnauthorized, hasUnsavedWork } from '@/services/unsavedWork';

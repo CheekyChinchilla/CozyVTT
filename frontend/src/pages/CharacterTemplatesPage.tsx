@@ -8,7 +8,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Home, Plus, Search, X, Loader2, Pencil, Trash2, Copy, Upload, User as UserIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';

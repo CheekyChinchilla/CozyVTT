@@ -96,7 +96,7 @@ vi.mock('framer-motion', () => ({
   } }),
   AnimatePresence: ({ children }: { children?: ReactNode }) => createElement(Fragment, null, children),
 }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 
 const MAP = vi.hoisted(() => ({
   id: 'map-a', campaignId: 'campaign-1', name: 'Map A', imageUrl: '/api/assets/maps/x', width: 20, height: 20,

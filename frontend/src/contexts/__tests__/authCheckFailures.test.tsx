@@ -13,7 +13,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, renderHook, act, waitFor, fireEvent } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { AuthProvider, useAuth } from '../AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import type { User } from '@/types/user.types';

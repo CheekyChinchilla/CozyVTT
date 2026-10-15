@@ -15,7 +15,7 @@ type Handler = (...args: unknown[]) => void;
 let routeId = 'campaign-1';
 const clientHandlers: Record<string, Handler> = {};
 
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: routeId }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ id: routeId }) }));
 vi.mock('@/services/api', () => ({ default: { pingSession: vi.fn().mockResolvedValue(undefined) } }));
 vi.mock('@/services/socket', () => ({
   default: {

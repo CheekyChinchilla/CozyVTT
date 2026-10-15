@@ -5,7 +5,7 @@
 // ============================================
 
 import { useState, useEffect, FormEvent } from 'react';
-import { Link, Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { isValidEmail } from '@/utils/validation';
 import { api } from '@/services/api';

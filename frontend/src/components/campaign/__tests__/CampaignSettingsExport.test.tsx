@@ -21,7 +21,7 @@ vi.mock('@/contexts/CampaignContext', () => ({
 }));
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }) }));
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('@/services/api', () => ({ default: { downloadCampaignExport } }));
 
 import CampaignSettingsModal from '../CampaignSettingsModal';

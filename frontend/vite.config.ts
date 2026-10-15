@@ -43,7 +43,7 @@ export default defineConfig({
         // A group also takes in the modules its packages import.
         codeSplitting: {
           groups: [
-            { name: 'vendor-react', test: /[\\/]node_modules[\\/](react|react-dom|react-router-dom)[\\/]/ },
+            { name: 'vendor-react', test: /[\\/]node_modules[\\/](react|react-dom|react-router)[\\/]/ },
             { name: 'vendor-framer', test: /[\\/]node_modules[\\/]framer-motion[\\/]/ },
             { name: 'vendor-socket', test: /[\\/]node_modules[\\/]socket\.io-client[\\/]/ },
             { name: 'vendor-lucide', test: /[\\/]node_modules[\\/]lucide-react[\\/]/ },

@@ -5,7 +5,7 @@
 
 import { useState, useEffect, useLayoutEffect, useRef, FormEvent, KeyboardEvent } from 'react';
 import { MessageCircle, Send, Loader, AlertCircle, Eraser } from 'lucide-react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
 import { useAuth } from '@/contexts/AuthContext';

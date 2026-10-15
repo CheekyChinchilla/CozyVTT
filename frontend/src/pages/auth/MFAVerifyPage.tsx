@@ -5,7 +5,7 @@
 // ============================================
 
 import { useState, FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';

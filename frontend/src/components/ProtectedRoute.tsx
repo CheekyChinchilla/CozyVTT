@@ -4,7 +4,7 @@
 // Supports role-based access control (RBAC)
 // ============================================
 
-import { Link, Navigate, useLocation } from 'react-router-dom';
+import { Link, Navigate, useLocation } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { PlatformRole } from '@/types/user.types';
 import Button from '@/components/ui/Button';
