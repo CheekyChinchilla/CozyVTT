@@ -97,8 +97,8 @@ export function resolveFileSizeLimits(
  * File size limits in bytes, resolved once at startup from the environment.
  *
  * NOTE: this reads process.env at module load, which is safe because
- * src/server.ts calls dotenv.config() on its first lines, before any import
- * that reaches this module. Keep that ordering intact.
+ * src/server.ts imports config/loadEnvFile.ts on its first line, before any
+ * import that reaches this module. Keep that ordering intact.
  */
 export const FILE_SIZE_LIMITS: Record<AssetType, number> = resolveFileSizeLimits();
 

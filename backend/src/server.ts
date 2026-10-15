@@ -1,6 +1,5 @@
 // CRITICAL: Load environment variables FIRST before any imports that use them
-import dotenv from 'dotenv';
-dotenv.config();
+import './config/loadEnvFile';
 
 import { createServer } from 'http';
 import { sessionConfig, sessionPool } from './config/session';
