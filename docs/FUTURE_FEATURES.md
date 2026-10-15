@@ -169,7 +169,11 @@ _Nothing at present._
   on once 1.5.3 ships. **Done** for the frontend's build and test tools:
   Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7; for
   the backend's web framework: Express 5. **Done** for React: React 19.3 with React Router 8.4, which clears both
-  advisories. **Defer** Tailwind CSS 4 and TypeScript 7.
+  advisories. **Done** for the advisories against the backend's test
+  runner: an npm override gives the coverage tool js-yaml 4 in place of
+  the js-yaml 3 it asks for. **Defer** Tailwind CSS 4 and TypeScript 7;
+  the seven advisories against the app's build tools, all in packages
+  Tailwind CSS 3 brings with it, wait for that move.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
   on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's
