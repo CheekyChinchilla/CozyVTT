@@ -407,6 +407,20 @@ describe('docs/DEVELOPMENT.md', () => {
     for (const name of triggers) expect(branches).toContain(`\`${name}\``);
     expect(branches).not.toContain('`develop`');
   });
+
+  // The guide and the dev compose file said the backend ran under nodemon
+  // after the dev script stopped using it.
+  it("gives the backend's dev command as package.json has it, and names no watcher it does not install", () => {
+    const manifest = JSON.parse(read('backend/package.json')) as {
+      scripts: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(guide).toContain(`The backend's \`npm run dev\` is \`${manifest.scripts.dev}\`.`);
+    if (!manifest.devDependencies?.nodemon) {
+      expect(guide).not.toMatch(/nodemon/i);
+      expect(read('docker-compose.dev.yml')).not.toMatch(/nodemon/i);
+    }
+  });
 });
 
 describe('backend/docs', () => {
