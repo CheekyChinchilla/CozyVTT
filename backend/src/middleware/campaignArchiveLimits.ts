@@ -15,7 +15,7 @@
  * slowed down.
  */
 
-import rateLimit, { type RateLimitInfo } from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator, type RateLimitInfo } from 'express-rate-limit';
 import type { NextFunction, Request, Response } from 'express';
 import type { AuthenticatedRequest } from './rbac';
 import logger from '../utils/logger';
@@ -42,7 +42,7 @@ export function resolveCampaignArchiveRateLimit(env: NodeJS.ProcessEnv = process
 
 /** The signed-in user a request belongs to; these routes all require one. */
 function callerKey(req: Request): string {
-  return (req as AuthenticatedRequest).session?.userId ?? req.ip ?? 'anonymous';
+  return (req as AuthenticatedRequest).session?.userId ?? (req.ip ? ipKeyGenerator(req.ip) : 'anonymous');
 }
 
 /** What each operation is called in a refusal. */

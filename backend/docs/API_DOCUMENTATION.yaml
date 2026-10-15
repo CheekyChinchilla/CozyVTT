@@ -57,8 +57,11 @@ info:
     proxy in front of it only when that connects from an address listed in
     `NGINX_TRUSTED_PROXIES` (or from loopback). Behind a proxy that is not
     listed, or that does not pass the visitor's address on, every client shares
-    one allowance. Uploads, campaign archives, invitation emails, the notes of
-    a campaign you have left and the WebSocket limits are counted per user.
+    one allowance. The global limit and the register, forgot-password and MFA
+    setup limits count an IPv6 client by its /56 network: every address that
+    shares its first 56 bits shares one allowance. Uploads, campaign archives,
+    invitation emails, the notes of a campaign you have left and the WebSocket
+    limits are counted per user.
     - Global API limit: 300 requests per minute (all `/api/*` routes; configurable via `RATE_LIMIT_MAX_REQUESTS`)
     - Credential endpoints (`POST /api/auth/login`, `/reset-password`, `/mfa/setup`,
       `/mfa/disable` and `/mfa/backup-codes`): one shared allowance of 5 **wrong

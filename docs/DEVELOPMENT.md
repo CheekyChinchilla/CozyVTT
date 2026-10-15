@@ -641,6 +641,15 @@ Some of those deserve a note:
   route needs one line in its `ROWS`. The server-wide limit on every `/api`
   request is mounted by `createApp` ahead of every router; the same file
   checks it is there and fires it.
+- **A limiter key that uses the client address passes it through
+  `ipKeyGenerator`.** express-rate-limit 8 counts an IPv6 client by its /56
+  network, and a custom `keyGenerator` that reads `req.ip` must call
+  `ipKeyGenerator` from the same package to do the same; otherwise the library
+  logs `ERR_ERL_KEY_GEN_IPV6` once and each address in the network gets its own
+  allowance. `backend/src/middleware/__tests__/rateLimitValidation.test.ts`
+  makes every express-rate-limit limiter, sends a request through each, and
+  fails on anything the library writes to the console; add a new limiter to
+  its list.
 - **A test file may not carry a `TODO(test)` marker.** A test known to be
   flaky or wrong once sat behind one, assigned to nobody, until it failed a
   release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test

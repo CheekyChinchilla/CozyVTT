@@ -14,7 +14,7 @@
  * is not counted. Past the ceiling the DM can still invite without the email.
  */
 
-import rateLimit, { type RateLimitInfo } from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator, type RateLimitInfo } from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from './rbac';
 import { isSmtpConfigured } from '../services/email';
@@ -33,7 +33,7 @@ export const invitationEmailLimiter = rateLimit({
   limit: INVITATION_EMAILS_PER_HOUR,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => `invitation-email:${(req as AuthenticatedRequest).session?.userId ?? req.ip ?? 'anonymous'}`,
+  keyGenerator: (req: Request) => `invitation-email:${(req as AuthenticatedRequest).session?.userId ?? (req.ip ? ipKeyGenerator(req.ip) : 'anonymous')}`,
   skip: (req: Request) => !asksForEmail(req) || !isSmtpConfigured(),
   skipFailedRequests: true,
   handler: (req: Request, res: Response) => {
