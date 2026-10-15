@@ -122,6 +122,18 @@ describe('the sign-in page', () => {
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
   });
 
+  // A browser reads `/\host` as another site, and React Router 6 passed such
+  // an address on to the browser as it was.
+  it.each([
+    ['as typed', '/auth/login?next=/\\evil.example'],
+    ['encoded', '/auth/login?next=%2F%5Cevil.example'],
+  ])('goes to the dashboard when the page asked for starts with a backslash, %s', (_name, path) => {
+    auth.mockReturnValue(signedIn);
+    renderAt(path);
+
+    expect(screen.getByText('Dashboard')).toBeInTheDocument();
+  });
+
   it('carries the page asked for to the code step', () => {
     auth.mockReturnValue({ ...signedOut, mfaPending: true, verifyMFA: vi.fn(), verifyMFAWithBackupCode: vi.fn(), cancelMFA: vi.fn() });
     renderAt('/auth/login?next=%2Fcampaigns%2Fabc');
