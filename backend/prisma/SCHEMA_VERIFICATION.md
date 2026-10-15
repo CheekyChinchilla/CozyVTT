@@ -3,12 +3,14 @@
 > **A historical record, not a current picture.** This captures the schema
 > verification done for the v1.0.0 release on 10 February 2026, against a
 > statement of work that is not in this repository. The schema has grown a lot
-> since: **21 models and 9 enums today**, against the 10 and 7 recorded below.
+> since: **22 models and 9 enums today**, against the 10 and 7 recorded below.
 >
 > Models added since and *not* in the February list: `PasswordResetToken`,
 > `CampaignInvitation`, `CharacterTemplate`, `CreatureTemplate`,
 > `CreatureFavorite`, `TokenTemplate`, `SystemSettings`, `PersonalNote`,
-> `DiceMacro`, `CampaignDocument`, `MapExploration`. The `MapExploration`
+> `DiceMacro`, `CampaignDocument`, `MapExploration`, and `LoginSession`, the
+sign-in table connect-pg-simple has always kept, described in the schema
+since 1.5.3 and left out of the Prisma client. The `MapExploration`
 > section and the last four `Map` fields below were added to this file in
 > September 2026, for columns added after v1.0.0.
 >

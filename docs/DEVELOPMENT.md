@@ -315,7 +315,7 @@ npx prisma generate
 npx prisma migrate deploy
 ```
 
-> ⚠️ **On a database the backend has already run against, `migrate dev` reports drift and offers a reset: answer no.** The sign-in session store creates a table named `session` the first time the backend starts, and no migration creates it, so Prisma finds a table it does not know. `migrate dev` then says the database has drifted and asks to reset it, which deletes everything in it, and `db push` asks to drop the table. To make a migration on such a database, generate it from the existing migrations into a scratch database instead, which never looks at the `session` table. Prisma empties that database each time, so give it one of its own:
+> ⚠️ **If `migrate dev` reports drift and offers a reset, answer no: a reset deletes everything in the database.** The sign-in session store makes a table named `session` the first time the backend starts. Until 1.5.3 no migration made it, so on a database the backend ran against before then, `migrate dev` finds a table it does not know and offers that reset, and `db push` offers to drop the table. Starting the backend once applies the migration that describes it (the start script runs `migrate deploy`), and from then on the database matches the migrations. `migrate dev` also refuses to run where it cannot ask questions, such as from a script. Either way, a migration can be generated from the existing migrations into a scratch database instead. Prisma empties that database each time, so give it one of its own:
 >
 > ```bash
 > # Once, with the dev stack running:
@@ -438,11 +438,12 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
-> **The run makes the sign-in table itself.** The backend keeps sign-ins in a
-> table named `session`, which the session store creates when the server
-> starts. The Prisma schema does not describe it, so `prisma db push` drops
-> it. Before any suite starts, jest makes it again from the session store's
-> own definition (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
+> **The run makes the sign-in table itself where it is missing.** The backend
+> keeps sign-ins in a table named `session`, which the session store creates
+> when the server starts. The Prisma schema describes it, so `prisma db push`
+> lays it out and keeps it. Before any suite starts, jest also makes it from
+> the session store's own definition where it is missing
+> (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
 > that end an account's sign-ins pass straight after a push.
 
 ### Frontend Tests (Vitest)

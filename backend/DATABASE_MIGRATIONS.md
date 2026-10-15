@@ -109,6 +109,13 @@ about; the list is not exhaustive.
   `Message.userId` already did. Two `DROP NOT NULL` and the two foreign keys
   dropped and re-added in one transaction. No row is changed or removed; it
   only lets an account with rolls or uploads be deleted.
+- `20261015032229_add_login_session_table` - The `session` table the sign-in
+  store keeps, with its key and its expiry index, exactly as the store makes
+  it. Every instance whose backend has started already has the table, so
+  there `CREATE TABLE IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` find it
+  and change nothing, and no one is signed out. A new install gets it from
+  the migrations. With the table described in the schema, `prisma db push` and
+  `migrate dev` no longer offer to drop it.
 
 ## Data migrations (one-off scripts)
 
@@ -309,10 +316,11 @@ This will:
 Since Prisma 7 it no longer regenerates the Prisma client; run
 `npx prisma generate` afterwards.
 
-On a database the backend has already run against, `prisma migrate dev`
-reports drift, because of the sign-in `session` table no migration creates,
-and offers a reset that deletes the database: answer no, and generate the
-migration as `docs/DEVELOPMENT.md` (Running Migrations) shows.
+If `prisma migrate dev` reports drift and offers a reset that deletes the
+database, answer no, and generate the migration as `docs/DEVELOPMENT.md`
+(Running Migrations) shows. On a database the backend ran against before
+1.5.3 it does that because of the sign-in `session` table, which no migration
+made until then; starting the backend once applies the one that does.
 
 ## Production Deployment
 

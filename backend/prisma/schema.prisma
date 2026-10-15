@@ -141,6 +141,26 @@ model User {
 }
 
 // ============================================
+// SIGN-IN SESSIONS
+// ============================================
+
+// The sign-in store, connect-pg-simple (src/config/session.ts), keeps its
+// rows here and reads and writes them itself, as does
+// services/sessionStore.ts with raw queries. The model is here so the
+// migrations make the table and `prisma db push` keeps it; @@ignore leaves it
+// out of the Prisma client. Its columns, key and index are connect-pg-simple's
+// own table.sql.
+model LoginSession {
+  sid    String   @id @db.VarChar
+  sess   Json     @db.Json
+  expire DateTime @db.Timestamp(6)
+
+  @@index([expire], map: "IDX_session_expire")
+  @@map("session")
+  @@ignore
+}
+
+// ============================================
 // PASSWORD RESET TOKENS
 // ============================================
 

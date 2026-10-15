@@ -7,11 +7,12 @@ through the `pg` driver (`src/config/prismaClient.ts`).
 
 ## Models
 
-The schema is in [`schema.prisma`](./schema.prisma) — 21 models grouped by domain:
+The schema is in [`schema.prisma`](./schema.prisma) — 22 models grouped by domain:
 
 **User & auth**
 - `User` — accounts with optional MFA, which an administrator must turn on within 7 days
 - `PasswordResetToken` — password reset links (1 hour) and admin invitation links (7 days), stored as the SHA-256 of the token (`services/passwordResetTokens.ts`)
+- `LoginSession` — the `session` table where `connect-pg-simple` keeps sign-ins. `@@ignore` leaves it out of the Prisma client; the session store and `services/sessionStore.ts` read and write it with SQL of their own. Its migration, `20261015032229_add_login_session_table`, uses `IF NOT EXISTS`, so on an instance whose backend already made the table it changes nothing
 
 **Campaigns & membership**
 - `Campaign` — game-system, vibe settings, spirit-layer config, status
@@ -137,5 +138,5 @@ npx prisma migrate reset
 - **No raw queries with user input.** The application's queries go through Prisma, and its raw SQL only as tagged `$queryRaw` and `$executeRaw` templates, which parameterize; nothing outside the tests uses the `Unsafe` forms. The exceptions are the session store (`connect-pg-simple`, with its own `pg` pool) and backup and restore (`pg_dump` and `psql`).
 - **Password hashing happens at the application layer**, not the database. Argon2id; see `backend/src/services/auth.ts`.
 - **MFA backup codes are hashed** with Argon2id before storage (`backend/src/utils/backupCodes.ts`). Plaintext is shown to the user exactly once, at setup or when they regenerate them.
-- **Session data is stored via `express-session` + `connect-pg-simple`**, in its own `session` table (managed by the session middleware, not this schema). Because no migration creates it, `prisma migrate dev` reports drift on a database the backend has run against and offers to reset it, and `prisma db push` offers to drop the table; never accept either. (On the throwaway test database the backend suite uses, the drop does no harm: the jest run makes the table again, as `docs/DEVELOPMENT.md`, Running Tests, says.) `docs/DEVELOPMENT.md` (Running Migrations) shows how to generate a migration without that comparison. `migrate deploy`, which production runs, does not compare and is not affected.
+- **Session data is stored via `express-session` + `connect-pg-simple`**, in the `session` table (`LoginSession` above). The session middleware reads and writes it and makes it if it is missing; the schema describes it so that the migrations make it and `prisma db push` keeps it. Before 1.5.3 no migration made it, so `prisma migrate dev` reported drift on a database the backend had run against and offered to reset it, and `prisma db push` offered to drop the table; on a database that has applied every migration, neither does.
 - **File paths are stored relatively** (e.g. `uploads/maps/global/<uuid>.png`) while `UPLOAD_DIR` is relative, as it is by default. Path-traversal mitigation lives at the upload layer.

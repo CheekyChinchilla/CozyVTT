@@ -2,15 +2,11 @@
  * Every run starts with the sign-in table in place.
  *
  * The server keeps sign-ins in a `session` table that connect-pg-simple makes
- * when the server starts. schema.prisma does not describe it, so the
- * `prisma db push` that brings a test database up to date after a branch
- * switch drops it, and the test app never starts the server. Ending an
+ * when the server starts, and the test app never starts the server. Ending an
  * account's sign-ins (account deletion, a password change or reset, a role
- * change) writes to it, so straight after a push every suite doing one of
- * those failed with "relation "session" does not exist", unless some other
- * file running earlier happened to make the table. The run's global setup
- * now makes it before any file starts, from connect-pg-simple's own
- * definition, so the table is the one a real server has.
+ * change) writes to it. schema.prisma now describes it, so `prisma db push`
+ * lays it out (loginSessionTable.test.ts); the run's global setup still makes
+ * it, from connect-pg-simple's own definition, where it is missing.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -49,16 +45,28 @@ beforeAll(() => {
   schema = createIsolatedSchema(SCHEMA);
 });
 
+async function dropTable(): Promise<void> {
+  const client = new Client({ connectionString: original });
+  await client.connect();
+  try {
+    await client.query(`DROP TABLE "${SCHEMA}"."session"`);
+  } finally {
+    await client.end();
+  }
+}
+
 afterAll(() => {
   process.env.DATABASE_URL = original;
   schema.drop();
 });
 
-it('starts from a schema without the table, as a push leaves it', async () => {
-  expect((await sessionTable()).present).toBe(false);
+it('starts from a schema with the table, as a push leaves it', async () => {
+  expect(await sessionTable()).toEqual({ present: true, indexes: ['IDX_session_expire', 'session_pkey'] });
 });
 
-it('makes the table connect-pg-simple makes, with its key and its expiry index', async () => {
+it('makes the table connect-pg-simple makes, with its key and its expiry index, where it is missing', async () => {
+  await dropTable();
+  expect((await sessionTable()).present).toBe(false);
   process.env.DATABASE_URL = schema.url;
   await globalSetup();
 
