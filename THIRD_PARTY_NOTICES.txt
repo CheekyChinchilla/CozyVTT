@@ -250,7 +250,7 @@ argon2 0.44.x
   License: MIT
   https://github.com/ranisalt/node-argon2
 
-connect-pg-simple 9.x
+connect-pg-simple 10.x
   Copyright (c) Pelle Wessman
   License: MIT
   https://github.com/voxpelli/node-connect-pg-simple
