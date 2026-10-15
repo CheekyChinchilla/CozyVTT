@@ -73,7 +73,8 @@ The first three are mounted one file each, and a single-file mount keeps the fil
 
 ```
 src/
-├── server.ts          Entry point: builds the app, attaches Socket.io, starts listening
+├── server.ts          Entry point: reads backend/.env first (config/loadEnvFile.ts), then
+│                      builds the app, attaches Socket.io, starts listening
 ├── app.ts             createApp: every middleware, gate, router and error handler, in
 │                      order; the integration tests build their app with it too
 ├── config/            Configuration loading (env vars, validation); prismaClient.ts makes every

@@ -267,7 +267,7 @@ cors 2.x
   License: MIT
   https://github.com/expressjs/cors
 
-dotenv 16.x
+dotenv 18.x
   Copyright (c) Scott Motte
   License: BSD-2-Clause
   https://github.com/motdotla/dotenv
