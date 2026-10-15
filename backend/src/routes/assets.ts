@@ -16,6 +16,7 @@ import {
   ensureDirectory,
   generateUniqueFilename,
   writeFileAtomically,
+  SERVER_BUILT_PATH,
 } from '../utils/fileUtils';
 import {
   CreateDocumentSchema,
@@ -746,7 +747,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     }
 
     // Send file with original name
-    return res.download(downloadPath, asset.originalName);
+    return res.download(downloadPath, asset.originalName, SERVER_BUILT_PATH);
   } catch (error) {
     logger.error('Error downloading asset', { err: error });
     return res.status(500).json({
@@ -961,6 +962,7 @@ function sendImageAsset(res: Response, filePath: string): void {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = IMAGE_CONTENT_TYPES[ext] ?? 'application/octet-stream';
   res.sendFile(filePath, {
+    ...SERVER_BUILT_PATH,
     headers: {
       'Content-Type': contentType,
       'X-Content-Type-Options': 'nosniff',
@@ -1043,6 +1045,7 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
     }
 
     return res.sendFile(documentPath, {
+      ...SERVER_BUILT_PATH,
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': 'inline',

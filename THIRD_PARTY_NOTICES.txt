@@ -265,7 +265,7 @@ dotenv 16.x
   License: BSD-2-Clause
   https://github.com/motdotla/dotenv
 
-express 4.x
+express 5.x
   Copyright (c) TJ Holowaychuk & Contributors
   License: MIT
   https://github.com/expressjs/express

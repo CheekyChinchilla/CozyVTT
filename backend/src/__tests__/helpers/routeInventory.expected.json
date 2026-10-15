@@ -1,0 +1,1596 @@
+{
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/setup/status",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/setup/init",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/config",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/register",
+      "handlers": [
+        "<anonymous>",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "handlers": [
+        "limiter",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/forgot-password",
+      "handlers": [
+        "<anonymous>",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset-password",
+      "handlers": [
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/change-password",
+      "handlers": [
+        "requireAuth",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/auth/account",
+      "handlers": [
+        "requireAuth",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/setup",
+      "handlers": [
+        "requireAuth",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/verify",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/verify-login",
+      "handlers": [
+        "limiter",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/disable",
+      "handlers": [
+        "requireAuth",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/mfa/backup-codes",
+      "handlers": [
+        "requireAuth",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/registration-status",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/appearance",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/ping",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/users",
+      "handlers": [
+        "requireAuth",
+        "requireAdmin",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/:id",
+      "handlers": [
+        "requireAuth",
+        "limiter",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/users/:id/preferences",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/users/:id/preferences",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/users/:id",
+      "handlers": [
+        "requireAuth",
+        "requireAdmin",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/:id/reset-password",
+      "handlers": [
+        "requireAuth",
+        "requireAdmin",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/users/:id/send-reset-link",
+      "handlers": [
+        "requireAuth",
+        "requireAdmin",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/stats",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/health",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/settings",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/settings",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/invite",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/:id/resend-invite",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/:id/approve",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/users/:id/reset-mfa",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/activity",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/config",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/smtp/test",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/backups",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/backups",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/backups/:filename/download",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/backups/:filename",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/backups/restore",
+      "handlers": [
+        "oneRestoreAtATime",
+        "takeRestoreUpload",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/orphaned-files",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/orphaned-files",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/left",
+      "handlers": [
+        "requireAuth",
+        "listLeftCampaigns"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/left/:campaignId",
+      "handlers": [
+        "requireAuth",
+        "getLeftCampaign"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/left/:campaignId/notes",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>",
+        "getLeftCampaignNotes"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/left/:campaignId/notes/:noteId",
+      "handlers": [
+        "requireAuth",
+        "getLeftCampaignNote"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/characters",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/vibe",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/invitable-users",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/invite",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/members/:userId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/members/:userId/role",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/dm",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/admin/all",
+      "handlers": [
+        "requireAuth",
+        "requireAdmin",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/messages",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/messages/join-leave",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/dice-rolls",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/notes",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/notes",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/notes/:noteId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/notes/:noteId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/notes/:noteId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/sessions",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/sessions/:sessionId/notes",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/sessions",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/sessions/:sessionId/pause",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/sessions/:sessionId/end",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/resume",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/export",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "oneCampaignArchiveAtATime",
+        "<anonymous>",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/import/preview",
+      "handlers": [
+        "requireAuth",
+        "oneCampaignArchiveAtATime",
+        "<anonymous>",
+        "takeImportUpload",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/import",
+      "handlers": [
+        "requireAuth",
+        "oneCampaignArchiveAtATime",
+        "<anonymous>",
+        "takeImportUpload",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/macros",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/macros",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/macros/:macroId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/macros/:macroId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/macros/:macroId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/documents",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/documents",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/documents/:assetId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/characters",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/characters",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/characters/templates/:gameSystem/:templateName",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/characters/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/characters/:id/validate",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/characters/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/characters/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/characters/:id/assign",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/characters/:id/copy",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/character-templates",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/character-templates/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/character-templates",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/character-templates/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/character-templates/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/invitations",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/invitations/:id/accept",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/invitations/:id/decline",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/assets/upload",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>",
+        "<anonymous>",
+        "<anonymous>",
+        "validateFileType",
+        "validateFileSize",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/assets/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/:id/download",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/assets/documents",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/assets/documents/:id/content",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/documents/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/maps/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/tokens/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/audio/:id",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/avatars/:userId",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/assets/:id/scope",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/import-uvtt",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>",
+        "<anonymous>",
+        "receiveUvtt",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id/export-uvtt",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/maps/:id",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/maps/:id",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/maps/:id/set-current",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/:id/tokens",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/maps/:id/tokens/:tokenId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/:id/tokens/move",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/maps/:id/tokens/:tokenId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id/walls",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/maps/:id/walls",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/:id/walls",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/maps/:id/walls/:sid",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/campaigns/:campaignId/maps/:id/walls/:sid",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id/lights",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/maps/:id/lights",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/:id/lights",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/campaigns/:campaignId/maps/:id/lights/:lightId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/maps/:id/lights/:lightId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/maps/:id/fog",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/maps/:id/fog/operation",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/maps/:id/lighting",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/creatures/seed/status",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireCampaignMember",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/creatures/seed",
+      "handlers": [
+        "requireAuth",
+        "adminToSeed",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/creatures",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/creatures/:creatureId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/creatures",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/creatures/:creatureId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/creatures/:creatureId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/creatures/:creatureId/duplicate",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/creatures/favorites/list",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/creatures/:creatureId/favorite",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/token-templates",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/token-templates/:id",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/token-templates",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "PUT",
+      "path": "/api/campaigns/:campaignId/token-templates/:id",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/token-templates/:id",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/token-templates/from-token",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "POST",
+      "path": "/api/campaigns/:campaignId/token-templates/:id/copy-to/:targetCampaignId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    }
+  ],
+  "layers": [
+    {
+      "name": "helmetMiddleware",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "corsMiddleware",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "originCheck",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "jsonParser",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "emptyBodyWhenNone",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "refuseWhileDatabaseIsReplaced",
+      "path": "/api",
+      "route": false
+    },
+    {
+      "name": "session",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "requireSetupComplete",
+      "path": "",
+      "route": false
+    },
+    {
+      "path": "/health",
+      "route": true
+    },
+    {
+      "name": "<anonymous>",
+      "path": "/api",
+      "route": false
+    },
+    {
+      "name": "requirePasswordChanged",
+      "path": "/api",
+      "route": false
+    },
+    {
+      "name": "requireAdminMfa",
+      "path": "/api",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/setup",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/config",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/auth",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/users",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/admin",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/admin",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/campaigns",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/campaigns",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/campaigns",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/characters",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/character-templates",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/invitations",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/assets",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/campaigns/:campaignId/maps",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/campaigns/:campaignId/creatures",
+      "route": false
+    },
+    {
+      "name": "router",
+      "path": "/api/campaigns/:campaignId/token-templates",
+      "route": false
+    },
+    {
+      "name": "<anonymous>",
+      "path": "",
+      "route": false
+    },
+    {
+      "name": "errorHandler",
+      "path": "",
+      "route": false
+    }
+  ]
+}

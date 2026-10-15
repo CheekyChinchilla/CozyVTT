@@ -237,8 +237,9 @@ export function createApp(options: AppOptions): express.Express {
   // Token Templates (nested under campaigns)
   app.use('/api/campaigns/:campaignId/token-templates', tokenTemplateRoutes);
 
-  // 404 catch-all
-  app.use('*', (_req, res) => {
+  // Whatever no route above answered. Mounted without a path, which matches
+  // every one.
+  app.use((_req, res) => {
     res.status(404).json({
       error: 'Not Found',
       message: 'The requested resource does not exist',

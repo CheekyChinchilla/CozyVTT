@@ -74,6 +74,20 @@ describe('the security headers', () => {
   });
 });
 
+describe('the not-found answer', () => {
+  it.each([
+    ['GET', '/api/no-such-route'],
+    ['POST', '/api/campaigns/no-such-campaign/no-such-thing'],
+    ['GET', '/no-such-page'],
+  ])('is the JSON body for %s %s', async (method, path) => {
+    const res = method === 'GET' ? await request(app).get(path) : await request(app).post(path).send({});
+
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(/^application\/json/);
+    expect(res.body).toEqual({ error: 'Not Found', message: 'The requested resource does not exist' });
+  });
+});
+
 describe('the session cookie', () => {
   async function signIn(headers: Record<string, string> = {}): Promise<string> {
     const user = await createTestUser({ displayName: 'Cookie' });
