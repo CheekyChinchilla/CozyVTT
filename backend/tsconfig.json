@@ -27,15 +27,6 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "typeRoots": ["./node_modules/@types", "./src/types"],
-    // file-type's package.json names its types only under "exports". The
-    // compiler reads them there, but ts-jest checks the tests with the older
-    // "node" resolution, which does not, so it is pointed at them here. This
-    // ties the config to the package's layout: check it when file-type moves
-    // its files. Only the types are looked up here; Node and Jest load the
-    // package's code through its "exports" at run time.
-    "paths": {
-      "file-type": ["./node_modules/file-type/source/index.d.ts"]
-    },
     // The global types every file sees. Others come in only when imported.
     "types": ["node", "jest"]
   },

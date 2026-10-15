@@ -47,7 +47,7 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   // file-type needs no moduleNameMapper: its "exports" give one "default"
   // file, which Jest's resolver finds, and tests use the real library unless
-  // they mock it. The compiler finds its types through "paths" in tsconfig.json.
+  // they mock it. ts-jest finds its types through the same "exports".
   // The packages in ESM_ONLY are compiled to CommonJS for the tests, so the
   // tests check codes and identify files with the real libraries.
   //

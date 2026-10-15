@@ -813,6 +813,12 @@ Both backend and frontend use TypeScript in **strict mode**. The `tsconfig.json`
 in each package enables `strict: true`, which brings `noImplicitAny`,
 `strictNullChecks` and the rest with it.
 
+Both packages use TypeScript 6.0 (`~6.0.3` in each `package.json`), since
+typescript-eslint supports TypeScript below 6.1 and ts-jest below 7. Neither
+`tsconfig.json` sets `ignoreDeprecations`: they use none of the options
+TypeScript 6 deprecates, such as `baseUrl` or `"moduleResolution": "node"`,
+and a deprecated option fails the type check.
+
 The backend compiles with `"module": "node20"` and `"moduleResolution":
 "node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
 every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
@@ -830,11 +836,9 @@ ES modules (archiver, file-type, mathjs), which Node 20 and later load with
   `backend/tsconfig.json` names the `@types` packages every file sees; any
   other comes in when a file imports it.
 
-ts-jest compiles the tests as CommonJS with the older `"node"` resolution,
-whatever the module setting. It warns about `node20` on every file, so
-`backend/jest.config.js` turns that one warning (151002) off, and it does not
-read `"exports"`, so `paths` in `backend/tsconfig.json` points it at
-file-type's types.
+ts-jest compiles the tests as CommonJS whatever the module setting, and
+warns about `node20` on every file, so `backend/jest.config.js` turns that one
+warning (151002) off.
 
 `noUncheckedIndexedAccess` is **not** enabled in either package. It is worth
 turning on one day, but it is its own burn-down and mixing it into other work
