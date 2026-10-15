@@ -42,7 +42,7 @@
     "helmet": "^7.2.0",
     "mathjs": "^12.4.3",
     "multer": "^2.4.0",
-    "nodemailer": "^10.0.16",
+    "nodemailer": "^10.1.1",
     "otplib": "^13.5.0",
     "pg": "^8.23.1",
     "prisma": "7.10.0",

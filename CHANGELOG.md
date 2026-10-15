@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **For people working on CozyVTT: after this update, start the development stack once with `docker compose -f docker-compose.dev.yml up --build -V`.** The app's build and test tools have moved to new versions, Vite 8 and Vitest 5. The development stack keeps its installed packages between runs, so without `--build -V` its frontend container goes on running the old ones. The production stack is not affected.
 
+- **The libraries the backend is built on are updated to recent releases within the versions it already used.** The email library now ends the connection when a mail server says it is closing. The next `docker compose up -d --build` installs them.
+
 ### Security
 
 - **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
