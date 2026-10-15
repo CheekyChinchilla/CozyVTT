@@ -72,11 +72,11 @@ describe('stored password hashes', () => {
     expect(await verifyPassword(STORED_HASH, 'Fixture-Passw0rd?')).toBe(false);
   });
 
-  // The standard encoding puts the parameters in m, t, p order; libsodium and
-  // argon2-cffi refuse a hash written in any other order.
+  // The standard encoding puts the parameters in m, t, p order; libsodium
+  // refuses a hash written in any other order.
   it('hashes new passwords as argon2id with 64 MB, three passes and four lanes', async () => {
     const hash = await hashPassword(STORED_PASSWORD);
-    expect(hash.startsWith('$argon2id$v=19$m=65536,t=3,p=4$')).toBe(true);
+    expect(hash).toMatch(/^\$argon2id\$v=19\$m=65536,t=3,p=4\$/);
   });
 });
 
