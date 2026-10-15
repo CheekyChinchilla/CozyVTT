@@ -819,8 +819,9 @@ npx prisma migrate deploy
 npm run build   # also prepares the database client (prisma generate)
 
 # Frontend. The page asks its own address for the API, which your Nginx sends
-# to the backend; the two empty settings make sure an old frontend/.env cannot
-# point it elsewhere.
+# to the backend. The build still reads two old settings that would point the
+# page at a backend on another address, so they are set empty here, in case an
+# old frontend/.env sets them.
 cd ../frontend
 npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
@@ -1665,6 +1666,7 @@ pm2 restart cozyvtt-backend
 
 cd ../frontend
 npm install
+# Empty, as in the install steps, in case an old frontend/.env sets them
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Static files in frontend/dist/ are now updated — Nginx serves them immediately
 ```

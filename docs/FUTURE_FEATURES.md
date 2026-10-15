@@ -371,12 +371,14 @@ _Nothing at present._
   `Cross-Origin-Resource-Policy: same-origin` refuses a picture loaded from
   another site, and the map canvas loads images with `crossOrigin='anonymous'`,
   which leaves the session cookie off, so every asset route answers 401. The
-  offer was withdrawn; the build arguments and the client code that reads them
-  remain. Making it work needs the extra origin in `img-src`, `media-src` and
-  `frame-src`, a `same-site` or `cross-origin` resource policy when
-  `CORS_ORIGIN` differs, `use-credentials` on canvas images, and a test that
-  renders the policy with an address set. **Revisit if** someone needs it with a
-  setup a proxy cannot cover.
+  offer was withdrawn in 1.5.2, and in 1.5.3 the production image stopped
+  taking the two as build arguments and stopped writing them into the page's
+  policy; the client code that reads them remains, for a build outside Docker.
+  Making it work needs the build arguments back, the extra origin in
+  `connect-src`, `img-src`, `media-src` and `frame-src`, a `same-site` or
+  `cross-origin` resource policy when `CORS_ORIGIN` differs, `use-credentials`
+  on canvas images, and a test that renders the policy with an address set.
+  **Revisit if** someone needs it with a setup a proxy cannot cover.
 
 ---
 

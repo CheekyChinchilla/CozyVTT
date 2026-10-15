@@ -94,16 +94,10 @@ describe('the manual-install nginx example in the deployment guide', () => {
   /** Each `location` block of the example, by its path, with the text inside it (one level of braces, as an `if` makes, may be nested). */
   const locations = [...example.matchAll(/^\s*location\s+(?:=\s+)?(\S+)\s*\{((?:[^{}]|\{[^}]*\})*)\}/gm)].map((m) => ({ path: m[1], body: m[2] }));
 
-  /**
-   * The headers the frontend container sends with the app page, as lines of
-   * its config file. The policy there names an extra connect address, filled
-   * in at image build time and empty now that the backend shares the page's
-   * address.
-   */
+  /** The headers the frontend container sends with the app page, as lines of its config file. */
   const pageHeaders = read('frontend/security-headers.conf')
     .split('\n')
-    .filter((line) => line.startsWith('add_header '))
-    .map((line) => line.replace('${CSP_CONNECT_EXTRA}', ''));
+    .filter((line) => line.startsWith('add_header '));
 
   // A host nginx serving frontend/dist never sees the container's config, so
   // the page it serves had no Content-Security-Policy and no Permissions-Policy

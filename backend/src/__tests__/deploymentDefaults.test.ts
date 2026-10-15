@@ -8,7 +8,10 @@
  * followed them got a page that signed in and then showed every map, token,
  * avatar, sound and document blank: the page's security policy, the
  * backend's resource policy and the canvas's anonymous image loads each
- * refuse a picture from another address. The offer is gone.
+ * refuse a picture from another address. The offer is gone, and so are the
+ * image build arguments that carried the two settings into the bundle and
+ * into the page's security policy: a value left in an older .env no longer
+ * reaches the image.
  *
  * The development stack. It is for a developer's own computer: its ports are
  * published on 127.0.0.1 only, where the guide said they were (Docker binds a
@@ -54,6 +57,21 @@ describe('one address for the page and the backend', () => {
 
   it('is not described as an option in the development guide', () => {
     expect(read('docs/DEVELOPMENT.md')).not.toMatch(/\|\s*`VITE_(API|SOCKET)_URL`\s*\|/);
+  });
+
+  it('is not passed to the production frontend build by docker-compose.yml', () => {
+    expect(service('docker-compose.yml', 'frontend')).not.toMatch(/VITE_/);
+  });
+
+  it('is not taken as a build argument by the production frontend image', () => {
+    expect(read('frontend/Dockerfile.prod')).not.toMatch(/^\s*ARG\s+VITE_/m);
+  });
+
+  it("leaves the page's security headers as the file writes them", () => {
+    expect(read('frontend/security-headers.conf')).not.toContain('${');
+    const dockerfile = read('frontend/Dockerfile.prod');
+    expect(dockerfile).toMatch(/^COPY security-headers\.conf \/etc\/nginx\/security-headers\.conf$/m);
+    expect(dockerfile).not.toContain('envsubst');
   });
 });
 
