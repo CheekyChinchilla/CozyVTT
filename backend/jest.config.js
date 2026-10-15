@@ -6,7 +6,10 @@
  * otplib (authenticator codes) is CommonJS, and loads @noble/hashes for
  * HMAC-SHA1 and @scure/base for base32. file-type, which identifies an
  * upload or a stored picture by its bytes, is an ES module, and so are the
- * four packages it reads with and the one they decode text with.
+ * four packages it reads with and the one they decode text with. archiver,
+ * which writes campaign exports and instance backups, is an ES module, and so
+ * are zip-stream, compress-commons and crc32-stream under it and the is-stream
+ * they all check their inputs with.
  */
 const ESM_ONLY = [
   '@noble/hashes',
@@ -17,6 +20,11 @@ const ESM_ONLY = [
   '@tokenizer/inflate',
   'uint8array-extras',
   '@borewit/text-codec',
+  'archiver',
+  'zip-stream',
+  'compress-commons',
+  'crc32-stream',
+  'is-stream',
 ].join('|');
 
 module.exports = {

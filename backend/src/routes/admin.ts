@@ -12,7 +12,7 @@ import fs from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -982,7 +982,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     await new Promise<void>((resolve, reject) => {
       streamed = true;
       const output = handle.createWriteStream();
-      const archive = archiver('zip', { zlib: { level: 6 } });
+      const archive = new ZipArchive({ zlib: { level: 6 } });
       // Both ends can fail: the archive while reading, the file while
       // writing (a full disk). A stream error with nobody listening is an
       // uncaught exception, which exits the process mid-backup. Creating the
@@ -994,6 +994,9 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.file(sqlPath, { name: 'database.sql' });
       if (withUploads) {
         // Under an "uploads/" prefix, skipping the backups subdir older installs had there
+        // TODO(backups): the folder's own entry is named "backups", with no
+        // slash, so the filter keeps it and every backup holds an empty
+        // uploads/backups/ folder. Leave out entry.name === 'backups' too.
         archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
           return entry.name.startsWith('backups/') ? false : entry;
         });

@@ -34,7 +34,7 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
@@ -157,7 +157,7 @@ const SAFETY_DUMP = '-- the database as it was before the restore\n';
 
 /** A backup archive holding the given files. */
 async function backupZip(entries: Record<string, string>): Promise<Buffer> {
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const chunks: Buffer[] = [];
   archive.on('data', (chunk: Buffer) => chunks.push(chunk));
   const ended = new Promise<void>((resolve, reject) => {
@@ -925,5 +925,48 @@ describe('POST /api/admin/backups', () => {
     expect((await fs.stat(madeFile)).size).toBe(marked);
     const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
     expect(names).toContain(res.body.safetyBackup);
+  });
+
+  // A restore puts back the uploaded files a backup holds, so the backup has
+  // to hold every one of them, under uploads/ beside the database. The
+  // backups folder older installs kept inside the uploads folder is left out.
+  it('holds the database and every uploaded file, and leaves out a backups folder among the uploads', async () => {
+    stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    const uploads: Record<string, string> = {
+      'maps/global/cellar.png': 'a map',
+      'maps/global/thumb_cellar.png': 'its thumbnail',
+      'tokens/campaigns/c1/goblin.png': 'a token',
+      'documents/global/.notes.md': 'a name starting with a dot',
+      'backups/backup-2024-01-01T00-00-00.zip': 'a backup from an older install',
+      'backups/older/inside.txt': 'a file further down',
+    };
+    for (const [name, body] of Object.entries(uploads)) {
+      await fs.mkdir(path.dirname(path.join(UPLOAD_DIR, name)), { recursive: true });
+      await fs.writeFile(path.join(UPLOAD_DIR, name), body);
+    }
+    let made: string | undefined;
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      made = path.join(BACKUP_DIR, res.body.filename);
+
+      const zip = await unzipper.Open.file(made);
+      const held: Record<string, string> = {};
+      for (const entry of zip.files) {
+        if (entry.type === 'File') held[entry.path] = (await entry.buffer()).toString('utf8');
+      }
+      expect(held).toEqual({
+        'database.sql': SAFETY_DUMP,
+        'uploads/maps/global/cellar.png': 'a map',
+        'uploads/maps/global/thumb_cellar.png': 'its thumbnail',
+        'uploads/tokens/campaigns/c1/goblin.png': 'a token',
+        'uploads/documents/global/.notes.md': 'a name starting with a dot',
+      });
+    } finally {
+      if (made) await fs.rm(made, { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
   });
 });

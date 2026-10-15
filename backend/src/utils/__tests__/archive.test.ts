@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import { readdirSync } from 'fs';
 import os from 'os';
 import path from 'path';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import {
   extractArchiveSafely,
@@ -29,7 +29,7 @@ const MB = 1024 * 1024;
 
 /** A ZIP holding the given files. */
 async function zipOf(entries: Record<string, string>): Promise<Buffer> {
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const chunks: Buffer[] = [];
   archive.on('data', (chunk: Buffer) => chunks.push(chunk));
   const ended = new Promise<void>((resolve, reject) => {
@@ -136,7 +136,7 @@ describe('extractArchiveSafely', () => {
   it('writes a symbolic link entry as an ordinary file, so it cannot be followed out', async () => {
     const dest = path.join(root, 'unpacked');
     const file = path.join(root, 'link.zip');
-    const archive = archiver('zip');
+    const archive = new ZipArchive();
     const out = (await import('fs')).createWriteStream(file);
     const closed = new Promise<void>((resolve) => out.on('close', () => resolve()));
     archive.pipe(out);
