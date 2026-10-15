@@ -9,7 +9,7 @@
  * script repeating the request would take from the database.
  */
 
-import rateLimit, { type RateLimitInfo } from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator, type RateLimitInfo } from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import type { AuthenticatedRequest } from './rbac';
 
@@ -21,7 +21,7 @@ export const leftNotesDownloadLimiter = rateLimit({
   limit: LEFT_NOTES_DOWNLOADS_PER_HOUR,
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: Request) => `left-notes:${(req as AuthenticatedRequest).session?.userId ?? req.ip ?? 'anonymous'}`,
+  keyGenerator: (req: Request) => `left-notes:${(req as AuthenticatedRequest).session?.userId ?? (req.ip ? ipKeyGenerator(req.ip) : 'anonymous')}`,
   handler: (req: Request, res: Response) => {
     const info = (req as Request & { rateLimit?: RateLimitInfo }).rateLimit;
     const minutes = info?.resetTime ? Math.max(1, Math.ceil((info.resetTime.getTime() - Date.now()) / 60_000)) : 60;

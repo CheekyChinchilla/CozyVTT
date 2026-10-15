@@ -270,7 +270,7 @@ express 4.x
   License: MIT
   https://github.com/expressjs/express
 
-express-rate-limit 7.x
+express-rate-limit 8.x
   Copyright (c) Nathan Friedly & Contributors
   License: MIT
   https://github.com/express-rate-limit/express-rate-limit

@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import type { NextFunction } from 'express';
 import type { Prisma } from '@prisma/client';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
@@ -65,7 +65,7 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const session = (req as AuthenticatedRequest).session;
-    return session?.userId ?? req.ip ?? 'anonymous';
+    return session?.userId ?? (req.ip ? ipKeyGenerator(req.ip) : 'anonymous');
   },
   message: {
     error: 'Too Many Requests',

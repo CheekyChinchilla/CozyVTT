@@ -38,6 +38,7 @@
  */
 
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
+import { ipKeyGenerator } from 'express-rate-limit';
 
 export interface FailureLimiter extends RequestHandler {
   /** Count one wrong answer against this request's key (its address, unless `key` says otherwise). */
@@ -52,7 +53,8 @@ export interface FailureLimiterOptions {
   message: string;
   /**
    * What a request is counted against. The default is the client address as
-   * Express reads it with the app's `trust proxy` setting. Returning null
+   * Express reads it with the app's `trust proxy` setting, an IPv6 address
+   * counted by its /56 network as the other limiters count it. Returning null
    * means the request is neither held to the limit nor counted: a sign-in
    * body with no usable email, a code step with no sign-in pending.
    */
@@ -97,8 +99,13 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
   const addresses = new Map<string, AddressState>();
 
   // The address as Express reads it with the app's `trust proxy` setting,
-  // which is what express-rate-limit keyed on.
-  const byAddress = (req: Request): string => req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  // which is what express-rate-limit keyed on. One IPv6 visitor usually holds
+  // a whole /56 network and can send each guess from a new address in it, so
+  // the network is counted, as express-rate-limit counts it.
+  const byAddress = (req: Request): string => {
+    const address = req.ip ?? req.socket.remoteAddress;
+    return address ? ipKeyGenerator(address) : 'unknown';
+  };
   const keyOf = options.key ?? byAddress;
 
   const stateOf = (key: string): AddressState => {
