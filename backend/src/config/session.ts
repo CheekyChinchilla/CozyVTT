@@ -12,6 +12,11 @@ const PgSession = connectPgSimple(session);
 
 // PostgreSQL connection pool for session storage. Exported so a clean
 // shutdown can close it.
+// TODO(accounts): pg ignores `?schema=` in DATABASE_URL, so with a schema
+// other than public this pool reads and writes public.session, while the raw
+// session queries made through Prisma (services/sessionStore.ts, the admin
+// activity route) follow that schema's search_path. Build this pool from
+// databaseConnectionSettings in prismaClient.ts, so both use one schema.
 export const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
