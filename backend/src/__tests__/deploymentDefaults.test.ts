@@ -197,6 +197,12 @@ const CAPABILITIES: Record<string, string[]> = {
   nginx: ['CHOWN', 'DAC_READ_SEARCH', 'NET_BIND_SERVICE', 'SETGID', 'SETUID'],
 };
 
+/** The named volumes docker-compose.yml declares at its top level. */
+function topLevelVolumes(): string[] {
+  const block = /\nvolumes:\n((?: {2}.*\n|\n)+)/.exec(read('docker-compose.yml'))?.[1] ?? '';
+  return [...block.matchAll(/^ {2}([a-z_]+):/gm)].map((m) => m[1]);
+}
+
 /** Every `docker compose exec` or `docker exec` line the self-hoster guides give for the backend. */
 function backendExecLines(rel: string): string[] {
   return read(rel)
@@ -237,6 +243,22 @@ describe('the containers', () => {
     const tmpfs = /\n {4}tmpfs:\n((?: {6}- .*\n)+)/.exec(frontend)?.[1] ?? '';
     // Its pid file, and the folders it keeps request bodies and proxied answers in.
     expect([...tmpfs.matchAll(/- (\S+)/g)].map((m) => m[1])).toEqual(expect.arrayContaining(['/run', '/var/cache/nginx']));
+  });
+
+  it('give the proxy a read-only filesystem, with its rendered settings and pid file in memory', () => {
+    const nginx = service('docker-compose.yml', 'nginx');
+    expect(nginx).toMatch(/\n {4}read_only: true\n/);
+    // The entrypoint renders the template into /etc/nginx/conf.d as it starts.
+    expect([...listed(nginx, 'tmpfs')].sort()).toEqual(['/etc/nginx/conf.d', '/run', '/tmp']);
+  });
+
+  it("keep the proxy's request and response files on a volume, out of its memory limit", () => {
+    // A 50 MB upload passes through /var/cache/nginx; in memory it would
+    // count against the proxy's 64 MB and stop it.
+    const nginx = service('docker-compose.yml', 'nginx');
+    expect(listed(nginx, 'tmpfs')).not.toContain('/var/cache/nginx');
+    expect(listed(nginx, 'volumes')).toContain('nginx_temp:/var/cache/nginx');
+    expect(topLevelVolumes()).toContain('nginx_temp');
   });
 
   it('are described in the README as they run: only the backend is said to drop to an unprivileged user', () => {

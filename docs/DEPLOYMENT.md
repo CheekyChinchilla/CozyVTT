@@ -106,7 +106,7 @@ This starts four containers on an isolated internal network:
 - `cozyvtt-frontend` — React SPA served by Nginx on internal port 80
 - `cozyvtt-nginx` — Reverse proxy, the only container with public ports (80 and 443)
 
-Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and with only the few Linux capabilities (the separate powers root normally holds) that its start-up needs, such as giving a folder to the right owner or switching to an unprivileged user. The frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user, `appuser`. Commands you run inside the backend container take `-u appuser`, as every one in this guide does: root in that container cannot write the backend's files.
+Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and with only the few Linux capabilities (the separate powers root normally holds) that its start-up needs, such as giving a folder to the right owner or switching to an unprivileged user. The frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. So are the proxy's (`cozyvtt-nginx`): it writes its settings, rendered from `nginx/nginx.conf` as it starts, to memory, and keeps large uploads and downloads as they pass on a volume of its own, `nginx_temp`, which Compose creates on the first start and which needs no backup. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user, `appuser`. Commands you run inside the backend container take `-u appuser`, as every one in this guide does: root in that container cannot write the backend's files.
 
 Database migrations run automatically when the backend starts.
 
@@ -1577,9 +1577,9 @@ docker compose logs backend | grep FATAL
 
 Use `docker compose up -d`, which reads `.env` again; `docker compose restart` keeps the old value. Once the backend starts, `docker compose ps` shows it as `healthy` within a minute.
 
-### A container stops with "Permission denied" or "Operation not permitted"
+### A container stops with "Permission denied", "Operation not permitted" or "Read-only file system"
 
-Each container gets only the Linux capabilities its start-up needs (see [Build and start the stack](#3-build-and-start-the-stack)). Something that needs one of the others now fails, and the container's log says so. Find the line:
+Each container gets only the Linux capabilities its start-up needs, and some have read-only files (see [Build and start the stack](#3-build-and-start-the-stack)). Something that needs one of the other capabilities, or writes where nothing may be written, fails, and the container's log says so. Find the line:
 
 ```bash
 docker compose logs --tail 30 backend nginx
@@ -1589,6 +1589,7 @@ docker compose logs --tail 30 backend nginx
 |---|---|
 | A command you ran with `docker compose exec backend ...` | Run it as the backend's user: `docker compose exec -u appuser backend ...` |
 | `docker-compose.override.yml` adds a program or a setting that needs a capability, such as a network tool or a mount of a different kind | Give that one back in your override file, under the same service: `cap_add:` followed by `- NET_ADMIN` (for example), one per line, indented like the other settings |
+| A file of yours in `nginx/conf.d` writes a log to a file, such as `access_log /var/log/nginx/mysite.log;`, and nginx stops with `Read-only file system` | Send it to nginx's own log instead, `access_log /dev/stdout;`, which `docker compose logs nginx` shows, or mount a folder of your own for it in `docker-compose.override.yml` |
 | nginx cannot read your certificate or key in `nginx/certs` | Check the files are there and not empty with `ls -l nginx/certs`, then copy them again with the steps in [Configure Nginx to use the certificate](#configure-nginx-to-use-the-certificate) |
 
 `docker compose up -d` applies a change to the override file; the container is recreated, and `docker compose ps` shows it running again.

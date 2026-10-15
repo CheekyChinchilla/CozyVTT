@@ -53,11 +53,16 @@ class Mounts(unittest.TestCase):
             '-v', '/tmp/certs:/etc/nginx/certs:ro',
         ])
 
+    def test_gives_a_named_volume_a_throwaway_one_in_its_place(self):
+        # docker run --rm removes an anonymous volume with the container, so
+        # the check leaves no volume behind and never touches the instance's.
+        self.assertEqual(nc.mounts(['nginx_temp:/var/cache/nginx'], '/a', '/b'), ['-v', '/var/cache/nginx'])
+
     def test_stops_on_a_mount_it_does_not_know(self):
         with self.assertRaises(SystemExit):
             nc.mounts([{'type': 'bind', 'source': './nginx', 'target': '/x'}], '/a', '/b')
         with self.assertRaises(SystemExit):
-            nc.mounts(['nginx_data:/var/cache/nginx'], '/a', '/b')
+            nc.mounts(['/srv/nginx:/var/cache/nginx'], '/a', '/b')
 
     def test_reads_the_compose_files_nginx_service(self):
         with open(nc.COMPOSE, encoding='utf-8') as f:
@@ -74,6 +79,9 @@ class Mounts(unittest.TestCase):
         self.assertIn(['--cap-drop', 'ALL'], [flags[i:i + 2] for i in range(len(flags))])
         self.assertIn(['--cap-add', 'DAC_READ_SEARCH'], [flags[i:i + 2] for i in range(len(flags))])
         self.assertIn(['--security-opt', 'no-new-privileges:true'], [flags[i:i + 2] for i in range(len(flags))])
+        self.assertIn('--read-only', flags)
+        self.assertIn(['--tmpfs', '/etc/nginx/conf.d'], [flags[i:i + 2] for i in range(len(flags))])
+        self.assertIn('nginx_temp:/var/cache/nginx', service.volumes)
 
 
 class RunFlags(unittest.TestCase):

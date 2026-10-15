@@ -101,7 +101,7 @@ def https_example(guide_text):
 
 
 def mounts(volumes, conf_d, certs):
-    """docker run -v arguments for the service's mounts, its own folders swapped for the given ones."""
+    """docker run -v arguments for the service's mounts, its own folders swapped for the given ones and its named volumes for throwaway ones."""
     out = []
     for volume in volumes:
         if not isinstance(volume, str):
@@ -113,6 +113,11 @@ def mounts(volumes, conf_d, certs):
             source = certs
         elif source.startswith('./'):
             source = os.path.join(ROOT, source[2:])
+        elif re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*', source):
+            # A named volume: a throwaway one in its place, which docker run
+            # --rm removes with the container.
+            out += ['-v', target]
+            continue
         else:
             raise SystemExit(f'docker-compose.yml: teach scripts/nginx-check.py this nginx mount: {volume!r}')
         out += ['-v', ':'.join([source, target] + mode)]

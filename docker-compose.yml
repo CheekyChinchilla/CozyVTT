@@ -190,10 +190,8 @@ services:
       - SETGID
       - NET_BIND_SERVICE
     # It only serves the built app, so its files are read-only, apart from
-    # nginx's pid file and scratch folders, held in memory. The proxy is not
-    # read-only: it renders its configuration when it starts, and keeps large
-    # uploads and downloads on disk as they pass. Nor is the backend, which
-    # writes a backup's database dump to /tmp.
+    # nginx's pid file and scratch folders, held in memory: nothing large
+    # passes through it.
     read_only: true
     tmpfs:
       - /run
@@ -233,6 +231,17 @@ services:
       - SETGID
       - NET_BIND_SERVICE
       - DAC_READ_SEARCH
+    # Its files are read-only too. The entrypoint renders nginx/nginx.conf
+    # into /etc/nginx/conf.d as it starts, and nginx writes its pid file in
+    # /run; those are held in memory. Uploads and downloads too large to
+    # hold in memory as they pass (a 50 MB map, a backup) go to
+    # /var/cache/nginx, kept on the nginx_temp volume: in memory they would
+    # count against the 64 MB below and stop nginx.
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+      - /etc/nginx/conf.d
     depends_on:
       - frontend
       - backend
@@ -279,6 +288,8 @@ services:
       # Your own nginx settings, such as HTTPS: every .conf file here is read.
       # git ignores this folder's contents, so `git pull` never stops at them.
       - ./nginx/conf.d:/etc/nginx/cozyvtt.d:ro
+      # Scratch files only: nothing in it needs a backup.
+      - nginx_temp:/var/cache/nginx
     networks:
       - internal
     deploy:
@@ -288,6 +299,10 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  # nginx's request and response scratch files; Compose makes it on the
+  # first start, and nothing in it needs a backup.
+  nginx_temp:
     driver: local
 
 networks:
