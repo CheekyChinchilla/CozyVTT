@@ -824,8 +824,9 @@ cd frontend && npm run lint
 ```
 
 The rules are in each package's `eslint.config.js` (ESLint 10, flat config):
-ESLint's recommended rules, typescript-eslint's recommended rules and, in the
-frontend, the React hooks rules. Only TypeScript files are linted, apart from
+ESLint's recommended rules from `@eslint/js`, the recommended rules of the
+`typescript-eslint` package (which brings its parser and plugin with it) and,
+in the frontend, the React hooks rules. Only TypeScript files are linted, apart from
 the frontend's `vite.config.ts`. A rule that is switched off says why beside
 it. In the frontend the ones waiting to be turned on are marked
 `TODO(ratchet)`; the backend's three are listed in the comment above them.

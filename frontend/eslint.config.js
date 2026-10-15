@@ -3,28 +3,18 @@
 // calibrated so `npm run lint` passes (--max-warnings 0) on the current
 // codebase and can be ratcheted stricter over time; rules that would need a
 // codebase-wide cleanup first are noted.
-import tsPlugin from '@typescript-eslint/eslint-plugin';
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { reactRefresh } from 'eslint-plugin-react-refresh';
-import { builtinRules } from 'eslint/use-at-your-own-risk';
-
-// ESLint's recommended rules, what `eslint:recommended` named before the flat
-// config format. Each built-in rule says whether it is recommended, and this
-// reads that from ESLint itself; the same list is published as the
-// @eslint/js package, which the project does not otherwise need.
-const eslintRecommended = Object.fromEntries(
-  [...builtinRules]
-    .filter(([, rule]) => rule.meta?.docs?.recommended)
-    .map(([name]) => [name, 'error'])
-);
 
 export default [
   // Only TypeScript is linted, as before the flat config format; the
   // JavaScript here is configuration.
   { ignores: ['dist/', 'coverage/', 'playwright-report/', 'test-results/', 'vite.config.ts', '**/*.js', '**/*.cjs', '**/*.mjs'] },
 
-  { name: 'eslint/recommended', rules: eslintRecommended },
-  ...tsPlugin.configs['flat/recommended'],
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
 
   {

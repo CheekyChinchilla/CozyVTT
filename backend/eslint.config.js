@@ -7,26 +7,16 @@
 //
 // `@typescript-eslint/no-explicit-any` is an **error** here, and it applies to
 // every file, tests included. There is no allowlist; do not add one.
-const tsPlugin = require('@typescript-eslint/eslint-plugin');
-const { builtinRules } = require('eslint/use-at-your-own-risk');
-
-// ESLint's recommended rules, what `eslint:recommended` named before the flat
-// config format. Each built-in rule says whether it is recommended, and this
-// reads that from ESLint itself; the same list is published as the
-// @eslint/js package, which the project does not otherwise need.
-const eslintRecommended = Object.fromEntries(
-  [...builtinRules]
-    .filter(([, rule]) => rule.meta?.docs?.recommended)
-    .map(([name]) => [name, 'error'])
-);
+const js = require('@eslint/js');
+const tseslint = require('typescript-eslint');
 
 module.exports = [
   // Only TypeScript is linted, as before the flat config format; the
   // JavaScript here is configuration.
   { ignores: ['dist/', 'coverage/', '**/*.js', '**/*.cjs', '**/*.mjs'] },
 
-  { name: 'eslint/recommended', rules: eslintRecommended },
-  ...tsPlugin.configs['flat/recommended'],
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
 
   {
     name: 'cozyvtt/backend',
