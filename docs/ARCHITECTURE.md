@@ -221,7 +221,8 @@ sequenceDiagram
 
 ```
 src/
-├── main.tsx           Entry point — BrowserRouter wrapper
+├── main.tsx           Entry point: renders App inside AppRouter
+├── AppRouter.tsx      The browser router, with React Router's transitions off
 ├── App.tsx            Route definitions, auth guards, lazy page loading
 ├── contexts/
 │   ├── AuthContext.tsx    User auth state, login/logout/register actions
