@@ -38,7 +38,7 @@ CozyVTT ships no game content. An administrator can import creature data from th
 
 ## Icons
 
-UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC License.
+UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC License (Copyright (c) Lucide Icons and Contributors). The icons Lucide derives from [Feather](https://github.com/feathericons/feather) are under the MIT License (Copyright (c) 2013-present Cole Bemis).
 
 ## Campaign Export/Import Libraries
 
