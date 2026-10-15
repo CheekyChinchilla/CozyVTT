@@ -297,7 +297,7 @@ helmet 8.x
   License: MIT
   https://github.com/helmetjs/helmet
 
-mathjs 12.x
+mathjs 15.x
   Copyright (c) Jos de Jong
   License: Apache-2.0
   https://github.com/josdejong/mathjs
