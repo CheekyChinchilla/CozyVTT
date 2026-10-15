@@ -156,10 +156,12 @@ framer-motion 10.x
   License: MIT
   https://github.com/framer/motion
 
-lucide-react 0.316.x
-  Copyright (c) Lucide Contributors
+lucide-react 1.x
+  Copyright (c) Lucide Icons and Contributors
   License: ISC
   https://github.com/lucide-icons/lucide
+  Note: The icons Lucide derives from Feather are under the MIT License,
+  Copyright (c) 2013-present Cole Bemis (https://github.com/feathericons/feather).
 
 react 18.x
   Copyright (c) Meta Platforms, Inc. and affiliates

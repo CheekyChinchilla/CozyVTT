@@ -16,6 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **For people working on CozyVTT: after this update, start the development stack once with `docker compose -f docker-compose.dev.yml up --build -V`.** The app's build and test tools have moved to new versions, Vite 8 and Vitest 5. The development stack keeps its installed packages between runs, so without `--build -V` its frontend container goes on running the old ones. The production stack is not affected.
 
+- **Many of the app's icons are drawn a little differently.** The icon set has moved to a new version, which redraws more than half of the icons CozyVTT uses, such as the ones for saving, deleting and settings. Each still stands for what it did before, so an icon that looks new is expected. Screen readers now pass over icons that are only decoration, and still read out an icon that has a label of its own, such as the loading spinner.
+
 ### Security
 
 - **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
