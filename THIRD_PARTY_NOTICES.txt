@@ -287,7 +287,7 @@ express-session 1.x
   License: MIT
   https://github.com/expressjs/session
 
-file-type 21.x
+file-type 22.x
   Copyright (c) Sindre Sorhus
   License: MIT
   https://github.com/sindresorhus/file-type
