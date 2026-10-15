@@ -43,8 +43,12 @@
  * memory-backed folders for nginx's own scratch files. So does the proxy,
  * whose settings the entrypoint renders into memory as it starts; its
  * request and response files, which a 50 MB upload fills, are on a volume,
- * outside its 64 MB memory limit. The README says what runs as root, and no
- * more.
+ * outside its 64 MB memory limit. The backend's filesystem is read-only as
+ * well, apart from its three data folders and /tmp, a volume of its own for
+ * the dump a backup writes and the archive a restore unpacks; its start
+ * script removes what a stopped one left there, and calls Prisma directly,
+ * since npx writes to the home folder. The README says what runs as root,
+ * and no more.
  */
 
 import fs from 'fs';
@@ -263,6 +267,51 @@ describe('the containers', () => {
     expect(listed(nginx, 'volumes')).toContain('nginx_temp:/var/cache/nginx');
     expect(topLevelVolumes()).toContain('nginx_temp');
   });
+
+  it("give the backend a read-only filesystem, with /tmp on a volume of its own", () => {
+    const backend = service('docker-compose.yml', 'backend');
+    expect(backend).toMatch(/\n {4}read_only: true\n/);
+    // A backup's dump of the whole database and a restore's unpacked archive
+    // go to /tmp; in memory they would count against the backend's 512 MB.
+    expect(listed(backend, 'tmpfs')).toEqual([]);
+    expect(listed(backend, 'volumes')).toContain('backend_tmp:/tmp');
+    expect(topLevelVolumes()).toContain('backend_tmp');
+  });
+
+  it('turn off the Prisma tools\' update check in the backend image, which writes to the home folder', () => {
+    const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
+    expect(stages[stages.length - 1]).toMatch(/^ENV CHECKPOINT_DISABLE=1$/m);
+  });
+
+  describe('the backend start script', () => {
+    const script = read('backend/scripts/start.sh');
+    const lines = script.split('\n').filter((line) => !line.trimStart().startsWith('#'));
+    /** Where the root phase ends: everything after it runs as appuser. */
+    const appuserPhase = script.slice(script.indexOf('\nfi\n', script.indexOf('if [ "$(id -u)" = "0" ]')));
+
+    it("runs the project's own Prisma, without npx, which writes to the home folder", () => {
+      expect(lines.filter((line) => /\bnpx\b/.test(line))).toEqual([]);
+      expect(script).toMatch(/^if \.\/node_modules\/\.bin\/prisma migrate deploy; then$/m);
+    });
+
+    it('removes the dumps a stopped backup or restore left in /tmp, which outlives the container, before the app starts', () => {
+      // On the backend_tmp volume they would survive an upgrade, and each is a
+      // copy of every credential on the instance.
+      const removal = /\brm -rf ([^;|&\n]*)/.exec(appuserPhase)?.[1] ?? '';
+      expect(removal.split(/\s+/)).toEqual(expect.arrayContaining(['/tmp/cozyvtt-db-*', '/tmp/cozyvtt-restore-*']));
+      expect(appuserPhase.indexOf('rm -rf')).toBeLessThan(appuserPhase.lastIndexOf('exec "$@"'));
+      expect(appuserPhase.indexOf('rm -rf')).toBeGreaterThan(0);
+    });
+  });
+
+  it.each(['docs/DEPLOYMENT.md', 'backend/DATABASE_MIGRATIONS.md'])(
+    "%s runs Prisma in the backend container as the project's own, without npx",
+    (file) => {
+      // The command itself, from `docker` on: a table row also names the development form.
+      const commands = backendExecLines(file).map((line) => line.slice(line.search(/docker(?: compose)? exec/)));
+      expect(commands.filter((command) => /\bnpx\b/.test(command.split('`')[0]))).toEqual([]);
+    }
+  );
 
   it('are described in the README as they run: only the backend is said to drop to an unprivileged user', () => {
     const readme = read('README.md');

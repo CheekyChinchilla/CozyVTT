@@ -12,12 +12,14 @@
  */
 
 import { spawnSync } from 'child_process';
+import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import type { Prisma } from '@prisma/client';
 import { prisma, createTestUser, createTestCampaign, cleanupUsers } from '../../__tests__/helpers/db';
 import { getBlankTemplate } from '../../utils/character-templates';
 import { GameSystem } from '../../game-systems';
-import { validateCharacters, parseValidateArgs } from '../validate-characters';
+import { validateCharacters, parseValidateArgs, exportValidationIssues, type ValidationReport } from '../validate-characters';
 import { migrateCharacters } from '../migrate-characters';
 
 const UNREACHABLE = 'postgresql://nobody:nothing@127.0.0.1:1/none';
@@ -120,6 +122,50 @@ describe('validate:characters', () => {
 
   it('exits 1 when it cannot reach the database', () => {
     expect(runScript('validate-characters.ts', [], UNREACHABLE).status).toBe(1);
+  });
+});
+
+describe('validate:characters --export', () => {
+  const report: ValidationReport = {
+    totalCharacters: 0,
+    validCharacters: 0,
+    invalidCharacters: 0,
+    noGameSystem: 0,
+    systemBreakdown: {},
+    issues: [],
+  };
+  let scratch: string;
+  beforeEach(() => {
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-validate-export-'));
+  });
+  afterEach(() => {
+    fs.chmodSync(scratch, 0o700);
+    fs.rmSync(scratch, { recursive: true, force: true });
+    jest.restoreAllMocks();
+  });
+
+  it('writes the report where it is asked to, and says where', () => {
+    const target = path.join(scratch, 'validation-report.json');
+    expect(exportValidationIssues(report, target)).toBe(target);
+    expect(JSON.parse(fs.readFileSync(target, 'utf8')).summary.total).toBe(0);
+  });
+
+  // Root may write to a folder whatever its mode, so the refusal below
+  // cannot be set up for it.
+  const asAnAccount = process.getuid?.() === 0 ? it.skip : it;
+  asAnAccount('writes it to the temporary folder when the working folder cannot be written, as in the production image', () => {
+    const readOnly = path.join(scratch, 'app');
+    const tmp = path.join(scratch, 'tmp');
+    fs.mkdirSync(readOnly);
+    fs.mkdirSync(tmp);
+    fs.chmodSync(readOnly, 0o500);
+    jest.spyOn(os, 'tmpdir').mockReturnValue(tmp);
+
+    const written = exportValidationIssues(report, path.join(readOnly, 'validation-report.json'));
+
+    expect(written).toBe(path.join(tmp, 'validation-report.json'));
+    expect(JSON.parse(fs.readFileSync(written, 'utf8')).issues).toEqual([]);
+    expect(fs.readdirSync(readOnly)).toEqual([]);
   });
 });
 

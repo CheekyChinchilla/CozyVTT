@@ -53,6 +53,13 @@ import {
 import logger from '../../utils/logger';
 import * as setupGate from '../../middleware/setup';
 
+/**
+ * The migration run: the project's own Prisma, from the folder the backend
+ * runs in. npx would want to write in the home folder, which the container's
+ * read-only filesystem does not allow.
+ */
+const MIGRATE = 'node_modules/.bin/prisma';
+
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
 const errorSpy = jest.spyOn(logger, 'error');
@@ -254,7 +261,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/log in again/);
 
-    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
     const [, psql, migrate] = calls;
     expect(psql.args).toEqual(expect.arrayContaining(['--single-transaction', 'ON_ERROR_STOP=1']));
     expect(path.basename(psql.args[psql.args.indexOf('--file') + 1])).not.toBe('database.sql');
@@ -263,7 +270,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(psql.sqlLoaded).toContain('CREATE TABLE public."Note"');
     expect(psql.sqlLoaded).not.toContain('OWNER TO');
     expect(psql.sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
-    expect(migrate.args).toEqual(['prisma', 'migrate', 'deploy']);
+    expect(migrate.args).toEqual(['migrate', 'deploy']);
   });
 
   it('writes a backup of the database as it is before loading anything, and names it', async () => {
@@ -487,7 +494,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.body.error).toBe('Restore Incomplete');
       expect(res.body.message).toMatch(/files/);
       // The database side still finishes, migrations included, so what was restored is usable.
-      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
     } finally {
       await fs.rm(path.join(UPLOAD_DIR, marker), { force: true });
     }
@@ -533,14 +540,14 @@ describe('POST /api/admin/backups/restore', () => {
   });
 
   it('says the database was restored but not migrated when the migration run fails', async () => {
-    const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
+    const calls = stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
 
     const res = await restore(admin, zip);
 
     expect(res.status).toBe(500);
     expect(res.body.message).toMatch(/restart/i);
-    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
   });
 
   it('ends every live connection when the database is replaced', async () => {
@@ -559,7 +566,7 @@ describe('POST /api/admin/backups/restore', () => {
       const res = await restore(admin, zip);
 
       expect(res.status).toBe(200);
-      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
       expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
     } finally {
@@ -579,7 +586,7 @@ describe('POST /api/admin/backups/restore', () => {
       const client = await ws.connectClient(cookie);
       const told = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
       const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
-      const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
+      const calls = stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
       const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
 
       const res = await restore(admin, zip);
@@ -587,7 +594,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Restore Incomplete');
       expect(res.body.message).toMatch(/restart/i);
-      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
       expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
       expect(getCombatState(campaignId).active).toBe(false);

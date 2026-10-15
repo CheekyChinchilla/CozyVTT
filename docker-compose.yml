@@ -103,6 +103,12 @@ services:
       - FOWNER
       - SETUID
       - SETGID
+    # Its files are read-only too: the backend writes only to the three
+    # folders below and to /tmp, where a backup keeps its dump of the database
+    # and a restore unpacks the archive. /tmp is the backend_tmp volume: in
+    # memory a dump would count against the 512 MB below. start.sh removes
+    # what a stopped backup or restore left there.
+    read_only: true
     depends_on:
       database:
         condition: service_healthy
@@ -148,6 +154,8 @@ services:
       - ./backend/backups:/app/backups
       # Logs persist on the host
       - ./backend/logs:/app/logs
+      # Scratch files only: nothing in it needs a backup.
+      - backend_tmp:/tmp
     # Backend is only accessible internally — Nginx terminates public traffic
     expose:
       - "4000"
@@ -303,6 +311,10 @@ volumes:
   # nginx's request and response scratch files; Compose makes it on the
   # first start, and nothing in it needs a backup.
   nginx_temp:
+    driver: local
+  # The backend's /tmp: a backup's database dump and a restore's unpacked
+  # archive while they run. Compose makes it on the first start.
+  backend_tmp:
     driver: local
 
 networks:

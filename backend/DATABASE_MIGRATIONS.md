@@ -15,7 +15,7 @@ Docker). The app itself connects through the `pg` driver, with the same
 When you start CozyVTT with Docker Compose, the backend container will automatically:
 
 1. Wait for the PostgreSQL database to be ready
-2. Run all pending migrations using `npx prisma migrate deploy`
+2. Run all pending migrations with `prisma migrate deploy`
 3. Start the application
 
 This ensures that your database schema is always up-to-date.
@@ -41,11 +41,15 @@ logs.
 docker compose exec -u appuser backend bash
 
 # Run migrations
-npx prisma migrate deploy
+./node_modules/.bin/prisma migrate deploy
 
 # View migration status
-npx prisma migrate status
+./node_modules/.bin/prisma migrate status
 ```
+
+In the container, call Prisma from `./node_modules/.bin/` as shown. `npx`
+writes to the home folder, and the backend container's files are read-only
+apart from its data folders and `/tmp`.
 
 ### Local Development
 
@@ -150,7 +154,10 @@ itself like any other: see `20260417000000_migrate_light_bright_dim` above.)
 
 The `npm run` forms run the TypeScript source and need a development checkout.
 In the production image, which has no source and no `ts-node`, run the compiled
-file shown in the last column, with the same options.
+file shown in the last column, with the same options. The image's app folder is
+read-only, so `validate-characters.js --export` writes its report to
+`/tmp/validation-report.json` there and says so; copy it out with
+`docker compose cp backend:/tmp/validation-report.json .`
 
 ### `migrate:sheet-fields`
 
@@ -281,14 +288,14 @@ docker compose down
 docker compose up --build
 
 # Or run migrations manually:
-docker compose exec -u appuser backend npx prisma migrate deploy
+docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate deploy
 ```
 
 ### A migration fails on an instance with real data
 
 Do not reset anything. Each migration runs as a single step, so a failed one
 normally leaves your data as it was. Take the last lines of `docker compose logs backend` and the output of
-`docker compose exec -u appuser backend npx prisma migrate status`, and open an issue
+`docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status`, and open an issue
 with both. If you have to get back to a working instance first, restore the last
 backup (see [Database Backups](../docs/DEPLOYMENT.md#database-backups)).
 
@@ -310,7 +317,7 @@ docker compose up --build  # Fresh start with migrations
 To see which migrations have been applied:
 
 ```bash
-docker compose exec -u appuser backend npx prisma migrate status
+docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status
 ```
 
 ## Creating New Migrations

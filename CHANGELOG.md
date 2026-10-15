@@ -40,6 +40,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The bundled nginx can no longer change its own files.** Its filesystem is read-only, as the frontend's already was. It writes its settings, made from `nginx/nginx.conf` each time it starts, to memory, and keeps uploads and downloads too large to hold in memory, such as a map or a backup, on a new volume, `nginx_temp`, which Compose creates by itself and which needs no backup. If a file of yours in `nginx/conf.d` writes a log to a file of its own, nginx now stops with `Read-only file system`; send that log to `/dev/stdout` instead, as [the deployment guide](docs/DEPLOYMENT.md#a-container-stops-with-permission-denied-operation-not-permitted-or-read-only-file-system) shows.
 
+- **The backend can no longer change its own program files.** Its filesystem is read-only, apart from `backend/uploads`, `backend/backups` and `backend/logs`, and its `/tmp`, where a backup writes its copy of the database and a restore unpacks the archive. `/tmp` is now a volume of its own, `backend_tmp`, which Compose creates by itself and which needs no backup, so a large backup does not count against the backend's memory. A backup or restore that was stopped part-way left its working copy of the database there, with every password hash in it, until the container was recreated; the backend now removes it each time it starts. `validate-characters.js --export`, run in the container, writes its report to `/tmp/validation-report.json` and says so; `docker compose cp backend:/tmp/validation-report.json .` copies it out.
+
 ---
 
 ## [1.5.2] - 2026-10-14

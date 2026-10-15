@@ -34,6 +34,13 @@ echo "================================================"
 echo "🏰 CozyVTT Backend Startup"
 echo "================================================"
 
+# A backup or restore that was stopped part-way leaves its working copy of
+# the database in /tmp, which is a volume in the Docker setup and outlives
+# the container. Nothing is running yet, so any found now is a leftover.
+if ! rm -rf /tmp/cozyvtt-db-* /tmp/cozyvtt-restore-* 2>/dev/null; then
+  echo "⚠️  Could not remove a leftover backup or restore folder from /tmp; it holds a copy of the database." >&2
+fi
+
 echo ""
 echo "🔍 Checking database connection..."
 
@@ -67,11 +74,13 @@ echo "✅ Database connection successful"
 echo ""
 echo "🔄 Running database migrations..."
 
-if npx prisma migrate deploy; then
+# The project's own Prisma: npx writes to the home folder, which is read-only
+# in the production image.
+if ./node_modules/.bin/prisma migrate deploy; then
   echo "✅ Migrations completed successfully"
 else
   echo "❌ Error: Migration failed"
-  echo "   Run 'docker compose exec -u appuser backend npx prisma migrate status' to diagnose"
+  echo "   Run 'docker compose exec -u appuser backend ./node_modules/.bin/prisma migrate status' to diagnose"
   exit 1
 fi
 

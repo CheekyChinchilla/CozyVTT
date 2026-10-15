@@ -1384,9 +1384,11 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
 
     // 8. Bring a backup from an older release up to this version's schema.
     // start.sh runs the same command on every boot, so a failure here is
-    // recovered by a restart, and the response says so.
+    // recovered by a restart, and the response says so. The project's own
+    // Prisma, called directly: npx writes to the home folder, which the
+    // container's read-only filesystem refuses.
     try {
-      await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
+      await execFileAsync('node_modules/.bin/prisma', ['migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
       // TODO(restore): this return skips step 9, so a restore whose migrations
