@@ -28,10 +28,11 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rolldownOptions: {
       // Remove console.log, info, debug and trace calls from the production
-      // bundle: they print chat messages, secret rolls and token details. console.error and console.warn stay, so real
-      // problems still reach the browser console. The minifier already drops
-      // `debugger` statements. The dev server (`vite`) bundles nothing, so
-      // development keeps every log.
+      // bundle: they print chat messages, secret rolls and token details.
+      // console.error and console.warn stay, so real problems still reach the
+      // browser console. The minifier already drops `debugger` statements.
+      // The dev server (`vite`) bundles nothing, so development keeps every
+      // log.
       treeshake: {
         manualPureFunctions: ['console.log', 'console.info', 'console.debug', 'console.trace'],
       },
