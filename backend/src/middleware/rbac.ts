@@ -12,9 +12,13 @@ import logger from '../utils/logger';
  */
 
 /**
- * Extended Request with campaign membership info
+ * Extended Request with campaign membership info.
+ *
+ * The route parameters are typed as plain strings. Express's own types allow a
+ * string array for any parameter, which only a `*name` wildcard produces, and
+ * no route here has one.
  */
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest<P = Record<string, string>> extends Request<P> {
   campaignMembership?: {
     role: CampaignRole;
     characterIds: string[];

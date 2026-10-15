@@ -57,7 +57,7 @@ router.get('/', requireAuth, requireAdmin, async (_req: Request, res: Response) 
  * Get specific user
  * Requires: Authentication (users can view their own profile, admins can view any)
  */
-router.get('/:id', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -101,7 +101,7 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
  */
-router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -417,7 +417,7 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request, res: 
  *
  * Auth: user can fetch own preferences; admins can fetch anyone's.
  */
-router.get('/:id/preferences', requireAuth, async (req: Request, res: Response) => {
+router.get('/:id/preferences', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -461,7 +461,7 @@ router.get('/:id/preferences', requireAuth, async (req: Request, res: Response) 
  * Auth: user can update own preferences; admins can update anyone's
  * (matches existing PUT /:id pattern).
  */
-router.put('/:id/preferences', requireAuth, async (req: Request, res: Response) => {
+router.put('/:id/preferences', requireAuth, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -523,7 +523,7 @@ router.put('/:id/preferences', requireAuth, async (req: Request, res: Response) 
  * Requires: Admin role
  * Note: This will cascade delete all related data (campaigns, memberships, etc.)
  */
-router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+router.delete('/:id', requireAuth, requireAdmin, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -602,7 +602,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request, res: Respo
  * Requires: Admin role
  * Returns: Temporary password (one-time display)
  */
-router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -686,7 +686,7 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
  * Creates a PasswordResetToken and emails the link — SMTP must be configured.
  * Requires: Admin role
  */
-router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Request, res: Response) => {
+router.post('/:id/send-reset-link', requireAuth, requireAdmin, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
 

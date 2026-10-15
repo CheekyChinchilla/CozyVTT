@@ -162,7 +162,8 @@ _Nothing at present._
   React Router 7. Dependabot holds back major versions of npm packages until
   then, and its automatic security pull requests are turned on once 1.5.3
   ships. **Done** for the frontend's build and test tools: Vite 8 with
-  @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7. **Defer**
+  @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7; and for the
+  backend's web framework: Express 5. **Defer**
   Tailwind CSS 4 and TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs stays

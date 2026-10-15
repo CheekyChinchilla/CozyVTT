@@ -43,9 +43,6 @@ function inventory(): Inventory {
       handlers: route.handlers.map(nameOf),
     })),
     layers: appLayers(app)
-      // Express 4 puts two layers of its own at the start of every app, which
-      // parse the query string and set up the request; Express 5 has none.
-      .filter((layer, index) => !(index < 2 && ['query', 'expressInit'].includes(layer.name)))
       // A route's layer runs Express's own dispatcher, whose name is Express's
       // business; the route's path says which one it is.
       .map((layer) => (layer.route ? { path: layer.path, route: true } : { name: layer.name, path: layer.path, route: false })),

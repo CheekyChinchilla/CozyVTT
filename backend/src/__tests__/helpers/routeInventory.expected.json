@@ -1464,6 +1464,11 @@
       "route": false
     },
     {
+      "name": "emptyBodyWhenNone",
+      "path": "",
+      "route": false
+    },
+    {
       "name": "refuseWhileDatabaseIsReplaced",
       "path": "/api",
       "route": false

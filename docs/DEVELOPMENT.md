@@ -633,6 +633,26 @@ Some of those deserve a note:
   fails when a test file sends a request to a route still listed in
   `UNTESTED`, so the list cannot go on claiming a gap that has closed. Add a
   new route's test, then its line in `TESTED`.
+- **The route tests read Express's router stack through one helper.**
+  `backend/src/__tests__/helpers/routeInventory.ts` walks `app.router.stack`
+  for the route inventory, the limiter wiring, the campaign role guards, the
+  admin routes and the app assembly tests. Express 5's layers do not keep the
+  path a router was mounted at, so the helper wraps `app.use` to note it, and
+  a test file has to import the helper before it builds the app.
+  `backend/src/__tests__/routeInventoryHelper.test.ts` compares what the
+  helper reads, every route with its handlers by name and every layer of the
+  app, with `helpers/routeInventory.expected.json`. After adding a route or
+  middleware on purpose, run that test once with `WRITE_ROUTE_INVENTORY=1`
+  and read the diff of the file before committing it.
+- **Route paths use Express 5's syntax.** A wildcard needs a name
+  (`/*splat`), an optional part goes in braces (`/:file{.:ext}`), and the
+  characters `?`, `+`, `!`, `(`, `)`, `[` and `]` are refused when the app
+  starts unless escaped. `app.use(handler)` with no path matches every
+  request; a bare `*` is refused.
+- **`req.body` is `{}` when a request sent no JSON only because
+  `backend/src/middleware/bodyParsers.ts` puts it there.** Express 5 leaves
+  it `undefined`, and many handlers destructure it straight away; keep that
+  middleware right after the JSON parser.
 - **Every rate limiter is tested where it is attached.**
   `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
   limited route: it sends the limit's worth of failing requests to the real

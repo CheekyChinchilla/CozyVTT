@@ -180,7 +180,7 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 1. `trust proxy` set to one hop (the bundled nginx), so the limiters read the visitor's address and the cookie is marked Secure over HTTPS
 2. helmet's headers, then CORS for `CORS_ORIGIN`
 3. `originCheck`: a change a browser sent from another site is refused
-4. `bodyParsers`: JSON up to 1 MB
+4. `bodyParsers`: JSON up to 1 MB, and an empty body for a request that sent none
 5. On `/api`, the restore gate (`restoreGate.ts`), ahead of the session lookup
 6. The session (`express-session` over the PostgreSQL store)
 7. The setup gate, which lets only `/health` and `/api/setup` through until setup has run
