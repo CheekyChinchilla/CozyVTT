@@ -79,7 +79,7 @@
   },
   "overrides": {
     "prisma": {
-      "mysql2": "3.24.6"
+      "mysql2": "3.24.5"
     },
     "@prisma/config": {
       "deepmerge-ts": "8.0.2"
