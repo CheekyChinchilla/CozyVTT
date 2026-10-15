@@ -25,6 +25,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import * as assetUsage from '../../services/assetUsage';
+import { personalFilesBeingRemoved } from '../../services/accountDeletion';
 import logger from '../../utils/logger';
 
 const app = createTestApp();
@@ -111,7 +112,9 @@ describe.each([
     expect((await pending).status).toBe(200);
     expect(await prisma.user.findUnique({ where: { id: leaver.user.id } })).toBeNull();
     expect(stillStored).not.toBeNull();
-    expect(await eventually(async () => (await prisma.asset.findUnique({ where: { id: file.id } })) === null)).toBe(true);
+    // The record goes first and the file after it; wait for both.
+    await personalFilesBeingRemoved.finished();
+    expect(await prisma.asset.findUnique({ where: { id: file.id } })).toBeNull();
     expect(fs.existsSync(file.filePath)).toBe(false);
   });
 
