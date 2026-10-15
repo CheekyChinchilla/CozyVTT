@@ -26,6 +26,9 @@ export interface AuthenticatedRequest extends Request {
  * Load campaign membership for authenticated user
  * Attaches membership info to req.campaignMembership
  * Must be used after requireAuth middleware
+ *
+ * The campaign comes from the route's `:campaignId` only (directly, or through
+ * a mount with `mergeParams`). The request body never chooses it.
  */
 export async function loadCampaignMembership(
   req: AuthenticatedRequest,
@@ -34,7 +37,7 @@ export async function loadCampaignMembership(
 ) {
   try {
     const userId = req.session.userId;
-    const campaignId = req.params.campaignId || req.body.campaignId;
+    const campaignId = req.params.campaignId;
 
     if (!userId) {
       return res.status(401).json({

@@ -22,6 +22,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
 
+- **The check of who belongs to a campaign takes the campaign from the request's address alone.** When the address named no campaign, the check would also read one from the data sent with the request. Every campaign route already names its campaign in the address, so no request could reach this and nothing changes for anyone. A route added later cannot be checked against a campaign the request chooses.
+
 ---
 
 ## [1.5.2] - 2026-10-14

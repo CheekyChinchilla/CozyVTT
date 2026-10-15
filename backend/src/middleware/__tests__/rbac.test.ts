@@ -72,6 +72,27 @@ describe('loadCampaignMembership', () => {
     expect(answer.nexted).toBe(false);
   });
 
+  it('takes the campaign from the route only, so a body cannot choose one', async () => {
+    const answer = await run(loadCampaignMembership, { session: { userId: 'u1' }, body: { campaignId: 'c1' } });
+    expect(answer.status).toBe(400);
+    expect(answer.body?.message).toBe('Campaign ID is required');
+    expect(answer.nexted).toBe(false);
+    expect(mockFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('checks the route\'s campaign when the body names another', async () => {
+    mockFindUnique.mockResolvedValue({ role: 'DM', characterIds: [], campaignId: 'c1' });
+    await run(loadCampaignMembership, { session: { userId: 'u1' }, params: { campaignId: 'c1' }, body: { campaignId: 'c2' } });
+    expect(mockFindUnique).toHaveBeenCalledWith({ where: { userId_campaignId: { userId: 'u1', campaignId: 'c1' } } });
+  });
+
+  it('answers 400 for a request with no body and no campaign', async () => {
+    const answer = await run(loadCampaignMembership, { session: { userId: 'u1' }, body: undefined });
+    expect(answer.status).toBe(400);
+    expect(answer.body?.message).toBe('Campaign ID is required');
+    expect(answer.nexted).toBe(false);
+  });
+
   it('refuses someone who is not a member', async () => {
     mockFindUnique.mockResolvedValue(null);
     const answer = await run(loadCampaignMembership, { session: { userId: 'u1' }, params: { campaignId: 'c1' } });

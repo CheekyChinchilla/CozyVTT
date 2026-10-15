@@ -804,12 +804,23 @@ router.get('/', requireAuth, loadCampaignMembership, requireDM, handler);
 ```
 
 ### 3. Campaign ID Location
-```typescript
-// campaignId can come from:
-req.params.campaignId  // URL parameter
-req.body.campaignId    // Request body
+`loadCampaignMembership` reads the campaign from `req.params.campaignId` only.
+A `campaignId` in the request body or the query string is ignored, so a
+request cannot pick which campaign it is checked against. A guarded route
+needs `:campaignId` in its own path, or in the path it is mounted at with a
+router created as `Router({ mergeParams: true })`; without it, the guard
+answers 400 "Campaign ID is required".
 
-// loadCampaignMembership checks both locations
+```typescript
+// ✅ CORRECT - campaignId in the route path
+router.get('/:campaignId/notes', campaignMember, handler);
+
+// ✅ CORRECT - campaignId in the mount path, read through mergeParams
+app.use('/api/campaigns/:campaignId/maps', mapRoutes); // mapRoutes = Router({ mergeParams: true })
+router.get('/', campaignMember, handler);
+
+// ❌ WRONG - no campaignId in the path; a body campaignId is not read
+router.post('/notes', campaignMember, handler); // always 400
 ```
 
 ### 4. TypeScript Types
