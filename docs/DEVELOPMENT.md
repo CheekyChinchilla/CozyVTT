@@ -455,6 +455,10 @@ npm run test:run          # Run once (CI mode)
 npm run test:coverage     # Generate coverage report
 ```
 
+The runner is Vitest 5, on Vite 8. On a machine short of memory, cap the
+workers a run starts with `npx vitest run --maxWorkers=2`; Vitest 5 has no
+`--minWorkers` option and stops with "Unknown option" if given one.
+
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
 
 ### Browser smoke tests (Playwright)
@@ -514,7 +518,7 @@ assume you ran:
 
 ```bash
 # Frontend
-cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run build
+cd frontend && npm run typecheck && npm run lint && npx vitest run --maxWorkers=2 && npm run build
 
 # Backend. The Prisma client is generated, not committed: without a fresh one,
 # every column added since the last generate is a type error.
@@ -532,6 +536,13 @@ Some of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
+- **The production build leaves out `console.log`, `info`, `debug` and
+  `trace`.** `frontend/vite.config.ts` marks them as calls with no effect, so
+  the build removes them; `console.error` and `console.warn` stay. After
+  `npm run build`, CI looks in `dist/assets` for four lines only such calls
+  print and fails if one is there. A misplaced build option only draws a
+  warning from Vite, and `vite.config.ts` is neither linted nor
+  type-checked, so read the build output after changing that file.
 - **The backend run manages its own database connections.** Every test file
   builds its own Prisma clients and jest reuses workers across files, so a
   full run once crept up to PostgreSQL's default ceiling of a hundred

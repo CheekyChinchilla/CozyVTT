@@ -161,7 +161,9 @@ _Nothing at present._
   upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
   React Router 7. Dependabot holds back major versions of npm packages until
   then, and its automatic security pull requests are turned on once 1.5.3
-  ships. **Defer** Tailwind CSS 4 and TypeScript 7.
+  ships. **Done** for the frontend's build and test tools: Vite 8 with
+  @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7. **Defer**
+  Tailwind CSS 4 and TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
   on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's

@@ -12,6 +12,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The backend's database library moves to Prisma 7.** It now reaches PostgreSQL through the same driver the sign-in store already used, and opens at most 10 connections for its own queries, where it opened twice the number of processor cores plus one; sign-ins keep their own 10. Docker installs need nothing beyond the usual upgrade. Two database updates run by themselves on the first start: one records the sign-in table the backend already keeps, and the other clears the author of custom creatures whose author's account was deleted, which pointed at an account that no longer exists. Nothing else stored changes. On an install without Docker, `npm run build` in the `backend` folder now also prepares the database client, which `npm install` no longer does, so the upgrade commands in the deployment guide stay the same. Settings in `DATABASE_URL`, such as `sslmode`, now apply to every connection the backend makes the way they already applied to sign-ins, so an address that lets people sign in today keeps working. Database errors in the backend's log are worded a little differently, and carry the database driver's own details beside Prisma's.
 
+- **The app now needs Chrome or Edge 111, Firefox 114 or Safari 16.4, all released in 2023, or a newer version.** The tool that builds the app's scripts and styles has moved to a new version, which writes them for these browsers; until now Chrome 87, Firefox 78 and Safari 14 were enough. An older browser, such as Safari on an iPad that cannot update past iPadOS 15, no longer loads the app. A phone or computer that installs its browser updates is not affected.
+
+- **For people working on CozyVTT: after this update, start the development stack once with `docker compose -f docker-compose.dev.yml up --build -V`.** The app's build and test tools have moved to new versions, Vite 8 and Vitest 5. The development stack keeps its installed packages between runs, so without `--build -V` its frontend container goes on running the old ones. The production stack is not affected.
+
+### Security
+
+- **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
+
 ---
 
 ## [1.5.2] - 2026-10-14

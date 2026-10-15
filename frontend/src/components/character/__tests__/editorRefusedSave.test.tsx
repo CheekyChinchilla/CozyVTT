@@ -12,6 +12,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
 import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 
 const showToast = vi.fn();
 const updateCharacter = vi.fn();
@@ -37,6 +38,7 @@ describe('a refused save in the in-page editor', () => {
   it('stays open with the edits, and asks before they are discarded', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -60,6 +62,7 @@ describe('what the in-page editor says about a refused save', () => {
 
   async function saveRefused() {
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={vi.fn()} />);
+    await waitForDialogFocus();
     await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(showToast).toHaveBeenCalled());
