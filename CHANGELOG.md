@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **The libraries the backend is built on are updated to recent releases within the versions it already used.** The email library now ends the connection when a mail server says it is closing. The next `docker compose up -d --build` installs them.
 
+- **A browser that has used your instance over HTTPS now keeps to HTTPS for its name for a year.** The backend's security headers come from a library that has moved to a new version, which raises the `Strict-Transport-Security` time from 180 days to 365. The time counts from the browser's latest visit, and it starts only in a browser that has reached the instance over HTTPS with a certificate it trusts, so an instance only ever used over plain HTTP is not affected. The other security headers say the same as before. If you might ever move the name back to plain HTTP, read [HTTPS is remembered by browsers](docs/DEPLOYMENT.md#https-is-remembered-by-browsers) first.
+
 ### Security
 
 - **Eight security advisories against the tools that build and test the app are cleared.** They were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.
