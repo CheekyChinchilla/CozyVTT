@@ -10,6 +10,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
 import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 
 vi.mock('@/hooks/queries', () => ({
   useServerConfigQuery: () => ({ data: undefined }),
@@ -25,6 +26,7 @@ describe('Escape in the in-page editor', () => {
   it('closes at once when nothing was changed', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.keyboard('{Escape}');
 
@@ -34,6 +36,7 @@ describe('Escape in the in-page editor', () => {
   it('asks before throwing away something typed', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
     await userEvent.keyboard('{Escape}');
@@ -45,6 +48,7 @@ describe('Escape in the in-page editor', () => {
   it('a second Escape closes the question and keeps the edits', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
     await userEvent.keyboard('{Escape}');

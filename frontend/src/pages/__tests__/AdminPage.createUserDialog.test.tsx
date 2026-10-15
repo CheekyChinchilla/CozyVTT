@@ -11,6 +11,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import AdminPage from '../AdminPage';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'admin-1', displayName: 'Root', platformRole: 'ADMIN' } }),
@@ -51,7 +52,7 @@ async function openCreateUser() {
   );
   await userEvent.click(screen.getByRole('tab', { name: /Users/ }));
   await userEvent.click(await screen.findByRole('button', { name: /Create User/ }));
-  return screen.findByRole('dialog', { name: 'Create User' });
+  return waitForDialogFocus(await screen.findByRole('dialog', { name: 'Create User' }));
 }
 
 describe('the Create User window', () => {
