@@ -41,8 +41,8 @@ beforeAll(async () => {
   process.env.DATABASE_URL = schema.url;
   db = createPrismaClient(schema.url);
 
-  const { hashPassword } = await import('../../services/auth');
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
+  const { hashPassword } = require('../../services/auth') as typeof import('../../services/auth');
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
   app = createTestApp();
   const user = await db.user.create({
     data: { email: 'settings-log@test.invalid', displayName: 'Settings Log Admin', passwordHash: await hashPassword(PASSWORD), platformRole: 'ADMIN' },

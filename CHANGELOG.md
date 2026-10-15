@@ -28,6 +28,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **`VITE_API_URL` and `VITE_SOCKET_URL` in `.env` no longer reach the app.** 1.5.2 stopped offering them, since a backend on another address left every map, token, avatar, sound and document blank, but `docker compose up -d --build` still passed a value left in `.env` into the app and its security settings. The app's image is now built without them, so the page always reaches the backend on its own address. If you never set them, nothing changes. If one is still set, your proxy must send `/api/` and `/socket.io/` to the backend on the page's own address, as [Using an External Reverse Proxy](docs/DEPLOYMENT.md#using-an-external-reverse-proxy) shows, and you can delete both lines from `.env`. The security headers sent with the page are the same as before.
 
+- **For people working on CozyVTT: the backend and the app are now type-checked with TypeScript 6, which also compiles the backend.** The backend's compiler settings follow Node's own rules for modules, and the compiled backend runs the same as before.
+
 ### Security
 
 - **Security advisories against the tools that build and test CozyVTT are cleared.** Eight were published for the versions of Vite and Vitest that CozyVTT used and for packages those bring with them, three of them critical. Twenty-three more, three of them high, were in an old version of a YAML reader that the backend's test runner brings with it and in the tool that restarted the backend's development server after a change, which Node.js now does by itself. These tools run only on a developer's computer and while the images are built. None of their code is part of a running instance, so no instance was exposed.

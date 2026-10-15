@@ -173,7 +173,8 @@ _Nothing at present._
   advisories. **Done** for the advisories against the backend's developer
   tools: an npm override gives the coverage tool js-yaml 4 in place of
   the js-yaml 3 it asks for, and Node's own watch mode restarts the
-  development server in place of nodemon. **Defer** Tailwind CSS 4 and TypeScript 7;
+  development server in place of nodemon. **Done** for TypeScript: 6.0 in
+  both packages. **Defer** Tailwind CSS 4 and TypeScript 7;
   the seven advisories against the app's build tools, all in packages
   Tailwind CSS 3 brings with it, wait for that move.
 

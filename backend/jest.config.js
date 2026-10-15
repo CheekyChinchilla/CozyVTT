@@ -47,11 +47,18 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   // file-type needs no moduleNameMapper: its "exports" give one "default"
   // file, which Jest's resolver finds, and tests use the real library unless
-  // they mock it. The compiler finds its types through "paths" in tsconfig.json.
+  // they mock it. On TypeScript 6, ts-jest finds its types through the same
+  // "exports" (5.9 needed a paths entry in tsconfig.json).
   // The packages in ESM_ONLY are compiled to CommonJS for the tests, so the
   // tests check codes and identify files with the real libraries.
+  //
+  // tsconfig.json's "module": "node20" is one ts-jest compiles as CommonJS,
+  // and it warns about that on every file (code 151002) unless isolatedModules
+  // is on. isolatedModules would compile each file on its own, so a dynamic
+  // import() would stay a native import, which Jest cannot load without
+  // --experimental-vm-modules. The warning is turned off instead.
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', { diagnostics: { ignoreCodes: [151002] } }],
     [`/node_modules/(${ESM_ONLY})/.+\\.js$`]: [
       'ts-jest',
       { tsconfig: { allowJs: true, module: 'commonjs', target: 'ES2022' }, diagnostics: false },

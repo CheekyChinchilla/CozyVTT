@@ -58,9 +58,9 @@ beforeAll(async () => {
       },
     },
   });
-  helpers = await import('../../__tests__/helpers/db');
+  helpers = require('../../__tests__/helpers/db') as Helpers;
   expect(helpers.TEST_PASSWORD).toBe(TEST_PASSWORD);
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
   app = createTestApp();
 });
 

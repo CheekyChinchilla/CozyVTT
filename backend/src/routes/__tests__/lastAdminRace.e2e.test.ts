@@ -52,8 +52,8 @@ beforeAll(async () => {
       },
     },
   });
-  ({ hashPassword } = await import('../../services/auth'));
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
+  ({ hashPassword } = require('../../services/auth') as typeof import('../../services/auth'));
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
   app = createTestApp();
 });
 

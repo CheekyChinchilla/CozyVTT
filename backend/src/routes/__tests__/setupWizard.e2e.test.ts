@@ -61,9 +61,9 @@ beforeAll(async () => {
   process.env.SETUP_TOKEN = TOKEN;
   db = createPrismaClient(schema.url);
 
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
-  const { requireSetupComplete } = await import('../../middleware/setup');
-  setupService = await import('../../services/setup');
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
+  const { requireSetupComplete } = require('../../middleware/setup') as typeof import('../../middleware/setup');
+  setupService = require('../../services/setup') as typeof import('../../services/setup');
 
   // The server's order: sessions, then the gate, then the routes. The one
   // extra route stands in for any page that stores something in a visitor's

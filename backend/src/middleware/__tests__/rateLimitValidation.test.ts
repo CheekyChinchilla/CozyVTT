@@ -43,12 +43,12 @@ afterAll(() => {
 let limiters: Array<[string, RequestHandler]> = [];
 
 beforeAll(async () => {
-  const { createGeneralApiLimiter } = await import('../../app');
-  const { emailDispatchLimiter, accountCreationLimiter, mfaSetupLimiter } = await import('../../routes/auth');
-  const { uploadLimiter } = await import('../../routes/assets');
-  const { campaignPreviewLimiter, campaignImportLimiter, campaignExportLimiter } = await import('../campaignArchiveLimits');
-  const { invitationEmailLimiter } = await import('../invitationEmailLimiter');
-  const { leftNotesDownloadLimiter } = await import('../leftNotesDownloadLimiter');
+  const { createGeneralApiLimiter } = require('../../app') as typeof import('../../app');
+  const { emailDispatchLimiter, accountCreationLimiter, mfaSetupLimiter } = require('../../routes/auth') as typeof import('../../routes/auth');
+  const { uploadLimiter } = require('../../routes/assets') as typeof import('../../routes/assets');
+  const { campaignPreviewLimiter, campaignImportLimiter, campaignExportLimiter } = require('../campaignArchiveLimits') as typeof import('../campaignArchiveLimits');
+  const { invitationEmailLimiter } = require('../invitationEmailLimiter') as typeof import('../invitationEmailLimiter');
+  const { leftNotesDownloadLimiter } = require('../leftNotesDownloadLimiter') as typeof import('../leftNotesDownloadLimiter');
   limiters = [
     ['the general limit', createGeneralApiLimiter()],
     ['emailDispatchLimiter', emailDispatchLimiter],

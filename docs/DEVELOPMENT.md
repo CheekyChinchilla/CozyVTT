@@ -756,8 +756,9 @@ comment, and `.github/dependabot.yml` asks for a weekly pull request into
 the Docker base images. Each major version of an npm package comes as a pull
 request of its own, since it can change behaviour. The packages and versions
 that wait are named under `ignore`, each with a comment giving the reason and
-when to remove the entry: Tailwind CSS 4 and TypeScript 7 among them, and
-`@types/node`, which moves with the Node major. Node and nginx move to a new
+when to remove the entry: Tailwind CSS 4, TypeScript 7 and TypeScript 6.1
+(until typescript-eslint accepts it) among them, and `@types/node`, which
+moves with the Node major. Node and nginx move to a new
 major or stable line by hand, and PostgreSQL's major version never through
 Dependabot, since its data has to be dumped and restored. Dependabot alerts
 for published advisories are on. Its automatic security pull requests are
@@ -812,6 +813,34 @@ checkout, which deletes its database, and `git worktree remove`.
 Both backend and frontend use TypeScript in **strict mode**. The `tsconfig.json`
 in each package enables `strict: true`, which brings `noImplicitAny`,
 `strictNullChecks` and the rest with it.
+
+Both packages use TypeScript 6.0 (`~6.0.3` in each `package.json`), since
+typescript-eslint supports TypeScript below 6.1 and ts-jest below 7. Neither
+`tsconfig.json` sets `ignoreDeprecations`: they use none of the options
+TypeScript 6 deprecates, such as `baseUrl` or `"moduleResolution": "node"`,
+and a deprecated option fails the type check.
+
+The backend compiles with `"module": "node20"` and `"moduleResolution":
+"node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
+every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
+package's `"exports"`, and the code can import the packages published only as
+ES modules (archiver, file-type, mathjs), which Node 22.12 and later load
+with `require` (the images run Node 26). `"module": "node16"` refuses those imports. Two things follow:
+
+- **No dynamic `import()` of our own files.** Under these settings an
+  `import()` stays a native ES module import, which fails in `dist/` and
+  under ts-node, and the type check refuses one without a file extension.
+  Application code imports statically. A test that must load a module late, after setting
+  `DATABASE_URL` or calling `jest.resetModules()`, uses
+  `require('../x') as typeof import('../x')`.
+- **The global types are listed.** `"types": ["node", "jest"]` in
+  `backend/tsconfig.json` names the `@types` packages every file sees; any
+  other comes in when a file imports it.
+
+ts-jest compiles the tests as CommonJS whatever the module setting, finding
+each package's types through its `"exports"` as the type check does, and
+warns about `node20` on every file, so `backend/jest.config.js` turns that one
+warning (151002) off.
 
 `noUncheckedIndexedAccess` is **not** enabled in either package. It is worth
 turning on one day, but it is its own burn-down and mixing it into other work
