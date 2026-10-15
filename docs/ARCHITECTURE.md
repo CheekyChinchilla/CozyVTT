@@ -47,7 +47,7 @@ graph TB
     end
 
     Browser -- "HTTP / WS" --> Nginx
-    Backend -- "Prisma ORM" --> Postgres
+    Backend -- "Prisma ORM, through pg" --> Postgres
     Backend -- "read/write" --> Uploads
 ```
 
@@ -76,7 +76,8 @@ src/
 ├── server.ts          Entry point: builds the app, attaches Socket.io, starts listening
 ├── app.ts             createApp: every middleware, gate, router and error handler, in
 │                      order; the integration tests build their app with it too
-├── config/            Configuration loading (env vars, validation)
+├── config/            Configuration loading (env vars, validation); prismaClient.ts makes every
+│                      Prisma client (see Database Schema), database.ts holds the app's
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication: requireAuth, requireAdmin, requireRole
 │   ├── rbac.ts        Campaign roles: loadCampaignMembership, requireDM, requireDMOrPlayer
@@ -334,7 +335,7 @@ graph LR
 
 ## Database Schema
 
-The full Prisma schema is at `backend/prisma/schema.prisma`. Below is an entity relationship diagram of every model, with the fields that matter here. A test checks it against the schema, so a model, field or relation that does not exist cannot stay in it. The login sessions are not a model: `connect-pg-simple` keeps them in a `session` table of its own (see Authentication below), and the `Session` below is a game session.
+The full Prisma schema is at `backend/prisma/schema.prisma`, and the Prisma command-line tools (`generate`, `migrate deploy`, `db push`) take their settings from `backend/prisma.config.ts`. Since Prisma 7 the client has no connection engine of its own: it runs its queries through the `pg` driver, the one the session store already uses, by way of `@prisma/adapter-pg`. `backend/src/config/prismaClient.ts` makes every client the backend, its scripts and its tests use, and reads a `DATABASE_URL` written for Prisma into pg's terms: `?schema=` names the schema queries are qualified with and becomes the connection's `search_path` (raw queries name their tables unqualified), `?connection_limit=` becomes the pool size (pg's default otherwise, ten), and a new connection may take five seconds. Below is an entity relationship diagram of every model, with the fields that matter here. A test checks it against the schema, so a model, field or relation that does not exist cannot stay in it. The login sessions are not a model: `connect-pg-simple` keeps them in a `session` table of its own (see Authentication below), and the `Session` below is a game session.
 
 ```mermaid
 erDiagram

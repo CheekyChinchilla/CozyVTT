@@ -25,6 +25,7 @@ import express from 'express';
 import session from 'express-session';
 import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
 
 jest.setTimeout(60000);
@@ -58,7 +59,7 @@ beforeAll(async () => {
   schema = createIsolatedSchema('setup_wizard_test');
   process.env.DATABASE_URL = schema.url;
   process.env.SETUP_TOKEN = TOKEN;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
+  db = createPrismaClient(schema.url);
 
   const { createTestApp } = await import('../../__tests__/helpers/test-app');
   const { requireSetupComplete } = await import('../../middleware/setup');

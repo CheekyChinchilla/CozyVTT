@@ -19,7 +19,7 @@
 
 import request from 'supertest';
 import type express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 
 // The test helpers import config/database, so they are imported once the
 // app's client is set below; otherwise the app would use a client of its own.
@@ -39,7 +39,7 @@ interface Hold {
 let hold: Hold | null = null;
 
 let app: express.Express;
-const appClient = new PrismaClient();
+const appClient = createPrismaClient();
 
 beforeAll(async () => {
   // The app's client, which config/database.ts takes from here when it is set.

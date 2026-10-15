@@ -12,11 +12,13 @@
  * Run with: npx ts-node src/scripts/migrate-asset-urls.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
+import { createPrismaClient } from '../config/prismaClient';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { readTokens, toJson } from '../utils/prisma-json';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function migrateAssetUrls() {
   console.log('🔄 Starting asset URL migration...\n');

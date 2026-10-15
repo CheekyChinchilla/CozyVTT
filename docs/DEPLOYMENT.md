@@ -827,6 +827,8 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
 
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file with `sslrootcert=/path/to/ca.crt`, or use `sslmode=no-verify`, which encrypts the connection without checking which server answers.
+
 ### 4. Run the backend with pm2
 
 Step 3 ended in the `frontend` folder, so this goes back to `backend` first. pm2 is installed for every account on the machine, which is why it needs `sudo`:
@@ -1454,7 +1456,7 @@ The backend rotates these files itself. When one reaches 10 MB it becomes `combi
 Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
 
 ```json
-{"err":{"name":"PrismaClientInitializationError","message":"Can't reach database server at `database:5432`","stack":"PrismaClientInitializationError: Can't reach database server ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+{"err":{"clientVersion":"7.10.0","code":"P1001","message":"\nInvalid `prisma.map.findUnique()` invocation:\n\n\nCan't reach database server at 172.18.0.2:5432","meta":{"driverAdapterError":{"cause":{"host":"172.18.0.2","kind":"DatabaseNotReachable","port":5432},"message":"DatabaseNotReachable","name":"DriverAdapterError","stack":"DriverAdapterError: DatabaseNotReachable ..."}},"name":"PrismaClientKnownRequestError","stack":"PrismaClientKnownRequestError: ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
 ```
 
 To see the most recent errors:

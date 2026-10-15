@@ -15,6 +15,7 @@
 import request from 'supertest';
 import type express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
 import { loginSessionTableSql } from '../../__tests__/helpers/loginSessionTable';
 
@@ -39,7 +40,7 @@ beforeAll(async () => {
   // change at the same time in the shared schema, so this runs on its own.
   schema = createIsolatedSchema('admin_settings_log_test');
   process.env.DATABASE_URL = schema.url;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
+  db = createPrismaClient(schema.url);
   await db.$executeRawUnsafe(loginSessionTableSql('admin_settings_log_test'));
 
   const { hashPassword } = await import('../../services/auth');

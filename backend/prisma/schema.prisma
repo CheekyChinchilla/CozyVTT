@@ -1,14 +1,15 @@
 // CozyVTT Database Schema
 // Source: docs/STATEMENT_OF_WORK.md Section 4.1
 
+// The database address is not set here: the command-line tools read it from
+// prisma.config.ts, and the app's client from DATABASE_URL in
+// src/config/database.ts.
 generator client {
-  provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 // ============================================

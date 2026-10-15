@@ -20,9 +20,6 @@
     "migrate:avatar-scope": "ts-node src/scripts/migrate-avatar-scope.ts",
     "migrate:sheet-fields": "ts-node src/scripts/migrate-sheet-fields.ts"
   },
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  },
   "keywords": [
     "vtt",
     "tabletop",
@@ -31,7 +28,8 @@
   "author": "CozyVTT Development Team",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@prisma/client": "5.8",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
     "archiver": "^7.0.1",
     "argon2": "^0.44.0",
     "connect-pg-simple": "^9.0.1",
@@ -47,7 +45,7 @@
     "nodemailer": "^10.0.16",
     "otplib": "^13.5.0",
     "pg": "^8.23.1",
-    "prisma": "5.8",
+    "prisma": "7.10.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
@@ -84,7 +82,6 @@
   },
   "allowScripts": {
     "@parcel/watcher": true,
-    "@prisma/client": true,
     "@prisma/engines": true,
     "argon2": true,
     "fsevents": true,

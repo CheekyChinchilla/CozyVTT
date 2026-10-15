@@ -25,11 +25,13 @@ type Project = 'frontend' | 'backend';
 
 /**
  * The licence of each production package whose lockfile entry records none.
- * Each declares it in the older `licenses` field of its package.json, which
- * npm does not copy into the lockfile.
+ * Most declare it in the older `licenses` field of their package.json, which
+ * npm does not copy into the lockfile; seq-queue (under the Prisma
+ * command-line tool) declares none, and its LICENSE file is the MIT licence.
  */
 const LICENCE_NOT_IN_LOCKFILE: Record<string, string> = {
   busboy: 'MIT',
+  'seq-queue': 'MIT',
   streamsearch: 'MIT',
   'xmlhttprequest-ssl': 'MIT',
 };
@@ -59,8 +61,13 @@ const versionLine = (version: string) => {
   return major === '0' ? `0.${minor}.x` : `${major}.x`;
 };
 
-/** The licence identifiers in an SPDX expression such as "Apache-2.0 AND LGPL-3.0-or-later". */
-const licenceIds = (expression: string) => expression.replace(/[()]/g, ' ').split(/\s+/).filter((word) => word && word !== 'AND' && word !== 'OR');
+/**
+ * The licence identifiers in an SPDX expression such as "Apache-2.0 AND
+ * LGPL-3.0-or-later". Some packages write the operators in lower case
+ * (@visx/vendor has "MIT and ISC").
+ */
+const licenceIds = (expression: string) =>
+  expression.replace(/[()]/g, ' ').split(/\s+/).filter((word) => word && !['AND', 'OR'].includes(word.toUpperCase()));
 
 const notices = read('THIRD_PARTY_NOTICES.txt');
 

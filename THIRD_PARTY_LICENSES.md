@@ -50,7 +50,7 @@ UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC L
 
 ## Core Application Libraries
 
-CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). This is not an exhaustive list — the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
+CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). The Prisma command-line tool also brings a few packages under EPL-2.0 and the Unlicense into the backend image, unmodified; [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) names them. This is not an exhaustive list — the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
 
 | Package | Purpose | License |
 |---------|---------|---------|
@@ -66,7 +66,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [remark-breaks](https://github.com/remarkjs/remark-breaks) | A single newline as a line break in that Markdown | MIT |
 | [Express](https://expressjs.com/) | Backend HTTP framework | MIT |
 | [Multer](https://github.com/expressjs/multer) | Reads uploaded files and forms on the backend | MIT |
-| [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
+| [Prisma](https://www.prisma.io/) | Database ORM (7.x) and the tool that applies database migrations, with `@prisma/adapter-pg`, which connects it through the `pg` driver, also Apache-2.0 | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
 | [Zod](https://zod.dev/) | Runtime validation | MIT |
 | [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |

@@ -3,11 +3,12 @@
  * Comprehensive testing for multi-game system character management
  */
 
-import { PrismaClient, GameSystem as PrismaGameSystem } from '@prisma/client';
+import { GameSystem as PrismaGameSystem } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { GameSystem } from '../../game-systems';
 import { validateCharacterData } from '../../validators/game-systems';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 describe('Game Systems - E2E Tests', () => {
   let testUserId: string;

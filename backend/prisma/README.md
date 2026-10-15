@@ -1,6 +1,9 @@
 # CozyVTT Database Schema
 
-Prisma schema and migrations for CozyVTT. PostgreSQL 14+.
+Prisma schema and migrations for CozyVTT. PostgreSQL 14+, Prisma 7. The
+command-line tools read their settings, the database address included, from
+[`../prisma.config.ts`](../prisma.config.ts); the app's client connects
+through the `pg` driver (`src/config/prismaClient.ts`).
 
 ## Models
 
@@ -106,7 +109,8 @@ Several models use Prisma's `Json` type for flexibility:
 # Generate the Prisma Client into node_modules (after schema edits)
 npx prisma generate
 
-# Create + apply a new migration in dev
+# Create + apply a new migration in dev; it no longer generates the client,
+# so run prisma generate after it
 npx prisma migrate dev --name <descriptive_name>
 
 # Apply pending migrations (production — runs automatically on container start)
@@ -115,8 +119,9 @@ npx prisma migrate deploy
 # Open Prisma Studio (web UI for browsing rows)
 npx prisma studio
 
-# Drop the local dev DB and rebuild it from the migrations (DESTRUCTIVE);
-# it then runs prisma/seed.ts, which seeds nothing yet
+# Drop the local dev DB and rebuild it from the migrations (DESTRUCTIVE).
+# It no longer seeds or generates: run npx prisma db seed (prisma/seed.ts,
+# which seeds nothing yet) and npx prisma generate after it
 npx prisma migrate reset
 ```
 

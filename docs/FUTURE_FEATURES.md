@@ -146,7 +146,11 @@ _Nothing at present._
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
 - **Move the remaining libraries to their current major versions.** Prisma
-  is held on 5.8 (January 2024), which gets no more fixes, and Vite, Vitest,
+  is on 7.10 since 1.5.3, connecting through the `pg` driver adapter and
+  still generating the client with the `prisma-client-js` generator. Prisma 8,
+  a rewrite that is still a release candidate, is the next data-layer step,
+  together with the move to the `prisma-client` generator, once it is stable
+  with a patch release or two. Vite, Vitest,
   Express and React are a major version or more behind. React Router 6 has
   two moderate advisories that cannot be reached in CozyVTT, a single-page
   app with no server rendering that never navigates to an address taken

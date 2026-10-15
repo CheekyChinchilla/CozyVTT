@@ -4,10 +4,12 @@
  * Run with: npx ts-node src/scripts/seedCreatures.ts
  */
 
-import { PrismaClient } from '@prisma/client';
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
+import { createPrismaClient } from '../config/prismaClient';
 import { seedSrdCreatures } from '../services/creatureSeed';
 
-const prisma = new PrismaClient();
+const prisma = createPrismaClient();
 
 async function main() {
   console.log('CozyVTT Creature Library Seeder');

@@ -16,7 +16,10 @@
  * character's id, so it can be reversed. Exits 1 if the run fails.
  */
 
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
 import { PrismaClient, GameSystem, type Prisma } from '@prisma/client';
+import { createPrismaClient } from '../config/prismaClient';
 
 interface MigrationReport {
   totalCharacters: number;
@@ -330,7 +333,7 @@ Confidence Levels:
 
 // Run if called directly
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   main(prisma)
     .catch((error) => {
       console.error('Migration failed:', error);

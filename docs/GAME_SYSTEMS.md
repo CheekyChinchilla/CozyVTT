@@ -312,9 +312,10 @@ Then create and apply the migration:
 ```bash
 cd backend
 npx prisma migrate dev --name add_my_system
+npx prisma generate
 ```
 
-This regenerates the Prisma client so `@prisma/client`'s `GameSystem` enum (used by the template layer) includes your value.
+`prisma generate` regenerates the Prisma client so `@prisma/client`'s `GameSystem` enum (used by the template layer) includes your value. Since Prisma 7, `migrate dev` no longer does that itself.
 
 ---
 

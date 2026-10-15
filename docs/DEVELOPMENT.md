@@ -206,7 +206,13 @@ cp backend/.env.example backend/.env
 ```bash
 cd backend
 npx prisma migrate dev
+npx prisma generate
 ```
+
+The Prisma command-line tools take their settings, the database address
+among them, from `backend/prisma.config.ts`, which loads `backend/.env`.
+Since Prisma 7, `migrate dev` and `db push` no longer generate the client, so
+`npx prisma generate` follows them.
 
 ### 5. Create the administrator
 
@@ -302,6 +308,9 @@ npx prisma migrate dev
 # Create a new migration after schema changes
 npx prisma migrate dev --name describe_your_change
 
+# Either way, then regenerate the client (migrate dev no longer does)
+npx prisma generate
+
 # Apply migrations in CI / production (no prompts)
 npx prisma migrate deploy
 ```
@@ -315,10 +324,17 @@ npx prisma migrate deploy
 > # Each new migration, from backend/ (the folder name is a UTC timestamp and a name):
 > mkdir -p prisma/migrations/20261011120000_describe_your_change
 > npx prisma migrate diff --from-migrations prisma/migrations \
->   --to-schema-datamodel prisma/schema.prisma \
->   --shadow-database-url postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow \
+>   --to-schema prisma/schema.prisma \
 >   --script > prisma/migrations/20261011120000_describe_your_change/migration.sql
 > npx prisma migrate deploy
+> npx prisma generate
+> ```
+>
+> `migrate diff` finds the scratch database through `prisma.config.ts`, which
+> reads its address from `SHADOW_DATABASE_URL`. Add it to `backend/.env`:
+>
+> ```bash
+> SHADOW_DATABASE_URL="postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow"
 > ```
 >
 > A fresh database that the backend has never started against has no `session` table, and `migrate dev` works on it as usual.
@@ -396,8 +412,12 @@ it:
 docker run -d --name cozyvtt-test-pg -e POSTGRES_USER=cozyvtt -e POSTGRES_PASSWORD=cozyvtt \
   -e POSTGRES_DB=cozyvtt_test -p 55500:5432 postgres:15-alpine
 cd backend
-DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push --skip-generate
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push
 ```
+
+Run the same `db push` again after switching to a branch with a different
+schema. It changes only the database; `npx prisma generate` brings the client
+up to date.
 
 Then run the suite, or one file, with the same `DATABASE_URL`:
 
@@ -640,7 +660,8 @@ also does what self-hosters run and a developer usually does not:
   migration fails, then applies the migrations to an empty database before
   the backend tests. To run the comparison yourself, give it a database of
   its own, which Prisma empties: the command is in the workflow, and the
-  scratch database is the one "Running Migrations" above creates.
+  scratch database is the one "Running Migrations" above creates, named by
+  `SHADOW_DATABASE_URL`.
 - **Collects test coverage** in both projects and shows it in the job
   summary, per folder under `src/`. A report only: no threshold fails yet.
 - **Builds both production images** with `docker compose build`, after

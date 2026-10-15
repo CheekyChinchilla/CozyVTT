@@ -21,6 +21,7 @@
 import request from 'supertest';
 import type express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
 import { loginSessionTableSql } from '../../__tests__/helpers/loginSessionTable';
 
@@ -39,7 +40,7 @@ let hashPassword: (password: string) => Promise<string>;
 beforeAll(async () => {
   schema = createIsolatedSchema('last_admin_race_test');
   process.env.DATABASE_URL = schema.url;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
+  db = createPrismaClient(schema.url);
   // connect-pg-simple's table, which ending an account's sign-ins writes to.
   // The run's global setup makes it in the shared schema only.
   await db.$executeRawUnsafe(loginSessionTableSql('last_admin_race_test'));

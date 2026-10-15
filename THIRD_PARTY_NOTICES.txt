@@ -230,7 +230,12 @@ The packages the backend lists as its dependencies, which its image installs.
 Each is given by its major version line; the exact versions are in
 backend/package-lock.json.
 
-@prisma/client 5.x
+@prisma/adapter-pg 7.x
+  Copyright (c) Prisma
+  License: Apache-2.0
+  https://github.com/prisma/prisma
+
+@prisma/client 7.x
   Copyright (c) Prisma
   License: Apache-2.0
   https://github.com/prisma/prisma
@@ -311,7 +316,7 @@ pg 8.x
   License: MIT
   https://github.com/brianc/node-postgres
 
-prisma 5.x
+prisma 7.x
   Copyright (c) Prisma
   License: Apache-2.0
   https://github.com/prisma/prisma
@@ -358,14 +363,23 @@ listed above or not, is under one of these licences, as the lockfiles record
 them:
 
   Frontend: 0BSD, ISC, MIT
-  Backend:  0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause, ISC,
-            LGPL-3.0-or-later, MIT, MIT-0
+  Backend:  0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause,
+            EPL-2.0, ISC, LGPL-3.0-or-later, MIT, MIT-0, Unlicense
 
 LGPL-3.0-or-later is the licence of libvips, the image library inside the
 prebuilt binaries sharp loads at run time; it places no requirement on
 CozyVTT's own code. CozyVTT publishes no images: each install downloads those
 binaries from npm when it builds. The libvips source is at
-https://github.com/libvips/libvips. No package is under the GPL or the AGPL.
+https://github.com/libvips/libvips.
+
+EPL-2.0 and Unlicense come with the Prisma command-line tool, which the
+backend image keeps because it applies database migrations every time the
+backend starts. EPL-2.0 is the licence of elkjs, a diagram layout library
+inside Prisma Studio, a database browser the tool includes and an instance
+never starts; its source is at https://github.com/kieler/elkjs. Unlicense, a
+public-domain dedication, is the licence of postgres, a database driver the
+tool includes, and robust-predicates, a geometry library under Prisma Studio.
+All are installed from npm unmodified. No package is under the GPL or the AGPL.
 
 CozyVTT itself is licensed under AGPL-3.0-only (see LICENSE).
 

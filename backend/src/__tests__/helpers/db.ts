@@ -7,10 +7,11 @@
  */
 
 import { randomUUID } from 'crypto';
-import { PrismaClient, PlatformRole, GameSystem } from '@prisma/client';
+import { PlatformRole, GameSystem } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { hashPassword } from '../../services/auth';
 
-export const prisma = new PrismaClient();
+export const prisma = createPrismaClient();
 
 // Shared plaintext password used across test helpers
 export const TEST_PASSWORD = 'TestPass1!Cozy';

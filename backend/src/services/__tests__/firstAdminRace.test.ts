@@ -28,6 +28,7 @@ jest.mock('argon2', () => {
 });
 
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
 
 jest.setTimeout(60000);
@@ -41,7 +42,7 @@ let db: PrismaClient;
 beforeAll(() => {
   schema = createIsolatedSchema('first_admin_race_test');
   process.env.DATABASE_URL = schema.url;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
+  db = createPrismaClient(schema.url);
 });
 
 afterAll(async () => {

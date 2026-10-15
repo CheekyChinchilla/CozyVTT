@@ -2,7 +2,13 @@
 
 ## Overview
 
-CozyVTT uses Prisma for database management and migrations. Database migrations are automatically run when the backend container starts.
+CozyVTT uses Prisma 7 for database management and migrations. Database migrations are automatically run when the backend container starts.
+
+The `prisma` commands below read their settings from `backend/prisma.config.ts`:
+where the schema and the migrations are, and the database address, taken from
+`DATABASE_URL` (in the container's environment, or in `backend/.env` outside
+Docker). The app itself connects through the `pg` driver, with the same
+`DATABASE_URL`.
 
 ## Automatic Migrations (Default)
 
@@ -299,7 +305,9 @@ npm run prisma:migrate
 This will:
 1. Generate a new migration file
 2. Apply it to your development database
-3. Regenerate the Prisma client
+
+Since Prisma 7 it no longer regenerates the Prisma client; run
+`npx prisma generate` afterwards.
 
 On a database the backend has already run against, `prisma migrate dev`
 reports drift, because of the sign-in `session` table no migration creates,

@@ -8,7 +8,10 @@
  * if the run fails.
  */
 
+// Loads backend/.env, which the database client does not read itself.
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../config/prismaClient';
 
 export async function migrateAvatarScope(prisma: PrismaClient): Promise<number> {
   const result = await prisma.asset.updateMany({
@@ -25,7 +28,7 @@ export async function migrateAvatarScope(prisma: PrismaClient): Promise<number> 
 
 // Only run when invoked directly, so importing this does not change anything.
 if (require.main === module) {
-  const prisma = new PrismaClient();
+  const prisma = createPrismaClient();
   migrateAvatarScope(prisma)
     .then((count) => console.log(`Migrated ${count} AVATAR assets from GLOBAL to USER scope.`))
     .catch((error) => {
