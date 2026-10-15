@@ -17,7 +17,6 @@ import type express from 'express';
 import { PrismaClient } from '@prisma/client';
 import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
-import { loginSessionTableSql } from '../../__tests__/helpers/loginSessionTable';
 
 jest.setTimeout(60000);
 
@@ -41,7 +40,6 @@ beforeAll(async () => {
   schema = createIsolatedSchema('admin_settings_log_test');
   process.env.DATABASE_URL = schema.url;
   db = createPrismaClient(schema.url);
-  await db.$executeRawUnsafe(loginSessionTableSql('admin_settings_log_test'));
 
   const { hashPassword } = await import('../../services/auth');
   const { createTestApp } = await import('../../__tests__/helpers/test-app');

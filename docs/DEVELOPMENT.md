@@ -438,13 +438,13 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
-> **The run makes the sign-in table itself where it is missing.** The backend
-> keeps sign-ins in a table named `session`, which the session store creates
-> when the server starts. The Prisma schema describes it, so `prisma db push`
-> lays it out and keeps it. Before any suite starts, jest also makes it from
-> the session store's own definition where it is missing
-> (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
-> that end an account's sign-ins pass straight after a push.
+> **The sign-in table comes from the push.** The backend keeps sign-ins in a
+> table named `session`, which the session store creates when the server
+> starts, and the suites that end an account's sign-ins write to it. The
+> Prisma schema describes it, so `prisma db push` lays it out and keeps it.
+> If those suites fail with `relation "session" does not exist`, the test
+> database was last pushed from an older branch: run the `db push` above
+> again.
 
 ### Frontend Tests (Vitest)
 
@@ -550,7 +550,7 @@ Some of those deserve a note:
 - **A test that needs a brand new instance gets a schema of its own.** The
   suites share one database and run at once, so none can count on it being
   empty. The setup wizard suite, the first-admin and last-admin race tests,
-  the admin settings log suite and the global setup's own test need exactly
+  the admin settings log suite and the sign-in table's own test need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
   end. The file sets `DATABASE_URL` to that schema before it imports the app,
