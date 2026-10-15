@@ -34,7 +34,7 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
@@ -157,7 +157,7 @@ const SAFETY_DUMP = '-- the database as it was before the restore\n';
 
 /** A backup archive holding the given files. */
 async function backupZip(entries: Record<string, string>): Promise<Buffer> {
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const chunks: Buffer[] = [];
   archive.on('data', (chunk: Buffer) => chunks.push(chunk));
   const ended = new Promise<void>((resolve, reject) => {

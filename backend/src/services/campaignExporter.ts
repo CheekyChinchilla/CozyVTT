@@ -12,7 +12,7 @@
  * Security: strips all user IDs, server-specific paths, and internal references.
  */
 
-import archiver from 'archiver';
+import { ZipArchive, type ZipEntryData } from 'archiver';
 import type { Writable } from 'stream';
 import { pipeline } from 'stream/promises';
 import path from 'path';
@@ -304,7 +304,7 @@ export async function prepareCampaignExport(
   return {
     filename,
     async writeTo(out: Writable): Promise<void> {
-      const archive = archiver('zip', { zlib: { level: 6 } });
+      const archive = new ZipArchive({ zlib: { level: 6 } });
       const written = pipeline(archive, out);
 
       for (const file of dataFiles) archive.append(file.content, { name: file.name });
@@ -313,7 +313,7 @@ export async function prepareCampaignExport(
       // space the size check above counted.
       for (const [id, info] of assetMap.entries()) {
         const ext = path.extname(info.originalName) || mimeToExt(info.mimeType);
-        const entry: archiver.ZipEntryData = { name: `assets/${id}${ext}`, store: true };
+        const entry: ZipEntryData = { name: `assets/${id}${ext}`, store: true };
         archive.file(info.filePath, entry);
       }
       archive.append(assetManifestFile.content, { name: assetManifestFile.name });

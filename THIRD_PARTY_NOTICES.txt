@@ -247,7 +247,7 @@ backend/package-lock.json.
   License: Apache-2.0
   https://github.com/prisma/prisma
 
-archiver 7.x
+archiver 8.x
   Copyright (c) Chris Talkington
   License: MIT
   https://github.com/archiverjs/node-archiver

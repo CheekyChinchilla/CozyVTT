@@ -9,7 +9,7 @@
 
 import fs from 'fs';
 import { Readable } from 'stream';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 
 export interface FixtureEntry {
   name: string;
@@ -43,7 +43,7 @@ export async function writeZip(dest: string, entries: FixtureEntry[]): Promise<v
     out.on('close', () => resolve());
     out.on('error', reject);
   });
-  const archive = archiver('zip', { zlib: { level: 9 } });
+  const archive = new ZipArchive({ zlib: { level: 9 } });
   archive.on('error', (err) => out.destroy(err));
   archive.pipe(out);
   for (const entry of entries) {
