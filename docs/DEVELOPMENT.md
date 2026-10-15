@@ -274,7 +274,7 @@ docker compose -f docker-compose.dev.yml exec --user root backend npm install
 docker compose -f docker-compose.dev.yml exec --user root backend npx prisma generate
 ```
 
-`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`.
+`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`. Do the same after pulling a change to either `package.json`, such as the move to Prisma 7 in 1.5.3: without `-V`, `up --build` alone leaves the backend on the packages it had before.
 
 ### Security headers are production-only
 

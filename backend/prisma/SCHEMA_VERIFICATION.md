@@ -9,8 +9,8 @@
 > `CampaignInvitation`, `CharacterTemplate`, `CreatureTemplate`,
 > `CreatureFavorite`, `TokenTemplate`, `SystemSettings`, `PersonalNote`,
 > `DiceMacro`, `CampaignDocument`, `MapExploration`, and `LoginSession`, the
-sign-in table connect-pg-simple has always kept, described in the schema
-since 1.5.3 and left out of the Prisma client. The `MapExploration`
+> sign-in table connect-pg-simple has always kept, described in the schema
+> since 1.5.3 and left out of the Prisma client. The `MapExploration`
 > section and the last four `Map` fields below were added to this file in
 > September 2026, for columns added after v1.0.0.
 >

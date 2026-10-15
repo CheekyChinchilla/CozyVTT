@@ -77,7 +77,7 @@ src/
 ├── app.ts             createApp: every middleware, gate, router and error handler, in
 │                      order; the integration tests build their app with it too
 ├── config/            Configuration loading (env vars, validation); prismaClient.ts makes every
-│                      Prisma client (see Database Schema), database.ts holds the app's
+│                      Prisma client (see Database Schema), database.ts holds the app's shared one
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication: requireAuth, requireAdmin, requireRole
 │   ├── rbac.ts        Campaign roles: loadCampaignMembership, requireDM, requireDMOrPlayer
