@@ -164,9 +164,10 @@ _Nothing at present._
   10, and fails CI on a high or critical advisory in what an instance runs.
   **Do** in 1.5.3, a release of its own: Prisma to its newest stable major
   first, with a full upgrade rehearsal, then Vite and Vitest, Express 5, and
-  React 19 with React Router 7. Dependabot holds back major versions of npm
-  packages until then, and its automatic security pull requests are turned
-  on once 1.5.3 ships. **Done** for the frontend's build and test tools:
+  React 19 with React Router 7. Dependabot held back major versions of npm
+  packages until then; since 1.5.3 each comes as a pull request of its own,
+  apart from those it names as waiting, and its automatic security pull
+  requests are turned on once 1.5.3 is on `main`. **Done** for the frontend's build and test tools:
   Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7; for
   the backend's web framework: Express 5. **Done** for React: React 19.3 with React Router 8.4, which clears both
   advisories. **Done** for the advisories against the backend's developer
