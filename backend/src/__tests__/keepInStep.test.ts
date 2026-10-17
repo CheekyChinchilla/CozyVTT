@@ -84,7 +84,7 @@
  *
  * The Node.js major. It is written in `.nvmrc`, every Dockerfile stage built
  * on Node, every CI job that sets Node up, the `engines` field of both
- * projects, the backend's `@types/node`, and the version the README and the
+ * projects, each project's `@types/node`, and the version the README and the
  * guides ask a reader to install. A move to a new major that misses one runs
  * CI, the images or a manual install on a different Node from the rest.
  * `.nvmrc` holds the major alone and the others are compared with it.
@@ -515,7 +515,9 @@ describe('the Node.js major', () => {
 
   const pkg = (rel: string) =>
     JSON.parse(read(rel)) as { engines?: { node?: string }; devDependencies?: Record<string, string> };
-  const lock = JSON.parse(read('backend/package-lock.json')) as { packages: Record<string, { version?: string }> };
+  const lockedTypesNode = (rel: string) =>
+    (JSON.parse(read(rel)) as { packages: Record<string, { version?: string }> }).packages['node_modules/@types/node']
+      ?.version ?? 'missing';
   const ci = read('.github/workflows/ci.yml');
 
   // A tag with no leading number (node:lts-alpine, node:current) is kept as
@@ -527,8 +529,10 @@ describe('the Node.js major', () => {
     ['.github/workflows/ci.yml', found('.github/workflows/ci.yml', ci, /^\s*node-version:\s*['"]?([^'"\s]+)/gm)],
     ['backend/package.json engines', [majorOf(pkg('backend/package.json').engines?.node ?? 'missing')]],
     ['frontend/package.json engines', [majorOf(pkg('frontend/package.json').engines?.node ?? 'missing')]],
-    ['backend/package.json @types/node', [majorOf(pkg('backend/package.json').devDependencies?.['@types/node'] ?? 'missing')]],
-    ['backend/package-lock.json @types/node', [majorOf(lock.packages['node_modules/@types/node']?.version ?? 'missing')]],
+    ...['backend', 'frontend'].flatMap((dir): [string, string[]][] => [
+      [`${dir}/package.json @types/node`, [majorOf(pkg(`${dir}/package.json`).devDependencies?.['@types/node'] ?? 'missing')]],
+      [`${dir}/package-lock.json @types/node`, [majorOf(lockedTypesNode(`${dir}/package-lock.json`))]],
+    ]),
     ['README.md', found('README.md', read('README.md'), /^- Node\.js (\d+)\+/gm)],
     ['docs/DEVELOPMENT.md', found('docs/DEVELOPMENT.md', read('docs/DEVELOPMENT.md'), /\| Node\.js \| (\d+)\.x \||Comes with Node\.js (\d+)/g)],
     ['docs/DEPLOYMENT.md', found('docs/DEPLOYMENT.md', read('docs/DEPLOYMENT.md'), /Install Node\.js (\d+)|setup_(\d+)\.x/g)],

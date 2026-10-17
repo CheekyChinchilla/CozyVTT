@@ -67,6 +67,10 @@ updates:
       # minor update to 6.1 would fail to install. Remove once it accepts 6.1.
       - dependency-name: typescript
         versions: [">=6.1.0"]
+      # @types/node moves with the Node major, as the backend's does;
+      # keepInStep.test.ts holds them together. This entry stays.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   # The actions CI runs, pinned to commit SHAs; Dependabot moves the SHA and
   # its version comment together.
