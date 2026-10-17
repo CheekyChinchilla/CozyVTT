@@ -174,12 +174,15 @@ _Nothing at present._
   tools: an npm override gives the coverage tool js-yaml 4 in place of
   the js-yaml 3 it asks for, and Node's own watch mode restarts the
   development server in place of nodemon. **Done** for TypeScript: 6.0 in
-  both packages. **Do** Tailwind CSS 4 in 1.5.4, before that release's bug
-  fixes, with every page compared before and after in each theme: it renames
-  or changes the meaning of many classes the app uses, raises Firefox's
-  minimum from 114 to 128, and clears the seven advisories against the app's
-  build tools, all in packages Tailwind CSS 3 brings with it. **Defer**
-  TypeScript 7.
+  both packages. **Done** for the advisory against Tailwind CSS 3's selector
+  parser: an npm override gives it the fixed release, and the built
+  stylesheets are byte for byte the same. **Do** Tailwind CSS 4 in 1.5.4,
+  before that release's bug fixes, with every page compared before and after
+  in each theme: it renames or changes the meaning of many classes the app
+  uses, raises Firefox's minimum from 114 to 128, and clears the one advisory
+  left against the app's build tools, in the file-matching package braces,
+  which Tailwind CSS 3 brings with it and which has no fixed release.
+  **Defer** TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
   from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser
