@@ -44,6 +44,10 @@ if (secretProblem) {
     );
     process.exit(1);
   } else {
+    // TODO(accounts): in the Docker dev stack docker-compose.dev.yml passes
+    // SESSION_SECRET from the root .env, empty when unset, and dotenv never
+    // overrides a variable already set, so a value put in backend/.env as
+    // this says is ignored there. Name the root .env for the Docker stack.
     logger.warn(
       `[WARN] SESSION_SECRET ${secretProblem}. ` +
         'Set a real secret in backend/.env before deploying; generate one with: openssl rand -hex 32'
