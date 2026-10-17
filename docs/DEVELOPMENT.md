@@ -745,7 +745,7 @@ also does what self-hosters run and a developer usually does not:
   so a failing backend audit still shows the frontend's result.
   When a package an instance runs asks for a dependency at a version with
   a high advisory, or a developer tool asks for one with any advisory, and
-  no release of that package asks for a fixed one yet, the backend's
+  no release of that package asks for a fixed one yet, that project's
   `package.json` holds the dependency at a fixed version under `overrides`,
   naming the package that asks for it. `keepInStep.test.ts`
   fails once an update of that package asks for the held version or a newer

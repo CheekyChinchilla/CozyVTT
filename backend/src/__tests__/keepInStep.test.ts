@@ -95,7 +95,7 @@
  * the file only if it copies it in before it runs npm; one that copies
  * `package*.json` alone installs as if the setting were off.
  *
- * The backend's npm overrides. Each one holds a package under another at a
+ * Each project's npm overrides. Each one holds a package under another at a
  * newer version than that package asks for, because the version it asks for
  * has a published advisory. The override names a version, and the package
  * above it names one too; when an update of that package asks for the same
@@ -584,10 +584,10 @@ describe('the .npmrc each image installs with', () => {
   });
 });
 
-describe('the npm overrides in backend/package.json', () => {
+describe.each(['backend', 'frontend'])('the npm overrides in %s/package.json', (dir) => {
   type LockPackage = { version?: string; dependencies?: Record<string, string> };
-  const manifest = JSON.parse(read('backend/package.json')) as { overrides?: Record<string, unknown> };
-  const lock = JSON.parse(read('backend/package-lock.json')) as { packages: Record<string, LockPackage> };
+  const manifest = JSON.parse(read(`${dir}/package.json`)) as { overrides?: Record<string, unknown> };
+  const lock = JSON.parse(read(`${dir}/package-lock.json`)) as { packages: Record<string, LockPackage> };
 
   /** Each override as [package above, package held, version held at]. */
   const overrides = Object.entries(manifest.overrides ?? {}).flatMap(([parent, held]) => {
