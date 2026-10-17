@@ -18,10 +18,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.104.2",
+    "@tanstack/react-query": "^5.104.4",
     "axios": "^1.20.0",
-    "framer-motion": "^14.2.0",
-    "lucide-react": "^1.57.0",
+    "framer-motion": "^14.3.0",
+    "lucide-react": "^1.59.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
