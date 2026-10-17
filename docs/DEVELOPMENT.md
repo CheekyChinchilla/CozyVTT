@@ -548,8 +548,9 @@ Some of those deserve a note:
   the build removes them; `console.error` and `console.warn` stay. After
   `npm run build`, CI looks in `dist/assets` for four lines only such calls
   print and fails if one is there. A misplaced build option only draws a
-  warning from Vite, and `vite.config.ts` is neither linted nor
-  type-checked, so read the build output after changing that file.
+  warning from Vite. `npm run typecheck` checks `vite.config.ts` against
+  the types of Vite's options, but the file is not linted, so read the
+  build output after changing it.
 - **The backend run manages its own database connections.** Every test file
   builds its own Prisma clients and jest reuses workers across files, so a
   full run once crept up to PostgreSQL's default ceiling of a hundred
@@ -613,8 +614,8 @@ Some of those deserve a note:
   can use an asset differ between the two sides or the API document, when
   either image's `.dockerignore` lets an env file other than `.env.example`
   into its build, and when the Node.js major differs between `.nvmrc`, a
-  Dockerfile stage, a CI job, an `engines` field, `@types/node` and the
-  guides.
+  Dockerfile stage, a CI job, an `engines` field, either project's
+  `@types/node` and the guides.
 - **What the guides claim is tested where a claim once drifted.**
   `backend/src/__tests__/documentedFacts.test.ts` checks the guides' own
   statements against the code and the shipped files: the deployment guide's
@@ -813,6 +814,12 @@ checkout, which deletes its database, and `git worktree remove`.
 Both backend and frontend use TypeScript in **strict mode**. The `tsconfig.json`
 in each package enables `strict: true`, which brings `noImplicitAny`,
 `strictNullChecks` and the rest with it.
+
+The frontend has three settings files, all strict, and `npm run typecheck`
+checks each: `tsconfig.json` for the app, `e2e/tsconfig.json` for the smoke
+tests, and `tsconfig.node.json` for `vite.config.ts` and `vitest.config.ts`.
+Those two run in Node, so only they see Node's types (`@types/node`, held to
+the Node major like the backend's); the app's code sees the browser's.
 
 Both packages use TypeScript 6.0 (`~6.0.3` in each `package.json`), since
 typescript-eslint supports TypeScript below 6.1 and ts-jest below 7. Neither

@@ -13,7 +13,7 @@ npm run test:run         # vitest one-shot (npm test is watch mode)
 npm run test:coverage    # vitest one-shot with a coverage report
 npm run test:e2e         # Playwright smoke tests against a running instance (e2e/)
 npm run lint             # eslint, flat config in eslint.config.js; fails on any warning
-npm run typecheck        # type-check, the app and e2e/
+npm run typecheck        # type-check the app, e2e/, vite.config.ts and vitest.config.ts
 ```
 
 ## Where things live

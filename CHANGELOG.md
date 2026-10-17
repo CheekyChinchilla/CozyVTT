@@ -28,7 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **`VITE_API_URL` and `VITE_SOCKET_URL` in `.env` no longer reach the app.** 1.5.2 stopped offering them, since a backend on another address left every map, token, avatar, sound and document blank, but `docker compose up -d --build` still passed a value left in `.env` into the app and its security settings. The app's image is now built without them, so the page always reaches the backend on its own address. If you never set them, nothing changes. If one is still set, your proxy must send `/api/` and `/socket.io/` to the backend on the page's own address, as [Using an External Reverse Proxy](docs/DEPLOYMENT.md#using-an-external-reverse-proxy) shows, and you can delete both lines from `.env`. The security headers sent with the page are the same as before.
 
-- **For people working on CozyVTT: the backend and the app are now type-checked with TypeScript 6, which also compiles the backend.** The backend's compiler settings follow Node's own rules for modules, and the compiled backend runs the same as before.
+- **For people working on CozyVTT: the backend and the app are now type-checked with TypeScript 6, which also compiles the backend.** The backend's compiler settings follow Node's own rules for modules, and the compiled backend runs the same as before. The settings files the frontend is built and tested with are type-checked too.
 
 ### Security
 
