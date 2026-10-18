@@ -20,7 +20,7 @@ export const WALL_PRESET_COLORS = [
   { label: 'Green', value: '#4ade80' },
 ];
 
-interface DmWallControlsProps {
+export interface DmWallControlsProps {
   wallMode: WallToolMode;
   onWallModeChange: (mode: WallToolMode) => void;
   onCollapse?: () => void;
