@@ -125,7 +125,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     // colour from the background, with readableTextOn in utils/color.ts.
     const headerClasses = isCustomColor
       ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
-      : `bg-gradient-to-r ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
+      : `bg-linear-to-r/srgb ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -159,7 +159,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                       : 'hover:bg-stone-50'
                   }`}
                 >
-                  <div className={`w-full h-6 rounded mb-1 bg-gradient-to-r ${color.from} ${color.to}`} />
+                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}
@@ -175,7 +175,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                   type="color"
                   value={customColorHex || '#14532d'}
                   onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="w-12 h-12 rounded cursor-pointer border-2 border-stone-300"
+                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300"
                   title="Pick a custom color"
                 />
 
@@ -192,7 +192,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                       }
                     }}
                     placeholder="#14532d"
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #14532d)</div>
                 </div>
@@ -200,9 +200,9 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 
               {/* Custom Color Preview */}
               {isCustomColor && customColorHex && /^#[0-9A-Fa-f]{6}$/.test(customColorHex) && (
-                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded">
+                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded-sm">
                   <div
-                    className="w-8 h-8 rounded"
+                    className="w-8 h-8 rounded-sm"
                     style={{ background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }}
                   />
                   <span className="text-sm font-medium">Custom: {customColorHex}</span>
@@ -227,7 +227,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
       <div className="flex items-start justify-between pr-24">
         <div className="flex items-start space-x-4">
           {/* Token Image */}
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {character.tokenImageUrl ? (
               <img
                 src={character.tokenImageUrl}
@@ -496,7 +496,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     <div className="space-y-6">
       {/* Wealth */}
       {data.wealth && (
-        <div className="bg-gradient-to-br from-amber-100 to-yellow-50 border-2 border-amber-400 rounded-lg p-5">
+        <div className="bg-linear-to-br/srgb from-amber-100 to-yellow-50 border-2 border-amber-400 rounded-lg p-5">
           <h3 className="text-lg font-bold text-amber-900 mb-4 flex items-center space-x-2">
             <Package className="w-5 h-5" />
             <span>Wealth & Assets</span>
@@ -518,7 +518,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
             </div>
           </div>
           {data.wealth.assets && (
-            <div className="bg-white/50 rounded p-3 mt-3">
+            <div className="bg-white/50 rounded-sm p-3 mt-3">
               <div className="text-xs text-amber-700 font-semibold mb-1">Assets</div>
               <p className="text-sm text-amber-900">{data.wealth.assets}</p>
             </div>

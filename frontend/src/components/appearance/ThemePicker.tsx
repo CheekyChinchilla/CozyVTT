@@ -207,7 +207,7 @@ export default function ThemePicker({
                     type="color"
                     value={customColors[key]}
                     onChange={e => handleCustomColor(key, e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-warm-gray/30"
+                    className="w-8 h-8 rounded-sm cursor-pointer border border-warm-gray/30"
                     aria-label={`${label} color`}
                   />
                   <span className="text-xs text-warm-gray font-mono">
@@ -297,9 +297,9 @@ function ContrastReport({ colors }: { colors: ThemePickerColors }) {
         {checks.map((check) => (
           <li key={check.label} className="flex items-center gap-2 text-[11px]">
             {check.ratio >= AA_TEXT ? (
-              <Check className="w-3 h-3 text-success-ink flex-shrink-0" aria-hidden="true" />
+              <Check className="w-3 h-3 text-success-ink shrink-0" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="w-3 h-3 text-warning-ink flex-shrink-0" aria-hidden="true" />
+              <AlertTriangle className="w-3 h-3 text-warning-ink shrink-0" aria-hidden="true" />
             )}
             <span className="text-warm-gray">{check.label}</span>
             <span className={`font-mono ml-auto ${check.ratio >= AA_TEXT ? 'text-warm-gray' : 'text-warning-ink'}`}>

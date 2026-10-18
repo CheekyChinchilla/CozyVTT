@@ -277,7 +277,7 @@ src/
 ├── assets/fonts/      The bundled typefaces: fonts.css, one @font-face per family and
 │                      character range (and weight, where a family has no variable
 │                      font), and their OFL.txt
-├── index.css          Tailwind's directives, the theme variables and the shared classes
+├── index.css          Tailwind, its @theme keys, the theme variables and the shared classes
 └── styles/            The atmosphere and spirit-layer effect stylesheets, and the Markdown
                        styles of notes and the document reader
 ```
@@ -290,7 +290,8 @@ The production build (`npm run build`, which is `vite build`) bundles with Rolld
 
 - `console.log`, `info`, `debug` and `trace` calls are declared pure (`treeshake.manualPureFunctions`), so the bundle leaves them out: they print chat messages, secret rolls and token details. `console.error` and `console.warn` stay. The dev server bundles nothing, so development keeps every log. A CI step fails the frontend job when a line only such a call prints is found in the bundle.
 - React with React Router, framer-motion, socket.io-client, lucide-react and react-markdown each go into a named vendor chunk (`codeSplitting.groups`), which a browser keeps cached while the app's own code changes.
-- No `build.target` is set, so the bundle is written for Vite's default, `baseline-widely-available`: Chrome and Edge 111, Firefox 114, and Safari 16.4 on macOS and iOS.
+- No `build.target` is set, so the scripts are written for Vite's default, `baseline-widely-available`: Chrome and Edge 111, Firefox 114, and Safari 16.4 on macOS and iOS. The stylesheet asks more of Firefox: Tailwind CSS 4 is built for Firefox 128 (and the same Chrome, Edge and Safari), so that is the floor the guides give.
+- Tailwind CSS 4 runs as a Vite plugin (`@tailwindcss/vite`), with no PostCSS or Tailwind config file: its settings are the `@theme` block and the `@utility` rules in `src/index.css`. That block keeps Tailwind 3's line heights in rem, and `src/styles/tailwind3-palette.css` keeps Tailwind 3's palette, so the move changed no color; gradients take the `/srgb` modifier to blend as Tailwind 3's did.
 
 ### State Management
 
@@ -309,9 +310,12 @@ The split exists for performance. Live token movement is written to the Zustand 
 ### Theming
 
 Every color in the themed UI comes from a CSS variable, so switching themes repaints the app without
-re-rendering anything. Tailwind maps each token with `rgb(var(--color-x) / <alpha-value>)`
-([tailwind.config.js](../frontend/tailwind.config.js)), which is why opacity modifiers such as
-`bg-danger/10` still follow the theme.
+re-rendering anything. `applyThemeColors` ([themes.ts](../frontend/src/themes.ts)) sets each token's
+channels on the page as `--rgb-x`, such as `--rgb-brand: 74 93 78`, and the `@theme` block in
+[index.css](../frontend/src/index.css) gives Tailwind each one as `--color-x: rgb(var(--rgb-x))`, which is
+why opacity modifiers such as `bg-danger/10` still follow the theme. The two prefixes stay apart on
+purpose: a page variable named like a Tailwind key would replace that key, and Tailwind would then
+read bare channels as a color and paint nothing.
 
 | Group | Tokens | Use for |
 |---|---|---|

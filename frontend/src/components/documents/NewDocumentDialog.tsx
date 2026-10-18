@@ -127,7 +127,7 @@ export default function NewDocumentDialog({
             className="flex-1"
             maxLength={MAX_DOCUMENT_NAME_LENGTH}
           />
-          <div className="flex rounded-lg border border-moss-green/30 overflow-hidden flex-shrink-0" role="radiogroup" aria-label="Format">
+          <div className="flex rounded-lg border border-moss-green/30 overflow-hidden shrink-0" role="radiogroup" aria-label="Format">
             {(['md', 'txt'] as const).map((f) => (
               <button
                 key={f}
@@ -146,7 +146,7 @@ export default function NewDocumentDialog({
         {!lockedScope && (
           <div className="space-y-1">
             <span className="text-xs text-ink-secondary">Who can read it</span>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Scope">
+            <div className="flex flex-wrap gap-2 mt-1" role="radiogroup" aria-label="Scope">
               {(
                 [
                   { value: AssetScope.USER, label: assetScopeLabel(AssetScope.USER), help: 'Yours alone until a DM shares it' },

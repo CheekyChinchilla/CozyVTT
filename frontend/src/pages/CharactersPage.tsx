@@ -177,9 +177,9 @@ export default function CharactersPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
-      <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-sm">
+      <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-6">
             {/* Left: Logo + Title */}

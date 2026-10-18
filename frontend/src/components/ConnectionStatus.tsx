@@ -59,7 +59,7 @@ export default function ConnectionStatus() {
       {/* Retry button */}
       <button
         onClick={reconnect}
-        className="text-xs px-2 py-1 rounded bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors"
+        className="text-xs px-2 py-1 rounded-sm bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors"
         title={error || 'Reconnect to server'}
       >
         Retry
@@ -114,7 +114,7 @@ export function ConnectionStatusCompact() {
       <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
 
       {/* Tooltip on hover */}
-      <div className="absolute top-full right-0 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+      <div className="absolute top-full right-0 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded-sm whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
         {getStatusTooltip()}
       </div>
     </div>

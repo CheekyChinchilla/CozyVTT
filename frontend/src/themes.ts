@@ -2,8 +2,8 @@
  * CozyVTT Theme Definitions
  *
  * Each theme defines RGB channel triplets (e.g. "74 93 78") for every CSS
- * variable consumed by Tailwind. Tailwind composes them with alpha via
- * rgb(var(--color-x) / <alpha-value>).
+ * variable consumed by Tailwind, set on the page as --rgb-x. The @theme block in
+ * index.css gives Tailwind each one as --color-x: rgb(var(--rgb-x)).
  *
  * Readability contract: every theme meets WCAG AA contrast (≥4.5:1) between
  * text colors and the backgrounds they are rendered on. This is enforced, not
@@ -552,45 +552,45 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
   const everywhere = [...onPage, ...onPaper];
 
   return {
-    '--color-ink-muted': ensureReadableOnAll(colors.inkMuted, everywhere),
+    '--rgb-ink-muted': ensureReadableOnAll(colors.inkMuted, everywhere),
     // Label on an accent-filled button. Authored values that already contrast
     // are kept; the rest are nudged until the label is legible.
-    '--color-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
+    '--rgb-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
     // brand is a fill in ~290 places (buttons, borders) AND text in ~470.
     // The fill keeps the authored color; text uses this readable shade of it.
-    '--color-brand-ink': ensureReadableOnAll(colors.brand, everywhere),
-    '--color-accent-ink': ensureReadableOnAll(colors.accent, everywhere),
-    '--color-spirit-ink': ensureReadableOnAll(colors.spirit, everywhere),
-    '--color-danger-ink': ensureReadableOnAll(colors.danger, everywhere),
-    '--color-success': STATE_HUES.success,
-    '--color-success-ink': ensureReadableOnAll(STATE_HUES.success, everywhere),
-    '--color-warning': STATE_HUES.warning,
-    '--color-warning-ink': ensureReadableOnAll(STATE_HUES.warning, everywhere),
-    '--color-info': STATE_HUES.info,
-    '--color-info-ink': ensureReadableOnAll(STATE_HUES.info, everywhere),
+    '--rgb-brand-ink': ensureReadableOnAll(colors.brand, everywhere),
+    '--rgb-accent-ink': ensureReadableOnAll(colors.accent, everywhere),
+    '--rgb-spirit-ink': ensureReadableOnAll(colors.spirit, everywhere),
+    '--rgb-danger-ink': ensureReadableOnAll(colors.danger, everywhere),
+    '--rgb-success': STATE_HUES.success,
+    '--rgb-success-ink': ensureReadableOnAll(STATE_HUES.success, everywhere),
+    '--rgb-warning': STATE_HUES.warning,
+    '--rgb-warning-ink': ensureReadableOnAll(STATE_HUES.warning, everywhere),
+    '--rgb-info': STATE_HUES.info,
+    '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, everywhere),
   };
 }
 
 export function applyThemeColors(colors: ThemeColors): void {
   const root = document.documentElement;
-  root.style.setProperty('--color-brand', colors.brand);
-  root.style.setProperty('--color-brand-dark', colors.brandDark);
-  root.style.setProperty('--color-accent', colors.accent);
-  root.style.setProperty('--color-accent-hover', colors.accentHover);
-  root.style.setProperty('--color-accent-text', colors.accentText);
-  root.style.setProperty('--color-bg-base', colors.bgBase);
-  root.style.setProperty('--color-bg-surface', colors.bgSurface);
-  root.style.setProperty('--color-bg-surface-light', colors.bgSurfaceLight);
-  root.style.setProperty('--color-bg-surface-dark', colors.bgSurfaceDark);
-  root.style.setProperty('--color-ink', colors.ink);
-  root.style.setProperty('--color-ink-secondary', colors.inkSecondary);
-  root.style.setProperty('--color-ink-muted', colors.inkMuted);
-  root.style.setProperty('--color-paper', colors.paper);
-  root.style.setProperty('--color-danger', colors.danger);
-  root.style.setProperty('--color-spirit', colors.spirit);
+  root.style.setProperty('--rgb-brand', colors.brand);
+  root.style.setProperty('--rgb-brand-dark', colors.brandDark);
+  root.style.setProperty('--rgb-accent', colors.accent);
+  root.style.setProperty('--rgb-accent-hover', colors.accentHover);
+  root.style.setProperty('--rgb-accent-text', colors.accentText);
+  root.style.setProperty('--rgb-bg-base', colors.bgBase);
+  root.style.setProperty('--rgb-bg-surface', colors.bgSurface);
+  root.style.setProperty('--rgb-bg-surface-light', colors.bgSurfaceLight);
+  root.style.setProperty('--rgb-bg-surface-dark', colors.bgSurfaceDark);
+  root.style.setProperty('--rgb-ink', colors.ink);
+  root.style.setProperty('--rgb-ink-secondary', colors.inkSecondary);
+  root.style.setProperty('--rgb-ink-muted', colors.inkMuted);
+  root.style.setProperty('--rgb-paper', colors.paper);
+  root.style.setProperty('--rgb-danger', colors.danger);
+  root.style.setProperty('--rgb-spirit', colors.spirit);
 
   // Readable text variants + state colors, computed from the above.
-  // Set last: --color-ink-muted is intentionally overwritten with its clamped
+  // Set last: --rgb-ink-muted is intentionally overwritten with its clamped
   // value when the authored one is too faint to read.
   for (const [name, value] of Object.entries(deriveReadableTokens(colors))) {
     root.style.setProperty(name, value);

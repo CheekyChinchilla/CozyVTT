@@ -31,7 +31,7 @@ function NoteText({ campaignId, note }: { campaignId: string; note: PersonalNote
   const { data, error } = useQuery(leftCampaignNoteQuery(campaignId, note));
   return (
     <>
-      <h3 className="text-base font-semibold text-brand-ink mb-2 break-words">{note.title}</h3>
+      <h3 className="text-base font-semibold text-brand-ink mb-2 wrap-break-word">{note.title}</h3>
       {error ? (
         <p role="alert" className="text-sm text-danger-ink">
           {apiErrorMessage(error) ?? 'Failed to load this note'}
@@ -162,7 +162,7 @@ function LeftCampaignDialog({ campaign, onClose }: { campaign: LeftCampaignSumma
                       type="button"
                       onClick={() => setSelectedId(note.id)}
                       aria-pressed={note.id === selectedId}
-                      className={`w-full text-left text-sm px-3 py-2 rounded-lg break-words transition-colors ${
+                      className={`w-full text-left text-sm px-3 py-2 rounded-lg wrap-break-word transition-colors ${
                         note.id === selectedId ? 'bg-moss-green/15 text-brand-ink font-medium' : 'text-stone-gray hover:bg-moss-green/5'
                       }`}
                     >
@@ -225,7 +225,7 @@ export default function LeftCampaignNotes() {
             className="flex items-center justify-between gap-3 p-4 rounded-lg bg-parchment/50 border border-moss-green/20"
           >
             <div className="min-w-0">
-              <p className="font-semibold text-brand-ink break-words">{campaign.name}</p>
+              <p className="font-semibold text-brand-ink wrap-break-word">{campaign.name}</p>
               <p className="text-xs text-warm-gray">
                 {count(campaign.notes.length, 'note', 'notes')}, {count(campaign.macros.length, 'saved roll', 'saved rolls')}
               </p>
@@ -234,7 +234,7 @@ export default function LeftCampaignNotes() {
               variant="secondary"
               onClick={() => setOpened(campaign)}
               aria-label={`Open your notes from ${campaign.name}`}
-              className="flex-shrink-0 text-sm py-1.5 px-3"
+              className="shrink-0 text-sm py-1.5 px-3"
             >
               Open
             </Button>

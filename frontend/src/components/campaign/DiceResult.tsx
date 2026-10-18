@@ -112,7 +112,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <User className="w-4 h-4 flex-shrink-0 text-ink-secondary" />
+            <User className="w-4 h-4 shrink-0 text-ink-secondary" />
             <span className="font-medium text-sm text-ink truncate">
               {subject}
               {/* Every secret roll in the list is labelled, whoever is looking.
@@ -125,7 +125,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                   you are reading as DM is somebody else's. */}
               {secret && (
                 <span
-                  className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded"
+                  className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded-sm"
                   title={
                     isCurrentUser
                       ? 'Hidden from the other players — your DM can still see it'
@@ -145,13 +145,13 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
 
           {purpose && (
             <div className="flex items-center gap-1 text-xs text-ink-secondary">
-              <Target className="w-3 h-3 flex-shrink-0" />
+              <Target className="w-3 h-3 shrink-0" />
               <span className="truncate">{purpose}</span>
             </div>
           )}
         </div>
 
-        <span className="text-xs text-ink-muted ml-2 flex-shrink-0">
+        <span className="text-xs text-ink-muted ml-2 shrink-0">
           {formatTimestamp(timestamp)}
         </span>
       </div>
@@ -178,7 +178,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       </div>
 
       {/* Breakdown */}
-      <div className="mt-2 pt-2 border-t border-current/10">
+      <div className="mt-2 pt-2 border-t">
         <div className="text-xs text-ink-secondary space-y-1">
           {/* Formula */}
           {breakdown?.formula && (
@@ -189,11 +189,11 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
           )}
 
           {/* Individual dice rolls */}
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {detail.map((roll, idx) => (
               <div key={idx} className="flex items-center gap-1">
                 {roll.type === 'dice' && roll.notation && (
-                  <div className="inline-flex items-center gap-1 bg-ink/5 px-2 py-1 rounded">
+                  <div className="inline-flex items-center gap-1 bg-ink/5 px-2 py-1 rounded-sm">
                     <span className="font-mono text-xs opacity-80">{roll.notation}:</span>
                     <div className="flex gap-1">
                       {roll.results?.map((r, rIdx) => {
@@ -225,7 +225,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                 )}
 
                 {roll.type === 'modifier' && roll.value !== undefined && (
-                  <div className="inline-flex items-center gap-1 bg-warm-amber/10 px-2 py-1 rounded">
+                  <div className="inline-flex items-center gap-1 bg-warm-amber/10 px-2 py-1 rounded-sm">
                     <span className="font-mono text-xs opacity-80">
                       {roll.value >= 0 ? '+' : ''}{roll.value}
                     </span>

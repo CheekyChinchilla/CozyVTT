@@ -367,7 +367,7 @@ function ActionListEditor({
           <button
             type="button"
             onClick={() => removeItem(i)}
-            className="p-1 mt-1 text-ink-muted hover:text-danger-ink transition-colors flex-shrink-0"
+            className="p-1 mt-1 text-ink-muted hover:text-danger-ink transition-colors shrink-0"
             title="Remove"
           >
             <X className="w-3 h-3" />

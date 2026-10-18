@@ -83,7 +83,7 @@ export function LogChanges({ context }: { context: AdminSystemLog['context'] }) 
       <summary className="text-xs text-warm-gray cursor-pointer">What changed</summary>
       <ul className="mt-1 space-y-0.5 text-xs text-stone-gray">
         {lines.map((text) => (
-          <li key={text} className="break-words whitespace-pre-wrap">{text}</li>
+          <li key={text} className="wrap-break-word whitespace-pre-wrap">{text}</li>
         ))}
       </ul>
     </details>

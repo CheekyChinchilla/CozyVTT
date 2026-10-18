@@ -169,7 +169,7 @@ export default function CampaignImportDialog({
               aria-label="Choose a campaign archive"
               className="border-2 border-dashed border-moss-green/30 rounded-xl p-8 text-center
                          hover:border-moss-green/50 hover:bg-moss-green/5 transition-colors cursor-pointer
-                         focus:outline-none focus:ring-2 focus:ring-brand"
+                         focus:outline-hidden focus:ring-2 focus:ring-brand"
               onClick={() => fileInputRef.current?.click()}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -256,7 +256,7 @@ export default function CampaignImportDialog({
                   role="switch"
                   aria-checked={importTokens}
                   onClick={() => setImportTokens((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-moss-green/50 ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
                     importTokens ? 'bg-moss-green' : 'bg-warm-gray/30'
                   }`}
                 >

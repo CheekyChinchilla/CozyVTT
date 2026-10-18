@@ -172,7 +172,7 @@ export default function SessionHistory() {
                           setEditingId(session.id);
                           setDraft(session.notes ?? '');
                         }}
-                        className="p-1 rounded hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink"
+                        className="p-1 rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink"
                         title="Edit these notes"
                         aria-label={`Edit notes for session ${session.sessionNumber}`}
                       >
@@ -191,7 +191,7 @@ export default function SessionHistory() {
                       rows={5}
                       aria-label={`Notes for session ${session.sessionNumber}`}
                       placeholder="What happened this session? Leave empty to clear these notes."
-                      className="w-full px-2 py-1.5 text-xs border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-y focus:outline-none focus:ring-2 focus:ring-warm-amber"
+                      className="w-full px-2 py-1.5 text-xs border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-y focus:outline-hidden focus:ring-2 focus:ring-warm-amber"
                     />
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] text-warm-gray">
@@ -203,7 +203,7 @@ export default function SessionHistory() {
                         <button
                           onClick={() => { setEditingId(null); setDraft(''); }}
                           disabled={savingNotes}
-                          className="p-1 rounded border border-warm-amber/30 text-stone-gray hover:text-brand-ink disabled:opacity-50"
+                          className="p-1 rounded-sm border border-warm-amber/30 text-stone-gray hover:text-brand-ink disabled:opacity-50"
                           title="Cancel"
                           aria-label="Cancel editing"
                         >
@@ -212,7 +212,7 @@ export default function SessionHistory() {
                         <button
                           onClick={() => void saveNotes(session.id)}
                           disabled={savingNotes}
-                          className="p-1 rounded border border-moss-green/40 bg-moss-green/10 text-moss-green hover:bg-moss-green/20 disabled:opacity-50"
+                          className="p-1 rounded-sm border border-moss-green/40 bg-moss-green/10 text-moss-green hover:bg-moss-green/20 disabled:opacity-50"
                           title="Save"
                           aria-label="Save notes"
                         >
@@ -224,7 +224,7 @@ export default function SessionHistory() {
                 ) : session.notes ? (
                   // `whitespace-pre-wrap` so the DM's own line breaks survive —
                   // these are usually written as a short list of what happened.
-                  <p className="text-xs text-brand-ink whitespace-pre-wrap break-words">
+                  <p className="text-xs text-brand-ink whitespace-pre-wrap wrap-break-word">
                     {session.notes}
                   </p>
                 ) : (

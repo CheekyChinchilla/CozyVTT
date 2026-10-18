@@ -51,7 +51,7 @@ export default function Tooltip({ content, delay = 400, side = 'top', children }
         id={id}
         role="tooltip"
         className={cn(
-          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-[70]',
+          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-70',
           side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
           'whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium',
           'bg-ink text-canvas shadow-lg',

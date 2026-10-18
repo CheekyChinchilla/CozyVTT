@@ -98,7 +98,7 @@ export default function SessionSidebar() {
       <div
         role="tablist"
         aria-label="Session panels"
-        className="flex items-stretch gap-1 px-2 pt-2 border-b border-moss-green/20 flex-shrink-0"
+        className="flex items-stretch gap-1 px-2 pt-2 border-b border-moss-green/20 shrink-0"
       >
         {TABS.map(({ key, label, icon: Icon }, index) => {
           const active = activeTab === key;
@@ -115,13 +115,13 @@ export default function SessionSidebar() {
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-t-lg',
                 'text-xs font-medium transition-colors duration-150',
-                'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+                'focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand',
                 active
                   ? 'text-brand-ink bg-surface-light/70 border-b-2 border-brand -mb-px'
                   : 'text-ink-muted hover:text-ink hover:bg-surface/60'
               )}
             >
-              <Icon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
               <span>{label}</span>
               {key === 'chat' && unreadChat > 0 && (
                 <span

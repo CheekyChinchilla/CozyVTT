@@ -68,7 +68,7 @@ export const CharacteristicBlock: React.FC<CharacteristicBlockProps> = ({
             type="number"
             value={regular}
             onChange={(e) => onChange?.(parseInt(e.target.value) || 0)}
-            className="w-full h-full text-center text-2xl font-bold text-sepia-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-sepia-500 rounded"
+            className="w-full h-full text-center text-2xl font-bold text-sepia-900 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-sepia-500 rounded-sm"
             min={0}
             max={99}
           />

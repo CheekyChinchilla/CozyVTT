@@ -243,7 +243,7 @@ export default function CampaignSettingsModal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
             onClick={onClose}
           >
             <motion.div
@@ -255,7 +255,7 @@ export default function CampaignSettingsModal({
               onClick={(e) => e.stopPropagation()}
             >
               {/* ── Header ── */}
-              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4 flex-shrink-0">
+              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4 shrink-0">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <Settings className="w-6 h-6 text-brand-ink" />
@@ -400,7 +400,7 @@ export default function CampaignSettingsModal({
                           role="switch"
                           aria-checked={exportIncludeAudio}
                           onClick={() => setExportIncludeAudio((v) => !v)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-moss-green/50 ${
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
                             exportIncludeAudio ? 'bg-moss-green' : 'bg-warm-gray/30'
                           }`}
                         >
@@ -438,7 +438,7 @@ export default function CampaignSettingsModal({
                 {activeTab === 'chat' && (
                   <div className="space-y-5">
                     <div className="flex items-start gap-3 p-4 rounded-lg bg-moss-green/5 border border-moss-green/15">
-                      <MessageCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+                      <MessageCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
                       <p className="text-sm text-stone-gray">
                         A message cooldown prevents players from sending messages too quickly.
                         When enabled, each player must wait the configured number of seconds
@@ -457,7 +457,7 @@ export default function CampaignSettingsModal({
                         role="switch"
                         aria-checked={chatCooldownEnabled}
                         onClick={() => setChatCooldownEnabled((v) => !v)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-moss-green/50 ${
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
                           chatCooldownEnabled ? 'bg-moss-green' : 'bg-warm-gray/30'
                         }`}
                       >
@@ -558,7 +558,7 @@ export default function CampaignSettingsModal({
                             className="flex items-center justify-between p-3 rounded-lg bg-parchment/50 border border-moss-green/10"
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center shrink-0">
                                 <span className="text-sm font-bold text-brand-ink uppercase">
                                   {(membership.user?.displayName ?? '?')[0]}
                                 </span>
@@ -576,7 +576,7 @@ export default function CampaignSettingsModal({
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2 flex-shrink-0">
+                            <div className="flex items-center gap-2 shrink-0">
                               {/* Role badge */}
                               <span
                                 className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
@@ -645,7 +645,7 @@ export default function CampaignSettingsModal({
                   <div className="space-y-4">
                     <div className="p-4 rounded-lg bg-danger/10 border border-danger/30">
                       <div className="flex items-start gap-3 mb-4">
-                        <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
+                        <AlertTriangle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
                         <div>
                           <h3 className="text-sm font-bold text-danger-ink mb-1">Delete Campaign</h3>
                           <p className="text-sm text-danger-ink">
@@ -666,7 +666,7 @@ export default function CampaignSettingsModal({
                             htmlFor="cs-delete-confirm"
                             className="block text-sm font-semibold text-danger-ink mb-1.5"
                           >
-                            Type <span className="font-mono bg-danger/10 px-1 rounded">{campaign.name}</span> to confirm:
+                            Type <span className="font-mono bg-danger/10 px-1 rounded-sm">{campaign.name}</span> to confirm:
                           </label>
                           <input
                             id="cs-delete-confirm"

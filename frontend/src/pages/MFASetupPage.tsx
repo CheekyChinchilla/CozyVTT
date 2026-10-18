@@ -131,7 +131,7 @@ export default function MFASetupPage() {
   // had answered.
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">
         <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-label="Loading" />
       </div>
     );
@@ -142,7 +142,7 @@ export default function MFASetupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
       <div className="glass-panel max-w-lg w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -244,7 +244,7 @@ export default function MFASetupPage() {
                 <code className="flex-1 text-sm font-mono text-brand-ink break-all">{secret}</code>
                 <button
                   onClick={copySecret}
-                  className="flex-shrink-0 p-1.5 rounded hover:bg-moss-green/10 transition-colors"
+                  className="shrink-0 p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
                   title="Copy secret"
                 >
                   {secretCopy === 'copied' ? (
@@ -325,7 +325,7 @@ export default function MFASetupPage() {
           <div className="space-y-5">
             {/* Success banner */}
             <div className="flex items-center gap-3 p-4 rounded-lg bg-success/10 border border-success/30">
-              <CheckCircle className="w-5 h-5 text-success-ink flex-shrink-0" />
+              <CheckCircle className="w-5 h-5 text-success-ink shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-success-ink">MFA Enabled Successfully</p>
                 <p className="text-xs text-success-ink mt-0.5">
@@ -336,7 +336,7 @@ export default function MFASetupPage() {
 
             {/* Warning */}
             <div className="flex items-start gap-3 p-4 rounded-lg bg-warm-amber/10 border border-warm-amber/30">
-              <AlertTriangle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
               <p className="text-sm text-stone-gray">
                 <span className="font-semibold">Save these backup codes now.</span> They will not
                 be shown again. Each code can only be used once to access your account if you lose
@@ -376,7 +376,7 @@ export default function MFASetupPage() {
                 {backupCodes.map((code, i) => (
                   <code
                     key={i}
-                    className="text-sm font-mono text-brand-ink text-center py-1.5 px-2 rounded bg-paper/60 border border-moss-green/10"
+                    className="text-sm font-mono text-brand-ink text-center py-1.5 px-2 rounded-sm bg-paper/60 border border-moss-green/10"
                   >
                     {code}
                   </code>
@@ -390,7 +390,7 @@ export default function MFASetupPage() {
                 type="checkbox"
                 checked={codesAcknowledged}
                 onChange={(e) => setCodesAcknowledged(e.target.checked)}
-                className="mt-0.5 w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
+                className="mt-0.5 w-4 h-4 rounded-sm border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
               />
               <span className="text-sm text-stone-gray">
                 I have saved my backup codes in a secure location.

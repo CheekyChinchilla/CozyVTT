@@ -46,7 +46,7 @@ const CurrencyDisplay: React.FC<{ currency: Currency }> = ({ currency }) => {
   ];
 
   return (
-    <div className="p-4 bg-gradient-to-br from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-lg">
+    <div className="p-4 bg-linear-to-br/srgb from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-lg">
       <div className="flex items-center space-x-2 mb-3">
         <Coins className="w-5 h-5 text-yellow-700" />
         <h4 className="font-semibold text-stone-800">Currency</h4>
@@ -68,7 +68,7 @@ const CurrencyDisplay: React.FC<{ currency: Currency }> = ({ currency }) => {
  */
 const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
   return (
-    <div className="flex items-center justify-between p-2 hover:bg-stone-50 rounded border-b border-stone-100 last:border-0">
+    <div className="flex items-center justify-between p-2 hover:bg-stone-50 rounded-sm border-b border-stone-100 last:border-0">
       <div className="flex-1">
         <div className="flex items-center space-x-2">
           <Package className="w-4 h-4 text-stone-500" />
@@ -76,18 +76,18 @@ const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
             <div className="flex items-center flex-wrap gap-2">
               <span className="font-medium text-stone-800">{item.name}</span>
               {item.equipped && (
-                <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded border border-green-300">
+                <span className="px-1.5 py-0.5 text-xs bg-green-100 text-green-700 rounded-sm border border-green-300">
                   Equipped
                 </span>
               )}
               {item.attuned && (
-                <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded border border-purple-300 flex items-center gap-1">
+                <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-sm border border-purple-300 flex items-center gap-1">
                   <Star className="w-3 h-3" />
                   Attuned
                 </span>
               )}
               {item.requiresAttunement && !item.attuned && (
-                <span className="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 rounded border border-amber-300">
+                <span className="px-1.5 py-0.5 text-xs bg-amber-50 text-amber-700 rounded-sm border border-amber-300">
                   Requires Attunement
                 </span>
               )}
@@ -130,7 +130,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currenc
 
       {/* Attunement Slots Tracker */}
       {inventory && inventory.some(item => item.requiresAttunement || item.attuned) && (
-        <div className="p-4 bg-gradient-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg">
+        <div className="p-4 bg-linear-to-br/srgb from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Star className="w-5 h-5 text-purple-600" />
@@ -146,7 +146,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currenc
                 key={idx}
                 className={`flex-1 h-2 rounded-full ${
                   idx < attunedCount
-                    ? 'bg-gradient-to-r from-purple-500 to-indigo-500'
+                    ? 'bg-linear-to-r/srgb from-purple-500 to-indigo-500'
                     : 'bg-stone-200'
                 }`}
               />

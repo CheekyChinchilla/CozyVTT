@@ -220,7 +220,9 @@ export default function CharacterSheetViewerModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    {/* m-0: the roster renders this inside its spaced list (space-y-4), whose
+        margin would otherwise leave a strip of the window uncovered. */}
+    <div className="fixed inset-0 z-50 m-0 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
       <div
         ref={modalRef}
         role="dialog"

@@ -397,7 +397,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           {/* Backdrop */}
           <motion.div
             key="creature-lib-backdrop"
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -415,14 +415,14 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
           >
             {/* ── Header ── */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <Skull className="w-5 h-5 text-brand-ink flex-shrink-0" />
+              <Skull className="w-5 h-5 text-brand-ink shrink-0" />
               <h2 className="flex-1 text-base font-bold text-brand-ink">
                 Creature Library
               </h2>
               <span className="text-xs text-stone-gray/60">
                 {total} creature{total !== 1 ? 's' : ''}
               </span>
-              <Button onClick={onClose} variant="secondary" className="p-1.5 flex-shrink-0" title="Close">
+              <Button onClick={onClose} variant="secondary" className="p-1.5 shrink-0" title="Close">
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -517,7 +517,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                 )}
               </div>
               {seedResult && (
-                <div className="text-[10px] text-success-ink bg-success/10 rounded px-2 py-1">
+                <div className="text-[10px] text-success-ink bg-success/10 rounded-sm px-2 py-1">
                   {seedResult}
                 </div>
               )}
@@ -551,7 +551,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   )}
                 </button>
                 {showFavorites && (
-                  <div className="divide-y divide-moss-green/10 bg-warning/[0.02]">
+                  <div className="divide-y divide-moss-green/10 bg-warning/2">
                     {isLoadingFavorites ? (
                       <div className="flex items-center gap-2 text-stone-gray text-xs py-3 px-4">
                         <Loader2 className="w-3 h-3 animate-spin" />
@@ -772,11 +772,11 @@ function CreatureRow({
           <img
             src={creature.imageUrl}
             alt={creature.name}
-            className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-moss-green/20"
+            className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
           />
         ) : (
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm ${
+            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
               creature.disposition === 'hostile' ? 'bg-danger' :
               creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
             }`}
@@ -794,7 +794,7 @@ function CreatureRow({
         </div>
 
         {/* Source badge */}
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
           creature.source === 'srd'
             ? 'bg-info/10 text-info-ink'
             : 'bg-moss-green/10 text-brand-ink'
@@ -805,7 +805,7 @@ function CreatureRow({
         {/* Favorite star */}
         <button
           onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className="flex-shrink-0 p-0.5 rounded hover:bg-warning/10 transition-colors"
+          className="shrink-0 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
@@ -817,9 +817,9 @@ function CreatureRow({
 
         {/* Expand icon */}
         {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-stone-gray/40 flex-shrink-0" />
+          <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-stone-gray/40 flex-shrink-0" />
+          <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
         )}
       </button>
 
@@ -935,7 +935,7 @@ function NameDescriptionList({
           <button
             type="button"
             onClick={() => onChange(items.filter((_, idx) => idx !== i))}
-            className="p-1 text-danger-ink hover:text-danger-ink flex-shrink-0 mt-0.5"
+            className="p-1 text-danger-ink hover:text-danger-ink shrink-0 mt-0.5"
             title="Remove"
           >
             <Trash2 className="w-3 h-3" />
@@ -1101,7 +1101,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
       </div>
 
       {formError && (
-        <div className="text-xs text-danger-ink bg-danger/10 rounded px-2 py-1">{formError}</div>
+        <div className="text-xs text-danger-ink bg-danger/10 rounded-sm px-2 py-1">{formError}</div>
       )}
 
       {/* Name */}

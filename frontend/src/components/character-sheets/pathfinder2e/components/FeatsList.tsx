@@ -100,7 +100,7 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
                 .map((feat, index) => (
                   <div
                     key={`${feat.name}-${index}`}
-                    className="bg-white border border-stone-200 rounded-lg p-3 shadow-sm"
+                    className="bg-white border border-stone-200 rounded-lg p-3 shadow-xs"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">

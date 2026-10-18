@@ -76,7 +76,7 @@ const SpellSlotIndicator: React.FC<{ slot: SpellSlot }> = ({ slot }) => {
             )}
           </div>
         ))}
-      <span className="text-xs text-stone-600 ml-1">
+      <span className="text-xs text-stone-600">
         {remaining}/{total}
       </span>
     </div>
@@ -96,7 +96,7 @@ function readSlot(value: unknown): SpellSlot | null {
  */
 const SpellRow: React.FC<{ spell: Spell }> = ({ spell }) => {
   return (
-    <div className="flex items-center justify-between py-1 px-2 hover:bg-stone-50 rounded">
+    <div className="flex items-center justify-between py-1 px-2 hover:bg-stone-50 rounded-sm">
       <div className="flex items-center space-x-2">
         {spell.prepared ? (
           <BookOpen className="w-4 h-4 text-blue-600" />
@@ -107,12 +107,12 @@ const SpellRow: React.FC<{ spell: Spell }> = ({ spell }) => {
           {spell.name}
         </span>
         {spell.ritual && (
-          <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">
+          <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded-sm">
             R
           </span>
         )}
         {spell.concentration && (
-          <span className="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
+          <span className="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded-sm">
             C
           </span>
         )}
@@ -161,7 +161,7 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
   return (
     <div className="space-y-4">
       {/* Spellcasting Header */}
-      <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
+      <div className="p-4 bg-linear-to-br/srgb from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
         <div className="flex items-center space-x-2 mb-3">
           <Sparkles className="w-5 h-5 text-blue-600" />
           <h4 className="font-semibold text-stone-800">
@@ -200,7 +200,7 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
             {cantrips.map((cantrip, idx) => (
               <span
                 key={idx}
-                className="px-2 py-1 text-sm bg-yellow-100 text-yellow-800 rounded border border-yellow-300"
+                className="px-2 py-1 text-sm bg-yellow-100 text-yellow-800 rounded-sm border border-yellow-300"
               >
                 {cantrip}
               </span>
@@ -253,11 +253,11 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
           <span>Prepared spell</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">R</span>
+          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-sm">R</span>
           <span>Ritual</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded">C</span>
+          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded-sm">C</span>
           <span>Concentration</span>
         </div>
       </div>

@@ -14,8 +14,8 @@ export default function CampaignCardSkeleton() {
 
       {/* Description lines */}
       <div className="space-y-2 mb-4">
-        <div className="h-4 w-full bg-stone-gray/10 rounded" />
-        <div className="h-4 w-4/5 bg-stone-gray/10 rounded" />
+        <div className="h-4 w-full bg-stone-gray/10 rounded-sm" />
+        <div className="h-4 w-4/5 bg-stone-gray/10 rounded-sm" />
       </div>
 
       {/* Status + game system badges */}
@@ -26,9 +26,9 @@ export default function CampaignCardSkeleton() {
 
       {/* Info rows */}
       <div className="space-y-2">
-        <div className="h-4 w-3/4 bg-stone-gray/10 rounded" />
-        <div className="h-4 w-1/2 bg-stone-gray/10 rounded" />
-        <div className="h-4 w-2/3 bg-stone-gray/10 rounded" />
+        <div className="h-4 w-3/4 bg-stone-gray/10 rounded-sm" />
+        <div className="h-4 w-1/2 bg-stone-gray/10 rounded-sm" />
+        <div className="h-4 w-2/3 bg-stone-gray/10 rounded-sm" />
       </div>
     </div>
   );

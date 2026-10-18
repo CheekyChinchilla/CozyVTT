@@ -39,13 +39,13 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   ghost:
     'bg-transparent text-ink px-4 py-2 rounded-cozy font-medium ' +
     'hover:bg-surface transition-colors duration-200 ' +
-    'focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2',
+    'focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
-  sm: 'text-sm !px-3 !py-1.5',
+  sm: 'text-sm px-3! py-1.5!',
   md: '', // natural padding from the variant styles
-  lg: 'text-lg !px-6 !py-3',
+  lg: 'text-lg px-6! py-3!',
 };
 
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
@@ -74,7 +74,7 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
       className={cn(
         VARIANT_CLASSES[variant],
         SIZE_CLASSES[size],
-        iconOnly && '!p-2',
+        iconOnly && 'p-2!',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         className
       )}

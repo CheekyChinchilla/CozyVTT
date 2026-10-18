@@ -57,6 +57,7 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [React](https://react.dev/) | Frontend UI library | MIT |
 | [React Router](https://reactrouter.com/) | Moves between the app's pages (8.x) | MIT |
 | [Vite](https://vitejs.dev/) | Frontend build tooling | MIT |
+| [Tailwind CSS](https://tailwindcss.com/) | The app's styles, built into its stylesheet (4.x) | MIT |
 | [Playwright](https://playwright.dev/) | Browser smoke tests, for development only; not part of an instance | Apache-2.0 |
 | [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |
 | [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
@@ -73,4 +74,4 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |
 | [sharp](https://github.com/lovell/sharp) | Picture thumbnails, and picture sizes for Universal VTT export | Apache-2.0 |
 
-The tools that only build or test the app include [Lightning CSS](https://lightningcss.dev/), which Vite uses to minify the stylesheets, under the Mozilla Public License 2.0 (MPL-2.0), and caniuse-lite, the browser-support data from [Can I Use](https://caniuse.com/) that Autoprefixer reads, under the Creative Commons Attribution 4.0 International License (CC-BY-4.0). Both are used unmodified while the app is built or tested, and none of their code or data is part of an instance.
+The tools that only build or test the app include [Lightning CSS](https://lightningcss.dev/), which Tailwind CSS and Vite use to build and minify the stylesheet, under the Mozilla Public License 2.0 (MPL-2.0), and caniuse-lite, the browser-support data from [Can I Use](https://caniuse.com/) that the linter's React Hooks rules bring in through Babel, under the Creative Commons Attribution 4.0 International License (CC-BY-4.0). Both are used unmodified while the app is built or tested, and none of their code or data is part of an instance.

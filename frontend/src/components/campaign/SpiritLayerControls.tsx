@@ -249,7 +249,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
           {/* Backdrop */}
           <motion.div
             key="spirit-backdrop"
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -312,7 +312,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                     className={`relative flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                       enabled
                         ? 'bg-spirit-purple text-white hover:bg-spirit-purple/80'
-                        : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
+                        : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
                     }`}
                     title={enabled ? 'Close the veil' : 'Open the veil'}
                   >
@@ -342,7 +342,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                     className={`flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                       dmViewBothPlanes
                         ? 'bg-spirit-purple/20 text-spirit-purple hover:bg-spirit-purple/30'
-                        : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2'
+                        : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
                     }`}
                     title={dmViewBothPlanes ? 'Switch to single-plane view' : 'Switch to dual-plane view'}
                   >
@@ -377,7 +377,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                       >
                         {/* Colour preview swatch */}
                         <div
-                          className="w-full h-8 rounded mb-2"
+                          className="w-full h-8 rounded-sm mb-2"
                           style={{
                             background:
                               style.id === 'custom'
@@ -408,7 +408,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                         value={customColor}
                         onChange={(e) => setCustomColor(e.target.value)}
                         onBlur={(e) => handleCustomColorChange(e.target.value)}
-                        className="w-10 h-8 rounded cursor-pointer border-none bg-transparent"
+                        className="w-10 h-8 rounded-sm cursor-pointer border-none bg-transparent"
                       />
                       <span className="text-xs text-stone-gray font-mono">{customColor}</span>
                     </div>
@@ -476,10 +476,10 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                               <img
                                 src={token.imageUrl}
                                 alt={token.name}
-                                className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-spirit-purple/30"
+                                className="w-8 h-8 rounded-full object-cover shrink-0 border border-spirit-purple/30"
                               />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-spirit-purple/20 flex items-center justify-center flex-shrink-0">
+                              <div className="w-8 h-8 rounded-full bg-spirit-purple/20 flex items-center justify-center shrink-0">
                                 <Ghost className="w-4 h-4 text-spirit-purple" />
                               </div>
                             )}
@@ -495,7 +495,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                           <button
                             onClick={() => handleTokenVisibilityToggle(token)}
                             disabled={isToggling}
-                            className={`flex-shrink-0 p-2 rounded-cozy transition-colors ${
+                            className={`shrink-0 p-2 rounded-cozy transition-colors ${
                               token.visible
                                 ? 'text-brand-ink hover:bg-moss-green/10'
                                 : 'text-stone-gray/50 hover:bg-stone-gray/10'

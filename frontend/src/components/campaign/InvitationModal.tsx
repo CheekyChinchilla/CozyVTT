@@ -176,7 +176,7 @@ export default function InvitationModal({
                       type="checkbox"
                       checked={selectedCharacterIds.includes(character.id)}
                       onChange={() => toggleCharacter(character.id)}
-                      className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green focus:ring-offset-0"
+                      className="w-4 h-4 rounded-sm border-moss-green/30 text-brand-ink focus:ring-moss-green focus:ring-offset-0"
                     />
                     {character.tokenImageUrl ? (
                       <img

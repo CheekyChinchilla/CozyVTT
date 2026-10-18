@@ -281,7 +281,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                         className="flex items-center gap-2 p-2 rounded-lg border border-dashed border-moss-green/30"
                       >
                         <span className="flex-1 min-w-0 truncate text-sm text-ink">{asset.name}</span>
-                        <span className="text-[11px] text-ink-secondary flex-shrink-0">
+                        <span className="text-[11px] text-ink-secondary shrink-0">
                           {FORMAT_LABEL[documentFormat(asset.originalName)]}
                         </span>
                         <Button

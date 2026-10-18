@@ -174,7 +174,7 @@ export default function AssetGrid({
             />
             {isSelected && (
               <div className="absolute inset-0 bg-moss-green/25 flex items-center justify-center">
-                <Check className={`${checkSize} text-brand-ink drop-shadow`} />
+                <Check className={`${checkSize} text-brand-ink drop-shadow-sm`} />
               </div>
             )}
             {showNames && (

@@ -202,7 +202,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
             onClick={onClose}
           />
 
@@ -300,7 +300,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                 {/* Now Playing indicator */}
                 {activeAtmosphereAudio && (
                   <div className="mb-4 p-3 rounded-lg bg-moss-green/10 border border-moss-green/20 flex items-center gap-3">
-                    <div className="flex gap-0.5 items-end h-5 flex-shrink-0">
+                    <div className="flex gap-0.5 items-end h-5 shrink-0">
                       {[1, 2, 3, 4].map((i) => (
                         <div
                           key={i}
@@ -321,7 +321,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                     <button
                       onClick={() => handleAudioSelect(null)}
                       title="Stop audio"
-                      className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors flex-shrink-0"
+                      className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors shrink-0"
                     >
                       <StopCircle className="w-4 h-4" />
                     </button>
@@ -336,7 +336,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                       <button
                         onClick={handleMuteToggle}
                         title={isMuted ? 'Unmute' : 'Mute'}
-                        className="text-stone-gray hover:text-brand-ink transition-colors flex-shrink-0"
+                        className="text-stone-gray hover:text-brand-ink transition-colors shrink-0"
                       >
                         {isMuted || volume === 0
                           ? <VolumeX className="w-4 h-4" />
@@ -355,7 +355,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                         className="flex-1 accent-moss-green"
                         title="Volume"
                       />
-                      <span className="text-xs text-stone-gray w-8 text-right flex-shrink-0">
+                      <span className="text-xs text-stone-gray w-8 text-right shrink-0">
                         {Math.round((isMuted ? 0 : volume) * 100)}%
                       </span>
                     </div>
@@ -424,7 +424,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                                 : 'border-moss-green/20 bg-parchment/50 hover:border-moss-green/40 hover:bg-moss-green/5'
                             }`}
                           >
-                            <div className={`p-1.5 rounded ${isPlaying ? 'bg-moss-green/20' : 'bg-stone-gray/10'}`}>
+                            <div className={`p-1.5 rounded-sm ${isPlaying ? 'bg-moss-green/20' : 'bg-stone-gray/10'}`}>
                               {isPlaying
                                 ? <StopCircle className="w-4 h-4 text-brand-ink" />
                                 : <Play className="w-4 h-4 text-stone-gray" />
@@ -441,7 +441,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                               </p>
                             </div>
                             {isPlaying && (
-                              <CheckCircle className="w-4 h-4 text-brand-ink flex-shrink-0" />
+                              <CheckCircle className="w-4 h-4 text-brand-ink shrink-0" />
                             )}
                           </button>
                         );

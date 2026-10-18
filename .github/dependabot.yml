@@ -69,10 +69,6 @@ updates:
       frontend-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Tailwind CSS 4 changes how the styles are configured and built, a
-      # move of its own. Remove when that work starts.
-      - dependency-name: tailwindcss
-        update-types: [version-update:semver-major]
       # TypeScript 7 cannot run under typescript-eslint yet. Remove once it
       # supports it.
       - dependency-name: typescript

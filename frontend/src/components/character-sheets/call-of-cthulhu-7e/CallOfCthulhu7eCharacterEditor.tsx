@@ -513,7 +513,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
     const headerClasses = isCustomColor
       ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
-      : `bg-gradient-to-r ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
+      : `bg-linear-to-r/srgb ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -543,7 +543,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                       : 'hover:bg-stone-50'
                   }`}
                 >
-                  <div className={`w-full h-6 rounded mb-1 bg-gradient-to-r ${color.from} ${color.to}`} />
+                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}
@@ -559,7 +559,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                   type="color"
                   value={customColorHex || '#14532d'}
                   onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="w-12 h-12 rounded cursor-pointer border-2 border-stone-300"
+                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300"
                   title="Pick a custom color"
                 />
 
@@ -577,7 +577,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                     }}
                     placeholder="#14532d"
                     aria-label="Custom colour hex code"
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #14532d)</div>
                   {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
@@ -586,9 +586,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
               {/* Custom Color Preview */}
               {isCustomColor && customColorHex && /^#[0-9A-Fa-f]{6}$/.test(customColorHex) && (
-                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded">
+                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded-sm">
                   <div
-                    className="w-8 h-8 rounded"
+                    className="w-8 h-8 rounded-sm"
                     style={{ background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }}
                   />
                   <span className="text-sm font-medium">Custom: {customColorHex}</span>
@@ -622,7 +622,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           pr-48 that was here. */}
       <div className="flex items-start space-x-4 pr-64">
         {/* Token Image */}
-        <div className="flex-shrink-0 relative">
+        <div className="shrink-0 relative">
           <label htmlFor="token-upload" className="cursor-pointer group">
             {tokenImagePreview ? (
               <img
@@ -664,7 +664,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             onChange={(e) => setFormData({ ...formData, investigatorName: e.target.value })}
             maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
-            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
           />
 
           <div className="grid grid-cols-3 gap-3">
@@ -678,14 +678,14 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.occupation || ''}
               onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
               placeholder="Occupation"
-              className="text-sm bg-white/10 border border-white/30 rounded px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
             <input
               type="text"
               value={formData.era || ''}
               onChange={(e) => setFormData({ ...formData, era: e.target.value })}
               placeholder="Era (e.g., 1920s)"
-              className="text-sm bg-white/10 border border-white/30 rounded px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -694,7 +694,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.age ?? 0}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
-              className="text-sm bg-white/10 border border-white/30 rounded px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               fallback={0}
             />
             <input
@@ -702,14 +702,14 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.sex || ''}
               onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
               placeholder="Sex"
-              className="text-sm bg-white/10 border border-white/30 rounded px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
             <input
               type="text"
               value={formData.residence || ''}
               onChange={(e) => setFormData({ ...formData, residence: e.target.value })}
               placeholder="Residence"
-              className="text-sm bg-white/10 border border-white/30 rounded px-2 py-1 col-span-2 text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -718,7 +718,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             value={formData.birthplace || ''}
             onChange={(e) => setFormData({ ...formData, birthplace: e.target.value })}
             placeholder="Birthplace"
-            className="text-sm bg-white/10 border border-white/30 rounded px-2 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
           />
         </div>
       </div>
@@ -884,7 +884,7 @@ value={formData.derivedStats?.hp?.current}
                   } as CoC7eDerivedStats,
                 });
               }}
-              className="w-full text-center text-2xl font-bold text-red-700 border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-red-500 rounded"
+              className="w-full text-center text-2xl font-bold text-red-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-red-500 rounded-sm"
             fallback={0}
             />
           </div>
@@ -904,7 +904,7 @@ value={formData.derivedStats?.magicPoints?.current}
                   } as CoC7eDerivedStats,
                 });
               }}
-              className="w-full text-center text-2xl font-bold text-purple-700 border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-purple-500 rounded"
+              className="w-full text-center text-2xl font-bold text-purple-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
             fallback={0}
             />
           </div>
@@ -921,7 +921,7 @@ value={formData.derivedStats?.luck?.score}
                   } as CoC7eDerivedStats,
                 });
               }}
-              className="w-full text-center text-2xl font-bold text-yellow-700 border-none bg-transparent focus:outline-none focus:ring-2 focus:ring-yellow-500 rounded"
+              className="w-full text-center text-2xl font-bold text-yellow-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-yellow-500 rounded-sm"
             fallback={0}
             />
           </div>
@@ -948,7 +948,7 @@ value={formData.derivedStats?.luck?.score}
                     conditions: { ...formData.conditions, [key]: e.target.checked } as CoC7eConditions,
                   });
                 }}
-                className="rounded border-sepia-400 text-red-700 focus:ring-red-500"
+                className="rounded-sm border-sepia-400 text-red-700 focus:ring-red-500"
               />
               {label}
             </label>
@@ -1012,7 +1012,7 @@ value={formData.derivedStats?.luck?.score}
                 })
               }
               placeholder="e.g., Average, Wealthy"
-              className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+              className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             />
           </div>
           <div>
@@ -1024,7 +1024,7 @@ value={formData.wealth?.cash}
                   wealth: { ...formData.wealth, cash: v } as CoC7eWealth,
                 })
               }
-              className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+              className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             fallback={0}
             />
           </div>
@@ -1041,7 +1041,7 @@ value={formData.wealth?.cash}
             }
             placeholder="Describe assets, property, investments..."
             rows={2}
-            className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+            className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
           />
         </div>
       </div>
@@ -1059,7 +1059,7 @@ value={formData.wealth?.cash}
           noteClassName={LIMIT_NOTE_CLASS}
           placeholder="List possessions, one per line. Format: Item Name - Notes"
           rows={8}
-          className="w-full bg-white border border-sepia-400 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-sepia-500"
+          className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
         />
       </div>
     </div>
@@ -1096,7 +1096,7 @@ value={formData.wealth?.cash}
                     appearance: { ...formData.appearance, [key]: e.target.value } as CoC7eAppearance,
                   });
                 }}
-                className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
               />
             </div>
           ))}
@@ -1124,7 +1124,7 @@ value={formData.wealth?.cash}
                   },
                 });
               }}
-              className="w-24 px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+              className="w-24 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             />
           </div>
           <div>
@@ -1147,7 +1147,7 @@ value={formData.wealth?.cash}
               max={SHEET_LIST_MAX}
               noteClassName={LIMIT_NOTE_CLASS}
               placeholder={'Contact Nyarlathotep\nElder Sign'}
-              className="w-full px-2 py-1 border border-sepia-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+              className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             />
           </div>
         </div>
@@ -1167,7 +1167,7 @@ value={formData.wealth?.cash}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             placeholder="Notes kept by the Keeper about this investigator"
             aria-label="Keeper's Notes"
-            className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+            className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
           />
         </div>
       )}

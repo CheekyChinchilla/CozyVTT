@@ -78,9 +78,9 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
-      <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-sm">
+      <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-6">
             {/* Left: Logo + Title */}
@@ -135,7 +135,7 @@ export default function DashboardPage() {
               <button
                 onClick={() => navigate('/profile')}
                 aria-label={`View profile for ${user?.displayName ?? 'your account'}`}
-                className="w-12 h-12 rounded-full border-2 border-moss-green/30 hover:border-moss-green/60 transition-colors overflow-hidden flex items-center justify-center bg-moss-green/10 flex-shrink-0"
+                className="w-12 h-12 rounded-full border-2 border-moss-green/30 hover:border-moss-green/60 transition-colors overflow-hidden flex items-center justify-center bg-moss-green/10 shrink-0"
               >
                 {user?.avatarUrl ? (
                   <img
@@ -187,10 +187,10 @@ export default function DashboardPage() {
                 <div className="mt-4 space-y-3 animate-pulse">
                   {[...Array(2)].map((_, i) => (
                     <div key={i} className="p-3 rounded-lg bg-parchment/50 border border-moss-green/10 flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-moss-green/10 flex-shrink-0" />
+                      <div className="w-10 h-10 rounded-lg bg-moss-green/10 shrink-0" />
                       <div className="flex-1 space-y-1.5">
-                        <div className="h-4 w-2/3 bg-moss-green/15 rounded" />
-                        <div className="h-3 w-1/3 bg-stone-gray/10 rounded" />
+                        <div className="h-4 w-2/3 bg-moss-green/15 rounded-sm" />
+                        <div className="h-3 w-1/3 bg-stone-gray/10 rounded-sm" />
                       </div>
                     </div>
                   ))}
@@ -210,7 +210,7 @@ export default function DashboardPage() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg bg-moss-green/10 border border-moss-green/30
-                                        flex items-center justify-center overflow-hidden flex-shrink-0">
+                                        flex items-center justify-center overflow-hidden shrink-0">
                             {character.tokenImageUrl ? (
                               <img
                                 src={character.tokenImageUrl}
@@ -453,13 +453,13 @@ export default function DashboardPage() {
             {/* Error Message */}
             {error && !loading && (
               <div className="mb-6 bg-danger/10 border border-danger/20 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
+                <AlertCircle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-danger-ink font-medium">{error}</p>
                 </div>
                 <Button
                   onClick={loadData}
-                  variant="secondary" className="text-xs py-1 px-3 flex-shrink-0"
+                  variant="secondary" className="text-xs py-1 px-3 shrink-0"
                 >
                   Try Again
                 </Button>

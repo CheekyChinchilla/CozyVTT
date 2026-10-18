@@ -217,7 +217,7 @@ export default function DiceMacroManager({
                   ) : (
                     <>
                       <span className="flex-1 min-w-0 truncate text-sm text-ink">{macro.name}</span>
-                      <span className="font-mono text-xs text-ink-secondary flex-shrink-0">
+                      <span className="font-mono text-xs text-ink-secondary shrink-0">
                         {macro.expression}
                       </span>
                       <button
@@ -277,7 +277,7 @@ export default function DiceMacroManager({
                 onClick={handleAdd}
                 disabled={!canAdd}
                 variant="secondary"
-                className="flex items-center gap-2 flex-shrink-0"
+                className="flex items-center gap-2 shrink-0"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                 Add

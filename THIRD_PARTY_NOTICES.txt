@@ -137,7 +137,8 @@ SECTION 3: FRONTEND DEPENDENCIES
 ================================================================================
 
 The packages the frontend lists as its dependencies, which the build puts into
-the app the browser loads, and two that much of it is built on. Each is given
+the app the browser loads, two that much of it is built on, and the three
+build tools whose own code the build copies into the app. Each is given
 by its major version line (4.x, or 0.35.x below version 1); the exact versions
 are in frontend/package-lock.json.
 
@@ -230,6 +231,27 @@ unified 11.x (and the remark, rehype and micromark packages around it)
   Copyright (c) Titus Wormer
   License: MIT
   https://github.com/unifiedjs/unified
+
+Three development tools also put code of their own into the built app.
+Tailwind CSS writes its base stylesheet (Preflight) into the app's
+stylesheet, Vite adds the helper that preloads the app's scripts, and
+Rolldown, the bundler Vite uses, adds its runtime helpers as a script of
+their own.
+
+tailwindcss 4.x
+  Copyright (c) Tailwind Labs, Inc.
+  License: MIT
+  https://github.com/tailwindlabs/tailwindcss
+
+vite 8.x
+  Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
+  License: MIT
+  https://github.com/vitejs/vite
+
+rolldown 1.x
+  Copyright (c) 2024-present VoidZero Inc. & Contributors
+  License: MIT
+  https://github.com/rolldown/rolldown
 
 
 ================================================================================

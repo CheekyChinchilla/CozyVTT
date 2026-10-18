@@ -83,7 +83,7 @@ export default function DeleteCharacterModal({
                 {isInActiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
                       <div>
                         <h3 className="font-semibold text-warm-amber mb-1">
                           Cannot Delete Character
@@ -106,7 +106,7 @@ export default function DeleteCharacterModal({
                 {isInInactiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
                       <div>
                         <h3 className="font-semibold text-warm-amber mb-1">
                           Character is Assigned to Campaign

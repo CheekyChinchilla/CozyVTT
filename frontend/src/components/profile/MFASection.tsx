@@ -41,7 +41,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
   if (isAdmin) {
     return (
       <div className="mt-4 p-4 rounded-lg bg-warm-amber/10 border border-warm-amber/30 flex gap-3">
-        <AlertTriangle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+        <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
         <p className="text-sm text-stone-gray">
           Admin accounts are required to keep MFA enabled and cannot disable it.
         </p>
@@ -175,7 +175,7 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
     return (
       <div className="mt-4 space-y-4 border-t border-moss-green/10 pt-4">
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warm-amber/10 border border-warm-amber/30">
-          <AlertTriangle className="w-4 h-4 text-warm-amber flex-shrink-0" />
+          <AlertTriangle className="w-4 h-4 text-warm-amber shrink-0" />
           <p className="text-xs text-stone-gray font-medium">
             Your old codes are now invalid. Save these new codes securely.
           </p>
@@ -195,7 +195,7 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
           )}
           <div className="grid grid-cols-2 gap-1.5 p-3 rounded-lg bg-parchment/60 border border-moss-green/15">
             {newCodes.map((code, i) => (
-              <code key={i} className="text-xs font-mono text-brand-ink text-center py-1 px-1.5 rounded bg-paper/60 border border-moss-green/10">
+              <code key={i} className="text-xs font-mono text-brand-ink text-center py-1 px-1.5 rounded-sm bg-paper/60 border border-moss-green/10">
                 {code}
               </code>
             ))}
@@ -323,7 +323,7 @@ export default function MFASection() {
       {/* Admin MFA notice */}
       {isEnabled && isAdmin && (
         <div className="flex items-start gap-2 p-3 rounded-lg bg-moss-green/5 border border-moss-green/15">
-          <ShieldCheck className="w-4 h-4 text-brand-ink flex-shrink-0 mt-0.5" />
+          <ShieldCheck className="w-4 h-4 text-brand-ink shrink-0 mt-0.5" />
           <p className="text-xs text-stone-gray">
             MFA is required for admin accounts and cannot be disabled.
           </p>

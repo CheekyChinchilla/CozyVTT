@@ -41,6 +41,7 @@ _Nothing at present._
 - `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 - `1.5.4` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
 - `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
+- `1.5.4` **In a dark theme, parts of a character sheet are hard to read.** The sheets are only partly themed: the D&D 5e sheet stays white while its saving throw names take the theme's light text color, and the Call of Cthulhu sheet turns dark around its dark sepia numbers (`components/character-sheets/`).
 - `1.5.4` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens
@@ -185,21 +186,15 @@ _Nothing at present._
   against the backend's developer tools: an npm override gives the coverage
   tool js-yaml 4 in place of the js-yaml 3 it asks for, and Node's own watch
   mode restarts the development server in place of nodemon. **Done** for
-  TypeScript: 6.0 in both packages. **Done** for the advisory against Tailwind
-  CSS 3's selector parser: an npm override gives it the fixed release, and the
-  built stylesheets are byte for byte the same. Dependabot held back major
+  TypeScript: 6.0 in both packages. **Done** for Tailwind CSS: version 4,
+  which leaves no advisory against the app's build tools and needs Firefox
+  128 where 114 was enough. Dependabot held back major
   versions of npm packages until 1.5.3; since then each comes as a pull
   request of its own, apart from those it names as waiting, and its automatic
   security pull requests are turned on once 1.5.3 is on `main`.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
-  to the `prisma-client` generator with it. **Do** Tailwind CSS 4 in 1.5.4,
-  before that release's bug fixes, with every page compared before and after
-  in each theme: it renames or changes the meaning of many classes the app
-  uses, raises Firefox's minimum from 114 to 128, and clears the one advisory
-  left against the app's build tools, in the file-matching package braces,
-  which Tailwind CSS 3 brings with it and which has no fixed release.
-  **Defer** TypeScript 7.
+  to the `prisma-client` generator with it. **Defer** TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
   from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser

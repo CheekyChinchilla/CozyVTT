@@ -168,7 +168,7 @@ export default function AssetLibraryPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <div className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-7xl mx-auto px-6 py-6">
@@ -218,7 +218,7 @@ export default function AssetLibraryPage() {
                 placeholder="Search assets by name or tags..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-9 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray placeholder-stone-gray/50"
+                className="w-full pl-10 pr-9 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray placeholder-stone-gray/50"
               />
               {searchQuery && (
                 <button
@@ -238,7 +238,7 @@ export default function AssetLibraryPage() {
                   key={key}
                   onClick={() => setFolderScope(key)}
                   variant={folderScope === key ? 'primary' : 'secondary'}
-                  className="flex items-center gap-2 !rounded-lg"
+                  className="flex items-center gap-2 rounded-lg!"
                 >
                   {icon}
                   <span className="hidden sm:inline">{label}</span>
@@ -250,7 +250,7 @@ export default function AssetLibraryPage() {
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value as AssetType | 'all')}
-              className="px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray"
+              className="px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray"
             >
               <option value="all">All Types</option>
               <option value={AssetType.MAP}>Maps</option>
@@ -263,7 +263,7 @@ export default function AssetLibraryPage() {
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as 'name' | 'date' | 'size')}
-              className="px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray"
+              className="px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray"
             >
               <option value="date">Sort by Date</option>
               <option value="name">Sort by Name</option>

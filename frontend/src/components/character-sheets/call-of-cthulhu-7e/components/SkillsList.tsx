@@ -154,7 +154,7 @@ const SkillRow: React.FC<{
       return `bg-${themeColor.accent} border-${themeColor.accent}`;
     }
     return skill.improvementChecked
-      ? 'bg-sepia-700 border-sepia-800 shadow-sm'
+      ? 'bg-sepia-700 border-sepia-800 shadow-xs'
       : 'border-sepia-600 bg-white shadow-inner';
   };
 
@@ -163,13 +163,13 @@ const SkillRow: React.FC<{
 
   return (
     <div
-      className={`flex items-center space-x-2 py-1.5 px-2 rounded group ${isClickable ? 'cursor-pointer hover:bg-sepia-100/50 select-none' : 'hover:bg-parchment-light/30'}`}
+      className={`flex items-center space-x-2 py-1.5 px-2 rounded-sm group ${isClickable ? 'cursor-pointer hover:bg-sepia-100/50 select-none' : 'hover:bg-parchment-light/30'}`}
       onClick={isClickable ? () => onRoll!('1d100', purpose) : undefined}
       title={isClickable ? `Click to roll ${displayName} (target: ${skill.currentValue}%)` : undefined}
     >
       {/* Improvement Checkbox */}
       <div
-        className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+        className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
           editable ? 'cursor-pointer hover:scale-110' : 'cursor-default'
         } ${getCheckboxClasses()}`}
         style={
@@ -179,13 +179,13 @@ const SkillRow: React.FC<{
         }
         onClick={() => editable && onChange?.('improvementChecked', !skill.improvementChecked)}
       >
-        {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-[3]" />}
+        {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-3" />}
       </div>
 
       {/* Skill Name */}
       <div className="flex-1 min-w-0 flex items-center gap-1">
         <span className="text-sm text-sepia-900 truncate">{displayName}</span>
-        {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity flex-shrink-0" />}
+        {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />}
         {/* TODO(ui): the Other Language and Science rows already carry the
            language or specialization in displayName, so these print it a
            second time, as in "Science (Physics) (Physics)". Show it here
@@ -214,7 +214,7 @@ const SkillRow: React.FC<{
             type="number"
             value={skill.currentValue}
             onChange={(e) => onChange?.('currentValue', parseInt(e.target.value) || 0)}
-            className="w-full text-center text-sm font-semibold text-sepia-900 bg-white/50 border border-sepia-400 rounded px-1 py-0.5 focus:outline-none focus:ring-2 focus:ring-sepia-500"
+            className="w-full text-center text-sm font-semibold text-sepia-900 bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             min={skill.baseValue}
             max={99}
           />
@@ -413,12 +413,12 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
       <div className="bg-sepia-100/50 rounded-md p-3 mt-4">
         <div className="text-xs text-sepia-700 space-y-1">
           <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded border border-sepia-400 bg-parchment flex items-center justify-center flex-shrink-0">
+            <div className="w-4 h-4 rounded-sm border border-sepia-400 bg-parchment flex items-center justify-center shrink-0">
               <Check className="w-3 h-3 text-sepia-600" />
             </div>
             <span>Check this box when you use a skill successfully to mark it for improvement between sessions.</span>
           </div>
-          <div className="mt-2 pl-6">
+          <div className="pl-6">
             <span className="font-semibold">Special Skills:</span>
             <ul className="list-disc pl-5 mt-1 space-y-0.5">
               <li><strong>Credit Rating:</strong> Determines wealth tier and spending level.</li>

@@ -665,9 +665,9 @@ export default function DiceRoller() {
       onConfirm={handleConfirmClear}
       onCancel={() => setConfirmClear(false)}
     />
-    <div className="h-full flex flex-col bg-surface/50 backdrop-blur-sm rounded-lg border border-ink-muted/20 relative">
+    <div className="h-full flex flex-col bg-surface/50 backdrop-blur-xs rounded-lg border border-ink-muted/20 relative">
       {/* Header */}
-      <div className="flex-shrink-0 p-3 border-b border-ink-muted/20">
+      <div className="shrink-0 p-3 border-b border-ink-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Dices className="w-4 h-4 text-brand-ink dark:text-brand-ink" />
@@ -749,7 +749,7 @@ export default function DiceRoller() {
       </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-sm">
+      <div className="shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs">
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-warm-amber text-center mb-2 italic">
@@ -770,7 +770,7 @@ export default function DiceRoller() {
               exit={{ opacity: 0, height: 0 }}
               className="mb-2 flex items-center gap-2 text-danger-ink dark:text-danger-ink text-xs"
             >
-              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+              <AlertCircle className="w-3 h-3 shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
@@ -830,7 +830,7 @@ export default function DiceRoller() {
                   px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
                   bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
                   disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink max-w-[10rem] truncate
+                  text-ink max-w-40 truncate
                 "
               >
                 {macro.name}
@@ -900,7 +900,7 @@ export default function DiceRoller() {
               checked={isSecret}
               onChange={(e) => setIsSecret(e.target.checked)}
               disabled={isRolling}
-              className="w-3 h-3 rounded border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <label
               htmlFor="secretRoll"
@@ -921,10 +921,10 @@ export default function DiceRoller() {
               disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
               className="
                 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
-                bg-success hover:bg-success text-white font-semibold text-xs shadow-sm
+                bg-success hover:bg-success text-white font-semibold text-xs shadow-xs
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200
-                focus:outline-none focus:ring-2 focus:ring-success/50
+                focus:outline-hidden focus:ring-2 focus:ring-success/50
               "
             >
               {isRolling ? (
@@ -955,7 +955,7 @@ export default function DiceRoller() {
                 text-ink
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200
-                focus:outline-none focus:ring-2 focus:ring-brand/50
+                focus:outline-hidden focus:ring-2 focus:ring-brand/50
               "
               title="Clear all fields"
             >
@@ -983,7 +983,7 @@ export default function DiceRoller() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50"
             onClick={() => setSecretRollResult(null)}
           >
             <motion.div
@@ -1029,7 +1029,7 @@ export default function DiceRoller() {
               <div className="p-3 border-t border-ink/10 bg-surface rounded-b-lg">
                 <button
                   onClick={() => setSecretRollResult(null)}
-                  className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-sm transition-all"
+                  className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-xs transition-all"
                 >
                   Close
                 </button>

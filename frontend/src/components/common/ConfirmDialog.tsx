@@ -96,7 +96,7 @@ export default function ConfirmDialog({
             disabled={isLoading}
             aria-busy={isLoading}
             className={`px-4 py-2 rounded-cozy font-medium transition-colors duration-200
-                        focus:outline-none focus:ring-2 focus:ring-offset-2
+                        focus:outline-hidden focus:ring-2 focus:ring-offset-2
                         disabled:opacity-50 disabled:cursor-not-allowed
                         flex items-center gap-2 ${confirmClass}`}
           >
@@ -109,7 +109,7 @@ export default function ConfirmDialog({
       }
     >
       <div className="flex items-start gap-4">
-        <div className={`p-2.5 rounded-full ${iconBg} flex-shrink-0`} aria-hidden="true">
+        <div className={`p-2.5 rounded-full ${iconBg} shrink-0`} aria-hidden="true">
           {icon}
         </div>
         <div className="pt-2 space-y-3">

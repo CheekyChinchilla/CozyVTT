@@ -80,7 +80,7 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
@@ -89,7 +89,7 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
       >
         <div className="flex items-center justify-between p-4 border-b border-moss-green/20">
           <h3 className="font-bold text-brand-ink">Add Combatant</h3>
-          <button onClick={onClose} className="p-1 rounded hover:bg-stone-gray/10 transition-colors">
+          <button onClick={onClose} className="p-1 rounded-sm hover:bg-stone-gray/10 transition-colors">
             <XCircle className="w-4 h-4 text-stone-gray" />
           </button>
         </div>
@@ -109,10 +109,10 @@ function AddCombatantModal({ tokens, combatantIds, mapId: _mapId, onAdd, onClose
                   <img
                     src={token.imageUrl}
                     alt={token.name}
-                    className="w-8 h-8 rounded-full object-cover border border-moss-green/20 flex-shrink-0"
+                    className="w-8 h-8 rounded-full object-cover border border-moss-green/20 shrink-0"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-stone-gray/20 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-stone-gray/20 flex items-center justify-center shrink-0">
                     <User className="w-4 h-4 text-stone-gray" />
                   </div>
                 )}
@@ -214,24 +214,24 @@ function CombatantRow({
     >
       {/* Drag handle (DM) or active dot (players) */}
       {isDM
-        ? <GripVertical className="w-3.5 h-3.5 text-stone-gray/40 flex-shrink-0 hover:text-stone-gray transition-colors" />
-        : <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />
+        ? <GripVertical className="w-3.5 h-3.5 text-stone-gray/40 shrink-0 hover:text-stone-gray transition-colors" />
+        : <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />
       }
 
       {/* Active dot always shown for DM too, alongside grip */}
-      {isDM && <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />}
+      {isDM && <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? 'bg-warm-amber' : 'bg-transparent'}`} />}
 
       {/* Token image */}
       {entry.imageUrl ? (
         <img
           src={entry.imageUrl}
           alt={entry.name}
-          className={`w-8 h-8 rounded-full object-cover flex-shrink-0 border-2 ${
+          className={`w-8 h-8 rounded-full object-cover shrink-0 border-2 ${
             isActive ? 'border-warm-amber' : 'border-moss-green/20'
           }`}
         />
       ) : (
-        <div className={`w-8 h-8 rounded-full bg-stone-gray/20 flex items-center justify-center flex-shrink-0 border-2 ${
+        <div className={`w-8 h-8 rounded-full bg-stone-gray/20 flex items-center justify-center shrink-0 border-2 ${
           isActive ? 'border-warm-amber' : 'border-stone-gray/20'
         }`}>
           <User className="w-4 h-4 text-stone-gray" />
@@ -251,12 +251,12 @@ function CombatantRow({
       </div>
 
       {/* Disposition icon */}
-      <span className={`flex-shrink-0 ${dispositionColor(entry)}`}>
+      <span className={`shrink-0 ${dispositionColor(entry)}`}>
         {dispositionIcon(entry)}
       </span>
 
       {/* Initiative value — editable for DM */}
-      <div className="flex-shrink-0 w-12 text-right">
+      <div className="shrink-0 w-12 text-right">
         {isDM && editing ? (
           <input
             ref={inputRef}
@@ -265,7 +265,7 @@ function CombatantRow({
             onChange={(e) => setInputVal(e.target.value)}
             onBlur={commitEdit}
             onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') { setEditing(false); } }}
-            className="w-12 text-center text-sm font-bold bg-paper/70 text-ink border border-warm-amber/50 rounded px-1 py-0.5 focus:outline-none focus:ring-1 focus:ring-warm-amber"
+            className="w-12 text-center text-sm font-bold bg-paper/70 text-ink border border-warm-amber/50 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-1 focus:ring-warm-amber"
           />
         ) : (
           <span
@@ -281,12 +281,12 @@ function CombatantRow({
       {/* Actions. Rolling and removing are gated separately: a player may roll
           for their own combatant, but only the DM decides who is in the fight. */}
       {(canRoll || isDM) && (
-        <div className="flex items-center gap-1 flex-shrink-0">
+        <div className="flex items-center gap-1 shrink-0">
           {canRoll && (
             <button
               onClick={() => onRoll(entry.tokenId)}
               title={isDM ? 'Roll initiative for this token' : 'Roll your initiative'}
-              className="p-1 rounded hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
+              className="p-1 rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink transition-colors"
             >
               <Dices className="w-3.5 h-3.5" />
             </button>
@@ -295,7 +295,7 @@ function CombatantRow({
             <button
               onClick={() => onRemove(entry.tokenId)}
               title="Remove from initiative"
-              className="p-1 rounded hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
+              className="p-1 rounded-sm hover:bg-danger/10 text-stone-gray hover:text-danger-ink transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
@@ -463,7 +463,7 @@ export default function InitiativeTracker() {
 
   return (
     <>
-      <div className="bg-soft-cream border border-moss-green/20 rounded-xl shadow-sm overflow-hidden">
+      <div className="bg-soft-cream border border-moss-green/20 rounded-xl shadow-xs overflow-hidden">
         {/* Header */}
         <button
           onClick={() => setCollapsed((c) => !c)}
@@ -473,12 +473,12 @@ export default function InitiativeTracker() {
             <Swords className="w-4 h-4 text-brand-ink" />
             <span className="font-semibold text-brand-ink text-sm">Initiative Tracker</span>
             {combatState.active && (
-              <span className="text-xs font-bold text-warm-amber bg-warm-amber/10 border border-warm-amber/20 rounded px-1.5 py-0.5">
+              <span className="text-xs font-bold text-warm-amber bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
                 Round {combatState.round}
               </span>
             )}
             {hasCombatants && !combatState.active && (
-              <span className="text-xs text-stone-gray bg-stone-gray/10 rounded px-1.5 py-0.5">
+              <span className="text-xs text-stone-gray bg-stone-gray/10 rounded-sm px-1.5 py-0.5">
                 {combatState.combatants.length} ready
               </span>
             )}
@@ -495,7 +495,7 @@ export default function InitiativeTracker() {
             {/* Active turn banner */}
             {combatState.active && currentCombatant && (
               <div className="flex items-center gap-2 px-3 py-2 bg-warm-amber/10 border border-warm-amber/30 rounded-lg">
-                <div className="w-2 h-2 rounded-full bg-warm-amber animate-pulse flex-shrink-0" />
+                <div className="w-2 h-2 rounded-full bg-warm-amber animate-pulse shrink-0" />
                 <span className="text-xs font-semibold text-warm-amber truncate">
                   {tokenDisplayName(currentCombatant)}'s turn
                 </span>

@@ -91,7 +91,7 @@ function CharacterCardInner({
         onClick={handleCardClick}
         className={`group relative glass-panel p-6 text-left transition-all duration-300
                    hover:scale-105 hover:shadow-xl hover:shadow-moss-green/20
-                   focus:outline-none focus:ring-2 focus:ring-moss-green/50 focus:scale-105
+                   focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 focus:scale-105
                    active:scale-100 w-full cursor-pointer ${showMenu ? 'z-50' : 'z-0'}`}
         role="button"
         tabIndex={0}
@@ -110,7 +110,7 @@ function CharacterCardInner({
           <button
             onClick={handleMenuToggle}
             className="p-2 rounded-lg hover:bg-warm-gray/20 transition-colors
-                     focus:outline-none focus:ring-2 focus:ring-moss-green/50"
+                     focus:outline-hidden focus:ring-2 focus:ring-moss-green/50"
             aria-label="Character actions"
             type="button"
           >
@@ -248,7 +248,7 @@ function CharacterCardInner({
         </div>
 
         {/* Hover Overlay Effect */}
-        <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-moss-green/5 to-spirit-purple/5
+        <div className="absolute inset-0 rounded-lg bg-linear-to-br/srgb from-moss-green/5 to-spirit-purple/5
                         opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
              style={{ transform: 'translateZ(-1px)' }} />
       </div>

@@ -249,7 +249,7 @@ export default function DmWallControls({
               </div>
               <button
                 onClick={onDeleteSelected}
-                className="w-full px-2 py-1 mt-0.5 rounded text-xs font-medium bg-red-700/30 text-red-400 border border-red-500/40 hover:bg-red-700/50 transition-colors"
+                className="w-full px-2 py-1 mt-0.5 rounded-sm text-xs font-medium bg-red-700/30 text-red-400 border border-red-500/40 hover:bg-red-700/50 transition-colors"
                 aria-label="Delete selected wall segment"
               >
                 Delete segment
@@ -263,7 +263,7 @@ export default function DmWallControls({
               <span className="text-xs text-sky-300 px-1">Selected point</span>
               <button
                 onClick={onMergeEndpoint}
-                className="w-full px-2 py-1 rounded text-xs font-medium bg-sky-700/30 text-sky-300 border border-sky-500/40 hover:bg-sky-700/50 transition-colors"
+                className="w-full px-2 py-1 rounded-sm text-xs font-medium bg-sky-700/30 text-sky-300 border border-sky-500/40 hover:bg-sky-700/50 transition-colors"
                 aria-label="Merge wall segments at this point"
               >
                 Merge point
@@ -301,7 +301,7 @@ export default function DmWallControls({
               <button
                 onClick={onUndo}
                 disabled={!canUndo}
-                className="flex-1 px-2 py-1 rounded text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 px-2 py-1 rounded-sm text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Undo last wall change (Ctrl+Z)"
                 aria-label="Undo wall edit"
               >
@@ -310,7 +310,7 @@ export default function DmWallControls({
               <button
                 onClick={onRedo}
                 disabled={!canRedo}
-                className="flex-1 px-2 py-1 rounded text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 px-2 py-1 rounded-sm text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Redo wall change (Ctrl+Y)"
                 aria-label="Redo wall edit"
               >
@@ -340,7 +340,7 @@ export default function DmWallControls({
                 type="color"
                 value={wallColor}
                 onChange={(e) => onWallColorChange(e.target.value)}
-                className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
+                className="w-5 h-5 rounded-sm cursor-pointer border-0 bg-transparent p-0"
                 title="Custom wall color"
                 aria-label="Custom wall color picker"
               />

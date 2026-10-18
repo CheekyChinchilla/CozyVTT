@@ -73,14 +73,14 @@ export default function EndSessionModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex items-center gap-2">
-              <Hash className="w-3.5 h-3.5 text-warm-amber flex-shrink-0" />
+              <Hash className="w-3.5 h-3.5 text-warm-amber shrink-0" />
               <div>
                 <p className="text-xs text-warm-gray">Session</p>
                 <p className="text-sm font-semibold text-stone-gray">#{session.sessionNumber}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Clock className="w-3.5 h-3.5 text-warm-amber flex-shrink-0" />
+              <Clock className="w-3.5 h-3.5 text-warm-amber shrink-0" />
               <div>
                 <p className="text-xs text-warm-gray">Duration</p>
                 <p className="text-sm font-semibold text-stone-gray">{duration}</p>
@@ -98,7 +98,7 @@ export default function EndSessionModal({
                 checked={saveState}
                 onChange={(e) => setSaveState(e.target.checked)}
                 disabled={isSubmitting}
-                className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green/50 cursor-pointer"
+                className="w-4 h-4 rounded-sm border-moss-green/30 text-brand-ink focus:ring-moss-green/50 cursor-pointer"
               />
             </div>
             <div>

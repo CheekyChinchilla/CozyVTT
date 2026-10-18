@@ -141,7 +141,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
       >
         <div className="flex items-center gap-4">
           {/* Thumbnail */}
-          <div className="flex-shrink-0 w-20 h-20 bg-moss-green/10 rounded-lg overflow-hidden flex items-center justify-center">
+          <div className="shrink-0 w-20 h-20 bg-moss-green/10 rounded-lg overflow-hidden flex items-center justify-center">
             {!showsPicture ? (
               getAssetIcon()
             ) : (
@@ -274,7 +274,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
         )}
 
         {/* Scope Badge */}
-        <div className="absolute top-2 right-2 px-2 py-1 bg-paper-white backdrop-blur-sm rounded-md text-xs font-medium text-stone-gray flex items-center gap-1">
+        <div className="absolute top-2 right-2 px-2 py-1 bg-paper-white backdrop-blur-xs rounded-md text-xs font-medium text-stone-gray flex items-center gap-1">
           {asset.scope === AssetScope.GLOBAL ? (
             <Globe className="w-3 h-3" />
           ) : asset.scope === AssetScope.USER ? (
@@ -290,7 +290,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center gap-3"
+            className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center gap-3"
           >
             <button
               onClick={onView}

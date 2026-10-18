@@ -86,7 +86,7 @@ function ProficiencyRowItem({ row, kind, onSetLevel, onSetOverride, onRemoveCust
               onClick={() => onRemoveCustom?.(row.key)}
               title="Remove this custom skill"
               aria-label={`Remove ${row.label}`}
-              className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
+              className="rounded-sm p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -96,7 +96,7 @@ function ProficiencyRowItem({ row, kind, onSetLevel, onSetOverride, onRemoveCust
               onClick={() => onSetLevel(kind, row.key, 'none')}
               title={`Back to the derived value (${formatModifier(row.derived)} if proficient)`}
               aria-label={`Reset ${row.label} to derived`}
-              className="rounded p-1 text-ink-muted hover:bg-moss-green/10 hover:text-brand-ink"
+              className="rounded-sm p-1 text-ink-muted hover:bg-moss-green/10 hover:text-brand-ink"
             >
               <RotateCcw className="h-3 w-3" />
             </button>
@@ -156,7 +156,7 @@ function ProficiencyRowItem({ row, kind, onSetLevel, onSetOverride, onRemoveCust
             onClick={() => onSetLevel(kind, row.key, 'custom')}
             title="Set this bonus by hand instead of deriving it"
             aria-label={`Override ${row.label}`}
-            className="rounded p-1 text-ink-muted hover:bg-moss-green/10 hover:text-brand-ink"
+            className="rounded-sm p-1 text-ink-muted hover:bg-moss-green/10 hover:text-brand-ink"
           >
             <Pencil className="h-3 w-3" />
           </button>
@@ -209,7 +209,7 @@ export default function ProficiencyEditor({ statBlock, onChange }: ProficiencyEd
                 onClick={() => onChange(setProficiencyBonusOverride(statBlock, null))}
                 title="Go back to the value derived from Challenge Rating"
                 aria-label="Reset proficiency bonus"
-                className="rounded p-1 text-ink-muted hover:bg-moss-green/10 hover:text-brand-ink"
+                className="rounded-sm p-1 text-ink-muted hover:bg-moss-green/10 hover:text-brand-ink"
               >
                 <RotateCcw className="h-3 w-3" />
               </button>

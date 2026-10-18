@@ -72,7 +72,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => 
   return (
     <div className="space-y-4">
       {/* Bulk Summary */}
-      <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+      <div className="bg-linear-to-r/srgb from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <div>
             <h4 className="font-bold text-blue-800 text-lg mb-1">Bulk Carried</h4>
@@ -135,7 +135,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => 
         {inventory.map((item, index) => (
           <div
             key={`${item.name}-${index}`}
-            className="bg-white border border-stone-200 rounded-lg p-3 shadow-sm hover:shadow-md transition-shadow"
+            className="bg-white border border-stone-200 rounded-lg p-3 shadow-xs hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between">
               {/* Item Info */}

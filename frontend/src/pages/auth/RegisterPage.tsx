@@ -138,7 +138,7 @@ export default function RegisterPage() {
 
   if (pendingApproval) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div className="glass-panel max-w-md w-full p-8 space-y-4 text-center">
           <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto">
             <span className="text-3xl">&#9203;</span>
@@ -147,7 +147,7 @@ export default function RegisterPage() {
           <p className="text-warm-gray text-sm">
             Your account has been created and is <strong>pending admin approval</strong>. You will be able to log in once an administrator approves your account.
           </p>
-          <Link to="/auth/login" className="btn-primary inline-block mt-4">
+          <Link to="/auth/login" className="btn-primary inline-block">
             Back to Login
           </Link>
         </div>
@@ -156,7 +156,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
       <div className="glass-panel max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -355,7 +355,7 @@ export default function RegisterPage() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full mt-6"
+            className="w-full"
           >
             {loading ? (
               <span className="flex items-center justify-center">

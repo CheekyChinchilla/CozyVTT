@@ -1,59 +1,320 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+@import './styles/tailwind3-palette.css';
+
+@theme {
+  /* ── Semantic theme colors, from the --rgb-* channels below ── */
+  --color-brand: rgb(var(--rgb-brand));
+  --color-brand-dark: rgb(var(--rgb-brand-dark));
+  --color-accent: rgb(var(--rgb-accent));
+  --color-accent-hover: rgb(var(--rgb-accent-hover));
+  --color-accent-text: rgb(var(--rgb-accent-text));
+  --color-canvas: rgb(var(--rgb-bg-base));
+  --color-surface: rgb(var(--rgb-bg-surface));
+  --color-surface-light: rgb(var(--rgb-bg-surface-light));
+  --color-surface-dark: rgb(var(--rgb-bg-surface-dark));
+  --color-ink: rgb(var(--rgb-ink));
+  --color-ink-secondary: rgb(var(--rgb-ink-secondary));
+  --color-ink-muted: rgb(var(--rgb-ink-muted));
+  --color-paper: rgb(var(--rgb-paper));
+  --color-danger: rgb(var(--rgb-danger));
+  --color-spirit: rgb(var(--rgb-spirit));
+
+  /* ── Readable text variants ──
+     The tokens above are fills; these are their text counterparts, derived
+     per theme so they always clear WCAG AA (themes.ts deriveReadableTokens).
+     Use `-ink` whenever the color is text. */
+  --color-brand-ink: rgb(var(--rgb-brand-ink));
+  --color-accent-ink: rgb(var(--rgb-accent-ink));
+  --color-spirit-ink: rgb(var(--rgb-spirit-ink));
+  --color-danger-ink: rgb(var(--rgb-danger-ink));
+
+  /* ── Semantic states ──
+     Use these instead of raw Tailwind red/green/amber/blue, which do not
+     follow the theme (a red-50 panel stays pale pink on a dark theme). */
+  --color-success: rgb(var(--rgb-success));
+  --color-success-ink: rgb(var(--rgb-success-ink));
+  --color-warning: rgb(var(--rgb-warning));
+  --color-warning-ink: rgb(var(--rgb-warning-ink));
+  --color-info: rgb(var(--rgb-info));
+  --color-info-ink: rgb(var(--rgb-info-ink));
+
+  /* ── Legacy aliases (the same channels) ── */
+  --color-moss-green: rgb(var(--rgb-brand));
+  --color-forest-shadow: rgb(var(--rgb-brand-dark));
+  --color-warm-amber: rgb(var(--rgb-accent));
+  --color-sunset-orange: rgb(var(--rgb-accent-hover));
+  --color-soft-cream: rgb(var(--rgb-bg-base));
+  --color-parchment: rgb(var(--rgb-bg-surface));
+  --color-parchment-light: rgb(var(--rgb-bg-surface-light));
+  --color-parchment-dark: rgb(var(--rgb-bg-surface-dark));
+  --color-charcoal: rgb(var(--rgb-ink));
+  --color-warm-gray: rgb(var(--rgb-ink-secondary));
+  --color-stone-gray: rgb(var(--rgb-ink-muted));
+  --color-paper-white: rgb(var(--rgb-paper));
+  --color-spirit-red: rgb(var(--rgb-danger));
+  --color-spirit-purple: rgb(var(--rgb-spirit));
+
+  /* Call of Cthulhu 7e's 1920s palette: static, it does not follow the theme. */
+  --color-sepia-100: #f5ebd9;
+  --color-sepia-200: #e8d5b7;
+  --color-sepia-300: #d4b896;
+  --color-sepia-400: #c19a6b;
+  --color-sepia-500: #a67c52;
+  --color-sepia-600: #8b6939;
+  --color-sepia-700: #6b5230;
+  --color-sepia-800: #4a3c28;
+  --color-sepia-900: #2e2419;
+
+  --font-heading: 'Quicksand', 'Comfortaa', sans-serif;
+  --font-body: 'Inter', 'Open Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Tailwind CSS 3's line heights, in rem. Tailwind 4's are ratios of the font
+     size, which round to a pixel differently and make a child given only a
+     font size (text-[10px]) inherit the ratio in place of a fixed height. */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+
+  --radius-cozy: 12px;
+  --radius-cozy-lg: 20px;
+
+  --backdrop-blur-cozy: 10px;
+
+  --animate-fade-in: fadeIn 0.3s ease-in-out;
+  --animate-slide-in: slideIn 0.4s ease-out;
+  --animate-pulse-soft: pulseSoft 2s ease-in-out infinite;
+
+  @keyframes fadeIn {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
+  @keyframes slideIn {
+    0% {
+      transform: translateY(-10px);
+      opacity: 0;
+    }
+    100% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes pulseSoft {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+}
+
+/*
+  Tailwind CSS 3's defaults that Tailwind CSS 4 changed, kept so the app looks
+  and behaves as before: a bare `border` is gray-200 (4 uses currentcolor),
+  placeholders are gray-400 (4 dims the text color), buttons show the pointer
+  cursor (4 uses the default arrow), and text boxes and dropdowns keep the
+  browser's own background (4 makes every form control transparent). To drop
+  one, give every element that relies on it an explicit utility first.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input:where(:not([type='button'], [type='reset'], [type='submit'])),
+  select,
+  textarea {
+    background-color: revert;
+  }
+}
+
+@utility glass-panel {
+  /* Glassmorphism Panel */
+  @apply bg-white/10 backdrop-blur-cozy border border-white/20 rounded-cozy shadow-lg;
+}
+
+@utility btn-primary {
+  /* Cozy Button — canonical button styles.
+     Do NOT use these classes on <button> elements directly; render
+     <Button variant="…"> from '@/components/ui' instead (it emits these
+     classes and adds loading/icon/disabled handling). Direct use is only
+     for link-as-button cases (<a>, <Link>, <label>) where a real <button>
+     is semantically wrong. */
+  @apply bg-accent text-accent-text px-4 py-2 rounded-cozy font-medium
+           hover:bg-accent-hover transition-colors duration-200
+           focus:outline-hidden focus:ring-2 focus:ring-accent focus:ring-offset-2;
+}
+
+@utility btn-secondary {
+  @apply bg-transparent border border-brand text-brand px-4 py-2 rounded-cozy font-medium
+           hover:bg-brand hover:text-white transition-colors duration-200
+           focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2;
+}
+
+@utility btn-danger {
+  @apply bg-red-500 text-white px-4 py-2 rounded-cozy font-medium
+           hover:bg-red-600 transition-colors duration-200
+           focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+}
+
+@utility input-cozy {
+  /* Cozy Input */
+  @apply w-full px-4 py-2 border border-ink-muted/30 rounded-cozy
+           bg-paper/80 backdrop-blur-xs text-ink placeholder:text-ink-muted
+           focus:outline-hidden focus:ring-2 focus:ring-brand focus:border-transparent
+           transition-all duration-200;
+}
+
+@utility card-cozy {
+  /* Card */
+  @apply glass-panel p-6 hover:shadow-xl transition-shadow duration-300;
+}
+
+@utility alert-danger {
+  /* ── Status messages ──
+     Use these instead of raw Tailwind colors (bg-red-50 / text-red-700 and
+     friends): those keep their light-mode look on dark themes, so an error
+     box renders as a pale pink panel. The tints below are alpha-composited
+     over whatever surface they sit on, and the text uses the derived `-ink`
+     variant, so both stay readable on every theme.
+
+       <div className="alert-danger">…</div>
+
+     For a message that is only text (no panel), use text-danger-ink /
+     text-success-ink / text-warning-ink / text-info-ink directly. */
+  @apply bg-danger/10 border border-danger/30 text-danger-ink rounded-cozy px-3 py-2 text-sm;
+}
+
+@utility alert-success {
+  @apply bg-success/10 border border-success/30 text-success-ink rounded-cozy px-3 py-2 text-sm;
+}
+
+@utility alert-warning {
+  @apply bg-warning/10 border border-warning/30 text-warning-ink rounded-cozy px-3 py-2 text-sm;
+}
+
+@utility alert-info {
+  @apply bg-info/10 border border-info/30 text-info-ink rounded-cozy px-3 py-2 text-sm;
+}
+
+@utility badge-danger {
+  /* ── Status pills ── */
+  @apply inline-flex items-center rounded-full bg-danger/15 text-danger-ink px-2 py-0.5 text-[10px] font-medium;
+}
+
+@utility badge-success {
+  @apply inline-flex items-center rounded-full bg-success/15 text-success-ink px-2 py-0.5 text-[10px] font-medium;
+}
+
+@utility badge-warning {
+  @apply inline-flex items-center rounded-full bg-warning/15 text-warning-ink px-2 py-0.5 text-[10px] font-medium;
+}
+
+@utility badge-neutral {
+  @apply inline-flex items-center rounded-full bg-ink-muted/15 text-ink-secondary px-2 py-0.5 text-[10px] font-medium;
+}
+
+@utility text-shadow-soft {
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+@utility transition-spring {
+  transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@utility input-cozy-number {
+  /* Compact number input — hides native spinner arrows so values aren't
+     clipped by the browser-rendered up/down controls. Arrow keys still
+     increment/decrement when focused. */
+  -moz-appearance: textfield;
+  appearance: textfield;
+  &::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
 
 @layer base {
   :root {
-    /* ── Theme Color Channels (R G B) ──
-       Stored as space-separated channels so Tailwind opacity modifiers work:
-       e.g. text-brand/50 → color: rgb(var(--color-brand) / 0.5)            */
+    /* ── Theme color channels (R G B) ──
+       Space-separated channels, set again by applyThemeColors (themes.ts).
+       The --color-* keys in @theme above wrap them in rgb() for Tailwind, so
+       bg-brand paints rgb(var(--rgb-brand)) and text-brand/50 mixes it at 50%.
+       They keep their own prefix: a runtime variable named like a Tailwind
+       key would replace it, and Tailwind would read channels as a color.  */
 
     /* Primary brand */
-    --color-brand: 74 93 78;
-    --color-brand-dark: 44 62 47;
+    --rgb-brand: 74 93 78;
+    --rgb-brand-dark: 44 62 47;
 
     /* Accent / CTA */
-    --color-accent: 212 165 116;
-    --color-accent-hover: 232 158 91;
-    --color-accent-text: 44 62 47;
+    --rgb-accent: 212 165 116;
+    --rgb-accent-hover: 232 158 91;
+    --rgb-accent-text: 44 62 47;
 
     /* Backgrounds */
-    --color-bg-base: 255 249 230;
-    --color-bg-surface: 244 236 216;
-    --color-bg-surface-light: 251 247 238;
-    --color-bg-surface-dark: 224 212 184;
+    --rgb-bg-base: 255 249 230;
+    --rgb-bg-surface: 244 236 216;
+    --rgb-bg-surface-light: 251 247 238;
+    --rgb-bg-surface-dark: 224 212 184;
 
     /* Text */
-    --color-ink: 31 41 55;
-    --color-ink-secondary: 107 96 90;
-    --color-ink-muted: 107 114 128;
+    --rgb-ink: 31 41 55;
+    --rgb-ink-secondary: 107 96 90;
+    --rgb-ink-muted: 107 114 128;
 
     /* Utility */
-    --color-paper: 254 254 254;
-    --color-danger: 192 57 43;
+    --rgb-paper: 254 254 254;
+    --rgb-danger: 192 57 43;
 
     /* Game-specific (not theme-dependent) */
-    --color-spirit: 147 112 219;
+    --rgb-spirit: 147 112 219;
 
     /* ── Readable text variants and state colors ──
        Overwritten per theme by applyThemeColors() → deriveReadableTokens();
        these defaults match the Cozy Default palette so the app renders
        correctly during the first paint, before a theme is applied. */
-    --color-brand-ink: 74 93 78;
-    --color-accent-ink: 138 90 43;
-    --color-spirit-ink: 106 71 178;
-    --color-danger-ink: 176 46 33;
-    --color-success: 34 139 68;
-    --color-success-ink: 30 122 60;
-    --color-warning: 191 129 20;
-    --color-warning-ink: 148 100 15;
-    --color-info: 37 99 190;
-    --color-info-ink: 37 99 190;
+    --rgb-brand-ink: 74 93 78;
+    --rgb-accent-ink: 138 90 43;
+    --rgb-spirit-ink: 106 71 178;
+    --rgb-danger-ink: 176 46 33;
+    --rgb-success: 34 139 68;
+    --rgb-success-ink: 30 122 60;
+    --rgb-warning: 191 129 20;
+    --rgb-warning-ink: 148 100 15;
+    --rgb-info: 37 99 190;
+    --rgb-info-ink: 37 99 190;
 
-    /* ── Font Families ── */
-    --font-heading: 'Quicksand', 'Comfortaa', sans-serif;
-    --font-body: 'Inter', 'Open Sans', sans-serif;
-    --font-mono: 'JetBrains Mono', monospace;
+    /* The font defaults are in @theme above; applyFont (themes.ts) replaces them. */
   }
 
   body {
@@ -74,117 +335,6 @@
   }
 }
 
-@layer components {
-  /* Glassmorphism Panel */
-  .glass-panel {
-    @apply bg-white/10 backdrop-blur-cozy border border-white/20 rounded-cozy shadow-lg;
-  }
-
-  /* Cozy Button — canonical button styles.
-     Do NOT use these classes on <button> elements directly; render
-     <Button variant="…"> from '@/components/ui' instead (it emits these
-     classes and adds loading/icon/disabled handling). Direct use is only
-     for link-as-button cases (<a>, <Link>, <label>) where a real <button>
-     is semantically wrong. */
-  .btn-primary {
-    @apply bg-accent text-accent-text px-4 py-2 rounded-cozy font-medium
-           hover:bg-accent-hover transition-colors duration-200
-           focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2;
-  }
-
-  .btn-secondary {
-    @apply bg-transparent border border-brand text-brand px-4 py-2 rounded-cozy font-medium
-           hover:bg-brand hover:text-white transition-colors duration-200
-           focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-2;
-  }
-
-  .btn-danger {
-    @apply bg-red-500 text-white px-4 py-2 rounded-cozy font-medium
-           hover:bg-red-600 transition-colors duration-200
-           focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
-  }
-
-  /* Cozy Input */
-  .input-cozy {
-    @apply w-full px-4 py-2 border border-ink-muted/30 rounded-cozy
-           bg-paper/80 backdrop-blur-sm text-ink placeholder:text-ink-muted
-           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
-           transition-all duration-200;
-  }
-
-  /* Card */
-  .card-cozy {
-    @apply glass-panel p-6 hover:shadow-xl transition-shadow duration-300;
-  }
-
-  /* ── Status messages ──
-     Use these instead of raw Tailwind colors (bg-red-50 / text-red-700 and
-     friends): those keep their light-mode look on dark themes, so an error
-     box renders as a pale pink panel. The tints below are alpha-composited
-     over whatever surface they sit on, and the text uses the derived `-ink`
-     variant, so both stay readable on every theme.
-
-       <div className="alert-danger">…</div>
-
-     For a message that is only text (no panel), use text-danger-ink /
-     text-success-ink / text-warning-ink / text-info-ink directly. */
-  .alert-danger {
-    @apply bg-danger/10 border border-danger/30 text-danger-ink rounded-cozy px-3 py-2 text-sm;
-  }
-
-  .alert-success {
-    @apply bg-success/10 border border-success/30 text-success-ink rounded-cozy px-3 py-2 text-sm;
-  }
-
-  .alert-warning {
-    @apply bg-warning/10 border border-warning/30 text-warning-ink rounded-cozy px-3 py-2 text-sm;
-  }
-
-  .alert-info {
-    @apply bg-info/10 border border-info/30 text-info-ink rounded-cozy px-3 py-2 text-sm;
-  }
-
-  /* ── Status pills ── */
-  .badge-danger {
-    @apply inline-flex items-center rounded-full bg-danger/15 text-danger-ink px-2 py-0.5 text-[10px] font-medium;
-  }
-
-  .badge-success {
-    @apply inline-flex items-center rounded-full bg-success/15 text-success-ink px-2 py-0.5 text-[10px] font-medium;
-  }
-
-  .badge-warning {
-    @apply inline-flex items-center rounded-full bg-warning/15 text-warning-ink px-2 py-0.5 text-[10px] font-medium;
-  }
-
-  .badge-neutral {
-    @apply inline-flex items-center rounded-full bg-ink-muted/15 text-ink-secondary px-2 py-0.5 text-[10px] font-medium;
-  }
-}
-
-@layer utilities {
-  .text-shadow-soft {
-    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-
-  .transition-spring {
-    transition-timing-function: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  }
-
-  /* Compact number input — hides native spinner arrows so values aren't
-     clipped by the browser-rendered up/down controls. Arrow keys still
-     increment/decrement when focused. */
-  .input-cozy-number {
-    -moz-appearance: textfield;
-    appearance: textfield;
-  }
-  .input-cozy-number::-webkit-outer-spin-button,
-  .input-cozy-number::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-}
-
 /* Panel resize separator styles (react-resizable-panels v4 renders
    [data-separator] elements; the attribute value tracks interaction
    state: inactive | hover | active | disabled) */
@@ -201,7 +351,7 @@
 }
 
 [data-separator]:focus-visible {
-  outline: 2px solid rgb(var(--color-brand));
+  outline: 2px solid rgb(var(--rgb-brand));
   outline-offset: 2px;
 }
 

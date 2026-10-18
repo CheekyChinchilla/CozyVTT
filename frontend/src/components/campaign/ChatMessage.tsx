@@ -97,7 +97,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
 
   return (
     <div
-      className={`p-3 rounded-lg border ${bg} ${borderColor} transition-all hover:shadow-sm ${
+      className={`p-3 rounded-lg border ${bg} ${borderColor} transition-all hover:shadow-xs ${
         isPending ? 'opacity-60' : ''
       }`}
     >
@@ -134,7 +134,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
       </div>
 
       {/* Message Content */}
-      <p className={`text-sm ${textColor} whitespace-pre-wrap break-words`}>
+      <p className={`text-sm ${textColor} whitespace-pre-wrap wrap-break-word`}>
         {message.content}
       </p>
 
@@ -149,7 +149,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
        message.metadata.action !== 'session.paused' &&
        message.metadata.action !== 'session.ended' &&
        message.metadata.action !== 'session.resumed' && (
-        <div className="mt-2 pt-2 border-t border-current/10">
+        <div className="mt-2 pt-2 border-t">
           <pre className="text-xs opacity-70 font-mono">
             {JSON.stringify(message.metadata, null, 2)}
           </pre>

@@ -194,7 +194,7 @@ export default function DmLightControls({
         <div className="flex flex-col gap-2 p-2 pt-1">
           {/* Warning when lighting is off */}
           {!lightingEnabled && (
-            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
+            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded-sm px-1.5 py-1 border border-amber-400/10">
               Dynamic lighting is off. Enable it in Edit Map for lights to affect player visibility.
             </div>
           )}
@@ -215,7 +215,7 @@ export default function DmLightControls({
             </label>
           )}
           {lightingEnabled && !globalIllumination && lightCount === 0 && (
-            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
+            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded-sm px-1.5 py-1 border border-amber-400/10">
               No lights placed and Global Illumination is off: players see only their darkvision.
             </div>
           )}
@@ -250,7 +250,7 @@ export default function DmLightControls({
 
           {/* Light property editor — shows for BOTH place mode (defaults) and select mode (editing) */}
           {lightMode && (
-            <div className="flex flex-col gap-2 bg-stone-700/40 rounded p-2 border border-stone-600/40">
+            <div className="flex flex-col gap-2 bg-stone-700/40 rounded-sm p-2 border border-stone-600/40">
               <div className="text-[10px] text-stone-400 uppercase tracking-wide">
                 {isEditing ? 'Edit Light' : 'New Light Settings'}
               </div>
@@ -262,7 +262,7 @@ export default function DmLightControls({
                     type="checkbox"
                     checked={selectedLight.enabled}
                     onChange={(e) => updateSelected({ enabled: e.target.checked })}
-                    className="rounded accent-amber-400"
+                    className="rounded-sm accent-amber-400"
                   />
                   <span className="text-[11px] text-stone-300">
                     {selectedLight.enabled ? 'Enabled' : 'Disabled (extinguished)'}
@@ -386,7 +386,7 @@ export default function DmLightControls({
                       if (isEditing) updateSelected({ color: e.target.value });
                       else updateDefaults({ color: e.target.value });
                     }}
-                    className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent"
+                    className="w-5 h-5 rounded-sm cursor-pointer border-0 bg-transparent"
                     title="Pick custom color"
                   />
                   <input
@@ -400,7 +400,7 @@ export default function DmLightControls({
                         else updateDefaults({ color: lower });
                       }
                     }}
-                    className="flex-1 text-[10px] bg-stone-800 border border-stone-600 rounded px-1.5 py-0.5 text-stone-300 font-mono"
+                    className="flex-1 text-[10px] bg-stone-800 border border-stone-600 rounded-sm px-1.5 py-0.5 text-stone-300 font-mono"
                     maxLength={7}
                     placeholder="#ffcc66"
                   />
@@ -412,7 +412,7 @@ export default function DmLightControls({
                 <button
                   type="button"
                   onClick={onDeleteSelected}
-                  className="text-[11px] py-1 rounded bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors"
+                  className="text-[11px] py-1 rounded-sm bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors"
                 >
                   Delete Light
                 </button>

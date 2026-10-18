@@ -82,7 +82,7 @@ function TokenTransferConfirmation({
   return (
     <div className="mt-3 p-3 bg-warm-amber/10 border border-warm-amber/30 rounded-lg space-y-3">
       <div className="flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-warm-amber flex-shrink-0 mt-0.5" />
+        <AlertTriangle className="w-4 h-4 text-warm-amber shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-medium text-stone-gray">
             Current map has {tokens.length} token{tokens.length !== 1 ? 's' : ''}
@@ -107,17 +107,17 @@ function TokenTransferConfirmation({
         {tokens.map((token) => (
           <label
             key={token.id}
-            className="flex items-center gap-2 p-1.5 rounded hover:bg-warm-amber/10 cursor-pointer"
+            className="flex items-center gap-2 p-1.5 rounded-sm hover:bg-warm-amber/10 cursor-pointer"
           >
             <input
               type="checkbox"
               checked={selected.has(token.id)}
               onChange={() => toggleToken(token.id)}
-              className="rounded accent-moss-green"
+              className="rounded-sm accent-moss-green"
             />
             <span className="text-sm text-stone-gray truncate">{token.name}</span>
             {token.layer === 'spirit' && (
-              <span className="text-xs text-spirit-purple bg-spirit-purple/10 px-1 rounded">spirit</span>
+              <span className="text-xs text-spirit-purple bg-spirit-purple/10 px-1 rounded-sm">spirit</span>
             )}
           </label>
         ))}
@@ -193,7 +193,7 @@ function MapCard({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className={`bg-parchment/50 border rounded-xl overflow-hidden shadow-sm transition-shadow hover:shadow-md ${
+      className={`bg-parchment/50 border rounded-xl overflow-hidden shadow-xs transition-shadow hover:shadow-md ${
         isActive ? 'border-moss-green/60' : 'border-moss-green/20'
       }`}
     >
@@ -218,7 +218,7 @@ function MapCard({
 
         {/* Active badge */}
         {isActive && (
-          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-moss-green text-white text-xs font-semibold rounded-full shadow">
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-moss-green text-white text-xs font-semibold rounded-full shadow-sm">
             <CheckCircle className="w-3 h-3" />
             Active
           </div>
@@ -550,7 +550,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
             onClick={onClose}
           >
             <motion.div
@@ -562,7 +562,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4">
+              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <MapPin className="w-6 h-6 text-brand-ink" />
@@ -615,14 +615,14 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
               <div className="p-6">
                 {error && (
                   <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                     {error}
                   </div>
                 )}
 
                 {importSuccess && (
                   <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                    <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     {importSuccess}
                   </div>
                 )}

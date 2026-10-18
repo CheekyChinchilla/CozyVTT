@@ -59,7 +59,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
           >
             <button
               onClick={() => removeField(field.id)}
-              className="absolute top-2 right-2 p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+              className="absolute top-2 right-2 p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
               title="Remove stat"
             >
               <Trash2 className="w-4 h-4" />
@@ -71,7 +71,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                 value={field.name}
                 onChange={(e) => updateField(field.id, { name: e.target.value })}
                 maxLength={SHEET_NAME_MAX}
-                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
+                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-brand-ink"
                 placeholder="Stat name"
               />
 
@@ -82,7 +82,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                   onChange={(e) =>
                     updateField(field.id, { value: parseInt(e.target.value) || 0 })
                   }
-                  className="w-20 text-2xl font-bold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
+                  className="w-20 text-2xl font-bold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-brand-ink"
                 />
                 <span className="text-lg text-stone-gray">
                   ({formatModifier(field.modifier || 0)})
