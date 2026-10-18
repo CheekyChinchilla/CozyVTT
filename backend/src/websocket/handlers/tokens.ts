@@ -18,7 +18,7 @@ import { Token, tokenMoveLimiter, limiterKey, withinCeiling } from '../shared';
 import { readTokens, toJson } from '../../utils/prisma-json';
 import { withMapsLocked, clampTokenPosition } from '../../utils/mapTokens';
 import { canControlToken, canMoveTokensNow, canReadMap, PAUSED_MOVE_REFUSAL } from '../../services/permissions';
-import { campaignSockets, stillInCampaign } from '../utils';
+import { bestEffort, campaignSockets, stillInCampaign } from '../utils';
 
 /** How one member is sent a dragged token. */
 interface FrameRecipient {
@@ -65,7 +65,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * which can change mid-drag without touching the token, so the decision is
    * made again at least every DRAG_DECISION_MS as well.
    */
-  const drags = new Map<string, { seenAs: string; at: number; deciding: Promise<DragAudience> }>();
+  const drags = new Map<string, { seenAs: string; at: number; mapId: string; deciding: Promise<DragAudience> }>();
   const seenAs = (token: Pick<Token, 'visible' | 'layer'>) => `${token.visible !== false}|${token.layer}`;
   function dragAudienceFor(mapId: string, token: Token): Promise<DragAudience> {
     const cached = drags.get(token.id);
@@ -83,7 +83,7 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       if (before) audience.holding = before.holding;
       return audience;
     });
-    drags.set(token.id, { seenAs: seenAs(token), at: now, deciding });
+    drags.set(token.id, { seenAs: seenAs(token), at: now, mapId, deciding });
     return deciding;
   }
   async function decideDragAudience(mapId: string, tokenId: string): Promise<DragAudience> {
@@ -233,6 +233,35 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       }
     }
   }
+
+  /**
+   * The carrier's connection is gone: every token it was carrying goes back
+   * where it stands on the screens its frames reached. Putting it down or
+   * letting it go is the carrier's to send, so a tab that closed or a
+   * connection that dropped mid-hold left the token drawn at the last frame
+   * on everyone else's screen.
+   */
+  socket.on('disconnect', () => {
+    const campaignId = socket.campaignId;
+    const held = [...drags.entries()];
+    drags.clear();
+    if (!campaignId) return;
+    for (const [tokenId, drag] of held) {
+      void bestEffort('token drag release on disconnect', async () => {
+        const audience = await drag.deciding;
+        const map = await prisma.map.findUnique({ where: { id: drag.mapId }, select: { tokens: true, campaignId: true } });
+        if (!map || map.campaignId !== campaignId) return;
+        const token = readTokens(map.tokens).find((t) => t.id === tokenId);
+        if (!token) return;
+        const back = { tokenId, mapId: drag.mapId, x: token.position.x, y: token.position.y, movedBy: null };
+        for (const s of stillInCampaign(await campaignSockets(io, campaignId), campaignId)) {
+          if (!audience.holding.has(s.id)) continue;
+          if (audience.recipients.get(s.id)?.sees(token)) s.emit('token.moved', back);
+          else s.emit('token:disappeared', { tokenId, mapId: drag.mapId });
+        }
+      });
+    }
+  });
 
   /**
    * TOKEN.MOVE.START - User begins dragging a token
