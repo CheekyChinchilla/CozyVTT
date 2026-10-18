@@ -268,7 +268,7 @@ viewer and the free-form custom roll input. See
 
 Copy from a system that's shaped like the one you're adding:
 
-- **Backend (all of steps 2–6): copy Shadowrun 6e.** It's the most recently added system and is fully wired through every backend registration point, while being smaller than D&D 5e — the cleanest end-to-end backend example. Files: `game-systems/shadowrun6e.ts`, `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in all three backend `index.ts` files.
+- **Backend (all of steps 2–6): copy Shadowrun 6e.** It is fully wired through every backend registration point, so it shows the whole backend side of a system from start to finish. Files: `game-systems/shadowrun6e.ts`, `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in all three backend `index.ts` files.
 - **Frontend sheet (step 9): copy D&D 5e or Call of Cthulhu 7e.** These are the complete sheet implementations, split into `…CharacterSheet.tsx` (mode switcher) + `…CharacterView.tsx` + `…CharacterEditor.tsx` + a `components/` folder. (Shadowrun 6e's sheet is intentionally a single "not yet implemented" placeholder, so don't copy it for the UI — but it *is* the reference for the minimal single-file sheet shape.)
 
 > **Note on Shadowrun 6e:** it is deliberately **not listed in the character-creation dropdown** — its entry in `GAME_SYSTEM_OPTIONS` (`frontend/src/constants/game-systems.ts`) is commented out because its sheet isn't finished. That commented block is a perfect illustration of [Step 8](#step-8--frontend-display-metadata): a system is only selectable once it's in `GAME_SYSTEM_OPTIONS`.
