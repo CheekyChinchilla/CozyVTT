@@ -27,6 +27,10 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
+### Fixed
+
+- **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
+
 ### Security
 
 - **The last security advisory against the tools that build CozyVTT is cleared.** It was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release. Tailwind CSS 4 does not use it. It was only ever in the build tools, never in an instance.
