@@ -649,7 +649,7 @@ export default function DiceRoller() {
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-warm-amber text-center mb-2 italic">
-            Session paused: your rolls stay on your own screen.
+            Session paused: rolls from this tab stay on your own screen.
           </p>
         )}
         {isSpectator && (

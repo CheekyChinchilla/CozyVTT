@@ -252,7 +252,7 @@ export default function SessionControls() {
         {/* Paused hint */}
         {isPaused && (
           <p className="text-xs text-warm-gray text-center italic">
-            Players can't move tokens, and their dice rolls stay on their own screens.
+            Players can't move tokens. Their rolls from the Dice tab stay on their own screens; rolls from a sheet or a Roll menu still reach the table.
           </p>
         )}
 

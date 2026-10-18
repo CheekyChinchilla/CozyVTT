@@ -335,7 +335,7 @@ Your players are told this plainly now. The secret-roll checkbox used to read "o
 
 **Clearing it.** Only you can, using the **Clear** button (with a trash icon) at the top of the Dice panel, and confirming with **Clear History**. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
 
-> **One exception.** While a session is **paused**, players' rolls are worked out in their own browser and never sent to the server — that's deliberate, so a paused table can still fiddle with dice without it counting. Those rolls aren't in the history and won't survive a refresh.
+> **One exception.** While a session is **paused**, players' rolls from the **Dice** tab are worked out in their own browser and never sent to the server — that's deliberate, so a paused table can still fiddle with dice without it counting. Those rolls aren't in the history and won't survive a refresh. A roll from a character sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
 ### Managing Token Visibility
 
@@ -733,7 +733,7 @@ Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
 - Disables token movement for players
-- Shows players a banner above the map: *Session is paused. Token movement is disabled, and your dice rolls stay on your own screen.*
+- Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
 

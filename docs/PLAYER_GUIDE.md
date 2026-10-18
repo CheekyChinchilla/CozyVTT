@@ -259,7 +259,7 @@ that never works.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
-One thing to know: if the DM has **paused** the session, your rolls are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh.
+One thing to know: if the DM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
 ---
 
@@ -578,7 +578,7 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 |--------|--------------|
 | Preparation | No session has been run yet — you can move your token |
 | 🟢 Live | Session is active — you can move your token |
-| 🟡 Paused | DM paused — token movement disabled, and your rolls stay in your own browser: the DM and other players don't see them |
+| 🟡 Paused | DM paused — token movement disabled, and your rolls from the Dice tab stay in your own browser: the DM and other players don't see them. Rolls from your sheet or a **Roll...** menu still reach the table |
 | ⚫ Inactive | The last session has ended — token movement disabled |
 
 The campaign card on the dashboard calls a **Live** campaign **Active**.
