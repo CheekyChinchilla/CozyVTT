@@ -8,7 +8,8 @@
 //
 // Only the sender's userId travels with the ping. Clients already hold the
 // campaign roster, so they resolve the display name (and the colour derived
-// from the id) locally — no database round-trip on a gesture people will spam.
+// from the id) locally. The one database read is the map, to check it, after
+// the per-user limit, so a burst of pings costs at most ten reads.
 // ============================================
 
 import { Server } from 'socket.io';
@@ -16,6 +17,8 @@ import { AuthenticatedSocket } from '../auth';
 import logger from '../../utils/logger';
 import { emitToMapReaders } from '../utils';
 import { pingLimiter } from '../shared';
+import { prisma } from '../../config/database';
+import { canReadMap } from '../../services/permissions';
 
 /** Max pings per user per window, and the window itself. */
 const PING_LIMIT = 10;
@@ -38,13 +41,17 @@ export function registerPingHandlers(io: Server, socket: AuthenticatedSocket): v
       const { mapId, x, y } = data ?? {};
 
       if (!mapId || typeof mapId !== 'string') return;
-      // TODO(play): the map is not checked to be one of this campaign's, as the
-      // other handlers check it; refuse a map from outside the campaign.
       if (typeof x !== 'number' || typeof y !== 'number') return;
       if (!Number.isFinite(x) || !Number.isFinite(y)) return;
 
       // Silent drop over the limit — see the note in shared.ts.
       if (!pingLimiter.check(socket.userId!, PING_LIMIT, PING_WINDOW_MS)) return;
+
+      // A map of this campaign the sender may read, as every other map event
+      // checks: a ping naming another campaign's map, or a player's on a map
+      // the DM is preparing, is dropped like one over the limit.
+      const map = await prisma.map.findUnique({ where: { id: mapId }, select: { campaignId: true, campaign: { select: { currentMapId: true } } } });
+      if (!map || map.campaignId !== socket.campaignId || !canReadMap(socket.role, mapId, map.campaign.currentMapId)) return;
 
       // The sender included, so they see their own ping as well; a ping on
       // a map the DM is preparing reaches only the DM.
