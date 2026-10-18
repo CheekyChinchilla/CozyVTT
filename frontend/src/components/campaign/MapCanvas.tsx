@@ -159,8 +159,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; CSS-transformed during pan
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
-  // Lazily-created AudioContext for spirit layer transition sound
+  // Lazily-created AudioContext for spirit layer transition sound, closed
+  // with the map so a map opened again does not leave the old one running.
   const audioCtxRef = useRef<AudioContext | null>(null);
+  useEffect(() => () => {
+    void audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+  }, []);
 
   // State
   const [showGrid, setShowGrid] = useState(true);

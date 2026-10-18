@@ -97,6 +97,7 @@ vi.mock('@/contexts/WebSocketContext', async () => {
     getSocket: () => h.raw,
     onMapChanged: (cb: (data: never) => void) => { h.raw.on('map.changed', cb); },
     off: (event: string, cb: (data: never) => void) => { h.raw.off(event, cb); },
+    onSpiritLayerToggled: (cb: (data: never) => void) => { h.raw.on('spirit_layer.toggled', cb); },
     emitTokenMoveStart: record('token.move.start'),
     emitTokenMove: record('token.move'),
     emitTokenMoveEnd: record('token.move.end'),
@@ -1133,5 +1134,28 @@ describe("a player's door toggle during the DM's wall drag", () => {
     press('z', { ctrlKey: true });
 
     expect(lastWalls()).toEqual([WALL_A, opened]);
+  });
+});
+
+describe('the spirit crossing sound (F459)', () => {
+  it('closes its audio context when the map goes away', () => {
+    const close = vi.fn().mockResolvedValue(undefined);
+    class FakeAudioContext {
+      state = 'running';
+      close = close;
+      resume() {}
+      createOscillator(): never { throw new Error('no audio here'); }
+    }
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    try {
+      const { unmount } = render(<MapCanvas />);
+      fire('spirit_layer.toggled', { campaignId: 'campaign-1', visible: true });
+
+      unmount();
+
+      expect(close).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });
