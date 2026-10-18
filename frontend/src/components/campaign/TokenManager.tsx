@@ -918,28 +918,27 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                 )}
                               </button>
 
-                              {/* TODO(tokens): this is offered for objects too, while
-                                 the map's right-click menu keeps objects on the
-                                 material plane. Render it only when
-                                 dmTokenControls(token.type).crossPlanes holds, as the
-                                 menu does. */}
-                              {/* Spirit layer toggle */}
-                              <button
-                                onClick={() => handleToggleLayer(token)}
-                                disabled={isTogglingLyr}
-                                className="p-1.5 rounded-sm hover:bg-spirit-purple/10 transition-colors"
-                                title={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
-                              >
-                                {isTogglingLyr ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
-                                ) : (
-                                  <Ghost
-                                    className={`w-3.5 h-3.5 ${
-                                      isSpirit ? 'text-spirit-purple' : 'text-stone-gray/30'
-                                    }`}
-                                  />
-                                )}
-                              </button>
+                              {/* Spirit layer toggle. An object keeps to the material
+                                 plane, as on the map's right-click menu; one already
+                                 on the spirit layer is offered only the way back. */}
+                              {(dmTokenControls(token.type).crossPlanes || isSpirit) && (
+                                <button
+                                  onClick={() => handleToggleLayer(token)}
+                                  disabled={isTogglingLyr}
+                                  className="p-1.5 rounded-sm hover:bg-spirit-purple/10 transition-colors"
+                                  title={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
+                                >
+                                  {isTogglingLyr ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
+                                  ) : (
+                                    <Ghost
+                                      className={`w-3.5 h-3.5 ${
+                                        isSpirit ? 'text-spirit-purple' : 'text-stone-gray/30'
+                                      }`}
+                                    />
+                                  )}
+                                </button>
+                              )}
 
                               {/* Move to another map */}
                               {otherMaps.length > 0 && (

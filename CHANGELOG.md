@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **The Token Manager no longer offers to send an object to the spirit realm,** which the map's right-click menu has never offered. An object already on the spirit layer is offered **Return to Material Plane**.
+
 - **The Token Manager says why the server refused.** **Place on Map**, hiding, obscuring, moving between the planes, removing a token and uploading a picture each showed a fixed sentence, such as "Failed to add token to map", when the server turned them down. They now show its reason, such as a map already holding 1,000 tokens.
 
 - **A Player token from the Token Manager can stand for a character.** The **Player** type said it linked to a character sheet, then made a token linked to nothing, which opened no sheet and rolled no character's numbers. A **Character** list now picks the character: the token is named after it unless you typed a name, controlled by its owner while they are a player, and given the character's token picture if you chose none.
