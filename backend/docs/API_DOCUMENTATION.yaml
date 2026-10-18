@@ -178,8 +178,10 @@ info:
       and the setup-gate 403, as described above and below.
     - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
-    - **500** `{ error, message }` on an unexpected error. In production the
-      message does not describe the failure.
+    - **500** `{ error, message }` on an unexpected error, whatever a route
+      throws. In production the message does not describe the failure. A
+      route that fails after its answer has started, such as a download part
+      way through, cannot send one: the connection is ended instead.
     - **503** `{ error: 'Service Unavailable', message }` with `Retry-After: 60`
       from every `/api` route while a backup restore replaces the database,
       checked before the session is read (see `POST /api/admin/backups/restore`).
@@ -225,7 +227,7 @@ info:
 
 servers:
   - url: https://vtt.example.com
-    description: Your instance's address. Every path below already starts with /api.
+    description: Your instance's address. Every path below is written from the root, with its /api prefix where it has one.
   - url: http://localhost:4000
     description: Local development (the backend's own port)
 
@@ -618,8 +620,6 @@ paths:
                   - type: object
                     description: When the instance requires admin approval. No session is created.
                     properties:
-                      message:
-                        type: string
                       message:
                         type: string
                         example: Registration submitted. Your account is pending admin approval.
@@ -1487,8 +1487,7 @@ paths:
         null, and documents they shared into a campaign stay shared (the
         share passes to the campaign's DM, or its owner). Character
         templates they published, and token templates and creatures they
-        made, stay with no author; a creature's `createdById` keeps the
-        deleted user's id, since it is not linked to the user row.
+        made, stay with no author: their `createdById` is set to null.
 
         The account is gone when the 200 is sent. The personal files are
         removed just after it, and a failure to remove one is logged and does
@@ -2984,10 +2983,11 @@ paths:
                       $ref: '#/components/schemas/CampaignMembership'
         '400':
           description: >-
-            `userId` is missing or not a user id (`Validation Error`, "A
-            campaign member must be named by their user id"), or names the
-            sitting DM (`Bad Request`, "That member is already the Dungeon
-            Master").
+            `userId` is text that is not a user id (`Validation Error`, "A
+            campaign member must be named by their user id"), is missing or
+            not text (`Validation Error`, "Invalid input: expected string,
+            received undefined" or the type received), or names the sitting
+            DM (`Bad Request`, "That member is already the Dungeon Master").
           content:
             application/json:
               schema:
@@ -12457,6 +12457,7 @@ components:
           type: string
           format: uuid
           nullable: true
+          description: Null for SRD creatures, and once the creator's account is deleted.
         createdAt:
           type: string
           format: date-time

@@ -141,7 +141,7 @@ Authenticate a user and create a session.
   "message": "MFA verification required. Please enter your TOTP code."
 }
 ```
-HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login` within 5 minutes, sending the code as `token`: exactly six digits, with nothing before, after or between them, or it is answered as a wrong code.
+HTTP status: `200 OK` — client must follow up with `POST /api/auth/mfa/verify-login` within 5 minutes, sending the code as `token`: exactly six digits, with nothing before, after or between them, or it is answered as a wrong code. A `token` that is not text, or is longer than 64 characters, is refused with `400` instead and not counted as a wrong code.
 
 **A script that keeps sending a wrong password locks the account.** Ten wrong
 passwords in an hour for one email address, counted from every address together,
@@ -511,7 +511,7 @@ Invite a user to the campaign. **Requires DM role.**
 
 The invitation is created whether or not an email goes out — it is what the invitee accepts from, on their dashboard. `emailSent` reports what actually happened: it is `false` when the caller did not ask, when the instance has no SMTP configured, and when the send failed. A failed send is logged and does not fail the request, because the invitation already exists by that point. This is deliberately unlike `POST /api/admin/users/invite`, which refuses outright without SMTP because there an email is the only way in.
 
-Each DM may make 20 invitations an hour that ask for an email, counted whether or not the email then goes out. A request with `sendEmail: true` past that, on an instance with SMTP configured, answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, and invitations refused with `400` or `404`, are not counted.
+On an instance with SMTP configured, each DM may make 20 invitations an hour that ask for an email, counted whether or not the email then goes out. A request with `sendEmail: true` past that answers `429` and creates no invitation; the same request without `sendEmail` goes through. Requests without an email, every request on an instance without SMTP, and requests answered with an error (`400`, `404` or `500`) are not counted.
 
 ### `PUT /api/campaigns/:campaignId/dm`
 
@@ -536,8 +536,10 @@ campaign stays with the owner, and so does handing the DM seat on, so an owner
 sitting as a player can take the seat back; the owner also cannot be removed
 from the campaign. Everything else a DM does follows the role.
 
-Rejected with `400` if `userId` is not a user id ("A campaign member must be
-named by their user id") or names the sitting DM ("That member is already the
+Rejected with `400` if `userId` is text that is not a user id ("A campaign
+member must be named by their user id"; a missing `userId`, or one that is not
+text, gets a generic message such as "Invalid input: expected string, received
+undefined") or names the sitting DM ("That member is already the
 Dungeon Master"), `404` if the campaign does not exist ("Campaign not found",
 checked before the caller is) or the named user is not a member ("That user is
 not a member of this campaign"), and `403` if the caller is none of the three
@@ -755,7 +757,7 @@ the most one account can. Delete one you no longer need to make room."
 }
 ```
 
-`name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
+For a character with a game system, `name` is written into the sheet's `characterName` (`investigatorName` in Call of Cthulhu), and your display name into `playerName`, before the sheet is checked; a Flexible sheet (no game system) gets neither. A D&D 5e sheet needs at least the fields above; a sheet that does not pass answers `400` with `validationErrors`, as on `PUT`.
 
 ---
 
@@ -997,7 +999,7 @@ every write — see [Stat block validation](#stat-block-validation).
 | `abilities` | object | Required. `str`/`dex`/`con`/`int`/`wis`/`cha`, each 0–30. Ability **scores** (D&D 5e's model) |
 | `hpMax`, `hitDice` | number, string | Optional |
 | `attributeModifiers` | object | Optional. Same six keys, each −10 to +20. Ability **modifiers**, for systems that print modifiers instead of scores (Pathfinder 2e) |
-| `challengeRating` | string | Optional. `"0"`, `"1/8"`, `"1/4"`, `"1/2"`, `"1"`–`"30"`. In D&D 5e this determines the proficiency bonus |
+| `challengeRating` | string | Optional, at most 10 characters; the server checks only the length. D&D 5e's are `"0"`, `"1/8"`, `"1/4"`, `"1/2"` and `"1"` to `"30"`, and there this determines the proficiency bonus |
 | `level` | number | Optional, −1 to 30. Creature level, for systems that rate by level rather than CR |
 | `savingThrows` | object | Optional. Keys to **final totals**, each −50 to +50 |
 | `skills` | object | Optional. Same shape as `savingThrows` |
@@ -1141,7 +1143,7 @@ List assets accessible to the authenticated user (Global + their own User scope 
 - `type` — filter by `MAP`, `TOKEN`, `AUDIO`, `AVATAR`, `DOCUMENT`. With no `type`, documents are left out: they have their own page in the app, and a rulebook does not belong among map thumbnails
 - `scope` — filter by `GLOBAL`, `USER`, `CAMPAIGN`
 - `search` — part of the asset's name, in any capitals. Tags are not searched
-- `campaignId` — list one campaign's library. You must be a member (`403` otherwise)
+- `campaignId` — list one campaign's library. You must be a member or a platform admin (`403` otherwise)
 - `page` — pagination page (default: 1)
 - `limit` — items per page (default: 50, at most 100)
 
@@ -1484,7 +1486,8 @@ change their own password with `POST /api/auth/change-password`, which asks for 
 {
   "message": "Password reset successfully",
   "temporaryPassword": "aB3d-Ef9h-Jk2m-Np4q",
-  "mustChangePassword": true
+  "mustChangePassword": true,
+  "notice": "This temporary password will only be displayed once. The user will be required to change it on next login, and any active sessions have been signed out."
 }
 ```
 
@@ -1673,7 +1676,7 @@ Check whether the setup wizard has been completed. Public.
 
 ### `POST /api/setup/init`
 
-Run the wizard: create the first administrator, apply the instance settings and mark setup complete, in one step, then sign the administrator in. Public, but it needs the setup token the backend printed in its log at start (or `SETUP_TOKEN`), as `setupToken` in the body; without it, or with the wrong one, the answer is `403 Forbidden` before the rest of the body is read. Once setup is complete, a call with the right token answers `400 Setup Already Completed`; without a token it still answers `403` first. The full request and every answer are in the OpenAPI document.
+Run the wizard: create the first administrator, apply the instance settings and mark setup complete, in one step, then sign the administrator in. Public, but it needs the setup token the backend printed in its log at start (or `SETUP_TOKEN`), as `setupToken` in the body; without it, or with the wrong one, the answer is `403 Forbidden` before the rest of the body is read. Once setup is complete, a call with the right token and a body that passes the administrator checks answers `400 Setup Already Completed`, and one whose body fails them answers `400 Validation Error`; without a token it still answers `403` first. The full request and every answer are in the OpenAPI document.
 
 ---
 
