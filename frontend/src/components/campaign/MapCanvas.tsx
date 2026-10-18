@@ -9,7 +9,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { canRollAsCharacter } from '@/services/permissions';
-import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative } from '@/stores/gameStore';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type {
@@ -130,7 +130,8 @@ interface MapCanvasProps {
 }
 
 export default function MapCanvas({ onEditToken }: MapCanvasProps) {
-  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect, characterHpCache } = useCampaign();
+  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
+  const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
   // socket handlers write there directly (outside React), and this
   // subscription is what re-renders the canvas per token change.

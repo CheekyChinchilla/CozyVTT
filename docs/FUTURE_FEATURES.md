@@ -80,7 +80,6 @@ _Nothing at present._
 - `1.5.4` **Initiative rolls vanish from the dice log on reload.** `handlers/initiative.ts` broadcasts the entry but never stores it.
 - `1.5.4` **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
 - `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
-- `1.5.4` **Saving Campaign Settings reloads the whole live table,** every token picture included, and reopens the settings on General. Several saves in a minute can reach the 300 requests a minute limit, after which token pictures fail to load until it passes (`CampaignContext.tsx`).
 - `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
 - `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
 

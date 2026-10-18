@@ -45,6 +45,16 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The session timer counts from the session's start after Resume Session.** On the DM's screen it could start again from zero, and then disagree with itself after a reload.
 
+- **Saving Campaign Settings, removing a player and handing over the DM seat leave the table as it is.** Each one rebuilt the whole campaign page: every token picture was fetched again, a chat message being typed was lost, and the settings reopened on **General**. Several saves in a minute could reach the limit of 300 requests a minute, after which token pictures failed to load until it passed.
+
+- **Sending an invitation leaves the page as it is.** **Invite Player** in the left sidebar reloaded the page, which hid the message saying the invitation was sent; from **Campaign Settings** that message appeared twice.
+
+- **The Campaign Roster keeps its list while it updates.** It went blank with "Loading roster..." whenever someone joined or a character was brought in, which dropped a character you were dragging from it, and two updates close together could leave the older list showing.
+
+- **A campaign that is still loading when you open another one can no longer replace it,** and a campaign link that was refused no longer sends you to the dashboard after you have moved on to another page.
+
+- **Hit point changes during a fight do less work.** Each one redrew everything on the campaign page; now only the roster and the map's health bars are redrawn.
+
 - **Moving the pointer over the map does less work.** The whole map page was worked out again for every pixel the pointer moved, and the mouse wheel's listener was taken off and put back each time; now the page updates only when the pointer reaches another square.
 
 - **Token pictures load together when a map opens, and one that cannot be loaded is not asked for again every time a token moves.** They loaded one after another, so a map with many tokens filled in slowly, and a missing picture was requested again on every move.

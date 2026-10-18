@@ -19,7 +19,6 @@ import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
 import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
-import type { CharacterHpInfo } from '@/utils/characterHp';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
@@ -47,6 +46,12 @@ interface CampaignContextState {
 
   // Actions
   loadCampaign: (id: string) => Promise<void>;
+  /**
+   * Re-read the campaign after a change to it (settings, members, the DM
+   * seat) and replace it in place: the table stays as it is, and the map,
+   * which arrives over the socket, is not reloaded. A failure is logged and
+   * the page keeps what it has.
+   */
   refreshCampaign: () => Promise<void>;
   /**
    * Re-fetch ONLY the current map (tokens, walls, lights, fog) without
@@ -105,10 +110,6 @@ interface CampaignContextState {
   activeAtmosphereAudio: { assetId: string; audioUrl: string; volume: number; loop: boolean } | null;
   /** Update atmosphere audio — called by AtmospherePlayer on WS broadcast */
   updateAtmosphereAudio: (audio: { assetId: string; audioUrl: string; volume: number; loop: boolean } | null) => void;
-  /** Cache of character HP keyed by characterId — populated from roster, updated by character.hp.updated WS events */
-  characterHpCache: Record<string, CharacterHpInfo>;
-  /** Seed the HP cache from roster data (called by CampaignRoster after fetch) */
-  seedCharacterHpCache: (entries: { id: string; hp: CharacterHpInfo | null }[]) => void;
 }
 
 // ============================================
@@ -170,8 +171,15 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // Atmosphere state — effect + audio
   const [activeAtmosphereEffect, setActiveAtmosphereEffect] = useState<string | null>(null);
   const [activeAtmosphereAudio, setActiveAtmosphereAudio] = useState<{ assetId: string; audioUrl: string; volume: number; loop: boolean } | null>(null);
-  // Character HP cache — keyed by characterId, updated by WS event and roster seed
-  const [characterHpCache, setCharacterHpCache] = useState<Record<string, CharacterHpInfo>>({});
+  // Each load is numbered and only the newest is applied, so the answer for
+  // a campaign the page has already left cannot write over the next one.
+  const loadSeq = useRef(0);
+  // The return to the dashboard after a refused load; cancelled when the
+  // page moves on first.
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The same for re-reads after a settings or roster change: answers can
+  // arrive out of order, and an older one would put back an older member list.
+  const rereadSeq = useRef(0);
 
   // Derived: current vibe period name
   const currentVibe = campaign?.currentVibe ?? null;
@@ -184,11 +192,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
 
   // Load campaign data
   const loadCampaign = useCallback(async (campaignId: string) => {
+    const seq = ++loadSeq.current;
+    const isNewest = () => seq === loadSeq.current;
     setLoading(true);
     setError(null);
 
     try {
       const data = await campaignService.getCampaign(campaignId);
+      if (!isNewest()) return;
       setCampaign(data);
 
       // Initialize active session from campaign response
@@ -226,10 +237,12 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       if (data.currentMapId) {
         try {
           const { map, spiritVisible } = await api.getMap(data.id, data.currentMapId);
+          if (!isNewest()) return;
           setCurrentMapState(map);
           useGameStore.getState().setTokens(map.tokens || []);
           setPlayerSpiritVisible(spiritVisible ?? false);
         } catch {
+          if (!isNewest()) return;
           // Fall back to embedded map metadata (no tokens) if the fetch fails
           const mapMeta = data.maps?.find((m: { id: string }) => m.id === data.currentMapId);
           if (mapMeta) {
@@ -239,34 +252,47 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         }
       }
     } catch (err) {
+      if (!isNewest()) return;
       console.error('Failed to load campaign:', err);
 
       // Handle specific errors
       if (apiErrorStatus(err) === 403) {
         setError('You do not have permission to view this campaign');
-        setTimeout(() => navigate('/dashboard'), 2000);
+        redirectTimer.current = setTimeout(() => navigate('/dashboard'), 2000);
       } else if (apiErrorStatus(err) === 404) {
         setError('Campaign not found');
-        setTimeout(() => navigate('/dashboard'), 2000);
+        redirectTimer.current = setTimeout(() => navigate('/dashboard'), 2000);
       } else {
         setError(apiErrorMessage(err) || 'Failed to load campaign');
       }
     } finally {
-      setLoading(false);
+      if (isNewest()) setLoading(false);
     }
   }, [navigate]);
 
-  // Refresh campaign data
-  // TODO(play): this reloads the campaign through loadCampaign, which sets
-  // `loading`, so CampaignPage swaps the live table for its spinner and back:
-  // one Campaign Settings save refetches every token picture (44 requests on
-  // a seeded map) and reopens the settings on General. Refresh the campaign
-  // row without the page's loading state.
+  /** The campaign as it is now, or null when a newer re-read has started or the page has moved on. */
+  const rereadCampaign = useCallback(async (campaignId: string) => {
+    const seq = ++rereadSeq.current;
+    const fresh = await campaignService.getCampaign(campaignId);
+    return seq === rereadSeq.current && shownCampaignId.current === campaignId ? fresh : null;
+  }, []);
+
+  // Re-read the campaign in place. Going through loadCampaign set `loading`,
+  // so the page swapped the live table for its spinner and back: a Campaign
+  // Settings save fetched every token picture again and reopened the
+  // settings on their first tab.
   const refreshCampaign = useCallback(async () => {
-    if (campaign?.id) {
-      await loadCampaign(campaign.id);
+    const campaignId = campaign?.id;
+    if (!campaignId) return;
+    try {
+      const fresh = await rereadCampaign(campaignId);
+      if (!fresh) return;
+      setCampaign((prev) => (prev && prev.id === fresh.id ? fresh : prev));
+      setActiveSession(fresh.activeSession ?? null);
+    } catch (err) {
+      console.error('[CampaignContext] Failed to refresh the campaign:', err);
     }
-  }, [campaign?.id, loadCampaign]);
+  }, [campaign?.id, rereadCampaign]);
 
   // Re-fetch the current map only — used after a WebSocket reconnect so the
   // local token/wall/light/fog state catches up with anything that broadcast
@@ -383,24 +409,12 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     setActiveAtmosphereAudio(audio);
   }, []);
 
-  // Seed HP cache from roster API response (called by CampaignRoster after fetchRoster)
-  const seedCharacterHpCache = useCallback((entries: { id: string; hp: CharacterHpInfo | null }[]) => {
-    setCharacterHpCache((prev) => {
-      const next = { ...prev };
-      for (const { id, hp } of entries) {
-        if (hp) next[id] = hp;
-      }
-      return next;
-    });
-  }, []);
-
-  // Listen for real-time character HP updates
+  // Listen for real-time character HP updates. They go to the game store,
+  // where only the roster and the map's HP bars read them: a new context
+  // value for every hit of a fight re-rendered everything on the page.
   useEffect(() => {
     const handleHpUpdated = (data: CharacterHpUpdatedBroadcast) => {
-      setCharacterHpCache((prev) => ({
-        ...prev,
-        [data.characterId]: data.hp,
-      }));
+      useGameStore.getState().setCharacterHp(data.characterId, data.hp);
     };
 
     socketClient.onCharacterHpUpdated(handleHpUpdated);
@@ -465,9 +479,9 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     const handleRosterUpdated = (data: { campaignId?: string }) => {
       const campaignId = data?.campaignId;
       if (!campaignId) return;
-      campaignService
-        .getCampaign(campaignId)
+      rereadCampaign(campaignId)
         .then((fresh) => {
+          if (!fresh) return;
           setCampaign((prev) => (prev && prev.id === fresh.id
             ? { ...prev, memberships: fresh.memberships, characters: fresh.characters ?? prev.characters }
             : prev));
@@ -482,7 +496,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       socketClient.off('authenticated', handleAuthenticated);
       socketClient.off('roster.updated', handleRosterUpdated);
     };
-  }, []);
+  }, [rereadCampaign]);
 
   // Update spirit layer enabled/style in local campaign state
   const updateCampaignSpiritLayer = useCallback((enabled: boolean, style?: string) => {
@@ -507,6 +521,10 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       loadCampaign(id);
     }
     return () => {
+      // A load still on its way is for a page that is gone.
+      loadSeq.current += 1;
+      if (redirectTimer.current) clearTimeout(redirectTimer.current);
+      redirectTimer.current = null;
       useGameStore.getState().clearGameState();
     };
   }, [id, loadCampaign]);
@@ -543,8 +561,6 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     updateAtmosphereEffect,
     activeAtmosphereAudio,
     updateAtmosphereAudio,
-    characterHpCache,
-    seedCharacterHpCache,
   }), [
     campaign,
     currentMap,
@@ -570,8 +586,6 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     updateAtmosphereEffect,
     activeAtmosphereAudio,
     updateAtmosphereAudio,
-    characterHpCache,
-    seedCharacterHpCache,
   ]);
 
   return (
