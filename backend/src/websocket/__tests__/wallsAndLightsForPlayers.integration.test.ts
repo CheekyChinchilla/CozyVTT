@@ -346,6 +346,42 @@ describe('a change a player cannot see, on a lit map', () => {
     player.disconnect();
   });
 
+  // Each reached the player as an event and a map sent again, though nothing
+  // they hold had changed.
+  it('sends a player nothing when the DM sets a light that is on to the values it has', async () => {
+    const mapId = await newMap(true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const told = heard(player);
+    const updated = waitForEvent(dm, 'light:updated');
+    dm.emit('light:update', { mapId, light: { ...LIT } });
+    await updated;
+    await settled();
+    expect(told).toEqual([]);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
+  it('refuses the removal of a wall the map does not have, writing and sending nothing', async () => {
+    const mapId = await newMap(true);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const before = (await prisma.map.findUniqueOrThrow({ where: { id: mapId } })).updatedAt;
+
+    const told = heard(player);
+    const refused = waitForEvent<{ message: string }>(dm, 'error');
+    dm.emit('wall:remove', { mapId, segmentId: randomUUID() });
+    expect((await refused).message).toBe('Wall segment not found');
+    await settled();
+    expect(told).toEqual([]);
+    expect((await prisma.map.findUniqueOrThrow({ where: { id: mapId } })).updatedAt).toEqual(before);
+
+    dm.disconnect();
+    player.disconnect();
+  });
+
   it('sends a player no map for the same changes made through the REST routes', async () => {
     const mapId = await newMap(true);
     const player = await server.connectAndAuth(playerCookie, campaignId);

@@ -26,6 +26,7 @@ There is no new setting, no setting is removed, and there is no database change 
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
+  - *Walls and lights.* `wall:remove` of an id the map does not have answers `error` with `Wall segment not found` and writes nothing; it wrote the list again and sent everyone `wall:removed`. A `light:update` that sets a light to the values it already has sends anyone but the DM nothing, where players were sent `light:updated` and, on a lit map, the map again.
   - *Walls and lights.* A player's `wall:update` on a map with fog of war on is refused with `You cannot see that door` unless a square revealed to them lies beside the door's middle, before any `That door is locked`. The refusal is followed by `wall:updated` with the door as it was, as other refusals are.
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
 

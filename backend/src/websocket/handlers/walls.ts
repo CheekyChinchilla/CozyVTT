@@ -156,6 +156,9 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         if (!map || map.campaignId !== campaignId) return { refused: 'Map not found' };
 
         const existing = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
+        // As the REST route answers 404: a wall the map does not have is not
+        // written over, and nobody is told it went.
+        if (!existing.some((s) => s.id === segmentId)) return { refused: 'Wall segment not found' };
         const filtered = existing.filter((s) => s.id !== segmentId);
         await tx.map.update({ where: { id: mapId }, data: { wallSegments: toJson(filtered) } });
         return { done: null };
