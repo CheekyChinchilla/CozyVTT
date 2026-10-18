@@ -184,6 +184,8 @@ The campaign page is your command center during play. It's a three-column worksp
 
 You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
 
+**In a window narrower than 1024 pixels**, such as a laptop with two windows side by side, a tablet or a phone, the page first shows a **Desktop Required** notice. Click **Continue anyway** to open the table there: it keeps the same three-column desktop layout, so the panels are cramped, and the header's buttons wrap onto a second row. Your browser remembers the choice, so the notice does not come back; clearing the site's data for your CozyVTT brings it back. A layout made for phones is planned for a later release.
+
 ---
 
 ### Adding Maps

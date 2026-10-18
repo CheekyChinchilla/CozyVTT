@@ -24,6 +24,7 @@ import SessionControls from './SessionControls';
 import SessionHistory from './SessionHistory';
 import PersonalNotes from './PersonalNotes';
 import type { ChatMessageBroadcast } from '@/types';
+import { optionalStorage } from '@/utils/optionalStorage';
 
 type RailTab = 'chat' | 'dice' | 'initiative' | 'notes' | 'session';
 
@@ -40,7 +41,7 @@ const TABS: { key: RailTab; label: string; icon: LucideIcon }[] = [
 ];
 
 function loadInitialTab(): RailTab {
-  const stored = localStorage.getItem(TAB_STORAGE_KEY);
+  const stored = optionalStorage.getItem(TAB_STORAGE_KEY);
   return TABS.some((t) => t.key === stored) ? (stored as RailTab) : 'chat';
 }
 
@@ -57,7 +58,7 @@ export default function SessionSidebar() {
 
   useEffect(() => {
     activeTabRef.current = activeTab;
-    localStorage.setItem(TAB_STORAGE_KEY, activeTab);
+    optionalStorage.setItem(TAB_STORAGE_KEY, activeTab);
     if (activeTab === 'chat') {
       setUnreadChat(0);
     }

@@ -23,6 +23,10 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The app needs Firefox 128 or newer.** Chrome and Edge 111 and Safari 16.4 are still enough.
 
+### Added
+
+- **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
+
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
@@ -54,6 +58,10 @@ There is no new setting, no setting is removed, and there is no database change 
 - **A campaign that is still loading when you open another one can no longer replace it,** and a campaign link that was refused no longer sends you to the dashboard after you have moved on to another page.
 
 - **Hit point changes during a fight do less work.** Each one redrew everything on the campaign page; now only the roster and the map's health bars are redrawn.
+
+- **The campaign page no longer scrolls sideways.** A hidden label beside the header's last button made the whole page 32 pixels wider than the window at any size, and at phone width the DM's header ran far off the side; the header now wraps onto a second row.
+
+- **The campaign page opens when the browser refuses to store site data,** as some private windows and blocked-site settings do. It stopped with an error; now the panel sizes and the last tab are simply not remembered.
 
 - **Moving the pointer over the map does less work.** The whole map page was worked out again for every pixel the pointer moved, and the mouse wheel's listener was taken off and put back each time; now the page updates only when the pointer reaches another square.
 
