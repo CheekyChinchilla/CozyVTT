@@ -12,29 +12,33 @@ import { toJson } from '../../utils/prisma-json';
 import { canRollDice } from '../../services/permissions';
 import { campaignSockets } from '../utils';
 import { DiceRollSchema } from '../../validators/dice';
+import { ackFrom, refuseRequest } from '../ack';
 
 export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): void {
   /**
    * DICE.ROLL - User rolls dice
    * Validates expression, calculates result, saves to database, and broadcasts.
-   * Under the per-user dice ceiling (SOCKET_CEILINGS).
+   * Under the per-user dice ceiling (SOCKET_CEILINGS). Answered through the
+   * acknowledgement when one is passed (see ../ack.ts).
    * SECURITY: Uses server-authenticated socket.campaignId only.
    */
-  socket.on('dice.roll', async (data: unknown) => {
+  socket.on('dice.roll', async (data: unknown, ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) {
-        socket.emit('error', { message: 'Not authenticated to a campaign' });
+        refuse('Not authenticated to a campaign');
         return;
       }
 
       // Counted before anything else is checked, so a flood of rolls that
       // would be refused (malformed, or from a spectator) is held to the
       // same ceiling and does not draw an error apiece.
-      if (!withinCeiling(socket, 'dice.roll')) return;
+      if (!withinCeiling(socket, 'dice.roll', ack)) return;
 
       // Spectators watch: they may talk in chat, and they may not roll.
       if (!canRollDice(socket.role)) {
-        socket.emit('error', { message: 'Spectators cannot roll dice' });
+        refuse('Spectators cannot roll dice');
         return;
       }
 
@@ -42,7 +46,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
       // they are bounded here (validators/dice.ts).
       const parsed = DiceRollSchema.safeParse(data);
       if (!parsed.success) {
-        socket.emit('error', { message: parsed.error.issues[0]?.message ?? 'Dice expression required' });
+        refuse(parsed.error.issues[0]?.message ?? 'Dice expression required');
         return;
       }
       const { expression, characterName, purpose, secret } = parsed.data;
@@ -52,7 +56,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         parseDiceExpression(expression);
       } catch (error) {
         if (error instanceof DiceParserError) {
-          socket.emit('error', { message: `Invalid dice expression: ${error.message}` });
+          refuse(`Invalid dice expression: ${error.message}`);
           return;
         }
         throw error;
@@ -68,7 +72,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
       });
 
       if (!user) {
-        socket.emit('error', { message: 'User not found' });
+        refuse('User not found');
         return;
       }
 
@@ -141,28 +145,27 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
         // Normal roll - broadcast to all campaign members
         io.to(socket.campaignId).emit('dice.rolled', rollData);
       }
+      ack?.({ ok: true, id: diceRoll.id });
 
       logger.debug('dice.roll', { expression, result: rollResult.total, userId: socket.userId, secret: secret || false, campaignId: socket.campaignId });
     } catch (error) {
       logger.error('dice.roll failed', { err: error });
-      if (error instanceof DiceParserError) {
-        socket.emit('error', { message: `Dice roll failed: ${error.message}` });
-      } else {
-        socket.emit('error', { message: 'Failed to roll dice' });
-      }
+      refuse(error instanceof DiceParserError ? `Dice roll failed: ${error.message}` : 'Failed to roll dice');
     }
   });
 
   /**
    * DICE.CLEAR_HISTORY - DM clears dice roll history (DM-only).
    */
-  socket.on('dice.clearHistory', async () => {
+  socket.on('dice.clearHistory', async (ackArg?: unknown) => {
+    const ack = ackFrom(ackArg);
+    const refuse = (message: string) => refuseRequest(socket, ack, message);
     try {
       if (!socket.campaignId) {
-        socket.emit('error', { message: 'Not authenticated to a campaign' });
+        refuse('Not authenticated to a campaign');
         return;
       }
-      if (!withinCeiling(socket, 'dice.clearHistory')) return;
+      if (!withinCeiling(socket, 'dice.clearHistory', ack)) return;
 
       // Who is running the game, not who owns the campaign. These are separate
       // facts — `Campaign.ownerId` never moves, while the DM seat can — and they
@@ -170,7 +173,7 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
       // ownership here refused the actual DM after a handover and let the former
       // DM, now a player, keep clearing the panel for everyone.
       if (socket.role !== 'DM') {
-        socket.emit('error', { message: 'Only the DM can clear roll history' });
+        refuse('Only the DM can clear roll history');
         return;
       }
 
@@ -188,11 +191,12 @@ export function registerDiceHandlers(io: Server, socket: AuthenticatedSocket): v
 
       // Broadcast to all campaign members (including DM)
       io.to(socket.campaignId).emit('dice.historyCleared');
+      ack?.({ ok: true });
 
       logger.info('dice.clearHistory', { campaignId: socket.campaignId, userId: socket.userId });
     } catch (error) {
       logger.error('dice.clearHistory failed', { err: error });
-      socket.emit('error', { message: 'Failed to clear dice history' });
+      refuse('Failed to clear dice history');
     }
   });
 }

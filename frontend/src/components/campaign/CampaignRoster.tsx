@@ -10,6 +10,7 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useCharacterHp } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTableRoll } from '@/hooks/useTableRoll';
 import { api } from '@/services/api';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
@@ -28,6 +29,7 @@ export default function CampaignRoster() {
   const { campaign, currentMap, userRole } = useCampaign();
   const characterHpCache = useCharacterHp();
   const { socket } = useWebSocket();
+  const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [roster, setRoster] = useState<RosterMember[]>([]);
@@ -435,9 +437,7 @@ export default function CampaignRoster() {
           }
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
-          onRoll={(expression, purpose, characterName) => {
-            socket?.emitDiceRoll({ expression, purpose, characterName });
-          }}
+          onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
           onClose={() => setRollPicker(null)}
         />
       )}

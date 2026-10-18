@@ -182,35 +182,19 @@ export default function DiceRoller() {
   const wasAtBottomRef = useRef(true);
 
   /**
-   * Safety net for the "Rolling…" state.
-   *
-   * A roll is only ever ended by a message coming back from the server, so
-   * anything that loses that message leaves the button disabled until the user
-   * reloads. The listener bug that caused this in practice is fixed in the
-   * socket client, but a roll can still be lost if the connection drops between
-   * the emit and the reply — and a control that can wedge with no way out
-   * should always have one.
+   * End the "Rolling…" state. The roll coming back as `dice.rolled` ends it,
+   * and so does the server's answer to the roll, which also comes when the
+   * roll was refused or never answered (see `rollDice` in the socket client),
+   * so the button cannot stay disabled.
    */
-  const rollTimeoutRef = useRef<number | null>(null);
-  const ROLL_TIMEOUT_MS = 10000;
-
   const clearPendingRoll = useCallback(() => {
-    if (rollTimeoutRef.current !== null) {
-      clearTimeout(rollTimeoutRef.current);
-      rollTimeoutRef.current = null;
-    }
     setIsRolling(false);
   }, []);
 
-  // A pending roll cannot be answered while the socket is down, and drop the
-  // timer on unmount so it cannot fire against a gone component.
+  // A pending roll cannot be answered while the socket is down.
   useEffect(() => {
     if (status !== 'connected') clearPendingRoll();
   }, [status, clearPendingRoll]);
-
-  useEffect(() => () => {
-    if (rollTimeoutRef.current !== null) clearTimeout(rollTimeoutRef.current);
-  }, []);
 
   // Confirm clear history
   const [confirmClear, setConfirmClear] = useState(false);
@@ -339,11 +323,9 @@ export default function DiceRoller() {
       if (!mayDisplayRoll(data, user?.id, userRole === 'DM')) return;
 
       // Newest first in state; the list renders oldest-first, chat style.
-      setRolls((prev) => {
-        const updated = [data, ...prev];
-        // Keep only last 50 rolls
-        return updated.length > 50 ? updated.slice(0, 50) : updated;
-      });
+      // A roll already listed (sent twice, or loaded with the history while
+      // it was on its way) is not added again.
+      setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(data)) ? prev : [data, ...prev].slice(0, 50)));
     };
 
     socket.onDiceRolled(handleDiceRolled);
@@ -369,13 +351,7 @@ export default function DiceRoller() {
         secret: true, // Keep secret flag for styling
       };
 
-      setRolls((prev) => {
-        const updated = [auditRoll, ...prev];
-        if (updated.length > 50) {
-          return updated.slice(0, 50);
-        }
-        return updated;
-      });
+      setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(auditRoll)) ? prev : [auditRoll, ...prev].slice(0, 50)));
     };
 
     socket.onDiceRolledSecret(handleSecretRollAudit);
@@ -385,35 +361,6 @@ export default function DiceRoller() {
       socket.off('dice.rolled.secret', handleSecretRollAudit);
     };
   }, [socket, userRole]);
-
-  // Handle WebSocket errors (rate limiting)
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleError = (data: { message: string }) => {
-      console.log('[DiceRoller] Received error event:', data);
-
-      // Check if it's a rate limit error
-      if (data.message.includes('Rate limit exceeded')) {
-        setError(data.message);
-        clearPendingRoll();
-        // Only set cooldown if not already in cooldown (prevent reset)
-        if (!isInCooldown.current) {
-          isInCooldown.current = true;
-          setRateLimitCooldown(20); // 20 seconds cooldown
-        }
-      } else {
-        setError(data.message);
-        clearPendingRoll();
-      }
-    };
-
-    socket.on('error', handleError);
-
-    return () => {
-      socket.off('error', handleError);
-    };
-  }, [socket]);
 
   // Countdown timer for rate limit cooldown
   useEffect(() => {
@@ -533,24 +480,28 @@ export default function DiceRoller() {
     setError(null);
     setIsRolling(true);
 
-    // The roll is fire-and-forget, so nothing but a reply ends this state. If
-    // the connection drops in between, release the button rather than leaving
-    // it disabled until the user works out that a reload is the only way on.
-    if (rollTimeoutRef.current !== null) clearTimeout(rollTimeoutRef.current);
-    rollTimeoutRef.current = window.setTimeout(() => {
-      rollTimeoutRef.current = null;
-      setIsRolling(false);
-      setError("That roll didn't come back — check your connection and try again.");
-    }, ROLL_TIMEOUT_MS);
-
     console.log('[DiceRoller] Rolling dice:', expr, 'secret:', isSecret);
 
-    socket.emitDiceRoll({
-      expression: expr.trim(),
-      characterName: characterName.trim() || undefined,
-      purpose: purpose.trim() || undefined,
-      secret: isSecret,
-    });
+    // Only the answer to this roll is this panel's to show: it used to take
+    // every `error` on the socket as a refused roll, chat and token refusals
+    // included.
+    void socket
+      .rollDice({
+        expression: expr.trim(),
+        characterName: characterName.trim() || undefined,
+        purpose: purpose.trim() || undefined,
+        secret: isSecret,
+      })
+      .then((answer) => {
+        clearPendingRoll();
+        if (answer.ok) return;
+        setError(answer.error);
+        // The server's flood ceiling: wait it out before rolling again.
+        if (answer.error.startsWith('Rate limit exceeded') && !isInCooldown.current) {
+          isInCooldown.current = true;
+          setRateLimitCooldown(20);
+        }
+      });
 
     // Reset secret roll checkbox after rolling
     if (isSecret) {
@@ -636,8 +587,10 @@ export default function DiceRoller() {
   };
 
   const handleConfirmClear = () => {
-    socket?.emitClearDiceHistory();
     setConfirmClear(false);
+    void socket?.clearDiceHistory().then((answer) => {
+      if (!answer.ok) setError(answer.error);
+    });
   };
 
   // ============================================

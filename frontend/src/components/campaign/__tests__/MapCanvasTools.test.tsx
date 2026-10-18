@@ -63,6 +63,7 @@ const h = vi.hoisted(() => {
   };
 });
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/CampaignContext', async () => {
   const { useSyncExternalStore } = await import('react');
   const noop = () => undefined;

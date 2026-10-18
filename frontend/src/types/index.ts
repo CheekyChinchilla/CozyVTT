@@ -1297,6 +1297,12 @@ export interface DiceRollEvent {
   secret?: boolean;
 }
 
+/** The server's answer to a `dice.roll` sent with an acknowledgement: the stored roll's id, or why not. */
+export type DiceRollAck = { ok: true; id: string } | { ok: false; error: string };
+
+/** The server's answer to a request that returns nothing but whether it was done. */
+export type DoneAck = { ok: true } | { ok: false; error: string };
+
 export interface DiceRolledEvent {
   /**
    * The stored roll's id. Optional because a roll made while the session is

@@ -13,6 +13,8 @@ import type {
   DiceRolledSecretEvent,
   ChatMessageEvent,
   ChatMessageAck,
+  DiceRollAck,
+  DoneAck,
   ChatMessageBroadcast,
   ChatSystemBroadcast,
   SessionStartEvent,
@@ -62,6 +64,8 @@ type EventCallback<T = unknown> = (data: T) => void;
 
 /** How long a chat message waits for the server's answer before it counts as not sent. */
 const CHAT_ANSWER_TIMEOUT_MS = 10_000;
+/** How long a roll, or a clear of the dice history, waits for its answer. */
+const ROLL_ANSWER_TIMEOUT_MS = 10_000;
 
 /**
  * A listener as the registry holds it, once its payload type has been erased.
@@ -492,8 +496,13 @@ class SocketClient {
   // Dice Rolling Events
   // ============================================
 
-  emitDiceRoll(data: DiceRollEvent) {
-    this.socket?.emit('dice.roll', data);
+  /**
+   * Roll at the table and wait for the server's answer: the stored roll's id,
+   * or why it was refused. With no connection, or no answer in
+   * ROLL_ANSWER_TIMEOUT_MS, it counts as not made.
+   */
+  rollDice(data: DiceRollEvent): Promise<DiceRollAck> {
+    return this.askFor<DiceRollAck>('dice.roll', data, ROLL_ANSWER_TIMEOUT_MS, "That roll didn't come back. Check your connection and try again.");
   }
 
   onDiceRolled(callback: EventCallback<DiceRolledEvent>) {
@@ -504,8 +513,24 @@ class SocketClient {
     this.addListener('dice.rolled.secret', callback);
   }
 
-  emitClearDiceHistory() {
-    this.socket?.emit('dice.clearHistory');
+  /** Clear the dice history for everyone (the DM's), and wait for the answer. */
+  clearDiceHistory(): Promise<DoneAck> {
+    return this.askFor<DoneAck>('dice.clearHistory', undefined, ROLL_ANSWER_TIMEOUT_MS, 'No answer from the server');
+  }
+
+  /**
+   * Send an event with an acknowledgement and resolve with the server's
+   * answer, or with a refusal saying `noAnswer` when none comes in time, or
+   * at once with no connection.
+   */
+  private askFor<T extends { ok: boolean }>(event: string, data: unknown, timeoutMs: number, noAnswer: string): Promise<T | { ok: false; error: string }> {
+    const socket = this.socket;
+    if (!socket?.connected) return Promise.resolve({ ok: false, error: 'Not connected to server' });
+    return new Promise((resolve) => {
+      const answered = (err: Error | null, answer?: T) => resolve(err || !answer ? { ok: false, error: noAnswer } : answer);
+      if (data === undefined) socket.timeout(timeoutMs).emit(event, answered);
+      else socket.timeout(timeoutMs).emit(event, data, answered);
+    });
   }
 
   onDiceHistoryCleared(callback: EventCallback<void>) {
@@ -693,7 +718,7 @@ class SocketClient {
   }
 
   /**
-   * Spend one hit die. The roll goes through emitDiceRoll like any other; this
+   * Spend one hit die. The roll goes through rollDice like any other; this
    * is only the decrement, which the server applies so the count cannot be
    * kept up by a client that declines to send it.
    */

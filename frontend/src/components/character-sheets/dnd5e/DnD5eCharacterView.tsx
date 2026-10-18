@@ -52,7 +52,8 @@ interface DnD5eCharacterViewProps {
   character: Character;
   onEdit?: () => void;
   /** Called when the user clicks a rollable stat. Omit outside campaign context. */
-  onRoll?: (expression: string, purpose: string) => void;
+  /** Roll at the table; resolves whether the roll was made, when the host can tell. */
+  onRoll?: (expression: string, purpose: string) => void | Promise<boolean>;
   /**
    * Called when a hit die is spent, with the position of the pool. Omit and
    * the dice still roll but nothing is decremented.
@@ -109,8 +110,17 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   }, [rollPopup]);
 
   const handleRoll = (expression: string, purpose: string) => {
-    if (onRoll) onRoll(expression, purpose);
+    const made = onRoll?.(expression, purpose);
     setRollPopup(null);
+    return made;
+  };
+
+  // A hit die is spent once its roll is made: a roll refused (too many rolls,
+  // no connection) used to take the die anyway.
+  const spendHitDie = (expression: string, purpose: string, index: number) => {
+    void Promise.resolve(handleRoll(expression, purpose)).then((made) => {
+      if (made !== false) onSpendHitDie?.(index);
+    });
   };
 
   const showRollPopup = (e: React.MouseEvent, expression: string, purpose: string) => {
@@ -430,7 +440,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                   className={`px-4 py-2 bg-white border border-stone-300 rounded-lg group ${
                     spendable ? 'cursor-pointer hover:bg-red-50 select-none' : ''
                   }`}
-                  onClick={spendable ? () => { handleRoll(expr, purpose); onSpendHitDie?.(idx); } : undefined}
+                  onClick={spendable ? () => spendHitDie(expr, purpose, idx) : undefined}
                   title={spendable ? `Spend one hit die: roll ${expr}` : undefined}
                 >
                   <div className="text-xs text-stone-500 capitalize">{hd.class}</div>

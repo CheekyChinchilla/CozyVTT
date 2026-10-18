@@ -214,7 +214,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 
 *Screenshot pending — Dice roller panel.*
 
-Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it.
+Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
 Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. Supported notation:
@@ -407,7 +407,7 @@ Your own skills show up with the rest on your sheet and in the right-click roll 
 
 At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5 d10` means you have five d10 hit dice and three of them are unspent.
 
-**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**.
+**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**. If the roll doesn't go through (the connection dropped, or too many rolls at once), a message says why and the die is not spent.
 
 It rolls **one** die, not the whole pool — spending is one die at a time, and the rules let you decide whether to spend another after seeing each result. So click again if you want a second.
 

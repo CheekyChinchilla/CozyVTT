@@ -9,6 +9,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { canRollAsCharacter } from '@/services/permissions';
+import { useTableRoll } from '@/hooks/useTableRoll';
 import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -149,6 +150,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // state watches it, because a request sent before the campaign is joined is
   // dropped unanswered.
   const { socket, joinedEpoch } = useWebSocket();
+  const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const isDM = userRole === 'DM';
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
@@ -3383,7 +3385,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           // rolls are filed under the name everyone may see.
           publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
           onRoll={(expression, purpose, characterName) =>
-            socket?.emitDiceRoll({ expression, purpose, characterName })
+            tableRoll({ expression, purpose, characterName })
           }
           // Only offered when this token is already in the initiative order and
           // this viewer may roll for it — the DM for anyone, a player for a
@@ -3408,7 +3410,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             anchorX={npcRollPicker.x}
             anchorY={npcRollPicker.y}
             onRoll={(expression, purpose, characterName) =>
-            socket?.emitDiceRoll({ expression, purpose, characterName })
+            tableRoll({ expression, purpose, characterName })
           }
             onClose={() => setNpcRollPicker(null)}
           />

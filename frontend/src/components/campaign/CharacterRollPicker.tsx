@@ -38,8 +38,11 @@ interface CharacterRollPickerProps {
    * The name comes from here rather than from each caller because this is the
    * component that already holds the character; three call sites looking it up
    * for themselves is how the roll menu got its ownership check wrong.
+   *
+   * Resolves whether the roll was made, when the host can tell, so a hit die
+   * is spent only for a roll that was.
    */
-  onRoll: (expression: string, purpose: string, characterName?: string) => void;
+  onRoll: (expression: string, purpose: string, characterName?: string) => void | Promise<boolean>;
   /**
    * The name to file rolls under in place of the character's. The dice log
    * goes to the whole table, so a picker opened from an obscured token passes
@@ -202,10 +205,15 @@ export default function CharacterRollPicker({
       purpose = `${purpose} (${modeLabel})`;
     }
 
-    onRoll(expr, purpose, publicName ?? character?.name);
-    // Spending is recorded after the roll, so a failure to decrement cannot
-    // swallow the roll the player just made.
-    if (opt.hitDiceIndex !== undefined) onSpendHitDie?.(opt.hitDiceIndex);
+    const made = onRoll(expr, purpose, publicName ?? character?.name);
+    // Spent once the roll is made: a refused roll used to take the die
+    // anyway. After the roll, so a failure to decrement cannot swallow it.
+    const hitDiceIndex = opt.hitDiceIndex;
+    if (hitDiceIndex !== undefined) {
+      void Promise.resolve(made).then((ok) => {
+        if (ok !== false) onSpendHitDie?.(hitDiceIndex);
+      });
+    }
     onClose();
   };
 
