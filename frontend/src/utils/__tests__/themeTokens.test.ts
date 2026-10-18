@@ -22,6 +22,12 @@ import { describe, it, expect } from 'vitest';
  *  - the DM map overlays are deliberately dark panels floating over the map
  */
 const EXEMPT = [
+  // TODO(sheets): GAME_SYSTEMS.md's Styling rule has the sheets use the theme
+  // tokens like the rest of the app, and they do not yet: they are half themed.
+  // In a dark theme the D&D 5e saving throw names take the theme's light text
+  // on the sheet's white paper, and the Call of Cthulhu sheet turns dark around
+  // its dark sepia text. Right: theme tokens throughout the sheets (the sepia
+  // scale stays the Call of Cthulhu exception), then this entry goes.
   '/src/components/character-sheets/',
   '/src/components/campaign/DmWallControls.tsx',
   '/src/components/campaign/DmLightControls.tsx',
