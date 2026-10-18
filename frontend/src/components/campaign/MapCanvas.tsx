@@ -107,6 +107,7 @@ import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
+import { useTokenImages } from './map/useTokenImages';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -184,7 +185,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [spiritLayerOpacity, setSpiritLayerOpacity] = useState(1);
 
   // Token state
-  const [tokenImages, setTokenImages] = useState<Map<string, HTMLImageElement>>(new Map());
+  // Token pictures by token id, as they load (map/useTokenImages.ts).
+  const tokenImages = useTokenImages(tokens);
   const [draggedToken, setDraggedToken] = useState<Token | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
@@ -668,62 +670,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [imageLoaded, currentMap?.id]);  
   // ^ Intentionally not including canvasSize/mapControls — we only want to fire once
   //   per map load, not on every resize. Users can use the Reset View button to re-fit.
-
-  // ============================================
-  // Token Image Loading
-  // ============================================
-
-  /**
-   * Load token images when tokens change
-   */
-  useEffect(() => {
-    console.log('[MapCanvas] Tokens changed:', tokens.length, 'tokens');
-
-    const loadTokenImages = async () => {
-      const newTokenImages = new Map<string, HTMLImageElement>();
-
-      for (const token of tokens) {
-        console.log('[MapCanvas] Processing token:', token.name, 'imageUrl:', token.imageUrl);
-        if (!token.imageUrl) continue;
-
-        // Reuse the cached element only when it was loaded from the SAME url.
-        // Keying on token id alone meant a token whose image was changed kept
-        // rendering the old picture until the page was reloaded — for every
-        // client, since they all cache the same way.
-        // getAttribute('src') returns the literal value set below, not the
-        // resolved absolute URL the .src property would give.
-        const cached = tokenImages.get(token.id);
-        if (cached && cached.getAttribute('src') === token.imageUrl) {
-          newTokenImages.set(token.id, cached);
-          continue;
-        }
-
-        // Load new image
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        await new Promise<void>((resolve) => {
-          img.onload = () => {
-            console.log('[MapCanvas] ✅ Token image loaded:', token.name);
-            newTokenImages.set(token.id, img);
-            resolve();
-          };
-          img.onerror = (error) => {
-            console.error(`[MapCanvas] ❌ Failed to load token image for ${token.name}:`, error);
-            console.error(`[MapCanvas] Image URL was:`, img.src);
-            resolve(); // Don't block on errors
-          };
-          // Use imageUrl directly - backend now returns full paths
-          console.log('[MapCanvas] Loading token image from:', token.imageUrl);
-          img.src = token.imageUrl;
-        });
-      }
-
-      setTokenImages(newTokenImages);
-    };
-
-    loadTokenImages();
-  }, [tokens]);
 
   // ============================================
   // WebSocket Event Listeners
