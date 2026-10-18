@@ -76,3 +76,20 @@ export function shortenFileName(name: string, max: number): string {
   if (ext.length === 0 || ext.length > 20) return cutText(name, max);
   return `${cutText(name.slice(0, name.length - ext.length), max - ext.length)}${ext}`;
 }
+
+/**
+ * The name an asset downloads under. multer reads an upload's file name as
+ * latin1, so a name with accented letters is stored as its UTF-8 bytes, one
+ * character each: "café.png" as "cafÃ©.png" (the TODO(upload) in
+ * routes/assets.ts). Express 4 sent that name as those bytes, which browsers
+ * read as UTF-8; Express 5 writes it out properly, so it is read back as UTF-8
+ * here. A name that is not such a run of bytes, such as one stored in its
+ * real letters, is returned as it is.
+ */
+export function downloadNameOf(stored: string): string {
+  const codes = Array.from(stored, (c) => c.codePointAt(0) ?? 0);
+  if (!codes.some((c) => c >= 0x80) || codes.some((c) => c > 0xff)) return stored;
+  const bytes = Buffer.from(stored, 'latin1');
+  const read = bytes.toString('utf8');
+  return Buffer.from(read, 'utf8').equals(bytes) ? read : stored;
+}

@@ -42,6 +42,7 @@ import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/clie
 import {
   parseUploadMetadata,
   shortenFileName,
+  downloadNameOf,
   MAX_ASSET_NAME_LENGTH,
   MAX_ORIGINAL_NAME_LENGTH,
 } from '../validators/assets';
@@ -467,8 +468,9 @@ router.post(
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
       // TODO(upload): multer reads the file name's UTF-8 bytes as latin1, so a
-      // name with non-ASCII characters is stored garbled and downloads with it;
-      // decode it as UTF-8 before storing.
+      // name with non-ASCII characters is stored garbled and shown so in the
+      // library (downloads read it back through downloadNameOf); decode it as
+      // UTF-8 before storing, and the names already stored with it.
       const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)
@@ -753,7 +755,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     }
 
     // Send file with original name
-    return res.download(downloadPath, asset.originalName, SERVER_BUILT_PATH);
+    return res.download(downloadPath, downloadNameOf(asset.originalName), SERVER_BUILT_PATH);
   } catch (error) {
     logger.error('Error downloading asset', { err: error });
     return res.status(500).json({
