@@ -119,3 +119,29 @@ export function squareExitPoint(centre: Pt, gridSize: number, angleRad: number):
 // Sphere and cylinder have no entry here on purpose. They sit on their anchor
 // point: a circle does not tile squares whatever it is centred on, and that
 // placement was not part of the reported misalignment.
+
+/**
+ * How a game system draws a cone. D&D 5e: a cone's width at any point along
+ * its length equals that point's distance from where it starts, so it is a
+ * triangle whose far edge, at its full length, is as wide as it is long.
+ * Pathfinder 2e: a quarter circle, a 90 degree sector of its length.
+ * Both checked against the systems' rulebooks.
+ */
+export type ConeRule = 'width-equals-distance' | 'quarter-circle';
+
+export type ConeOutline =
+  | { kind: 'triangle'; points: [Pt, Pt, Pt] }
+  | { kind: 'sector'; centre: Pt; radius: number; from: number; to: number };
+
+/** A cone from `origin`, aimed along `angleRad`, `length` map pixels long. */
+export function coneOutline(origin: Pt, angleRad: number, length: number, rule: ConeRule): ConeOutline {
+  if (rule === 'quarter-circle') {
+    return { kind: 'sector', centre: origin, radius: length, from: angleRad - Math.PI / 4, to: angleRad + Math.PI / 4 };
+  }
+  // The far edge's middle, a cone's length out, and half its width either side.
+  const fx = origin.x + Math.cos(angleRad) * length;
+  const fy = origin.y + Math.sin(angleRad) * length;
+  const px = -Math.sin(angleRad) * (length / 2);
+  const py = Math.cos(angleRad) * (length / 2);
+  return { kind: 'triangle', points: [origin, { x: fx - px, y: fy - py }, { x: fx + px, y: fy + py }] };
+}

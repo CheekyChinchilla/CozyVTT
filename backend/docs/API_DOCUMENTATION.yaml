@@ -6424,9 +6424,9 @@ paths:
       responses:
         '200':
           description: >-
-            List of maps. Each item is a summary of 14 fields, not the full
-            Map object: no tokens, annotations, walls, lights, fog, spirit
-            layer or `campaignId`.
+            List of maps. Each item is a summary of 14 fields, and for the DM
+            a 15th, `spiritLayerUrl`; not the full Map object: no tokens,
+            annotations, walls, lights, fog or `campaignId`.
           content:
             application/json:
               schema:
@@ -6449,6 +6449,10 @@ paths:
                         fogEnabled: { type: boolean }
                         globalIllumination: { type: boolean }
                         explorationEnabled: { type: boolean }
+                        spiritLayerUrl:
+                          type: string
+                          nullable: true
+                          description: The DM's alone; absent for anyone else.
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
         '403':
@@ -6639,19 +6643,31 @@ paths:
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
         campaign is showing and to the DM's connections for any other. When
-        `lightingEnabled` or `globalIllumination` actually changes, and the map
-        is the one the campaign is showing, every member is also sent the map
-        as they can now see it (`map.changed`), since those two decide which
-        tokens a player is sent; editing another map in the library sends no
-        `map.changed`.
+        `lightingEnabled` or `globalIllumination` actually changes, since
+        those two decide which tokens a player is sent, or anything the map is
+        drawn from (`name`, `imageUrl`, `baseLayerUrl`, `width`, `height`,
+        `gridSize`, `feetPerSquare`, `diagonalRule`, `spiritLayerUrl`), and
+        the map is the one the campaign is showing, every member is also sent
+        the map as they can now see it (`map.changed`); editing another map in
+        the library sends no `map.changed`.
 
         Turning `fogEnabled` on from off also pushes the map's fog at once,
         as a fog operation does: `fog:updated` with the whole grid to the DM,
         `fog:cells` with the revealed cells to everyone else who may read the
-        map. Changing `gridSize`, `width` or `height` pushes nothing, but the
-        stored fog no longer matches the map's grid, so from then on it is
-        read as a fresh, fully hidden grid, and the next fog operation
-        overwrites it.
+        map. Changing `width` or `height` pushes nothing, but the stored fog
+        no longer matches the map's squares, so from then on it is read as a
+        fresh, fully hidden grid, and the next fog operation overwrites it.
+        Changing only `gridSize` keeps the stored fog and explored areas: the
+        squares are the same, drawn larger or smaller.
+
+        Walls, doors and lights are stored in map pixels and the picture is
+        drawn across `width` × `gridSize` by `height` × `gridSize`, so a change
+        to either side of that moves every wall end and light by the same
+        factor on that axis, rounded to whole pixels, under the map's lock.
+        Light radii are in squares and do not change, nor do token positions.
+        Every member who may read the map is then sent `walls:replaced` and
+        `lights:replaced`, as for a bulk replace and with no `opId`, so open
+        pages draw them where they now are.
 
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
         address (`/api/assets/<kind>/<id>`); a bare id is stored as
@@ -6794,9 +6810,9 @@ paths:
         Set a map as the current map for the campaign (DM only). Which plane
         each player is on, and which combatants they are sent, follows the
         current map, so while anything is in the initiative order it is sent
-        again to every connected member (`initiative.state`). The route sends
-        no map event of its own, so open pages are not moved to the new map
-        by it.
+        again to every connected member (`initiative.state`). Every connected
+        member is sent the new map as they may see it (`map.changed`), so
+        every open page moves onto it, whoever made the request.
       operationId: setCurrentMap
       security:
         - cookieAuth: []
@@ -7737,8 +7753,9 @@ paths:
       description: |
         Returns the full `FogState` for the map, one cell per grid square,
         whether or not fog of war is on for it. A map with no stored fog, or
-        whose stored fog no longer matches its `width`, `height` and
-        `gridSize`, answers a fresh, fully hidden grid. Players do not see the
+        whose stored fog no longer matches its `width` and `height`, answers a
+        fresh, fully hidden grid; stored fog of the right size is answered at
+        the map's `gridSize`. Players do not see the
         raw fog state; they receive the revealed cells over WebSocket
         (`fog:cells`) as the DM reveals areas. DM only.
 

@@ -51,8 +51,6 @@ _Nothing at present._
 - `1.5.4` **Edit Token's Controlled By list has no entry for a spectator or former member still named on a token,** yet its hint still says "This player can move the token on the map." (`NpcQuickEditor.tsx`).
 - `1.5.4` **Copying a token template to another campaign shows nothing on success and only "Failed to copy template" on refusal** (`TokenTemplateLibrary.tsx`).
 - `1.5.4` **A refused Place on Map in the Token Manager says only "Failed to add token to map",** without the server's reason (`TokenManager.tsx`).
-- `1.5.4` **Right-click Hide, Obscure and Spirit Realm moves fail silently.** Their errors go only to the browser console (`MapCanvas.tsx`).
-- `1.5.4` **The DM's spirit-token toggle reads "Hiding spirit tokens (click to show)" while they are shown** (`MapCanvas.tsx`).
 - `1.5.4` **The REST token routes do not broadcast their changes.** Creating, updating or deleting a token through `routes/maps.ts` sends open pages nothing about the token, only the initiative order when there is one. Only a move between maps sends the map, so a change made by an API client stays unseen until the next broadcast or a reload.
 
 ### Campaigns and assets
@@ -90,10 +88,7 @@ _Nothing at present._
 
 ### Maps
 
-- `1.5.4` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
-- `1.5.4` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
-- `1.5.4` **A player's door toggle made while the DM is moving selected walls is undone for everyone.** The move's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the move is lost. Dragging a wall's end keeps the change, but Undo after it puts the old door back (`MapCanvas.tsx`).
-- `1.5.4` **At the zoom that fits the map to the screen, clicking a token's square next to a door toggles the door for everyone** instead of picking up or placing the token (`MapCanvas.tsx`).
+- `after 1.5.4` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 
 ### Accounts
 

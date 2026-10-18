@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dmTokenControls } from '../tokenControls';
+import { dmTokenControls } from '../dmTokenMenu';
 import { TokenType } from '@/types';
 
 /**

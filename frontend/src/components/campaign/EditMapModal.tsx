@@ -284,20 +284,6 @@ export default function EditMapModal({
     }
   }, [isOpen, map]);
 
-  // The Map Library's list leaves out the spirit layer picture, so the
-  // picker would show none. Read the whole map for it, unless the DM has
-  // already picked one.
-  useEffect(() => {
-    if (!isOpen || !map) return;
-    let cancelled = false;
-    mapService.getMap(campaignId, map.id)
-      .then((whole) => {
-        if (!cancelled && !spiritTouched.current) setSpiritAssetId(extractAssetId(whole.spiritLayerUrl));
-      })
-      .catch(() => { /* the picker shows none; a save leaves the picture alone */ });
-    return () => { cancelled = true; };
-  }, [isOpen, map, campaignId]);
-
   // When the map image is swapped to a different one, attempt auto-detection
   // (Don't run on initial open — the existing settings are already correct)
   const initialAssetId = useRef<string | null>(null);

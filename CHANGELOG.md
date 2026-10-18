@@ -26,15 +26,65 @@ There is no new setting, no setting is removed, and there is no database change 
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
+  - *Maps.* `GET /api/campaigns/:campaignId/maps` gives the DM each map's `spiritLayerUrl` as well; it is still absent for anyone else. `PUT /api/campaigns/:campaignId/maps/:id` sends every member `map.changed` when it changes the name, picture, size, grid, scale, diagonal rule or spirit layer of the map on screen, as it already did for lighting. `PUT /api/campaigns/:campaignId/maps/:id/set-current` sends every member `map.changed` with the new map; the web app no longer sends `map.change` itself after switching.
+  - *Walls and lights.* `PUT /api/campaigns/:campaignId/maps/:id` changing `width`, `height` or `gridSize` scales every wall end and light position by the change in the map's drawn size on each axis, rounded to whole pixels; light radii are unchanged. Every page reading the map is then sent `walls:replaced` and `lights:replaced`, as for a bulk replace and with no `opId`. Stored fog and explored areas are kept across a `gridSize`-only change, at the new cell size.
+  - *Walls and lights.* `wall:remove` of an id the map does not have answers `error` with `Wall segment not found` and writes nothing; it wrote the list again and sent everyone `wall:removed`. A `light:update` that sets a light to the values it already has sends anyone but the DM nothing, where players were sent `light:updated` and, on a lit map, the map again.
+  - *Walls and lights.* A player's `wall:update` on a map with fog of war on is refused with `You cannot see that door` unless a square revealed to them lies beside the door's middle, before any `That door is locked`. The refusal is followed by `wall:updated` with the door as it was, as other refusals are.
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
 
+- **Moving the pointer over the map does less work.** The whole map page was worked out again for every pixel the pointer moved, and the mouse wheel's listener was taken off and put back each time; now the page updates only when the pointer reaches another square.
+
+- **Token pictures load together when a map opens, and one that cannot be loaded is not asked for again every time a token moves.** They loaded one after another, so a map with many tokens filled in slowly, and a missing picture was requested again on every move.
+
+- **A burst of edits to one map no longer holds up the rest of the server.** Each edit waiting its turn on a busy map held one of the server's few database connections while it waited, so dragging many walls or tokens at once could leave other pages, on any campaign, waiting too.
+
+- **Fog of war fades away over the squares you reveal.** The fade was meant to play on each player's screen as fog lifted, but it never drew, and the map was redrawn about 24 times for nothing each time fog changed.
+
+- **The AoE Shape tool's cone has the right shape for your game.** In D&D 5e its far corners fell about a tenth short, and its far edge came to a point; it is now as wide at its far end as it is long, as the rules describe. In Pathfinder 2e it is now a quarter circle, the shape that game uses.
+
+- **Walls, doors and lights stay on the map's picture when you change its Width, Height or Grid Size.** They stayed where they were while the picture stretched, so none lined up with the art any more and had to be redrawn. Changing only the **Grid Size** also keeps the fog you revealed and what each player has explored; it used to cover the whole map again.
+
+- **Players see an edit to the map on screen straight away.** A new picture, size, grid, scale, name or spirit layer reached players only when they next loaded the map. A map made current by a script or a second tab moves every page onto it, as switching in the Map Library does.
+
+- **The map's Zoom In and Zoom Out buttons zoom about the middle of the view.** They zoomed about the map's top-left corner, so what you were looking at slid away. The mouse wheel zooms by how far it turns, so a trackpad no longer zooms a whole step for each tiny movement, and a quick turn of the wheel no longer loses steps.
+
+- **A player opening or closing a door while you drag walls keeps their change.** Dropping the dragged walls put the door back as it was for everyone, and undoing a moved wall corner could do the same.
+
+- **Clicking a token beside a door picks the token up, or puts the one you are holding down there.** Zoomed out, as when the map is fitted to the screen, the click opened or closed the door for everyone instead. A click on an empty square still opens the door.
+
+- **Switching maps lets go of whatever you were holding on the last one.** A token you were moving stayed in your hand on the new map, while everyone else still saw it at your pointer on the old one; it now goes back where it was picked up. A half-drawn wall or polygon, and a wall selection, no longer carry over either, so they cannot join the old map's points to the new map's. **Esc** now puts a token you are holding back, as a right-click does.
+
+- **Letting go of the mouse button off the map finishes what you were doing.** An erase or brush stroke dragged off the map stayed live, so it went on erasing or painting when the pointer came back with no button held, and a right-button pan left the wall **Select** tool unable to highlight the wall under the pointer. A fog box, a wall drag and a light drag released off the map are finished the same way.
+
+- **The ruler counts alternating diagonals at the map's own scale.** On a map using the alternating diagonal rule, each diagonal square was counted as 5 ft, and every second one as 10 ft, whatever the map's **Grid Scale**, so on a map at 10 ft a square diagonals measured half their distance.
+
+- **A player who right-clicks a creature or an object on the map no longer gets an empty menu.** The menu has nothing for a player there, so none opens.
+
+- **A character dragged from the roster that cannot be placed on the map says why.** Nothing appeared and there was no message.
+
+- **Hide from Players, Obscure Identity, Send to Spirit Realm and Return to Material Plane on a token's right-click menu say why when they fail.** The menu closed and nothing changed, with no message.
+
+- **Preview Player View can always be ended.** Turning off both dynamic lighting and fog of war during a preview hid **DM View**, the button that ends it, and left you in the player's view until one was turned on again or the page was reloaded.
+
+- **The light tool's Select does nothing during a preview.** A click there still picked up and dragged lights, whose markers the preview hides. Placing a light while previewing still works, so you can watch what it lights for the player.
+
+- **The DM's spirit token button on the map toolbar says what a click does.** While spirit tokens were shown, its tooltip read "Hiding spirit tokens (click to show)"; it now reads "Spirit tokens shown, click to hide".
+
+- **Panning with the right mouse button under the fog or light tool no longer opens a token or door menu.** The right button pans the map while any wall, fog or light tool is up. The wall tools already kept the menus closed, and now the fog and light tools do too; press **Esc** to put the tool away and right-click as usual.
+
+- **Clicking near a polygon's first corner closes the shape.** The **Polygon** wall tool placed one more corner there instead, unless the map happened to start at the very top left of the page, so a double-click was the only way to finish a shape.
+
+- **Escape puts the light tool away, as it does the wall tools.** With **Place** or **Select** chosen in the **Lights** panel, pressing it did nothing.
+
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **With fog of war on, a player can open or close only a door beside a square revealed to them.** A door wholly under fog could still be toggled, and the answer, or being told it was locked, told the player a door was there where their screen showed nothing. The DM can still open any door.
 
 - **The last security advisory against the tools that build CozyVTT is cleared.** It was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release. Tailwind CSS 4 does not use it. It was only ever in the build tools, never in an instance.
 

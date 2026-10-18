@@ -593,8 +593,12 @@ export function lightReachesPlayers(light: LightSource | undefined): boolean {
   return light?.enabled === true;
 }
 
-/** Whether a light changing from `before` to `after` changes the copy anyone but the DM has. */
+/**
+ * Whether a light changing from `before` to `after` changes the copy anyone
+ * but the DM has. A light set to the values it already has changes nothing.
+ */
 export function lightChangeReachesPlayers(before: LightSource, after: LightSource): boolean {
+  if (sameLight(before, after)) return false;
   return lightReachesPlayers(before) || lightReachesPlayers(after);
 }
 

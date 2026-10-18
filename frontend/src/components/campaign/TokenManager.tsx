@@ -25,7 +25,7 @@ import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Asset, CreateTokenRequest, Token, TokenDisplayMode } from '@/types';
 import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '@/types';
-import { dmTokenControls } from '@/utils/tokenControls';
+import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { apiErrorMessage } from '@/utils/errors';
 import Button from '@/components/ui/Button';
 import AssetGrid from '@/components/assets/AssetGrid';
@@ -88,7 +88,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [initiative, setInitiative] = useState<string>('');
   const [sightRadius, setSightRadius] = useState(0);
   // Placing a token already hidden. Offered for the tokens that are secrets
-  // (see utils/tokenControls.ts). An object defaults to hidden, which is what
+  // (see utils/dmTokenMenu.ts). An object defaults to hidden, which is what
   // a secret door or a trapped chest wants; a creature defaults to visible, so
   // an ordinary monster is not placed invisible by accident. The form opens on
   // NPC, and the type buttons keep the two in step.

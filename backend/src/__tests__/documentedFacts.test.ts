@@ -631,8 +631,9 @@ describe('the guides on moving a token and on setting up', () => {
     expect(found).toEqual([]);
   });
 
+  // The behaviour itself is driven through MapCanvas by this suite.
   it('describe the pick-up and put-down the map really uses', () => {
-    expect(read('frontend/src/components/campaign/MapCanvas.tsx')).toContain('Token placement is handled in handleMouseDown on second click');
+    expect(read('frontend/src/components/campaign/__tests__/MapCanvasInput.test.tsx')).toContain("describe('moving a token: click to pick it up, click again to put it down'");
     for (const { text } of guides) expect(text).toMatch(/click/i);
   });
 

@@ -12,7 +12,8 @@ export interface Point {
 /**
  * Calculate grid distance in feet between two positions.
  * flat: Chebyshev — every diagonal costs the same as a straight move (D&D 5e)
- * alternating: every second diagonal costs 10 ft instead of 5 ft (PF2e)
+ * alternating: every second diagonal costs two squares instead of one (PF2e:
+ * 5 ft, then 10 ft, on 5 ft squares)
  */
 export function calcGridDistance(
   dx: number,
@@ -23,7 +24,7 @@ export function calcGridDistance(
   if (diagonalRule === 'alternating') {
     const diag = Math.min(dx, dy);
     const straight = Math.max(dx, dy) - diag;
-    const diagCost = diag * 5 + Math.floor(diag / 2) * 5;
+    const diagCost = (diag + Math.floor(diag / 2)) * feetPerSquare;
     return diagCost + straight * feetPerSquare;
   }
   return Math.max(dx, dy) * feetPerSquare;

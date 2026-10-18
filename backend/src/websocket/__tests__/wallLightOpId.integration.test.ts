@@ -37,6 +37,8 @@ async function newMap(data: { wallSegments?: Wall[]; lights?: Light[] } = {}): P
     data: {
       campaignId, name: 'Op ids', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
       width: 20, height: 20, gridSize: 50, tokens: [], annotations: [],
+      // Fog off: a player's door under fog is refused (doorSight.integration.test.ts).
+      fogEnabled: false,
       wallSegments: toJson(data.wallSegments ?? []), lights: toJson(data.lights ?? []),
     },
   });

@@ -160,7 +160,7 @@ Once your map is in the asset library:
 
 Handing the DM seat over and staying in the campaign as a player changes nothing: the new DM and the players still see your **Personal** pictures. If you mean to leave, move the pictures your maps use to **Campaign** in the Asset Library first, while you are still the DM.
 
-You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Changing any of them resets that map's fog of war to fully covered and forgets what every player has explored of it.
+You can change a map's **Width**, **Height** and **Grid Size** later with the **pencil** (Edit map) in the Map Library. Walls, doors and lights move with the picture, so they stay on it. Changing the **Width** or **Height** resets that map's fog of war to fully covered and forgets what every player has explored of it; changing only the **Grid Size** keeps both. Whatever you change on the map on screen, its picture and name included, reaches your players at once.
 
 **Map size limits.** A map can be:
 
@@ -234,7 +234,7 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 - **NPCs and monsters** — the **Place on Map** button on a creature in the **Creature Library**, or on a token template.
 - **Anything you built yourself** — **Place on Map** in the **Token Manager**.
 
-Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
+Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
 
 *GIF pending — Placing a token and moving it into position.*
 
@@ -709,7 +709,7 @@ Otherwise templates snap to your map's grid, so a shape covers whole squares rat
 
 - **Cube** — always axis-aligned, covering exactly the squares it should. A 10 ft cube on a 5 ft grid covers 2×2 squares; a 15 ft cube covers 3×3. It doesn't rotate, because a tilted square can't line up with a square grid
 - **Line** — starts at the edge of the square you pinned and is centred across its width, so a 20 ft × 5 ft line laid along a row or column covers exactly 4×1 squares. Widths that come to an *even* number of squares (10 ft on a 5 ft grid) sit half a square into the rows either side, because the line is centred on the square you pinned rather than on the line between two squares — Alt+click if you need one placed exactly
-- **Cone** — its point sits on the edge of the square you pinned, so the cone leaves that square evenly. The spreading edges are at an angle, so they'll still cut across squares — that's the shape, not a bug. Judge affected squares by how much of each is covered, as you would at the table
+- **Cone** — its point sits on the edge of the square you pinned, so the cone leaves that square evenly. Its shape follows your campaign's system: in D&D 5e it is as wide at its far end as it is long, and in Pathfinder 2e it is a quarter circle. The spreading edges are at an angle, so they'll still cut across squares — that's the shape, not a bug. Judge affected squares by how much of each is covered, as you would at the table
 - **Circle** — centred on the square under the cursor
 
 > Sizes use the map's **feet per square** setting (**Grid Scale** in Edit Map), which defaults to 5 ft. If your templates look twice or half the size you expect, check that value first.
@@ -941,7 +941,7 @@ Walls define the physical boundaries of your map — they block line of sight an
 
 ### The Wall Drawing Tool
 
-Open the **Walls** panel, one of the DM tool panels stacked at the top right of the map. The panel has six tool modes:
+Open the **Walls** panel, one of the DM tool panels stacked at the top right of the map. While a wall, fog or light tool is up, the right mouse button pans the map and no right-click menu opens; press **Esc** to put the tool away first. The panel has six tool modes:
 
 - **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click to finish. Each pair of consecutive points creates a wall segment.
 - **Select** — Click a wall segment to select it and change its type or delete it. Click an endpoint to select it; drag an endpoint to move it (all connected segments move together). Click **Merge point** to remove a bend point and join two segments into one.
@@ -962,7 +962,7 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 
 **Colour, snapping and clearing.** The **Wall color** swatches, and the colour box beside them, set the colour walls are drawn in on your screen. **Snap to grid** pulls new points onto the grid, and **Snap to endpoint** pulls them onto the nearest existing wall end; the second is available only while the first is off. **Clear all** deletes every wall on the map, after a second click on **Confirm clear all?**.
 
-**Locking and unlocking a door.** Right-click a door on the map, with no wall or fog tool in use, for its menu: **Open Door** or **Close Door**, and for you **Lock Door** or **Unlock Door**. **Change type** in the Walls panel's **Select** mode does the same for every wall selected. Players get the same menu for the doors they are offered, without the lock. A locked door reaches their browser as an ordinary closed door, so it looks like any other until they try to open it and are told it is locked.
+**Locking and unlocking a door.** Right-click a door on the map, with no wall, fog or light tool in use, for its menu: **Open Door** or **Close Door**, and for you **Lock Door** or **Unlock Door**. **Change type** in the Walls panel's **Select** mode does the same for every wall selected. Players get the same menu for the doors they are offered, without the lock. A locked door reaches their browser as an ordinary closed door, so it looks like any other until they try to open it and are told it is locked.
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
 
@@ -1205,7 +1205,7 @@ Two practical consequences when you are building a map:
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
 4. Pick a color from the palette or enter a custom hex
 
-Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see; spectators cannot open or close doors at all.
+Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see, and with fog of war on only a door beside a square you have revealed to them; spectators cannot open or close doors at all.
 
 | Preset | Bright (sq) | Dim (sq) | Typical Use |
 |--------|-------------|----------|-------------|
@@ -1217,7 +1217,7 @@ Players see the result straight away: a creature a new light shows appears on th
 
 #### Editing & Moving Lights
 
-Switch to **Select** mode to click on a light. You can then drag it to reposition, adjust its radii and color, untick **Enabled** to put it out (an extinguished torch), or click **Delete Light**.
+Switch to **Select** mode to click on a light. You can then drag it to reposition, adjust its radii and color, untick **Enabled** to put it out (an extinguished torch), or click **Delete Light**. Press **Esc** to put the light tool away.
 
 > **Tip:** The DM always sees light icons on the map. Toggle **Preview Player View** to see how the bright/dim zones actually look to players; the icons are hidden there, as they are for players.
 
@@ -1225,7 +1225,7 @@ Switch to **Select** mode to click on a light. You can then drag it to repositio
 
 As DM you always see all walls, all tokens and the full map. To see what a player is actually seeing:
 
-- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
+- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on, and stays while you preview), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
 - Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors they can actually see (in their line of sight and lit, within their darkvision, or under Global Illumination), the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
 - Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
 - The preview is on the plane that viewer is on: a player whose token you have sent to the spirit layer is previewed in the spirit realm, with the spirit layer image, the spirit tint and only spirit-plane tokens, seeing through their spirit token, exactly as their own screen shows it. So is a single token on the spirit layer (the picker marks those *(spirit)*), and every view while the spirit layer is open to everyone. **All player tokens** stays on the material plane unless the spirit layer is open to everyone

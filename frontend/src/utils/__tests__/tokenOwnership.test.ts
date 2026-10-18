@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { controlsToken } from '../tokenControl';
+import { controlsToken } from '../tokenOwnership';
 
 /**
  * One definition of "my token" for the client, matching the server's

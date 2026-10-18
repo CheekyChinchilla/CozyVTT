@@ -823,7 +823,8 @@ export interface Token {
   disposition: TokenDisposition | null;
   hp:          TokenHp | null;
   showHpBar:   boolean;
-  notes:       string;
+  /** The DM's notes. Never sent to players (tokenSentTo), so absent for them. */
+  notes?:      string | null;
   initiative:  number | null;
   /**
    * Darkvision, in grid squares: how far the token makes things out with no
@@ -1204,7 +1205,7 @@ export interface CreateTokenRequest {
   disposition?: TokenDisposition | null;
   hp?: TokenHp | null;
   showHpBar?: boolean;
-  notes?: string;
+  notes?: string | null;
   initiative?: number | null;
   /** Darkvision in grid squares; 0 = none. DM only on update. */
   sightRadius?: number | null;

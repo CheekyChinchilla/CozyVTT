@@ -19,7 +19,7 @@ import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { toJson } from '../../utils/prisma-json';
-import { withMapsLocked } from '../../utils/mapTokens';
+import { withMapsLocked, writersWaitingFor } from '../../utils/mapTokens';
 import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { setState, getState, clearState } from '../initiativeState';
 import { sendInitiativeState } from '../handlers/initiative';
@@ -49,24 +49,13 @@ const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Until a roll is waiting for the map lock the test holds: it has read the
- * order by then. Seen in pg_locks as an advisory lock not yet granted, so a
- * slow machine only waits longer, where a fixed pause could come too soon.
- *
- * Only this map's lock, in this database: pg_locks covers the whole server,
- * and another suite running alongside has waiters of its own. The key is the
- * one withMapsLocked takes, hashtext(mapId) as a bigint, which pg_locks shows
- * split into its high and low 32 bits.
+ * order by then. Writers to a map wait their turn in the backend before
+ * taking the lock (withMapsLocked), so the roll is seen in that line; a slow
+ * machine only waits longer, where a fixed pause could come too soon.
  */
 async function rollWaitingForLock(): Promise<void> {
   for (let tries = 0; tries < 100; tries++) {
-    const [{ n }] = await prisma.$queryRaw<Array<{ n: number }>>`
-      SELECT count(*)::int AS n FROM pg_locks
-      WHERE locktype = 'advisory' AND NOT granted
-        AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
-        AND classid = ((hashtext(${mapId})::bigint >> 32) & 4294967295)::oid
-        AND objid = (hashtext(${mapId})::bigint & 4294967295)::oid
-        AND objsubid = 1`;
-    if (n > 0) return;
+    if (writersWaitingFor(mapId) > 0) return;
     await pause(50);
   }
   throw new Error('the roll never reached the map lock');

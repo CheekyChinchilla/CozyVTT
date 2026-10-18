@@ -21,7 +21,10 @@ export interface FogDrawState {
    * the overlay must not paint over them.
    */
   exemptCells?: ReadonlySet<number>;
-  /** Per-cell reveal-fade opacity (1 = just revealed → 0 = faded in). */
+  /**
+   * The fog left over a cell that has just been revealed, as it fades out:
+   * 1 = still full, falling to 0. A hidden cell is always drawn full.
+   */
   revealOpacity: ReadonlyMap<number, number>;
 }
 
@@ -38,16 +41,10 @@ export function drawFog(
     for (let row = 0; row < fogRows; row++) {
       for (let col = 0; col < fogCols; col++) {
         const idx = row * fogCols + col;
-        if (!revealed[idx]) {
-          const fadeOpacity = state.revealOpacity.get(idx);
-          if (fadeOpacity !== undefined) {
-            ctx.fillStyle = `rgba(15, 12, 25, ${0.55 * fadeOpacity})`;
-            ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-            ctx.fillStyle = 'rgba(15, 12, 25, 0.55)';
-          } else {
-            ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-          }
-        }
+        const fade = revealed[idx] ? state.revealOpacity.get(idx) : undefined;
+        if (revealed[idx] && fade === undefined) continue;
+        ctx.fillStyle = fade === undefined ? 'rgba(15, 12, 25, 0.55)' : `rgba(15, 12, 25, ${0.55 * fade})`;
+        ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
       }
     }
     ctx.restore();
@@ -62,13 +59,11 @@ export function drawFog(
     for (let row = 0; row < fogRows; row++) {
       for (let col = 0; col < fogCols; col++) {
         const idx = row * fogCols + col;
-        if (!state.revealedCells.has(idx) && !state.exemptCells?.has(idx)) {
-          const fadeOpacity = state.revealOpacity.get(idx);
-          ctx.fillStyle = fadeOpacity !== undefined
-            ? `rgba(15, 12, 25, ${fadeOpacity})`
-            : 'rgba(15, 12, 25, 1)';
-          ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
-        }
+        if (state.exemptCells?.has(idx)) continue;
+        const fade = state.revealedCells.has(idx) ? state.revealOpacity.get(idx) : undefined;
+        if (state.revealedCells.has(idx) && fade === undefined) continue;
+        ctx.fillStyle = fade === undefined ? 'rgba(15, 12, 25, 1)' : `rgba(15, 12, 25, ${fade})`;
+        ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
       }
     }
     ctx.restore();
