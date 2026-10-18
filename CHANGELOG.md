@@ -32,6 +32,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Clicking near a polygon's first corner closes the shape.** The **Polygon** wall tool placed one more corner there instead, unless the map happened to start at the very top left of the page, so a double-click was the only way to finish a shape.
+
 - **Escape puts the light tool away, as it does the wall tools.** With **Place** or **Select** chosen in the **Lights** panel, pressing it did nothing.
 
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.

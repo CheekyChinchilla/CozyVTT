@@ -14,7 +14,7 @@
  * is map pixel (x, y), and a square is 50 pixels.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TokenType, type Map as CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
@@ -347,6 +347,37 @@ describe('the polygon tool', () => {
     press('Escape');
     click(px(300, 700), { detail: 2 });
     expect(sentOf('walls:replace')).toEqual([]);
+  });
+});
+
+describe('the polygon tool on a page where the map does not start at the corner', () => {
+  // In the app the canvas sits beside the sidebar and under the header. The
+  // close compared the pointer's page position with the corner's canvas
+  // position, so it never closed anywhere but the page's top-left (F350).
+  const original = HTMLCanvasElement.prototype.getBoundingClientRect;
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getBoundingClientRect = () =>
+      ({ left: 100, top: 50, right: 1100, bottom: 1050, width: 1000, height: 1000, x: 100, y: 50, toJSON: () => ({}) }) as DOMRect;
+  });
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getBoundingClientRect = original;
+  });
+  const onPage = (x: number, y: number) => px(x + 100, y + 50);
+
+  it('closes the shape on a click beside its first corner', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(onPage(500, 500));
+    click(onPage(700, 500));
+    click(onPage(700, 700));
+    click(onPage(505, 505));
+
+    expect(lastWalls().slice(2)).toEqual([
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
   });
 });
 

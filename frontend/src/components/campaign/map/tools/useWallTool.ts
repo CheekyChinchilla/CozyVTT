@@ -250,7 +250,7 @@ export function useWallTool({
   };
 
   const tool: MapTool = {
-    down({ e, mapPx }: PointerAt) {
+    down({ e, mapPx, screenX, screenY }: PointerAt) {
       // Wall-draw mode: place a point (or finish polyline on double-click)
       if (wallMode === 'wall-draw' && isDM) {
         const snapped = snapPoint(mapPx);
@@ -350,7 +350,8 @@ export function useWallTool({
         if (polygonPoints.length >= 3) {
           const firstPt = polygonPoints[0];
           const firstScreen = mapPxToScreen(firstPt.x, firstPt.y);
-          const distToFirst = Math.hypot(e.clientX - firstScreen.x, e.clientY - firstScreen.y);
+          // Both in canvas pixels; the page position is somewhere else.
+          const distToFirst = Math.hypot(screenX - firstScreen.x, screenY - firstScreen.y);
           if (distToFirst <= POLYGON_CLOSE_RADIUS) {
             closePolygon();
             return true;
