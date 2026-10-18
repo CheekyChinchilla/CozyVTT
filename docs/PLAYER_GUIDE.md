@@ -132,7 +132,7 @@ The page has three main areas:
 - Campaign name and description at the top
 - The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
-- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character
+- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character. The minus buttons are damage, so in D&D 5e and Pathfinder 2e your temporary hit points go first
 - Click a character to read its sheet. Right-click one for a menu: **View Character Sheet** for anyone's character, and for your own **Roll...**, **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
 

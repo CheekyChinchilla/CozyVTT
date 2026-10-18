@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
+import { ownerStillIn } from '../utils/characterCampaign';
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
@@ -82,18 +83,6 @@ const CHARACTER_SUMMARY_SELECT = {
   campaign: { select: { id: true, name: true } },
 } as const;
 
-/**
- * Whether a character's owner is still a member of the campaign it names. A
- * member removed before removals took their characters out of the campaign
- * left characters naming it; those are the owner's alone.
- */
-async function ownerStillIn(ownerId: string, campaignId: string): Promise<boolean> {
-  const owner = await prisma.campaignMembership.findUnique({
-    where: { userId_campaignId: { userId: ownerId, campaignId } },
-    select: { userId: true },
-  });
-  return owner !== null;
-}
 
 
 /**
