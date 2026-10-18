@@ -69,6 +69,10 @@ export default function CharacterSheetViewerModal({
   const [showEditor, setShowEditor] = useState(false);
 
   // Fetch character owner's name
+  // TODO(sheets): GET /api/users/:id answers 403 for anyone but the user and
+  // an admin, so a DM viewing a player's sheet sees "Unknown Player" and the
+  // console logs the refusal. Take the name from the campaign roster, which
+  // already holds every member's display name.
   useEffect(() => {
     const fetchOwnerName = async () => {
       try {

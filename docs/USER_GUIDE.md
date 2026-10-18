@@ -415,7 +415,7 @@ The Asset Library is where all your campaign media lives — maps, token images,
 | **Audio** | Ambient soundscapes, background music | MP3, Ogg or WAV |
 | **Avatar** | Your personal profile picture | PNG, JPEG or WebP |
 
-An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again.
+An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again. For now, Firefox's upload dialog refuses Ogg and WAV files with "Invalid file type"; upload them from another browser, or as MP3. A later release fixes this.
 
 Rulebooks and handouts are not here. They have their own **Documents** section, described below, so a PDF never sits among your map thumbnails.
 

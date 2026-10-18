@@ -176,6 +176,10 @@ export default function AssetUploadModal({
     }
 
     const allowed = allowedTypes[type];
+    // TODO(assets): Firefox reports a Vorbis .ogg as application/ogg and a .wav
+    // as audio/x-wav, so this refuses both there while the server, which reads
+    // the file's content, would take them. Check the extension too, or leave
+    // the type to the server.
     if (allowed.length > 0 && !allowed.includes(file.type)) {
       return `Invalid file type. Allowed types: ${allowed.join(', ')}`;
     }

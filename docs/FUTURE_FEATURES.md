@@ -40,6 +40,7 @@ _Nothing at present._
 - `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 - `1.5.4` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
+- `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
 - `1.5.4` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens
@@ -72,6 +73,7 @@ _Nothing at present._
 - `1.5.4` **In Firefox, asset cards fade in twice as the library opens,** because their hover transition also covers their opacity (`AssetCard.tsx`).
 - `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
 - `1.5.4` **At phone width the campaign page scrolls sideways behind its "Desktop Required" notice** (`CampaignPage.tsx`).
+- `1.5.4` **In Firefox, the Upload Asset dialog refuses Ogg and WAV audio files** with "Invalid file type". Firefox names them `application/ogg` and `audio/x-wav`, which the dialog's own list does not include; the server would take them. Upload them from another browser, or as MP3 (`AssetUploadModal.tsx`).
 
 ### Play and connection
 
@@ -81,6 +83,8 @@ _Nothing at present._
 - `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
 - `1.5.4` **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
 - `1.5.4` **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
+- `1.5.4` **Saving Campaign Settings reloads the whole live table,** every token picture included, and reopens the settings on General. Several saves in a minute can reach the 300 requests a minute limit, after which token pictures fail to load until it passes (`CampaignContext.tsx`).
+- `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
 - `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
 
 ### Maps
