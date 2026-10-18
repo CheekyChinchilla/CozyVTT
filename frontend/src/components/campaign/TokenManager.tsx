@@ -31,6 +31,7 @@ import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
 import { setTokenFlag } from '@/utils/tokenFlags';
+import { tokenControllerStanding } from '@/utils/tokenCopy';
 import { assetNameFrom } from '@/utils/assetName';
 
 // ============================================
@@ -836,6 +837,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   <div className="space-y-2">
                     {tokens.map((token) => {
                       const isSpirit = token.layer === TokenLayer.SPIRIT;
+                      const controller = tokenControllerStanding(token.controlledBy, campaign?.memberships);
                       const isTogglingVis = togglingVisibilityId === token.id;
                       const isTogglingLyr = togglingLayerId === token.id;
                       const isDeleting = deletingId === token.id;
@@ -877,14 +879,17 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                     Hidden
                                   </span>
                                 )}
-                                {/* TODO(ui): players holds only members whose role is
-                                   PLAYER, so a token still naming someone who became a
-                                   spectator or left the campaign shows a "Player" chip.
-                                   Show the chip only when the controller is found, or
-                                   say the controller is no longer a player. */}
-                                {token.controlledBy && (
+                                {controller.kind === 'player' && (
                                   <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-warm-amber/10 text-warm-amber">
-                                    {players.find((p) => p.userId === token.controlledBy)?.user?.displayName ?? 'Player'}
+                                    {controller.name}
+                                  </span>
+                                )}
+                                {controller.kind === 'not a player' && (
+                                  <span
+                                    className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-stone-gray/10 text-stone-gray"
+                                    title="No longer a player in this campaign, so they cannot move this token. Choose who controls it in Edit Token."
+                                  >
+                                    {controller.name ?? 'Former member'}, not a player
                                   </span>
                                 )}
                               </div>

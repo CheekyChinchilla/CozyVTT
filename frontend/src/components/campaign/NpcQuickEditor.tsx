@@ -27,6 +27,7 @@ import { useToast } from '@/contexts/ToastContext';
 import { apiErrorMessage } from '@/utils/errors';
 import { conditionsOffered } from '@/utils/conditions';
 import { TOKEN_LIMITS } from '@/constants/tokenLimits';
+import { tokenControllerStanding } from '@/utils/tokenCopy';
 import api from '@/services/api';
 import { useGameStore } from '@/stores/gameStore';
 import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/types';
@@ -106,6 +107,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const obscured = liveToken?.obscured ?? token.obscured ?? false;
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [controlledBy, setControlledBy] = useState<string | null>(token.controlledBy ?? null);
+  const controller = tokenControllerStanding(controlledBy, campaign?.memberships);
   const [isRemoving, setIsRemoving] = useState(false);
   // Set while the Remove confirmation is open.
   const [confirmingRemove, setConfirmingRemove] = useState(false);
@@ -1062,17 +1064,19 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 Controlled By
               </h3>
               <select
+                aria-label="Controlled By"
                 value={controlledBy ?? 'none'}
                 onChange={(e) => handleControllerChange(e.target.value === 'none' ? null : e.target.value)}
                 className="input-cozy w-full text-sm"
               >
-                {/* TODO(ui): only players are listed, so a token still
-                   naming a spectator or a former member has no matching
-                   entry, the box shows the first option, and the hint below
-                   still says "This player can move the token on the map."
-                   Add an entry for that controller saying they can no longer
-                   move it, and show the hint only for a player. */}
                 <option value="none">Nobody (DM controls)</option>
+                {/* A controller who is no longer a player is shown, so the
+                    box says who the token names, and cannot be picked again. */}
+                {controller.kind === 'not a player' && controlledBy && (
+                  <option value={controlledBy} disabled>
+                    {controller.name ?? 'A former member'} (no longer a player)
+                  </option>
+                )}
                 {(campaign?.memberships ?? [])
                   .filter((m) => m.role === 'PLAYER')
                   .map((m) => (
@@ -1081,9 +1085,14 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     </option>
                   ))}
               </select>
-              {controlledBy && (
+              {controller.kind === 'player' && (
                 <p className="text-[10px] text-stone-gray/60 mt-1">
                   This player can move the token on the map.
+                </p>
+              )}
+              {controller.kind === 'not a player' && (
+                <p className="text-[10px] text-warning-ink mt-1">
+                  {controller.name ?? 'They'} {controller.name ? 'is' : 'are'} no longer a player here, so they cannot move the token. Choose a player, or Nobody.
                 </p>
               )}
             </section>

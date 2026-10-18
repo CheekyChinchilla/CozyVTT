@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **A token whose controller is no longer a player says so.** A token keeps naming whoever controlled it after they become a spectator or leave the campaign, though they can no longer move it. The Token Manager's list showed it with a **Player** chip, and Edit Token's **Controlled By** showed **Nobody** while its hint said "This player can move the token on the map." Both now name that person as no longer a player (or a former member, once they have left), and the hint says they cannot move it.
+
 - **The Token Manager no longer offers to send an object to the spirit realm,** which the map's right-click menu has never offered. An object already on the spirit layer is offered **Return to Material Plane**.
 
 - **The Token Manager says why the server refused.** **Place on Map**, hiding, obscuring, moving between the planes, removing a token and uploading a picture each showed a fixed sentence, such as "Failed to add token to map", when the server turned them down. They now show its reason, such as a map already holding 1,000 tokens.
