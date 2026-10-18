@@ -49,6 +49,8 @@ async function newMap(lit = false): Promise<string> {
     data: {
       campaignId, name: 'Secrets', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
       width: 20, height: 20, gridSize: 50, tokens: [], annotations: [], lightingEnabled: lit,
+      // Fog off: a player's door under fog is refused (doorSight.integration.test.ts).
+      fogEnabled: false,
       wallSegments: toJson([LOCKED, PLAIN]), lights: toJson([LIT, OUT]),
     },
   });

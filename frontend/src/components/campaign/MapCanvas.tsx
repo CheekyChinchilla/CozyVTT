@@ -1286,7 +1286,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const doorViewer = useCallback((): DoorViewer => {
     const lightingEnabled = currentMap?.lightingEnabled ?? false;
-    if (!currentMap || !lightingEnabled || isDM) return { role: userRole, lightingEnabled, canSee: () => true };
+    // Manual fog as this player has it: the squares their screen shows.
+    const fog = currentMap && !isDM && effectiveRevealedCells
+      ? {
+          grid: { fogCols: currentMap.width, fogRows: currentMap.height, cellPx: currentMap.gridSize },
+          isRevealed: (cell: number) => effectiveRevealedCells.has(cell),
+        }
+      : null;
+    if (!currentMap || !lightingEnabled || isDM) return { role: userRole, lightingEnabled, canSee: () => true, fog };
     const viewport: Viewport = {
       zoom: mapControls.zoom,
       panOffset: mapControls.panOffset,
@@ -1294,8 +1301,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapWidth: currentMap.width,
       mapHeight: currentMap.height,
     };
-    return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee };
-  }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn]);
+    return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee, fog };
+  }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn, effectiveRevealedCells]);
 
   // Doors with no wall, fog or light tool up (map/tools/useDoorTool.ts).
   const { tool: doorTool, doorAt, setDoorType, hoveredDoorId, setHoveredDoorId } = useDoorTool({

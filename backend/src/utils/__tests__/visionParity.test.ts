@@ -9,9 +9,10 @@ import path from 'path';
  * The obscured-token mask is a fourth: the server applies it before sending,
  * the DM's preview applies it to show what was sent. vibeAudio.ts is the
  * rule for what a vibe period's audio value names: the server plays by it,
- * the period editor displays by it.
+ * the period editor displays by it. doorFog.ts is the rule for a door under
+ * manual fog: the server refuses a toggle by it, the client offers doors by it.
  */
-describe.each(['raycasting.ts', 'spatialIndex.ts', 'visibilityRule.ts', 'tokenMask.ts', 'vibeAudio.ts', '__fixtures__/vision-scenarios.json'])('%s', (file) => {
+describe.each(['raycasting.ts', 'spatialIndex.ts', 'visibilityRule.ts', 'tokenMask.ts', 'vibeAudio.ts', 'doorFog.ts', '__fixtures__/vision-scenarios.json'])('%s', (file) => {
   it('is byte-for-byte identical in backend/src/utils and frontend/src/utils', () => {
     const backendCopy = readFileSync(path.resolve(__dirname, '..', file), 'utf8');
     const frontendCopy = readFileSync(path.resolve(__dirname, '../../../../frontend/src/utils', file), 'utf8');

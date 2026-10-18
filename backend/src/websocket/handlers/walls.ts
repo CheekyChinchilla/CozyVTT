@@ -8,14 +8,15 @@ import { throttle } from '../../utils/throttle';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
-import type { WallSegment } from '../../types/walls';
+import type { FogState, WallSegment } from '../../types/walls';
+import { doorBesideRevealed } from '../../utils/doorFog';
 import logger from '../../utils/logger';
 import { emitToMapReaders, emitToMapReadersAs } from '../utils';
 import {
   filterTokensByRole, getSpiritVisibility, playerSightOnLitMap, viewerIdFor, wallChangeReachesPlayers, wallChangeSentTo,
   wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo, type PlayerSight,
 } from '../../utils/spirit-layer';
-import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange } from '../shared';
+import { mapEditLimiter, limiterKey, stateRequestAllowed, resendSightAfterChange, loadFogState, FogTooLargeError } from '../shared';
 import { toJson } from '../../utils/prisma-json';
 import { canReadMap, canToggleDoor } from '../../services/permissions';
 import { wallOutsideMap, WALL_OUTSIDE_MAP_MESSAGE } from '../../validators/maps';
@@ -24,6 +25,25 @@ import { echoedOpId } from '../opId';
 
 /** What a wall edit reads of the map to check it: whose it is, and its extent. */
 const EXTENT = { campaignId: true, width: true, height: true, gridSize: true } as const;
+
+/**
+ * Whether a door on a map with manual fog is beside a revealed square
+ * (utils/doorFog.ts). A map too large for fog has none revealed: its players
+ * are sent no revealed squares, so their whole screen is covered.
+ */
+function doorBesideRevealedFog(
+  door: WallSegment,
+  map: { width: number; height: number; gridSize: number; fogData: unknown }
+): boolean {
+  let fog: FogState;
+  try {
+    fog = loadFogState(map, map.fogData as FogState | null);
+  } catch (error) {
+    if (error instanceof FogTooLargeError) return false;
+    throw error;
+  }
+  return doorBesideRevealed(door, fog, (cell) => fog.revealed[cell] === true);
+}
 
 /**
  * Every edit below reads the map's whole wall list, changes it and writes it
@@ -188,7 +208,7 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
         // a prepared map is the DM's until they switch to it.
         const map = await tx.map.findUnique({
           where: { id: mapId },
-          select: { ...EXTENT, wallSegments: true, lightingEnabled: true, campaign: { select: { currentMapId: true } } },
+          select: { ...EXTENT, wallSegments: true, lightingEnabled: true, fogEnabled: true, fogData: true, campaign: { select: { currentMapId: true } } },
         });
         if (!map || map.campaignId !== campaignId || !canReadMap(role, mapId, map.campaign.currentMapId)) {
           return { refused: 'Map not found' };
@@ -212,13 +232,14 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
           // is now, so one the DM moved since the sight was worked out is
           // refused if it went out of it, and on a map lit since then, with
           // no sight worked out, no door is seen yet.
-          // TODO(maps): manual fog is not asked. A player can still toggle a
-          // door in unrevealed squares, which their screen covers, and learn
-          // from the answer that it is there. Refuse a door with no revealed
-          // square on either side of its middle, and offer none in the
-          // client's doorAccess.ts.
           const door = existing[idx];
           if (map.lightingEnabled && !(sight?.seesPoint((door.x1 + door.x2) / 2, (door.y1 + door.y2) / 2) ?? false)) {
+            return { refused: 'You cannot see that door', current: door };
+          }
+          // Under manual fog, only a door beside a revealed square: one
+          // wholly under fog is covered on their screen. Same answer as a
+          // door in the dark, and also asked before the lock.
+          if (map.fogEnabled && !doorBesideRevealedFog(door, map)) {
             return { refused: 'You cannot see that door', current: door };
           }
           const targetType = sent.type;

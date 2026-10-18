@@ -324,7 +324,7 @@ Two things worth knowing:
 
 - **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it, and neither is one on a map the DM hasn't switched to, or on the other plane when your DM uses the spirit realm.
 - **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
-- **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. A locked door looks like any closed door until you try it, and then you are told it is locked.
+- **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. With fog of war on, it means a door beside a square the DM has revealed to you. A locked door looks like any closed door until you try it, and then you are told it is locked.
 
 ### Sound and weather on the map
 

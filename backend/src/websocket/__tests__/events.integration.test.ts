@@ -291,6 +291,12 @@ describe('token movement', () => {
 // ── 3. Walls & doors ─────────────────────────────────────────────────────────
 
 describe('walls & doors', () => {
+  // These are about who may toggle what; a door under manual fog is refused
+  // for its own reason (doorSight.integration.test.ts), so fog is off here.
+  beforeEach(async () => {
+    await prisma.map.update({ where: { id: mapId }, data: { fogEnabled: false } });
+  });
+
   it('DM can add a wall segment: broadcast + persisted', async () => {
     const dm = await server.connectAndAuth(dmCookie, campaignId);
     const player = await server.connectAndAuth(player1Cookie, campaignId);

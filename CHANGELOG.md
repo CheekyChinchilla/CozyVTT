@@ -26,6 +26,7 @@ There is no new setting, no setting is removed, and there is no database change 
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
+  - *Walls and lights.* A player's `wall:update` on a map with fog of war on is refused with `You cannot see that door` unless a square revealed to them lies beside the door's middle, before any `That door is locked`. The refusal is followed by `wall:updated` with the door as it was, as other refusals are.
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
@@ -59,6 +60,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **With fog of war on, a player can open or close only a door beside a square revealed to them.** A door wholly under fog could still be toggled, and the answer, or being told it was locked, told the player a door was there where their screen showed nothing. The DM can still open any door.
 
 - **The last security advisory against the tools that build CozyVTT is cleared.** It was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release. Tailwind CSS 4 does not use it. It was only ever in the build tools, never in an instance.
 

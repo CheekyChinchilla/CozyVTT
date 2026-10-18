@@ -1040,3 +1040,25 @@ describe('Escape with a token held (F349)', () => {
     expect(sentOf('token.move.end')).toEqual([]);
   });
 });
+
+describe("a player's door under manual fog", () => {
+  // The door's middle is (150, 100): the squares beside it are cells 23 and 43.
+  const door = seg('d1', 100, 100, 200, 100, 'door-closed');
+  function asPlayer(revealed: number[]) {
+    h.set({ userRole: 'PLAYER', currentMap: mapWith({ fogEnabled: true, wallSegments: [door] }) });
+    render(<MapCanvas />);
+    fire('fog:cells', { mapId: 'map-a', revealedCells: revealed, fogCols: 20, fogRows: 20, cellPx: 50 });
+  }
+
+  it('opens one beside a revealed square', () => {
+    asPlayer([23]);
+    click(px(150, 104));
+    expect(sentOf('wall:update')).toHaveLength(1);
+  });
+
+  it('leaves one wholly under fog alone, as the server would refuse it', () => {
+    asPlayer([0]);
+    click(px(150, 104));
+    expect(sentOf('wall:update')).toEqual([]);
+  });
+});

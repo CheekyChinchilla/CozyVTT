@@ -79,8 +79,9 @@ today. Where spectators are refused, the handler does it: `dice.roll` (socket)
 through `canRollDice`, token control through `canControlToken`, and doors
 through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
-and size they send being ignored, and on a lit map only a door one of their
-tokens can see, or the answer is "You cannot see that door"). Anyone but the
+and size they send being ignored, on a lit map only a door one of their
+tokens can see, and under manual fog only one beside a square revealed to
+them, or the answer is "You cannot see that door"). Anyone but the
 DM is sent a locked door as `door-closed`, and no light that is off.
 Chat is a socket event (`chat.message`)
 and spectators may send it. `character.hp.update`, `character.hitdice.spend`
