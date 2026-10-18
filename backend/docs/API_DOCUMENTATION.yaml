@@ -6424,9 +6424,9 @@ paths:
       responses:
         '200':
           description: >-
-            List of maps. Each item is a summary of 14 fields, not the full
-            Map object: no tokens, annotations, walls, lights, fog, spirit
-            layer or `campaignId`.
+            List of maps. Each item is a summary of 14 fields, and for the DM
+            a 15th, `spiritLayerUrl`; not the full Map object: no tokens,
+            annotations, walls, lights, fog or `campaignId`.
           content:
             application/json:
               schema:
@@ -6449,6 +6449,10 @@ paths:
                         fogEnabled: { type: boolean }
                         globalIllumination: { type: boolean }
                         explorationEnabled: { type: boolean }
+                        spiritLayerUrl:
+                          type: string
+                          nullable: true
+                          description: The DM's alone; absent for anyone else.
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
         '403':

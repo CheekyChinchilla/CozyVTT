@@ -388,6 +388,9 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
         fogEnabled: true,
         globalIllumination: true,
         explorationEnabled: true,
+        // The DM's alone, for Edit Map; a player is sent it with the map,
+        // when the spirit layer is theirs to see (filterMapData).
+        spiritLayerUrl: role === 'DM',
         createdAt: true,
         updatedAt: true,
       },
