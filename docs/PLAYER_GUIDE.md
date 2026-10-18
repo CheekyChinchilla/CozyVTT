@@ -375,7 +375,7 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
-Roll before the DM clicks **Start Combat**. Once combat has started, the dice icon and **Roll Initiative** are no longer offered to you, and the server refuses a roll; if your initiative needs changing, ask your DM.
+Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload, and if your token's identity is obscured, it shows there under your token's name for you and as *Unknown creature* for everyone else.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 

@@ -10751,8 +10751,10 @@ paths:
         ordered by id, so the order is the same on every request and page.
         Secret rolls are filtered server-side before anything is
         sent: a player receives public rolls plus their own secret ones, a DM
-        receives everything. Rolls older than the last history clear are
-        omitted; the rows themselves are kept, so a DM can still audit them.
+        receives everything. Initiative rolls that threw dice are included,
+        as a secret roll when the token was not sent to every player. Rolls
+        older than the last history clear are omitted; the rows themselves
+        are kept, so a DM can still audit them.
       operationId: getCampaignDiceRolls
       security:
         - cookieAuth: []

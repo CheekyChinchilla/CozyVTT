@@ -29,6 +29,8 @@ import {
   getVersion,
   startSend,
   latestSend,
+  playerHasRolled,
+  markPlayerRolled,
   type CombatantEntry,
   type CombatantSource,
   type CombatState,
@@ -39,7 +41,7 @@ import { stateRequestAllowed, withinCeiling } from '../shared';
 /** What a send needs of a socket; a connected one and a fetched one both have it. */
 type Recipient = Pick<AuthenticatedFields, 'userId' | 'role'> & {
   emit(event: 'initiative.state', state: CombatState): unknown;
-  emit(event: 'dice.rolled', roll: Record<string, unknown>): unknown;
+  emit(event: 'dice.rolled' | 'dice.rolled.secret', roll: Record<string, unknown>): unknown;
 };
 
 /**
@@ -165,17 +167,34 @@ export async function resendInitiative(campaignId: string, options: { evenWhenEm
 /**
  * Store a token's initiative on its map, in the list as it is under the map's
  * lock like every other write to a map's tokens. A token no longer on the
- * map is left alone.
+ * map is left alone, and the answer is false.
  */
-async function setTokenInitiative(mapId: string, tokenId: string, value: number | null): Promise<void> {
-  await withMapsLocked([mapId], async (tx) => {
+async function setTokenInitiative(mapId: string, tokenId: string, value: number | null): Promise<boolean> {
+  return withMapsLocked([mapId], async (tx) => {
     const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
     const tokens = readTokens(fresh.tokens);
     const index = tokens.findIndex((t) => t.id === tokenId);
-    if (index === -1) return;
+    if (index === -1) return false;
     tokens[index] = { ...tokens[index], initiative: value };
     await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
+    return true;
   });
+}
+
+/**
+ * Whether every member who is not a DM is sent `token`, online or not: it
+ * stands on the map the table is showing, and the role filter keeps it for
+ * each of them (visible, on their plane). A roll for a token some player is
+ * not sent is stored and sent as a secret roll.
+ */
+async function sentToEveryPlayer(campaignId: string, token: ReturnType<typeof readTokens>[number], mapId: string): Promise<boolean> {
+  const [campaign, members] = await Promise.all([
+    prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } }),
+    prisma.campaignMembership.findMany({ where: { campaignId, role: { not: 'DM' } }, select: { userId: true, role: true } }),
+  ]);
+  if (campaign?.currentMapId !== mapId) return false;
+  const spiritVisibility = await getSpiritVisibilityBatch(campaignId, members.map((m) => m.userId));
+  return members.every((m) => filterTokensByRole([token], m.role, spiritVisibility.get(m.userId) ?? false, m.userId).length > 0);
 }
 
 export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSocket): void {
@@ -318,12 +337,11 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
     try {
       if (!socket.campaignId) { socket.emit('error', { message: 'Not authenticated to a campaign' }); return; }
       // The DM rolls for a whole encounter, so the DM's rolls have a ceiling
-      // of their own; everyone else's count as dice rolls, below.
-      if (socket.role === 'DM' && !withinCeiling(socket, 'initiative.roll')) return;
-      // TODO(play): a player's roll is counted against the dice.roll ceiling
-      // only after the spectator, token and expression checks below, so a
-      // flood of refused initiative rolls is never counted and each draws its
-      // own error. Count it here, before those checks, as dice.roll now does.
+      // of their own. Everyone else's is a dice roll: it writes the map, tells
+      // the table and re-sends the order, and is counted against the dice
+      // ceiling before anything is checked, as dice.roll is, so a flood of
+      // rolls that would be refused is held to it too.
+      if (!withinCeiling(socket, socket.role === 'DM' ? 'initiative.roll' : 'dice.roll')) return;
 
       // A spectator may not roll, as with dice.roll, and is told so before
       // anything is read. The token check below refuses one too, for a role
@@ -339,12 +357,6 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         socket.emit('error', { message: 'Invalid expression: it must be text, like 1d20+2' });
         return;
       }
-
-      // An initiative roll is a dice roll: it writes the map, tells the table
-      // and re-sends the order, and it used to bypass the ceiling dice.roll
-      // applies. Every roll but the DM's is counted; the DM rolls for a whole
-      // encounter at once.
-      if (socket.role !== 'DM' && !withinCeiling(socket, 'dice.roll')) return;
 
       // `expression` is now only a fallback for combatants the server cannot
       // work initiative out for itself — see the resolution below. Validate it
@@ -400,6 +412,13 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           socket.emit('error', { message: 'Combat has started — ask your DM to change your initiative' });
           return;
         }
+        // Once each time the token joins the order, recorded now so a second
+        // roll sent at the same moment is refused too.
+        if (playerHasRolled(socket.campaignId, tokenId)) {
+          socket.emit('error', { message: 'You have rolled initiative for this fight already. Ask your DM to change it.' });
+          return;
+        }
+        markPlayerRolled(socket.campaignId, tokenId);
       }
 
       // Work out what initiative actually means for this combatant.
@@ -466,8 +485,14 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
       }
 
       // Persist to token, in the list as it is under the map's lock: the
-      // copy fetched before the character lookups above is stale by now.
-      await setTokenInitiative(mapId, tokenId, rolledValue);
+      // copy fetched before the character lookups above is stale by now. A
+      // token deleted meanwhile is not rolled for at all: the DM's roll used
+      // to add it to the order anyway.
+      if (!(await setTokenInitiative(mapId, tokenId, rolledValue))) {
+        if (socket.role !== 'DM') markPlayerRolled(socket.campaignId, tokenId, false);
+        socket.emit('error', { message: 'Token not found' });
+        return;
+      }
 
       // Update in-memory state — add to combatants if not already present.
       // Only for a DM, and only a token that was not in the order when the
@@ -502,28 +527,38 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
         setCombatState(socket.campaignId, current);
       }
 
-      // Announce the roll in the dice log — but only when dice were actually
-      // thrown. A Call of Cthulhu investigator's initiative is simply their
-      // Dexterity, and a dice-log entry claiming otherwise would be a lie. The
-      // value still reaches everyone through the initiative broadcast below.
+      // Store the roll in the dice history and announce it, but only when dice
+      // were actually thrown. A Call of Cthulhu investigator's initiative is
+      // simply their Dexterity, and a dice-log entry claiming otherwise would
+      // be a lie. The value still reaches everyone through the initiative
+      // broadcast below.
       const campaignId = socket.campaignId;
       const roll = rollResult;
       // The roll is stored and ordered by now: a failure to write its dice
       // log entry is logged, and the new order below still goes out.
-      // TODO(play): this entry is only broadcast. Unlike a roll made in dice.ts
-      // it is never written to the diceRoll table, so it is gone from the dice
-      // log on reload. Store it as other rolls are stored.
       if (roll) await bestEffort('initiative.roll dice log', async () => {
         const user = await prisma.user.findUnique({ where: { id: socket.userId }, select: { displayName: true } });
         // The server names the token; a name the client sends is not used.
-        // An obscured token is not named in the dice log even to the DM, since
-        // one entry reaches everyone who is sent the token.
-        // TODO(play): who rolled is not considered, so a player rolling for
-        // their own obscured token sees it logged as "Unknown creature", while
-        // a roll from their sheet names the character. Send the roller the
-        // token's name and everyone else the placeholder.
+        // An obscured token is stored and sent under the placeholder, except
+        // to the player who rolled for it, who knows it.
         const publicName = token.obscured === true ? 'Unknown creature' : token.name;
+        // A token some player is not sent makes a secret roll: the roller
+        // and the DM see it, in the history too.
+        const secret = !(await sentToEveryPlayer(campaignId, token, mapId));
+        const stored = await prisma.diceRoll.create({
+          data: {
+            campaignId,
+            userId: socket.userId!,
+            expression: usedExpression,
+            result: rolledValue,
+            breakdown: toJson(roll),
+            characterName: publicName,
+            purpose: `${publicName} Initiative`,
+            secret,
+          },
+        });
         const rollData = {
+          id: stored.id,
           userId: socket.userId,
           userName: user?.displayName ?? 'DM',
           characterName: publicName,
@@ -531,11 +566,19 @@ export function registerInitiativeHandlers(io: Server, socket: AuthenticatedSock
           result: rolledValue,
           breakdown: roll,
           purpose: `${publicName} Initiative`,
-          timestamp: new Date().toISOString(),
-          secret: false,
+          timestamp: stored.rolledAt.toISOString(),
+          secret,
         };
-        for (const r of await recipientsSentToken(io, campaignId, token, mapId)) {
-          r.emit('dice.rolled', rollData);
+        const named = { ...rollData, characterName: token.name, purpose: `${token.name} Initiative` };
+        const recipients = await recipientsSentToken(io, campaignId, token, mapId);
+        for (const r of recipients) {
+          const isRoller = r.userId === socket.userId;
+          if (secret && !isRoller && r.role !== 'DM') continue;
+          if (secret && !isRoller) {
+            r.emit('dice.rolled.secret', { ...rollData, originalRoller: socket.userId, isAuditView: true });
+          } else {
+            r.emit('dice.rolled', isRoller ? named : rollData);
+          }
         }
       });
 

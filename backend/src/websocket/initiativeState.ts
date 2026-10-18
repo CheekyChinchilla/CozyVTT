@@ -90,17 +90,53 @@ export function getState(campaignId: string): CombatState {
 export function setState(campaignId: string, state: CombatState): void {
   campaignStates.set(campaignId, state);
   bump(campaignId);
+  // A combatant that has left the order may be rolled for again when it
+  // comes back.
+  const rolled = playerRolls.get(campaignId);
+  if (rolled) {
+    for (const tokenId of rolled) {
+      if (!state.combatants.some((c) => c.tokenId === tokenId)) rolled.delete(tokenId);
+    }
+  }
 }
 
 /** Forget every campaign's combat state, after a restore replaces the database under it. */
 export function clearAllState(): void {
   for (const campaignId of campaignStates.keys()) bump(campaignId);
   campaignStates.clear();
+  playerRolls.clear();
 }
 
 export function clearState(campaignId: string): void {
   campaignStates.delete(campaignId);
+  playerRolls.delete(campaignId);
   bump(campaignId);
+}
+
+/**
+ * The combatants a player has rolled initiative for, by campaign. A player
+ * rolls once each time their token joins the order: rolling again until a
+ * good number came up was open to anyone. The DM can still change the
+ * number. Kept apart from the state, which is sent to clients as it is; a
+ * combatant leaving the order, or the fight ending, forgets its roll.
+ */
+const playerRolls = new Map<string, Set<string>>();
+
+/** Whether a player has rolled for this combatant in this fight. */
+export function playerHasRolled(campaignId: string, tokenId: string): boolean {
+  return playerRolls.get(campaignId)?.has(tokenId) ?? false;
+}
+
+/** Record a player's roll for a combatant, or take it back (`rolled` false) when it did not happen. */
+export function markPlayerRolled(campaignId: string, tokenId: string, rolled = true): void {
+  let marks = playerRolls.get(campaignId);
+  if (!marks) {
+    if (!rolled) return;
+    marks = new Set();
+    playerRolls.set(campaignId, marks);
+  }
+  if (rolled) marks.add(tokenId);
+  else marks.delete(tokenId);
 }
 
 /**
