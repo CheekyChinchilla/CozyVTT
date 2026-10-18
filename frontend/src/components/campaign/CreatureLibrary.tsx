@@ -765,50 +765,68 @@ function CreatureRow({
 
   return (
     <div>
-      {/* Summary row */}
-      <button
-        onClick={onToggle}
-        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-moss-green/5 transition-colors"
-      >
-        {/* Creature avatar — image if available, colored initial otherwise */}
-        {creature.imageUrl ? (
-          <img
-            src={creature.imageUrl}
-            alt={creature.name}
-            className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
-          />
-        ) : (
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
-              creature.disposition === 'hostile' ? 'bg-danger' :
-              creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
-            }`}
-          >
-            {creature.name.charAt(0).toUpperCase()}
-          </div>
-        )}
-
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-ink-black truncate">{creature.name}</div>
-          <div className="text-[10px] text-stone-gray/60 flex gap-2">
-            {creature.challengeRating && <span>CR {creature.challengeRating}</span>}
-            {statBlock.creatureType && <span className="truncate">{statBlock.creatureType}</span>}
-          </div>
-        </div>
-
-        {/* Source badge */}
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
-          creature.source === 'srd'
-            ? 'bg-info/10 text-info-ink'
-            : 'bg-moss-green/10 text-brand-ink'
-        }`}>
-          {creature.source === 'srd' ? 'SRD' : 'Custom'}
-        </span>
-
-        {/* Favorite star */}
+      {/* Summary row. The star is a button of its own, laid over the row's
+          button in the gap left for it: a button inside a button is not valid
+          HTML, and a screen reader read the two as one control. */}
+      <div className="relative hover:bg-moss-green/5 transition-colors">
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className="shrink-0 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          className="w-full text-left px-4 py-2.5 flex items-center gap-3"
+        >
+          {/* Creature avatar — image if available, colored initial otherwise */}
+          {creature.imageUrl ? (
+            <img
+              src={creature.imageUrl}
+              alt={creature.name}
+              className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
+            />
+          ) : (
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
+                creature.disposition === 'hostile' ? 'bg-danger' :
+                creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
+              }`}
+            >
+              {creature.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-ink-black truncate">{creature.name}</div>
+            <div className="text-[10px] text-stone-gray/60 flex gap-2">
+              {creature.challengeRating && <span>CR {creature.challengeRating}</span>}
+              {statBlock.creatureType && <span className="truncate">{statBlock.creatureType}</span>}
+            </div>
+          </div>
+
+          {/* Source badge */}
+          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+            creature.source === 'srd'
+              ? 'bg-info/10 text-info-ink'
+              : 'bg-moss-green/10 text-brand-ink'
+          }`}>
+            {creature.source === 'srd' ? 'SRD' : 'Custom'}
+          </span>
+
+          {/* Room for the favourite star */}
+          <span className="w-4.5 shrink-0" aria-hidden="true" />
+
+          {/* Expand icon */}
+          {isExpanded ? (
+            <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
+          )}
+        </button>
+
+        {/* Favorite star, over the room left for it: the row's right padding,
+            the chevron and the gap before it come to 2.75rem. */}
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          className="absolute top-1/2 right-11 -translate-y-1/2 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
@@ -817,14 +835,7 @@ function CreatureRow({
               : 'text-stone-gray/30 hover:text-warning-ink'
           }`} />
         </button>
-
-        {/* Expand icon */}
-        {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
-        )}
-      </button>
+      </div>
 
       {/* Expanded details */}
       {isExpanded && (
