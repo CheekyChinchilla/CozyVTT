@@ -3177,12 +3177,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     try {
                       await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
                     } catch (err) {
-                      // TODO(ui): this failure, and those of Obscure, Send to
-                      // Spirit Realm and Return to Material Plane below, go only
-                      // to the console, so the DM sees the menu close and nothing
-                      // change. Show them in a toast with apiErrorMessage(err),
-                      // as Save as Template above does.
-                      console.error('Failed to toggle token visibility:', err);
+                      showToast(apiErrorMessage(err) || (token.visible ? 'Could not hide the token from players' : 'Could not show the token to players'), 'error');
                     }
                   }}
                 >
@@ -3201,7 +3196,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     try {
                       await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
                     } catch (err) {
-                      console.error('Failed to toggle token identity:', err);
+                      showToast(apiErrorMessage(err) || (token.obscured ? "Could not reveal the token's identity" : "Could not obscure the token's identity"), 'error');
                     }
                   }}
                 >
@@ -3225,7 +3220,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
                         socket?.emitMapChange(currentMap.id);
                       } catch (err) {
-                        console.error('Failed to move token to spirit realm:', err);
+                        showToast(apiErrorMessage(err) || 'Could not send the token to the spirit realm', 'error');
                       } finally {
                         setIsMovingTokenLayer(false);
                       }
@@ -3247,7 +3242,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
                         socket?.emitMapChange(currentMap.id);
                       } catch (err) {
-                        console.error('Failed to return token to material plane:', err);
+                        showToast(apiErrorMessage(err) || 'Could not return the token to the material plane', 'error');
                       } finally {
                         setIsMovingTokenLayer(false);
                       }

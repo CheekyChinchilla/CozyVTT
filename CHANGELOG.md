@@ -32,6 +32,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Hide from Players, Obscure Identity, Send to Spirit Realm and Return to Material Plane on a token's right-click menu say why when they fail.** The menu closed and nothing changed, with no message.
+
 - **Preview Player View can always be ended.** Turning off both dynamic lighting and fog of war during a preview hid **DM View**, the button that ends it, and left you in the player's view until one was turned on again or the page was reloaded.
 
 - **The light tool's Select does nothing during a preview.** A click there still picked up and dragged lights, whose markers the preview hides. Placing a light while previewing still works, so you can watch what it lights for the player.

@@ -28,6 +28,7 @@ const h = vi.hoisted(() => {
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
+  const updateToken = vi.fn();
   const raw = {
     on(event: string, fn: (data: never) => void) {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -48,6 +49,7 @@ const h = vi.hoisted(() => {
     handlers,
     sent,
     raw,
+    updateToken,
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
     set(patch: Partial<typeof state>) {
@@ -119,7 +121,9 @@ vi.mock('@/services/map.service', () => ({
 }));
 
 vi.mock('@/services/api', () => {
-  const client = new Proxy({}, { get: () => vi.fn().mockResolvedValue({}) });
+  const client = new Proxy({}, {
+    get: (_target, prop: string) => (prop === 'updateToken' ? h.updateToken : vi.fn().mockResolvedValue({})),
+  });
   return { api: client, default: client };
 });
 
@@ -229,6 +233,7 @@ beforeAll(() => {
 beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
+  h.updateToken.mockReset().mockResolvedValue({});
   useGameStore.getState().setTokens([]);
   h.set({ userRole: 'DM', currentMap: mapWith() });
 });
@@ -833,5 +838,36 @@ describe('Preview Player View', () => {
     drag(px(255, 250), px(280, 280), px(300, 310));
 
     expect(sentOf('light:update')).toEqual([]);
+  });
+});
+
+describe("the token menu's Hide, Obscure and Spirit Realm actions", () => {
+  const refused = (message?: string) => Object.assign(new Error('refused'), { response: { status: 409, data: message ? { message } : {} } });
+
+  it.each([
+    ['Hide from Players', {}],
+    ['Obscure Identity', {}],
+    ['Send to Spirit Realm', {}],
+    ['Return to Material Plane', { layer: 'spirit' }],
+  ] as const)('say why when %s is refused', async (item, extra) => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19, extra as Partial<Token>));
+    h.updateToken.mockRejectedValue(refused('The map is being changed by someone else'));
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+    fireEvent.click(screen.getByText(item));
+
+    expect(await screen.findByText('The map is being changed by someone else')).toBeInTheDocument();
+  });
+
+  it('say so in plain words when the server gives no reason', async () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    h.updateToken.mockRejectedValue(refused());
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+    fireEvent.click(screen.getByText('Hide from Players'));
+
+    expect(await screen.findByText('Could not hide the token from players')).toBeInTheDocument();
   });
 });
