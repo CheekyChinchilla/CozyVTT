@@ -9,11 +9,12 @@ import { z } from 'zod';
 import { CampaignStatus } from '@prisma/client';
 import { GameSystem } from '../game-systems';
 import { HEX_COLOR_PATTERN, SPIRIT_STYLE_PATTERN, isSafeVibeFilter } from '../utils/styleAllowlists';
+import { CAMPAIGN_LIMITS } from './campaignLimits';
 
 /** POST /api/campaigns */
 export const CreateCampaignSchema = z.object({
-  name: z.string().trim().min(1, 'Campaign name is required').max(200, 'Campaign name must be 200 characters or fewer'),
-  description: z.string().max(5000).optional(),
+  name: z.string().trim().min(1, 'Campaign name is required').max(CAMPAIGN_LIMITS.maxNameLength, `Campaign name must be ${CAMPAIGN_LIMITS.maxNameLength} characters or fewer`),
+  description: z.string().max(CAMPAIGN_LIMITS.maxDescriptionLength).optional(),
   gameSystem: z.nativeEnum(GameSystem).nullish(),
 });
 
@@ -81,8 +82,8 @@ const SETTABLE_STATUSES = [CampaignStatus.PREPARATION, CampaignStatus.COMPLETED,
 
 /** PUT /api/campaigns/:campaignId. Every field optional; each is checked when present. */
 export const UpdateCampaignSchema = z.object({
-  name: z.string().trim().min(1, 'Campaign name is required').max(200, 'Campaign name must be 200 characters or fewer').optional(),
-  description: z.string().max(5000, 'Description must be 5000 characters or fewer').nullable().optional(),
+  name: z.string().trim().min(1, 'Campaign name is required').max(CAMPAIGN_LIMITS.maxNameLength, `Campaign name must be ${CAMPAIGN_LIMITS.maxNameLength} characters or fewer`).optional(),
+  description: z.string().max(CAMPAIGN_LIMITS.maxDescriptionLength, `Description must be ${CAMPAIGN_LIMITS.maxDescriptionLength} characters or fewer`).nullable().optional(),
   status: z.enum(SETTABLE_STATUSES, {
     error: `Invalid status. Must be one of: ${SETTABLE_STATUSES.join(', ')}; starting, pausing and ending a session set the others`,
   }).optional(),

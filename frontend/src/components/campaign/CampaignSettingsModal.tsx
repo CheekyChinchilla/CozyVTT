@@ -33,6 +33,7 @@ import type { CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
 import { isCampaignOwner } from '@/utils/campaignRoles';
+import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 interface CampaignSettingsModalProps {
   isOpen: boolean;
@@ -347,16 +348,12 @@ export default function CampaignSettingsModal({
                       >
                         Campaign Name <span className="text-danger-ink">*</span>
                       </label>
-                      {/* TODO(ui): these boxes stop at 100 and 1000 characters,
-                         while the server accepts a name of 200 and a
-                         description of 5000. Use the server's limits,
-                         declared in one place. */}
                       <input
                         id="cs-name"
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        maxLength={100}
+                        maxLength={CAMPAIGN_LIMITS.maxNameLength}
                         className="input-cozy w-full"
                         placeholder="My Campaign"
                       />
@@ -374,12 +371,12 @@ export default function CampaignSettingsModal({
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         rows={4}
-                        maxLength={1000}
+                        maxLength={CAMPAIGN_LIMITS.maxDescriptionLength}
                         className="input-cozy w-full resize-none"
                         placeholder="Describe your campaign…"
                       />
                       <p className="mt-1 text-xs text-warm-gray text-right">
-                        {description.length}/1000
+                        {description.length}/{CAMPAIGN_LIMITS.maxDescriptionLength}
                       </p>
                     </div>
 

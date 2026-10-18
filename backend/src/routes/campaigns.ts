@@ -36,6 +36,7 @@ import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
 import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validators/inviteSearchLimits';
 import { escapeLikePattern } from '../utils/likePattern';
 import { standingInvitation, isStanding } from '../utils/invitationState';
+import { CAMPAIGN_LIMITS } from '../validators/campaignLimits';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -2359,10 +2360,10 @@ router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportL
       const campaignName = typeof req.body.campaignName === 'string' ? req.body.campaignName.trim() : undefined;
       const importTokens = req.body.importTokens !== 'false'; // default true
 
-      if (campaignName !== undefined && (campaignName.length === 0 || campaignName.length > 200)) {
+      if (campaignName !== undefined && (campaignName.length === 0 || campaignName.length > CAMPAIGN_LIMITS.maxNameLength)) {
         return {
           status: 400,
-          body: { error: 'Validation Error', message: 'Campaign name must be between 1 and 200 characters.' },
+          body: { error: 'Validation Error', message: `Campaign name must be between 1 and ${CAMPAIGN_LIMITS.maxNameLength} characters.` },
         };
       }
 

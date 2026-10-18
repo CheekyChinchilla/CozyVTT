@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Campaign } from '@/types';
+import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 let current: Campaign;
 const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
@@ -106,4 +107,14 @@ describe('pending invitations', () => {
     await waitFor(() => expect(invitationsApi.withdrawCampaignInvitation).toHaveBeenCalledWith('c1', 'inv-1'));
     await waitFor(() => expect(screen.queryByText('Gwen')).toBeNull());
   });
+});
+
+// The boxes stopped at 100 and 1,000 characters, short of the server's 200
+// and 5,000.
+it('stops the name and description at the server\'s limits', () => {
+  current = campaign();
+  render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+  expect((screen.getByPlaceholderText('My Campaign') as HTMLInputElement).maxLength).toBe(CAMPAIGN_LIMITS.maxNameLength);
+  expect((screen.getByPlaceholderText('Describe your campaign…') as HTMLTextAreaElement).maxLength).toBe(CAMPAIGN_LIMITS.maxDescriptionLength);
+  expect(screen.getByText(`11/${CAMPAIGN_LIMITS.maxDescriptionLength}`)).toBeTruthy();
 });

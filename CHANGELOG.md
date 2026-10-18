@@ -64,6 +64,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A campaign's name and description can be as long as the server allows,** 200 and 5,000 characters, in **New Campaign** and **Campaign Settings**. The settings stopped at 100 and 1,000, and **New Campaign** refused a name over 100 characters, or of one letter, and had no limit on the description.
+
 - **A campaign that exports can be imported again, however large.** An import refused any archive with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files, though nothing stopped a campaign from holding more, so a large campaign's export could never be imported. Those numbers are gone: an archive may hold up to 1,000 files (one for each map and each picture or sound file) and 10 MB of creatures, of token templates or of one map's data, and **Export Campaign** now says when a campaign is over those, before saving anything.
 
 - **A campaign import keeps picture and sound names within an upload's limits.** A name in the archive could be up to 500 characters and was stored as it was, longer than an uploaded file's name may be and too long for most computers to save the file under. It is now cut to 200 characters for its name, and to 255 for its file name, keeping the extension.

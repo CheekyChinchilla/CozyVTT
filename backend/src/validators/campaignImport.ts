@@ -12,6 +12,7 @@ import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
 import { TOKEN_LIMITS } from './tokenLimits';
+import { CAMPAIGN_LIMITS } from './campaignLimits';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -77,7 +78,7 @@ export const ManifestSchema = z.object({
   formatVersion: z.literal(IMPORT_LIMITS.FORMAT_VERSION),
   exportedAt: z.string().max(50),
   exportedFrom: z.string().max(100),
-  campaignName: z.string().min(1).max(200),
+  campaignName: z.string().min(1).max(CAMPAIGN_LIMITS.maxNameLength),
   gameSystem: z.string().max(50),
   mapCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_FILE_COUNT),
   tokenCount: z.number().int().min(0),
@@ -91,8 +92,8 @@ export const ManifestSchema = z.object({
 // ── Campaign settings ───────────────────────────────────────────────────────
 
 export const CampaignSettingsSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().max(5000).nullable().optional(),
+  name: z.string().min(1).max(CAMPAIGN_LIMITS.maxNameLength),
+  description: z.string().max(CAMPAIGN_LIMITS.maxDescriptionLength).nullable().optional(),
   gameSystem: z.unknown().optional(),
   // Both fall back to the default when an archive carries a value outside the
   // allowlist, so one bad field does not refuse the whole campaign.

@@ -60,6 +60,10 @@
  * the token editor's condition box stops at them. The file is kept identical in
  * both packages.
  *
+ * The limits on a campaign's name and description. The server refuses a
+ * campaign over them and the campaign dialogs stop each box at them. The file
+ * is kept identical in both packages.
+ *
  * The session secret examples. A production server refuses the example values
  * for SESSION_SECRET, so a self-hoster who copies a block as written is told
  * to generate one; the guide's example was once changed without the list of
@@ -397,6 +401,12 @@ describe('the creature and stat block limits', () => {
 describe('the limits on a token\'s conditions', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/tokenLimits.ts')).toBe(read('backend/src/validators/tokenLimits.ts'));
+  });
+});
+
+describe('the limits on a campaign\'s name and description', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/campaignLimits.ts')).toBe(read('backend/src/validators/campaignLimits.ts'));
   });
 });
 

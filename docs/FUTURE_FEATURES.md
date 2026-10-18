@@ -51,7 +51,7 @@ _Nothing at present._
 ### Campaigns and assets
 
 - `1.5.4` **A refused asset move shows only "Forbidden".** `AssetDetailPanel.tsx` reads the reply's short `error` label instead of its `message`.
-- `1.5.4` **Vibe settings are validated two ways, and the campaign name and description boxes stop short of the server's limits.** `PUT /api/campaigns/:id/vibe` checks with `validateVibeSettings` and `PUT /api/campaigns/:id` with `VibeSettingsSchema`, which disagree; the settings panel caps the name and description at 100 and 1000 characters against the server's 200 and 5000.
+- `1.5.4` **Vibe settings are validated two ways.** `PUT /api/campaigns/:id/vibe` checks with `validateVibeSettings` and `PUT /api/campaigns/:id` with `VibeSettingsSchema`, which disagree.
 - `1.5.4` **The asset library offers Delete and Move by a rule of its own.** It offers both only to an asset's uploader or an admin, though the server also lets a campaign's DM do both on the campaign's assets, and refuses a global asset's uploader who no longer has Global Assets (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The asset list already tells the page whether the server will take each change (`canChange`), as the Documents page uses it.
 - `1.5.4` **A file whose name has accented or other non-ASCII letters is stored and downloads with a garbled name.** The upload reads the name's UTF-8 bytes as latin1 (`routes/assets.ts`).
 - `1.5.4` **The asset library's search box filters only the page of results on screen,** not the whole library (`AssetLibraryPage.tsx`).

@@ -10,6 +10,7 @@ import type { Campaign, GameSystem } from '@/types';
 import { GAME_SYSTEM_OPTIONS } from '@/constants/game-systems';
 import { Button, Modal, Field, Input, Textarea, Select } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 interface CreateCampaignModalProps {
   isOpen: boolean;
@@ -42,14 +43,9 @@ export default function CreateCampaignModal({
     e.preventDefault();
     setError('');
 
-    // Validation
-    if (name.trim().length < 2) {
-      setError('Campaign name must be at least 2 characters');
-      return;
-    }
-
-    if (name.trim().length > 100) {
-      setError('Campaign name must be less than 100 characters');
+    // The box stops at the server's longest name; an empty one is refused here.
+    if (!name.trim()) {
+      setError('Campaign name is required');
       return;
     }
 
@@ -93,7 +89,7 @@ export default function CreateCampaignModal({
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Campaign Name" required hint="Give your campaign a memorable name (2-100 characters)">
+        <Field label="Campaign Name" required hint={`Give your campaign a memorable name (up to ${CAMPAIGN_LIMITS.maxNameLength} characters)`}>
           {(field) => (
             <Input
               {...field}
@@ -101,6 +97,7 @@ export default function CreateCampaignModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="The Lost Mines of Phandelver"
+              maxLength={CAMPAIGN_LIMITS.maxNameLength}
               disabled={loading}
               autoFocus
               required
@@ -133,6 +130,7 @@ export default function CreateCampaignModal({
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="A classic D&D adventure where heroes search for the lost mines..."
+              maxLength={CAMPAIGN_LIMITS.maxDescriptionLength}
               rows={4}
               disabled={loading}
             />
@@ -162,7 +160,7 @@ export default function CreateCampaignModal({
 
           <Button
             type="submit"
-            disabled={name.trim().length < 2}
+            disabled={!name.trim()}
             loading={loading}
             icon={Plus}
             className="flex-1"
