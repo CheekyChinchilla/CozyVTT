@@ -56,6 +56,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The session timer counts from the session's start after Resume Session.** On the DM's screen it could start again from zero, and then disagree with itself after a reload.
 
+- **Reset Explored Areas clears every player's memory of the map,** even one whose memory was being saved as you clicked it. That player kept everything they had explored.
+
 - **Damage from the roster's minus buttons takes temporary hit points first,** in D&D 5e and Pathfinder 2e, as both games' rules do. It came straight off the character's hit points and left the temporary ones untouched.
 
 - **Initiative rolls stay in the Dice panel after a reload,** where they used to vanish. A roll for a token not every player can see (hidden, on the spirit layer, on a map you have not switched to) is kept as a secret roll, seen by you and whoever rolled it. A player who rolls for their own obscured token now sees their token's name on it, where it said *Unknown creature*; everyone else still sees *Unknown creature*.
