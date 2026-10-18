@@ -247,7 +247,7 @@ Each token has:
 
 **Colored-letter placeholders:** Tokens without an assigned image display a colored circle with the first letter of their name. Player tokens are blue; for creatures the color reflects the disposition, and objects are grey.
 
-**Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
+**Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
 
 *GIF pending — Picking up a token and putting it down across the map.*
 
@@ -615,7 +615,7 @@ To move the view, drag an empty part of the map.
 
 ### Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, or move the pointer off the map, to put it back where it was.
+When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, press **Esc**, or move the pointer off the map, to put it back where it was.
 
 *GIF pending — Moving a player token.*
 

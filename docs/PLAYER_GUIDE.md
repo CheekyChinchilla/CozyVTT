@@ -264,7 +264,7 @@ One thing to know: if the DM has **paused** the session, your rolls are worked o
 
 ## Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
+When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
 
 *GIF pending — Picking up a player token and placing it across the map.*
 

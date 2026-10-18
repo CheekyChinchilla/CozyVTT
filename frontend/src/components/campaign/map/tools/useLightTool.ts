@@ -7,7 +7,7 @@
 // in step with the server.
 // ============================================
 
-import { useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import { useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { LightSource } from '@/types/walls';
 import type { LightToolMode, LightPlacementDefaults } from '@/components/campaign/DmLightControls';
 import { randomId } from '@/utils/uuid';
@@ -44,6 +44,12 @@ export function useLightTool({
   });
   // Drag-to-move state for lights in select mode
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
+
+  // A new map has none of the last one's lights to have selected or in hand.
+  useEffect(() => {
+    setSelectedLightId(null);
+    draggingLightRef.current = null;
+  }, [mapId]);
 
   const tool: MapTool = {
     // Light tool: place or select/drag

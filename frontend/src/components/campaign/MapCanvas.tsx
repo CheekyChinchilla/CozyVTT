@@ -433,11 +433,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // showing the last cursor position until the token next moves.
   const cancelHold = () => {
     if (draggedToken && currentMap && canEmit()) {
-      socket!.emitTokenMove(releaseHeldToken(draggedToken, currentMap.id));
+      socket!.emitTokenMove(releaseHeldToken(draggedToken, heldOnMapRef.current ?? currentMap.id));
     }
     setDraggedToken(null);
     setDragOffset(null);
   };
+  // The map a held token was picked up on, which is where it goes back to if
+  // the map changes while it is held.
+  const heldOnMapRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (draggedToken) cancelHold();
+  }, [currentMap?.id]);
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
   const {
@@ -1199,6 +1205,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
 
       if (e.key === 'Escape') {
+        // A held token is put back first: it is the most transient thing.
+        if (draggedToken) {
+          cancelHold();
+          return;
+        }
         // Each press lets go of one thing, asking the tools in this order. The
         // measuring tools come last on purpose: the AoE template is not
         // mutually exclusive with the wall and light tools, so it can sit armed
@@ -1227,7 +1238,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [wallMode, lightMode, wallInProgress, polygonPoints, showAoE, aoeAnchor, isDM, currentMap, undoWalls, redoWalls, socket, wallSegments, selectedWallIds, deleteSelectedWalls, moveSelectedWalls]);
+  }, [wallMode, lightMode, wallInProgress, polygonPoints, showAoE, aoeAnchor, isDM, currentMap, undoWalls, redoWalls, socket, wallSegments, selectedWallIds, deleteSelectedWalls, moveSelectedWalls, draggedToken]);
 
   // ============================================
   // Canvas Rendering
@@ -1921,6 +1932,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           // Pick up token — disable ruler if it was active
           if (showRuler) putRulerAway();
           console.log('👆 Picking up token:', token.name);
+          heldOnMapRef.current = currentMap.id;
           setDraggedToken(token);
           setDragOffset({
             x: gridCoords.x - token.position.x,

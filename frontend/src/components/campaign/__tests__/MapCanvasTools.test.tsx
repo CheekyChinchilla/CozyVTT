@@ -972,3 +972,71 @@ describe('letting go of the mouse outside the map (F352)', () => {
     expect(surface().className).toContain('cursor-pointer');
   });
 });
+
+describe('switching maps (F349)', () => {
+  const mapB = () => ({ ...mapWith({ wallSegments: [seg('b1', 100, 500, 200, 500)] }), id: 'map-b', name: 'Map B' }) as unknown as CampaignMap;
+  const switchMap = () => act(() => { h.set({ currentMap: mapB() }); });
+
+  it('puts a held token back on the map it came from', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    click(square(0, 19));
+    move(square(3, 19), 0);
+
+    switchMap();
+
+    expect(lastOf('token.move')).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
+    click(square(5, 10));
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+
+  it('drops a half-drawn wall', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+
+    switchMap();
+    click(px(200, 300));
+
+    expect(sentOf('wall:add')).toEqual([]);
+  });
+
+  it('drops the corners of a half-drawn polygon', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+    click(px(500, 500));
+    click(px(700, 500));
+
+    switchMap();
+    click(px(700, 700));
+    click(px(700, 700), { detail: 2 });
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+
+  it('drops the wall selection', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+    press('a', { ctrlKey: true });
+
+    switchMap();
+    press('Delete');
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+});
+
+describe('Escape with a token held (F349)', () => {
+  it('puts the token back where it was picked up', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    click(square(0, 19));
+    move(square(3, 19), 0);
+
+    press('Escape');
+
+    expect(lastOf('token.move')).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
+    click(square(5, 19));
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+});

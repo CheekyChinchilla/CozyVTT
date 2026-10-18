@@ -232,6 +232,26 @@ export function useWallTool({
     commitWalls([...wallSegments, ...newSegs]);
   }, [polygonPoints, wallSegments, wallType, currentMap, commitWalls]);
 
+  // A new map starts with nothing half-drawn or held from the last one: a line
+  // or polygon would join the old map's points to the new map's, and a
+  // selection names walls the new map does not have.
+  useEffect(() => {
+    setWallInProgress([]);
+    setPolygonPoints([]);
+    setSelectedWallIds(new Set());
+    setSelectedEndpoint(null);
+    setWallMarquee(null);
+    wallMarqueeRef.current = null;
+    wallMoveRef.current = null;
+    wallDragEndpointRef.current = null;
+    setSplitHoverPoint(null);
+    setHoveredWallId(null);
+    wallEraseBrushActiveRef.current = false;
+    wallErasedIdsRef.current = new Set();
+    wallBrushActiveRef.current = false;
+    wallBrushPointsRef.current = [];
+  }, [currentMap?.id]);
+
   // Clear polygon when leaving polygon mode
   useEffect(() => {
     if (wallMode !== 'wall-polygon') {
