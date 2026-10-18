@@ -99,6 +99,10 @@ export default function ToastContainer() {
       <AnimatePresence mode="sync">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto">
+            {/* TODO(ui): a new onDismiss on every render restarts each card's
+                timer (its effect depends on it), so adding a toast makes every
+                open toast leave together. Pass a stable function, such as
+                dismissToast with the id read inside ToastCard. */}
             <ToastCard
               toast={toast}
               onDismiss={() => dismissToast(toast.id)}
