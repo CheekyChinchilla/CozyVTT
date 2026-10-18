@@ -20,7 +20,6 @@ import {
   Upload,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
 import type { Asset, CreateTokenRequest, Token, TokenDisplayMode } from '@/types';
@@ -61,7 +60,6 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const { campaign, currentMap } = useCampaign();
   // Manager lists tokens by name/flags — no need to re-render on moves.
   const tokens = useTokenListIgnoringMovement();
-  const { socket } = useWebSocket();
 
   // ── Asset picker state ──
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -237,7 +235,6 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
       // Optimistic local update then broadcast so other clients get the new token
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
 
       // Reset form (keep asset selected in case DM wants to place another)
       setTokenName('');
@@ -259,7 +256,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden, socket]);
+  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden]);
 
   // ============================================
   // Token List Actions
@@ -269,7 +266,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     if (!campaign || !currentMap) return;
     setTogglingVisibilityId(token.id);
     try {
-      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
+      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
     } catch {
       setError('Failed to toggle token visibility');
     } finally {
@@ -281,7 +278,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     if (!campaign || !currentMap) return;
     setTogglingVisibilityId(token.id);
     try {
-      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
     } catch {
       setError('Failed to toggle token identity');
     } finally {
@@ -296,7 +293,6 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     try {
       await api.updateToken(campaign.id, currentMap.id, token.id, { layer: newLayer });
       useGameStore.getState().patchToken(token.id, { layer: newLayer });
-      socket?.emitMapChange(currentMap.id);
     } catch {
       setError('Failed to move token between layers');
     } finally {
@@ -333,7 +329,6 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     try {
       await api.deleteToken(campaign.id, currentMap.id, token.id);
       useGameStore.getState().removeToken(token.id);
-      socket?.emitMapChange(currentMap.id);
     } catch {
       setError('Failed to remove token from map');
     } finally {

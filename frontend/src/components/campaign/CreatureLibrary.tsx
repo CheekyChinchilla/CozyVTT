@@ -25,7 +25,6 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
@@ -104,7 +103,6 @@ interface CreatureLibraryProps {
 
 export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProps) {
   const { campaign, currentMap } = useCampaign();
-  const { socket } = useWebSocket();
 
   // ── Search & filter state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -290,13 +288,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         tokenPayload
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap, socket]);
+  }, [campaign, currentMap]);
 
   // ── Duplicate creature ──
   const handleDuplicate = useCallback(async (creatureId: string) => {

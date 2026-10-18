@@ -6871,7 +6871,10 @@ paths:
         - Maps
       summary: Add token to map
       description: |
-        Add a new token to the map (DM only). Every field is checked against
+        Add a new token to the map (DM only). When the map is the one the
+        campaign is showing, every connected member is then sent
+        `map.changed` with the map as they may see it, as `map.change` sends
+        it; a map the DM has not switched to sends nothing. Every field is checked against
         the token schema and stored as parsed: a position keeps only `x` and
         `y`, `rotation` is 0 to 360, the flags are booleans and the ids are
         UUIDs. A `characterId` must name a character of this campaign, or the
@@ -6953,7 +6956,9 @@ paths:
         - Maps
       summary: Update token
       description: |
-        Update a token. The DM may update any token and any field. A player may
+        Update a token. When the map is the one the campaign is showing, every
+        connected member is then sent `map.changed` with the map as they may
+        see it, a player's own change included. The DM may update any token and any field. A player may
         update only a token that names them in `controlledBy`, and only its
         `position`, `rotation` and `conditions`; every other field of the body
         below, `size` and `sightRadius` included, answers 403 for a player
@@ -7168,7 +7173,9 @@ paths:
         - Maps
       summary: Delete token
       description: >-
-        Remove a token from the map (DM only). If it is a combatant, it
+        Remove a token from the map (DM only). When the map is the one the
+        campaign is showing, every connected member is then sent
+        `map.changed` without it. If it is a combatant, it
         leaves the initiative order and the order is sent again to every
         connected member (`initiative.state`), even when that empties it.
         Otherwise the order is sent again only while anything is in it, since

@@ -67,7 +67,8 @@ describe('removing a token from the roster', () => {
 
     await waitFor(() => expect(api.deleteToken).toHaveBeenCalledWith('campaign-1', 'map-1', 'goblin'));
     await waitFor(() => expect(useGameStore.getState().tokens['goblin']).toBeUndefined());
-    expect(emitMapChange).toHaveBeenCalledWith('map-1');
+    // The server tells the table; the page sends no map.change of its own.
+    expect(emitMapChange).not.toHaveBeenCalled();
   });
 
   it('says so when the server refuses, and keeps the token', async () => {

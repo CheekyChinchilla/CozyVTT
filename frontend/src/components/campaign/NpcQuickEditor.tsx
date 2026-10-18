@@ -21,7 +21,6 @@ import {
   Image as ImageIcon,
   Save,
 } from 'lucide-react';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/contexts/ToastContext';
 import { apiErrorMessage } from '@/utils/errors';
@@ -81,7 +80,6 @@ function getEffectiveType(token: Token): TokenType {
 // ============================================
 
 export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTokenUpdate }: NpcQuickEditorProps) {
-  const { socket } = useWebSocket();
   const { campaign, currentMap } = useCampaign();
   const { showToast } = useToast();
 
@@ -133,7 +131,6 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       const result = await api.updateToken(campaignId, mapId, token.id, changes);
       // The DM, the only one this editor opens for, always gets the token back.
       if (result.token) onTokenUpdate(result.token);
-      socket?.emitMapChange(mapId);
       return true;
     } catch (err) {
       // Say why, or the edit stays in the field looking saved. A token from
@@ -143,7 +140,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       showToast(apiErrorMessage(err) || 'Could not save that change to the token', 'error');
       return false;
     }
-  }, [campaignId, mapId, token.id, onTokenUpdate, socket, showToast]);
+  }, [campaignId, mapId, token.id, onTokenUpdate, showToast]);
 
   // ── HP adjustment ──
   // Each quick control shows its change at once and goes back to what it was
@@ -445,13 +442,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setIsRemoving(true);
     try {
       await api.deleteToken(campaignId, mapId, token.id);
-      socket?.emitMapChange(mapId);
       onClose();
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
       setIsRemoving(false);
     }
-  }, [campaignId, mapId, token.id, socket, onClose, isRemoving, showToast]);
+  }, [campaignId, mapId, token.id, onClose, isRemoving, showToast]);
 
   // HP bar rendering values
   const hpPct = hp && hp.max > 0 ? Math.max(0, Math.min(1, hp.current / hp.max)) : 0;

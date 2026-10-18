@@ -22,7 +22,6 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import type { TokenTemplate, NpcStatBlock, Campaign } from '@/types';
@@ -58,7 +57,6 @@ interface TokenTemplateLibraryProps {
 
 export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateLibraryProps) {
   const { campaign, currentMap } = useCampaign();
-  const { socket } = useWebSocket();
 
   // ── Data state ──
   const [templates, setTemplates] = useState<TokenTemplate[]>([]);
@@ -163,13 +161,12 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
         tokenPayload
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place token on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap, socket]);
+  }, [campaign, currentMap]);
 
   // ── Delete template ──
   const handleDelete = useCallback(async (id: string) => {

@@ -18,7 +18,6 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useGameStore, useTokenListIgnoringMovement } from '@/stores/gameStore';
 import api from '@/services/api';
@@ -66,7 +65,6 @@ interface TokenRowProps {
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
   const { campaign, currentMap } = useCampaign();
-  const { socket } = useWebSocket();
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
@@ -95,7 +93,6 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         conditions: [],
       });
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(mapId);
     } catch (err) {
       // A copy is a new token, so an older one whose fields predate validation
       // is refused: say which, so the DM can fix it in Edit Token.
@@ -103,23 +100,23 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, socket, showToast]);
+  }, [token, campaignId, mapId, currentMap, showToast]);
 
   const handleToggleVisible = useCallback(async () => {
     try {
-      await setTokenFlag(campaignId, mapId, token, 'visible', !token.visible, socket);
+      await setTokenFlag(campaignId, mapId, token, 'visible', !token.visible);
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to change whether players can see the token', 'error');
     }
-  }, [token, campaignId, mapId, socket, showToast]);
+  }, [token, campaignId, mapId, showToast]);
 
   const handleToggleObscured = useCallback(async () => {
     try {
-      await setTokenFlag(campaignId, mapId, token, 'obscured', !token.obscured, socket);
+      await setTokenFlag(campaignId, mapId, token, 'obscured', !token.obscured);
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to change whether the token\'s identity is hidden', 'error');
     }
-  }, [token, campaignId, mapId, socket, showToast]);
+  }, [token, campaignId, mapId, showToast]);
 
   const handleDelete = useCallback(async () => {
     if (isDeleting) return;
@@ -128,12 +125,11 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     try {
       await api.deleteToken(campaignId, mapId, token.id);
       useGameStore.getState().removeToken(token.id);
-      socket?.emitMapChange(mapId);
     } catch (err) {
       showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
       setIsDeleting(false);
     }
-  }, [token, campaignId, mapId, socket, isDeleting, showToast]);
+  }, [token, campaignId, mapId, isDeleting, showToast]);
 
   const hp = hpLabel(token);
 

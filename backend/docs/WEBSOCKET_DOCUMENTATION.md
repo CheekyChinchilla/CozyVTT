@@ -45,13 +45,13 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 Two things people expect on the socket are not there:
 
 - **Creating, editing and deleting a token** are REST calls (`POST`, `PUT` and
-  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). Those routes
-  send the other connected clients no token event (only the initiative order
-  again, while something is in it); the web client follows each call with a
-  `map.change` for the map, so the table reloads it. A script that changes a
-  token over REST does the same, as the DM: `map.change` is the DM's alone.
-  Moving a token is the one token change with socket events of its own
-  (below).
+  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). There is no
+  token event for them: when the map is the one the campaign is showing, each
+  route sends every connected member `map.changed` with the map as they may see
+  it (the event `map.change` sends), then the initiative order again while
+  something is in it. A script needs to send nothing more, and a player's edit
+  to a token they control reaches the table the same way. Moving a token is the
+  one token change with socket events of its own (below).
 - **Starting, pausing, resuming and ending a session** are REST calls too
   (`POST /api/campaigns/{campaignId}/sessions`, then `PUT .../sessions/{sessionId}/pause`,
   `PUT /api/campaigns/{campaignId}/resume` and `PUT .../sessions/{sessionId}/end`). The

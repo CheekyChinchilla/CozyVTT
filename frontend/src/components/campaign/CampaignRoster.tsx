@@ -223,7 +223,6 @@ export default function CampaignRoster() {
         ),
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
       showToast(`${character.name} placed on the map`, 'success');
     } catch (error) {
       console.error('Failed to place character on map:', error);

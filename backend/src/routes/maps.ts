@@ -1287,11 +1287,12 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
 // TOKEN MANIPULATION ENDPOINTS
 // ============================================
 
-// TODO(tokens): only the move route below tells open pages of its change.
-// Creating, updating or deleting a token here broadcasts nothing but the
-// initiative order; the web app follows each call with a map-change emit of
-// its own, so a change made by any other client stays unseen until the next
-// broadcast or a reload. Broadcast from these routes, as the move route does.
+// Every route here that changes a map's tokens sends the map again to the
+// table, as each member may see it, when it is the map the campaign is
+// showing (resendIfCurrent), then the initiative order as before: the same
+// `map.changed` the DM's `map.change` sends. The web app used to follow each
+// call with that emit itself, so a change from a script, a second tab or a
+// player's edit to their own token reached nobody.
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/tokens
@@ -1490,6 +1491,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(appended.full) });
     }
     const updatedMap = appended.map;
+    await resendIfCurrent(campaignId, updatedMap);
 
     // A player's spirit-layer token placed on the map the table is on moves
     // them to the spirit plane, which changes what they are sent of the
@@ -1755,6 +1757,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(404).json({ error: 'Not Found', message: 'Token not found on this map' });
     }
     const { token: updatedToken, map: updatedMap } = written;
+    await resendIfCurrent(campaignId, updatedMap);
 
     // A combatant's own change follows the token. A layer, visibility or
     // controller change on any token may move a player between planes,
@@ -1926,10 +1929,11 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 
     // Removed from the list as it is under the map's lock; several deletes
     // at once used to leave only whichever wrote last.
-    await withMapsLocked([mapId], async (tx) => {
+    const withoutToken = await withMapsLocked([mapId], async (tx) => {
       const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-      await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
+      return tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
     });
+    await resendIfCurrent(campaignId, withoutToken);
 
     // The entry goes with the token, and the order is sent again without it.
     // Any other token's deletion can move its controller between planes (a
