@@ -48,6 +48,7 @@ import {
   drawPings,
   PING_DURATION_MS,
   type ActivePing,
+  type AoEShape,
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
@@ -57,7 +58,7 @@ import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { useFogTool } from './map/tools/useFogTool';
 import { useLightTool } from './map/tools/useLightTool';
-import { useMeasureTools, type AoEShape } from './map/tools/useMeasureTools';
+import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';

@@ -5,17 +5,9 @@
 // ============================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AoEAnchor } from '../layers';
+import type { AoEAnchor, AoEConfig } from '../layers';
 import type { MapLayer } from '../useRenderLoop';
 import type { MapTool, PointerAt } from './types';
-
-export type AoEShape = 'sphere' | 'cylinder' | 'cone' | 'line' | 'cube';
-
-export interface AoEConfig {
-  shape: AoEShape;
-  sizeFt: number;
-  widthFt?: number; // line only, default 5
-}
 
 interface UseMeasureToolsArgs {
   isDM: boolean;
