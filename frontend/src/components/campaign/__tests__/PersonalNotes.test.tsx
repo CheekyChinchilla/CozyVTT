@@ -56,7 +56,12 @@ const full = (id: string, title: string, content: string): PersonalNote => ({
 
 /** Open the picker's first note and wait for its body to arrive. */
 async function openNote(id: string) {
-  fireEvent.change(screen.getByLabelText('Choose a note'), { target: { value: id } });
+  // Choose only once the list has drawn the note's option: a <select> given a
+  // value it has no option for falls back to the empty one, and the note
+  // asked for is ''.
+  const picker = screen.getByLabelText<HTMLSelectElement>('Choose a note');
+  await waitFor(() => expect(picker.querySelector(`option[value="${id}"]`)).not.toBeNull());
+  fireEvent.change(picker, { target: { value: id } });
   await waitFor(() => expect(getNote).toHaveBeenCalledWith('camp-1', id));
   // openNote clears its loading flag on a zero-delay timer.
   await act(async () => {
