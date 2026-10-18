@@ -4,7 +4,7 @@
 // Spirit Layer Implementation
 // ============================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Ghost, Layers, X, Loader2 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -167,6 +167,14 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
   // Style Selector
   // ============================================
 
+  // The veil as the page holds it now, for a save that answers after the
+  // server has opened or closed it: the answer must not put back the veil
+  // as it was when the save began.
+  const enabledNow = useRef(enabled);
+  useEffect(() => {
+    enabledNow.current = enabled;
+  }, [enabled]);
+
   // A style is saved, then announced to the table. The picker shows the
   // choice meanwhile and goes back to the stored style when the save is
   // refused, saying why.
@@ -176,7 +184,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
     setErrorMsg(null);
     try {
       await campaignService.updateCampaign(campaign.id, { spiritLayerStyle: encoded });
-      updateCampaignSpiritLayer(enabled, encoded);
+      updateCampaignSpiritLayer(enabledNow.current, encoded);
       socket?.emitSpiritLayerStyleChange(encoded);
     } catch (err) {
       const stored = parseStyle(campaign.spiritLayerStyle ?? 'wispy');

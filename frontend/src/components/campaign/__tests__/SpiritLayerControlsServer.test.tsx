@@ -10,7 +10,7 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('framer-motion', () => {
@@ -26,9 +26,10 @@ vi.mock('framer-motion', () => {
 });
 
 const updateCampaignSpiritLayer = vi.fn();
+const veil = vi.hoisted(() => ({ open: false }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({
-    campaign: { id: 'campaign-1', spiritLayerEnabled: false, spiritLayerStyle: 'wispy' },
+    campaign: { id: 'campaign-1', spiritLayerEnabled: veil.open, spiritLayerStyle: 'wispy' },
     currentMap: { id: 'map-1' },
     updateCampaignSpiritLayer,
     dmViewBothPlanes: true,
@@ -47,6 +48,7 @@ import SpiritLayerControls from '../SpiritLayerControls';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  veil.open = false;
 });
 
 it('asks the server to open the veil and leaves the page as it is until the server says so', async () => {
@@ -68,4 +70,18 @@ it('puts the style back when the server refuses it', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: /Wispy/ })).toHaveAttribute('aria-pressed', 'true'));
   expect(shadow).toHaveAttribute('aria-pressed', 'false');
   expect(emitSpiritLayerStyleChange).not.toHaveBeenCalled();
+});
+
+// The save's answer put the veil back to how it was when the save began: a
+// veil opened by the server meanwhile showed closed again on the DM's page.
+it('keeps a veil opened while a style was being saved', async () => {
+  let answer: () => void = () => {};
+  updateCampaign.mockReturnValue(new Promise<void>((resolve) => { answer = resolve; }));
+  const { rerender } = render(<SpiritLayerControls isOpen onClose={() => {}} />);
+  await userEvent.click(screen.getByRole('button', { name: /Shadow/ }));
+
+  veil.open = true;
+  rerender(<SpiritLayerControls isOpen onClose={() => {}} />);
+  await act(async () => { answer(); });
+  expect(updateCampaignSpiritLayer).toHaveBeenLastCalledWith(true, 'shadow');
 });
