@@ -56,10 +56,12 @@ import {
 import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
 import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
-import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/fogSelection';
+import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
+import { useFogTool } from './map/tools/useFogTool';
+import type { PointerAt } from './map/tools/types';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
@@ -308,6 +310,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
   }, []);
 
+  // The fog boxes (map/tools/useFogTool.ts).
+  const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
+    isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, markDirty,
+  });
+
   // Wall tool state (DM only)
   const [wallType, setWallType] = useState<import('@/types/walls').WallType>('wall');
   const [snapToGrid, setSnapToGrid] = useState(true);
@@ -396,13 +403,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   });
   // Drag-to-move state for lights in select mode
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
-
-  // Fog selection tool state (DM only)
-  // Fog selection drag: anchor is fixed on mousedown, current follows the
-  // cursor. Both in map pixels — the fog raster is top-left origin like map
-  // pixels, so the box never touches the bottom-left grid convention.
-  const fogDragAnchorRef = useRef<{ x: number; y: number } | null>(null);
-  const [fogDragCurrent, setFogDragCurrent] = useState<{ x: number; y: number } | null>(null);
 
   // Always-current wall segments ref — socket handlers registered with [socket, currentMap?.id]
   // deps would otherwise close over stale wallSegments from registration time.
@@ -623,49 +623,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
     return mapPx;
   };
-
-  /**
-   * Apply a set of fog cells: optimistic local update plus one server op.
-   *
-   * A rectangle drag produces exactly one call here, which is why the old
-   * pending-cells buffer and its 80ms flush interval are gone — those existed
-   * only to batch the continuous stream a brush stroke produced.
-   */
-  const applyFogCells = useCallback((cells: number[]) => {
-    if (!currentMap || !fogMode || cells.length === 0) return;
-
-    const reveal = fogMode === 'fog-reveal';
-    const operation = { op: reveal ? 'reveal' : 'hide', cells } as const;
-
-    setFogState((prev) => {
-      if (!prev) return prev;
-      const revealed = [...prev.revealed];
-      for (const idx of cells) {
-        if (idx >= 0 && idx < revealed.length) revealed[idx] = reveal;
-      }
-      return { ...prev, revealed };
-    });
-
-    socket?.getSocket()?.emit('fog:operation', { mapId: currentMap.id, operation });
-  }, [currentMap, fogMode, socket]);
-
-  /** Finish a fog drag: compute the snapped rectangle once and apply it. */
-  const commitFogDrag = useCallback((endX: number, endY: number) => {
-    const anchor = fogDragAnchorRef.current;
-    fogDragAnchorRef.current = null;
-    setFogDragCurrent(null);
-    if (!anchor || !fogState) return;
-
-    const rect = fogRectFromDrag(fogState, anchor.x, anchor.y, endX, endY);
-    if (!rect) return; // Entirely off the map
-    applyFogCells(fogCellsInRect(fogState, rect));
-  }, [fogState, applyFogCells]);
-
-  /** Abandon a drag without changing anything (Escape, right-click, map change). */
-  const cancelFogDrag = useCallback(() => {
-    fogDragAnchorRef.current = null;
-    setFogDragCurrent(null);
-  }, []);
 
   // Helper: change a door's type and broadcast.
   const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
@@ -1481,11 +1438,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
 
       if (e.key === 'Escape') {
-        // A fog box being dragged is abandoned before any other Escape action
-        if (fogDragAnchorRef.current) {
-          cancelFogDrag();
-          return;
-        }
+        if (fogTool.escape!()) return;
         // Polygon mode: clear in-progress polygon first
         if (polygonPoints.length > 0) {
           setPolygonPoints([]);
@@ -1627,11 +1580,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       setPolygonPoints([]);
     }
   }, [wallMode]);
-
-  // Leaving fog mode, or switching maps, drops any drag in progress.
-  useEffect(() => {
-    cancelFogDrag();
-  }, [fogMode, currentMap?.id, cancelFogDrag]);
 
   // ============================================
   // Canvas Rendering
@@ -2256,6 +2204,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
+    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
     // Wall-draw mode: place a point (or finish polyline on double-click)
     if (wallMode === 'wall-draw' && isDM) {
@@ -2555,14 +2504,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
-    // Fog selection: anchor the box on mousedown
-    if (fogMode && isDM && fogState) {
-      e.preventDefault(); // Prevent native drag — keeps mousemove firing during the drag
-      const mapPx = screenToMapPx(screenX, screenY);
-      fogDragAnchorRef.current = mapPx;
-      setFogDragCurrent(mapPx);
-      return;
-    }
+    if (fogTool.down!(at)) return;
 
     // If ruler is active and user is DM, set ruler origin on click
     if (showRuler && isDM) {
@@ -2689,9 +2631,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
+    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
     // Track raw map-px position (unquantised) for accurate ghost line in free-draw mode
-    hoverMapPxRef.current = screenToMapPx(screenX, screenY);
+    hoverMapPxRef.current = at.mapPx;
 
     // AoE aim and Alt state, refreshed on every move for the reasons given
     // where they are declared.
@@ -2883,13 +2826,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       }
     }
 
-    // Fog selection: track the cursor. Also runs with no button held, so the
-    // idle single-cell outline follows the mouse before a drag starts.
-    if (fogMode && isDM && fogState) {
-      setFogDragCurrent(screenToMapPx(screenX, screenY));
-      markDirty('overlay');
-      return;
-    }
+    if (fogTool.move!(at)) return;
 
     // Handle token dragging
     if (draggedToken && dragOffset) {
@@ -3003,11 +2940,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         }
       }
     }
-    // Commit the fog selection box on mouse release — one operation per drag.
-    if (fogMode && fogDragAnchorRef.current) {
-      const end = fogDragCurrent ?? fogDragAnchorRef.current;
-      commitFogDrag(end.x, end.y);
-    }
+    fogTool.up!();
     // Commit wall erase brush
     if (wallMode === 'wall-erase' && wallEraseBrushActiveRef.current) {
       wallEraseBrushActiveRef.current = false;
