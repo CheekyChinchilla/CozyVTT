@@ -36,6 +36,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Moving the pointer over the map does less work.** The whole map page was worked out again for every pixel the pointer moved, and the mouse wheel's listener was taken off and put back each time; now the page updates only when the pointer reaches another square.
+
 - **Token pictures load together when a map opens, and one that cannot be loaded is not asked for again every time a token moves.** They loaded one after another, so a map with many tokens filled in slowly, and a missing picture was requested again on every move.
 
 - **A burst of edits to one map no longer holds up the rest of the server.** Each edit waiting its turn on a busy map held one of the server's few database connections while it waited, so dragging many walls or tokens at once could leave other pages, on any campaign, waiting too.

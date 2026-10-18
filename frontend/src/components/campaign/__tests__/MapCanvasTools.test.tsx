@@ -15,6 +15,7 @@
  */
 
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { Profiler } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TokenType, type Map as CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
@@ -1156,6 +1157,36 @@ describe('the spirit crossing sound (F459)', () => {
       expect(close).toHaveBeenCalledTimes(1);
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('moving the pointer (F351)', () => {
+  // Each move stored the square under the pointer as a new object, so the
+  // whole canvas re-rendered for every pixel of movement, and each render
+  // put the wheel listener on again.
+  it('renders again only when the pointer reaches another square', () => {
+    let commits = 0;
+    render(<Profiler id="map" onRender={() => { commits += 1; }}><MapCanvas /></Profiler>);
+    fireEvent.mouseMove(surface(), { ...px(110, 110), buttons: 0 });
+    // React may render once more right after a state change before it can
+    // skip an update that leaves the state as it is; a second move settles it.
+    fireEvent.mouseMove(surface(), { ...px(111, 110), buttons: 0 });
+    const before = commits;
+
+    for (const x of [112, 115, 120, 130, 140]) fireEvent.mouseMove(surface(), { ...px(x, 110), buttons: 0 });
+
+    expect(commits).toBe(before);
+  });
+
+  it('puts the wheel listener on once', () => {
+    const attach = vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener');
+    try {
+      render(<MapCanvas />);
+      for (const x of [60, 160, 260, 360]) fireEvent.mouseMove(surface(), { ...px(x, 110), buttons: 0 });
+      expect(attach.mock.calls.filter(([type]) => type === 'wheel')).toHaveLength(1);
+    } finally {
+      attach.mockRestore();
     }
   });
 });

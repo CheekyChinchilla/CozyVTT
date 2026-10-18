@@ -2026,8 +2026,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     trackMeasure(at);
 
     // Update hover coordinates
+    // Only when the pointer reaches another square: a new object on every
+    // pixel of movement re-rendered the whole canvas.
     if (mapControls.isWithinBounds(gridCoords)) {
-      setHoverCoords(gridCoords);
+      setHoverCoords((prev) => (prev && prev.x === gridCoords.x && prev.y === gridCoords.y ? prev : gridCoords));
     } else {
       setHoverCoords(null);
     }
@@ -2248,13 +2250,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   /**
    * Handle mouse wheel (zoom)
    */
+  // On the hook's own handler, which keeps its identity: the controls object
+  // is new each render, and the listener went off and on again with it.
+  const wheelZoom = mapControls.handleWheel;
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       if (!canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
-      mapControls.handleWheel(e, rect);
+      wheelZoom(e, rect);
     },
-    [mapControls]
+    [wheelZoom]
   );
 
   /**
