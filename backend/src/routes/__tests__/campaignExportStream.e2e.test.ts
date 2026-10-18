@@ -135,6 +135,10 @@ describe('a campaign export', () => {
     expect(entries.map((e) => e.path)).toEqual(expect.arrayContaining(['manifest.json', 'campaign.json', 'maps/map-0.json']));
     const picture = entries.find((e) => e.path.startsWith('assets/') && e.path.endsWith('.png'));
     expect(picture?.uncompressedSize).toBe(40 * MB);
+    // Pictures are stored as they are, so the archive is the size the check
+    // before it counted; the campaign's data is compressed.
+    expect(picture?.compressionMethod).toBe(0);
+    expect(entries.find((e) => e.path === 'campaign.json')?.compressionMethod).toBe(8);
   }, 60_000);
 
   it('keeps memory bounded however large the campaign is', async () => {

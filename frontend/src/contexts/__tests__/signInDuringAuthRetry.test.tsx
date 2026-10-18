@@ -12,7 +12,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, act, fireEvent, waitFor } from '@testing-library/react';
-import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router';
 import { AuthProvider, useAuth } from '../AuthContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import type { User } from '@/types/user.types';

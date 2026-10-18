@@ -281,6 +281,9 @@ export default function DocumentReader({
                 Open this PDF in a new tab
               </button>
             </p>
+            {/* TODO(ui): Chrome's PDF viewer does not run in a frame sandboxed without
+                allow-same-origin, so Chromium shows its blocked page here; opening the
+                file directly works. Show PDFs a way Chrome can display. */}
             <iframe
               src={url}
               title={name}

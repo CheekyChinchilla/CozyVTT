@@ -154,7 +154,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   // in that time vanished with it.
   const [seedError, setSeedError] = useState<string | null>(null);
 
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   // The search the list last loaded with. Opening the library loads the list
   // (the effect below); the search box's wait reloads it only for a search
   // that differs, where it used to fire on opening too and load it twice.

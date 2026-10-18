@@ -10,11 +10,15 @@
 import type express from 'express';
 import logger from '../utils/logger';
 
+/**
+ * Anything a route throws or rejects with reaches this, an Error or not:
+ * Express 5 passes a rejected promise on too, and code may throw a string.
+ */
 export function errorHandler(
-  err: Error,
+  err: unknown,
   req: express.Request,
   res: express.Response,
-  _next: express.NextFunction
+  next: express.NextFunction
 ): void {
   // Body-parser reports an oversized body as 413 and malformed JSON as 400.
   // Reporting those as 500 blamed the server for something the caller could fix
@@ -27,10 +31,16 @@ export function errorHandler(
   // `err.status` used as the response code — a library is free to put its own
   // numbering in that field, and `res.status()` throws on anything that is not a
   // valid code, from inside the handler that exists to stop things throwing.
-  const rawStatus = 'status' in err ? (err as { status?: unknown }).status : undefined;
-  const parserType = 'type' in err ? (err as { type?: unknown }).type : undefined;
+  const fields: object = typeof err === 'object' && err !== null ? err : {};
+  const rawStatus = 'status' in fields ? fields.status : undefined;
+  const parserType = 'type' in fields ? fields.type : undefined;
+  const message = 'message' in fields && typeof fields.message === 'string' ? fields.message : String(err);
+  const stack = 'stack' in fields && typeof fields.stack === 'string' ? fields.stack : undefined;
   const tooLarge = rawStatus === 413 || parserType === 'entity.too.large';
   const notJson = parserType === 'entity.parse.failed';
+  // TODO(accounts): body-parser's own 415s (`charset.unsupported`,
+  // `encoding.unsupported`) fall through to the 500 below. Answer them 415 as
+  // the caller's mistake, like the two cases above.
 
   if (tooLarge || notJson) {
     // The caller's mistake, not the server's, and never logged with its
@@ -43,7 +53,14 @@ export function errorHandler(
       path: req.path,
     });
   } else {
-    logger.error('Unhandled error', { message: err.message, stack: err.stack });
+    logger.error('Unhandled error', { message, stack });
+  }
+
+  // A route that failed part way through its answer: a second one cannot be
+  // started, and Express's own handler ends the connection.
+  if (res.headersSent) {
+    next(err);
+    return;
   }
 
   if (tooLarge) {
@@ -64,6 +81,6 @@ export function errorHandler(
 
   res.status(500).json({
     error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'An unexpected error occurred',
+    message: process.env.NODE_ENV === 'development' ? message : 'An unexpected error occurred',
   });
 }

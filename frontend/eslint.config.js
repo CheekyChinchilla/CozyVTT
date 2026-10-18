@@ -3,28 +3,18 @@
 // calibrated so `npm run lint` passes (--max-warnings 0) on the current
 // codebase and can be ratcheted stricter over time; rules that would need a
 // codebase-wide cleanup first are noted.
-import tsPlugin from '@typescript-eslint/eslint-plugin';
+import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
 import reactHooks from 'eslint-plugin-react-hooks';
 import { reactRefresh } from 'eslint-plugin-react-refresh';
-import { builtinRules } from 'eslint/use-at-your-own-risk';
-
-// ESLint's recommended rules, what `eslint:recommended` named before the flat
-// config format. Each built-in rule says whether it is recommended, and this
-// reads that from ESLint itself; the same list is published as the
-// @eslint/js package, which the project does not otherwise need.
-const eslintRecommended = Object.fromEntries(
-  [...builtinRules]
-    .filter(([, rule]) => rule.meta?.docs?.recommended)
-    .map(([name]) => [name, 'error'])
-);
 
 export default [
   // Only TypeScript is linted, as before the flat config format; the
   // JavaScript here is configuration.
   { ignores: ['dist/', 'coverage/', 'playwright-report/', 'test-results/', 'vite.config.ts', '**/*.js', '**/*.cjs', '**/*.mjs'] },
 
-  { name: 'eslint/recommended', rules: eslintRecommended },
-  ...tsPlugin.configs['flat/recommended'],
+  js.configs.recommended,
+  ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
 
   {
@@ -59,10 +49,14 @@ export default [
       // TODO(ratchet): four of the React Compiler rules that came with
       // eslint-plugin-react-hooks 7, off for the reason exhaustive-deps is.
       // They ask for code the React Compiler can rewrite, and CozyVTT does
-      // not use the compiler. Each of their 120 findings when they arrived
+      // not use the compiler. They find 121 places on React 19
       // (set-state-in-effect 85, refs 26, immutability 5,
-      // preserve-manual-memoization 5) is a change to when an effect or a
-      // render runs, so each needs its own review; revisit with React 19.
+      // preserve-manual-memoization 5), and each fix changes when an effect
+      // or a render runs, so each needs its own review. They come on one at a
+      // time, each in its own branch: immutability and
+      // preserve-manual-memoization first, then refs, moving the refs that
+      // only carry the latest value into an effect to useEffectEvent, then
+      // set-state-in-effect.
       // The plugin's other recommended rules, rules-of-hooks among them, are on.
       'react-hooks/set-state-in-effect': 'off',
       'react-hooks/refs': 'off',

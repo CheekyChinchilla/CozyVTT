@@ -132,10 +132,12 @@ The page has three main areas:
 - Campaign name and description at the top
 - The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
+- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character
+- Click a character to read its sheet. Right-click one for a menu: **View Character Sheet** for anyone's character, and for your own **Roll...**, **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
 
 ### Center — The Map
-This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)).
+This is the battle map. During a session, you'll see your token here and can move it: click it to pick it up, then click where it should go ([Moving Your Token](#moving-your-token)). The toolbar at its top left zooms and fits the view, and you move the view by dragging an empty part of the map ([Moving Around the Map](USER_GUIDE.md#moving-around-the-map)).
 
 ### Right Sidebar — Your Tools
 A tabbed panel — click a tab to switch between:
@@ -158,7 +160,7 @@ The top bar shows:
 
 ### Rulebooks and Handouts
 
-Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play.
+Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Some browsers will not show a PDF inside the reader and leave a blank space or a notice that the page is blocked; use the arrow, or the **Open this PDF in a new tab** link above the document.
 
 You can read everything on that list and nothing that is not on it. Sharing is the DM's to do, so if a rulebook you expected is missing, ask them. If your DM edits a shared document, you see the new text the next time you open it.
 
@@ -211,10 +213,10 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 
 *Screenshot pending — Dice roller panel.*
 
-Click any die icon to roll it. Your result appears in the **Dice** panel immediately, where everyone at the table can see it.
+Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it.
 
 **Rolling custom expressions:**
-Type directly into the expression input. Supported notation:
+Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. Supported notation:
 
 | Expression | What it does |
 |-----------|-------------|
@@ -225,6 +227,9 @@ Type directly into the expression input. Supported notation:
 | `2d6-1` | 2d6 minus 1 |
 | `4d6kh3` | Four d6s, keep highest three |
 | `4d6kl3` | Four d6s, keep lowest three |
+| `4d6dl1` | Four d6s, drop the lowest one |
+
+One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Anything over those limits is refused with a message saying which.
 
 *GIF pending — Typing a dice expression and seeing the result in the Dice panel.*
 
@@ -249,7 +254,7 @@ that never works.
 
 **Your roll history sticks around.** The panel reads like the chat beside it — a running list, oldest at the top, newest at the bottom — so you can see several rolls at once instead of stepping through them one at a time. It's kept on the server, so refreshing the page, closing the tab and coming back, or losing your connection for a minute won't wipe it. Only the DM can clear it.
 
-**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel hides them; that only changes your own view, and nobody else's rolls are affected either way.
+**Secret rolls.** Tick **Secret Roll** and your result is hidden from the other players. It still appears in your own list, marked as secret, so you can look back at it. **Your DM can see it too** — that is deliberate, so they can settle a dispute about what was actually rolled. If you would rather not have your secret rolls cluttering the list, the **Secret** button at the top of the panel, which appears once the list holds a secret roll, hides them; that only changes your own view, and nobody else's rolls are affected either way.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
@@ -563,8 +568,8 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 | d20 with +5 bonus | `1d20+5` |
 | 4d6 drop lowest (ability scores) | `4d6kh3` |
 | Percentile | `d100` |
-| Advantage (D&D) | `2d20kh1` |
-| Disadvantage (D&D) | `2d20kl1` |
+| Advantage (D&D) | `2d20kh1` (the **Adv** button) |
+| Disadvantage (D&D) | `2d20kl1` (the **Dis** button) |
 
 ### Session Status Indicators
 
@@ -592,6 +597,8 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 **My token isn't on the map.** Ask your DM to place it. They drag your character onto the map from the Campaign Roster.
 
 **I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
+
+**CozyVTT won't open on my tablet or old computer.** It needs a browser from 2023 or later: Chrome or Edge 111, Firefox 114 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer. An older browser does not load the app, so update the browser or use another device.
 
 **I lost connection.** CozyVTT reconnects by itself; **Retry** beside the connection indicator in the header tries at once. Your session state is saved on the server.
 

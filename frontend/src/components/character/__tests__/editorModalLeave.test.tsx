@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event';
 import type { Character } from '@/types';
 import CharacterSheetEditorModal from '../CharacterSheetEditorModal';
 import { pf2eCharacter } from '@/components/character-sheets/pathfinder2e/__tests__/pf2eFixture';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 
 vi.mock('@/hooks/queries', () => ({
   useServerConfigQuery: () => ({ data: undefined }),
@@ -31,6 +32,7 @@ describe('leaving the in-page editor', () => {
   it('closes at once when nothing was changed', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
@@ -41,6 +43,7 @@ describe('leaving the in-page editor', () => {
   it('asks before throwing away something typed', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.type(screen.getByPlaceholderText('Deity'), 'Torag');
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
@@ -52,6 +55,7 @@ describe('leaving the in-page editor', () => {
   it('closes at once when a change was typed and then put back', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={pf2eCharacter()} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.type(screen.getByPlaceholderText('Character Name'), 'x{Backspace}');
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
@@ -62,6 +66,7 @@ describe('leaving the in-page editor', () => {
   it('closes at once for an untouched Flexible sheet', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={flexible} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.click(screen.getByRole('button', { name: 'Close dialog' }));
 
@@ -72,6 +77,7 @@ describe('leaving the in-page editor', () => {
   it('asks once a section is added to a Flexible sheet', async () => {
     const onClose = vi.fn();
     render(<CharacterSheetEditorModal character={flexible} onClose={onClose} />);
+    await waitForDialogFocus();
 
     await userEvent.click(screen.getByRole('button', { name: /Add Section/ }));
     await userEvent.click(screen.getByRole('button', { name: /Attributes/ }));

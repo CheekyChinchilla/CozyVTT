@@ -9,11 +9,12 @@ _Last verified against the code on 2026-10-13: the files and helpers it names ex
 `createApp` (`app.ts`) puts every `/api` request through these gates before a
 router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
 
-1. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
-2. The session lookup
-3. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
-4. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address
-5. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
+1. The origin check: `403` for a change a browser sent from another site (`middleware/originCheck.ts`)
+2. The restore gate: `503` while a restore replaces the database (`middleware/restoreGate.ts`)
+3. The session lookup
+4. The setup gate: until setup has run, `403` "Setup Required" for everything but `/health` and `/api/setup/*`; `POST /api/setup/init` also asks for the setup token (`middleware/setup.ts`, `routes/setup.ts`)
+5. The general rate limiter: `429` past `RATE_LIMIT_MAX_REQUESTS` a minute per address, an IPv6 address counted by its /56 network
+6. The password-change gate (`middleware/passwordChange.ts`), then the admin MFA gate (`middleware/adminMfa.ts`); both are described below
 
 ### Import Statement
 ```typescript
@@ -693,7 +694,7 @@ written:
 | `DELETE /api/campaigns/:id/members/:userId` | `clearCampaignFromLiveSockets(userId, campaignId)` |
 | `DELETE /api/campaigns/:id` | `clearDeletedCampaignFromLiveSockets(campaignId)` for every socket in the room, then the combat state is cleared |
 
-The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
+The routes below end a sign-in's live sockets along with it, through `endLiveSockets(userId, reason, { exceptSessionId?, onlySessionId? })` (`websocket/utils.ts`), beside `destroyUserLoginSessions`; a restore ends every socket on the instance through `endEveryLiveSocket`. Nothing else does. A socket's sign-in is checked against the session store when it connects and again on every `authenticate` (`socketSessionIsLive` in `websocket/auth.ts`), which refuses with `Unauthorized` and closes the connection once the sign-in has ended or its administrator is past the two-factor deadline; so a session that expires from inactivity leaves an open socket in the campaign it is already in until it disconnects or asks to join a campaign again.
 
 | Route | Which sockets end |
 |---|---|
@@ -804,12 +805,23 @@ router.get('/', requireAuth, loadCampaignMembership, requireDM, handler);
 ```
 
 ### 3. Campaign ID Location
-```typescript
-// campaignId can come from:
-req.params.campaignId  // URL parameter
-req.body.campaignId    // Request body
+`loadCampaignMembership` reads the campaign from `req.params.campaignId` only.
+A `campaignId` in the request body or the query string is ignored, so a
+request cannot pick which campaign it is checked against. A guarded route
+needs `:campaignId` in its own path, or in the path it is mounted at with a
+router created as `Router({ mergeParams: true })`; without it, the guard
+answers 400 "Campaign ID is required".
 
-// loadCampaignMembership checks both locations
+```typescript
+// ✅ CORRECT - campaignId in the route path
+router.get('/:campaignId/notes', campaignMember, handler);
+
+// ✅ CORRECT - campaignId in the mount path, read through mergeParams
+app.use('/api/campaigns/:campaignId/maps', mapRoutes); // mapRoutes = Router({ mergeParams: true })
+router.get('/', campaignMember, handler);
+
+// ❌ WRONG - no campaignId in the path; a body campaignId is not read
+router.post('/notes', campaignMember, handler); // always 400
 ```
 
 ### 4. TypeScript Types

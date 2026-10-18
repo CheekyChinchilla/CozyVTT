@@ -19,7 +19,7 @@
 
 import request from 'supertest';
 import type express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 
 // The test helpers import config/database, so they are imported once the
 // app's client is set below; otherwise the app would use a client of its own.
@@ -39,7 +39,7 @@ interface Hold {
 let hold: Hold | null = null;
 
 let app: express.Express;
-const appClient = new PrismaClient();
+const appClient = createPrismaClient();
 
 beforeAll(async () => {
   // The app's client, which config/database.ts takes from here when it is set.
@@ -58,9 +58,9 @@ beforeAll(async () => {
       },
     },
   });
-  helpers = await import('../../__tests__/helpers/db');
+  helpers = require('../../__tests__/helpers/db') as Helpers;
   expect(helpers.TEST_PASSWORD).toBe(TEST_PASSWORD);
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
   app = createTestApp();
 });
 

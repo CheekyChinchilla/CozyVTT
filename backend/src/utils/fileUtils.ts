@@ -97,8 +97,8 @@ export function resolveFileSizeLimits(
  * File size limits in bytes, resolved once at startup from the environment.
  *
  * NOTE: this reads process.env at module load, which is safe because
- * src/server.ts calls dotenv.config() on its first lines, before any import
- * that reaches this module. Keep that ordering intact.
+ * src/server.ts imports config/loadEnvFile.ts on its first line, before any
+ * import that reaches this module. Keep that ordering intact.
  */
 export const FILE_SIZE_LIMITS: Record<AssetType, number> = resolveFileSizeLimits();
 
@@ -341,6 +341,15 @@ export function isAllowedExtension(assetType: AssetType, extension: string): boo
   const ext = extension.startsWith('.') ? extension.toLowerCase() : `.${extension.toLowerCase()}`;
   return (ALLOWED_EXTENSIONS[assetType] as readonly string[]).includes(ext);
 }
+
+/**
+ * Options for `res.sendFile` and `res.download` on a path the server built
+ * itself, from a stored row or a name it has checked. Express 5's file sender
+ * refuses any path with a folder whose name starts with a dot, and the
+ * uploads or backups folder may sit inside one, such as
+ * `~/.local/share/cozyvtt`. Never pass this for a path taken from a request.
+ */
+export const SERVER_BUILT_PATH = { dotfiles: 'allow' } as const;
 
 /**
  * The uploads folder as an absolute path: `UPLOAD_DIR`, or `uploads` in the

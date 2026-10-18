@@ -4,7 +4,7 @@
 // Bento-box aesthetic with hover effects
 // ============================================
 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { campaignDmName, campaignOwnerName, ownerDiffersFromDm } from '@/utils/campaignRoles';
 import type { Campaign, CampaignRole, CampaignStatus } from '@/types';
 import { Users, Calendar, Crown, Eye, Gamepad2, KeyRound} from 'lucide-react';

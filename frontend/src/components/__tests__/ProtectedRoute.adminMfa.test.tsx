@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import ProtectedRoute from '../ProtectedRoute';
 import { PlatformRole, type User, type AuthContextType } from '@/types/user.types';
 

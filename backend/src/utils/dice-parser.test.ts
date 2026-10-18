@@ -388,6 +388,33 @@ describe('Dice Parser', () => {
     });
   });
 
+  describe('Arithmetic totals', () => {
+    // Dice of one side always roll 1, so these totals are exact. They pin the
+    // order of operations, left to right evaluation, unary signs and rounding
+    // down of a fractional total.
+    const cases: [string, number][] = [
+      ['2+3*4', 14],
+      ['10-3-2', 5],
+      ['6/4*2', 3],
+      ['7/2', 3],
+      ['100/3', 33],
+      ['1-5', -4],
+      ['1-7/2', -3],
+      ['-7/2', -4],
+      ['2++3', 5],
+      ['1d1--1', 2],
+      ['9999*9999', 99980001],
+      ['4d1kh3+2', 5],
+      ['2d1*3/2', 3],
+      ['1d1*3/2', 1],
+      ['1d1-1', 0],
+    ];
+
+    it.each(cases)('%s totals %d', (expression, expected) => {
+      expect(rollDice(expression).total).toBe(expected);
+    });
+  });
+
   describe('Deterministic Tests (Results Validation)', () => {
     test('all results are within valid range', () => {
       for (let i = 0; i < 100; i++) {

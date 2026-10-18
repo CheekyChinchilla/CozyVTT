@@ -3,12 +3,14 @@
 > **A historical record, not a current picture.** This captures the schema
 > verification done for the v1.0.0 release on 10 February 2026, against a
 > statement of work that is not in this repository. The schema has grown a lot
-> since: **21 models and 9 enums today**, against the 10 and 7 recorded below.
+> since: **22 models and 9 enums today**, against the 10 and 7 recorded below.
 >
 > Models added since and *not* in the February list: `PasswordResetToken`,
 > `CampaignInvitation`, `CharacterTemplate`, `CreatureTemplate`,
 > `CreatureFavorite`, `TokenTemplate`, `SystemSettings`, `PersonalNote`,
-> `DiceMacro`, `CampaignDocument`, `MapExploration`. The `MapExploration`
+> `DiceMacro`, `CampaignDocument`, `MapExploration`, and `LoginSession`, the
+> sign-in table connect-pg-simple has always kept, described in the schema
+> since 1.5.3 and left out of the Prisma client. The `MapExploration`
 > section and the last four `Map` fields below were added to this file in
 > September 2026, for columns added after v1.0.0.
 >
@@ -131,7 +133,7 @@
 
 ## Relationship Verification
 
-### User Relationships (6 at v1.0.0; 15 today)
+### User Relationships (6 at v1.0.0; 16 today)
 - ✅ ownedCampaigns → Campaign[] (@relation "CampaignOwner")
 - ✅ campaignMemberships → CampaignMembership[]
 - ✅ characters → Character[]
@@ -175,7 +177,7 @@
 
 - ✅ Provider: PostgreSQL
 - ✅ Client generator: prisma-client-js
-- ✅ Database URL from environment variable
+- ✅ Database URL from environment variable (`env("DATABASE_URL")` in the schema at v1.0.0; since 1.5.3 the schema names no address, and `prisma.config.ts` and the app's client read `DATABASE_URL` themselves)
 - ✅ All models use @db.Text for long strings
 - ✅ All timestamps properly configured
 

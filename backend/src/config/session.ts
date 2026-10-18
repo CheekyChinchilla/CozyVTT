@@ -12,6 +12,11 @@ const PgSession = connectPgSimple(session);
 
 // PostgreSQL connection pool for session storage. Exported so a clean
 // shutdown can close it.
+// TODO(accounts): pg ignores `?schema=` in DATABASE_URL, so with a schema
+// other than public this pool reads and writes public.session, while the raw
+// session queries made through Prisma (services/sessionStore.ts, the admin
+// activity route) follow that schema's search_path. Build this pool from
+// databaseConnectionSettings in prismaClient.ts, so both use one schema.
 export const sessionPool = new Pool({
   connectionString: process.env.DATABASE_URL,
 });
@@ -39,6 +44,10 @@ if (secretProblem) {
     );
     process.exit(1);
   } else {
+    // TODO(accounts): in the Docker dev stack docker-compose.dev.yml passes
+    // SESSION_SECRET from the root .env, empty when unset, and dotenv never
+    // overrides a variable already set, so a value put in backend/.env as
+    // this says is ignored there. Name the root .env for the Docker stack.
     logger.warn(
       `[WARN] SESSION_SECRET ${secretProblem}. ` +
         'Set a real secret in backend/.env before deploying; generate one with: openssl rand -hex 32'

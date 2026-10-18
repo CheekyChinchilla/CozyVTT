@@ -56,6 +56,30 @@ describe('verifyPassword', () => {
   });
 });
 
+// Hashes already stored on running instances must keep verifying after an
+// argon2 upgrade, and new hashes must keep the same parameters.
+describe('stored password hashes', () => {
+  // Made by argon2 0.44.0 with the options in auth.ts, for the password below.
+  const STORED_HASH =
+    '$argon2id$v=19$m=65536,t=3,p=4$wbEbrtF3htcIp4rm/3RQBw$Ky5z1VClvqHiXqUFzo2d7mi24fmaaIFg59R4PXLhiyc';
+  const STORED_PASSWORD = 'Fixture-Passw0rd!';
+
+  it('verifies a hash made by argon2 0.44.0', async () => {
+    expect(await verifyPassword(STORED_HASH, STORED_PASSWORD)).toBe(true);
+  });
+
+  it('rejects the wrong password against a hash made by argon2 0.44.0', async () => {
+    expect(await verifyPassword(STORED_HASH, 'Fixture-Passw0rd?')).toBe(false);
+  });
+
+  // The standard encoding puts the parameters in m, t, p order; libsodium
+  // refuses a hash written in any other order.
+  it('hashes new passwords as argon2id with 64 MB, three passes and four lanes', async () => {
+    const hash = await hashPassword(STORED_PASSWORD);
+    expect(hash).toMatch(/^\$argon2id\$v=19\$m=65536,t=3,p=4\$/);
+  });
+});
+
 // ============================================
 // sanitizeUser
 // ============================================

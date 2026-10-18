@@ -38,7 +38,7 @@ CozyVTT ships no game content. An administrator can import creature data from th
 
 ## Icons
 
-UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC License.
+UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC License (Copyright (c) Lucide Icons and Contributors). The icons Lucide derives from [Feather](https://github.com/feathericons/feather) are under the MIT License (Copyright (c) 2013-present Cole Bemis).
 
 ## Campaign Export/Import Libraries
 
@@ -50,24 +50,27 @@ UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC L
 
 ## Core Application Libraries
 
-CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). This is not an exhaustive list — the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
+CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). Two sets of packages come with other licences, unmodified: libvips, the image library inside the prebuilt binaries that sharp loads (LGPL-3.0-or-later), and a few packages the Prisma command-line tool brings into the backend image (EPL-2.0 and the Unlicense). [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) names them. This is not an exhaustive list: the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
 
 | Package | Purpose | License |
 |---------|---------|---------|
 | [React](https://react.dev/) | Frontend UI library | MIT |
+| [React Router](https://reactrouter.com/) | Moves between the app's pages (8.x) | MIT |
 | [Vite](https://vitejs.dev/) | Frontend build tooling | MIT |
 | [Playwright](https://playwright.dev/) | Browser smoke tests, for development only; not part of an instance | Apache-2.0 |
 | [Zustand](https://github.com/pmndrs/zustand) | Live session state store | MIT |
 | [TanStack Query](https://tanstack.com/query) | REST data fetching / caching | MIT |
 | [react-resizable-panels](https://github.com/bvaughn/react-resizable-panels) | Resizable session workspace | MIT |
-| [Framer Motion](https://www.framer.com/motion/) | Animations | MIT |
+| [Framer Motion](https://motion.dev/) | Animations | MIT |
 | [react-markdown](https://github.com/remarkjs/react-markdown) | Renders personal notes and documents written in Markdown | MIT |
 | [remark-gfm](https://github.com/remarkjs/remark-gfm) | Tables, strikethrough, task lists and autolinks in that Markdown | MIT |
 | [remark-breaks](https://github.com/remarkjs/remark-breaks) | A single newline as a line break in that Markdown | MIT |
 | [Express](https://expressjs.com/) | Backend HTTP framework | MIT |
 | [Multer](https://github.com/expressjs/multer) | Reads uploaded files and forms on the backend | MIT |
-| [Prisma](https://www.prisma.io/) | Database ORM | Apache-2.0 |
+| [Prisma](https://www.prisma.io/) | Database ORM (7.x) and the tool that applies database migrations, with `@prisma/adapter-pg`, which connects it through the `pg` driver, also Apache-2.0 | Apache-2.0 |
 | [Socket.IO](https://socket.io/) | Real-time WebSocket transport | MIT |
 | [Zod](https://zod.dev/) | Runtime validation | MIT |
 | [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |
 | [sharp](https://github.com/lovell/sharp) | Picture thumbnails, and picture sizes for Universal VTT export | Apache-2.0 |
+
+The tools that only build or test the app include [Lightning CSS](https://lightningcss.dev/), which Vite uses to minify the stylesheets, under the Mozilla Public License 2.0 (MPL-2.0), and caniuse-lite, the browser-support data from [Can I Use](https://caniuse.com/) that Autoprefixer reads, under the Creative Commons Attribution 4.0 International License (CC-BY-4.0). Both are used unmodified while the app is built or tested, and none of their code or data is part of an instance.

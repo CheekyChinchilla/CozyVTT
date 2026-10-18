@@ -21,7 +21,7 @@ const tokens = vi.hoisted(() => ({
   b: { id: 'tok-b', name: 'Goblin B' },
 }));
 
-vi.mock('react-router-dom', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('react-resizable-panels', () => {
   const Box = ({ children }: { children?: unknown }) => <div>{children as never}</div>;
   return {

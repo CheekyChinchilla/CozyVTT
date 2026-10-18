@@ -84,10 +84,23 @@
  *
  * The Node.js major. It is written in `.nvmrc`, every Dockerfile stage built
  * on Node, every CI job that sets Node up, the `engines` field of both
- * projects, the backend's `@types/node`, and the version the README and the
+ * projects, each project's `@types/node`, and the version the README and the
  * guides ask a reader to install. A move to a new major that misses one runs
  * CI, the images or a manual install on a different Node from the rest.
  * `.nvmrc` holds the major alone and the others are compared with it.
+ *
+ * The npm settings the images install with. Each project's `.npmrc` turns
+ * on strict-allow-scripts, which fails an install at a package with an
+ * install script that `allowScripts` does not name. A Dockerfile stage reads
+ * the file only if it copies it in before it runs npm; one that copies
+ * `package*.json` alone installs as if the setting were off.
+ *
+ * Each project's npm overrides. Each one holds a package under another at a
+ * newer version than that package asks for, because the version it asks for
+ * has a published advisory. The override names a version, and the package
+ * above it names one too; when an update of that package asks for the same
+ * version or a newer one, the override is no longer needed, and left in place
+ * it would hold the package back.
  */
 
 import crypto from 'crypto';
@@ -502,7 +515,9 @@ describe('the Node.js major', () => {
 
   const pkg = (rel: string) =>
     JSON.parse(read(rel)) as { engines?: { node?: string }; devDependencies?: Record<string, string> };
-  const lock = JSON.parse(read('backend/package-lock.json')) as { packages: Record<string, { version?: string }> };
+  const lockedTypesNode = (rel: string) =>
+    (JSON.parse(read(rel)) as { packages: Record<string, { version?: string }> }).packages['node_modules/@types/node']
+      ?.version ?? 'missing';
   const ci = read('.github/workflows/ci.yml');
 
   // A tag with no leading number (node:lts-alpine, node:current) is kept as
@@ -514,8 +529,10 @@ describe('the Node.js major', () => {
     ['.github/workflows/ci.yml', found('.github/workflows/ci.yml', ci, /^\s*node-version:\s*['"]?([^'"\s]+)/gm)],
     ['backend/package.json engines', [majorOf(pkg('backend/package.json').engines?.node ?? 'missing')]],
     ['frontend/package.json engines', [majorOf(pkg('frontend/package.json').engines?.node ?? 'missing')]],
-    ['backend/package.json @types/node', [majorOf(pkg('backend/package.json').devDependencies?.['@types/node'] ?? 'missing')]],
-    ['backend/package-lock.json @types/node', [majorOf(lock.packages['node_modules/@types/node']?.version ?? 'missing')]],
+    ...['backend', 'frontend'].flatMap((dir): [string, string[]][] => [
+      [`${dir}/package.json @types/node`, [majorOf(pkg(`${dir}/package.json`).devDependencies?.['@types/node'] ?? 'missing')]],
+      [`${dir}/package-lock.json @types/node`, [majorOf(lockedTypesNode(`${dir}/package-lock.json`))]],
+    ]),
     ['README.md', found('README.md', read('README.md'), /^- Node\.js (\d+)\+/gm)],
     ['docs/DEVELOPMENT.md', found('docs/DEVELOPMENT.md', read('docs/DEVELOPMENT.md'), /\| Node\.js \| (\d+)\.x \||Comes with Node\.js (\d+)/g)],
     ['docs/DEPLOYMENT.md', found('docs/DEPLOYMENT.md', read('docs/DEPLOYMENT.md'), /Install Node\.js (\d+)|setup_(\d+)\.x/g)],
@@ -540,5 +557,87 @@ describe('the Node.js major', () => {
     const setups = ci.match(/uses: actions\/setup-node@/g) ?? [];
     const versions = ci.match(/^\s*node-version:/gm) ?? [];
     expect(versions.length).toBe(setups.length);
+  });
+});
+
+describe('the .npmrc each image installs with', () => {
+  const dockerfiles = ['backend/Dockerfile', 'backend/Dockerfile.prod', 'frontend/Dockerfile', 'frontend/Dockerfile.prod'];
+
+  /** The files a COPY line takes from the build context; none for a copy from another stage. */
+  const copied = (line: string): string[] => {
+    const words = line.trim().split(/\s+/).slice(1);
+    if (words.some((word) => word.startsWith('--from='))) return [];
+    const paths = words.filter((word) => !word.startsWith('--'));
+    return paths.slice(0, -1);
+  };
+
+  it.each(dockerfiles)('is copied into every stage of %s before npm installs there', (rel) => {
+    const stages = instructions(rel).join('\n').split(/^FROM\s/m).slice(1);
+    const installing = stages.filter((stage) => /^RUN\b.*\bnpm (ci|install)\b/m.test(stage));
+    if (installing.length === 0) throw new Error(`${rel} no longer runs npm ci or npm install; update this test with the file`);
+    const late = installing.filter((stage) => {
+      const lines = stage.split('\n');
+      const install = lines.findIndex((line) => /^RUN\b.*\bnpm (ci|install)\b/.test(line));
+      return !lines.slice(0, install).some((line) => /^COPY\s/.test(line) && copied(line).includes('.npmrc'));
+    });
+    expect(late.map((stage) => `${rel}: FROM ${stage.split('\n')[0]}`)).toEqual([]);
+  });
+});
+
+describe.each(['backend', 'frontend'])('the npm overrides in %s/package.json', (dir) => {
+  type LockPackage = { version?: string; dependencies?: Record<string, string> };
+  const manifest = JSON.parse(read(`${dir}/package.json`)) as { overrides?: Record<string, unknown> };
+  const lock = JSON.parse(read(`${dir}/package-lock.json`)) as { packages: Record<string, LockPackage> };
+
+  /** Each override as [package above, package held, version held at]. */
+  const overrides = Object.entries(manifest.overrides ?? {}).flatMap(([parent, held]) => {
+    if (typeof held !== 'object' || held === null) throw new Error(`the override for ${parent} is not a map of packages to versions`);
+    return Object.entries(held).map(([name, version]): [string, string, string] => {
+      if (typeof version !== 'string' || !/^\d+\.\d+\.\d+$/.test(version)) {
+        throw new Error(`the override of ${name} under ${parent} is not an exact version`);
+      }
+      return [parent, name, version];
+    });
+  });
+
+  /** The x.y.z a version or a simple range starts from ("^7.1.5" gives 7.1.5). */
+  const numbers = (version: string) => {
+    const m = /(\d+)\.(\d+)\.(\d+)/.exec(version);
+    if (!m) throw new Error(`${version} has no x.y.z version in it`);
+    return [Number(m[1]), Number(m[2]), Number(m[3])];
+  };
+  const newer = (a: string, b: string) => {
+    const [x, y] = [numbers(a), numbers(b)];
+    const i = x.findIndex((n, k) => n !== y[k]);
+    return i !== -1 && x[i] > y[i];
+  };
+
+  /** Where npm installed `name` for the package at `where`: beside it, or higher up. */
+  const installedFor = (where: string, name: string): LockPackage | undefined => {
+    for (let base = where; ; base = base.slice(0, Math.max(base.lastIndexOf('/node_modules/'), 0))) {
+      const found = lock.packages[`${base ? `${base}/` : ''}node_modules/${name}`];
+      if (found || !base) return found;
+    }
+  };
+
+  it('are installed at the version they name, wherever the package above them is', () => {
+    const wrong = overrides.flatMap(([parent, name, version]) => {
+      const parents = Object.keys(lock.packages).filter((where) => where.endsWith(`node_modules/${parent}`));
+      if (parents.length === 0) return [`${parent}: not in the lockfile, so its override of ${name} does nothing`];
+      return parents.flatMap((where) => {
+        const installed = installedFor(where, name)?.version;
+        return installed === version ? [] : [`${name} under ${where}: the lockfile has ${installed ?? 'nothing'}, the override ${version}`];
+      });
+    });
+    expect(wrong).toEqual([]);
+  });
+
+  it('hold each package newer than the package above it asks for, or they are holding it back', () => {
+    const wrong = overrides.flatMap(([parent, name, version]) => {
+      const asked = lock.packages[`node_modules/${parent}`]?.dependencies?.[name];
+      if (!asked) return [`${parent} no longer asks for ${name}: remove the override`];
+      return newer(version, asked) ? [] : [`${parent} asks for ${name} ${asked}, the override holds it at ${version}: remove the override`];
+    });
+    expect(wrong).toEqual([]);
   });
 });

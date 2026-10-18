@@ -9,7 +9,7 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import os from 'os';
@@ -18,7 +18,7 @@ import { importCampaign } from '../campaignImporter';
 import { prisma, createTestUser, cleanupUsers, cleanupCampaigns } from '../../__tests__/helpers/db';
 
 async function zipOf(entries: Record<string, string>): Promise<Buffer> {
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const chunks: Buffer[] = [];
   archive.on('data', (chunk: Buffer) => chunks.push(chunk));
   const ended = new Promise<void>((resolve, reject) => {

@@ -4,6 +4,10 @@
  * such as `constructor` used to find a property every object inherits and
  * answer 200 with no sheet in it.
  *
+ * A game system's templates come through the same route, and both lookups
+ * are checked here end to end, so a template module the route cannot load
+ * fails a test.
+ *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
@@ -38,5 +42,13 @@ describe('GET /api/characters/templates/null/:templateName', () => {
     const res = await agent.get('/api/characters/templates/null/basic');
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data.sections)).toBe(true);
+  });
+});
+
+describe('GET /api/characters/templates/:gameSystem/:templateName', () => {
+  it('finds a game system\'s template', async () => {
+    const res = await agent.get('/api/characters/templates/DND_5E/fighter');
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Level 1 Fighter');
   });
 });

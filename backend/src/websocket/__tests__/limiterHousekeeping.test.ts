@@ -16,7 +16,7 @@ type Shared = typeof import('../shared');
 
 async function loadShared(): Promise<Shared> {
   jest.resetModules();
-  return import('../shared');
+  return require('../shared') as Shared;
 }
 
 /** The keys a limiter is holding, read from its private store. */

@@ -106,7 +106,7 @@ This starts four containers on an isolated internal network:
 - `cozyvtt-frontend` — React SPA served by Nginx on internal port 80
 - `cozyvtt-nginx` — Reverse proxy, the only container with public ports (80 and 443)
 
-Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and the frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user.
+Every container runs with Docker's `no-new-privileges` option, so no program in it can gain privileges, and with only the few Linux capabilities (the separate powers root normally holds) that its start-up needs, such as giving a folder to the right owner or switching to an unprivileged user. The frontend container's files are read-only: it only serves the built app, and nginx keeps its scratch files in memory. So are the proxy's (`cozyvtt-nginx`): it writes its settings, rendered from `nginx/nginx.conf` as it starts, to memory, and keeps large uploads and downloads as they pass on a volume of its own, `nginx_temp`, which Compose creates on the first start and which needs no backup. The backend's files are read-only as well, apart from `backend/uploads`, `backend/backups` and `backend/logs` and its `/tmp`, where a backup or a restore keeps its working copy of the database: a volume of its own, `backend_tmp`, created on the first start like `nginx_temp`, with nothing in it to back up. The backend starts as root only long enough to give its mounted folders the right owner, then runs as an unprivileged user, `appuser`. Commands you run inside the backend container take `-u appuser`, as every one in this guide does: root in that container cannot write the backend's files.
 
 Database migrations run automatically when the backend starts.
 
@@ -142,7 +142,7 @@ docker compose ps
 docker compose logs backend | grep -i migrat
 
 # Health check (returns {"status":"healthy",...})
-docker compose exec backend wget -qO- http://localhost:4000/health
+docker compose exec -u appuser backend wget -qO- http://localhost:4000/health
 
 # The API answers on the same address as the site — this must be JSON, not a web page
 curl -s -w '\n%{http_code} %{content_type}\n' http://localhost/api/setup/status
@@ -350,7 +350,7 @@ Wrong passwords are also counted for the account itself, whatever addresses they
 
 The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. Only a wrong code counts, so people signing in together behind one address are all let through, exactly as with passwords.
 
-Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's. So does the general limit of 300 requests a minute from one address (`RATE_LIMIT_MAX_REQUESTS`, see [Other settings](#other-settings)), which counts every request the app makes, each picture on a map included.
+Both limits tell visitors apart by their *IP address*, the address their device connects from, so CozyVTT has to see each visitor's own address and not your tunnel's or proxy's. So does the general limit of 300 requests a minute from one address (`RATE_LIMIT_MAX_REQUESTS`, see [Other settings](#other-settings)), which counts every request the app makes, each picture on a map included. A visitor who connects over IPv6 usually has a whole block of addresses from their internet provider, so all of these limits count every address in one block (a /56 network, the addresses that share their first 56 bits) as one visitor.
 
 **With the bundled nginx, a visitor who connects straight to your server is counted by their own address.** When a tunnel or another proxy stands in front of nginx, every request reaches nginx from that proxy, and nginx has to be told it may believe what the proxy says. A proxy names the visitor it is passing along in a header called `X-Forwarded-For`, and says whether the visitor used HTTPS in `X-Forwarded-Proto` (which decides whether CozyVTT marks the sign-in cookie as HTTPS-only). Anyone can send those headers, so nginx believes them only from the addresses you list in `NGINX_TRUSTED_PROXIES` in `.env`. From anyone else it ignores them, so a visitor from the internet cannot pretend to be someone else.
 
@@ -564,9 +564,9 @@ Running in a folder is on the backlog rather than ruled out. If it matters to yo
 
 ### HTTPS is remembered by browsers
 
-CozyVTT's backend sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer it gives, the API's included. That header (HSTS) tells a browser to use only HTTPS for that name, and for every name under it, for 180 days. A browser takes notice of it only when it arrives over HTTPS with a certificate the browser trusts, so it begins to apply the first time someone uses your instance that way: through a trusted certificate of your own, such as one from Let's Encrypt, a Cloudflare Tunnel or any other proxy that adds HTTPS. A self-signed or Let's Encrypt staging certificate, which the browser warns about, does not start it, even if the visitor clicks past the warning.
+CozyVTT's backend sends `Strict-Transport-Security: max-age=31536000; includeSubDomains` with every answer it gives, the API's included. That header (HSTS) tells a browser to use only HTTPS for that name, and for every name under it, for a year (365 days). A browser takes notice of it only when it arrives over HTTPS with a certificate the browser trusts, so it begins to apply the first time someone uses your instance that way: through a trusted certificate of your own, such as one from Let's Encrypt, a Cloudflare Tunnel or any other proxy that adds HTTPS. A self-signed or Let's Encrypt staging certificate, which the browser warns about, does not start it, even if the visitor clicks past the warning.
 
-So decide before you start that this name stays on HTTPS. If you try HTTPS briefly and then go back to plain HTTP on the same name, every browser that loaded the app over HTTPS refuses `http://` for that name, and for any name under it such as `play.vtt.example.com` if you use `vtt.example.com`, for up to six months, until the time runs out or each visitor clears it in their browser. A different name for testing avoids it.
+So decide before you start that this name stays on HTTPS. If you try HTTPS briefly and then go back to plain HTTP on the same name, every browser that loaded the app over HTTPS refuses `http://` for that name, and for any name under it such as `play.vtt.example.com` if you use `vtt.example.com`, for up to a year, until the time runs out or each visitor clears it in their browser. A different name for testing avoids it.
 
 ### How it works
 
@@ -638,6 +638,8 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
    sudo chown $(whoami) nginx/certs/*
    ```
 
+   The key stays readable by your account alone (`ls -l nginx/certs` shows `-rw-------` for `server.key`), which is as it should be: nginx reads it as root when it starts, and the nginx container keeps the one power root needs to read a file that belongs to another account. If nginx cannot open the key, it does not start, and `docker compose logs nginx` ends with `cannot load certificate key "/etc/nginx/certs/server.key"` and `Permission denied`.
+
 2. Take away the temporary file from step 2 of "Obtain a certificate", if you made it. `https.conf` below answers Let's Encrypt's check itself, and two files answering for the same domain on port 80 would leave the first one in charge:
 
    ```bash
@@ -677,7 +679,7 @@ Your HTTPS settings go in a file of your own in the `nginx/conf.d/` folder, whic
        ssl_prefer_server_ciphers on;
 
        # HSTS tells browsers to reach this domain over HTTPS only. The backend
-       # already sends a 180-day one with every answer from /api (see "HTTPS is
+       # already sends a one-year one with every answer from /api (see "HTTPS is
        # remembered by browsers" above), so this line only adds it to the app
        # page and lets you choose the length. Turn it on once HTTPS works,
        # not before, and start with a short max-age (300) before raising it.
@@ -816,16 +818,19 @@ cp .env.example .env
 # https://your-domain.com, in CORS_ORIGIN and APP_URL (email links use APP_URL)
 npm install
 npx prisma migrate deploy
-npm run build
+npm run build   # also prepares the database client (prisma generate)
 
 # Frontend. The page asks its own address for the API, which your Nginx sends
-# to the backend; the two empty settings make sure an old frontend/.env cannot
-# point it elsewhere.
+# to the backend. The build still reads two old settings that would point the
+# page at a backend on another address, so they are set empty here, in case an
+# old frontend/.env sets them.
 cd ../frontend
 npm install
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
+
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. Leave out `sslmode=no-verify`, which the driver also offers: the Admin Dashboard's **Create Backup** and restore give the same address to `pg_dump` and `psql`, which refuse that value (`invalid sslmode value`), so every backup and restore fails.
 
 ### 4. Run the backend with pm2
 
@@ -1168,7 +1173,7 @@ On an install without Docker the backend writes them to a `backups` folder in it
 
 Because a backup holds every credential on the instance, the backend keeps the folder and each file in it readable by its own user alone (the folder is mode `700`, each backup `600`), and `backup.sh` does the same for its folder and the dumps in it, including any an earlier version left readable. While a backup or a restore runs, the working copy of the database it keeps in the system's temporary folder (`/tmp` unless `TMPDIR` says otherwise) sits in a folder of its own with the same protection, and is removed when it finishes, whether it worked or not. On a Docker host that user is the container's `appuser`, so copying a backup off the machine by hand needs `sudo`; downloading it from the dashboard needs nothing. The database password is never on a tool's command line either: `pg_dump` and `psql` read it from their environment, where the process list cannot show it.
 
-If the backend is stopped part-way through a backup or a restore (killed, or the machine loses power), its temporary folder (`cozyvtt-db-…` or `cozyvtt-restore-…`) is left behind: on Docker it stays in the container's `/tmp` until the container is recreated, for example with `docker compose up -d --force-recreate backend`, and on a manual install until you delete it.
+If the backend is stopped part-way through a backup or a restore (killed, or the machine loses power), its temporary folder (`cozyvtt-db-…` or `cozyvtt-restore-…`) is left behind. On Docker, the backend's `/tmp` is a volume of its own, `backend_tmp`, which outlives the container, and the backend removes such a folder each time it starts, for example with `docker compose restart backend`. On a manual install it stays until you delete it.
 
 For large or multi-server deployments, consider mounting an S3-compatible object store (MinIO, AWS S3) as a FUSE filesystem at `backend/uploads/`. No code changes required.
 
@@ -1454,7 +1459,7 @@ The backend rotates these files itself. When one reaches 10 MB it becomes `combi
 Each line is one JSON object. An error is written with its message and its stack trace (the list of places in the code it passed through), which is what makes a log worth attaching to a bug report:
 
 ```json
-{"err":{"name":"PrismaClientInitializationError","message":"Can't reach database server at `database:5432`","stack":"PrismaClientInitializationError: Can't reach database server ..."},"level":"error","message":"Error adding token","timestamp":"2026-01-01T00:00:00.000Z"}
+{"err":{"cause":{"message":"Connection terminated unexpectedly","name":"Error","stack":"Error: Connection terminated unexpectedly\n    at ..."},"clientVersion":"7.10.0","message":"Connection terminated due to connection timeout","name":"Error","stack":"Error: Connection terminated due to connection timeout\n    at ..."},"level":"error","message":"Error checking setup status","timestamp":"2026-10-15T06:16:47.132Z"}
 ```
 
 To see the most recent errors:
@@ -1500,7 +1505,7 @@ curl -s http://localhost/health
 It is also reachable from inside the stack, which works whatever proxy is in front:
 
 ```bash
-docker compose exec backend wget -qO- http://localhost:4000/health
+docker compose exec -u appuser backend wget -qO- http://localhost:4000/health
 ```
 
 Docker already runs this check for you every 30 seconds; `docker compose ps` shows the backend as `healthy` or `unhealthy` based on it.
@@ -1572,6 +1577,34 @@ docker compose logs backend | grep FATAL
 
 Use `docker compose up -d`, which reads `.env` again; `docker compose restart` keeps the old value. Once the backend starts, `docker compose ps` shows it as `healthy` within a minute.
 
+### A container stops with "Permission denied", "Operation not permitted" or "Read-only file system"
+
+Each container gets only the Linux capabilities its start-up needs, and some have read-only files (see [Build and start the stack](#3-build-and-start-the-stack)). Something that needs one of the other capabilities, or writes where nothing may be written, fails, and the container's log says so. Find the line:
+
+```bash
+docker compose logs --tail 30 backend nginx
+```
+
+| Where it happens | What to do |
+|---|---|
+| A command you ran with `docker compose exec backend ...` | Run it as the backend's user: `docker compose exec -u appuser backend ...` |
+| `docker-compose.override.yml` adds a program or a setting that needs a capability, such as a network tool or a mount of a different kind | Give that one back in your override file, under the same service: `cap_add:` followed by `- NET_ADMIN` (for example), one per line, indented like the other settings |
+| A command you ran in the backend container writes a file, and stops with `Read-only file system` | Have it write under `/tmp`, the one folder there that may be written besides uploads, backups and logs, and copy the file out with `docker compose cp backend:/tmp/the-file .` |
+| A file of yours in `nginx/conf.d` writes a log to a file, such as `access_log /var/log/nginx/mysite.log;`, and nginx stops with `Read-only file system` | Send it to nginx's own log instead, `access_log /dev/stdout;`, which `docker compose logs nginx` shows, or mount a folder of your own for it in `docker-compose.override.yml` |
+| nginx cannot read your certificate or key in `nginx/certs` | Check the files are there and not empty with `ls -l nginx/certs`, then copy them again with the steps in [Configure Nginx to use the certificate](#configure-nginx-to-use-the-certificate) |
+
+`docker compose up -d` applies a change to the override file; the container is recreated, and `docker compose ps` shows it running again.
+
+Three lines like these appear each time the stack starts and are harmless: the database tries to set the permissions of its folders, which already have the right ones, and the frontend's image tries to make it listen on IPv6 as well, which nothing needs: the bundled nginx reaches it over Docker's own network.
+
+```
+cozyvtt-database  | chmod: /var/lib/postgresql/data: Operation not permitted
+cozyvtt-database  | chmod: /var/run/postgresql: Operation not permitted
+cozyvtt-frontend  | 10-listen-on-ipv6-by-default.sh: info: can not modify /etc/nginx/conf.d/default.conf (read-only file system?)
+```
+
+If the container keeps running and `docker compose ps` shows the database as `healthy`, there is nothing to fix.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
@@ -1624,19 +1657,19 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**None of 1.4.0, 1.5.0, 1.5.1 and 1.5.2 needs a manual step here**: their database migrations run automatically and change no existing data, and 1.5.1 and 1.5.2 have none. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
+**None of 1.4.0, 1.5.0, 1.5.1, 1.5.2 and 1.5.3 needs a manual step here**: their database migrations run automatically, and 1.5.1 and 1.5.2 have none. Only one of them changes existing data: 1.5.3 clears the author of any custom creature whose account had already been deleted, and keeps the creature. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
 Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
 
 ```bash
 # See what would change, without writing anything
-docker compose exec backend node dist/scripts/migrate-sheet-fields.js --dry-run
+docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js --dry-run
 
 # Apply
-docker compose exec backend node dist/scripts/migrate-sheet-fields.js
+docker compose exec -u appuser backend node dist/scripts/migrate-sheet-fields.js
 ```
 
-Without Docker, run the same two commands from the `backend` folder, without `docker compose exec backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
+Without Docker, run the same two commands from the `backend` folder, without `docker compose exec -u appuser backend`. (`npm run migrate:sheet-fields` works only in a development checkout; the production image does not include the tool it needs.)
 
 What to expect:
 
@@ -1658,11 +1691,12 @@ git pull origin main
 cd backend
 npm install
 npx prisma migrate deploy
-npm run build
+npm run build   # also prepares the database client (prisma generate)
 pm2 restart cozyvtt-backend
 
 cd ../frontend
 npm install
+# Empty, as in the install steps, in case an old frontend/.env sets them
 VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Static files in frontend/dist/ are now updated — Nginx serves them immediately
 ```
@@ -1707,7 +1741,7 @@ Before going live:
 - [ ] **Admin MFA** — Every administrator account has two-factor authentication on. CozyVTT requires it: an administrator without it sees a banner for 7 days, then can only set it up, change their password or sign out
 - [ ] **Backups tested** — Automated backups configured and a restore drill completed successfully
 - [ ] **Upload isolation** — `backend/uploads/` is served only through authenticated backend endpoints, not directly by the web server
-- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS**: the backend already sends `Strict-Transport-Security: max-age=15552000; includeSubDomains` with every answer from `/api`, so a browser that has used the instance over HTTPS keeps that name on HTTPS for 180 days (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)). The app page itself carries it only if you turn on the commented line in the `nginx/conf.d/https.conf` example
+- [ ] **Security headers** — CozyVTT sends its own (Content-Security-Policy, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy) from the container that serves the app page, so they arrive whether you use the bundled Nginx or your own proxy. A manual install has no such container: its Nginx example in [Manual Deployment](#manual-deployment) sets them in `location /`. Confirm with `curl -sI https://your-host/ | grep -i content-security`. If your proxy strips or overwrites response headers, stop doing that. **HSTS**: the backend already sends `Strict-Transport-Security: max-age=31536000; includeSubDomains` with every answer from `/api`, so a browser that has used the instance over HTTPS keeps that name on HTTPS for a year (see [HTTPS is remembered by browsers](#https-is-remembered-by-browsers)). The app page itself carries it only if you turn on the commented line in the `nginx/conf.d/https.conf` example
 - [ ] **Database isolation** — PostgreSQL container uses `expose` (not `ports`); unreachable from outside the Docker network
 - [ ] **Log size** — Nothing to set up: the backend rotates `backend/logs/` itself and Docker caps each container's log (see [Monitoring and Logs](#monitoring-and-logs)). Remove any `logrotate` rule you added for `backend/logs/`
 - [ ] **OS updates** — A plan exists for keeping the host OS and Docker up to date

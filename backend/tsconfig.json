@@ -1,7 +1,13 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "commonjs",
+    // Node's own module rules, as current Node applies them. A file is
+    // CommonJS because package.json has no "type", so the output stays
+    // CommonJS, and a package's "exports" (and the types it names there) are
+    // read. "node20" also lets this CommonJS code require the ES module
+    // packages archiver, file-type and mathjs, as Node 22.12 and later do;
+    // "node16" refuses them.
+    "module": "node20",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -10,7 +16,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
+    "moduleResolution": "node16",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -21,7 +27,9 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "typeRoots": ["./node_modules/@types", "./src/types"]
+    "typeRoots": ["./node_modules/@types", "./src/types"],
+    // The global types every file sees. Others come in only when imported.
+    "types": ["node", "jest"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

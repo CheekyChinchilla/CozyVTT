@@ -99,7 +99,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Per-endpoint rate limiting** — global API limit, strict auth limit, asset upload limit (configurable via `ASSET_UPLOAD_RATE_LIMIT`), a limit on campaign invitation emails per DM, and per-account limits on everything sent to the live table, set far above what a game sends
 - **Security headers on the app page** — a Content-Security-Policy that allows script only from your own instance, plus `X-Frame-Options`, `nosniff`, `Referrer-Policy` and `Permissions-Policy`. Injected script cannot run, the app cannot be framed by another site, and the browser will not send data to an address CozyVTT does not use. The Docker setup sends them; an install without Docker gets them from the Nginx example in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#5-serve-with-nginx)
 - **WebSocket campaign isolation** — server-authenticated campaign membership; no client-spoofing
-- **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs. In the two nginx containers the master process runs as root, as nginx's own image does, and the worker processes that handle requests run as the unprivileged `nginx` user. The database container runs PostgreSQL as the unprivileged `postgres` user, as its official image does. Every container runs with `no-new-privileges`, and the one serving the app's files has a read-only filesystem
+- **The backend runs as an unprivileged user** — the container starts as root only long enough to fix ownership on your mounted folders, then drops to `appuser` before the app itself runs. In the two nginx containers the master process runs as root, as nginx's own image does, and the worker processes that handle requests run as the unprivileged `nginx` user. The database container runs PostgreSQL as the unprivileged `postgres` user, as its official image does. Every container runs with `no-new-privileges` and drops every Linux capability except the few its start-up needs, such as changing a folder's owner and switching user, and the frontend, the proxy and the backend have read-only filesystems, apart from the folders each writes to
 - **Production refuses to start** with a placeholder `SESSION_SECRET` or `DATABASE_PASSWORD`, or a `SESSION_SECRET` shorter than 32 characters
 - See [SECURITY.md](SECURITY.md) for the vulnerability disclosure policy
 
@@ -130,7 +130,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - Jest for testing
 
 **Frontend**
-- React 18 + TypeScript (strict mode)
+- React 19 + TypeScript (strict mode)
 - Vite build tooling
 - Tailwind CSS with custom design tokens
 - Zustand for live session state; TanStack Query (React Query) for REST data
@@ -148,7 +148,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 - Docker 24+ with Docker Compose v2, for the recommended install below
 - Node.js 26+ and PostgreSQL 14+, only to install without Docker (see [Manual Deployment](docs/DEPLOYMENT.md#manual-deployment))
-- A modern browser (Chrome, Firefox, Edge, Safari)
+- A browser from 2023 or later: Chrome or Edge 111, Firefox 114, Safari 16.4 (iPadOS 16.4 on an iPad) or newer. An older browser does not load the app
 - SMTP server (optional — required for password reset and invitation emails)
 
 ### Docker (Recommended)

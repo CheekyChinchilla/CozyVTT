@@ -40,6 +40,7 @@ _Nothing at present._
 - `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 - `1.5.4` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
+- `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
 - `1.5.4` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens
@@ -66,6 +67,13 @@ _Nothing at present._
 - `1.5.4` **Deleting a favourite creature leaves its row under the Creature Library's Favorites** until the library is reopened, whichever list it was deleted from. The delete removes it from the main list only (`CreatureLibrary.tsx`).
 - `1.5.4` **The Creature Library and Token Templates forms say only "Failed to create creature" or "Failed to update creature" (or the same for a template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
 - `1.5.4` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
+- `1.5.4` **A file whose name has accented or other non-ASCII letters is stored and downloads with a garbled name.** The upload reads the name's UTF-8 bytes as latin1 (`routes/assets.ts`).
+- `1.5.4` **The asset library's search box filters only the page of results on screen,** not the whole library (`AssetLibraryPage.tsx`).
+- `1.5.4` **In Chrome, the document reader shows a blocked page for a PDF.** Chrome's PDF viewer does not run in the reader's sandboxed frame; opening the file directly works (`DocumentReader.tsx`).
+- `1.5.4` **In Firefox, asset cards fade in twice as the library opens,** because their hover transition also covers their opacity (`AssetCard.tsx`).
+- `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
+- `1.5.4` **At phone width the campaign page scrolls sideways behind its "Desktop Required" notice** (`CampaignPage.tsx`).
+- `1.5.4` **In Firefox, the Upload Asset dialog refuses Ogg and WAV audio files** with "Invalid file type". Firefox names them `application/ogg` and `audio/x-wav`, which the dialog's own list does not include; the server would take them. Upload them from another browser, or as MP3 (`AssetUploadModal.tsx`).
 
 ### Play and connection
 
@@ -75,20 +83,28 @@ _Nothing at present._
 - `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
 - `1.5.4` **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
 - `1.5.4` **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
+- `1.5.4` **Saving Campaign Settings reloads the whole live table,** every token picture included, and reopens the settings on General. Several saves in a minute can reach the 300 requests a minute limit, after which token pictures fail to load until it passes (`CampaignContext.tsx`).
+- `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
+- `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
 
 ### Maps
 
 - `1.5.4` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
 - `1.5.4` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
 - `1.5.4` **A player's door toggle made while the DM is moving selected walls is undone for everyone.** The move's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the move is lost. Dragging a wall's end keeps the change, but Undo after it puts the old door back (`MapCanvas.tsx`).
+- `1.5.4` **At the zoom that fits the map to the screen, clicking a token's square next to a door toggles the door for everyone** instead of picking up or placing the token (`MapCanvas.tsx`).
 
 ### Accounts
 
-_Nothing at present._
+- `1.5.4` **In the Admin Panel's Create User dialog, the email box loses its focus as the dialog opens,** to the dialog's first control, usually its close button (`hooks/useFocusTrap.ts`).
 
 ### Server and deployment
 
 - `1.5.4` **A restore stopped part-way through unpacking keeps a file handle and the uploaded backup's disk space until the backend restarts,** for example a backup refused for unpacking to more than 10 GiB. Stopping an entry's read part-way leaves the file open (`utils/archive.ts`).
+- `1.5.4` **With a player connected, `docker compose stop`, `down`, or an `up` that recreates nginx waits 10 seconds and then stops nginx by force.** nginx waits for live connections to close, and they never close by themselves; players reconnect on their own afterwards (`docker-compose.yml`).
+- `1.5.4` **On an install that still has the `backend/uploads/backups` folder from before 1.5.0, every backup holds an empty `uploads/backups/` folder.** It does no harm (`routes/admin.ts`).
+- `1.5.4` **Backups and restores fail when `DATABASE_URL` carries `?schema=`, `?connection_limit=` or `sslmode=no-verify`,** which the app itself accepts: `pg_dump` and `psql` refuse those settings (`utils/pgRestore.ts`). The addresses the guides and `docker-compose.yml` give carry none of them.
+- `1.5.4` **With a `DATABASE_URL` that names a schema other than `public` (`?schema=`), sign-ins are stored in the `public` schema** while the parts of the app that list or end sign-ins look in the named one (`config/session.ts`).
 
 ---
 
@@ -96,6 +112,7 @@ _Nothing at present._
 
 ### User-facing
 
+- `1.5.4` **Animated maps and tokens.** Review, and add if it can be done safely. Today a token can be a GIF, and a WebP map or token is accepted whether or not it is animated, but the map canvas draws its picture only when the map layer repaints (on a pan, a zoom or a change of map), so an animated map does not play. An animated PNG is refused everywhere: the upload's content check names it `image/apng`, which no asset type lists. An animated picture carries no script, unlike SVG, so the guards that matter stay as they are: the content check, the image library limited to its PNG, JPEG, WebP and GIF readers (`utils/sharpInput.ts`), and the page's security policy. What an animation adds is size: every frame is decoded by the server when it makes a thumbnail and by every player's browser, so a file of a few megabytes can unpack to gigabytes. Needs: limits on the width, height, frame count and total pixels of an animated upload, read from the image library's metadata before anything else, with the thumbnail made from the first frame; then, for maps, a canvas that repaints the map layer on each frame without redrawing tokens, walls and fog, and a way to pause animation for players who ask for less motion.
 - **Sound effects.** Dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
 - **Browser notifications.** Desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
 - **Per-user default dice color.** Surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice log (`DiceRoller.tsx` and `DiceResult.tsx`) and the socket roll payload metadata, then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
@@ -143,31 +160,57 @@ _Nothing at present._
   initialises the new cluster, loads the dump, and deletes nothing until the new
   cluster verifies, rehearsed on a seeded instance the way 1.5.0 was. Prisma's
   supported server range has to be checked for the target major first.
+  The same release is the time to make the database container's filesystem
+  read-only, as the backend's, the frontend's and the proxy's are, once the
+  new image's first start and the dump-and-reload step are proven to write
+  nowhere but the data volume and `/var/run/postgresql`.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Move the remaining libraries to their current major versions.** Prisma
-  is held on 5.8 (January 2024), which gets no more fixes, and Vite, Vitest,
-  Express and React are a major version or more behind. React Router 6 has
-  two moderate advisories that cannot be reached in CozyVTT, a single-page
-  app with no server rendering that never navigates to an address taken
-  from a link; version 7.18 or later clears them. 1.5.2 updates every
-  package within its current major version, moves to ESLint 10, and fails CI
-  on a high or critical advisory in what an instance runs. **Do** in 1.5.3, a
-  release of its own: Prisma to its newest stable major first, with a full
-  upgrade rehearsal, then Vite and Vitest, Express 5, and React 19 with
-  React Router 7. Dependabot holds back major versions of npm packages until
-  then, and its automatic security pull requests are turned on once 1.5.3
-  ships. **Defer** Tailwind CSS 4 and TypeScript 7.
+- **Move the remaining libraries to their current major versions.** 1.5.2
+  updated every package within its current major version, moved to ESLint 10,
+  and made CI fail on a high or critical advisory in what an instance runs.
+  1.5.3 was the release for the major versions. **Done** for the data layer:
+  Prisma 7.10, connecting through the `pg` driver adapter and still generating
+  the client with the `prisma-client-js` generator. **Done** for the frontend's
+  build and test tools: Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30
+  and jest-dom 7. **Done** for the backend's web framework: Express 5, with
+  express-rate-limit 8 and helmet 8, and for its smaller libraries:
+  connect-pg-simple 10, archiver 8, dotenv 18, file-type 22 and mathjs 15.
+  **Done** for React: React 19.3 with React Router 8.4, and for framer-motion
+  14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
+  advisories that could not be reached in CozyVTT, a single-page app with no
+  server rendering whose one address taken from a link, the page to go back to
+  after signing in, is followed only when it is a path on this site with no
+  backslash in it; React Router 8.4 clears both. **Done** for the advisories
+  against the backend's developer tools: an npm override gives the coverage
+  tool js-yaml 4 in place of the js-yaml 3 it asks for, and Node's own watch
+  mode restarts the development server in place of nodemon. **Done** for
+  TypeScript: 6.0 in both packages. **Done** for the advisory against Tailwind
+  CSS 3's selector parser: an npm override gives it the fixed release, and the
+  built stylesheets are byte for byte the same. Dependabot held back major
+  versions of npm packages until 1.5.3; since then each comes as a pull
+  request of its own, apart from those it names as waiting, and its automatic
+  security pull requests are turned on once 1.5.3 is on `main`.
+  **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
+  candidate, so wait until it is stable with a patch release or two, and move
+  to the `prisma-client` generator with it. **Do** Tailwind CSS 4 in 1.5.4,
+  before that release's bug fixes, with every page compared before and after
+  in each theme: it renames or changes the meaning of many classes the app
+  uses, raises Firefox's minimum from 114 to 128, and clears the one advisory
+  left against the app's build tools, in the file-matching package braces,
+  which Tailwind CSS 3 brings with it and which has no fixed release.
+  **Defer** TypeScript 7.
 
-- **Replace mathjs in the dice parser with a small evaluator.** mathjs stays
-  on 12.4.3, the last 12.x release, three majors behind the current one: 1.5.2's
-  dependency update left it alone. The dice parser
+- **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
+  from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser
   (`backend/src/utils/dice-parser.ts`) uses it only to add, subtract,
   multiply and divide numbers it has built itself, so no typed text reaches
-  it, yet it is about 18 MB installed. Replacing it means writing and testing
-  an evaluator for those four operators. **Do** as a separate small project,
-  not tied to a release, and before the dice grammar lets anything other
-  than numbers and those operators through.
+  it, yet it is about 18 MB installed and brings nine packages of its own.
+  Every major version of it is one more upgrade to check. Replacing it means
+  writing and testing an evaluator for those four operators; the exact totals
+  in the dice parser's tests are its specification. **Do** as a separate
+  small project, not tied to a release, and before the dice grammar lets
+  anything other than numbers and those operators through.
 
 - **One dice grammar for both sides.** The server owns the real parser
   (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks,
@@ -359,16 +402,18 @@ _Nothing at present._
 - **Serving the backend from a different address than the page.** `.env`
   offered `VITE_API_URL` and `VITE_SOCKET_URL` for it until 1.5.2, but only
   sign-in and the API ever worked that way: the page's Content-Security-Policy
-  allows another address for `connect-src` alone, helmet's
+  allowed another address for `connect-src` alone, helmet's
   `Cross-Origin-Resource-Policy: same-origin` refuses a picture loaded from
   another site, and the map canvas loads images with `crossOrigin='anonymous'`,
   which leaves the session cookie off, so every asset route answers 401. The
-  offer was withdrawn; the build arguments and the client code that reads them
-  remain. Making it work needs the extra origin in `img-src`, `media-src` and
-  `frame-src`, a `same-site` or `cross-origin` resource policy when
-  `CORS_ORIGIN` differs, `use-credentials` on canvas images, and a test that
-  renders the policy with an address set. **Revisit if** someone needs it with a
-  setup a proxy cannot cover.
+  offer was withdrawn in 1.5.2, and in 1.5.3 the production image stopped
+  taking the two as build arguments and stopped writing them into the page's
+  policy; the client code that reads them remains, for a build outside Docker.
+  Making it work needs the build arguments back, the extra origin in
+  `connect-src`, `img-src`, `media-src` and `frame-src`, a `same-site` or
+  `cross-origin` resource policy when `CORS_ORIGIN` differs, `use-credentials`
+  on canvas images, and a test that renders the policy with an address set.
+  **Revisit if** someone needs it with a setup a proxy cannot cover.
 
 ---
 

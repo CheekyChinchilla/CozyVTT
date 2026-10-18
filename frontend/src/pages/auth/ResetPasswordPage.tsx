@@ -9,7 +9,7 @@
 // ============================================
 
 import { useState, FormEvent, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { KeyRound, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import authService from '@/services/auth.service';
 import Button from '@/components/ui/Button';

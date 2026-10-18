@@ -8,8 +8,9 @@
 
 import fs from 'fs';
 import path from 'path';
-import helmet from 'helmet';
 import { isSmtpConfigured } from '../services/email';
+import { createApp } from '../app';
+import { appLayers } from './helpers/routeInventory';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -93,16 +94,10 @@ describe('the manual-install nginx example in the deployment guide', () => {
   /** Each `location` block of the example, by its path, with the text inside it (one level of braces, as an `if` makes, may be nested). */
   const locations = [...example.matchAll(/^\s*location\s+(?:=\s+)?(\S+)\s*\{((?:[^{}]|\{[^}]*\})*)\}/gm)].map((m) => ({ path: m[1], body: m[2] }));
 
-  /**
-   * The headers the frontend container sends with the app page, as lines of
-   * its config file. The policy there names an extra connect address, filled
-   * in at image build time and empty now that the backend shares the page's
-   * address.
-   */
+  /** The headers the frontend container sends with the app page, as lines of its config file. */
   const pageHeaders = read('frontend/security-headers.conf')
     .split('\n')
-    .filter((line) => line.startsWith('add_header '))
-    .map((line) => line.replace('${CSP_CONNECT_EXTRA}', ''));
+    .filter((line) => line.startsWith('add_header '));
 
   // A host nginx serving frontend/dist never sees the container's config, so
   // the page it serves had no Content-Security-Policy and no Permissions-Policy
@@ -144,8 +139,11 @@ describe("the changelog's note for installs without Docker", () => {
 });
 
 describe('HSTS, in the deployment guide', () => {
-  /** The Strict-Transport-Security value helmet sets when asked for nothing about it. */
-  function helmetDefault(): string | undefined {
+  /** The Strict-Transport-Security value the app's own security headers set. */
+  function sentByTheApp(): string | undefined {
+    const app = createApp({ session: { secret: 'test-secret-do-not-use-in-production' }, generalApiLimiter: false });
+    const layer = appLayers(app).find((candidate) => candidate.name === 'helmetMiddleware');
+    if (!layer || typeof layer.handle !== 'function') throw new Error('The app no longer sets its security headers with helmet');
     const headers: Record<string, string> = {};
     const response = {
       setHeader: (name: string, value: string) => {
@@ -154,20 +152,25 @@ describe('HSTS, in the deployment guide', () => {
       removeHeader: () => undefined,
       getHeader: () => undefined,
     };
-    helmet()({} as never, response as never, () => undefined);
+    layer.handle({}, response, () => undefined);
     return headers['strict-transport-security'];
   }
 
   // The guide said HSTS was off until the administrator added it. The backend
-  // sends helmet's default with every answer it makes, /api and /socket.io
-  // included, and a browser keeps a host on HTTPS for that long once it has
-  // seen the header over HTTPS.
-  it('says what the backend sends, which is helmet’s default because server.ts leaves it alone', () => {
-    expect(read('backend/src/server.ts')).not.toMatch(/\bhsts\b|strictTransportSecurity/i);
-
-    const sent = helmetDefault();
+  // sends it with every answer it makes, /api and /socket.io included, and a
+  // browser keeps a host on HTTPS for that long once it has seen the header
+  // over HTTPS. The value is read from the app, so an option set in app.ts
+  // counts as much as a change of helmet's default.
+  it('says what the backend sends, and for how many days', () => {
+    const sent = sentByTheApp();
     expect(sent).toMatch(/^max-age=\d+; includeSubDomains$/);
-    expect(read('docs/DEPLOYMENT.md')).toContain(`\`Strict-Transport-Security: ${sent}\``);
+    // Every place the guide quotes the header the backend sends.
+    const quoted = [...read('docs/DEPLOYMENT.md').matchAll(/`Strict-Transport-Security: ([^`]*)`/g)].map((match) => match[1]);
+    expect(quoted.length).toBeGreaterThan(0);
+    expect(quoted.filter((value) => value !== sent)).toEqual([]);
+
+    const days = Number(/max-age=(\d+)/.exec(sent ?? '')?.[1]) / 86400;
+    expect(section('docs/DEPLOYMENT.md', '### HTTPS is remembered by browsers', '### How it works')).toContain(`(${days} days)`);
   });
 
   it('no longer calls HSTS something the administrator adds', () => {
@@ -403,6 +406,20 @@ describe('docs/DEVELOPMENT.md', () => {
     expect(triggers.length).toBeGreaterThan(0);
     for (const name of triggers) expect(branches).toContain(`\`${name}\``);
     expect(branches).not.toContain('`develop`');
+  });
+
+  // The guide and the dev compose file said the backend ran under nodemon
+  // after the dev script stopped using it.
+  it("gives the backend's dev command as package.json has it, and names no watcher it does not install", () => {
+    const manifest = JSON.parse(read('backend/package.json')) as {
+      scripts: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    expect(guide).toContain(`The backend's \`npm run dev\` is \`${manifest.scripts.dev}\`.`);
+    if (!manifest.devDependencies?.nodemon) {
+      expect(guide).not.toMatch(/nodemon/i);
+      expect(read('docker-compose.dev.yml')).not.toMatch(/nodemon/i);
+    }
   });
 });
 
@@ -701,11 +718,13 @@ describe('the dependency check SECURITY.md describes', () => {
 });
 
 describe('the install-script list the guides describe', () => {
-  // npm 11, which builds the images and runs CI, still runs the install script
-  // of a package that allowScripts does not name, and prints a warning. It
-  // refuses one only when an .npmrc turns on strict-allow-scripts. Turning it
-  // on makes "still runs" untrue: change the guides in the same change.
-  const npmrcs = ['.npmrc', 'backend/.npmrc', 'frontend/.npmrc'].filter((rel) => fs.existsSync(path.join(root, rel)));
+  // Each project's .npmrc turns on strict-allow-scripts, so npm fails an
+  // install that meets a package with an install script allowScripts does not
+  // name. Without the setting, npm 11, which builds the images and runs CI,
+  // runs such a script and prints a warning. The guides say the install
+  // fails; dropping the setting from either file makes that untrue, so change
+  // the guides in the same change. A root .npmrc reaches neither project.
+  const npmrcs = ['backend/.npmrc', 'frontend/.npmrc'];
   const paragraphs = ['SECURITY.md', 'docs/DEVELOPMENT.md'].flatMap((rel) =>
     read(rel)
       .split(/\n\s*\n/)
@@ -713,12 +732,15 @@ describe('the install-script list the guides describe', () => {
       .map((paragraph) => ({ rel, text: paragraph.replace(/\s+/g, ' ') }))
   );
 
-  it('say npm still runs the script of a package not on it, since no .npmrc tells npm to refuse one', () => {
-    expect(npmrcs.filter((rel) => /^\s*strict-allow-scripts\s*=\s*true\b/m.test(read(rel)))).toEqual([]);
+  it('say the install fails at a package not on it, since both projects tell npm to fail it', () => {
+    const strict = (rel: string) =>
+      fs.existsSync(path.join(root, rel)) && /^\s*strict-allow-scripts\s*=\s*true\s*$/m.test(read(rel));
+    expect(npmrcs.filter((rel) => !strict(rel))).toEqual([]);
     expect(paragraphs.map(({ rel }) => rel).sort()).toEqual(['SECURITY.md', 'docs/DEVELOPMENT.md']);
     for (const { rel, text } of paragraphs) {
-      expect(`${rel}: ${text}`).not.toMatch(/only if .*allowScripts/);
-      expect(`${rel}: ${text}`).toMatch(/still runs the script of a package/);
+      expect(`${rel}: ${text}`).toMatch(/strict-allow-scripts/);
+      expect(`${rel}: ${text}`).toMatch(/the install fails/);
+      expect(`${rel}: ${text}`).not.toMatch(/still runs the script of a package|does not turn on/);
     }
   });
 });

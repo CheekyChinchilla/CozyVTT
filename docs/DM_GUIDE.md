@@ -82,6 +82,8 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
+**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner.
+
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
 **Who's actually here.** A small dot on each person's icon shows whether they're connected right now — green for in session, grey for not. It updates as people arrive and leave, so you can tell at a glance whether the quiet player is thinking or has dropped off. Someone with the campaign open in two tabs stays green until they close the last one.
@@ -331,7 +333,7 @@ The **Dice** tab keeps the rolls made in your campaign in a scrolling list, olde
 
 Your players are told this plainly now. The secret-roll checkbox used to read "only you can see", which was not true and set an expectation you could not keep; it reads "hidden from other players" instead, and the confirmation says your DM can still see it. Nobody is going to be surprised later that you were watching.
 
-**Clearing it.** Only you can, using the trash icon on the Dice panel. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
+**Clearing it.** Only you can, using the **Clear** button (with a trash icon) at the top of the Dice panel, and confirming with **Clear History**. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
 
 > **One exception.** While a session is **paused**, players' rolls are worked out in their own browser and never sent to the server — that's deliberate, so a paused table can still fiddle with dice without it counting. Those rolls aren't in the history and won't survive a refresh.
 
@@ -416,7 +418,7 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 - **Disposition** — Hostile, friendly, or neutral
 - **Display Mode** — Pog, top-down, or full-art
 
-Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats.
+Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats. A custom creature belongs to the campaign: if the account that made it is deleted, it stays in the campaign's library, and whoever runs the campaign can still edit or delete it.
 
 A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it. The token quick editor's message says why ("Stat block is too large (64 KB maximum)"), but the Creature Library and Token Templates forms show only a general failure such as "Failed to update creature". If a very long stat block will not save there, shorten its text and try again.
 
@@ -958,6 +960,8 @@ Wall types are selected from the **Draw type** buttons in the Walls panel:
 | Door (Locked) | Red | Yes | Players cannot open it until you unlock it |
 | Window | Blue | No | Transparent to light |
 
+**Colour, snapping and clearing.** The **Wall color** swatches, and the colour box beside them, set the colour walls are drawn in on your screen. **Snap to grid** pulls new points onto the grid, and **Snap to endpoint** pulls them onto the nearest existing wall end; the second is available only while the first is off. **Clear all** deletes every wall on the map, after a second click on **Confirm clear all?**.
+
 **Locking and unlocking a door.** Right-click a door on the map, with no wall or fog tool in use, for its menu: **Open Door** or **Close Door**, and for you **Lock Door** or **Unlock Door**. **Change type** in the Walls panel's **Select** mode does the same for every wall selected. Players get the same menu for the doors they are offered, without the lock. A locked door reaches their browser as an ordinary closed door, so it looks like any other until they try to open it and are told it is locked.
 
 Walls and lights can sit past the edge of the map, up to 500 grid squares beyond it, which is far more room than any drawing or imported map needs. One placed further out than that is refused with a message. Walls already further out, from before version 1.5.1, are kept and still save with the rest; only moving one of them somewhere still that far out is refused.
@@ -1283,6 +1287,8 @@ Every token sits on exactly one plane: the material one, or the spirit layer. Mo
 
 Choose the plane when you place a player or creature token (**Place on Layer** in the Token Manager; objects always go on the material plane), or move one afterwards with **Send to Spirit Realm** and **Return to Material Plane** in the Token Manager's list or on the token's right-click menu.
 
+To clear spirit-layer tokens off your own screen, use the ghost button at the right end of the map toolbar (top left of the map). It hides them from your view and shows them again, and changes nothing for players.
+
 *GIF pending — Sending a token to the spirit realm.*
 
 ---
@@ -1293,7 +1299,7 @@ Set the mood with audio and visual effects — the Atmosphere panel is your tool
 
 ### Opening the Atmosphere Panel
 
-Click the **Atmosphere** button in the campaign header.
+Click **Atmosphere** (the cloud icon) in the campaign header.
 
 *Screenshot pending — Atmosphere panel.*
 
@@ -1302,7 +1308,7 @@ Click the **Atmosphere** button in the campaign header.
 Upload audio files to your Asset Library (type: **Audio**; MP3, Ogg or WAV, an Ogg file recorded in Opus included), then select them in the Atmosphere panel. All connected players hear the audio automatically.
 
 - Set a specific audio track for the current scene
-- Audio loops automatically until you change or stop it
+- Once a track plays, the panel shows **Now Playing** with a stop button, a volume slider with a mute button, and a **Loop track** switch. The switch starts on, so a track repeats until you change or stop it; turn it off for a sound that should play once. Volume, mute and looping change for the whole table, not only your screen
 - Use ambient sounds (rain, tavern chatter, dungeon drips) to set the scene without narrating it
 
 **Which tracks you can play.** The panel lists your own audio, anything in the global library, and audio uploaded to this campaign. Audio belonging to a *different* campaign is not offered, even one you play in, because it belongs to that table.
@@ -1315,7 +1321,7 @@ Upload audio files to your Asset Library (type: **Audio**; MP3, Ogg or WAV, an O
 
 ### Atmosphere Effects
 
-Visual particle overlays render on top of the map to complement your audio. Six effects are available:
+Visual particle overlays render on top of the map to complement your audio. Choose one under **Particle Overlay** in the panel; click the active one again, or **None**, to clear it. Six effects are available:
 
 | Effect | Description |
 |--------|-------------|

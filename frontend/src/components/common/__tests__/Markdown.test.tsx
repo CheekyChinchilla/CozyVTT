@@ -90,6 +90,39 @@ describe('Markdown', () => {
       expect(hrefs).toEqual(['', '', 'https://ok.example']);
     });
 
+    it('creates no link, frame or form from raw HTML either', () => {
+      const { container } = render(
+        <Markdown>
+          {[
+            '<a href="javascript:alert(1)">raw link</a>',
+            '<iframe src="https://evil.example"></iframe>',
+            '<form action="/api/auth/logout"><button>go</button></form>',
+          ].join('\n\n')}
+        </Markdown>
+      );
+      expect(container.querySelector('a')).toBeNull();
+      expect(container.querySelector('iframe')).toBeNull();
+      expect(container.querySelector('form')).toBeNull();
+      expect(container.querySelector('button')).toBeNull();
+    });
+
+    it('strips an unsafe scheme however it is spelled', () => {
+      const { container } = render(
+        <Markdown>
+          {[
+            '[a](JaVaScRiPt:alert(1))',
+            '[b](vbscript:msgbox(1))',
+            '[c](java&#x73;cript:alert(1))',
+            '[d](%6Aavascript:alert(1))',
+            '[e][evil]',
+            '[evil]: javascript:alert(1)',
+          ].join('\n\n')}
+        </Markdown>
+      );
+      const hrefs = [...container.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+      expect(hrefs).toEqual(['', '', '', '', '']);
+    });
+
     it('does not let an autolink smuggle a scheme in', () => {
       // GFM autolinks only recognise http, https, mailto and www. Nothing else
       // becomes a link at all.
@@ -159,6 +192,23 @@ describe('Markdown', () => {
     it('treats a protocol-relative address as another host', () => {
       const { container } = render(<Markdown>{'![x](//evil.example/pixel.png)'}</Markdown>);
       expect(container.querySelector('img')).toBeNull();
+    });
+
+    it('does not load an outside image given as a reference', () => {
+      const { container } = render(
+        <Markdown>{'![tracker][pix]\n\n[pix]: https://evil.example/pixel.png'}</Markdown>
+      );
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.textContent).toContain('tracker');
+    });
+
+    it('does not load an image with an unsafe scheme', () => {
+      const { container } = render(
+        <Markdown>{'![a](javascript:alert(1))\n\n![b](data:image/svg+xml;base64,PHN2Zz4=)'}</Markdown>
+      );
+      expect(container.querySelector('img')).toBeNull();
+      expect(container.textContent).toContain('a');
+      expect(container.textContent).toContain('b');
     });
 
     it('drops an image with no usable address without throwing', () => {

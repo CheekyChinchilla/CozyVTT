@@ -209,15 +209,19 @@
    Honor the OS "reduce motion" preference for all CSS-driven animation
    and transitions (tailwind animate-* utilities, ambient atmosphere/spirit
    loops, hover transitions). Framer-motion is handled separately via
-   <MotionConfig reducedMotion="user"> in App.tsx. Durations are collapsed
-   rather than removed so animation/transition-end events still fire. */
+   <MotionConfig reducedMotion="user"> in App.tsx. Animation durations are
+   collapsed to a moment so animationend still fires. Transitions are off
+   (0s): when framer-motion finishes a fade it writes the final opacity on
+   the element, and a transition of any length would start from the fade's
+   first value, which Firefox paints for one frame (a modal that faded in
+   blinks out once). Nothing in the app listens for transitionend. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.001ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
+    transition-duration: 0s !important;
     scroll-behavior: auto !important;
   }
 }

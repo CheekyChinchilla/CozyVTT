@@ -1,5 +1,7 @@
-// Extend Vitest's expect with jest-dom matchers (toBeInTheDocument, etc.)
-import '@testing-library/jest-dom';
+// Extend Vitest's expect with the jest-dom matchers (toBeInTheDocument and
+// the rest). This entry also types them on Vitest's expect; the package's
+// main entry types them only for Jest. jestDomTypes.test.ts checks it.
+import '@testing-library/jest-dom/vitest';
 import { configure } from '@testing-library/react';
 
 // findBy* and waitFor give up after one second by default. On a loaded machine

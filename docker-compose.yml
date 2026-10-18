@@ -23,7 +23,9 @@
 # Cloudflare Tunnel users: the simplest setup is to KEEP the bundled nginx —
 # CF Tunnel handles public-facing TLS and origin hiding, but not the routing
 # between the frontend SPA and the backend API/WebSocket. Point your
-# `cloudflared` ingress at http://localhost:80 and you're done. To run without
+# `cloudflared` ingress at http://localhost:80, and set NGINX_TRUSTED_PROXIES,
+# HTTP_PORT and HTTPS_PORT in .env as docs/DEPLOYMENT.md says, or every visitor
+# counts as the tunnel's one address. To run without
 # nginx you need path-based ingress rules (specific paths first, catch-all last).
 # See docs/DEPLOYMENT.md → "Using an External Reverse Proxy" for all three setups.
 
@@ -44,6 +46,17 @@ services:
     # Nothing in the container can gain privileges through a setuid program.
     security_opt:
       - no-new-privileges:true
+    # Every Linux capability is dropped, and the image's start script gets back
+    # only what it uses as root before it switches to the postgres user: giving
+    # the data folder to postgres, looking inside it (it is postgres's alone),
+    # and switching user. PostgreSQL itself runs with none.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_READ_SEARCH
+      - SETUID
+      - SETGID
     environment:
       POSTGRES_DB: ${DATABASE_NAME:-cozyvtt}
       POSTGRES_USER: ${DATABASE_USER:-cozyvtt}
@@ -77,6 +90,27 @@ services:
     # Nothing in the container can gain privileges through a setuid program.
     security_opt:
       - no-new-privileges:true
+    # Every Linux capability is dropped, and start.sh gets back only what it
+    # uses as root before it switches to appuser: giving the mounted folders to
+    # appuser, reading folders private to one account on the way (the backups
+    # folder is appuser's alone), setting the backups folder's mode, and
+    # switching user. The backend itself runs with none. Root in this
+    # container cannot write appuser's files, so run commands in it as
+    # appuser: docker compose exec -u appuser backend ...
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_READ_SEARCH
+      - FOWNER
+      - SETUID
+      - SETGID
+    # Its files are read-only too: the backend writes only to the three
+    # folders below and to /tmp, where a backup keeps its dump of the database
+    # and a restore unpacks the archive. /tmp is the backend_tmp volume: in
+    # memory a dump would count against the 512 MB below. start.sh removes
+    # what a stopped backup or restore left there.
+    read_only: true
     depends_on:
       database:
         condition: service_healthy
@@ -122,6 +156,8 @@ services:
       - ./backend/backups:/app/backups
       # Logs persist on the host
       - ./backend/logs:/app/logs
+      # Scratch files only: nothing in it needs a backup.
+      - backend_tmp:/tmp
     # Backend is only accessible internally — Nginx terminates public traffic
     expose:
       - "4000"
@@ -145,14 +181,6 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile.prod
-      args:
-        # Empty unless an older .env still sets them. Empty means the page asks
-        # its own address, and the bundled nginx proxies /api/* and
-        # /socket.io/* to the backend. A backend on another address is not
-        # supported: the page could sign in, but every picture, sound and
-        # document stayed blank. .env.example no longer offers them.
-        VITE_API_URL: ${VITE_API_URL:-}
-        VITE_SOCKET_URL: ${VITE_SOCKET_URL:-}
     image: cozyvtt-frontend:latest
     container_name: cozyvtt-frontend
     logging: *logging
@@ -160,11 +188,20 @@ services:
     # Nothing in the container can gain privileges through a setuid program.
     security_opt:
       - no-new-privileges:true
+    # Every Linux capability is dropped, and nginx's master process, which
+    # runs as root, gets back only what it uses: giving its scratch folders to
+    # the nginx user, listening on port 80, and starting its workers as that
+    # user.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
     # It only serves the built app, so its files are read-only, apart from
-    # nginx's pid file and scratch folders, held in memory. The proxy is not
-    # read-only: it renders its configuration when it starts, and keeps large
-    # uploads and downloads on disk as they pass. Nor is the backend, which
-    # writes a backup's database dump to /tmp.
+    # nginx's pid file and scratch folders, held in memory: nothing large
+    # passes through it.
     read_only: true
     tmpfs:
       - /run
@@ -186,11 +223,40 @@ services:
     # A test keeps the two in step; move both together.
     image: nginx:1.30-alpine
     container_name: cozyvtt-nginx
+    # TODO(shutdown): with a Socket.io connection open, `docker compose stop`
+    # waits the full 10 s and then kills nginx (exit 137): the image's
+    # SIGQUIT waits for websockets, which never close by themselves. Use
+    # `stop_signal: SIGTERM` or set worker_shutdown_timeout so nginx exits
+    # in about a second and players reconnect as they already do.
     logging: *logging
     restart: unless-stopped
     # Nothing in the container can gain privileges through a setuid program.
     security_opt:
       - no-new-privileges:true
+    # Every Linux capability is dropped, and nginx's master process, which
+    # runs as root, gets back only what it uses: giving its scratch folders to
+    # the nginx user, listening on ports 80 and 443, starting its workers as
+    # that user, and reading files only their owner may read, such as a TLS
+    # key in nginx/certs that belongs to your own account.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+      - DAC_READ_SEARCH
+    # Its files are read-only too. The entrypoint renders nginx/nginx.conf
+    # into /etc/nginx/conf.d as it starts, and nginx writes its pid file in
+    # /run; those are held in memory. Uploads and downloads too large to
+    # hold in memory as they pass (a 50 MB map, a backup) go to
+    # /var/cache/nginx, kept on the nginx_temp volume: in memory they would
+    # count against the 64 MB below and stop nginx.
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+      - /etc/nginx/conf.d
     depends_on:
       - frontend
       - backend
@@ -237,6 +303,8 @@ services:
       # Your own nginx settings, such as HTTPS: every .conf file here is read.
       # git ignores this folder's contents, so `git pull` never stops at them.
       - ./nginx/conf.d:/etc/nginx/cozyvtt.d:ro
+      # Scratch files only: nothing in it needs a backup.
+      - nginx_temp:/var/cache/nginx
     networks:
       - internal
     deploy:
@@ -246,6 +314,14 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  # nginx's request and response scratch files; Compose makes it on the
+  # first start, and nothing in it needs a backup.
+  nginx_temp:
+    driver: local
+  # The backend's /tmp: a backup's database dump and a restore's unpacked
+  # archive while they run. Compose makes it on the first start.
+  backend_tmp:
     driver: local
 
 networks:

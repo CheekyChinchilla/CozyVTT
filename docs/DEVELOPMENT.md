@@ -97,6 +97,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `SHADOW_DATABASE_URL` | No | — | A scratch database for `prisma migrate diff` and `prisma migrate dev`, read only by `prisma.config.ts`; see [Running Migrations](#running-migrations) |
 | `SESSION_SECRET` | Yes | — | Random string for session signing (32+ chars) |
 | `NODE_ENV` | No | `development` | `development` or `production` |
 | `PORT` | No | `4000` | Port the API server listens on |
@@ -172,13 +173,18 @@ npm install
 Each project's `package.json` names under `allowScripts` the packages that
 run a script while they install: the Prisma packages fetch the database engines
 that way, argon2 checks for its prebuilt binary, and a few developer tools set
-up their own binaries. npm 11, which builds the images, still runs the
-script of a package that is not listed and prints a warning naming it; npm 12
-is announced to block such a script unless the list names it. When a new
-dependency brings one, `npm install-scripts ls` names it; read what the script
-does, then add it with
-`npm install-scripts approve --no-allow-scripts-pin <package>`, or leave it
-out. `dependencySources.test.ts` fails until the list matches the lockfile.
+up their own binaries. Each project's `.npmrc` turns on npm's
+`strict-allow-scripts` setting, so when a package with such a script is not on
+the list, the install fails before anything is installed, with
+`ESTRICTALLOWSCRIPTS` and the package's name and script. That holds for
+`npm install` and `npm ci`, in the images, in CI and on your machine. Without
+the setting, npm 11 (11.20.0 comes with Node.js 26.12.0, and builds the images
+and CI) runs such a script and prints a warning, and npm 12 (12.2.0 is
+released) skips it and prints a warning. When a new dependency brings one,
+read what its script does, then add `"<package>": true` under `allowScripts`
+in that project's `package.json` and install again; `npm install-scripts ls`
+and `approve` work only on a tree that is already installed.
+`dependencySources.test.ts` fails until the list matches the lockfile.
 
 ### 2. Set up PostgreSQL
 
@@ -206,7 +212,13 @@ cp backend/.env.example backend/.env
 ```bash
 cd backend
 npx prisma migrate dev
+npx prisma generate
 ```
+
+The Prisma command-line tools take their settings, the database address
+among them, from `backend/prisma.config.ts`, which loads `backend/.env`.
+Since Prisma 7, `migrate dev` and `db push` no longer generate the client, so
+`npx prisma generate` follows them; `npm run build` runs it too.
 
 ### 5. Create the administrator
 
@@ -216,7 +228,7 @@ There is no seed data yet: `backend/prisma/seed.ts` is a stub that logs two line
 
 ## Local Setup (With Docker)
 
-> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which publishes the database, the backend and the frontend on this computer only (`127.0.0.1`), runs the backend under nodemon in development mode with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
+> ⚠️ **This section is for local development only.** The command below runs the **dev stack** (`docker-compose.dev.yml`), which publishes the database, the backend and the frontend on this computer only (`127.0.0.1`), runs the backend under Node's watch mode in development mode with verbose logging, and runs the frontend under Vite's dev server with hot module replacement. **Do not use this for a public deployment.** For production, use the plain `docker-compose.yml` and follow **[DEPLOYMENT.md](./DEPLOYMENT.md)**.
 
 ```bash
 # Copy the root .env template
@@ -255,7 +267,7 @@ docker compose -f docker-compose.dev.yml -f docker-compose.dev.local.yml up
 
 Then open `http://<this computer's address>:3001` on the other device; a name rather than an address also needs adding to `VITE_ALLOWED_HOSTS` in `.env`. Anyone on that network can reach it too, so do this only on a network you trust.
 
-The backend container runs `npm run dev` (nodemon with hot reload). The frontend container runs `vite` with hot module replacement. The backend's start script (`backend/scripts/start.sh`) applies any pending migrations with `prisma migrate deploy` each time the container starts.
+The backend container runs `npm run dev`, which restarts the backend when a file it has loaded changes (`node --watch`, below). The frontend container runs `vite` with hot module replacement. The backend's start script (`backend/scripts/start.sh`) applies any pending migrations with `prisma migrate deploy` each time the container starts.
 
 **Each container has its own `node_modules` and its own generated Prisma client.** Source is bind-mounted, `node_modules` is not, so after adding a dependency or changing `schema.prisma` the running container does not see it until you tell it to. Vite answers a missing package with a 500 and the app shows "Something went wrong"; the backend throws on the first query that touches a new table:
 
@@ -268,7 +280,7 @@ docker compose -f docker-compose.dev.yml exec --user root backend npm install
 docker compose -f docker-compose.dev.yml exec --user root backend npx prisma generate
 ```
 
-`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`.
+`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`. Do the same after pulling a change to either `package.json`, such as the move to Prisma 7 in 1.5.3: without `-V`, `up --build` alone leaves the backend on the packages it had before.
 
 ### Security headers are production-only
 
@@ -280,7 +292,7 @@ The practical consequence: **a CSP violation cannot appear during development**.
 
 | | Production (`docker-compose.yml`) | Development (`docker-compose.dev.yml`) |
 |---|---|---|
-| Backend | Compiled JS, no source on disk | Source mounted, nodemon |
+| Backend | Compiled JS, no source on disk | Source mounted, `node --watch` |
 | Frontend | Pre-built static files via Nginx | Vite dev server with HMR |
 | Database port | **Not exposed to host** | Exposed on `localhost:5432` |
 | Backend port | **Not exposed to host** | Exposed on `localhost:4000` |
@@ -302,11 +314,14 @@ npx prisma migrate dev
 # Create a new migration after schema changes
 npx prisma migrate dev --name describe_your_change
 
+# Either way, then regenerate the client (migrate dev no longer does)
+npx prisma generate
+
 # Apply migrations in CI / production (no prompts)
 npx prisma migrate deploy
 ```
 
-> ⚠️ **On a database the backend has already run against, `migrate dev` reports drift and offers a reset: answer no.** The sign-in session store creates a table named `session` the first time the backend starts, and no migration creates it, so Prisma finds a table it does not know. `migrate dev` then says the database has drifted and asks to reset it, which deletes everything in it, and `db push` asks to drop the table. To make a migration on such a database, generate it from the existing migrations into a scratch database instead, which never looks at the `session` table. Prisma empties that database each time, so give it one of its own:
+> ⚠️ **If `migrate dev` reports drift and offers a reset, answer no: a reset deletes everything in the database.** The sign-in session store makes a table named `session` the first time the backend starts. Until 1.5.3 no migration made it, so on a database the backend ran against before then, `migrate dev` finds a table its migrations do not account for and offers that reset. `npx prisma migrate deploy` applies the migration that describes the table, which finds it and changes nothing, and the backend container's start script runs that command each time the container starts; outside Docker, run it yourself. From then on the database matches the migrations. `migrate dev` also refuses to run where it cannot ask questions, such as from a script. Either way, a migration can be generated from the existing migrations into a scratch database instead. Prisma empties that database each time, so give it one of its own:
 >
 > ```bash
 > # Once, with the dev stack running:
@@ -315,10 +330,17 @@ npx prisma migrate deploy
 > # Each new migration, from backend/ (the folder name is a UTC timestamp and a name):
 > mkdir -p prisma/migrations/20261011120000_describe_your_change
 > npx prisma migrate diff --from-migrations prisma/migrations \
->   --to-schema-datamodel prisma/schema.prisma \
->   --shadow-database-url postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow \
+>   --to-schema prisma/schema.prisma \
 >   --script > prisma/migrations/20261011120000_describe_your_change/migration.sql
 > npx prisma migrate deploy
+> npx prisma generate
+> ```
+>
+> `migrate diff` finds the scratch database through `prisma.config.ts`, which
+> reads its address from `SHADOW_DATABASE_URL`. Add it to `backend/.env`:
+>
+> ```bash
+> SHADOW_DATABASE_URL="postgresql://cozyvtt:YOUR_DATABASE_PASSWORD@localhost:5432/cozyvtt_shadow"
 > ```
 >
 > A fresh database that the backend has never started against has no `session` table, and `migrate dev` works on it as usual.
@@ -330,7 +352,7 @@ Prisma Studio is a web-based database browser:
 ```bash
 cd backend
 npm run prisma:studio
-# Opens http://localhost:5555
+# Opens http://localhost:51212, or another free port it names when that one is taken
 ```
 
 ### Schema Location
@@ -356,6 +378,8 @@ npm run dev
 ```
 
 The Vite dev server proxies all `/api/*` and WebSocket traffic to the backend. You only need to open `http://localhost:3000`.
+
+The backend's `npm run dev` is `node --watch -r ts-node/register src/server.ts`. Node watches every file the backend has loaded and, when one changes, stops the backend with SIGTERM, so it closes its sockets and database connections as it does when Docker stops the production container, and starts it again. A new file is watched once something imports it. A change to a file the backend never loads does not restart it: tests, `.env` and `prisma/schema.prisma` among them. After a type error, the backend stays stopped until the next change to a file it loaded.
 
 ### Building for Production
 
@@ -396,8 +420,12 @@ it:
 docker run -d --name cozyvtt-test-pg -e POSTGRES_USER=cozyvtt -e POSTGRES_PASSWORD=cozyvtt \
   -e POSTGRES_DB=cozyvtt_test -p 55500:5432 postgres:15-alpine
 cd backend
-DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push --skip-generate
+DATABASE_URL=postgresql://cozyvtt:cozyvtt@localhost:55500/cozyvtt_test npx prisma db push
 ```
+
+Run the same `db push` again after switching to a branch with a different
+schema. It changes only the database; `npx prisma generate` brings the client
+up to date.
 
 Then run the suite, or one file, with the same `DATABASE_URL`:
 
@@ -418,12 +446,13 @@ Tests live in `backend/src/**/__tests__/`, or beside the code as `name.test.ts`.
 > `backend/.env` names, which is your development database, and refuses it.
 > The check is `src/__tests__/helpers/testDatabaseGuard.ts`.
 
-> **The run makes the sign-in table itself.** The backend keeps sign-ins in a
+> **The sign-in table comes from the push.** The backend keeps sign-ins in a
 > table named `session`, which the session store creates when the server
-> starts. The Prisma schema does not describe it, so `prisma db push` drops
-> it. Before any suite starts, jest makes it again from the session store's
-> own definition (`src/__tests__/helpers/jest.globalSetup.ts`), so the suites
-> that end an account's sign-ins pass straight after a push.
+> starts, and the suites that end an account's sign-ins write to it. The
+> Prisma schema describes it, so `prisma db push` lays it out and keeps it.
+> If those suites fail with `relation "session" does not exist`, the test
+> database was last pushed from an older branch: run the `db push` above
+> again.
 
 ### Frontend Tests (Vitest)
 
@@ -433,6 +462,10 @@ npm test                  # Interactive watch mode
 npm run test:run          # Run once (CI mode)
 npm run test:coverage     # Generate coverage report
 ```
+
+The runner is Vitest 5, on Vite 8. On a machine short of memory, cap the
+workers a run starts with `npx vitest run --maxWorkers=2`; Vitest 5 has no
+`--minWorkers` option and stops with "Unknown option" if given one.
 
 Tests live alongside the components they test in `__tests__/` subdirectories or as `.test.tsx` files.
 
@@ -482,7 +515,8 @@ developer tools open on the Network tab:
 # Backend
 cd backend && npx tsc --noEmit
 
-# Frontend: the app, then e2e/ and playwright.config.ts (e2e/tsconfig.json)
+# Frontend: the app, then e2e/ and playwright.config.ts (e2e/tsconfig.json),
+# then vite.config.ts and vitest.config.ts (tsconfig.node.json)
 cd frontend && npm run typecheck
 ```
 
@@ -493,7 +527,7 @@ assume you ran:
 
 ```bash
 # Frontend
-cd frontend && npm run typecheck && npm run lint && npx vitest run && npm run build
+cd frontend && npm run typecheck && npm run lint && npx vitest run --maxWorkers=2 && npm run build
 
 # Backend. The Prisma client is generated, not committed: without a fresh one,
 # every column added since the last generate is a type error.
@@ -511,6 +545,14 @@ Some of those deserve a note:
 
 - **`npx vitest run`, not `npm test`.** The latter is watch mode and will sit
   there until you notice.
+- **The production build leaves out `console.log`, `info`, `debug` and
+  `trace`.** `frontend/vite.config.ts` marks them as calls with no effect, so
+  the build removes them; `console.error` and `console.warn` stay. After
+  `npm run build`, CI looks in `dist/assets` for four lines only such calls
+  print and fails if one is there. A misplaced build option only draws a
+  warning from Vite. `npm run typecheck` checks `vite.config.ts` against
+  the types of Vite's options, but the file is not linted, so read the
+  build output after changing it.
 - **The backend run manages its own database connections.** Every test file
   builds its own Prisma clients and jest reuses workers across files, so a
   full run once crept up to PostgreSQL's default ceiling of a hundred
@@ -529,11 +571,12 @@ Some of those deserve a note:
 - **A test that needs a brand new instance gets a schema of its own.** The
   suites share one database and run at once, so none can count on it being
   empty. The setup wizard suite, the first-admin and last-admin race tests,
-  the admin settings log suite and the global setup's own test need exactly
+  the admin settings log suite and the sign-in table's own test need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
-  end. The file sets `DATABASE_URL` to that schema before it imports the app,
-  with a dynamic import, because the app's database client reads it once.
+  end. The file sets `DATABASE_URL` to that schema before it loads the app,
+  with `require` (see TypeScript below), because the app's database client
+  reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when a file the nginx service mounts on its own (`nginx/nginx.conf`,
   `nginx/locations.conf`, `nginx/trusted-proxies.envsh`, read from the
@@ -573,9 +616,10 @@ Some of those deserve a note:
   `backend/scripts/backup.sh` and `restore.sh`, when the kinds of thing that
   can use an asset differ between the two sides or the API document, when
   either image's `.dockerignore` lets an env file other than `.env.example`
-  into its build, and when the Node.js major differs between `.nvmrc`, a
-  Dockerfile stage, a CI job, an `engines` field, `@types/node` and the
-  guides.
+  into its build, when a Dockerfile stage runs `npm ci` or `npm install`
+  before it copies the project's `.npmrc`, and when the Node.js major
+  differs between `.nvmrc`, a Dockerfile stage, a CI job, an `engines`
+  field, either project's `@types/node` and the guides.
 - **What the guides claim is tested where a claim once drifted.**
   `backend/src/__tests__/documentedFacts.test.ts` checks the guides' own
   statements against the code and the shipped files: the deployment guide's
@@ -601,6 +645,32 @@ Some of those deserve a note:
   fails when a test file sends a request to a route still listed in
   `UNTESTED`, so the list cannot go on claiming a gap that has closed. Add a
   new route's test, then its line in `TESTED`.
+- **The route tests read Express's router stack through one helper.**
+  `backend/src/__tests__/helpers/routeInventory.ts` walks `app.router.stack`
+  for the route inventory, the limiter wiring, the campaign role guards, the
+  admin routes and the app assembly tests. Express 5's layers do not keep the
+  path a router was mounted at, so the helper wraps `app.use` to note it, and
+  a test file has to import the helper before it builds the app.
+  `backend/src/__tests__/routeInventoryHelper.test.ts` compares what the
+  helper reads, every route with its handlers by name and every layer of the
+  app, with `helpers/routeInventory.expected.json`. After adding a route or
+  middleware on purpose, run that test once with `WRITE_ROUTE_INVENTORY=1`
+  and read the diff of the file before committing it.
+- **Route paths use Express 5's syntax.** A wildcard needs a name
+  (`/*splat`), an optional part goes in braces (`/:file{.:ext}`), and the
+  characters `?`, `+`, `!`, `(`, `)`, `[` and `]` are refused when the app
+  starts unless escaped. `app.use(handler)` with no path matches every
+  request; a bare `*` is refused.
+- **`req.body` is `{}` when a request sent no JSON only because
+  `backend/src/middleware/bodyParsers.ts` puts it there.** Express 5 leaves
+  it `undefined`, and many handlers destructure it straight away; keep that
+  middleware right after the JSON parser.
+- **A file the server sends from its own folders takes `SERVER_BUILT_PATH`**
+  (`backend/src/utils/fileUtils.ts`) as `res.sendFile` or `res.download`
+  options. Express 5 refuses a path with any folder whose name starts with a
+  dot, and a self-hoster's uploads or backups folder can sit inside one;
+  `hiddenStorageFolder.e2e.test.ts` serves every kind of file from such a
+  folder. Never pass it for a path taken from a request.
 - **Every rate limiter is tested where it is attached.**
   `backend/src/routes/__tests__/limiterWiring.e2e.test.ts` has a row per
   limited route: it sends the limit's worth of failing requests to the real
@@ -609,6 +679,18 @@ Some of those deserve a note:
   route needs one line in its `ROWS`. The server-wide limit on every `/api`
   request is mounted by `createApp` ahead of every router; the same file
   checks it is there and fires it.
+- **A limiter key that uses the client address passes it through
+  `ipKeyGenerator`.** express-rate-limit 8 counts an IPv6 client by its /56
+  network, and a custom `keyGenerator` that reads `req.ip` must call
+  `ipKeyGenerator` from the same package to do the same; otherwise the library
+  logs `ERR_ERL_KEY_GEN_IPV6` once and each address in the network gets its own
+  allowance. `backend/src/middleware/__tests__/rateLimitValidation.test.ts`
+  makes every express-rate-limit limiter, sends a request through each, and
+  fails on anything the library writes to the console; add a new limiter to
+  its list. The wrong-answer limiter (`backend/src/middleware/failureLimiter.ts`)
+  keys an address with `ipKeyGenerator` too, so a test that mocks
+  express-rate-limit keeps the rest of the package real with
+  `jest.requireActual`.
 - **A test file may not carry a `TODO(test)` marker.** A test known to be
   flaky or wrong once sat behind one, assigned to nobody, until it failed a
   release's CI run. `backend/src/__tests__/testMarkers.test.ts` scans the test
@@ -640,7 +722,8 @@ also does what self-hosters run and a developer usually does not:
   migration fails, then applies the migrations to an empty database before
   the backend tests. To run the comparison yourself, give it a database of
   its own, which Prisma empties: the command is in the workflow, and the
-  scratch database is the one "Running Migrations" above creates.
+  scratch database is the one "Running Migrations" above creates, named by
+  `SHADOW_DATABASE_URL`.
 - **Collects test coverage** in both projects and shows it in the job
   summary, per folder under `src/`. A report only: no threshold fails yet.
 - **Builds both production images** with `docker compose build`, after
@@ -652,7 +735,11 @@ also does what self-hosters run and a developer usually does not:
   image's own entrypoint, the environment and mounts `docker-compose.yml`
   gives the container and `nginx/trusted-proxies.envsh`, and has nginx check
   it three ways: as shipped, with `NGINX_TRUSTED_PROXIES` set, and with the
-  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate. It
+  HTTPS example from `docs/DEPLOYMENT.md` and a throwaway certificate whose
+  key only the account running the check may read, as the guide's steps
+  leave a real one. The container gets the same capabilities,
+  `no-new-privileges`, read-only filesystem and tmpfs folders as the
+  service, so a capability the start needs and the file lacks fails here. It
   needs Docker, openssl and PyYAML, and runs locally too.
 - **Checks known advisories** in the packages an instance runs
   (`npm audit --omit=dev --audit-level=high` in both projects): a high or
@@ -660,17 +747,31 @@ also does what self-hosters run and a developer usually does not:
   project's developer tools too, and fails nothing, since those never reach
   an instance. Each of these steps runs whatever the ones before it found,
   so a failing backend audit still shows the frontend's result.
+  When a package an instance runs asks for a dependency at a version with
+  a high advisory, or a developer tool asks for one with any advisory, and
+  no release of that package asks for a fixed one yet, that project's
+  `package.json` holds the dependency at a fixed version under `overrides`,
+  naming the package that asks for it. `keepInStep.test.ts`
+  fails once an update of that package asks for the held version or a newer
+  one, which is when the override has to go.
 
 Every action the workflow uses is pinned to a commit, with its version in a
 comment, and `.github/dependabot.yml` asks for a weekly pull request into
 `dev` for each project's minor and patch updates (grouped), the actions and
-the Docker base images. Major versions of npm packages are held back until
-the 1.5.3 platform release takes them by hand; after it, each major comes as
-a pull request of its own. Node and nginx move to a new major or stable line
-by hand, and PostgreSQL's major version never through Dependabot, since its
-data has to be dumped and restored. Dependabot alerts for published
-advisories are on; its automatic security pull requests are off for now,
-because GitHub opens those against `main`, which only takes releases.
+the Docker base images. Each major version of an npm package comes as a pull
+request of its own, since it can change behaviour. The packages and versions
+that wait are named under `ignore`, each with a comment giving the reason and
+when to remove the entry: Tailwind CSS 4, TypeScript 7 and TypeScript 6.1
+(until typescript-eslint accepts it) among them, and `@types/node`, which
+moves with the Node major. Node and nginx move to a new
+major or stable line by hand, and PostgreSQL's major version never through
+Dependabot, since its data has to be dumped and restored. A new release
+waits before Dependabot proposes it (`cooldown`): an npm package 3 days for a
+patch, 7 for a minor and 14 for a major, an action or base image 7 days, so
+a hijacked publish is usually pulled first. Security updates do not wait.
+Dependabot alerts for published advisories are on. Its automatic security pull requests are
+turned on in the repository's settings once 1.5.3 is on `main`; GitHub opens
+those against `main` whatever `target-branch` says.
 
 A pull request into `main` cannot merge until the Frontend, Backend, Docs,
 Dependency advisories, and Production images, nginx and smoke tests jobs pass
@@ -721,6 +822,40 @@ Both backend and frontend use TypeScript in **strict mode**. The `tsconfig.json`
 in each package enables `strict: true`, which brings `noImplicitAny`,
 `strictNullChecks` and the rest with it.
 
+The frontend has three settings files, all strict, and `npm run typecheck`
+checks each: `tsconfig.json` for the app, `e2e/tsconfig.json` for the smoke
+tests, and `tsconfig.node.json` for `vite.config.ts` and `vitest.config.ts`.
+Those two run in Node, so only they see Node's types (`@types/node`, held to
+the Node major like the backend's); the app's code sees the browser's.
+
+Both packages use TypeScript 6.0 (`~6.0.3` in each `package.json`), since
+typescript-eslint supports TypeScript below 6.1 and ts-jest below 7. Neither
+`tsconfig.json` sets `ignoreDeprecations`: they use none of the options
+TypeScript 6 deprecates, such as `baseUrl` or `"moduleResolution": "node"`,
+and a deprecated option fails the type check.
+
+The backend compiles with `"module": "node20"` and `"moduleResolution":
+"node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
+every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
+package's `"exports"`, and the code can import the packages published only as
+ES modules (archiver, file-type, mathjs), which Node 22.12 and later load
+with `require` (the images run Node 26). `"module": "node16"` refuses those imports. Two things follow:
+
+- **No dynamic `import()` of our own files.** Under these settings an
+  `import()` stays a native ES module import, which fails in `dist/` and
+  under ts-node, and the type check refuses one without a file extension.
+  Application code imports statically. A test that must load a module late, after setting
+  `DATABASE_URL` or calling `jest.resetModules()`, uses
+  `require('../x') as typeof import('../x')`.
+- **The global types are listed.** `"types": ["node", "jest"]` in
+  `backend/tsconfig.json` names the `@types` packages every file sees; any
+  other comes in when a file imports it.
+
+ts-jest compiles the tests as CommonJS whatever the module setting, finding
+each package's types through its `"exports"` as the type check does, and
+warns about `node20` on every file, so `backend/jest.config.js` turns that one
+warning (151002) off.
+
 `noUncheckedIndexedAccess` is **not** enabled in either package. It is worth
 turning on one day, but it is its own burn-down and mixing it into other work
 would make it impossible to say what caused a regression.
@@ -743,8 +878,9 @@ cd frontend && npm run lint
 ```
 
 The rules are in each package's `eslint.config.js` (ESLint 10, flat config):
-ESLint's recommended rules, typescript-eslint's recommended rules and, in the
-frontend, the React hooks rules. Only TypeScript files are linted, apart from
+ESLint's recommended rules from `@eslint/js`, the recommended rules of the
+`typescript-eslint` package (which brings its parser and plugin with it) and,
+in the frontend, the React hooks rules. Only TypeScript files are linted, apart from
 the frontend's `vite.config.ts`. A rule that is switched off says why beside
 it. In the frontend the ones waiting to be turned on are marked
 `TODO(ratchet)`; the backend's three are listed in the comment above them.

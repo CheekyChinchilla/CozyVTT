@@ -1,11 +1,11 @@
 {
   "name": "cozyvtt-backend",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "CozyVTT Backend - Self-hosted Virtual Tabletop",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "nodemon --exec ts-node src/server.ts",
-    "build": "tsc",
+    "dev": "node --watch -r ts-node/register src/server.ts",
+    "build": "prisma generate && tsc",
     "lint": "eslint . --max-warnings 0",
     "start": "node dist/server.js",
     "test": "jest",
@@ -20,9 +20,6 @@
     "migrate:avatar-scope": "ts-node src/scripts/migrate-avatar-scope.ts",
     "migrate:sheet-fields": "ts-node src/scripts/migrate-sheet-fields.ts"
   },
-  "prisma": {
-    "seed": "ts-node prisma/seed.ts"
-  },
   "keywords": [
     "vtt",
     "tabletop",
@@ -31,23 +28,24 @@
   "author": "CozyVTT Development Team",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@prisma/client": "5.8",
-    "archiver": "^7.0.1",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "archiver": "^8.0.0",
     "argon2": "^0.44.0",
-    "connect-pg-simple": "^9.0.1",
+    "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.6",
-    "dotenv": "^16.6.1",
-    "express": "^4.22.3",
-    "express-rate-limit": "^7.5.1",
+    "dotenv": "^18.0.8",
+    "express": "^5.3.0",
+    "express-rate-limit": "^8.7.1",
     "express-session": "^1.19.0",
-    "file-type": "^21.3.4",
-    "helmet": "^7.2.0",
-    "mathjs": "^12.4.3",
+    "file-type": "^22.2.0",
+    "helmet": "^8.3.0",
+    "mathjs": "^15.2.0",
     "multer": "^2.4.0",
-    "nodemailer": "^10.0.16",
+    "nodemailer": "^10.1.2",
     "otplib": "^13.5.0",
     "pg": "^8.23.1",
-    "prisma": "5.8",
+    "prisma": "7.10.0",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
@@ -56,10 +54,11 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/archiver": "^6.0.4",
+    "@eslint/js": "10.0.1",
+    "@types/archiver": "^8.0.0",
     "@types/connect-pg-simple": "^7.0.3",
     "@types/cors": "^2.8.19",
-    "@types/express": "^4.17.25",
+    "@types/express": "^5.0.6",
     "@types/express-session": "^1.19.0",
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.3.0",
@@ -68,26 +67,33 @@
     "@types/qrcode": "^1.5.6",
     "@types/supertest": "^7.2.1",
     "@types/unzipper": "^0.10.11",
-    "@typescript-eslint/eslint-plugin": "8.71.1",
-    "@typescript-eslint/parser": "8.71.1",
-    "eslint": "10.12.0",
+    "eslint": "10.13.0",
     "jest": "^30.5.2",
-    "nodemon": "^3.1.14",
     "socket.io-client": "^4.8.4",
     "supertest": "^7.3.1",
-    "ts-jest": "^29.4.14",
+    "ts-jest": "^29.4.15",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "8.71.2"
+  },
+  "overrides": {
+    "prisma": {
+      "mysql2": "3.24.5"
+    },
+    "@prisma/config": {
+      "deepmerge-ts": "8.0.2"
+    },
+    "@istanbuljs/load-nyc-config": {
+      "js-yaml": "4.3.2"
+    }
   },
   "engines": {
     "node": ">=26.0.0"
   },
   "allowScripts": {
     "@parcel/watcher": true,
-    "@prisma/client": true,
     "@prisma/engines": true,
     "argon2": true,
-    "fsevents": true,
     "prisma": true,
     "unrs-resolver": true
   }

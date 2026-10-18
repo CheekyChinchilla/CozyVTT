@@ -25,6 +25,7 @@ import request from 'supertest';
 
 import { credentialLimiter, emailDispatchLimiter, accountCreationLimiter } from '../auth';
 import { mfaLoginLimiter, mfaSetupLimiter } from '../auth';
+import { createGeneralApiLimiter } from '../../app';
 
 /** Any of the limiters; the credential limiter is also told of each failure. */
 type Limiter = RequestHandler & { recordFailure?: (req: Request) => void };
@@ -192,5 +193,47 @@ describe('MFA limiters', () => {
 
     // ...and logging in is still available to them.
     expect((await hit(loginApp, ip, 401)).status).toBe(401);
+  });
+});
+
+describe('IPv6 visitors', () => {
+  // One IPv6 visitor usually holds a whole /56 network, 256 networks of
+  // their own, and can send each request from a new address in it. Counting
+  // each address separately gave them a fresh allowance for every one.
+  const sameNetwork = ['2001:db8:5:100::1', '2001:db8:5:1ff:abcd::2'];
+  const otherNetwork = '2001:db8:5:200::1';
+
+  it('share the general limit across one /56 network', async () => {
+    const before = process.env.RATE_LIMIT_MAX_REQUESTS;
+    process.env.RATE_LIMIT_MAX_REQUESTS = '2';
+    let limiter: RequestHandler;
+    try {
+      limiter = createGeneralApiLimiter();
+    } finally {
+      if (before === undefined) delete process.env.RATE_LIMIT_MAX_REQUESTS;
+      else process.env.RATE_LIMIT_MAX_REQUESTS = before;
+    }
+    const app = appWith(limiter);
+
+    expect((await hit(app, sameNetwork[0], 200)).status).toBe(200);
+    expect((await hit(app, sameNetwork[1], 200)).status).toBe(200);
+    expect((await hit(app, sameNetwork[0], 200)).status).toBe(429);
+
+    // The next network along is someone else.
+    expect((await hit(app, otherNetwork, 200)).status).toBe(200);
+  });
+
+  it('share the wrong-answer limit across one /56 network', async () => {
+    // Its own addresses, since the credential limiter's counts last the module.
+    const network = ['2001:db8:6:100::1', '2001:db8:6:1ff:abcd::2'];
+    const app = appWith(credentialLimiter);
+
+    for (let i = 0; i < 5; i++) {
+      expect((await hit(app, network[i % 2], 401)).status).toBe(401);
+    }
+    expect((await hit(app, network[0], 401)).status).toBe(429);
+    expect((await hit(app, network[1], 401)).status).toBe(429);
+
+    expect((await hit(app, '2001:db8:6:200::1', 401)).status).toBe(401);
   });
 });

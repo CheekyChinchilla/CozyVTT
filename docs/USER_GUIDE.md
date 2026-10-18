@@ -72,9 +72,11 @@ Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor 
 | Five wrong passwords in 15 minutes from one internet address, such as everyone on your home network (a password reset link that does not work counts too) | "Too many authentication attempts, please try again later" | 15 minutes after the oldest of the five |
 | Ten wrong passwords in an hour for your account, from every device together | "Too many failed sign-ins for this account, please try again later" | An hour after the oldest of the ten, or at once when you get a new password: set it with the **Forgot password?** link (if your instance sends email), or ask an administrator for a temporary one |
 
+If you connect over IPv6, your internet provider usually gives your home or office a whole block of addresses, and the first limit counts all of them as one, as it counts everyone behind one IPv4 address.
+
 When the second limit locks an account, the Admin Panel's **Activity** tab gets a line naming the account and the address the last wrong password came from (see [The activity log](#the-activity-log-admins)). The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three say "Too many wrong passwords, please try again later".
 
-**A sign-in lasts at most 30 days**, however much you use it (your administrator can change the length). When it runs out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
+**How long a sign-in lasts.** Tick **Remember me** on the sign-in page to stay signed in between visits. Without it, a sign-in ends after an hour with no activity; with it, after 30 days with no activity. Those are the usual lengths; the person who runs your instance can change them. A campaign page that is open counts as activity, and so does a character sheet with unsaved changes, so neither drops you in the middle of a game. Whichever you choose, **a sign-in lasts at most 30 days**, however much you use it. Your administrator can change both lengths. When the 30 days run out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
 
 *GIF pending — Login flow with MFA step.*
 
@@ -97,7 +99,7 @@ Your role badge is visible on your profile page.
 
 ### The activity log (admins)
 
-The **Activity** tab of the Admin Panel shows the newest 100 lines of the admins' activity log. A line is written each time an administrator:
+The **Activity** tab of the Admin Panel, headed **Platform Activity** and reloaded with its **Refresh** button, has four lists: **Currently Online** (the accounts with a live sign-in, with each one's role, last login and when its sign-in expires), **Recent Admin Actions** (the newest 100 lines of the admins' activity log), **Recent Registrations** (the 50 newest accounts) and **Recent Game Sessions** (the 20 most recent). The rest of this section is about the activity log. A line is written each time an administrator:
 
 - creates, invites, approves or deletes an account;
 - makes someone an administrator, or takes the role away;
@@ -205,7 +207,7 @@ Click **Campaign Settings** (the gear icon) in the campaign header. Here you can
 
 ### Managing Your Roster
 
-Players join your campaign by accepting an invitation. Once they're in, they appear in the **Campaign Roster** on the left sidebar. You can see all current members and their characters.
+Players join your campaign by accepting an invitation. Once they're in, they appear in the **Campaign Roster** on the left sidebar. You can see all current members and their characters, with the hit points of each (see [The Campaign Roster](DM_GUIDE.md#the-campaign-roster)).
 
 To invite someone:
 1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
@@ -413,7 +415,9 @@ The Asset Library is where all your campaign media lives — maps, token images,
 | **Audio** | Ambient soundscapes, background music | MP3, Ogg or WAV |
 | **Avatar** | Your personal profile picture | PNG, JPEG or WebP |
 
-An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again.
+A PNG that is animated is refused for now, for every kind of picture.
+
+An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again. For now, Firefox's upload dialog refuses Ogg and WAV files with "Invalid file type"; upload them from another browser, or as MP3. A later release fixes this.
 
 Rulebooks and handouts are not here. They have their own **Documents** section, described below, so a PDF never sits among your map thumbnails.
 
@@ -433,7 +437,7 @@ Click **Upload Asset** to add a new asset. You'll choose:
 
 ### Finding Assets
 
-Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size. Click a tag chip to filter to just assets with that tag.
+Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size. Click a tag chip to filter to just assets with that tag. The library shows 24 assets at a time; once there are more, **Previous** and **Next** under the grid move between pages. For now the search, the tag filter and the sort apply to the page on screen only, so an asset on another page does not show up until you move to that page; a later release makes them cover the whole library.
 
 ### Viewing and Managing Assets
 
@@ -490,7 +494,7 @@ A DM can share their own documents, and Global ones, with their campaign from in
 
 ### Reading
 
-Click a document's name or its **Read** button to open it in a full-screen reader over whatever page you are on. **Open in a new tab** does what it says, for reading on a second screen while play continues. A PDF is shown by your browser's own PDF viewer. Some browsers, Safari among them, will not display a PDF inside another page and leave the space blank; if that happens, use **Open this PDF in a new tab** above the document.
+Click a document's name or its **Read** button to open it in a full-screen reader over whatever page you are on. **Open in a new tab** does what it says, for reading on a second screen while play continues. A PDF is shown by your browser's own PDF viewer. Some browsers will not display a PDF inside another page: Safari leaves the space blank, and Chrome and Edge show a page saying the content is blocked. If that happens, use **Open this PDF in a new tab** above the document, or **Open in a new tab** at the bottom of the reader.
 
 ### Editing
 
@@ -536,7 +540,7 @@ Type your message in the input field and press **Enter** to send. Messages show 
 
 ### Rolling Dice
 
-The **Dice Roller** has its own **Dice** tab beside Chat. Click a die face to roll it, or type a custom expression.
+The **Dice Roller** has its own **Dice** tab beside Chat. Click one of the dice under **Quick Roll** (d4 to d100) to roll it, or type a custom expression and press **Enter** or **Roll**.
 
 *GIF pending — Rolling dice and seeing the result in the Dice panel.*
 
@@ -553,6 +557,9 @@ edit or delete them. See the
 - `4d6kh3` — Roll four d6s and keep the highest three (great for ability score generation!)
 - `1d20+5` — Roll a d20 and add 5
 - `2d6-1` — Roll 2d6 and subtract 1
+- `4d6dl1`: Roll four d6s and drop the lowest one
+
+One roll can hold up to 100 dice in all (the [Player Guide](PLAYER_GUIDE.md#the-dice-roller) lists the other limits).
 
 Dice results go to the **Dice** panel, where everyone can see them. It keeps a
 running list of the latest 50 rolls, oldest at the top and newest at the
@@ -564,7 +571,8 @@ survives a refresh.
 never see it. Your DM does — deliberately, so they can settle an argument about
 what was really rolled — and the checkbox says so. Your own secret rolls stay in
 your list marked **🔒 Secret**, so you can look back at them; the **Secret**
-button at the top of the panel hides them from your own view if you would rather
+button at the top of the panel, which appears once the list holds a secret roll,
+hides them from your own view if you would rather
 keep the list to open rolls, which changes nothing for anyone else.
 
 ### Your Own Notes
@@ -591,6 +599,19 @@ about it when they ended it. It is the thing to read before the next game.
 
 Everyone in the campaign sees the same list. A session the DM wrote nothing for
 still appears, marked as having no notes.
+
+### Moving Around the Map
+
+The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. Nothing you do there changes anyone else's view.
+
+| Control | What it does |
+|---|---|
+| **Zoom Out**, **Zoom In** | Change the zoom, from 10% to 300%. The current zoom is shown between them, and the mouse wheel zooms too, towards the pointer |
+| **Fit to Screen** | Shows the whole map in the space available |
+| **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
+| **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
+
+To move the view, drag an empty part of the map.
 
 ### Moving Your Token
 
@@ -765,6 +786,10 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 ---
 
 ## Troubleshooting & FAQ
+
+### CozyVTT does not open on an old phone, tablet or computer
+
+CozyVTT needs a browser from 2023 or later: Chrome or Edge 111, Firefox 114 or Safari 16.4 (iPadOS 16.4 on an iPad), or a newer version. An older browser does not load the app. Update the browser, or the device's system software if that is what holds the browser back. An iPad that cannot update past iPadOS 15 needs another device. A phone or computer that installs its browser updates is not affected.
 
 ### I can't connect to my campaign
 

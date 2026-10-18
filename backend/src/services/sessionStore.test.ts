@@ -1,9 +1,9 @@
 /**
  * Ending a user's login sessions, and the one case that keeps one.
  *
- * These rows belong to connect-pg-simple, not to Prisma. The production app
- * creates the table at startup, and the test run's global setup does the
- * same (helpers/loginSessionTable.ts), so the real SQL runs here. Other
+ * These rows belong to connect-pg-simple, not to the Prisma client. The
+ * table is in schema.prisma, so a test database laid out by `prisma db push`
+ * has it, and the real SQL runs here. Other
  * suites read the table at the same time, so this one touches only its own
  * rows.
  *

@@ -23,7 +23,7 @@ const ARGON2_OPTIONS = {
   memoryCost: 65536, // 64 MB
   timeCost: 3,
   parallelism: 4,
-};
+} as const;
 
 /**
  * A registration refused for what was sent: an invalid address, a weak

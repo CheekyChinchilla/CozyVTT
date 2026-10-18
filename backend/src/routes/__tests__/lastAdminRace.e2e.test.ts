@@ -21,8 +21,8 @@
 import request from 'supertest';
 import type express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
-import { loginSessionTableSql } from '../../__tests__/helpers/loginSessionTable';
 
 jest.setTimeout(60000);
 
@@ -39,11 +39,7 @@ let hashPassword: (password: string) => Promise<string>;
 beforeAll(async () => {
   schema = createIsolatedSchema('last_admin_race_test');
   process.env.DATABASE_URL = schema.url;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
-  // connect-pg-simple's table, which ending an account's sign-ins writes to.
-  // The run's global setup makes it in the shared schema only.
-  await db.$executeRawUnsafe(loginSessionTableSql('last_admin_race_test'));
-
+  db = createPrismaClient(schema.url);
   // The app's client, which config/database.ts takes from here when it is set.
   (global as unknown as { prisma?: unknown }).prisma = db.$extends({
     query: {
@@ -56,8 +52,8 @@ beforeAll(async () => {
       },
     },
   });
-  ({ hashPassword } = await import('../../services/auth'));
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
+  ({ hashPassword } = require('../../services/auth') as typeof import('../../services/auth'));
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
   app = createTestApp();
 });
 

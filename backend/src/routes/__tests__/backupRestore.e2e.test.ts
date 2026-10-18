@@ -34,7 +34,7 @@ process.env.BACKUP_DIR = BACKUP_DIR;
 process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { PassThrough } from 'stream';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import request from 'supertest';
 import { PlatformRole } from '@prisma/client';
@@ -52,6 +52,13 @@ import {
 } from '../../websocket/initiativeState';
 import logger from '../../utils/logger';
 import * as setupGate from '../../middleware/setup';
+
+/**
+ * The migration run: the project's own Prisma, from the folder the backend
+ * runs in. npx would want to write in the home folder, which the container's
+ * read-only filesystem does not allow.
+ */
+const MIGRATE = 'node_modules/.bin/prisma';
 
 const app = createTestApp();
 const execFileMock = execFile as unknown as jest.Mock;
@@ -157,7 +164,7 @@ const SAFETY_DUMP = '-- the database as it was before the restore\n';
 
 /** A backup archive holding the given files. */
 async function backupZip(entries: Record<string, string>): Promise<Buffer> {
-  const archive = archiver('zip');
+  const archive = new ZipArchive();
   const chunks: Buffer[] = [];
   archive.on('data', (chunk: Buffer) => chunks.push(chunk));
   const ended = new Promise<void>((resolve, reject) => {
@@ -254,7 +261,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(res.status).toBe(200);
     expect(res.body.message).toMatch(/log in again/);
 
-    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
     const [, psql, migrate] = calls;
     expect(psql.args).toEqual(expect.arrayContaining(['--single-transaction', 'ON_ERROR_STOP=1']));
     expect(path.basename(psql.args[psql.args.indexOf('--file') + 1])).not.toBe('database.sql');
@@ -263,7 +270,7 @@ describe('POST /api/admin/backups/restore', () => {
     expect(psql.sqlLoaded).toContain('CREATE TABLE public."Note"');
     expect(psql.sqlLoaded).not.toContain('OWNER TO');
     expect(psql.sqlLoaded).toContain('a1\tSET transaction_timeout = 0;\n');
-    expect(migrate.args).toEqual(['prisma', 'migrate', 'deploy']);
+    expect(migrate.args).toEqual(['migrate', 'deploy']);
   });
 
   it('writes a backup of the database as it is before loading anything, and names it', async () => {
@@ -487,7 +494,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.body.error).toBe('Restore Incomplete');
       expect(res.body.message).toMatch(/files/);
       // The database side still finishes, migrations included, so what was restored is usable.
-      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
     } finally {
       await fs.rm(path.join(UPLOAD_DIR, marker), { force: true });
     }
@@ -533,14 +540,14 @@ describe('POST /api/admin/backups/restore', () => {
   });
 
   it('says the database was restored but not migrated when the migration run fails', async () => {
-    const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
+    const calls = stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
 
     const res = await restore(admin, zip);
 
     expect(res.status).toBe(500);
     expect(res.body.message).toMatch(/restart/i);
-    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+    expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
   });
 
   it('ends every live connection when the database is replaced', async () => {
@@ -559,7 +566,7 @@ describe('POST /api/admin/backups/restore', () => {
       const res = await restore(admin, zip);
 
       expect(res.status).toBe(200);
-      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
       expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
     } finally {
@@ -579,7 +586,7 @@ describe('POST /api/admin/backups/restore', () => {
       const client = await ws.connectClient(cookie);
       const told = waitForEvent<{ reason: string; message: string }>(client, 'campaign.access.revoked');
       const dropped = new Promise<string>((resolve) => client.on('disconnect', (reason: string) => resolve(reason)));
-      const calls = stubTools({ cmd: 'npx', stderr: 'Error: P1001' });
+      const calls = stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
       const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
 
       const res = await restore(admin, zip);
@@ -587,7 +594,7 @@ describe('POST /api/admin/backups/restore', () => {
       expect(res.status).toBe(500);
       expect(res.body.error).toBe('Restore Incomplete');
       expect(res.body.message).toMatch(/restart/i);
-      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', 'npx']);
+      expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
       expect(await told).toMatchObject({ reason: 'signed-out', message: 'The instance is being restored from a backup. Sign in again once it has finished.' });
       expect(await dropped).toBe('io server disconnect');
       expect(getCombatState(campaignId).active).toBe(false);
@@ -925,5 +932,48 @@ describe('POST /api/admin/backups', () => {
     expect((await fs.stat(madeFile)).size).toBe(marked);
     const names = (await admin.get('/api/admin/backups')).body.backups.map((b: { filename: string }) => b.filename);
     expect(names).toContain(res.body.safetyBackup);
+  });
+
+  // A restore puts back the uploaded files a backup holds, so the backup has
+  // to hold every one of them, under uploads/ beside the database. The
+  // backups folder older installs kept inside the uploads folder is left out.
+  it('holds the database and every uploaded file, and leaves out a backups folder among the uploads', async () => {
+    stubTools();
+    await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+    const uploads: Record<string, string> = {
+      'maps/global/cellar.png': 'a map',
+      'maps/global/thumb_cellar.png': 'its thumbnail',
+      'tokens/campaigns/c1/goblin.png': 'a token',
+      'documents/global/.notes.md': 'a name starting with a dot',
+      'backups/backup-2024-01-01T00-00-00.zip': 'a backup from an older install',
+      'backups/older/inside.txt': 'a file further down',
+    };
+    for (const [name, body] of Object.entries(uploads)) {
+      await fs.mkdir(path.dirname(path.join(UPLOAD_DIR, name)), { recursive: true });
+      await fs.writeFile(path.join(UPLOAD_DIR, name), body);
+    }
+    let made: string | undefined;
+    try {
+      const res = await admin.post('/api/admin/backups');
+      expect(res.status).toBe(201);
+      made = path.join(BACKUP_DIR, res.body.filename);
+
+      const zip = await unzipper.Open.file(made);
+      const held: Record<string, string> = {};
+      for (const entry of zip.files) {
+        if (entry.type === 'File') held[entry.path] = (await entry.buffer()).toString('utf8');
+      }
+      expect(held).toEqual({
+        'database.sql': SAFETY_DUMP,
+        'uploads/maps/global/cellar.png': 'a map',
+        'uploads/maps/global/thumb_cellar.png': 'its thumbnail',
+        'uploads/tokens/campaigns/c1/goblin.png': 'a token',
+        'uploads/documents/global/.notes.md': 'a name starting with a dot',
+      });
+    } finally {
+      if (made) await fs.rm(made, { force: true });
+      await fs.rm(UPLOAD_DIR, { recursive: true, force: true });
+      await fs.mkdir(UPLOAD_DIR, { recursive: true });
+    }
   });
 });

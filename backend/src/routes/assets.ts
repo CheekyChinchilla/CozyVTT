@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import type { NextFunction } from 'express';
 import type { Prisma } from '@prisma/client';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
@@ -16,6 +16,7 @@ import {
   ensureDirectory,
   generateUniqueFilename,
   writeFileAtomically,
+  SERVER_BUILT_PATH,
 } from '../utils/fileUtils';
 import {
   CreateDocumentSchema,
@@ -41,6 +42,7 @@ import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/clie
 import {
   parseUploadMetadata,
   shortenFileName,
+  downloadNameOf,
   MAX_ASSET_NAME_LENGTH,
   MAX_ORIGINAL_NAME_LENGTH,
 } from '../validators/assets';
@@ -65,7 +67,7 @@ export const uploadLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => {
     const session = (req as AuthenticatedRequest).session;
-    return session?.userId ?? req.ip ?? 'anonymous';
+    return session?.userId ?? (req.ip ? ipKeyGenerator(req.ip) : 'anonymous');
   },
   message: {
     error: 'Too Many Requests',
@@ -175,6 +177,9 @@ function handleAssetCaching(
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
+    // TODO(assets): a parameter sent twice (`?search=a&search=b`) arrives as an
+    // array, and the casts below hand it to Prisma, which throws, so the list
+    // answers 500. Refuse a repeated parameter with 400, as invitable-users does.
     const { campaignId, page, limit, search, uploadedBy, usable } = req.query;
 
     const typeFilter = readEnumQuery(req.query.type, 'type', Object.values(AssetTypes));
@@ -462,6 +467,10 @@ router.post(
       // What the bytes are (validateFileType), never what the browser said:
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
+      // TODO(upload): multer reads the file name's UTF-8 bytes as latin1, so a
+      // name with non-ASCII characters is stored garbled and shown so in the
+      // library (downloads read it back through downloadNameOf); decode it as
+      // UTF-8 before storing, and the names already stored with it.
       const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)
@@ -746,7 +755,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     }
 
     // Send file with original name
-    return res.download(downloadPath, asset.originalName);
+    return res.download(downloadPath, downloadNameOf(asset.originalName), SERVER_BUILT_PATH);
   } catch (error) {
     logger.error('Error downloading asset', { err: error });
     return res.status(500).json({
@@ -961,6 +970,7 @@ function sendImageAsset(res: Response, filePath: string): void {
   const ext = path.extname(filePath).toLowerCase();
   const contentType = IMAGE_CONTENT_TYPES[ext] ?? 'application/octet-stream';
   res.sendFile(filePath, {
+    ...SERVER_BUILT_PATH,
     headers: {
       'Content-Type': contentType,
       'X-Content-Type-Options': 'nosniff',
@@ -1037,12 +1047,16 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       const etag = `"${asset.id}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
       res.set('Cache-Control', 'private, no-cache');
       res.set('ETag', etag);
+      // TODO(assets): this 304 goes out before the document's sandbox CSP is set,
+      // so it carries the app-wide policy and the browser keeps that one; set the
+      // document's headers first.
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
     }
 
     return res.sendFile(documentPath, {
+      ...SERVER_BUILT_PATH,
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': 'inline',

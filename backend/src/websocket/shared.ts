@@ -146,7 +146,7 @@ export const mapEditLimiter = new RateLimiter();   // Max 40 wall/light edits/se
 export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per user
 // Explored-memory reveals arrive as a player's vision moves; a client sends
 // at most a few a second. Over-limit reveals are dropped silently.
-export const explorationRevealLimiter = new RateLimiter(); // Max 10 reveals/second per user
+export const explorationRevealLimiter = new RateLimiter(); // Max REVEALS_PER_SECOND (40) reveals/second per user
 
 /**
  * The key a per-socket flood ceiling is counted under: the user, so that

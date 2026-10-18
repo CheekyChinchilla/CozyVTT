@@ -23,9 +23,31 @@ function app(): express.Express {
   a.get('/boom', () => {
     throw new Error('kaboom');
   });
+  a.get('/thrown-words', () => {
+    throw 'plain words';
+  });
+  a.get('/rejected-words', async () => {
+    await Promise.resolve();
+    throw 'plain words';
+  });
+  a.get('/rejected-mid-answer', async (_req, res) => {
+    res.status(200).write('partial');
+    await Promise.resolve();
+    throw new Error('late failure');
+  });
   a.use(errorHandler);
+  // What the handler passes on, and Express's own handler after it.
+  a.use((err: unknown, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    passedOn.push(err);
+    next(err);
+  });
   return a;
 }
+
+const passedOn: unknown[] = [];
+beforeEach(() => {
+  passedOn.length = 0;
+});
 
 describe('a request body that is not valid JSON', () => {
   it('is answered 400 and none of it reaches the log', async () => {
@@ -84,5 +106,38 @@ describe('any other error', () => {
     const logged = entries.find((e) => e.level === 'error');
     expect(String(logged?.message)).toContain('kaboom');
     expect(String(logged?.stack ?? objectField(logged ?? {}, 'err').stack)).toContain('Error: kaboom');
+  });
+});
+
+describe('an error that is not an Error object', () => {
+  it.each([
+    ['thrown', '/thrown-words'],
+    ['rejected from an async handler', '/rejected-words'],
+  ])('is answered with the JSON 500 when %s', async (_how, path) => {
+    const logs = captureLogs();
+    const res = await request(app()).get(path);
+    const entries = await logs.stop();
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'Internal Server Error', message: 'An unexpected error occurred' });
+    expect(String(entries.find((e) => e.level === 'error')?.message)).toContain('plain words');
+    expect(passedOn).toEqual([]);
+  });
+});
+
+describe('an error after the answer has started', () => {
+  it('is logged and left to Express, which ends the connection', async () => {
+    const logs = captureLogs();
+    const outcome = await request(app())
+      .get('/rejected-mid-answer')
+      .then((res) => `answered ${res.status}`, (err: unknown) => `connection ended: ${err instanceof Error ? err.message : String(err)}`);
+    const entries = await logs.stop();
+
+    // Express's own handler can only cut the answer off; the handler here
+    // must not try to start a new one.
+    expect(outcome).not.toBe('answered 500');
+    // The route's own error, not one from writing a second answer.
+    expect(passedOn).toEqual([expect.objectContaining({ message: 'late failure' })]);
+    expect(String(entries.find((e) => e.level === 'error')?.message)).toContain('late failure');
   });
 });

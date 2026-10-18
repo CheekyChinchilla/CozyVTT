@@ -13,7 +13,7 @@ import {
   useRef,
   ReactNode,
 } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router';
 import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -257,6 +257,11 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, [navigate]);
 
   // Refresh campaign data
+  // TODO(play): this reloads the campaign through loadCampaign, which sets
+  // `loading`, so CampaignPage swaps the live table for its spinner and back:
+  // one Campaign Settings save refetches every token picture (44 requests on
+  // a seeded map) and reopens the settings on General. Refresh the campaign
+  // row without the page's loading state.
   const refreshCampaign = useCallback(async () => {
     if (campaign?.id) {
       await loadCampaign(campaign.id);

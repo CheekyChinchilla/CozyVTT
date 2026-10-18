@@ -12,7 +12,7 @@
  */
 
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, BookOpen, ExternalLink, FilePlus, FileText, Loader2, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui';

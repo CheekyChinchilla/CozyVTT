@@ -8,39 +8,45 @@ import { loadCampaignMembership, requireDM, requireDMOrPlayer, requireCampaignMe
  */
 
 /**
+ * A guard whose route parameters are plain strings, as AuthenticatedRequest
+ * types them, so a guard chain fits a route whose handler takes one.
+ */
+type RouteGuard = RequestHandler<Record<string, string>>;
+
+/**
  * Standard authenticated route
  * Requires user to be logged in
  */
-export const authenticated: RequestHandler[] = [requireAuth];
+export const authenticated: RouteGuard[] = [requireAuth];
 
 /**
  * Admin-only route
  * Requires user to be logged in AND be an admin
  */
-export const adminOnly: RequestHandler[] = [requireAuth, requireAdmin];
+export const adminOnly: RouteGuard[] = [requireAuth, requireAdmin];
 
 /**
  * Campaign member route
  * Requires user to be logged in AND be a member of the campaign
  * Loads campaign membership into request
  */
-export const campaignMember: RequestHandler[] = [requireAuth, loadCampaignMembership, requireCampaignMember];
+export const campaignMember: RouteGuard[] = [requireAuth, loadCampaignMembership, requireCampaignMember];
 
 /**
  * Campaign DM route
  * Requires user to be logged in AND be the DM of the campaign
  */
-export const campaignDM: RequestHandler[] = [requireAuth, loadCampaignMembership, requireDM];
+export const campaignDM: RouteGuard[] = [requireAuth, loadCampaignMembership, requireDM];
 
 /**
  * Campaign DM or Player route
  * Requires user to be logged in AND be DM or Player (excludes Spectators)
  */
-export const campaignDMOrPlayer: RequestHandler[] = [requireAuth, loadCampaignMembership, requireDMOrPlayer];
+export const campaignDMOrPlayer: RouteGuard[] = [requireAuth, loadCampaignMembership, requireDMOrPlayer];
 
 /**
  * Helper to compose multiple middleware arrays
  */
-export function compose(...middlewares: RequestHandler[][]): RequestHandler[] {
+export function compose(...middlewares: RouteGuard[][]): RouteGuard[] {
   return middlewares.flat();
 }

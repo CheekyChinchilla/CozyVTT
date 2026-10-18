@@ -21,14 +21,37 @@ import { prisma } from '../config/database';
  */
 export const SERIALIZABLE_ATTEMPTS = 5;
 
-/** Whether PostgreSQL refused a transaction for overlapping another, so it may be run again. */
+/** PostgreSQL's codes for a transaction refused for overlapping another: a serialization failure, a deadlock. */
+const CONFLICT_CODES = ['40001', '40P01'];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/**
+ * Whether an error from the pg driver adapter says PostgreSQL refused the
+ * transaction. The adapter names the refusal `TransactionWriteConflict` and
+ * keeps PostgreSQL's own code beside it.
+ */
+function isDriverConflict(error: unknown): boolean {
+  if (!isRecord(error) || error.name !== 'DriverAdapterError' || !isRecord(error.cause)) return false;
+  const { kind, originalCode } = error.cause;
+  return kind === 'TransactionWriteConflict' || (typeof originalCode === 'string' && CONFLICT_CODES.includes(originalCode));
+}
+
+/**
+ * Whether PostgreSQL refused a transaction for overlapping another, so it may
+ * be run again. The refusal arrives in one of three forms: P2034 from a
+ * query Prisma built; P2010 from a raw query, carrying the driver's error;
+ * and, when it comes at COMMIT, the driver's error itself.
+ */
 export function isSerializationFailure(error: unknown): boolean {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return false;
-  // P2034: "Transaction failed due to a write conflict or a deadlock".
-  if (error.code === 'P2034') return true;
-  // A raw query reports PostgreSQL's own code.
-  const meta = error.meta as { code?: unknown } | undefined;
-  return error.code === 'P2010' && (meta?.code === '40001' || meta?.code === '40P01');
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    // P2034: "Transaction failed due to a write conflict or a deadlock".
+    if (error.code === 'P2034') return true;
+    return error.code === 'P2010' && isRecord(error.meta) && isDriverConflict(error.meta.driverAdapterError);
+  }
+  return isDriverConflict(error);
 }
 
 export async function inSerializableTransaction<T>(work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {

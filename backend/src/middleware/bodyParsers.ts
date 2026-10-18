@@ -25,10 +25,22 @@ import express from 'express';
 export const MAX_REQUEST_BODY = '1mb';
 
 /**
+ * An empty object as the body of a request that sent no JSON.
+ *
+ * Express 4's parser left `{}` there; Express 5's leaves `undefined`. Many
+ * handlers take their fields straight off `req.body`, and would throw on a
+ * POST or PUT with no body where they answer 400 saying what is missing.
+ */
+export const emptyBodyWhenNone: express.RequestHandler = (req, _res, next) => {
+  if (req.body === undefined) req.body = {};
+  next();
+};
+
+/**
  * The body parsers, in the order they must be mounted. JSON only: the web
  * client sends nothing else, and a plain HTML form (urlencoded) is the one
  * body another site can post without asking first.
  */
 export function bodyParsers(): express.RequestHandler[] {
-  return [express.json({ limit: MAX_REQUEST_BODY })];
+  return [express.json({ limit: MAX_REQUEST_BODY }), emptyBodyWhenNone];
 }

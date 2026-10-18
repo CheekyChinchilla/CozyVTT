@@ -4,7 +4,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 CozyVTT incorporates third-party software components. The following notices
 are provided for informational purposes and to comply with license requirements.
 
-Last brought in line with the lockfiles: 2026-10-11
+Last brought in line with the lockfiles: 2026-10-17
 
 
 ================================================================================
@@ -151,27 +151,31 @@ axios 1.x
   License: MIT
   https://github.com/axios/axios
 
-framer-motion 10.x
+framer-motion 14.x
   Copyright (c) Framer B.V.
   License: MIT
-  https://github.com/framer/motion
+  https://github.com/motiondivision/motion
+  Note: It brings motion-dom and motion-utils from the same project, also
+  under the MIT License, Copyright (c) Motion B.V.
 
-lucide-react 0.316.x
-  Copyright (c) Lucide Contributors
+lucide-react 1.x
+  Copyright (c) Lucide Icons and Contributors
   License: ISC
   https://github.com/lucide-icons/lucide
+  Note: The icons Lucide derives from Feather are under the MIT License,
+  Copyright (c) 2013-present Cole Bemis (https://github.com/feathericons/feather).
 
-react 18.x
+react 19.x
   Copyright (c) Meta Platforms, Inc. and affiliates
   License: MIT
   https://github.com/facebook/react
 
-react-dom 18.x
+react-dom 19.x
   Copyright (c) Meta Platforms, Inc. and affiliates
   License: MIT
   https://github.com/facebook/react
 
-react-markdown 9.x
+react-markdown 10.x
   Copyright (c) Espen Hovlandsdal
   License: MIT
   https://github.com/remarkjs/react-markdown
@@ -181,10 +185,16 @@ react-resizable-panels 4.x
   License: MIT
   https://github.com/bvaughn/react-resizable-panels
 
-react-router-dom 6.x
-  Copyright (c) Remix Software Inc.
+react-router 8.x
+  Copyright (c) React Training LLC 2015-2019, Remix Software Inc. 2020-2021,
+  Shopify Inc. 2022-2023
   License: MIT
   https://github.com/remix-run/react-router
+  Note: It brings @remix-run/route-pattern, Copyright (c) 2025 Shopify Inc.,
+  and cookie-es, Copyright (c) Pooya Parsa, both under the MIT License.
+  cookie-es parses cookies as the cookie package does (Copyright (c)
+  2012-2014 Roman Shtylman, 2015 Douglas Christopher Wilson) and Set-Cookie
+  headers as set-cookie-parser does (Copyright (c) 2015 Nathan Friedly).
 
 remark-breaks 4.x
   Copyright (c) 2017 Titus Wormer
@@ -230,12 +240,17 @@ The packages the backend lists as its dependencies, which its image installs.
 Each is given by its major version line; the exact versions are in
 backend/package-lock.json.
 
-@prisma/client 5.x
+@prisma/adapter-pg 7.x
   Copyright (c) Prisma
   License: Apache-2.0
   https://github.com/prisma/prisma
 
-archiver 7.x
+@prisma/client 7.x
+  Copyright (c) Prisma
+  License: Apache-2.0
+  https://github.com/prisma/prisma
+
+archiver 8.x
   Copyright (c) Chris Talkington
   License: MIT
   https://github.com/archiverjs/node-archiver
@@ -245,7 +260,7 @@ argon2 0.44.x
   License: MIT
   https://github.com/ranisalt/node-argon2
 
-connect-pg-simple 9.x
+connect-pg-simple 10.x
   Copyright (c) Pelle Wessman
   License: MIT
   https://github.com/voxpelli/node-connect-pg-simple
@@ -255,17 +270,17 @@ cors 2.x
   License: MIT
   https://github.com/expressjs/cors
 
-dotenv 16.x
+dotenv 18.x
   Copyright (c) Scott Motte
   License: BSD-2-Clause
   https://github.com/motdotla/dotenv
 
-express 4.x
+express 5.x
   Copyright (c) TJ Holowaychuk & Contributors
   License: MIT
   https://github.com/expressjs/express
 
-express-rate-limit 7.x
+express-rate-limit 8.x
   Copyright (c) Nathan Friedly & Contributors
   License: MIT
   https://github.com/express-rate-limit/express-rate-limit
@@ -275,17 +290,17 @@ express-session 1.x
   License: MIT
   https://github.com/expressjs/session
 
-file-type 21.x
+file-type 22.x
   Copyright (c) Sindre Sorhus
   License: MIT
   https://github.com/sindresorhus/file-type
 
-helmet 7.x
-  Copyright (c) Adam Baldwin & Contributors
+helmet 8.x
+  Copyright (c) Evan Hahn, Adam Baldwin
   License: MIT
   https://github.com/helmetjs/helmet
 
-mathjs 12.x
+mathjs 15.x
   Copyright (c) Jos de Jong
   License: Apache-2.0
   https://github.com/josdejong/mathjs
@@ -311,7 +326,7 @@ pg 8.x
   License: MIT
   https://github.com/brianc/node-postgres
 
-prisma 5.x
+prisma 7.x
   Copyright (c) Prisma
   License: Apache-2.0
   https://github.com/prisma/prisma
@@ -358,14 +373,32 @@ listed above or not, is under one of these licences, as the lockfiles record
 them:
 
   Frontend: 0BSD, ISC, MIT
-  Backend:  0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause, ISC,
-            LGPL-3.0-or-later, MIT, MIT-0
+  Backend:  0BSD, Apache-2.0, BlueOak-1.0.0, BSD-2-Clause, BSD-3-Clause,
+            EPL-2.0, ISC, LGPL-3.0-or-later, MIT, MIT-0, Unlicense
 
 LGPL-3.0-or-later is the licence of libvips, the image library inside the
 prebuilt binaries sharp loads at run time; it places no requirement on
 CozyVTT's own code. CozyVTT publishes no images: each install downloads those
 binaries from npm when it builds. The libvips source is at
-https://github.com/libvips/libvips. No package is under the GPL or the AGPL.
+https://github.com/libvips/libvips.
+
+EPL-2.0 and Unlicense come with the Prisma command-line tool, which the
+backend image keeps because it applies database migrations every time the
+backend starts. EPL-2.0 is the licence of elkjs, a diagram layout library
+inside Prisma Studio, a database browser the tool includes and an instance
+never starts; its source is at https://github.com/kieler/elkjs. Unlicense, a
+public-domain dedication, is the licence of postgres, a database driver the
+tool includes, and robust-predicates, a geometry library under Prisma Studio.
+All are installed from npm unmodified. No package is under the GPL or the AGPL.
+
+Four Apache-2.0 packages come with a NOTICE file. The one in mathjs is the
+copyright line for Jos de Jong given above. archiver brings bare-path, through
+tar-stream and bare-fs; its notice names Holepunch Inc (Copyright 2023). The
+Prisma command-line tool brings @prisma/studio-core, whose notice says Prisma
+Studio may be used in production under the Apache License 2.0 as long as
+Prisma's branding is left in place, and @prisma/streams-local, whose notice
+says its xxhash files are copied from hash-wasm (MIT, Copyright (c) 2020 Dani
+Biró). CozyVTT changes none of them, and each notice stays with its package.
 
 CozyVTT itself is licensed under AGPL-3.0-only (see LICENSE).
 

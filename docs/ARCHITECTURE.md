@@ -20,7 +20,7 @@ This document describes the system architecture, data models, and key design dec
 
 ## High-Level Overview
 
-CozyVTT is a monorepo containing a Node.js/Express API backend and a React SPA frontend. The backend serves the REST API, the Socket.io live connection and the uploaded files; it does not serve the built frontend. In production the Docker stack (`docker-compose.yml`) runs four containers on one internal network: `nginx` is the only one with published ports, it sends `/api/` and `/socket.io/` to `backend` and everything else to `frontend`, which serves the built SPA, and `database` is PostgreSQL, reachable from the backend alone. Without Docker, a host nginx does the public `nginx` container's job and serves `frontend/dist` itself (the deployment guide's manual install). In development, a Vite dev server runs separately and proxies API/WebSocket traffic to the backend.
+CozyVTT is a monorepo containing a Node.js/Express API backend and a React SPA frontend. The backend serves the REST API, the Socket.io live connection and the uploaded files; it does not serve the built frontend. In production the Docker stack (`docker-compose.yml`) runs four containers on one internal network: `nginx` is the only one with published ports, it sends `/api/`, `/socket.io/` and `/health` to `backend` and everything else to `frontend`, which serves the built SPA, and `database` is PostgreSQL, which publishes no port and which only the backend connects to. Without Docker, a host nginx does the public `nginx` container's job and serves `frontend/dist` itself (the deployment guide's manual install). In development, a Vite dev server runs separately and proxies API/WebSocket traffic to the backend.
 
 ```mermaid
 graph TB
@@ -30,7 +30,7 @@ graph TB
         Nginx["nginx :80 / :443\nthe only published ports"]
         Frontend["frontend\nnginx serving frontend/dist"]
         Backend["backend\nExpress + Socket.io :4000"]
-        Nginx -- "/api/ and /socket.io/" --> Backend
+        Nginx -- "/api/, /socket.io/ and /health" --> Backend
         Nginx -- "everything else" --> Frontend
     end
 
@@ -38,7 +38,7 @@ graph TB
         ViteDev["Vite Dev Server :3000"]
         BackendDev["Express Server :4000"]
         ViteDev -- proxies /api/* --> BackendDev
-        ViteDev -- proxies ws/* --> BackendDev
+        ViteDev -- "proxies /socket.io (WebSocket)" --> BackendDev
     end
 
     subgraph Data["Data Layer"]
@@ -47,13 +47,13 @@ graph TB
     end
 
     Browser -- "HTTP / WS" --> Nginx
-    Backend -- "Prisma ORM" --> Postgres
+    Backend -- "Prisma ORM, through pg" --> Postgres
     Backend -- "read/write" --> Uploads
 ```
 
 ### The bundled nginx
 
-The Docker production stack (`docker-compose.yml`) puts two nginx servers in front of the backend. The `nginx` service is the public entry: it sends `/api/` and `/socket.io/` to the backend and everything else to the `frontend` container, whose own nginx serves the built SPA with the page's security headers (`frontend/nginx.conf`, `frontend/security-headers.conf`). The public one is made from the files in `nginx/`:
+The Docker production stack (`docker-compose.yml`) puts two nginx servers in front of the backend. The `nginx` service is the public entry: it sends `/api/`, `/socket.io/` and `/health` to the backend and everything else to the `frontend` container, whose own nginx serves the built SPA with the page's security headers (`frontend/nginx.conf`, `frontend/security-headers.conf`). The public one is made from the files in `nginx/`:
 
 | File | What it does |
 |---|---|
@@ -65,6 +65,19 @@ The Docker production stack (`docker-compose.yml`) puts two nginx servers in fro
 
 The first three are mounted one file each, and a single-file mount keeps the file it found when the container was made, so `NGINX_CONF_STAMP` on the service has to change with any of them; `backend/src/__tests__/keepInStep.test.ts` holds it to their hash.
 
+### The containers
+
+Every service in `docker-compose.yml` runs with `no-new-privileges`, drops every Linux capability (`cap_drop: ALL`) and gets back only those its start needs as root (`cap_add`):
+
+| Service | `cap_add` | What uses them | Filesystem |
+|---|---|---|---|
+| `database` | `CHOWN`, `DAC_READ_SEARCH`, `SETUID`, `SETGID` | The image's start script, which gives the data folder to the postgres user, looks inside it and switches to that user; PostgreSQL runs with none | Writable; the data is on the `postgres_data` volume |
+| `backend` | `CHOWN`, `DAC_READ_SEARCH`, `FOWNER`, `SETUID`, `SETGID` | `scripts/start.sh`, which gives the `uploads`, `logs` and `backups` folders to `appuser`, makes `backups` its alone (mode 700) and switches to `appuser` through `su-exec`; the backend runs with none | Read-only; it writes only to those three bind-mounted folders and to `/tmp`, the `backend_tmp` volume |
+| `frontend` | `CHOWN`, `SETUID`, `SETGID`, `NET_BIND_SERVICE` | nginx's master process, which gives its scratch folders to the nginx user, listens on port 80 and starts its workers as that user | Read-only; `/run`, `/var/cache/nginx` and `/tmp` are held in memory (`tmpfs`) |
+| `nginx` | As `frontend`, and `DAC_READ_SEARCH` | The same, on ports 80 and 443, and reading a file only its owner may read, such as a TLS key in `nginx/certs` | Read-only; `/run`, `/tmp` and `/etc/nginx/conf.d` (where the entrypoint renders `nginx.conf`) in memory, and `/var/cache/nginx`, where bodies too large to hold in memory wait, on the `nginx_temp` volume |
+
+The two volumes keep large scratch files out of memory, where they would count against the container's memory limit (512 MB for the backend, 64 MB for nginx). Root in the backend container cannot write `appuser`'s files without first taking them over, so a command run there runs as `appuser` (`docker compose exec -u appuser backend ...`). Once `start.sh` runs as `appuser`, it removes any folder a stopped backup or restore left in `/tmp` (see File Storage), waits for the database, and applies the migrations with `./node_modules/.bin/prisma migrate deploy`, the project's own Prisma, since `npx` writes to the home folder, which is read-only. Then it starts `node dist/server.js`.
+
 ---
 
 ## Backend Architecture
@@ -73,14 +86,18 @@ The first three are mounted one file each, and a single-file mount keeps the fil
 
 ```
 src/
-├── server.ts          Entry point: builds the app, attaches Socket.io, starts listening
+├── server.ts          Entry point: reads the .env in its working directory (backend/.env in
+│                      development) first, through config/loadEnvFile.ts, then builds the
+│                      app, attaches Socket.io, starts listening
 ├── app.ts             createApp: every middleware, gate, router and error handler, in
 │                      order; the integration tests build their app with it too
-├── config/            Configuration loading (env vars, validation)
+├── config/            Configuration loading (env vars, validation); prismaClient.ts makes every
+│                      Prisma client (see Database Schema), database.ts holds the app's shared one
 ├── middleware/
 │   ├── auth.ts        Session-cookie authentication: requireAuth, requireAdmin, requireRole
 │   ├── rbac.ts        Campaign roles: loadCampaignMembership, requireDM, requireDMOrPlayer
-│   │                  and requireCampaignMember, read from the database, never from the request
+│   │                  and requireCampaignMember, read from the database for the route's
+│   │                  :campaignId, never from the request body
 │   ├── compose.ts     The guards routes actually use, composed: authenticated, adminOnly,
 │   │                  campaignMember, campaignDM, campaignDMOrPlayer
 │   ├── setup.ts       The setup gate: everything but /api/setup and /health is refused
@@ -92,7 +109,9 @@ src/
 │   ├── restoreGate.ts     Refuses API requests while a backup restore replaces the database
 │   ├── bodyParsers.ts     JSON body parsing and its 1 MB limit (a form-encoded body is not read), shared with the test app
 │   ├── errorHandler.ts    The JSON error answer for anything a route did not catch
-│   ├── failureLimiter.ts  The sign-in limiter: counts only wrong answers, per address
+│   ├── failureLimiter.ts  The limiter on wrong passwords, codes and reset links: counts only
+│   │                      wrong answers, per address (an IPv6 address by its /56 network)
+│   │                      unless it is given another key, such as the account
 │   ├── authLimiters.ts    The per-account sign-in limit and the signed-in password-check limit
 │   ├── invitationEmailLimiter.ts  How many invitation emails a DM may have the instance send
 │   ├── leftNotesDownloadLimiter.ts  How often a user may download all the notes of a campaign they have left
@@ -120,7 +139,7 @@ src/
 │   ├── invitations.ts Campaign invitation lifecycle
 │   ├── setup.ts       First-run setup wizard; asks for the setup token (services/setupToken.ts)
 │   │                  and runs services/setup.ts, one transaction for the first admin and the settings
-│   ├── config.ts      Public client config (upload limits)
+│   ├── config.ts      Public client config (upload limits, whether the instance can send email)
 │   ├── admin.ts       Admin: stats, health, settings, accounts, activity log, SMTP test,
 │   │                  backups and restore
 │   └── adminStorage.ts Admin: files in the uploads folder that no asset names
@@ -179,17 +198,17 @@ Real-time gameplay logic lives in the per-domain `websocket/handlers/*` modules;
 1. `trust proxy` set to one hop (the bundled nginx), so the limiters read the visitor's address and the cookie is marked Secure over HTTPS
 2. helmet's headers, then CORS for `CORS_ORIGIN`
 3. `originCheck`: a change a browser sent from another site is refused
-4. `bodyParsers`: JSON up to 1 MB
+4. `bodyParsers`: JSON up to 1 MB, and an empty body for a request that sent none
 5. On `/api`, the restore gate (`restoreGate.ts`), ahead of the session lookup
 6. The session (`express-session` over the PostgreSQL store)
 7. The setup gate, which lets only `/health` and `/api/setup` through until setup has run
 8. `GET /health`, answered here, with no rate limit
-9. On `/api`, the general rate limiter (`RATE_LIMIT_MAX_REQUESTS` a minute per address, 300 by default)
+9. On `/api`, the general rate limiter (`RATE_LIMIT_MAX_REQUESTS` a minute per address, 300 by default; express-rate-limit counts an IPv6 address by its /56 network)
 10. On `/api`, the password-change gate, then the administrator MFA gate
 11. The routers: setup, config, auth, users, admin, campaigns (with macros and documents), characters, character templates, invitations, assets, and the maps, creatures and token templates nested under `/api/campaigns/:campaignId`
-12. A JSON 404 for anything no router answered, then `errorHandler`
+12. A JSON 404 for anything no router answered, then `errorHandler`: 413 for a body over the limit and 400 for one that is not valid JSON, and a JSON 500 for anything else a route throws or a promise it returns rejects with, Error or not; when the answer has already started, it logs the error and leaves Express to end the connection
 
-Inside a router, each route names its own guards (`middleware/compose.ts`) and any limiter of its own, then checks its body with Zod.
+Inside a router, each route names its own guards (`middleware/compose.ts`; the admin router mounts its two for every route) and any limiter of its own, then checks its body with Zod.
 
 ```mermaid
 sequenceDiagram
@@ -220,7 +239,8 @@ sequenceDiagram
 
 ```
 src/
-├── main.tsx           Entry point — BrowserRouter wrapper
+├── main.tsx           Entry point: renders App inside AppRouter
+├── AppRouter.tsx      The browser router, with React Router's transitions off
 ├── App.tsx            Route definitions, auth guards, lazy page loading
 ├── contexts/
 │   ├── AuthContext.tsx    User auth state, login/logout/register actions
@@ -239,7 +259,7 @@ src/
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
 │   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
 │   ├── character-sheets/  Game system sheet renderers
-│   ├── common/        Reusable primitives (Toast, ConfirmDialog, EmptyState, etc.)
+│   ├── common/        Reusable primitives (ToastContainer, ConfirmDialog, EmptyState, etc.)
 │   └── admin/         Parts of the Admin Panel (activity details, deletion blockers, the
 │                      leftover files panel); the tabs themselves are in pages/AdminPage.tsx
 ├── services/
@@ -251,14 +271,26 @@ src/
 │   ├── sessionKeepAlive.ts  Pings the session from the game table and from editors with unsaved changes
 │   └── auth.service.ts  Auth-specific API calls
 ├── hooks/
-│   └── queries/       React Query hooks wrapping the REST services (useCampaign, useCharacters, useAssets, …)
+│   └── queries/       React Query hooks wrapping the REST services (useCampaignsQuery, useCharactersQuery, useAssetsQuery, …)
 ├── types/             TypeScript type definitions mirroring backend types
 ├── utils/             Client-side helpers (validation, formatting)
 ├── assets/fonts/      The bundled typefaces: fonts.css, one @font-face per family and
 │                      character range (and weight, where a family has no variable
 │                      font), and their OFL.txt
-└── styles/            Global CSS, Tailwind directives, effect stylesheets
+├── index.css          Tailwind's directives, the theme variables and the shared classes
+└── styles/            The atmosphere and spirit-layer effect stylesheets, and the Markdown
+                       styles of notes and the document reader
 ```
+
+### Router and build
+
+`AppRouter.tsx` runs the app in React Router's `BrowserRouter` with `useTransitions={false}`. From React Router 7 on, each move between pages is wrapped in a React transition unless told otherwise, and code that changes state and then navigates, such as signing out and then opening the sign-in page, rendered once more at the old address with the new state. With transitions off the new page renders at once, and a page still loading shows the spinner.
+
+The production build (`npm run build`, which is `vite build`) bundles with Rolldown, Vite 8's bundler, configured under `build.rolldownOptions` in `vite.config.ts`:
+
+- `console.log`, `info`, `debug` and `trace` calls are declared pure (`treeshake.manualPureFunctions`), so the bundle leaves them out: they print chat messages, secret rolls and token details. `console.error` and `console.warn` stay. The dev server bundles nothing, so development keeps every log. A CI step fails the frontend job when a line only such a call prints is found in the bundle.
+- React with React Router, framer-motion, socket.io-client, lucide-react and react-markdown each go into a named vendor chunk (`codeSplitting.groups`), which a browser keeps cached while the app's own code changes.
+- No `build.target` is set, so the bundle is written for Vite's default, `baseline-widely-available`: Chrome and Edge 111, Firefox 114, and Safari 16.4 on macOS and iOS.
 
 ### State Management
 
@@ -334,7 +366,7 @@ graph LR
 
 ## Database Schema
 
-The full Prisma schema is at `backend/prisma/schema.prisma`. Below is an entity relationship diagram of every model, with the fields that matter here. A test checks it against the schema, so a model, field or relation that does not exist cannot stay in it. The login sessions are not a model: `connect-pg-simple` keeps them in a `session` table of its own (see Authentication below), and the `Session` below is a game session.
+The full Prisma schema is at `backend/prisma/schema.prisma`, and the Prisma command-line tools (`generate`, `migrate deploy`, `db push`) take their settings from `backend/prisma.config.ts`. `prisma generate` writes the client (the `prisma-client-js` generator) into `node_modules/.prisma`: `npm run build` runs it before compiling, and the production image copies what it wrote. Since Prisma 7 the client has no connection engine of its own: it runs its queries through the `pg` driver, the one the session store uses through a pool of its own, by way of `@prisma/adapter-pg`. `backend/src/config/prismaClient.ts` makes every client the backend, its scripts and its tests use, and reads a `DATABASE_URL` written for Prisma into pg's terms: `?schema=` names the schema queries are qualified with and becomes the connection's `search_path` (raw queries name their tables unqualified), `?connection_limit=` becomes the pool size (pg's default otherwise, ten), and a new connection may take five seconds. Below is an entity relationship diagram of every model, with the fields that matter here. A test checks it against the schema, so a model, field or relation that does not exist cannot stay in it. The login sessions are `LoginSession`, the `session` table that `connect-pg-simple`, and `services/sessionStore.ts` with raw queries, read and write themselves (see Authentication below). It is in the schema so the migrations make it and `prisma db push` keeps it, and `@@ignore` leaves it out of the Prisma client. The `Session` below is a game session.
 
 ```mermaid
 erDiagram
@@ -496,7 +528,7 @@ erDiagram
     CreatureTemplate {
         string id PK
         string name
-        string gameSystem
+        GameSystem gameSystem
         string source
         string challengeRating
         string creatureType
@@ -505,6 +537,7 @@ erDiagram
         string disposition
         string displayMode
         string imageUrl
+        string createdById FK
         string campaignId FK
     }
 
@@ -552,6 +585,12 @@ erDiagram
         datetime createdAt
     }
 
+    LoginSession {
+        string sid PK
+        json sess
+        datetime expire
+    }
+
     User ||--o{ Campaign : "owns"
     User ||--o{ CampaignMembership : "belongs to"
     Campaign ||--o{ CampaignMembership : "has"
@@ -577,6 +616,7 @@ erDiagram
     User ||--o{ Asset : "uploaded"
     Campaign ||--o{ Asset : "scoped to"
     Campaign ||--o{ CreatureTemplate : "scoped to"
+    User ||--o{ CreatureTemplate : "made"
     CreatureTemplate ||--o{ CreatureFavorite : "favorited as"
     User ||--o{ CreatureFavorite : "has favorites"
     Campaign ||--o{ CreatureFavorite : "scoped to"
@@ -606,18 +646,19 @@ erDiagram
 
 ### Session Authentication
 
-CozyVTT uses **express-session** with **connect-pg-simple** to store sessions in PostgreSQL. This means sessions survive server restarts and scale to multiple processes.
+CozyVTT uses **express-session** with **connect-pg-simple** to store sessions in PostgreSQL, through a `pg` pool of its own (`sessionPool` in `config/session.ts`), apart from the Prisma client's. This means sessions survive server restarts and scale to multiple processes.
 
 ```mermaid
 sequenceDiagram
     participant C as Client
     participant S as Server
-    participant DB as Session Store (PG)
+    participant DB as PostgreSQL
 
     C->>S: POST /api/auth/login {email, password}
-    S->>DB: Verify argon2id hash
+    S->>DB: Read the user (Prisma)
     DB-->>S: User record
-    S->>DB: Create session record
+    S->>S: Verify the argon2id hash
+    S->>DB: Create session record (session store)
     S-->>C: Set-Cookie: cozyvtt.sid (httpOnly, sameSite=lax, Secure over HTTPS)
 
     Note over C,S: Subsequent requests
@@ -632,10 +673,10 @@ A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember m
 
 ### Role-Based Authorization
 
-Authorization is enforced at two levels, both by middleware composed in `middleware/compose.ts` and named in the route declaration:
+Authorization is enforced at two levels, both by middleware named in the route declaration or mounted on its router:
 
-1. **Platform level** — `requireAdmin` (as `adminOnly`) on admin routes, which checks the role stored in the session
-2. **Campaign level** — `loadCampaignMembership` reads the caller's `CampaignMembership` for the `:campaignId` in the URL from the database, and `requireDM`, `requireDMOrPlayer` or `requireCampaignMember` then judge its role. The role comes from that row, never from the request
+1. **Platform level** — `requireAdmin`, after `requireAuth`, which checks the role stored in the session. The admin routers mount the pair ahead of every route they hold (`router.use` in `routes/admin.ts`, and on `/orphaned-files` in `routes/adminStorage.ts`); the admin routes of `routes/users.ts` name both, and `GET /api/campaigns/admin/all` uses `adminOnly`, the same pair from `middleware/compose.ts`
+2. **Campaign level** — the guards composed in `middleware/compose.ts` (`campaignMember`, `campaignDMOrPlayer`, `campaignDM`). `loadCampaignMembership` reads the caller's `CampaignMembership` from the database for the `:campaignId` in the route's path, directly or through a router mounted with `mergeParams`, and never for a campaign id in the body; `requireDM`, `requireDMOrPlayer` or `requireCampaignMember` then judge its role. The role comes from that row, never from the request
 
 ```typescript
 // Example: a DM-only route. campaignDM is [requireAuth, loadCampaignMembership, requireDM];
@@ -686,7 +727,7 @@ unless an editor holds unsaved changes.
 
 ### MFA (TOTP)
 
-MFA uses the `otplib` library for TOTP secrets, setup links and verification. A new secret is 20 random bytes written in base32; the secrets stored before 1.5.2, made by an earlier library as 20 printable characters in base32, are read the same way. A code must be exactly six digits, and anything else is refused before it is checked. One 30-second step either side of the current one is accepted, for clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
+MFA uses the `otplib` library for TOTP secrets, setup links and verification. A new secret is 20 random bytes written in base32; the secrets stored before 1.5.2, made by an earlier library as 20 printable characters in base32, are read the same way. A code must be exactly six digits, and anything else is refused before it is checked. One 30-second step either side of the current one is accepted, for clock drift. Every check goes through `utils/totp.ts`, which accepts each code once: it remembers the last 30-second step accepted for each account and refuses a code from that step or an earlier one, at sign-in, when MFA is turned on and when it is turned off. That record is kept in the backend process's memory, which is sound for the single production process; a restart forgets it, and more than one backend process would need it moved to the database. The sign-in code step is rate limited per address (an IPv6 address by its /56 network) and, separately, per account. Backup codes are hashed with Argon2id, like passwords, and shown to the user only once. A code that matches is removed with one conditional `UPDATE ... array_remove` that only succeeds while that hash is still stored, so two sign-ins racing on a code cannot both use it and cannot write back a list that brings another code back.
 
 ### Administrators must use MFA
 
@@ -716,10 +757,10 @@ sequenceDiagram
 
     Note over C,S: Session active
 
-    C->>S: emit('dice.roll', { expression, isSecret })
+    C->>S: emit('dice.roll', { expression, secret })
     S->>S: Parse + evaluate expression
     S-->>C: emit('dice.rolled', result) [to all in campaign]
-    Note right of S: or emit('dice.rolled.secret') [to DM only]
+    Note right of S: a secret roll goes as dice.rolled to the roller alone and as dice.rolled.secret to the DM's sockets
 
     C->>S: socket.disconnect()
     S->>S: socket.leave all rooms
@@ -746,7 +787,7 @@ visible again.
 Sockets join two rooms, keyed by raw id (no prefix):
 
 - `<campaignId>` — all connected members of a campaign
-- `<userId>` — per-user room for targeted broadcasts (e.g., secret dice results)
+- `<userId>` — per-user room: it counts a user's open sockets, carries `invitation.received`, and is how a role change, a removal from a campaign or an ended sign-in reaches every socket of that user (`websocket/utils.ts`)
 
 ### Spirit Layer Security
 
@@ -800,7 +841,14 @@ else refers to a file on disk.
 
 Instance backups (`backup-{timestamp}.zip`) are kept outside this tree, in
 `backend/backups/` or `BACKUP_DIR`, which may not point inside the uploads
-directory (`backend/src/utils/backupDir.ts`).
+directory (`backend/src/utils/backupDir.ts`). A backup is written as
+`<name>.partial` and renamed once complete; the backup list removes a partial
+file that no backup is writing. Its database dump waits in a folder of its own
+in the system's temporary directory (`cozyvtt-db-…`, made by `mkdtemp`, so only
+the backend's user can open it), and a restore unpacks the archive into another
+(`cozyvtt-restore-…`). Each is removed when its work ends. Under Docker that
+directory is `/tmp`, the `backend_tmp` volume, which outlives the container, so
+`scripts/start.sh` also removes any that a stopped backend left.
 
 A restore runs one at a time, and `services/restoreState.ts` knows whether
 one is running and whether it has started replacing the database. From then
@@ -810,15 +858,17 @@ every socket, `websocket/events.ts` refuses a new connection, and
 middleware, answers every request 503. A write waiting behind the load's locks
 would otherwise land on the restored rows. Its upload waits in the backups
 folder as `restore-temp-<uuid>.zip`; one a stopped backend left is removed at
-start.
+start, and when the backup list is read with no restore running.
 
 ### Upload Pipeline
 
-1. **Multer** receives the multipart upload and streams to a temp file
-2. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and the detected type is the MIME type the `Asset` row records.
-3. **Size limit check** — configurable per asset type via environment variables
-4. **Sharp** makes a thumbnail in the picture's own format (for maps and tokens), through `openPicture` (see [Decoding pictures](#decoding-pictures))
-5. File is moved to its final location; the `Asset` record is created in the database
+1. **Multer** writes the upload to `maps/global/` under a new UUID name, up to the largest per-type limit: the asset's type and scope are fields of the same multipart body, so they are not known yet
+2. **Request check**: the type, the scope, the caller's right to place the asset there (`canPlaceAssetAtScope`) and its name, description and tags; a refused upload's file is deleted
+3. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and the detected type is the MIME type the `Asset` row records.
+4. **Size limit check**: the asset type's own limit, configurable per asset type via environment variables
+5. The file is moved to the folder its type and scope call for (`relocateUpload` in `utils/fileUtils.ts`; a move that fails leaves it where it is)
+6. **Sharp** makes a thumbnail beside it in the picture's own format (for maps and tokens), through `openPicture` (see [Decoding pictures](#decoding-pictures))
+7. The `Asset` row is created in the database; if that fails, the file and its thumbnail are removed
 
 Editing a text or Markdown document never writes over the file. The new text
 goes to a temporary file in the same folder, which is flushed to disk and then
@@ -854,9 +904,10 @@ container. A Content-Security-Policy on a JSON response governs nothing, which
 is why the page had no protection until the second file existed.
 
 The page's policy is the wider of the two, since it also covers the page's
-stylesheets, fonts and the document reader's frame. Nothing it allows is on
-another site: the typefaces are part of the app (`frontend/src/assets/fonts`,
-one `@font-face` per family and character range, and per weight where a family
+stylesheets, fonts and the document reader's frame. Apart from live
+connections (`connect-src` names `ws:` and `wss:`, which match any host),
+nothing it allows is on another site: the typefaces are part of the app
+(`frontend/src/assets/fonts`, one `@font-face` per family and character range, and per weight where a family
 has no variable font, so a browser fetches only
 what the page uses), and the build inlines the smallest as `data:` addresses.
 It is strict where it counts, `script-src 'self'` with no
@@ -1048,11 +1099,11 @@ Each tool owns what it's good at. React Query handles server resources — cachi
 
 ### Why store tokens in `Map.tokens` JSON instead of a separate table?
 
-Token positions change at up to 60fps during movement. Normalizing into a separate table would require frequent individual row updates or complex batch upserts. Storing as JSON on the map row allows atomic updates (`UPDATE maps SET tokens = $1 WHERE id = $2`) with a single query per move event.
+Token positions change at up to 60fps during movement. The frames of a drag (`token.move`) are relayed to the table without being stored, and only the drop (`token.move.end`) is written, as one read and one write of `Map.tokens` inside `withMapsLocked` (see Key Schema Notes). Normalizing into a separate table would require frequent individual row updates or complex batch upserts. Stored as JSON on the map row, the whole token list is replaced in a single write.
 
 ### Why no client-side campaignId on WebSocket events?
 
-Early in development, the client passed `campaignId` in every WebSocket event payload. This was removed — the server now derives the campaign from the authenticated socket's room membership. This eliminates a class of campaign-spoofing attacks where a player could send events to a campaign they're not a member of.
+Early in development, the client passed `campaignId` in every WebSocket event payload. This was removed: the server now takes the campaign from the socket itself (`socket.campaignId`, set by `authenticate` once the membership is checked). This eliminates a class of campaign-spoofing attacks where a player could send events to a campaign they're not a member of.
 
 ### Why HTML Canvas instead of a SVG or DOM-based map renderer?
 

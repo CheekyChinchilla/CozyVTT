@@ -28,6 +28,7 @@ jest.mock('argon2', () => {
 });
 
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
 
 jest.setTimeout(60000);
@@ -41,7 +42,7 @@ let db: PrismaClient;
 beforeAll(() => {
   schema = createIsolatedSchema('first_admin_race_test');
   process.env.DATABASE_URL = schema.url;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
+  db = createPrismaClient(schema.url);
 });
 
 afterAll(async () => {
@@ -67,7 +68,7 @@ it('makes exactly one ADMIN when registrations race on an empty instance', async
       },
     },
   });
-  const { registerUser } = await import('../auth');
+  const { registerUser } = require('../auth') as typeof import('../auth');
   const results = await Promise.allSettled(
     emails.map((email) => registerUser({ email, password: 'RaceTest123!Cozy', displayName: 'Race' }))
   );

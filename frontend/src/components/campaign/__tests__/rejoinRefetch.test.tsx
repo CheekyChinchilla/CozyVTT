@@ -20,7 +20,7 @@ vi.mock('framer-motion', () => ({
   } }),
   AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
 }));
-vi.mock('react-router-dom', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
+vi.mock('react-router', () => ({ useParams: () => ({ id: 'campaign-1' }) }));
 vi.mock('@/contexts/CampaignContext', () => ({
   useCampaign: () => ({ userRole: 'PLAYER', campaign: { id: 'campaign-1', status: 'ACTIVE', memberships: [], characters: [] } }),
 }));

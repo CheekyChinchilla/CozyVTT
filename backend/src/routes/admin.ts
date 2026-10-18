@@ -12,7 +12,7 @@ import fs from 'fs/promises';
 import type { FileHandle } from 'fs/promises';
 import path from 'path';
 import multer from 'multer';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { Router, type RequestHandler } from 'express';
 import { Prisma } from '@prisma/client';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -32,7 +32,7 @@ import { writeAdminLog } from '../services/systemLog';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
-import { UPLOAD_LIMITS } from '../utils/fileUtils';
+import { SERVER_BUILT_PATH, UPLOAD_LIMITS } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
 import {
@@ -313,6 +313,10 @@ router.put('/settings', async (req, res) => {
     } satisfies Record<string, string | null | undefined>;
     for (const [field, value] of Object.entries(branding)) {
       if (value === undefined) continue;
+      // TODO(accounts): isSameOriginPath accepts a protocol-relative address
+      // such as //other.example/logo.png, which names another server; the
+      // page's img-src 'self' blocks it, so it shows broken. Accept only a path
+      // on this host: refuse a leading // and a backslash too.
       if (typeof value === 'string' && value !== '' && !isSameOriginPath(value)) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -982,7 +986,7 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
     await new Promise<void>((resolve, reject) => {
       streamed = true;
       const output = handle.createWriteStream();
-      const archive = archiver('zip', { zlib: { level: 6 } });
+      const archive = new ZipArchive({ zlib: { level: 6 } });
       // Both ends can fail: the archive while reading, the file while
       // writing (a full disk). A stream error with nobody listening is an
       // uncaught exception, which exits the process mid-backup. Creating the
@@ -994,6 +998,9 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.file(sqlPath, { name: 'database.sql' });
       if (withUploads) {
         // Under an "uploads/" prefix, skipping the backups subdir older installs had there
+        // TODO(backups): the folder's own entry is named "backups", with no
+        // slash, so the filter keeps it and every backup holds an empty
+        // uploads/backups/ folder. Leave out entry.name === 'backups' too.
         archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
           return entry.name.startsWith('backups/') ? false : entry;
         });
@@ -1121,7 +1128,7 @@ router.get('/backups/:filename/download', async (req, res) => {
     return res.status(404).json({ error: 'Not Found', message: 'Backup file not found' });
   }
 
-  return res.download(filepath, filename);
+  return res.download(filepath, filename, SERVER_BUILT_PATH);
 });
 
 // ============================================
@@ -1384,9 +1391,11 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
 
     // 8. Bring a backup from an older release up to this version's schema.
     // start.sh runs the same command on every boot, so a failure here is
-    // recovered by a restart, and the response says so.
+    // recovered by a restart, and the response says so. The project's own
+    // Prisma, called directly: npx writes to the home folder, which the
+    // container's read-only filesystem refuses.
     try {
-      await execFileAsync('npx', ['prisma', 'migrate', 'deploy']);
+      await execFileAsync('node_modules/.bin/prisma', ['migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
       // TODO(restore): this return skips step 9, so a restore whose migrations

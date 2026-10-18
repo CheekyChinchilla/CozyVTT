@@ -15,8 +15,8 @@
 import request from 'supertest';
 import type express from 'express';
 import { PrismaClient } from '@prisma/client';
+import { createPrismaClient } from '../../config/prismaClient';
 import { createIsolatedSchema, type IsolatedSchema } from '../../__tests__/helpers/isolatedSchema';
-import { loginSessionTableSql } from '../../__tests__/helpers/loginSessionTable';
 
 jest.setTimeout(60000);
 
@@ -39,11 +39,10 @@ beforeAll(async () => {
   // change at the same time in the shared schema, so this runs on its own.
   schema = createIsolatedSchema('admin_settings_log_test');
   process.env.DATABASE_URL = schema.url;
-  db = new PrismaClient({ datasources: { db: { url: schema.url } } });
-  await db.$executeRawUnsafe(loginSessionTableSql('admin_settings_log_test'));
+  db = createPrismaClient(schema.url);
 
-  const { hashPassword } = await import('../../services/auth');
-  const { createTestApp } = await import('../../__tests__/helpers/test-app');
+  const { hashPassword } = require('../../services/auth') as typeof import('../../services/auth');
+  const { createTestApp } = require('../../__tests__/helpers/test-app') as typeof import('../../__tests__/helpers/test-app');
   app = createTestApp();
   const user = await db.user.create({
     data: { email: 'settings-log@test.invalid', displayName: 'Settings Log Admin', passwordHash: await hashPassword(PASSWORD), platformRole: 'ADMIN' },
