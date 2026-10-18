@@ -23,7 +23,9 @@
 # Cloudflare Tunnel users: the simplest setup is to KEEP the bundled nginx —
 # CF Tunnel handles public-facing TLS and origin hiding, but not the routing
 # between the frontend SPA and the backend API/WebSocket. Point your
-# `cloudflared` ingress at http://localhost:80 and you're done. To run without
+# `cloudflared` ingress at http://localhost:80, and set NGINX_TRUSTED_PROXIES,
+# HTTP_PORT and HTTPS_PORT in .env as docs/DEPLOYMENT.md says, or every visitor
+# counts as the tunnel's one address. To run without
 # nginx you need path-based ingress rules (specific paths first, catch-all last).
 # See docs/DEPLOYMENT.md → "Using an External Reverse Proxy" for all three setups.
 
