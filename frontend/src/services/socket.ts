@@ -12,6 +12,7 @@ import type {
   DiceRolledEvent,
   DiceRolledSecretEvent,
   ChatMessageEvent,
+  ChatMessageAck,
   ChatMessageBroadcast,
   ChatSystemBroadcast,
   SessionStartEvent,
@@ -58,6 +59,9 @@ const { origin: SOCKET_ORIGIN, path: SOCKET_PATH } = socketTarget(
 );
 
 type EventCallback<T = unknown> = (data: T) => void;
+
+/** How long a chat message waits for the server's answer before it counts as not sent. */
+const CHAT_ANSWER_TIMEOUT_MS = 10_000;
 
 /**
  * A listener as the registry holds it, once its payload type has been erased.
@@ -532,8 +536,20 @@ class SocketClient {
   // Chat Events
   // ============================================
 
-  emitChatMessage(data: ChatMessageEvent) {
-    this.socket?.emit('chat.message', data);
+  /**
+   * Send a chat message and wait for the server's answer: the stored id, or
+   * why it was refused. With no connection, or no answer in
+   * CHAT_ANSWER_TIMEOUT_MS, it counts as not sent; a resend with the same
+   * `clientId` cannot post it twice.
+   */
+  sendChatMessage(data: ChatMessageEvent): Promise<ChatMessageAck> {
+    const socket = this.socket;
+    if (!socket?.connected) return Promise.resolve({ ok: false, error: 'Not connected' });
+    return new Promise((resolve) => {
+      socket.timeout(CHAT_ANSWER_TIMEOUT_MS).emit('chat.message', data, (err: Error | null, answer?: ChatMessageAck) => {
+        resolve(err || !answer ? { ok: false, error: 'No answer from the server' } : answer);
+      });
+    });
   }
 
   onChatMessage(callback: EventCallback<ChatMessageBroadcast>) {

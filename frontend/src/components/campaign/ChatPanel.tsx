@@ -25,6 +25,24 @@ import type { ChatSystemBroadcast } from '@/types';
 /** Messages per page. The server caps this at 100. */
 const PAGE_SIZE = 50;
 
+/** The longest message the server accepts, in characters. */
+const MAX_MESSAGE_LENGTH = 2000;
+
+/** Shown under the box once a message is this close to the limit. */
+const LENGTH_WARNING_AT = MAX_MESSAGE_LENGTH - 200;
+
+/**
+ * A name for a message being sent, which the server gives back on the
+ * sender's copy and uses to post a resent message once. Not
+ * crypto.randomUUID, which a page served over plain http does not have.
+ */
+function newClientId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** The id a message being sent is shown under until the server names it. */
+const pendingId = (clientId: string) => `temp-${clientId}`;
+
 export default function ChatPanel() {
   const { id: campaignId } = useParams<{ id: string }>();
   const { socket, joinedEpoch } = useWebSocket();
@@ -62,6 +80,11 @@ export default function ChatPanel() {
 
   // State
   const [messages, setMessages] = useState<Message[]>([]);
+  /** Why a message was not sent, by its pending id, for those that were not. */
+  const [notSent, setNotSent] = useState<Record<string, string>>({});
+  // The messages as last shown, for a send's answer that arrives later.
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [messageInput, setMessageInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +178,9 @@ export default function ChatPanel() {
         const page = await getMessages(campaignId, PAGE_SIZE);
 
         // The server sends newest first; the panel reads oldest first.
-        setMessages(mergeMessages([], page.messages));
+        // Merged with what is already shown: a message can arrive live
+        // before the history does.
+        setMessages((prev) => mergeMessages(prev, page.messages));
         setHasMore(page.pagination.hasMore);
         setCursor(page.pagination.nextCursor);
 
@@ -279,31 +304,21 @@ export default function ChatPanel() {
         createdAt: data.timestamp,
       };
 
-      // Deduplicate: Replace optimistic message if this is from current user
+      // Our own message comes back with the name it was sent under, and
+      // takes the place of the copy shown while it was sending (or marked
+      // Not sent, when the answer was lost but the message went through).
+      // Anything already shown under its id is not added again.
+      const ownPendingId = data.clientId ? pendingId(data.clientId) : null;
       setMessages((prev) => {
-        // Check if this is our own message (from optimistic UI)
-        if (user && data.userId === user.id) {
-          // Find and replace the optimistic message with matching content
-          const optimisticIndex = prev.findIndex(
-            (msg) =>
-              msg.id.startsWith('temp-') &&
-              msg.userId === data.userId &&
-              msg.content === data.content &&
-              msg.type === data.type
-          );
-
-          if (optimisticIndex !== -1) {
-            // Replace optimistic message with real one
-            const updated = [...prev];
-            updated[optimisticIndex] = newMessage;
-            console.log('[ChatPanel] Replaced optimistic message with real message');
-            return updated;
-          }
+        const pendingIndex = ownPendingId ? prev.findIndex((msg) => msg.id === ownPendingId) : -1;
+        if (pendingIndex !== -1) {
+          const updated = [...prev];
+          updated[pendingIndex] = newMessage;
+          return prev.some((msg) => msg.id === data.id) ? updated.filter((msg, i) => i === pendingIndex || msg.id !== data.id) : updated;
         }
-
-        // Not a duplicate, add as new message
-        return [...prev, newMessage];
+        return prev.some((msg) => msg.id === data.id) ? prev : [...prev, newMessage];
       });
+      if (ownPendingId) setNotSent((prev) => withoutKey(prev, ownPendingId));
 
       // Auto-scroll if user was at bottom
       if (wasAtBottomRef.current) {
@@ -395,69 +410,86 @@ export default function ChatPanel() {
   };
 
   /**
-   * Send chat message via WebSocket
+   * Send one message and wait for the server's answer. Confirmed, the copy
+   * shown takes the stored id; refused or unanswered, it is marked Not sent
+   * with the reason, for Retry or Discard.
+   */
+  const deliver = async (clientId: string, content: string, type: MessageType) => {
+    if (!socket) return;
+    const id = pendingId(clientId);
+    setNotSent((prev) => withoutKey(prev, id));
+    const answer = await socket.sendChatMessage({ content, type, clientId });
+    if (answer.ok) {
+      // Usually the message itself has come back first and taken its place.
+      setMessages((prev) => {
+        if (!prev.some((msg) => msg.id === id)) return prev;
+        return prev.some((msg) => msg.id === answer.id)
+          ? prev.filter((msg) => msg.id !== id)
+          : prev.map((msg) => (msg.id === id ? { ...msg, id: answer.id } : msg));
+      });
+    } else if (messagesRef.current.some((msg) => msg.id === id)) {
+      // Still showing as sending: the message itself has not come back.
+      setNotSent((reasons) => ({ ...reasons, [id]: answer.error }));
+    }
+  };
+
+  /** Send a message marked Not sent again, under the name it had. */
+  const retry = (message: Message) => {
+    void deliver(message.id.slice('temp-'.length), message.content, message.type);
+  };
+
+  /** Drop a message marked Not sent. */
+  const discard = (message: Message) => {
+    setMessages((prev) => prev.filter((msg) => msg.id !== message.id));
+    setNotSent((prev) => withoutKey(prev, message.id));
+  };
+
+  /**
+   * Send the message in the box: shown at once as sending, then confirmed or
+   * marked Not sent when the server answers.
    */
   const sendMessage = (): void => {
     if (!messageInput.trim() || !canSend || !socket || !campaignId || !user) return;
 
     const content = messageInput.trim();
+    const clientId = newClientId();
 
     const messageType: MessageType = userRole === 'DM' ? MessageType.DM : MessageType.PLAYER;
 
-    try {
-      console.log('[ChatPanel] Sending message:', content);
+    const optimisticMessage: Message = {
+      id: pendingId(clientId),
+      campaignId,
+      userId: user.id,
+      user: {
+        id: user.id,
+        displayName: user.displayName,
+        email: user.email,
+        platformRole: user.platformRole,
+        globalAssetManager: user.globalAssetManager,
+        templateEditor: user.templateEditor,
+        mfaEnabled: user.mfaEnabled,
+        avatarUrl: user.avatarUrl,
+        bio: user.bio,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+        lastLoginAt: user.lastLoginAt,
+      },
+      type: messageType,
+      content,
+      metadata: null,
+      createdAt: new Date().toISOString(),
+    };
 
-      // TODO(play): this is sent with no acknowledgement. Sent while the
-      // connection is dropping, the message is lost: the client drops it once
-      // its socket is gone, or socket.io delivers it on reconnect before the
-      // socket has rejoined the campaign, which the server refuses. Either
-      // way the optimistic copy below stays "sending…" for good. Emit with an
-      // ack and offer a resend when it fails, or hold it until the socket has
-      // rejoined.
-      //
-      // Emit to WebSocket (campaignId comes from server-side socket.campaignId)
-      socket.emitChatMessage({
-        content,
-        type: messageType,
-      });
+    setMessages((prev) => [...prev, optimisticMessage]);
 
-      // Optimistic UI: Add message immediately
-      const optimisticMessage: Message = {
-        id: `temp-${Date.now()}`,
-        campaignId,
-        userId: user.id,
-        user: {
-          id: user.id,
-          displayName: user.displayName,
-          email: user.email,
-          platformRole: user.platformRole,
-          globalAssetManager: user.globalAssetManager,
-          templateEditor: user.templateEditor,
-          mfaEnabled: user.mfaEnabled,
-          avatarUrl: user.avatarUrl,
-          bio: user.bio,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-          lastLoginAt: user.lastLoginAt,
-        },
-        type: messageType,
-        content,
-        metadata: null,
-        createdAt: new Date().toISOString(),
-      };
+    // Clear input and scroll
+    setMessageInput('');
+    setTimeout(() => scrollToBottom(true), 50);
 
-      setMessages((prev) => [...prev, optimisticMessage]);
+    // Start rate limit cooldown
+    startCooldown();
 
-      // Clear input and scroll
-      setMessageInput('');
-      setTimeout(() => scrollToBottom(true), 50);
-
-      // Start rate limit cooldown
-      startCooldown();
-    } catch (err) {
-      console.error('[ChatPanel] Failed to send message:', err);
-      setError('Failed to send message');
-    }
+    void deliver(clientId, content, messageType);
   };
 
   // ============================================
@@ -579,7 +611,10 @@ export default function ChatPanel() {
                 key={message.id}
                 message={message}
                 isCurrentUser={message.userId === user?.id}
-                isPending={message.id.startsWith('temp-')}
+                isPending={message.id.startsWith('temp-') && !(message.id in notSent)}
+                notSentReason={notSent[message.id]}
+                onRetry={retry}
+                onDiscard={discard}
               />
             ))}
             <div ref={messagesEndRef} />
@@ -600,6 +635,7 @@ export default function ChatPanel() {
               aria-describedby="chat-hint"
               className="input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px]"
               rows={2}
+              maxLength={MAX_MESSAGE_LENGTH}
               disabled={!canSend}
             />
             <Button
@@ -622,7 +658,12 @@ export default function ChatPanel() {
               Wait {cooldownSeconds}s before sending another message
             </p>
           )}
-          {canSend && (
+          {canSend && messageInput.length >= LENGTH_WARNING_AT && (
+            <p className="text-xs text-warning-ink text-center" aria-live="polite">
+              {messageInput.length} of {MAX_MESSAGE_LENGTH} characters
+            </p>
+          )}
+          {canSend && messageInput.length < LENGTH_WARNING_AT && (
             <p id="chat-hint" className="text-xs text-stone-gray/70 text-center">
               Press Enter to send, Shift+Enter for new line
             </p>
@@ -631,4 +672,12 @@ export default function ChatPanel() {
       </div>
     </div>
   );
+}
+
+/** The same record without `key`. */
+function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T> {
+  if (!(key in record)) return record;
+  const next = { ...record };
+  delete next[key];
+  return next;
 }

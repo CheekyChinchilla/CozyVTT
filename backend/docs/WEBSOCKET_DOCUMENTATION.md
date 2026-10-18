@@ -734,7 +734,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | Event | Ceiling per user | Past it |
 | --- | --- | --- |
 | `authenticate` | 50 every ten seconds; a page joins once per socket and again after each reconnect | `error` once |
-| `chat.message` | 50 a second and 300 a minute; the campaign's chat cooldown, when the DM turns it on, applies as well | `error` once |
+| `chat.message` | 50 a second and 300 a minute; the campaign's chat cooldown, when the DM turns it on, applies as well | `error` once; a message sent with an acknowledgement is refused through it, every time |
 | `character.hp.update` | 50 a second | `error` once |
 | `character.hitdice.spend` | 50 a second | `error` once |
 | `token.move.start` | 30 a second | `error` once |
@@ -751,6 +751,8 @@ Three things decide what a player's map shows, and each has one source of truth.
 An `initiative.request_state` while nothing is in the order is answered from memory without any database work. The only events with no ceiling of their own are `ping`, answered to its own socket alone, and `dm:editing`, which the DM sends and which is passed on at most twice a second per socket.
 
 **Connections per user.** One user may hold at most 40 sockets open at once, in every campaign together; each campaign page is one, and a connection that dropped without closing counts until its heartbeat times out, up to 85 seconds later. The next one is answered with `error` ("Too many CozyVTT tabs or devices are open on this account at once …") and closed before it can join anything. Every fan-out to a campaign is worked out per socket, so this bounds how far one account can multiply what everyone else's events cost.
+
+**A chat message can be answered.** `chat.message` takes `content` (text, up to 2000 characters before it is trimmed), `type` (`PLAYER` or `DM`; only the DM's choice counts, and a player's message is always `PLAYER`) and `clientId`. Pass an acknowledgement function as the last argument and the server answers it once: `{ ok: true, id }` with the stored message's id, or `{ ok: false, error }` with the refusal (`Message content required`, `Message too long. Maximum 2000 characters.`, `Rate limit: wait <n>s between messages.` from the campaign's cooldown, the flood ceiling's message, and the rest), and sends no `error` event for that message. Without one, a refusal is an `error` event, as for every other event. `clientId` is the sender's own name for the message, 1 to 64 letters, digits, hyphens or underscores: it comes back on the sender's own copy of the broadcast, so a client can match the copy it showed while sending, and a message sent again with the same `clientId` within 10 minutes is not stored or sent again, and is answered with the first message's id. The broadcast is sent to each member's sockets one by one; every member is sent every message.
 
 **What a dice roll may carry.** `dice.roll` takes `expression` (text; the dice parser allows up to 200 characters), `characterName` (up to 200 characters), `purpose` (up to 300, since the sheets build it from a name, as in "<attack name> Damage (Versatile)") and `secret` (true or false); the three after the expression may be left out. One of these fields of the wrong type or over its length is answered with `error` naming it, and nothing is stored or sent; any other field is ignored. `initiative.roll` refuses an `expression` that is not text the same way.
 

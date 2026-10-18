@@ -538,7 +538,9 @@ The **Chat** panel on the right sidebar is how everyone communicates during a se
 
 *Screenshot pending — Chat panel with example messages.*
 
-Type your message in the input field and press **Enter** to send. Messages show your display name and a timestamp. System messages (like session start/stop events) appear in a different style.
+Type your message in the input field and press **Enter** to send. Messages show your display name and a timestamp. System messages (like session start/stop events) appear in a different style. A message can be up to 2,000 characters; the count appears under the box as you get close.
+
+Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the DM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. Retrying never posts a message twice, even if the first try did reach the server after all.
 
 ### Rolling Dice
 
@@ -820,7 +822,7 @@ If a character sheet window says **Error Loading Character Sheet**, that sheet h
 
 ### I lost connection mid-session
 
-CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, and the map the table moved to are all brought up to date once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
+CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, and the map the table moved to are all brought up to date once you're back. A chat message you send while disconnected is marked **Not sent**; click **Retry** once you are back. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
 
 If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard.
 

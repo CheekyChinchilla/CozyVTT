@@ -1326,7 +1326,16 @@ export interface DiceRolledSecretEvent extends DiceRolledEvent {
 export interface ChatMessageEvent {
   content: string;
   type: MessageType;
+  /**
+   * The sender's own name for the message, 1 to 64 letters, digits, hyphens
+   * or underscores. It comes back on the sender's copy of the broadcast, and
+   * a message resent with it is stored and sent once.
+   */
+  clientId?: string;
 }
+
+/** The server's answer to a `chat.message` sent with an acknowledgement. */
+export type ChatMessageAck = { ok: true; id: string } | { ok: false; error: string };
 
 /**
  * A system notice. The server sends the row's real id, which is what lets a
@@ -1347,6 +1356,8 @@ export interface ChatMessageBroadcast {
   content: string;
   type: MessageType;
   timestamp: string;
+  /** On the sender's own copy only: the `clientId` it was sent with. */
+  clientId?: string;
 }
 
 // Session Events

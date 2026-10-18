@@ -9,6 +9,7 @@
 import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
+import type { SocketAck } from './ack';
 import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
 import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
@@ -279,12 +280,16 @@ const refusalNotices = new RateLimiter();
  * Whether this socket's user may send one more `event` now, counting it if
  * so. Checked before any work. A refused event changes nothing; its socket
  * is told once in REFUSAL_NOTICE_MS, not once per event, and nothing is
- * logged, so a flood fills neither the socket nor the log.
+ * logged, so a flood fills neither the socket nor the log. A request that
+ * came with an acknowledgement is answered through it every time instead:
+ * the client asked for an answer to that request.
  */
-export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent): boolean {
+export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent, ack: SocketAck | null = null): boolean {
   const ceiling: SocketCeiling = SOCKET_CEILINGS[event];
   if (ceilingLimiter.checkAll(`${limiterKey(socket)}:${event}`, ceiling.windows)) return true;
-  if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
+  if (ack) {
+    ack({ ok: false, error: ceiling.refusal });
+  } else if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
     socket.emit('error', { message: ceiling.refusal });
   }
   return false;

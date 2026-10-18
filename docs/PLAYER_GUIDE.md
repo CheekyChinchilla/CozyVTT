@@ -208,6 +208,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 - **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - Scroll up to read the history — the full session log is preserved
+- A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and never twice; **Discard** removes it
 
 ### The Dice Roller
 
