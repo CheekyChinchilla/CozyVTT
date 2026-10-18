@@ -66,6 +66,12 @@ _Nothing at present._
 - `1.5.4` **Deleting a favourite creature leaves its row under the Creature Library's Favorites** until the library is reopened, whichever list it was deleted from. The delete removes it from the main list only (`CreatureLibrary.tsx`).
 - `1.5.4` **The Creature Library and Token Templates forms say only "Failed to create creature" or "Failed to update creature" (or the same for a template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
 - `1.5.4` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
+- `1.5.4` **A file whose name has accented or other non-ASCII letters is stored and downloads with a garbled name.** The upload reads the name's UTF-8 bytes as latin1 (`routes/assets.ts`).
+- `1.5.4` **The asset library's search box filters only the page of results on screen,** not the whole library (`AssetLibraryPage.tsx`).
+- `1.5.4` **In Chrome, the document reader shows a blocked page for a PDF.** Chrome's PDF viewer does not run in the reader's sandboxed frame; opening the file directly works (`DocumentReader.tsx`).
+- `1.5.4` **In Firefox, asset cards fade in twice as the library opens,** because their hover transition also covers their opacity (`AssetCard.tsx`).
+- `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
+- `1.5.4` **At phone width the campaign page scrolls sideways behind its "Desktop Required" notice** (`CampaignPage.tsx`).
 
 ### Play and connection
 
@@ -75,20 +81,26 @@ _Nothing at present._
 - `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
 - `1.5.4` **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
 - `1.5.4` **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
+- `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
 
 ### Maps
 
 - `1.5.4` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
 - `1.5.4` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
 - `1.5.4` **A player's door toggle made while the DM is moving selected walls is undone for everyone.** The move's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the move is lost. Dragging a wall's end keeps the change, but Undo after it puts the old door back (`MapCanvas.tsx`).
+- `1.5.4` **At the zoom that fits the map to the screen, clicking a token's square next to a door toggles the door for everyone** instead of picking up or placing the token (`MapCanvas.tsx`).
 
 ### Accounts
 
-_Nothing at present._
+- `1.5.4` **In the Admin Panel's Create User dialog, the email box loses its focus as the dialog opens,** to the dialog's first control, usually its close button (`hooks/useFocusTrap.ts`).
 
 ### Server and deployment
 
 - `1.5.4` **A restore stopped part-way through unpacking keeps a file handle and the uploaded backup's disk space until the backend restarts,** for example a backup refused for unpacking to more than 10 GiB. Stopping an entry's read part-way leaves the file open (`utils/archive.ts`).
+- `1.5.4` **With a player connected, `docker compose stop`, `down`, or an `up` that recreates nginx waits 10 seconds and then stops nginx by force.** nginx waits for live connections to close, and they never close by themselves; players reconnect on their own afterwards (`docker-compose.yml`).
+- `1.5.4` **On an install that still has the `backend/uploads/backups` folder from before 1.5.0, every backup holds an empty `uploads/backups/` folder.** It does no harm (`routes/admin.ts`).
+- `1.5.4` **Backups and restores fail when `DATABASE_URL` carries `?schema=`, `?connection_limit=` or `sslmode=no-verify`,** which the app itself accepts: `pg_dump` and `psql` refuse those settings (`utils/pgRestore.ts`). The addresses the guides and `docker-compose.yml` give carry none of them.
+- `1.5.4` **With a `DATABASE_URL` that names a schema other than `public` (`?schema=`), sign-ins are stored in the `public` schema** while the parts of the app that list or end sign-ins look in the named one (`config/session.ts`).
 
 ---
 
@@ -144,39 +156,39 @@ _Nothing at present._
   cluster verifies, rehearsed on a seeded instance the way 1.5.0 was. Prisma's
   supported server range has to be checked for the target major first.
   The same release is the time to make the database container's filesystem
-  read-only, as the frontend's and the proxy's are, once the new image's first
-  start and the dump-and-reload step are proven to write nowhere but the data
-  volume and `/var/run/postgresql`.
+  read-only, as the backend's, the frontend's and the proxy's are, once the
+  new image's first start and the dump-and-reload step are proven to write
+  nowhere but the data volume and `/var/run/postgresql`.
   **Do** before 15 leaves support; **revisit** sooner if a feature needs it.
 
-- **Move the remaining libraries to their current major versions.** Prisma
-  is on 7.10 since 1.5.3, connecting through the `pg` driver adapter and
-  still generating the client with the `prisma-client-js` generator. Prisma 8,
-  a rewrite that is still a release candidate, is the next data-layer step,
-  together with the move to the `prisma-client` generator, once it is stable
-  with a patch release or two. Vite, Vitest,
-  Express and React are a major version or more behind. React Router 6 has
-  two moderate advisories that cannot be reached in CozyVTT, a single-page
-  app with no server rendering whose one address taken from a link, the page
-  to go back to after signing in, is followed only when it is a path on this
-  site with no backslash in it; version 7.18 or later clears them. 1.5.2
-  updates every package within its current major version, moves to ESLint
-  10, and fails CI on a high or critical advisory in what an instance runs.
-  **Do** in 1.5.3, a release of its own: Prisma to its newest stable major
-  first, with a full upgrade rehearsal, then Vite and Vitest, Express 5, and
-  React 19 with React Router 7. Dependabot held back major versions of npm
-  packages until then; since 1.5.3 each comes as a pull request of its own,
-  apart from those it names as waiting, and its automatic security pull
-  requests are turned on once 1.5.3 is on `main`. **Done** for the frontend's build and test tools:
-  Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30 and jest-dom 7; for
-  the backend's web framework: Express 5. **Done** for React: React 19.3 with React Router 8.4, which clears both
-  advisories. **Done** for the advisories against the backend's developer
-  tools: an npm override gives the coverage tool js-yaml 4 in place of
-  the js-yaml 3 it asks for, and Node's own watch mode restarts the
-  development server in place of nodemon. **Done** for TypeScript: 6.0 in
-  both packages. **Done** for the advisory against Tailwind CSS 3's selector
-  parser: an npm override gives it the fixed release, and the built
-  stylesheets are byte for byte the same. **Do** Tailwind CSS 4 in 1.5.4,
+- **Move the remaining libraries to their current major versions.** 1.5.2
+  updated every package within its current major version, moved to ESLint 10,
+  and made CI fail on a high or critical advisory in what an instance runs.
+  1.5.3 was the release for the major versions. **Done** for the data layer:
+  Prisma 7.10, connecting through the `pg` driver adapter and still generating
+  the client with the `prisma-client-js` generator. **Done** for the frontend's
+  build and test tools: Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30
+  and jest-dom 7. **Done** for the backend's web framework: Express 5, with
+  express-rate-limit 8 and helmet 8, and for its smaller libraries:
+  connect-pg-simple 10, archiver 8, dotenv 18, file-type 22 and mathjs 15.
+  **Done** for React: React 19.3 with React Router 8.4, and for framer-motion
+  14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
+  advisories that could not be reached in CozyVTT, a single-page app with no
+  server rendering whose one address taken from a link, the page to go back to
+  after signing in, is followed only when it is a path on this site with no
+  backslash in it; React Router 8.4 clears both. **Done** for the advisories
+  against the backend's developer tools: an npm override gives the coverage
+  tool js-yaml 4 in place of the js-yaml 3 it asks for, and Node's own watch
+  mode restarts the development server in place of nodemon. **Done** for
+  TypeScript: 6.0 in both packages. **Done** for the advisory against Tailwind
+  CSS 3's selector parser: an npm override gives it the fixed release, and the
+  built stylesheets are byte for byte the same. Dependabot held back major
+  versions of npm packages until 1.5.3; since then each comes as a pull
+  request of its own, apart from those it names as waiting, and its automatic
+  security pull requests are turned on once 1.5.3 is on `main`.
+  **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
+  candidate, so wait until it is stable with a patch release or two, and move
+  to the `prisma-client` generator with it. **Do** Tailwind CSS 4 in 1.5.4,
   before that release's bug fixes, with every page compared before and after
   in each theme: it renames or changes the meaning of many classes the app
   uses, raises Firefox's minimum from 114 to 128, and clears the one advisory
@@ -385,7 +397,7 @@ _Nothing at present._
 - **Serving the backend from a different address than the page.** `.env`
   offered `VITE_API_URL` and `VITE_SOCKET_URL` for it until 1.5.2, but only
   sign-in and the API ever worked that way: the page's Content-Security-Policy
-  allows another address for `connect-src` alone, helmet's
+  allowed another address for `connect-src` alone, helmet's
   `Cross-Origin-Resource-Policy: same-origin` refuses a picture loaded from
   another site, and the map canvas loads images with `crossOrigin='anonymous'`,
   which leaves the session cookie off, so every asset route answers 401. The

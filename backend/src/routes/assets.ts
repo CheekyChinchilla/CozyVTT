@@ -176,6 +176,9 @@ function handleAssetCaching(
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
+    // TODO(assets): a parameter sent twice (`?search=a&search=b`) arrives as an
+    // array, and the casts below hand it to Prisma, which throws, so the list
+    // answers 500. Refuse a repeated parameter with 400, as invitable-users does.
     const { campaignId, page, limit, search, uploadedBy, usable } = req.query;
 
     const typeFilter = readEnumQuery(req.query.type, 'type', Object.values(AssetTypes));

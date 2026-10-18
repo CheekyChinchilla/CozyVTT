@@ -12,8 +12,8 @@
  * of the address, raw queries included.
  *
  * The app's database client reads DATABASE_URL when it is first imported, so
- * a file using this sets DATABASE_URL to `url` and only then imports the app,
- * with a dynamic import.
+ * a file using this sets DATABASE_URL to `url` and only then loads the app,
+ * with `require(...) as typeof import(...)`.
  */
 
 import { execFileSync } from 'child_process';

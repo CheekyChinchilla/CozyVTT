@@ -114,6 +114,9 @@ router.post('/seed', requireAuth, adminToSeed, async (_req: AuthenticatedRequest
 router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
+    // TODO(assets): a `search`, `source` or `cr` sent twice arrives as an array,
+    // which the casts below hand to Prisma, so the list answers 500. Refuse a
+    // repeated parameter with 400, as invitable-users does.
     const { search, source, cr, limit = '50', offset = '0' } = req.query;
     const system = readEnumQuery(req.query.gameSystem, 'gameSystem', Object.values(GameSystem));
     if (!system.ok) {

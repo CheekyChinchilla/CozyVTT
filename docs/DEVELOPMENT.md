@@ -97,6 +97,7 @@ Copy `backend/.env.example` to `backend/.env` and fill in the values.
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `DATABASE_URL` | Yes | — | PostgreSQL connection string |
+| `SHADOW_DATABASE_URL` | No | — | A scratch database for `prisma migrate diff` and `prisma migrate dev`, read only by `prisma.config.ts`; see [Running Migrations](#running-migrations) |
 | `SESSION_SECRET` | Yes | — | Random string for session signing (32+ chars) |
 | `NODE_ENV` | No | `development` | `development` or `production` |
 | `PORT` | No | `4000` | Port the API server listens on |
@@ -320,7 +321,7 @@ npx prisma generate
 npx prisma migrate deploy
 ```
 
-> ⚠️ **If `migrate dev` reports drift and offers a reset, answer no: a reset deletes everything in the database.** The sign-in session store makes a table named `session` the first time the backend starts. Until 1.5.3 no migration made it, so on a database the backend ran against before then, `migrate dev` finds a table it does not know and offers that reset, and `db push` offers to drop the table. Starting the backend once applies the migration that describes it (the start script runs `migrate deploy`), and from then on the database matches the migrations. `migrate dev` also refuses to run where it cannot ask questions, such as from a script. Either way, a migration can be generated from the existing migrations into a scratch database instead. Prisma empties that database each time, so give it one of its own:
+> ⚠️ **If `migrate dev` reports drift and offers a reset, answer no: a reset deletes everything in the database.** The sign-in session store makes a table named `session` the first time the backend starts. Until 1.5.3 no migration made it, so on a database the backend ran against before then, `migrate dev` finds a table its migrations do not account for and offers that reset. `npx prisma migrate deploy` applies the migration that describes the table, which finds it and changes nothing, and the backend container's start script runs that command each time the container starts; outside Docker, run it yourself. From then on the database matches the migrations. `migrate dev` also refuses to run where it cannot ask questions, such as from a script. Either way, a migration can be generated from the existing migrations into a scratch database instead. Prisma empties that database each time, so give it one of its own:
 >
 > ```bash
 > # Once, with the dev stack running:
@@ -351,7 +352,7 @@ Prisma Studio is a web-based database browser:
 ```bash
 cd backend
 npm run prisma:studio
-# Opens http://localhost:5555
+# Opens http://localhost:51212, or another free port it names when that one is taken
 ```
 
 ### Schema Location
@@ -514,7 +515,8 @@ developer tools open on the Network tab:
 # Backend
 cd backend && npx tsc --noEmit
 
-# Frontend: the app, then e2e/ and playwright.config.ts (e2e/tsconfig.json)
+# Frontend: the app, then e2e/ and playwright.config.ts (e2e/tsconfig.json),
+# then vite.config.ts and vitest.config.ts (tsconfig.node.json)
 cd frontend && npm run typecheck
 ```
 
@@ -572,8 +574,9 @@ Some of those deserve a note:
   the admin settings log suite and the sign-in table's own test need exactly
   that, so `src/__tests__/helpers/isolatedSchema.ts` creates a PostgreSQL
   schema in the same test database from `schema.prisma`, and drops it at the
-  end. The file sets `DATABASE_URL` to that schema before it imports the app,
-  with a dynamic import, because the app's database client reads it once.
+  end. The file sets `DATABASE_URL` to that schema before it loads the app,
+  with `require` (see TypeScript below), because the app's database client
+  reads it once.
 - **Facts written in more than one place are tested, not trusted.** `backend/src/__tests__/keepInStep.test.ts`
   fails when a file the nginx service mounts on its own (`nginx/nginx.conf`,
   `nginx/locations.conf`, `nginx/trusted-proxies.envsh`, read from the
@@ -613,9 +616,10 @@ Some of those deserve a note:
   `backend/scripts/backup.sh` and `restore.sh`, when the kinds of thing that
   can use an asset differ between the two sides or the API document, when
   either image's `.dockerignore` lets an env file other than `.env.example`
-  into its build, and when the Node.js major differs between `.nvmrc`, a
-  Dockerfile stage, a CI job, an `engines` field, either project's
-  `@types/node` and the guides.
+  into its build, when a Dockerfile stage runs `npm ci` or `npm install`
+  before it copies the project's `.npmrc`, and when the Node.js major
+  differs between `.nvmrc`, a Dockerfile stage, a CI job, an `engines`
+  field, either project's `@types/node` and the guides.
 - **What the guides claim is tested where a claim once drifted.**
   `backend/src/__tests__/documentedFacts.test.ts` checks the guides' own
   statements against the code and the shipped files: the deployment guide's

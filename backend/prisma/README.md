@@ -128,7 +128,7 @@ npx prisma migrate reset
 
 ## Migration strategy
 
-- Create schema migrations with Prisma's own tooling (`prisma migrate dev`, or `prisma migrate diff` where `migrate dev` refuses to run; `docs/DEVELOPMENT.md` shows both). A migration that moves data is written by hand in SQL, and has to be safe to run twice and safe to fail half-way: `20260417000000_migrate_light_bright_dim`, which rewrites every map's lights, is the one so far. Never edit a migration that has shipped: a database that already ran it would no longer match the file.
+- Create schema migrations with Prisma's own tooling (`prisma migrate dev`, or `prisma migrate diff` where `migrate dev` refuses to run; `docs/DEVELOPMENT.md` shows both). A migration that changes rows is written by hand in SQL, and has to be safe to run twice and safe to fail half-way: `20260417000000_migrate_light_bright_dim`, which rewrites every map's lights, and `20261015033738_creature_template_author_set_null`, which clears the author of each creature whose author's account was already deleted, are the two so far. Never edit a migration that has shipped: a database that already ran it would no longer match the file.
 - **Production deployments** run `npx prisma migrate deploy` on backend startup — this only applies migrations that haven't run on the target DB. It never modifies existing migration history.
 - The `migrations/` directory is **tracked in git**. Every PR that touches `schema.prisma` should also commit the generated migration file alongside it.
 - Migrations are forward-only. There's no `prisma migrate down`. To "revert," write a new migration that undoes the previous change.

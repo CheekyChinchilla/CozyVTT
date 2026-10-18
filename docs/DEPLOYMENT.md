@@ -830,7 +830,7 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
 
-If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file with `sslrootcert=/path/to/ca.crt`, or use `sslmode=no-verify`, which encrypts the connection without checking which server answers.
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. Leave out `sslmode=no-verify`, which the driver also offers: the Admin Dashboard's **Create Backup** and restore give the same address to `pg_dump` and `psql`, which refuse that value (`invalid sslmode value`), so every backup and restore fails.
 
 ### 4. Run the backend with pm2
 
