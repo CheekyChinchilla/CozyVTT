@@ -3118,9 +3118,11 @@ paths:
         everyone; a period without one silences the table. Period names must
         be unique ignoring case. The current period stays current when the new
         list still has it, matched ignoring case, and takes the spelling it is
-        saved with; otherwise (renamed or deleted) it is cleared. Other fields,
-        at the top level or in a period, are stored as sent, except
-        `atmosphereAudio`, which is ignored in favour of the stored value.
+        saved with; otherwise (renamed or deleted) it is cleared. Other
+        top-level fields are stored as sent, and unknown fields in a period
+        are dropped, except `atmosphereAudio` and `atmosphereEffect` (the
+        ambient track and the weather), which are ignored and kept as stored
+        at the moment of the save: a track or weather set meanwhile stands.
 
         Every connected member is then sent `vibe.settings.updated` with
         `campaignId`, the stored `vibeSettings`, the `currentVibe` the save

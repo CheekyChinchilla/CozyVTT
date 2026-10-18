@@ -12,14 +12,15 @@
 import { Server } from 'socket.io';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
-import { findVibePeriod, normalizeVibeSettings, preserveAtmosphereAudio } from '../utils/vibe-presets';
+import { findVibePeriod, normalizeVibeSettings } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
-import { readJsonObject, toJson } from '../utils/prisma-json';
+import { readJsonObject } from '../utils/prisma-json';
 import { getSocketInstance } from '../websocket/utils';
 import logger from '../utils/logger';
 import type { VibeSettingsInput } from '../validators/campaigns';
 import { lastAmbientVolume, setCampaignAmbientAudio } from './atmosphereAudio';
 import { canReadAsset } from './permissions';
+import { replaceVibeSettingsKeepingLive } from './vibeSettingsColumn';
 
 /**
  * Why a period's track cannot be saved, or null when each can be. A period's
@@ -57,7 +58,7 @@ export async function vibeAudioRefusal(
 
 /**
  * Save a campaign's vibe settings, for both routes that take them. The
- * stored atmosphere track is kept (preserveAtmosphereAudio); the period in
+ * stored track and weather are kept (replaceVibeSettingsKeepingLive); the period in
  * force stays the vibe under its saved spelling, written only while it is
  * still the one read, so a switch made meanwhile stands, and the vibe ends
  * once that period is renamed or deleted. The table is then told
@@ -72,10 +73,7 @@ export async function saveVibeSettings(
     where: { id: campaignId },
     select: { currentVibe: true, vibeSettings: true },
   });
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: { vibeSettings: toJson(preserveAtmosphereAudio(settings, before?.vibeSettings)) },
-  });
+  await replaceVibeSettingsKeepingLive(campaignId, settings);
   const vibeBefore = before?.currentVibe ?? null;
   const vibeAfter = vibeAfterSave(settings, vibeBefore);
   if (vibeAfter !== vibeBefore) {

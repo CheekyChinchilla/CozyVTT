@@ -60,10 +60,13 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Campaign archives.* An imported asset's `name` is cut to 200 characters and its `originalName` to 255 (extension kept), as an upload's are; the archive may still give names up to 500.
   - *Campaign archives.* The import's count limits are gone: a manifest may give up to 1,000 maps and 1,000 assets (it was 50 and 500) and any number of creatures and token templates (it was 200 and 500), each list held to 10 MB. `GET /api/campaigns/:campaignId/export` answers 422 `Export Too Large` for a campaign whose archive would hold more than 1,000 files or a data file over 10 MB, as well as one over the size limit.
   - *Vibe and audio.* `PUT /api/campaigns/:campaignId` with `vibeSettings` now checks and saves them as `PUT .../vibe` does: at least one period, names of 1 to 50 characters unique ignoring case (it took 0 periods and names up to 100, repeated), each track checked (400 naming the period), the current period kept or cleared, and `vibe.settings.updated` sent. `PUT .../vibe` now takes a period with no `audio` (read as none) and no `enabled`, and its refusals lead each problem with its field (`vibeSettings.periods.0.name: A period needs a name`; it sent messages such as `vibeSettings.periods[0].name must be a non-empty string`).
+  - *Vibe and audio.* A vibe save (`PUT .../vibe`, or `vibeSettings` in `PUT /api/campaigns/:campaignId`) ignores an `atmosphereEffect` it is sent and keeps the stored one, as it already did `atmosphereAudio`.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **Saving the vibe periods keeps the weather, and the ambient track, as they are.** Weather you had set since opening the page went back to what it was when you saved the periods, and a track or periods changed at the same moment as another save could be put back.
 
 - **A campaign's name and description can be as long as the server allows,** 200 and 5,000 characters, in **New Campaign** and **Campaign Settings**. The settings stopped at 100 and 1,000, and **New Campaign** refused a name over 100 characters, or of one letter, and had no limit on the description.
 
