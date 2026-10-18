@@ -449,6 +449,19 @@ class SocketClient {
     return this.socket?.connected ?? false;
   }
 
+  /** Whether the current socket has joined its campaign at least once. */
+  hasJoined(): boolean {
+    return this.joined;
+  }
+
+  /**
+   * A refusal from the server: `{ message }`, for a request sent without an
+   * acknowledgement. One sent with one is answered through it instead.
+   */
+  onServerRefusal(callback: EventCallback<{ message?: string }>) {
+    this.addListener('error', callback);
+  }
+
   // ============================================
   // State Synchronization
   // ============================================

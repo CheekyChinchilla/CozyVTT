@@ -63,6 +63,7 @@ vi.mock('@/components/campaign/TokenManager', nothing);
 vi.mock('@/components/campaign/SpiritLayerControls', nothing);
 vi.mock('@/components/campaign/AtmospherePanel', nothing);
 vi.mock('@/components/campaign/AtmospherePlayer', nothing);
+vi.mock('@/components/campaign/TableRefusals', nothing);
 vi.mock('@/components/campaign/CreatureLibrary', nothing);
 vi.mock('@/components/campaign/TokenTemplateLibrary', nothing);
 vi.mock('@/components/campaign/CampaignSettingsModal', nothing);

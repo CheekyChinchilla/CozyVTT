@@ -787,6 +787,17 @@ after every rejoin, Retry included) and as connected, retries a first connect
 that left no socket behind, and reconnects at once when the page becomes
 visible again.
 
+### Answers and refusals
+
+A request sent with an acknowledgement is answered through it, once, with
+`{ ok: true, ... }` or `{ ok: false, error }` (`websocket/ack.ts`), and then
+sends no `error` event: `chat.message`, `dice.roll` and `dice.clearHistory`
+take one, and the web client shows the answer where the request was made
+(the chat row's **Not sent**, the Dice panel's banner, `hooks/useTableRoll.ts`
+for rolls from a sheet or a menu). Every other refusal is an `error` event,
+and the campaign page shows each one as a message (`TableRefusals.tsx`), once
+the page has joined the campaign. No panel listens to `error` for itself.
+
 ### Room Structure
 
 Sockets join two rooms, keyed by raw id (no prefix):

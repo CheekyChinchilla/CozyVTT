@@ -44,6 +44,7 @@ import TokenManager from '@/components/campaign/TokenManager';
 import SpiritLayerControls from '@/components/campaign/SpiritLayerControls';
 import AtmospherePanel from '@/components/campaign/AtmospherePanel';
 import AtmospherePlayer from '@/components/campaign/AtmospherePlayer';
+import TableRefusals from '@/components/campaign/TableRefusals';
 import NpcQuickEditor from '@/components/campaign/NpcQuickEditor';
 import CreatureLibrary from '@/components/campaign/CreatureLibrary';
 import TokenTemplateLibrary from '@/components/campaign/TokenTemplateLibrary';
@@ -563,6 +564,9 @@ function CampaignPageContent() {
 
       {/* Atmosphere Player — mounts for ALL users, manages ambient audio sync */}
       <AtmospherePlayer />
+
+      {/* What the server refuses, shown as a message */}
+      <TableRefusals />
 
       {/* Narrow screen notice */}
       {!continueOnNarrowScreen && (
