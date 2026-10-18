@@ -921,7 +921,7 @@ min={1} max={20} value={formData.level} onChange={(v: number) => updateField('le
             <div className="text-xs opacity-70">Experience Points</div>
             <NumberField
 min={0} value={formData.experiencePoints} onChange={(v: number) => updateField('experiencePoints', v)} className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
-            <div className="text-xs opacity-70 mt-2">Hero Points</div>
+            <div className="text-xs opacity-70">Hero Points</div>
             <NumberField
 min={0} max={3} value={formData.heroPoints} onChange={(v: number) => updateField('heroPoints', Math.min(v, 3))} className={`w-16 text-lg font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
           </div>
@@ -1060,7 +1060,7 @@ value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${sk
                 {renderProficiencySelector(`loreSkills.${index}.proficiencyRank`, lore.proficiencyRank as ProficiencyRank)}
                 <NumberField
 min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
-                <span className="text-lg font-bold text-blue-700 ml-auto">{formatModifier(lore.bonus)}</span>
+                <span className="text-lg font-bold text-blue-700">{formatModifier(lore.bonus)}</span>
               </div>
             </div>
           ))}

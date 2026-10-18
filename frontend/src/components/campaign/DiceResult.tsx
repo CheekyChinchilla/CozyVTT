@@ -189,7 +189,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
           )}
 
           {/* Individual dice rolls */}
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {detail.map((roll, idx) => (
               <div key={idx} className="flex items-center gap-1">
                 {roll.type === 'dice' && roll.notation && (

@@ -156,7 +156,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
 
       {/* Passive Perception */}
       {passivePerception !== undefined && (
-        <div className="mt-4 pt-3 border-t border-stone-200">
+        <div className="pt-3 border-t border-stone-200">
           <div className="flex items-center justify-between px-2 py-1 bg-red-50 rounded-sm">
             <span className="text-sm font-semibold text-stone-700">
               Passive Perception
@@ -169,7 +169,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
       )}
 
       {/* Legend */}
-      <div className="mt-3 pt-3 border-t border-stone-200">
+      <div className="pt-3 border-t border-stone-200">
         <div className="flex flex-wrap gap-4 text-xs text-stone-600">
           <div className="flex items-center space-x-1">
             <Circle className="w-3 h-3 text-stone-500" />

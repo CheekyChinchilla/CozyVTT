@@ -418,7 +418,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
             </div>
             <span>Check this box when you use a skill successfully to mark it for improvement between sessions.</span>
           </div>
-          <div className="mt-2 pl-6">
+          <div className="pl-6">
             <span className="font-semibold">Special Skills:</span>
             <ul className="list-disc pl-5 mt-1 space-y-0.5">
               <li><strong>Credit Rating:</strong> Determines wealth tier and spending level.</li>

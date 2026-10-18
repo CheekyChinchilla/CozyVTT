@@ -2415,7 +2415,7 @@ export default function AdminPage() {
                     {/* A full page load: this session went with the old database. */}
                     <a
                       href="/auth/login"
-                      className="inline-block text-xs py-1.5 px-4 mt-1 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors font-medium"
+                      className="inline-block text-xs py-1.5 px-4 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors font-medium"
                     >
                       Go to Login
                     </a>

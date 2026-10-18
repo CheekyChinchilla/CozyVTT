@@ -147,7 +147,7 @@ export default function RegisterPage() {
           <p className="text-warm-gray text-sm">
             Your account has been created and is <strong>pending admin approval</strong>. You will be able to log in once an administrator approves your account.
           </p>
-          <Link to="/auth/login" className="btn-primary inline-block mt-4">
+          <Link to="/auth/login" className="btn-primary inline-block">
             Back to Login
           </Link>
         </div>
@@ -355,7 +355,7 @@ export default function RegisterPage() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full mt-6"
+            className="w-full"
           >
             {loading ? (
               <span className="flex items-center justify-center">

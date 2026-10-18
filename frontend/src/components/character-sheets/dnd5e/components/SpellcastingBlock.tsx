@@ -76,7 +76,7 @@ const SpellSlotIndicator: React.FC<{ slot: SpellSlot }> = ({ slot }) => {
             )}
           </div>
         ))}
-      <span className="text-xs text-stone-600 ml-1">
+      <span className="text-xs text-stone-600">
         {remaining}/{total}
       </span>
     </div>

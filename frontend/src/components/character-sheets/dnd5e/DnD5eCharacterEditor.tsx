@@ -2351,7 +2351,7 @@ min={0}
           />
         </div>
       </div>
-      <p className="text-xs text-stone-600 -mt-3">
+      <p className="text-xs text-stone-600">
         Both are worked out from your proficiency bonus and spellcasting ability. Use
         &quot;Other bonus&quot; for anything else that changes them — a Rod of the Pact
         Keeper, a Robe of the Archmagi. They are separate because some items raise only one.
