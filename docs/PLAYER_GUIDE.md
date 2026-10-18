@@ -208,7 +208,7 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 - **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - Scroll up to read the history — the full session log is preserved
-- A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and never twice; **Discard** removes it
+- A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and a message that did get through after all is not posted twice if you retry within ten minutes; **Discard** removes it
 
 ### The Dice Roller
 
@@ -375,7 +375,7 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
-Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload, and if your token's identity is obscured, it shows there under your token's name for you and as *Unknown creature* for everyone else.
+Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 

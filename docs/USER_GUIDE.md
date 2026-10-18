@@ -540,7 +540,7 @@ The **Chat** panel on the right sidebar is how everyone communicates during a se
 
 Type your message in the input field and press **Enter** to send. Messages show your display name and a timestamp. System messages (like session start/stop events) appear in a different style. A message can be up to 2,000 characters; the count appears under the box as you get close.
 
-Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the DM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. Retrying never posts a message twice, even if the first try did reach the server after all.
+Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the DM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. If the first try did reach the server after all, retrying within ten minutes does not post it twice (a restart of the server in between forgets that it arrived).
 
 While you are scrolled up reading earlier messages, new ones don't pull you down; a **Jump to newest** button appears at the bottom instead, and takes you to them. The **Dice** panel does the same for new rolls.
 
