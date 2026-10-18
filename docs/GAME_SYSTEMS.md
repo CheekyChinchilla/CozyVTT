@@ -490,20 +490,7 @@ case GameSystem.MY_SYSTEM: {
 }
 ```
 
-Second, provide a **blank-character factory** and wire it into `getBlankCharacterTemplate`. This returns the minimal valid data object used to seed a brand-new character:
-
-```typescript
-case GameSystem.MY_SYSTEM:
-  return createBlankMySystemCharacter();
-
-// …lower in the file, next to the other createBlank* functions:
-function createBlankMySystemCharacter(): MySystemCharacterData {
-  return {
-    characterName: 'New Character',
-    // …minimal valid defaults…
-  };
-}
-```
+`getBlankCharacterTemplate`, which the tests build their sheets on, needs nothing of its own: it returns your system's `blank` starter sheet (Step 6) parsed by the schema, and throws if that sheet does not pass it. So the tests use the sheet players actually start from.
 
 ---
 
@@ -868,7 +855,7 @@ The exhaustive `switch`/`Record` types mean a missed backend registration point 
 - [ ] `game-systems/mySystem.ts` — character-data interface(s)
 - [ ] `game-systems/index.ts` — `export *`, type import, enum value, `CharacterDataBySystem`, `GameSystemCharacterData`, `isMySystemData` guard, cases in `getTypedCharacterData` + structural `validateCharacterData`
 - [ ] `validators/game-systems/mySystem.schema.ts` — Zod schema + inferred type
-- [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`, `createBlankMySystemCharacter()` + case in `getBlankCharacterTemplate`
+- [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`
 - [ ] `utils/character-templates/mySystem-templates.ts` — templates + `getMySystemTemplates` / `getMySystemTemplate`
 - [ ] `utils/character-templates/index.ts` — cases in `getTemplatesForGameSystem`, `getCharacterTemplate`, and `getAllTemplates`
 - [ ] Schema (and template) tests written and passing
