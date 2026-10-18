@@ -59,6 +59,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The session timer counts from the session's start after Resume Session.** On the DM's screen it could start again from zero, and then disagree with itself after a reload.
 
+- **Personal notes follow your theme.** A link in a note is blue, the text takes the theme's ink colour, and the quote bar and divider lines take its accent; the styles meant for them never applied, so links looked like plain text and the quote bar was always amber.
+
 - **Firefox no longer logs "Invalid URI. Load of media resource failed" on every campaign page.** The ambient audio player was emptied in a way that pointed it at the page itself.
 
 - **A character taken out of a campaign leaves the campaign page at once.** Its sheet and rolls stayed on offer there, on the map's token menu and elsewhere, until the page was reloaded.
