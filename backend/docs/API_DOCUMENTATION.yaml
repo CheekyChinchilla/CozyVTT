@@ -5061,7 +5061,7 @@ paths:
           `action` set to `character.assigned` and `characterId`, `userId`
           and `campaignId`. Unassigning a character that had a campaign
           broadcasts `roster.updated` to that campaign, with `action` set to
-          `character.unassigned` and `characterId` and `userId`.
+          `character.unassigned` and `characterId`, `userId` and `campaignId`.
       operationId: assignCharacterToCampaign
       security:
         - cookieAuth: []
