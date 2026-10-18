@@ -60,7 +60,7 @@ import { useLightTool } from './map/tools/useLightTool';
 import { useMeasureTools, type AoEShape } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
-import type { PointerAt } from './map/tools/types';
+import type { MapTool, PointerAt } from './map/tools/types';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
@@ -1829,9 +1829,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Mouse Event Handlers
   // ============================================
 
-  /**
-   * Handle mouse down (pick up token, place token, or pan map)
-   */
   // Helper: convert screen coords to map-space pixel coords (not grid coords)
   const screenToMapPx = (screenX: number, screenY: number) => {
     return {
@@ -1839,6 +1836,167 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       y: (screenY - mapControls.panOffset.y) / mapControls.zoom,
     };
   };
+
+  // Throttle token move events to 60fps (~16ms)
+  const lastMoveEmitRef = useRef<number>(0);
+  const MOVE_THROTTLE_MS = 16;
+
+  /**
+   * Tokens and panning, when no other tool took the event: a click picks a
+   * token up or puts the held one down, and a drag on empty ground pans.
+   */
+  const tokenTool: MapTool = {
+    down({ e, gridCoords }: PointerAt) {
+      if (!currentMap) return false;
+        // If we're already holding a token, place it on this click
+        if (draggedToken && dragOffset) {
+          // Finalize token position (snap to grid)
+          const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
+          const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
+
+          // Two creatures do not share a square. The Basic Rules are blunt about it
+          // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
+          // friend or an enemy, you can't willingly end your move in its space."
+          // A token at zero hit points is treated as no longer holding its space,
+          // so a body can be stood on — that part is a house rule, not something
+          // the rulebook spells out.
+          //
+          // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
+          // swarm, scenery being arranged — is ordinary DM work, and refusing it
+          // would be an obstacle rather than a rule.
+          //
+          // Checked here on the client and nowhere else, deliberately: see
+          // `blockingTokensAt`, which explains why enforcing this server-side would
+          // turn a refused move into a way to find hidden creatures.
+          if (userRole !== 'DM') {
+            const blockedBy = blockingTokensAt(
+              tokens,
+              draggedToken,
+              { x: Math.floor(finalX), y: Math.floor(finalY) },
+              characterHpCache
+            );
+            if (blockedBy.length > 0) {
+              showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
+              cancelHold();
+              markDirty('tokens');
+              return true;
+            }
+          }
+
+          // Emit token.move.end event
+          if (canEmit() && currentMap.id) {
+            const event: TokenMoveEndEvent = {
+              tokenId: draggedToken.id,
+              mapId: currentMap.id,
+              x: Math.floor(finalX),
+              y: Math.floor(finalY),
+            };
+            socket!.emitTokenMoveEnd(event);
+          } else {
+            console.warn('⚠️ Cannot emit token.move.end - socket not connected');
+          }
+
+          // Update local token position
+          useGameStore.getState().applyTokenMove(draggedToken.id, {
+            x: Math.floor(finalX),
+            y: Math.floor(finalY),
+          });
+
+          // Clear drag state
+          setDraggedToken(null);
+          setDragOffset(null);
+          console.log('✅ Token placed, state cleared');
+          return true;
+        }
+
+        // Check if clicked on a token to pick it up.
+        //
+        // Deliberately looks past tokens this user cannot move rather than stopping
+        // at whatever is drawn on top: a player standing on the same square as an
+        // NPC could otherwise never pick their own token up again.
+        const token = getMovableTokenAtPosition(gridCoords.x, gridCoords.y);
+        console.log('🔍 Movable token at click position:', token?.name || 'none');
+
+        if (token) {
+          // Pick up token — disable ruler if it was active
+          if (showRuler) putRulerAway();
+          console.log('👆 Picking up token:', token.name);
+          setDraggedToken(token);
+          setDragOffset({
+            x: gridCoords.x - token.position.x,
+            y: gridCoords.y - token.position.y,
+          });
+
+          // Emit token.move.start event
+          if (canEmit() && currentMap.id) {
+            const event: TokenMoveStartEvent = {
+              tokenId: token.id,
+              mapId: currentMap.id,
+            };
+            socket!.emitTokenMoveStart(event);
+          } else {
+            console.warn('⚠️ Cannot emit token.move.start - socket not connected');
+          }
+        } else if (!draggedToken) {
+          // Only start panning if we're not holding a token
+          mapControls.startDrag(e);
+        }
+      return true;
+    },
+    move({ e, gridCoords }: PointerAt) {
+      if (!currentMap) return false;
+        // Handle token dragging
+        if (draggedToken && dragOffset) {
+          // Calculate new token position (snapped to grid)
+          const newX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
+          const newY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
+
+          // Throttle move events to 60fps
+          const now = Date.now();
+          if (canEmit() && currentMap.id && now - lastMoveEmitRef.current >= MOVE_THROTTLE_MS) {
+            const event: TokenMoveEvent = {
+              tokenId: draggedToken.id,
+              mapId: currentMap.id,
+              x: Math.floor(newX),
+              y: Math.floor(newY),
+            };
+            socket!.emitTokenMove(event);
+            lastMoveEmitRef.current = now;
+          }
+
+          // Keep the hover panel honest while dragging. It used to be updated only
+          // in the branch below, so a held token left the last name it happened to
+          // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
+          // the cursor was over something else entirely. Reading the square under
+          // the cursor also shows what you are about to land on.
+          setHoverToken(getHoverTokenAt(gridCoords.x, gridCoords.y));
+
+          // Ghost follows the cursor — tokens layer only.
+          markDirty('tokens');
+        } else {
+          // Handle map panning
+          mapControls.handleDrag(e);
+
+          // Update hover token
+          const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
+          setHoverToken(token);
+
+          // Pan moves the whole scene → repaint every layer.
+          if (mapControls.isDragging) {
+            markDirty('terrain', 'tokens', 'overlay');
+          }
+        }
+      return true;
+    },
+  };
+
+  /**
+   * The tools a click or a move is offered to, in this order, until one takes
+   * it: a DM tool first, then doors, the fog boxes, the measuring tools, and
+   * tokens and panning last. The order is what decides a click when two tools
+   * are up at once. On mouse up each finishes what it holds, in the same order.
+   */
+  const pointerTools: MapTool[] = [wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !currentMap) return;
@@ -1861,113 +2019,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
     const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
-    if (wallTool.down!(at)) return;
-    if (lightTool.down!(at)) return;
-
-    if (doorTool.down!(at)) return;
-
-    if (fogTool.down!(at)) return;
-
-    if (measuring.down!(at)) return;
-
-    // If we're already holding a token, place it on this click
-    if (draggedToken && dragOffset) {
-      // Finalize token position (snap to grid)
-      const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-      const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-
-      // Two creatures do not share a square. The Basic Rules are blunt about it
-      // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
-      // friend or an enemy, you can't willingly end your move in its space."
-      // A token at zero hit points is treated as no longer holding its space,
-      // so a body can be stood on — that part is a house rule, not something
-      // the rulebook spells out.
-      //
-      // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
-      // swarm, scenery being arranged — is ordinary DM work, and refusing it
-      // would be an obstacle rather than a rule.
-      //
-      // Checked here on the client and nowhere else, deliberately: see
-      // `blockingTokensAt`, which explains why enforcing this server-side would
-      // turn a refused move into a way to find hidden creatures.
-      if (userRole !== 'DM') {
-        const blockedBy = blockingTokensAt(
-          tokens,
-          draggedToken,
-          { x: Math.floor(finalX), y: Math.floor(finalY) },
-          characterHpCache
-        );
-        if (blockedBy.length > 0) {
-          showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
-          cancelHold();
-          markDirty('tokens');
-          return;
-        }
-      }
-
-      // Emit token.move.end event
-      if (canEmit() && currentMap.id) {
-        const event: TokenMoveEndEvent = {
-          tokenId: draggedToken.id,
-          mapId: currentMap.id,
-          x: Math.floor(finalX),
-          y: Math.floor(finalY),
-        };
-        socket!.emitTokenMoveEnd(event);
-      } else {
-        console.warn('⚠️ Cannot emit token.move.end - socket not connected');
-      }
-
-      // Update local token position
-      useGameStore.getState().applyTokenMove(draggedToken.id, {
-        x: Math.floor(finalX),
-        y: Math.floor(finalY),
-      });
-
-      // Clear drag state
-      setDraggedToken(null);
-      setDragOffset(null);
-      console.log('✅ Token placed, state cleared');
-      return;
-    }
-
-    // Check if clicked on a token to pick it up.
-    //
-    // Deliberately looks past tokens this user cannot move rather than stopping
-    // at whatever is drawn on top: a player standing on the same square as an
-    // NPC could otherwise never pick their own token up again.
-    const token = getMovableTokenAtPosition(gridCoords.x, gridCoords.y);
-    console.log('🔍 Movable token at click position:', token?.name || 'none');
-
-    if (token) {
-      // Pick up token — disable ruler if it was active
-      if (showRuler) putRulerAway();
-      console.log('👆 Picking up token:', token.name);
-      setDraggedToken(token);
-      setDragOffset({
-        x: gridCoords.x - token.position.x,
-        y: gridCoords.y - token.position.y,
-      });
-
-      // Emit token.move.start event
-      if (canEmit() && currentMap.id) {
-        const event: TokenMoveStartEvent = {
-          tokenId: token.id,
-          mapId: currentMap.id,
-        };
-        socket!.emitTokenMoveStart(event);
-      } else {
-        console.warn('⚠️ Cannot emit token.move.start - socket not connected');
-      }
-    } else if (!draggedToken) {
-      // Only start panning if we're not holding a token
-      mapControls.startDrag(e);
+    for (const tool of pointerTools) {
+      if (tool.down?.(at)) return;
     }
   };
-
-  // Throttle token move events to 60fps (~16ms)
-  const lastMoveEmitRef = useRef<number>(0);
-  const MOVE_THROTTLE_MS = 16;
 
   /**
    * Handle mouse move (pan + hover coordinates + token drag)
@@ -1993,59 +2048,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       setHoverCoords(null);
     }
 
-    if (wallTool.move!(at)) return;
-    if (lightTool.move!(at)) return;
-
-    doorTool.move!(at);
-
-    if (fogTool.move!(at)) return;
-
-    // Handle token dragging
-    if (draggedToken && dragOffset) {
-      // Calculate new token position (snapped to grid)
-      const newX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-      const newY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-
-      // Throttle move events to 60fps
-      const now = Date.now();
-      if (canEmit() && currentMap.id && now - lastMoveEmitRef.current >= MOVE_THROTTLE_MS) {
-        const event: TokenMoveEvent = {
-          tokenId: draggedToken.id,
-          mapId: currentMap.id,
-          x: Math.floor(newX),
-          y: Math.floor(newY),
-        };
-        socket!.emitTokenMove(event);
-        lastMoveEmitRef.current = now;
-      }
-
-      // Keep the hover panel honest while dragging. It used to be updated only
-      // in the branch below, so a held token left the last name it happened to
-      // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
-      // the cursor was over something else entirely. Reading the square under
-      // the cursor also shows what you are about to land on.
-      setHoverToken(getHoverTokenAt(gridCoords.x, gridCoords.y));
-
-      // Ghost follows the cursor — tokens layer only.
-      markDirty('tokens');
-    } else {
-      // Handle map panning
-      mapControls.handleDrag(e);
-
-      // Update hover token
-      const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
-      setHoverToken(token);
-
-      // Pan moves the whole scene → repaint every layer.
-      if (mapControls.isDragging) {
-        markDirty('terrain', 'tokens', 'overlay');
-      }
+    for (const tool of pointerTools) {
+      if (tool.move?.(at)) return;
     }
   };
 
   /**
    * Handle mouse up (stop map panning)
-   * Note: Token placement is handled in handleMouseDown on second click
+   * Note: a held token is put down by the token tool's mouse down, on the second click
    */
   const handleMouseUp = (e?: React.MouseEvent<HTMLCanvasElement>) => {
     // Release right-button pan
@@ -2054,9 +2064,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapControls.stopDrag();
       return;
     }
-    wallTool.up!();
-    lightTool.up!();
-    fogTool.up!();
+    for (const tool of pointerTools) tool.up?.();
     // Stop map panning
     mapControls.stopDrag();
   };
