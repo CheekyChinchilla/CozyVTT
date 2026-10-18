@@ -13,6 +13,20 @@ import { createRef, useRef } from 'react';
 import DmToolPanelContainer from '../DmToolPanelContainer';
 
 describe('DmToolPanelContainer', () => {
+  // With a height limit on the stack, the panels shrank to fit it, cutting
+  // off their lower controls, where the stack should have scrolled. Each
+  // keeps its own height; the stack scrolls.
+  it('keeps each panel its height, so a tall stack scrolls', () => {
+    const { container } = render(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>
+        <p>Fog of War</p>
+      </DmToolPanelContainer>
+    );
+    const stack = container.firstElementChild as HTMLElement;
+    expect(stack.className).toMatch(/(^|\s)overflow-y-auto(\s|$)/);
+    expect(stack.className).toMatch(/(^|\s)\*:shrink-0(\s|$)/);
+  });
+
   it('gives the panel stack one fixed width, so long notes wrap', () => {
     const { container } = render(
       <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>

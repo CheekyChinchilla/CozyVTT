@@ -101,7 +101,7 @@ export default function DmToolPanelContainer({ children, containerRef }: DmToolP
   // One width for the stack, the one Walls and Lights take, so a section's
   // notes wrap instead of widening every panel when it is opened.
   return (
-    <div ref={panelRef} style={style} className="flex flex-col gap-1.5 w-[200px] overflow-y-auto">
+    <div ref={panelRef} style={style} className="flex flex-col gap-1.5 w-[200px] overflow-y-auto *:shrink-0">
       {/* Drag handle */}
       <div
         className="flex items-center justify-center py-0.5 cursor-grab active:cursor-grabbing select-none rounded-t bg-stone-700/60 border border-stone-600/30 hover:bg-stone-700/80 transition-colors"
