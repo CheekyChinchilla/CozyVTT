@@ -52,6 +52,10 @@
  * sheet editors stop each box at them; an editor allowing more is a sheet the
  * player fills in and cannot save. The file is kept identical in both packages.
  *
+ * The creature and stat block limits. The server refuses a creature, token
+ * template or token over them and the forms stop each box at them. The file is
+ * kept identical in both packages.
+ *
  * The session secret examples. A production server refuses the example values
  * for SESSION_SECRET, so a self-hoster who copies a block as written is told
  * to generate one; the guide's example was once changed without the list of
@@ -377,6 +381,12 @@ describe('the Invite Player search limits', () => {
 describe('the character sheet limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/sheetLimits.ts')).toBe(read('backend/src/validators/game-systems/sheetLimits.ts'));
+  });
+});
+
+describe('the creature and stat block limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/statBlockLimits.ts')).toBe(read('backend/src/validators/statBlockLimits.ts'));
   });
 });
 

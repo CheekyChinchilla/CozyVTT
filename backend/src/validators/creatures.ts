@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 import { GameSystem } from '@prisma/client';
 import { NpcStatBlockSchema } from './statBlock';
+import { STAT_BLOCK_LIMITS } from './statBlockLimits';
 
 const SizeSchema = z.object({
   width: z.number().int().min(1).max(10),
@@ -31,9 +32,9 @@ const DisplayModeSchema = z.enum(TOKEN_DISPLAY_MODES);
  */
 const creatureFields = {
   gameSystem: z.nativeEnum(GameSystem).nullable().optional(),
-  challengeRating: z.string().max(10).nullable().optional(),
-  creatureType: z.string().max(200).nullable().optional(),
-  alignment: z.string().max(100).nullable().optional(),
+  challengeRating: z.string().max(STAT_BLOCK_LIMITS.maxChallengeRatingLength).nullable().optional(),
+  creatureType: z.string().max(STAT_BLOCK_LIMITS.maxCreatureTypeLength).nullable().optional(),
+  alignment: z.string().max(STAT_BLOCK_LIMITS.maxAlignmentLength).nullable().optional(),
   imageUrl: z.string().max(500).nullable().optional(),
   size: SizeSchema.optional(),
   disposition: DispositionSchema.optional(),
@@ -41,14 +42,14 @@ const creatureFields = {
 };
 
 export const CreateCreatureSchema = z.object({
-  name: z.string().trim().min(1, 'Creature name is required').max(200),
+  name: z.string().trim().min(1, 'Creature name is required').max(STAT_BLOCK_LIMITS.maxNameLength),
   statBlock: NpcStatBlockSchema,
   ...creatureFields,
 });
 
 export const UpdateCreatureSchema = z
   .object({
-    name: z.string().trim().min(1, 'Creature name cannot be empty').max(200).optional(),
+    name: z.string().trim().min(1, 'Creature name cannot be empty').max(STAT_BLOCK_LIMITS.maxNameLength).optional(),
     statBlock: NpcStatBlockSchema.optional(),
     ...creatureFields,
   })

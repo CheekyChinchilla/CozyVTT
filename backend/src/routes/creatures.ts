@@ -15,6 +15,7 @@ import { seedSrdCreatures, getSrdSeedStatus, SeedSourceError } from '../services
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
+import { issueMessages } from '../validators/issueMessages';
 import { toJson } from '../utils/prisma-json';
 import { readEnumQuery } from '../utils/queryEnum';
 import { GameSystem } from '../game-systems';
@@ -232,7 +233,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
     const data = parsed.data;
@@ -284,7 +285,7 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
     const data = parsed.data;

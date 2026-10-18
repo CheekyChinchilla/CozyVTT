@@ -24,6 +24,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 import type { TokenTemplate, NpcStatBlock, Campaign } from '@/types';
 import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
@@ -177,8 +178,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
       setTemplates((prev) => prev.filter((t) => t.id !== id));
       setTotal((prev) => prev - 1);
       if (expandedId === id) setExpandedId(null);
-    } catch {
-      setError('Failed to delete template');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to delete template');
     }
   }, [campaign, expandedId]);
 
@@ -639,8 +640,8 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       formData.append('file', file);
       const { asset } = await api.uploadAsset(formData);
       setImageUrl(asset.id);
-    } catch {
-      setFormError('Failed to upload image');
+    } catch (err) {
+      setFormError(apiErrorMessage(err) || 'Failed to upload image');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -684,8 +685,8 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
         const created = await api.createTokenTemplate(campaignId, payload);
         onCreated(created);
       }
-    } catch {
-      setFormError(isEdit ? 'Failed to update template' : 'Failed to create template');
+    } catch (err) {
+      setFormError(apiErrorMessage(err) || (isEdit ? 'Failed to update template' : 'Failed to create template'));
     } finally {
       setIsSubmitting(false);
     }
@@ -709,7 +710,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       {/* Name */}
       <div>
         <label className="text-[10px] text-stone-gray block mb-0.5">Name *</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Treasure Chest" className="input-cozy w-full text-sm" />
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Treasure Chest" maxLength={STAT_BLOCK_LIMITS.maxNameLength} className="input-cozy w-full text-sm" />
       </div>
 
       {/* Image */}
@@ -841,7 +842,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       {/* Notes */}
       <div>
         <label className="text-[10px] text-stone-gray block mb-0.5">Notes</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="input-cozy w-full text-xs resize-y" placeholder="Optional description or notes" />
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="input-cozy w-full text-xs resize-y" placeholder="Optional description or notes" maxLength={STAT_BLOCK_LIMITS.maxNotesLength} />
       </div>
 
       {/* Submit */}

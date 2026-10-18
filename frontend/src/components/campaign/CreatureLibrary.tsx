@@ -27,6 +27,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
 import { TokenType, GameSystem, AssetType, TokenDisposition } from '@/types';
 import {
@@ -304,8 +305,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       const duplicate = await api.duplicateCreature(campaign.id, creatureId);
       setCreatures((prev) => [duplicate, ...prev]);
       setTotal((prev) => prev + 1);
-    } catch {
-      setError('Failed to duplicate creature');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to duplicate creature');
     }
   }, [campaign]);
 
@@ -322,8 +323,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       setCreatures((prev) => prev.filter((c) => c.id !== creatureId));
       setTotal((prev) => prev - 1);
       if (expandedId === creatureId) setExpandedId(null);
-    } catch {
-      setError('Failed to delete creature');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to delete creature');
     }
   }, [campaign, expandedId]);
 
@@ -900,7 +901,8 @@ function NameDescriptionList({
         <button
           type="button"
           onClick={() => onChange([...items, { name: '', description: '' }])}
-          className="text-[10px] text-brand-ink hover:text-brand-ink/80 flex items-center gap-0.5"
+          disabled={items.length >= STAT_BLOCK_LIMITS.maxListEntries}
+          className="text-[10px] text-brand-ink hover:text-brand-ink/80 flex items-center gap-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-2.5 h-2.5" /> Add
         </button>
@@ -917,6 +919,7 @@ function NameDescriptionList({
                 onChange(updated);
               }}
               placeholder="Name"
+              maxLength={STAT_BLOCK_LIMITS.maxEntryNameLength}
               className="input-cozy w-full text-[11px]"
             />
             <textarea
@@ -927,6 +930,7 @@ function NameDescriptionList({
                 onChange(updated);
               }}
               placeholder="Description"
+              maxLength={STAT_BLOCK_LIMITS.maxEntryDescriptionLength}
               rows={2}
               className="input-cozy w-full text-[11px] resize-y"
             />
@@ -1103,8 +1107,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         const creature = await api.createCreature(campaignId, payload);
         onCreated(creature);
       }
-    } catch {
-      setFormError(isEdit ? 'Failed to update creature' : 'Failed to create creature');
+    } catch (err) {
+      setFormError(apiErrorMessage(err) || (isEdit ? 'Failed to update creature' : 'Failed to create creature'));
     } finally {
       setIsSubmitting(false);
     }
@@ -1133,6 +1137,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Goblin Boss"
+          maxLength={STAT_BLOCK_LIMITS.maxNameLength}
           className="input-cozy w-full text-sm"
         />
       </div>
@@ -1160,6 +1165,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             value={creatureType}
             onChange={(e) => setCreatureType(e.target.value)}
             placeholder="Small humanoid"
+            maxLength={STAT_BLOCK_LIMITS.maxCreatureTypeLength}
             className="input-cozy w-full text-xs"
           />
         </div>
@@ -1170,6 +1176,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             value={alignment}
             onChange={(e) => setAlignment(e.target.value)}
             placeholder="neutral evil"
+            maxLength={STAT_BLOCK_LIMITS.maxAlignmentLength}
             className="input-cozy w-full text-xs"
           />
         </div>
@@ -1240,6 +1247,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             type="text"
             value={speed}
             onChange={(e) => setSpeed(e.target.value)}
+            maxLength={STAT_BLOCK_LIMITS.maxSpeedLength}
             className="input-cozy w-full text-xs"
           />
         </div>
@@ -1359,27 +1367,27 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Damage Vulnerabilities</label>
-                <input type="text" value={damageVulnerabilities} onChange={(e) => setDamageVulnerabilities(e.target.value)} placeholder="fire" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={damageVulnerabilities} onChange={(e) => setDamageVulnerabilities(e.target.value)} placeholder="fire" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Damage Resistances</label>
-                <input type="text" value={damageResistances} onChange={(e) => setDamageResistances(e.target.value)} placeholder="cold, bludgeoning" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={damageResistances} onChange={(e) => setDamageResistances(e.target.value)} placeholder="cold, bludgeoning" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Damage Immunities</label>
-                <input type="text" value={damageImmunities} onChange={(e) => setDamageImmunities(e.target.value)} placeholder="poison" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={damageImmunities} onChange={(e) => setDamageImmunities(e.target.value)} placeholder="poison" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Condition Immunities</label>
-                <input type="text" value={conditionImmunities} onChange={(e) => setConditionImmunities(e.target.value)} placeholder="charmed, frightened" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={conditionImmunities} onChange={(e) => setConditionImmunities(e.target.value)} placeholder="charmed, frightened" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Senses</label>
-                <input type="text" value={senses} onChange={(e) => setSenses(e.target.value)} placeholder="darkvision 60 ft." className="input-cozy w-full text-[11px]" />
+                <input type="text" value={senses} onChange={(e) => setSenses(e.target.value)} placeholder="darkvision 60 ft." maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Languages</label>
-                <input type="text" value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="Common, Goblin" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="Common, Goblin" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
             </div>
 

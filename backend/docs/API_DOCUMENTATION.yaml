@@ -8125,7 +8125,10 @@ paths:
         '400':
           description: >-
             `error` is `Validation Error`; `message` joins every validation
-            problem with `; `.
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
           content:
             application/json:
               schema:
@@ -8263,7 +8266,10 @@ paths:
         '400':
           description: >-
             `error` is `Validation Error`; `message` joins every validation
-            problem with `; `. An empty body is refused.
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`. An empty body is refused.
           content:
             application/json:
               schema:
@@ -8650,7 +8656,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -8709,7 +8724,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -8770,7 +8794,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
 

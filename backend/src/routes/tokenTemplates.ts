@@ -16,6 +16,7 @@ import {
   SaveTokenAsTemplateSchema,
 } from '../validators/tokenTemplates';
 import { TOKEN_TYPES } from '../validators/tokens';
+import { issueMessages } from '../validators/issueMessages';
 import { jsonOrNull } from '../utils/prisma-json';
 import { canReferenceAsset } from '../services/permissions';
 import logger from '../utils/logger';
@@ -102,7 +103,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
 
@@ -158,7 +159,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
 
@@ -230,7 +231,7 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
 
