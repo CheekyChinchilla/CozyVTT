@@ -1223,7 +1223,7 @@ Two practical consequences when you are building a map:
 1. Open the **Lights** panel among the DM tool panels at the top right of the map
 2. Click **Place**, then click on the map to drop a light
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
-4. Pick a color from the palette or enter a custom hex
+4. Pick a color from the palette, or type a hex colour such as `#ff9933` (the `#` is optional); it applies once all six digits are in
 
 Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see, and with fog of war on only a door beside a square you have revealed to them; spectators cannot open or close doors at all.
 

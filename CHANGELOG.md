@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **A light's colour can be typed into the Lights panel.** The box beside the colour swatches undid every key until a whole colour was there, so nothing could be typed into it. It now takes a colour such as `#ff9933`, with or without the `#`, and goes back to the colour in use if you leave it unfinished.
+
 - **The Spirit Layer panel shows the veil and the style as the server has them.** Opening the veil marked it open on your screen before the server answered, so after a refusal your screen said the players could cross while they could not; a refused style stayed picked, though the table kept the old one. The switch now waits for the server, and a refused style goes back to the one in use, with the reason.
 
 - **Edit Token shows changes made elsewhere while it is open, and no longer undoes them.** It kept the token as it was when opened, so a condition a player added to their own token, damage dealt from another tab or a rename did not show, and the next change made in it put the old values back. It now follows the token as the table has it; what you are typing in a box stays there until it is saved.
