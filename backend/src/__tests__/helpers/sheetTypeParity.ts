@@ -83,6 +83,12 @@ export function sheetTypeMismatches(pairs: SheetPair[]): Record<string, string[]
   const result: Record<string, string[]> = {};
   pairs.forEach((pair, i) => {
     const out: string[] = [];
+    // A schema wrapped in z.preprocess, or annotated as z.ZodType<T>, takes
+    // unknown, and comparing unknown checks nothing.
+    const server = checker.getNonNullableType(declared(`ServerSide${i}`));
+    if (!isPlainObject(checker, server) || checker.getPropertiesOfType(server).length === 0) {
+      out.push(`(the sheet): the schema takes ${checker.typeToString(server)}, not an object with fields, so nothing can be compared`);
+    }
     compare(checker, declared(`ClientSide${i}`), declared(`ServerSide${i}`), '', out, new Set());
     result[pair.label] = out;
   });
@@ -94,6 +100,8 @@ const has = (t: ts.Type, flag: ts.TypeFlags) => parts(t).some((p) => (p.flags & 
 
 function isPlainObject(checker: ts.TypeChecker, t: ts.Type): boolean {
   if (t.isUnion() || checker.isArrayType(t) || checker.isTupleType(t)) return false;
+  // `CoC7eSkill & { language: string }` is an object too.
+  if (t.isIntersection()) return t.types.every((p) => isPlainObject(checker, p));
   if (!(t.flags & ts.TypeFlags.Object)) return false;
   return checker.getPropertiesOfType(t).length > 0 || checker.getIndexInfosOfType(t).length > 0;
 }
@@ -118,8 +126,10 @@ function compare(checker: ts.TypeChecker, client: ts.Type, server: ts.Type, at: 
   if (seen.has(key)) return;
   seen.add(key);
 
+  // A preprocessed field: anything goes in. Tested before null is removed,
+  // which turns unknown into {}.
+  if (server.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) return;
   const serverNonNull = checker.getNonNullableType(server);
-  if (serverNonNull.flags & (ts.TypeFlags.Unknown | ts.TypeFlags.Any)) return; // a preprocessed field: anything goes in
   const clientNonNull = checker.getNonNullableType(client);
   if (clientNonNull.flags & ts.TypeFlags.Any) {
     out.push(`${here}: the frontend type is any`);
@@ -157,10 +167,79 @@ function compare(checker: ts.TypeChecker, client: ts.Type, server: ts.Type, at: 
     else if (serverIndex.length !== clientIndex.length) out.push(`${here}: one side is a record, the other is not`);
     return;
   }
-  // A leaf, a union of objects or a tuple: the two must accept the same values.
-  const a = checker.getNonNullableType(client);
-  const b = checker.getNonNullableType(server);
-  if (!checker.isTypeAssignableTo(a, b) || !checker.isTypeAssignableTo(b, a)) {
-    out.push(`${here}: the frontend type is ${checker.typeToString(a)}, the schema takes ${checker.typeToString(b)}`);
+  const clientObjects = parts(clientNonNull).filter((p) => isPlainObject(checker, p));
+  const serverObjects = parts(serverNonNull).filter((p) => isPlainObject(checker, p));
+  if (clientObjects.length || serverObjects.length) {
+    compareUnion(checker, clientNonNull, serverNonNull, clientObjects, serverObjects, at, out, seen);
+    return;
   }
+  // A leaf or a tuple: the two must accept the same values.
+  if (!checker.isTypeAssignableTo(clientNonNull, serverNonNull) || !checker.isTypeAssignableTo(serverNonNull, clientNonNull)) {
+    out.push(`${here}: the frontend type is ${checker.typeToString(clientNonNull)}, the schema takes ${checker.typeToString(serverNonNull)}`);
+  }
+}
+
+/**
+ * A union with object members, such as `string | { name, rank }` or the
+ * Flexible sections. Whether each side accepts the other is too weak a test
+ * here: an optional field on one side only passes it. So the other members
+ * must accept the same values, and the objects are compared field by field,
+ * paired by the literal field they all have (`type`) when there are several.
+ */
+function compareUnion(
+  checker: ts.TypeChecker,
+  client: ts.Type,
+  server: ts.Type,
+  clientObjects: ts.Type[],
+  serverObjects: ts.Type[],
+  at: string,
+  out: string[],
+  seen: Set<string>
+): void {
+  const here = at || '(the sheet)';
+  const others = (t: ts.Type) => parts(t).filter((p) => !isPlainObject(checker, p));
+  const acceptedBy = (p: ts.Type, side: ts.Type[]) => side.some((q) => checker.isTypeAssignableTo(p, q));
+  const clientOthers = others(client);
+  const serverOthers = others(server);
+  for (const p of serverOthers) {
+    if (!acceptedBy(p, clientOthers)) out.push(`${here}: the schema also takes ${checker.typeToString(p)}, the frontend type does not`);
+  }
+  for (const p of clientOthers) {
+    if (!acceptedBy(p, serverOthers)) out.push(`${here}: the frontend type also allows ${checker.typeToString(p)}, the schema does not`);
+  }
+
+  if (clientObjects.length === 1 && serverObjects.length === 1) {
+    compare(checker, clientObjects[0], serverObjects[0], at, out, seen);
+    return;
+  }
+  const key = discriminant(checker, [...clientObjects, ...serverObjects]);
+  if (!key) {
+    out.push(`${here}: a union of ${clientObjects.length} and ${serverObjects.length} objects with no shared literal field to pair them by`);
+    return;
+  }
+  const byValue = (members: ts.Type[]) => new Map(members.map((m) => [literalOf(checker, m, key)!, m]));
+  const clientByValue = byValue(clientObjects);
+  const serverByValue = byValue(serverObjects);
+  for (const [value, serverMember] of serverByValue) {
+    const member = `${at}(${key} '${value}')`;
+    const clientMember = clientByValue.get(value);
+    if (clientMember) compare(checker, clientMember, serverMember, member, out, seen);
+    else out.push(`${member}: in the schema, missing from the frontend type`);
+  }
+  for (const value of clientByValue.keys()) {
+    if (!serverByValue.has(value)) out.push(`${at}(${key} '${value}'): in the frontend type, not in the schema`);
+  }
+}
+
+/** A field every member has, holding a different string literal in each. */
+function discriminant(checker: ts.TypeChecker, members: ts.Type[]): string | undefined {
+  const names = checker.getPropertiesOfType(members[0]).map((p) => p.name);
+  return names.find((name) => members.every((m) => literalOf(checker, m, name) !== undefined));
+}
+
+function literalOf(checker: ts.TypeChecker, member: ts.Type, name: string): string | undefined {
+  const property = checker.getPropertyOfType(member, name);
+  if (!property) return undefined;
+  const type = checker.getNonNullableType(checker.getTypeOfSymbol(property));
+  return type.isStringLiteral() ? type.value : undefined;
 }

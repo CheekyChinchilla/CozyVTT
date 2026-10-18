@@ -494,7 +494,7 @@ The frontend keeps its own copy of the types: its image is built from `frontend/
    }
    ```
 
-2. **Character type** — create `frontend/src/types/game-systems/mySystem.ts` describing what the system's Zod schema accepts, export it from `frontend/src/types/game-systems/index.ts`, and have the sheet interface extend `SheetChrome`. A field the schema lets be absent, or fills in by default, is optional in the type: the server sends a sheet as it was stored, so a sheet saved before the field existed arrives without it. Add the pair to the sheet check at the end of `backend/src/__tests__/keepInStep.test.ts`, which compares the type with the schema field by field and fails on any difference in names, optionality, `null` or values.
+2. **Character type** — create `frontend/src/types/game-systems/mySystem.ts` describing what the system's Zod schema accepts, export it from `frontend/src/types/game-systems/index.ts`, and have the sheet interface extend `SheetChrome`. A field the schema lets be absent, or fills in by default, is optional in the type: the server sends a sheet as it was stored, so a sheet saved before the field existed arrives without it. Add the pair to the sheet check at the end of `backend/src/__tests__/keepInStep.test.ts`, which compares the type with the schema field by field and fails on any difference in names, optionality, `null` or values. Inside a union it compares each object member field by field too; when a union has several objects, give them a field holding a different string in each (the Flexible sections' `type`), which the check pairs them by. A field the schema runs through `z.preprocess` takes anything, so it is not compared.
 
 ---
 
