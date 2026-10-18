@@ -2129,7 +2129,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       useGameStore.getState().addToken(result.token);
       socket?.emitMapChange(currentMap.id);
     } catch (err) {
-      console.error('[MapCanvas] Failed to place token from roster drag:', err);
+      showToast(apiErrorMessage(err) || `Could not place ${dragData.name} on the map`, 'error');
     }
   };
 

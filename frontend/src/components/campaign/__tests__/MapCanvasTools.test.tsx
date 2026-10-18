@@ -29,6 +29,7 @@ const h = vi.hoisted(() => {
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
   const updateToken = vi.fn();
+  const addToken = vi.fn();
   const raw = {
     on(event: string, fn: (data: never) => void) {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -50,6 +51,7 @@ const h = vi.hoisted(() => {
     sent,
     raw,
     updateToken,
+    addToken,
     subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; },
     snapshot: () => version,
     set(patch: Partial<typeof state>) {
@@ -122,7 +124,8 @@ vi.mock('@/services/map.service', () => ({
 
 vi.mock('@/services/api', () => {
   const client = new Proxy({}, {
-    get: (_target, prop: string) => (prop === 'updateToken' ? h.updateToken : vi.fn().mockResolvedValue({})),
+    get: (_target, prop: string) =>
+      prop === 'updateToken' ? h.updateToken : prop === 'addToken' ? h.addToken : vi.fn().mockResolvedValue({}),
   });
   return { api: client, default: client };
 });
@@ -234,6 +237,7 @@ beforeEach(() => {
   h.sent.length = 0;
   h.handlers.clear();
   h.updateToken.mockReset().mockResolvedValue({});
+  h.addToken.mockReset().mockResolvedValue({ token: token('tok-new', 'Aria', 2, 17) });
   useGameStore.getState().setTokens([]);
   h.set({ userRole: 'DM', currentMap: mapWith() });
 });
@@ -869,5 +873,31 @@ describe("the token menu's Hide, Obscure and Spirit Realm actions", () => {
     fireEvent.click(screen.getByText('Hide from Players'));
 
     expect(await screen.findByText('Could not hide the token from players')).toBeInTheDocument();
+  });
+});
+
+describe('a character dropped from the roster', () => {
+  const drag = JSON.stringify({ type: 'character-token', characterId: 'char-1', name: 'Aria', imageUrl: '', userId: 'player-1' });
+  const drop = () => {
+    const container = surface().parentElement!.parentElement!;
+    fireEvent.drop(container, { clientX: 125, clientY: 125, dataTransfer: { getData: () => drag } });
+  };
+
+  it('says why when the map refuses it', async () => {
+    render(<MapCanvas />);
+    h.addToken.mockRejectedValue(Object.assign(new Error('refused'), { response: { status: 400, data: { message: 'This map already has the most tokens it can hold' } } }));
+
+    drop();
+
+    expect(await screen.findByText('This map already has the most tokens it can hold')).toBeInTheDocument();
+  });
+
+  it('says so in plain words when the server gives no reason', async () => {
+    render(<MapCanvas />);
+    h.addToken.mockRejectedValue(new Error('network down'));
+
+    drop();
+
+    expect(await screen.findByText('Could not place Aria on the map')).toBeInTheDocument();
   });
 });
