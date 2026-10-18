@@ -2170,6 +2170,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return canRollAsCharacter(user, character, membership);
   };
 
+  /**
+   * Whether the token menu offers this viewer anything. The DM always has the
+   * token actions; anyone else has only the character's sheet and rolls, so a
+   * creature or an object would open an empty box.
+   */
+  const tokenMenuHasItems = (token: Token): boolean =>
+    isDM || (!!token.characterId && (campaignHasCharacter(token.characterId) || canRollForToken(token)));
+
   const canRollInitiativeFor = (token: Token): boolean => {
     const combat = useGameStore.getState().combat;
     if (!combat.combatants.some((c) => c.tokenId === token.id)) return false;
@@ -2220,9 +2228,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
 
-    // Check tokens first — they sit on a higher visual layer than doors
+    // Check tokens first — they sit on a higher visual layer than doors. A
+    // token whose menu would be empty for this viewer is passed over.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
-    if (token) {
+    if (token && tokenMenuHasItems(token)) {
       setContextMenu({ token, x: e.clientX, y: e.clientY });
       return;
     }

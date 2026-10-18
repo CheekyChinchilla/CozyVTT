@@ -32,6 +32,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A player who right-clicks a creature or an object on the map no longer gets an empty menu.** The menu has nothing for a player there, so none opens.
+
 - **A character dragged from the roster that cannot be placed on the map says why.** Nothing appeared and there was no message.
 
 - **Hide from Players, Obscure Identity, Send to Spirit Realm and Return to Material Plane on a token's right-click menu say why when they fail.** The menu closed and nothing changed, with no message.

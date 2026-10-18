@@ -901,3 +901,28 @@ describe('a character dropped from the roster', () => {
     expect(await screen.findByText('Could not place Aria on the map')).toBeInTheDocument();
   });
 });
+
+describe("a player's right-click on a token", () => {
+  // The token menu's box, drawn whether or not anything in it applies.
+  const tokenMenu = () => document.querySelector('.glass-panel.fixed');
+
+  it('opens nothing for a creature, where the menu would offer them nothing (F354)', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19), token('tok-crate', 'Crate', 2, 19, { type: TokenType.OBJECT }));
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+    expect(tokenMenu()).toBeNull();
+    fireEvent.contextMenu(surface(), square(2, 19));
+    expect(tokenMenu()).toBeNull();
+  });
+
+  it('still opens the menu for the DM', () => {
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+
+    expect(tokenMenu()).not.toBeNull();
+  });
+});
