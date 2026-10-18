@@ -107,6 +107,10 @@
  * frontend cannot import the schema, so the TypeScript compiler compares the
  * two here, field by field: names, whether a field can be absent or null,
  * arrays and the values a field takes (helpers/sheetTypeParity.ts).
+ *
+ * The Basic Flexible sheet. The server offers it as a starter sheet, and its
+ * four sections are the Flexible editor's Attributes, Skills, Inventory and
+ * Background section templates. Compared here, ids aside.
  */
 
 import crypto from 'crypto';
@@ -117,6 +121,8 @@ import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
 import { sheetTypeMismatches } from './helpers/sheetTypeParity';
+import ts from 'typescript';
+import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -667,6 +673,53 @@ describe('the character sheets, as the schemas take them and the frontend types 
 
   it.each(Object.keys(mismatches))('%s: the frontend type matches what the schema takes', (label) => {
     expect(mismatches[label]).toEqual([]);
+  });
+});
+
+describe('the Basic Flexible sheet and the editor\'s section templates', () => {
+  /** A literal from the frontend source as a plain value; every id is '<id>'. */
+  function literal(node: ts.Expression): unknown {
+    if (ts.isParenthesizedExpression(node)) return literal(node.expression);
+    if (ts.isObjectLiteralExpression(node)) {
+      return Object.fromEntries(node.properties.map((p) => {
+        if (!ts.isPropertyAssignment(p)) throw new Error(`unexpected ${ts.SyntaxKind[p.kind]} in a section template`);
+        const name = p.name.getText();
+        return [name, name === 'id' ? '<id>' : literal(p.initializer)];
+      }));
+    }
+    if (ts.isArrayLiteralExpression(node)) return node.elements.map((e) => literal(e));
+    if (ts.isStringLiteral(node)) return node.text;
+    if (ts.isNumericLiteral(node)) return Number(node.text);
+    if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+    if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+    throw new Error(`unexpected ${ts.SyntaxKind[node.kind]} in a section template; teach this test to read it`);
+  }
+
+  function editorSection(id: string): unknown {
+    const file = 'frontend/src/components/character-sheets/flexible/utils/section-templates.ts';
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    let found: unknown;
+    const visit = (node: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const idProp = node.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'id');
+        const create = node.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'create');
+        if (idProp && create && ts.isPropertyAssignment(idProp) && ts.isStringLiteral(idProp.initializer) && idProp.initializer.text === id
+          && ts.isPropertyAssignment(create) && ts.isArrowFunction(create.initializer)) {
+          found = literal(create.initializer.body as ts.Expression);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    if (found === undefined) throw new Error(`no '${id}' section template in ${file}`);
+    return found;
+  }
+
+  const withoutIds = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, v) => (key === 'id' ? '<id>' : v)));
+
+  it('has the editor\'s Attributes, Skills, Inventory and Background sections', () => {
+    const sections = (flexibleBasicTemplate().data as { sections: unknown[] }).sections;
+    expect(withoutIds(sections)).toEqual(['attributes', 'skills', 'inventory', 'background'].map(editorSection));
   });
 });
 

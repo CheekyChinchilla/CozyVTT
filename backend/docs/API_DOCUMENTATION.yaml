@@ -10658,7 +10658,8 @@ paths:
         system has `blank`, plus `fighter` for `DND_5E` and `PATHFINDER_2E`,
         `streetsamurai` for `SHADOWRUN_6E`, and `privateinvestigator` (or
         `pi`) for `CALL_OF_CTHULHU_7E`; any other name returns that system's
-        `blank` template with 200.
+        `blank` template with 200. The flexible `basic` sheet carries new
+        section and field ids in each answer.
       operationId: getBuiltInCharacterTemplate
       security:
         - cookieAuth: []
