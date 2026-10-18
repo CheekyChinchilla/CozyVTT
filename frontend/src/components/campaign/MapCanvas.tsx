@@ -62,6 +62,7 @@ import { useWallSelection } from './map/useWallSelection';
 import { useFogTool } from './map/tools/useFogTool';
 import { useLightTool } from './map/tools/useLightTool';
 import { useMeasureTools, type AoEShape } from './map/tools/useMeasureTools';
+import { useDoorTool } from './map/tools/useDoorTool';
 import type { PointerAt } from './map/tools/types';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
@@ -72,7 +73,7 @@ import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
 import { releaseHeldToken } from './map/tokenHold';
-import { offeredDoorAt, type DoorViewer } from './map/doorAccess';
+import type { DoorViewer } from './map/doorAccess';
 import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
@@ -295,7 +296,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const ENDPOINT_SNAP_RADIUS = 16;
   const [wallInProgress, setWallInProgress] = useState<{ x: number; y: number }[]>([]); // current polyline points
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
-  const [hoveredDoorId, setHoveredDoorId] = useState<string | null>(null); // for pointer cursor in pan mode
   const [wallColor, setWallColor] = useState('#f97316'); // default orange
   const [splitHoverPoint, setSplitHoverPoint] = useState<{ x: number; y: number; wallId: string } | null>(null);
   const wallEraseBrushActiveRef = useRef(false);
@@ -599,17 +599,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
     return mapPx;
   };
-
-  // Helper: change a door's type and broadcast.
-  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
-    if (!currentMap) return;
-    const updated = { ...door, type: newType };
-    // Opening or closing a door is not an undoable edit: carried into the
-    // whole history, so undo never closes a door again.
-    carryWallHistory((walls) => walls.map(s => s.id === door.id ? updated : s));
-    socket?.getSocket()?.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
-    setDoorContextMenu(null);
-  }, [currentMap, socket, carryWallHistory, ownEdits]);
 
   // Player's own token on the current map — used as ruler origin for non-DM users
   const myToken = useMemo(() => {
@@ -1546,6 +1535,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee };
   }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn]);
 
+  // Doors with no wall, fog or light tool up (map/tools/useDoorTool.ts).
+  const { tool: doorTool, doorAt, setDoorType, hoveredDoorId, setHoveredDoorId } = useDoorTool({
+    mapId: currentMap?.id, wallSegments, doorViewer, zoom: mapControls.zoom,
+    wallMode, fogMode, lightMode, holdingToken: draggedToken !== null,
+    carryWallHistory, socket, ownEdits, showToast, markDirty,
+  });
+
+  // A choice from the door menu: the door changed, the menu closed.
+  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
+    setDoorType(door, newType);
+    setDoorContextMenu(null);
+  }, [setDoorType]);
+
   /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
    * spirit imagery. Static during a token drag. The three layers stack
@@ -2341,28 +2343,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     if (lightTool.down!(at)) return;
 
-    // Door interaction: click near a door segment to toggle open/closed. Only
-    // a door the map offers this viewer (doorAccess.ts): the DM any, a player
-    // one they can see, a spectator none, as the server's wall:update checks.
-    if (!wallMode && !fogMode && !lightMode) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 12 / mapControls.zoom;
-      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
-      if (door) {
-        if (door.type === 'door-locked') {
-          showToast('This door is locked.', 'info');
-          return;
-        }
-        const newType = door.type === 'door-closed' ? 'door-open' : 'door-closed';
-        const updated = { ...door, type: newType } as WallSegment;
-        carryWallHistory((walls) => walls.map((s) => s.id === door.id ? updated : s));
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
-        }
-        return;
-      }
-    }
+    if (doorTool.down!(at)) return;
 
     if (fogTool.down!(at)) return;
 
@@ -2634,18 +2615,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     if (lightTool.move!(at)) return;
 
-    // Door hover detection in pan mode — changes cursor to pointer over a door
-    // the map offers this viewer
-    if (!wallMode && !fogMode && !draggedToken) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 12 / mapControls.zoom;
-      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
-      const newHoveredDoorId = door?.id ?? null;
-      if (newHoveredDoorId !== hoveredDoorId) {
-        setHoveredDoorId(newHoveredDoorId);
-        markDirty('overlay');
-      }
-    }
+    doorTool.move!(at);
 
     if (fogTool.move!(at)) return;
 
@@ -2964,9 +2934,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Door hit-test: right-click opens the full door state menu (only in pan
     // mode), for a door the map offers this viewer
     if (!wallMode && !fogMode) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 12 / mapControls.zoom;
-      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
+      const door = doorAt(screenToMapPx(screenX, screenY));
       if (door) {
         setDoorContextMenu({ door, x: e.clientX, y: e.clientY });
       }
