@@ -35,7 +35,9 @@ import {
   ProficiencyEditor,
   Pf2eProficiencyEditor,
 } from './npc-stat-blocks';
-import { CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
+import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
+import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
+import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -1026,6 +1028,28 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
     ...proficiencyFields,
   };
 
+  // Ability scores and CR feed every derived save and skill, so a change
+  // moves them, as in the token editor: the form used to show the new totals
+  // and save the old ones. Pathfinder modifiers are printed values, not derived.
+  const changeNumbers = (changes: Partial<Pick<NpcStatBlock, 'abilities' | 'challengeRating'>>) => {
+    if (isPf2e) return;
+    const next = changeAbilitiesOrRating(workingStatBlock, changes);
+    setProficiencyFields({ savingThrows: next.savingThrows, skills: next.skills, proficiencies: next.proficiencies });
+  };
+  const scoreSetters: Record<AbilityKey, (value: number) => void> = {
+    str: setStr, dex: setDex, con: setCon, int: setInt, wis: setWis, cha: setCha,
+  };
+  const changeScore = (ability: AbilityKey, value: number) => {
+    scoreSetters[ability](value);
+    changeNumbers({ abilities: { ...workingStatBlock.abilities, [ability]: value } });
+  };
+
+  // A Pathfinder stat block holds attribute modifiers (the token editor writes
+  // them, and rolls and the viewer read them); there is no score behind them.
+  const [attributeModifiers, setAttributeModifiers] = useState<Record<AbilityKey, number>>(() =>
+    readAttributeModifiers(sb ?? workingStatBlock)
+  );
+
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -1037,7 +1061,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
 
     // Merge the proficiency edits over the source before assembling, so the
     // carry-forward below sees the current saves and skills.
-    const statBlock = buildCreatureStatBlock({ ...sb, ...proficiencyFields, level }, {
+    const statBlock = buildCreatureStatBlock({ ...sb, ...proficiencyFields, level, ...(isPf2e ? { attributeModifiers } : {}) }, {
       ac,
       hpMax,
       speed,
@@ -1187,7 +1211,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             <select
               id="creature-cr"
               value={cr}
-              onChange={(e) => setCr(e.target.value)}
+              onChange={(e) => {
+                setCr(e.target.value);
+                changeNumbers({ challengeRating: e.target.value || undefined });
+              }}
               className="input-cozy w-full text-xs"
             >
               <option value="">—</option>
@@ -1218,30 +1245,45 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         </div>
       </div>
 
-      {/* Ability scores */}
-      <div>
-        <label className="text-[10px] text-stone-gray block mb-0.5">Ability Scores</label>
-        <div className="grid grid-cols-6 gap-1.5">
-          {([
-            ['STR', str, setStr],
-            ['DEX', dex, setDex],
-            ['CON', con, setCon],
-            ['INT', int, setInt],
-            ['WIS', wis, setWis],
-            ['CHA', cha, setCha],
-          ] as const).map(([label, val, setter]) => (
-            <div key={label} className="text-center">
-              <label className="text-[8px] font-bold text-brand-ink block">{label}</label>
-              <input
-                type="number"
-                value={val}
-                onChange={(e) => (setter as (v: number) => void)(parseInt(e.target.value, 10) || 10)}
-                className="input-cozy w-full text-xs text-center"
-              />
-            </div>
-          ))}
+      {/* Ability scores, or a Pathfinder creature's attribute modifiers */}
+      {isPf2e ? (
+        <div>
+          <label className="text-[10px] text-stone-gray block mb-0.5">Attribute Modifiers</label>
+          <div className="grid grid-cols-6 gap-1.5">
+            {ABILITY_KEYS.map((ability) => (
+              <div key={ability} className="text-center">
+                <label className="text-[8px] font-bold text-brand-ink block">{PF2E_ATTRIBUTE_LABELS[ability]}</label>
+                <input
+                  type="number"
+                  value={attributeModifiers[ability]}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setAttributeModifiers((prev) => ({ ...prev, [ability]: Number.isFinite(parsed) ? parsed : 0 }));
+                  }}
+                  className="input-cozy w-full text-xs text-center"
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <label className="text-[10px] text-stone-gray block mb-0.5">Ability Scores</label>
+          <div className="grid grid-cols-6 gap-1.5">
+            {ABILITY_KEYS.map((ability) => (
+              <div key={ability} className="text-center">
+                <label className="text-[8px] font-bold text-brand-ink block">{ability.toUpperCase()}</label>
+                <input
+                  type="number"
+                  value={workingStatBlock.abilities[ability]}
+                  onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
+                  className="input-cozy w-full text-xs text-center"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Saves & skills — derived from the ability scores and CR above. This
           form had no fields for these at all, which is why editing a duplicated

@@ -10,7 +10,7 @@ import type { NpcStatBlock } from '@/types';
 import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
 import ProficiencyEditor from './ProficiencyEditor';
 import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
-import { recomputeDerivedBonuses } from './statBlockProficiency';
+import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
 
 interface StatBlockEditorProps {
@@ -57,19 +57,14 @@ export default function StatBlockEditor({
   // Bonuses marked as overrides keep their value.
   const updateAbility = useCallback(
     (ab: keyof NpcStatBlock['abilities'], value: number) => {
-      onChange(
-        recomputeDerivedBonuses({
-          ...statBlock,
-          abilities: { ...statBlock.abilities, [ab]: value },
-        })
-      );
+      onChange(changeAbilitiesOrRating(statBlock, { abilities: { ...statBlock.abilities, [ab]: value } }));
     },
     [statBlock, onChange]
   );
 
   const updateChallengeRating = useCallback(
     (cr: string) => {
-      onChange(recomputeDerivedBonuses({ ...statBlock, challengeRating: cr || undefined }));
+      onChange(changeAbilitiesOrRating(statBlock, { challengeRating: cr || undefined }));
     },
     [statBlock, onChange]
   );

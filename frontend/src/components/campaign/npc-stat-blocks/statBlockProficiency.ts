@@ -302,6 +302,24 @@ export function recomputeDerivedBonuses(statBlock: NpcStatBlock): NpcStatBlock {
 }
 
 /**
+ * Change ability scores or the challenge rating, and every derived save and
+ * skill with them.
+ *
+ * Each row's level is recorded first, inferred from the stored total where
+ * the stat block records none (every SRD creature), so the new totals follow
+ * the creature's proficiencies. Inferred afresh against the new numbers, a
+ * row no longer fitted and froze as custom at its old total: a Goblin given
+ * Dexterity 16 kept Stealth +6, and typing "16" froze every row at the "1"
+ * on the way.
+ */
+export function changeAbilitiesOrRating(
+  statBlock: NpcStatBlock,
+  changes: Partial<Pick<NpcStatBlock, 'abilities' | 'challengeRating'>>
+): NpcStatBlock {
+  return recomputeDerivedBonuses({ ...recomputeDerivedBonuses(statBlock), ...changes });
+}
+
+/**
  * Render a saving-throw record the way a stat block prints it: "Dex +5, Wis +3".
  *
  * Uses formatModifier rather than a hardcoded "+", which previously rendered a
@@ -310,10 +328,12 @@ export function recomputeDerivedBonuses(statBlock: NpcStatBlock): NpcStatBlock {
 export function formatSaveList(saves: Record<string, number>): string {
   return Object.entries(saves)
     .map(([key, bonus]) => {
-      const label = ABILITY_LABELS[key as AbilityKey] ?? key;
-      // Stat blocks abbreviate saves ("Dex +5"), unlike skills.
-      const short = label.slice(0, 3);
-      return `${short} ${formatModifier(bonus)}`;
+      // Stat blocks abbreviate the six abilities' saves ("Dex +5"); any other
+      // save (a Pathfinder "fortitude" seen in another system) is printed
+      // whole, where cutting it made "for".
+      const label = ABILITY_LABELS[key as AbilityKey];
+      const shown = label ? label.slice(0, 3) : key.charAt(0).toUpperCase() + key.slice(1);
+      return `${shown} ${formatModifier(bonus)}`;
     })
     .join(', ');
 }

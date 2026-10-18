@@ -5,16 +5,15 @@
  */
 
 import type { NpcStatBlock } from '@/types';
+import { abilityModifier, formatModifier } from '@/utils/rules/dnd5e';
+import { formatSaveList, formatSkillList } from './statBlockProficiency';
 
 interface Props {
   statBlock: NpcStatBlock;
   tokenName: string;
 }
 
-function abilityMod(score: number): string {
-  const m = Math.floor((score - 10) / 2);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
+const abilityMod = (score: number) => formatModifier(abilityModifier(score));
 
 export default function GenericStatBlock({ statBlock, tokenName }: Props) {
   return (
@@ -80,10 +79,10 @@ function DetailLines({ statBlock }: { statBlock: NpcStatBlock }) {
   const entries: Array<[string, string]> = [];
 
   if (statBlock.savingThrows && Object.keys(statBlock.savingThrows).length > 0) {
-    entries.push(['Saves', Object.entries(statBlock.savingThrows).map(([k, v]) => `${k} +${v}`).join(', ')]);
+    entries.push(['Saves', formatSaveList(statBlock.savingThrows)]);
   }
   if (statBlock.skills && Object.keys(statBlock.skills).length > 0) {
-    entries.push(['Skills', Object.entries(statBlock.skills).map(([k, v]) => `${k} +${v}`).join(', ')]);
+    entries.push(['Skills', formatSkillList(statBlock.skills)]);
   }
   if (statBlock.damageVulnerabilities) entries.push(['Vulnerabilities', statBlock.damageVulnerabilities]);
   if (statBlock.damageResistances) entries.push(['Resistances', statBlock.damageResistances]);

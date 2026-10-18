@@ -468,13 +468,18 @@ earlier are read, not rewritten. CozyVTT works backwards from the printed bonus 
 show the right checkboxes — an SRD Goblin opens already showing Stealth as
 expertise, still at its printed +6. Where a printed value doesn't fit the rules
 (the Night Hag is one), it's kept exactly as published and shown as an override.
+Change its Dexterity or CR and the bonuses it is proficient in follow: give that
+Goblin Dexterity 16 and its Stealth becomes +7.
 
 **In Pathfinder 2e** this section looks different, because PF2e works
 differently: creature stat blocks print final modifiers rather than deriving them
 from proficiency ranks. You'll see **Fortitude, Reflex and Will** instead of six
-ability saves, a **Level** instead of a Challenge Rating, and you enter each
-modifier directly. CozyVTT warns if a number looks far off for the creature's
-level, but never changes it.
+ability saves, a **Level** instead of a Challenge Rating, **Attribute Modifiers**
+(Str +4, Dex -1) instead of ability scores, and you enter each modifier directly.
+CozyVTT warns if a number looks far off for the creature's level, but never
+changes it. The stat block then reads as Pathfinder prints one: its level, its
+modifiers, and Fort, Ref and Will. A D&D creature used in a Pathfinder campaign
+keeps its Challenge Rating, shown as CR.
 
 ### Editing Custom Creatures
 

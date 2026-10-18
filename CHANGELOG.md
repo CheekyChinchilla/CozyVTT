@@ -55,6 +55,12 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Changing a creature's ability scores or Challenge Rating moves its saves and skills, and saves them.** The Creature Library's form showed the new bonuses and saved the old ones, so a Goblin given Dexterity 16 kept rolling Stealth +6; in a token's stat block, typing a score froze the creature's bonuses at the first digit typed. Both now follow the creature's proficiencies, an SRD creature's included.
+
+- **A Pathfinder 2e stat block shows the creature's level, its attribute modifiers and Fort, Ref and Will.** It showed no level, ability scores with modifiers worked out from them instead of the modifiers you entered, and saves cut to "for", "ref" and "wil". The Creature Library's Pathfinder form now edits attribute modifiers too, as a token's stat block does. A D&D creature used in a Pathfinder campaign shows its CR as CR, no longer as a level.
+
+- **Stat blocks in Flexible and Shadowrun campaigns print negative saves and skills properly,** as "Dex -1" where they showed "dex +-1", and name skills in full ("Sleight of Hand").
+
 - **Remove from Campaign works for the DM on any player's character.** The roster offered it, as the DM guide says, but the server refused anyone but the character's owner. The character stays with its owner. A refused removal now says why.
 
 - **A token added, changed or removed reaches everyone at once, from wherever it was changed.** The app's own pages told the table after each change, so a change from a script, a second tab, or a player editing a token they control (its conditions, say) reached nobody else until the map was next sent.
