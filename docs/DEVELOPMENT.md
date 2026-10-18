@@ -40,7 +40,7 @@ cozyvtt/
 ├── backend/               Express API server
 │   ├── src/
 │   │   ├── config/        Configuration loading and validation
-│   │   ├── game-systems/  Game system type definitions
+│   │   ├── game-systems/  The GameSystem enum, re-exported from Prisma
 │   │   ├── middleware/     Auth and role guards, the sign-in and other limiters, upload checks
 │   │   ├── routes/        Express route handlers
 │   │   ├── scripts/       Scripts run by hand: data migrations, checks, the SRD creature seed

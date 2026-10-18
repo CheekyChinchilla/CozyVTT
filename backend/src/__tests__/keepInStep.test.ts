@@ -111,6 +111,10 @@
  * The Basic Flexible sheet. The server offers it as a starter sheet, and its
  * four sections are the Flexible editor's Attributes, Skills, Inventory and
  * Background section templates. Compared here, ids aside.
+ *
+ * The game systems. The database decides them (the GameSystem enum in
+ * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
+ * declares its own enum, which has to name the same values.
  */
 
 import crypto from 'crypto';
@@ -720,6 +724,20 @@ describe('the Basic Flexible sheet and the editor\'s section templates', () => {
   it('has the editor\'s Attributes, Skills, Inventory and Background sections', () => {
     const sections = (flexibleBasicTemplate().data as { sections: unknown[] }).sections;
     expect(withoutIds(sections)).toEqual(['attributes', 'skills', 'inventory', 'background'].map(editorSection));
+  });
+});
+
+describe('the game systems', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum GameSystem \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum GameSystem \{([^}]*)\}/.exec(read('frontend/src/types/gameSystem.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a GameSystem enum moved; update this test');
+    const prisma = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(prisma);
   });
 });
 
