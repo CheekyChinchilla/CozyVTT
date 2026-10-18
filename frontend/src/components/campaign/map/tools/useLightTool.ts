@@ -17,6 +17,8 @@ import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types'
 
 interface UseLightToolArgs {
   isDM: boolean;
+  /** A player-view preview hides the light markers, so Select stays idle. */
+  previewing: boolean;
   mapId: string | undefined;
   lightMode: LightToolMode;
   setLightMode: (mode: LightToolMode) => void;
@@ -33,7 +35,7 @@ interface UseLightToolArgs {
 }
 
 export function useLightTool({
-  isDM, mapId, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
+  isDM, previewing, mapId, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
   socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
 }: UseLightToolArgs) {
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
@@ -44,10 +46,6 @@ export function useLightTool({
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
 
   const tool: MapTool = {
-    // TODO(maps): this checks isDM and not previewing, so during a player-view
-    // preview, where no light markers are drawn, a click still places, selects
-    // or drags a light with nothing on screen to show it. Ignore the light
-    // tool while previewing.
     // Light tool: place or select/drag
     down({ mapPx }: PointerAt) {
       if (!(lightMode && isDM)) return false;
@@ -69,6 +67,9 @@ export function useLightTool({
         }
         return true;
       }
+      // Placing a light while previewing shows its effect as a player sees it;
+      // selecting one does nothing there, with no markers to show what is hit.
+      if (previewing) return false;
       const hitR = 16 / mapControls.zoom;
       let closest: LightSource | null = null;
       let closestDist = Infinity;

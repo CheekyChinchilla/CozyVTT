@@ -157,7 +157,7 @@ function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
 function token(id: string, name: string, x: number, y: number, extra: Partial<Token> = {}): Token {
   return {
     id, name, imageUrl: '', position: { x, y }, size: { width: 1, height: 1 },
-    layer: 'material', visible: true, type: 'npc', conditions: [], ...extra,
+    layer: 'token', visible: true, type: 'npc', conditions: [], ...extra,
   } as unknown as Token;
 }
 
@@ -785,5 +785,53 @@ describe("the DM's spirit token button", () => {
     fireEvent.click(screen.getByTitle('Spirit tokens shown, click to hide'));
 
     expect(screen.getByTitle('Spirit tokens hidden — click to show')).toBeInTheDocument();
+  });
+});
+
+describe('Preview Player View', () => {
+  const previewButton = () => screen.queryByLabelText('Toggle DM player view preview');
+
+  it('can still be ended after fog and lighting are both turned off', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    fireEvent.click(previewButton()!);
+    expect(previewButton()).toHaveTextContent('DM View');
+
+    fireEvent.click(screen.getByText('Fog of War'));
+    fireEvent.click(screen.getByLabelText('Fog of war on this map'));
+
+    expect(previewButton()).toHaveTextContent('DM View');
+    fireEvent.click(previewButton()!);
+    expect(previewButton()).toBeNull();
+  });
+
+  it('still places a light, so the DM sees its effect as the player does', () => {
+    h.set({ currentMap: mapWith({ lightingEnabled: true }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+    fireEvent.click(previewButton()!);
+    expect(previewButton()).toHaveTextContent('DM View');
+
+    click(px(400, 400));
+
+    expect(sentOf('light:add')).toHaveLength(1);
+  });
+
+  it('does not select or drag a light, since the light markers are hidden', () => {
+    const lamp: LightSource = { id: 'l1', x: 250, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
+    h.set({ currentMap: mapWith({ lightingEnabled: true, lights: [lamp] }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Select'));
+    fireEvent.click(previewButton()!);
+    expect(previewButton()).toHaveTextContent('DM View');
+
+    drag(px(255, 250), px(280, 280), px(300, 310));
+
+    expect(sentOf('light:update')).toEqual([]);
   });
 });

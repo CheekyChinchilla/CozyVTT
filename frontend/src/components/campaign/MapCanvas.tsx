@@ -413,7 +413,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lightPlacementDefaults, setLightPlacementDefaults,
     draggingLightRef,
   } = useLightTool({
-    isDM, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
+    isDM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
     socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
   });
 
@@ -2663,13 +2663,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </DmToolPanelContainer>
       )}
 
-      {/* TODO(maps): the button that ends a preview renders only while
-         lighting or fog is on, and nothing else resets dmPreviewPlayerView,
-         so turning both off during a preview leaves the DM in the player's
-         view until one is turned back on or the page reloads. End the
-         preview when both go off, or keep the button while previewing. */}
-      {/* DM Preview Player View — shown when dynamic lighting is enabled */}
-      {userRole === 'DM' && ((currentMap?.lightingEnabled ?? false) || fogEnabled) && (
+      {/* DM Preview Player View — offered while dynamic lighting or fog is
+         on, and kept while a preview is on, so turning both off mid-preview
+         still leaves the way back to the DM's view. */}
+      {userRole === 'DM' && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled) && (
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
           {dmPreviewPlayerView && (
             <select

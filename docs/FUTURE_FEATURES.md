@@ -89,8 +89,6 @@ _Nothing at present._
 
 ### Maps
 
-- `1.5.4` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
-- `1.5.4` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
 - `1.5.4` **A player's door toggle made while the DM is moving selected walls is undone for everyone.** The move's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the move is lost. Dragging a wall's end keeps the change, but Undo after it puts the old door back (`MapCanvas.tsx`).
 - `1.5.4` **At the zoom that fits the map to the screen, clicking a token's square next to a door toggles the door for everyone** instead of picking up or placing the token (`MapCanvas.tsx`).
 

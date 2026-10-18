@@ -32,6 +32,10 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Preview Player View can always be ended.** Turning off both dynamic lighting and fog of war during a preview hid **DM View**, the button that ends it, and left you in the player's view until one was turned on again or the page was reloaded.
+
+- **The light tool's Select does nothing during a preview.** A click there still picked up and dragged lights, whose markers the preview hides. Placing a light while previewing still works, so you can watch what it lights for the player.
+
 - **The DM's spirit token button on the map toolbar says what a click does.** While spirit tokens were shown, its tooltip read "Hiding spirit tokens (click to show)"; it now reads "Spirit tokens shown, click to hide".
 
 - **Panning with the right mouse button under the fog or light tool no longer opens a token or door menu.** The right button pans the map while any wall, fog or light tool is up. The wall tools already kept the menus closed, and now the fog and light tools do too; press **Esc** to put the tool away and right-click as usual.
