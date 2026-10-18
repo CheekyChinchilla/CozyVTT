@@ -6643,11 +6643,13 @@ paths:
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
         campaign is showing and to the DM's connections for any other. When
-        `lightingEnabled` or `globalIllumination` actually changes, and the map
-        is the one the campaign is showing, every member is also sent the map
-        as they can now see it (`map.changed`), since those two decide which
-        tokens a player is sent; editing another map in the library sends no
-        `map.changed`.
+        `lightingEnabled` or `globalIllumination` actually changes, since
+        those two decide which tokens a player is sent, or anything the map is
+        drawn from (`name`, `imageUrl`, `baseLayerUrl`, `width`, `height`,
+        `gridSize`, `feetPerSquare`, `diagonalRule`, `spiritLayerUrl`), and
+        the map is the one the campaign is showing, every member is also sent
+        the map as they can now see it (`map.changed`); editing another map in
+        the library sends no `map.changed`.
 
         Turning `fogEnabled` on from off also pushes the map's fog at once,
         as a fog operation does: `fog:updated` with the whole grid to the DM,
@@ -6798,9 +6800,9 @@ paths:
         Set a map as the current map for the campaign (DM only). Which plane
         each player is on, and which combatants they are sent, follows the
         current map, so while anything is in the initiative order it is sent
-        again to every connected member (`initiative.state`). The route sends
-        no map event of its own, so open pages are not moved to the new map
-        by it.
+        again to every connected member (`initiative.state`). Every connected
+        member is sent the new map as they may see it (`map.changed`), so
+        every open page moves onto it, whoever made the request.
       operationId: setCurrentMap
       security:
         - cookieAuth: []

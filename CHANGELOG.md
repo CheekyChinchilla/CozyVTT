@@ -26,7 +26,7 @@ There is no new setting, no setting is removed, and there is no database change 
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
-  - *Maps.* `GET /api/campaigns/:campaignId/maps` gives the DM each map's `spiritLayerUrl` as well; it is still absent for anyone else.
+  - *Maps.* `GET /api/campaigns/:campaignId/maps` gives the DM each map's `spiritLayerUrl` as well; it is still absent for anyone else. `PUT /api/campaigns/:campaignId/maps/:id` sends every member `map.changed` when it changes the name, picture, size, grid, scale, diagonal rule or spirit layer of the map on screen, as it already did for lighting. `PUT /api/campaigns/:campaignId/maps/:id/set-current` sends every member `map.changed` with the new map; the web app no longer sends `map.change` itself after switching.
   - *Walls and lights.* `wall:remove` of an id the map does not have answers `error` with `Wall segment not found` and writes nothing; it wrote the list again and sent everyone `wall:removed`. A `light:update` that sets a light to the values it already has sends anyone but the DM nothing, where players were sent `light:updated` and, on a lit map, the map again.
   - *Walls and lights.* A player's `wall:update` on a map with fog of war on is refused with `You cannot see that door` unless a square revealed to them lies beside the door's middle, before any `That door is locked`. The refusal is followed by `wall:updated` with the door as it was, as other refusals are.
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
@@ -34,6 +34,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **Players see an edit to the map on screen straight away.** A new picture, size, grid, scale, name or spirit layer reached players only when they next loaded the map. A map made current by a script or a second tab moves every page onto it, as switching in the Map Library does.
 
 - **The map's Zoom In and Zoom Out buttons zoom about the middle of the view.** They zoomed about the map's top-left corner, so what you were looking at slid away. The mouse wheel zooms by how far it turns, so a trackpad no longer zooms a whole step for each tiny movement, and a quick turn of the wheel no longer loses steps.
 

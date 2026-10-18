@@ -1090,8 +1090,12 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Lighting and Global Illumination decide which tokens each player is
     // sent, so when either changes every client gets the map again as they
     // can now see it. The flags alone would leave a player holding a token the
-    // server would no longer send, or missing one it now would.
-    if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
+    // server would no longer send, or missing one it now would. So does a
+    // change to what the canvas draws from the row itself: the picture, the
+    // size, the grid and its scale, the name and the spirit layer.
+    const drawn = ['name', 'imageUrl', 'baseLayerUrl', 'width', 'height', 'gridSize', 'feetPerSquare', 'diagonalRule', 'spiritLayerUrl'] as const;
+    const drawnChanged = drawn.some((key) => updatedMap[key] !== existingMap[key]);
+    if (drawnChanged || updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
       await resendIfCurrent(campaignId, updatedMap);
@@ -1214,6 +1218,13 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
       },
     });
 
+    // Every page goes onto the new map, each member's as they may see it,
+    // whoever asked: the DM's page, another tab or a script.
+    try {
+      await broadcastMapData(getSocketInstance(), campaignId, map);
+    } catch (err) {
+      logger.warn('Map not sent to the table; it is current all the same', { err, mapId: id });
+    }
     // Which plane each player is on is decided by the current map, and with
     // it which combatants they are sent.
     await resendInitiative(campaignId);

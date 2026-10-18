@@ -19,7 +19,6 @@ import {
   Download,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
@@ -296,7 +295,6 @@ function MapCard({
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
-  const { socket } = useWebSocket();
 
   const [maps, setMaps] = useState<Map[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -529,10 +527,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
       setCurrentMapTokens([]);
 
-      // 6. Notify other connected clients via WebSocket
-      if (socket) {
-        socket.emitMapChange(targetMap.id);
-      }
+      // The server sends every page the new map when it is set current.
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to switch map. Please try again.');
     } finally {
