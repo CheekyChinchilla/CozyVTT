@@ -93,6 +93,21 @@ it.each([
   expect((await prisma.character.findUniqueOrThrow({ where: { id: characterId } })).campaignId).toBe(campaignId);
 });
 
+// A character still naming a campaign its owner has left is its owner's
+// alone, as the read and edit routes already decide: that DM may not take
+// it out, nor read the sheet in the answer.
+it('refuses the DM a character whose owner has left the campaign', async () => {
+  await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId } } });
+  try {
+    const res = await unassign('dm');
+    expect(res.status).toBe(403);
+    expect(res.body.data).toBeUndefined();
+    expect((await prisma.character.findUniqueOrThrow({ where: { id: characterId } })).campaignId).toBe(campaignId);
+  } finally {
+    await prisma.campaignMembership.create({ data: { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] } });
+  }
+});
+
 it('still lets only the owner assign a character to a campaign', async () => {
   await prisma.character.update({ where: { id: characterId }, data: { campaignId: null } });
   const res = await agents.dm.post(`/api/characters/${characterId}/assign`).send({ campaignId });

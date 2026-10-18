@@ -5053,7 +5053,8 @@ paths:
       description: |
         Assigning is the owner's alone. Unassigning is the owner's, or the
         campaign DM's: the DM of the campaign the character is in may take it
-        out of that campaign, and it stays with its owner. Anyone else answers
+        out of that campaign while its owner is still a member, and it stays
+        with its owner. Anyone else answers
         403 (`Only the character owner can assign this character to a
         campaign`, or `Only the character owner, or the DM of its campaign, can
         take it out of a campaign`). A `campaignId` that is not a string or null

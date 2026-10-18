@@ -968,13 +968,16 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
 
     // The owner assigns and unassigns their character. The DM of the
     // campaign it is in may also take it out of that campaign, as the DM
-    // guide says; it stays with its owner. Nobody else may do either.
+    // guide says; it stays with its owner. A character still naming a
+    // campaign its owner has left is the owner's alone, as for reading and
+    // editing it. Nobody else may do either.
     if (character.userId !== userId) {
       const runsItsCampaign = unassigning && character.campaignId !== null
         && (await prisma.campaignMembership.findUnique({
           where: { userId_campaignId: { userId, campaignId: character.campaignId } },
           select: { role: true },
-        }))?.role === 'DM';
+        }))?.role === 'DM'
+        && (await ownerStillIn(character.userId, character.campaignId));
       if (!runsItsCampaign) {
         return res.status(403).json({
           error: 'Forbidden',

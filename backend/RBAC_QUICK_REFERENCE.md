@@ -65,8 +65,10 @@ that campaign. The socket's hit point and hit dice events ask the same
 
 Only the owner assigns a character to a campaign (`POST
 /api/characters/:id/assign` with a `campaignId`). The owner, or the DM of the
-campaign the character is in, may take it out of that campaign (the same route
-with `campaignId` null); it stays with its owner.
+campaign the character is in while its owner is still a member, may take it out
+of that campaign (the same route with `campaignId` null); it stays with its
+owner. A character left naming a campaign its owner is no longer in is its
+owner's alone, here as for reading and editing it.
 
 The top-level `notes` of a `CALL_OF_CTHULHU_7E` sheet, which the editor calls
 Keeper's Notes, belong to the Keeper: the DM of the character's campaign alone
