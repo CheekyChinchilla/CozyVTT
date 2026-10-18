@@ -304,26 +304,9 @@ class SocketClient {
         this.reconnect(this.refusedBeforeJoin);
       });
 
-      // Reconnection attempt
-      // TODO(play): socket.io-client 4 emits reconnect_attempt, reconnect and
-      // reconnect_failed on the manager (this.socket.io), never on the socket, so
-      // these three never run; move them there or remove them.
-      this.socket.on('reconnect_attempt', (attemptNumber) => {
-        this.reconnectAttempts = attemptNumber;
-      });
-
-      // Reconnection successful
-      this.socket.on('reconnect', () => {
-        this.reconnectAttempts = 0;
-        // Re-authentication happens automatically when backend emits 'connected' event
-      });
-
-      // Reconnection failed
-      this.socket.on('reconnect_failed', () => {
-        console.error('[Socket] Reconnection failed after max attempts');
-        clearTimeout(connectionTimeout);
-        reject(new Error('Failed to reconnect after maximum attempts'));
-      });
+      // socket.io's own reconnecting is reported on the manager
+      // (this.socket.io), where WebSocketContext listens; `authenticated`
+      // above resets the count on every rejoin.
 
       // The connection's access has ended, with the reason: the page shows
       // it (useAccessRevoked), and the disconnect that may follow is final.

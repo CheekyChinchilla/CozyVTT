@@ -70,6 +70,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **What the table refuses is shown as a message, and the Dice panel shows only what happened to its own rolls.** Every refusal, such as a token move during a pause, initiative rolled after combat has started, or a chat message held back by the cooldown, went to the Dice panel's banner, in a tab you might not have open, and a roll still on its way could lose its **Rolling...** state. Refusals now appear as a message at the top right of the page, once each, and the Dice panel's banner is for its own rolls. A roll that reached the panel twice is listed once.
 
+- **Coming back after a dropped connection brings back what the DM changed meanwhile:** the vibe and its tint, the weather and the ambient track, the spirit layer, and a dice history the DM cleared. The page kept the old tint, the rain and the music, and every cleared roll, until it was reloaded.
+
 - **Coming back after a long disconnect fills in every chat message you missed.** Only the newest 50 were fetched, so after a busy stretch away the messages before them were missing until you reloaded, and **Load More** could not reach them. The chat now reads back until it joins up with what you had.
 
 - **Chat times move on.** A message's time stayed at "just now", or wherever it was when the message arrived, until the page was reloaded; it now updates each minute.

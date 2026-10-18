@@ -118,6 +118,8 @@ export default function DiceRoller() {
   const rollsEndRef = useRef<HTMLDivElement>(null);
   const rollsContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+  /** Rolls that arrived live while the history was being read, by key. */
+  const liveDuringRead = useRef<Set<string> | null>(null);
   /** A roll arrived below while the reader was scrolled up. */
   const [newBelow, setNewBelow] = useState(false);
 
@@ -181,23 +183,28 @@ export default function DiceRoller() {
   useEffect(() => {
     if (!campaign?.id) return;
     let cancelled = false;
+    const isRejoin = rejoins > 0;
+    liveDuringRead.current = new Set();
 
     const loadHistory = async () => {
       try {
         const fetched = await getDiceRolls(campaign.id, 50);
         if (cancelled) return;
         const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'DM'));
+        const arrivedLive = liveDuringRead.current ?? new Set<string>();
+        liveDuringRead.current = null;
 
-        // TODO(play): suspected, not reproduced. This merge only adds, and
-        // the DM's clear reaches only members online at the time, so a member
-        // who was offline then keeps the cleared rolls after rejoining, until
-        // they reload. On a rejoin, take the server's list as the history,
-        // keeping only rolls that arrived live since it was fetched.
         setRolls((prev) => {
-          // Merge rather than replace: a roll can land live between mount and
-          // this response, and it must not be lost or duplicated.
-          const seen = new Set(prev.map(rollKey));
-          const merged = [...prev, ...visible.filter((r) => !seen.has(rollKey(r)))];
+          // Merged, not replaced, on the first load: a roll can land live
+          // between mount and this response, and it must not be lost or
+          // duplicated. On a rejoin the server's list is the history: a clear
+          // made while this page was away reached only the pages online, and
+          // merging kept every cleared roll. Kept beside it are the rolls that
+          // arrived while it was being read, and rolls made in this browser
+          // during a pause, which the server never had.
+          const held = isRejoin ? prev.filter((r) => !r.id || arrivedLive.has(rollKey(r))) : prev;
+          const seen = new Set(held.map(rollKey));
+          const merged = [...held, ...visible.filter((r) => !seen.has(rollKey(r)))];
           merged.sort(
             (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
@@ -261,6 +268,7 @@ export default function DiceRoller() {
       // Someone else's secret roll is not mine to see. The server does not send
       // them, so reaching this is already wrong; drop it rather than draw it.
       if (!mayDisplayRoll(data, user?.id, userRole === 'DM')) return;
+      liveDuringRead.current?.add(rollKey(data));
 
       // Newest first in state; the list renders oldest-first, chat style.
       // A roll already listed (sent twice, or loaded with the history while
@@ -290,6 +298,7 @@ export default function DiceRoller() {
         ...data,
         secret: true, // Keep secret flag for styling
       };
+      liveDuringRead.current?.add(rollKey(auditRoll));
 
       setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(auditRoll)) ? prev : [auditRoll, ...prev].slice(0, 50)));
     };

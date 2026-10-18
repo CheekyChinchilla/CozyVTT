@@ -190,6 +190,37 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       ? campaign.memberships?.find((m) => m.userId === user.id)?.role || null
       : null;
 
+  // The atmosphere and the vibe's tint, worked out from a campaign as the
+  // server holds it: on the first load, and after a reconnect, when the DM
+  // may have changed them while this page was away.
+  const applyCampaignEffects = useCallback((data: Campaign) => {
+    // Initialize atmosphere state from saved campaign vibeSettings
+    const vs = data.vibeSettings as VibeSettingsBlob | undefined;
+    setActiveAtmosphereEffect(vs?.atmosphereEffect ?? null);
+    if (vs?.atmosphereAudio?.assetId) {
+      setActiveAtmosphereAudio({
+        assetId: vs.atmosphereAudio.assetId,
+        audioUrl: `/api/assets/audio/${vs.atmosphereAudio.assetId}`,
+        volume: vs.atmosphereAudio.volume ?? 0.5,
+        loop: vs.atmosphereAudio.loop !== false,
+      });
+    } else {
+      setActiveAtmosphereAudio(null);
+    }
+
+    // Initialize vibe effect from saved campaign state
+    if (data.currentVibe && data.vibeSettings?.periods) {
+      const activePeriod = (data.vibeSettings.periods as VibePeriod[]).find(
+        (p) => p.name === data.currentVibe,
+      );
+      setActiveVibeEffect(
+        activePeriod ? { hue: activePeriod.hue, filter: activePeriod.filter } : null,
+      );
+    } else {
+      setActiveVibeEffect(null);
+    }
+  }, []);
+
   // Load campaign data
   const loadCampaign = useCallback(async (campaignId: string) => {
     const seq = ++loadSeq.current;
@@ -205,31 +236,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       // Initialize active session from campaign response
       setActiveSession(data.activeSession ?? null);
 
-      // Initialize atmosphere state from saved campaign vibeSettings
-      const vs = data.vibeSettings as VibeSettingsBlob | undefined;
-      setActiveAtmosphereEffect(vs?.atmosphereEffect ?? null);
-      if (vs?.atmosphereAudio?.assetId) {
-        setActiveAtmosphereAudio({
-          assetId: vs.atmosphereAudio.assetId,
-          audioUrl: `/api/assets/audio/${vs.atmosphereAudio.assetId}`,
-          volume: vs.atmosphereAudio.volume ?? 0.5,
-          loop: vs.atmosphereAudio.loop !== false,
-        });
-      } else {
-        setActiveAtmosphereAudio(null);
-      }
-
-      // Initialize vibe effect from saved campaign state
-      if (data.currentVibe && data.vibeSettings?.periods) {
-        const activePeriod = (data.vibeSettings.periods as VibePeriod[]).find(
-          (p) => p.name === data.currentVibe,
-        );
-        setActiveVibeEffect(
-          activePeriod ? { hue: activePeriod.hue, filter: activePeriod.filter } : null,
-        );
-      } else {
-        setActiveVibeEffect(null);
-      }
+      applyCampaignEffects(data);
 
       // Load current map via the filtered REST endpoint so tokens are spirit-filtered
       // per this user's role. The campaign response (maps: true) returns raw unfiltered
@@ -268,7 +275,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     } finally {
       if (isNewest()) setLoading(false);
     }
-  }, [navigate]);
+  }, [navigate, applyCampaignEffects]);
 
   /** The campaign as it is now, or null when a newer re-read has started or the page has moved on. */
   const rereadCampaign = useCallback(async (campaignId: string) => {
@@ -312,7 +319,8 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, [campaign?.id, currentMap?.id]);
 
   // Events sent while this page was offline are not replayed: a pause or an
-  // end, a member's role, a switch to another map. Re-read them without the
+  // end, a member's role, a switch to another map, the vibe, the weather and
+  // ambient track, the spirit layer. Re-read them without the
   // full reload's loading screen, then load the map the table is on now,
   // which may not be the one this page had (a player may no longer read it).
   const catchUpAfterReconnect = useCallback(async () => {
@@ -327,10 +335,20 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       if (!stillShown()) return;
       setCampaign((prev) =>
         prev && prev.id === fresh.id
-          ? { ...prev, status: fresh.status, memberships: fresh.memberships, currentMapId: fresh.currentMapId }
+          ? {
+              ...prev,
+              status: fresh.status,
+              memberships: fresh.memberships,
+              currentMapId: fresh.currentMapId,
+              currentVibe: fresh.currentVibe,
+              vibeSettings: fresh.vibeSettings,
+              spiritLayerEnabled: fresh.spiritLayerEnabled,
+              spiritLayerStyle: fresh.spiritLayerStyle,
+            }
           : prev
       );
       setActiveSession(fresh.activeSession ?? null);
+      applyCampaignEffects(fresh);
       mapId = fresh.currentMapId ?? null;
     } catch (err) {
       console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', err);
@@ -345,7 +363,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     } catch (err) {
       console.error('[CampaignContext] Failed to refresh the current map after reconnect:', err);
     }
-  }, [campaign?.id, currentMap?.id]);
+  }, [campaign?.id, currentMap?.id, applyCampaignEffects]);
 
   // Update currentVibe + activeVibeEffect when vibe.updated WS event arrives
   const updateVibe = useCallback((period: string, hue: string, filter: string) => {
