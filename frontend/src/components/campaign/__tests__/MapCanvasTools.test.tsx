@@ -926,3 +926,49 @@ describe("a player's right-click on a token", () => {
     expect(tokenMenu()).not.toBeNull();
   });
 });
+
+describe('letting go of the mouse outside the map (F352)', () => {
+  const releaseOutside = (button = 0) => fireEvent.mouseUp(document.body, { button });
+
+  it('finishes an erase stroke', () => {
+    render(<MapCanvas />);
+    wallTool('Wall erase mode');
+
+    down(px(150, 110));
+    move(px(350, 110));
+    fireEvent.mouseLeave(surface());
+    releaseOutside();
+
+    expect(lastWalls()).toEqual([]);
+    h.sent.length = 0;
+    fireEvent.mouseMove(surface(), { ...px(150, 110), buttons: 0 });
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+
+  it('finishes a brush stroke', () => {
+    render(<MapCanvas />);
+    wallTool('Brush wall mode');
+
+    down(px(100, 300));
+    move(px(200, 300));
+    move(px(300, 300));
+    fireEvent.mouseLeave(surface());
+    releaseOutside();
+
+    expect(lastWalls().slice(2)).toEqual([{ x1: 100, y1: 300, x2: 300, y2: 300, type: 'wall' }]);
+  });
+
+  // A right-button pan left on blocked the select tool's hover, so a wall
+  // under the pointer no longer showed it could be picked.
+  it('ends a right-button pan', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
+    fireEvent.mouseLeave(surface());
+    releaseOutside(2);
+    fireEvent.mouseMove(surface(), { ...px(150, 102), buttons: 0 });
+
+    expect(surface().className).toContain('cursor-pointer');
+  });
+});

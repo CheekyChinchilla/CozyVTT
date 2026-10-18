@@ -2057,7 +2057,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * Handle mouse up (stop map panning)
    * Note: a held token is put down by the token tool's mouse down, on the second click
    */
-  const handleMouseUp = (e?: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = (e?: { button: number }) => {
     // Release right-button pan
     if (e?.button === 2) {
       rightPanActiveRef.current = false;
@@ -2068,6 +2068,20 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Stop map panning
     mapControls.stopDrag();
   };
+
+  // A button let go outside the canvas never reaches its onMouseUp, which left
+  // an erase or brush stroke, a box, a drag or a right-button pan going. The
+  // window hears every release; one over the canvas is the canvas's own.
+  const handleMouseUpRef = useRef(handleMouseUp);
+  handleMouseUpRef.current = handleMouseUp;
+  useEffect(() => {
+    const onWindowMouseUp = (e: MouseEvent) => {
+      if (e.target === canvasRef.current) return;
+      handleMouseUpRef.current(e);
+    };
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+  }, []);
 
   /**
    * Handle mouse leave (stop pan, clear hover, cancel token drag)
