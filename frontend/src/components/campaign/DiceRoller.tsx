@@ -13,6 +13,7 @@ import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import DiceMacroManager from './DiceMacroManager';
+import JumpToNewest from './JumpToNewest';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -117,6 +118,8 @@ export default function DiceRoller() {
   const rollsEndRef = useRef<HTMLDivElement>(null);
   const rollsContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+  /** A roll arrived below while the reader was scrolled up. */
+  const [newBelow, setNewBelow] = useState(false);
 
   /**
    * End the "Rolling…" state. The roll coming back as `dice.rolled` ends it,
@@ -476,10 +479,21 @@ export default function DiceRoller() {
   const newestIsMine = newestRoll !== undefined && newestRoll.userId === user?.id;
   useLayoutEffect(() => {
     const container = rollsContainerRef.current;
-    if (!container || (!wasAtBottomRef.current && !newestIsMine)) return;
+    if (!container || newestRollKey === null) return;
+    if (!wasAtBottomRef.current && !newestIsMine) {
+      setNewBelow(true);
+      return;
+    }
     container.scrollTo({ top: container.scrollHeight });
     wasAtBottomRef.current = true;
+    setNewBelow(false);
   }, [newestRollKey, newestIsMine]);
+
+  const jumpToNewest = () => {
+    rollsContainerRef.current?.scrollTo({ top: rollsContainerRef.current.scrollHeight });
+    wasAtBottomRef.current = true;
+    setNewBelow(false);
+  };
 
   /**
    * Only scrolling up leaves the bottom, so a position short of it that the
@@ -490,8 +504,12 @@ export default function DiceRoller() {
     const container = rollsContainerRef.current;
     if (!container) return;
     const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-    if (atBottom) wasAtBottomRef.current = true;
-    else if (container.scrollTop < lastScrollTopRef.current) wasAtBottomRef.current = false;
+    if (atBottom) {
+      wasAtBottomRef.current = true;
+      setNewBelow(false);
+    } else if (container.scrollTop < lastScrollTopRef.current) {
+      wasAtBottomRef.current = false;
+    }
     lastScrollTopRef.current = container.scrollTop;
   };
 
@@ -579,6 +597,7 @@ export default function DiceRoller() {
       </div>
 
       {/* Roll list — a running log, oldest first, like the chat beside it */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
@@ -612,6 +631,8 @@ export default function DiceRoller() {
             <div ref={rollsEndRef} />
           </div>
         )}
+      </div>
+      {newBelow && <JumpToNewest onClick={jumpToNewest} />}
       </div>
 
       {/* Input Area */}

@@ -15,6 +15,7 @@ import { mergeMessages } from '@/utils/messageMerge';
 import { api } from '@/services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatMessage from './ChatMessage';
+import JumpToNewest from './JumpToNewest';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
 import { MessageType, PlatformRole } from '@/types';
 import type { Message, ChatMessageBroadcast } from '@/types';
@@ -109,6 +110,8 @@ export default function ChatPanel() {
   /** Distance from the bottom to restore once an older page has been added. */
   const restoreScrollRef = useRef<number | null>(null);
   const wasAtBottomRef = useRef(true);
+  /** Something arrived below while the reader was scrolled up. */
+  const [newBelow, setNewBelow] = useState(false);
 
   // ============================================
   // Scroll Management
@@ -164,6 +167,13 @@ export default function ChatPanel() {
    */
   const handleScroll = () => {
     wasAtBottomRef.current = isAtBottom();
+    if (wasAtBottomRef.current) setNewBelow(false);
+  };
+
+  const jumpToNewest = () => {
+    wasAtBottomRef.current = true;
+    setNewBelow(false);
+    scrollToBottom(true);
   };
 
   // ============================================
@@ -347,9 +357,11 @@ export default function ChatPanel() {
       });
       if (ownPendingId) setNotSent((prev) => withoutKey(prev, ownPendingId));
 
-      // Auto-scroll if user was at bottom
+      // Auto-scroll if user was at bottom; otherwise say something arrived.
       if (wasAtBottomRef.current) {
         setTimeout(() => scrollToBottom(true), 50);
+      } else if (!ownPendingId) {
+        setNewBelow(true);
       }
     };
 
@@ -372,6 +384,8 @@ export default function ChatPanel() {
 
       if (wasAtBottomRef.current) {
         setTimeout(() => scrollToBottom(true), 50);
+      } else {
+        setNewBelow(true);
       }
     };
 
@@ -603,6 +617,7 @@ export default function ChatPanel() {
       )}
 
       {/* Messages Area */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
@@ -657,6 +672,8 @@ export default function ChatPanel() {
             <div ref={messagesEndRef} />
           </>
         )}
+      </div>
+      {newBelow && <JumpToNewest onClick={jumpToNewest} />}
       </div>
 
       {/* Input Area */}

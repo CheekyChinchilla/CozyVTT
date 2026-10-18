@@ -542,6 +542,8 @@ Type your message in the input field and press **Enter** to send. Messages show 
 
 Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the DM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. Retrying never posts a message twice, even if the first try did reach the server after all.
 
+While you are scrolled up reading earlier messages, new ones don't pull you down; a **Jump to newest** button appears at the bottom instead, and takes you to them. The **Dice** panel does the same for new rolls.
+
 ### Rolling Dice
 
 The **Dice Roller** has its own **Dice** tab beside Chat. Click one of the dice under **Quick Roll** (d4 to d100) to roll it, or type a custom expression and press **Enter** or **Roll**.

@@ -27,6 +27,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
 
+- **Jump to newest in the chat and the Dice panel.** While you are scrolled up, neither list pulls you down when something new arrives, and nothing said that anything had. A **Jump to newest** button now appears at the bottom of the list and takes you down to it.
+
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
