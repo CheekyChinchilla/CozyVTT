@@ -258,6 +258,7 @@ src/
 │   ├── ui/            Shared UI primitives (Button, Modal, Input, Field, Tooltip)
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
 │   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
+│   │       └── tools/ Each map tool's mouse and key handling: walls, lights, doors, fog boxes, the ruler and AoE template
 │   ├── character-sheets/  Game system sheet renderers
 │   ├── common/        Reusable primitives (ToastContainer, ConfirmDialog, EmptyState, etc.)
 │   └── admin/         Parts of the Admin Panel (activity details, deletion blockers, the
@@ -1117,3 +1118,5 @@ Early in development, the client passed `campaignId` in every WebSocket event pa
 ### Why HTML Canvas instead of a SVG or DOM-based map renderer?
 
 Canvas provides the best performance for the use case: pan, zoom, token rendering, and real-time movement at 60fps with potentially hundreds of tokens. SVG struggles at scale, and DOM-based approaches add layout overhead that compounds with zoom transforms. The map draws on three stacked canvases (terrain / tokens / overlay) coordinated by a single animation-frame loop, so dragging a token repaints only the token layer, and vision polygons are memoized so panning re-raycasts nothing.
+
+Input reaches the map through its tools, one module each in `components/campaign/map/tools/`. MapCanvas owns the mouse and keyboard listeners and offers each event to the tools in a fixed order until one takes it: walls, lights, doors, the fog boxes, the ruler and AoE template, and last tokens and panning. That order is what decides a click when two tools are up, since the ruler or the AoE template can stay up beside a DM tool. Escape asks them in its own order, the most transient thing first. A new tool is one more module in that list.
