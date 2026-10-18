@@ -122,9 +122,10 @@
 /*
   Tailwind CSS 3's defaults that Tailwind CSS 4 changed, kept so the app looks
   and behaves as before: a bare `border` is gray-200 (4 uses currentcolor),
-  placeholders are gray-400 (4 dims the text color), and buttons show the
-  pointer cursor (4 uses the default arrow). To drop one, give every element
-  that relies on it an explicit utility first.
+  placeholders are gray-400 (4 dims the text color), buttons show the pointer
+  cursor (4 uses the default arrow), and text boxes and dropdowns keep the
+  browser's own background (4 makes every form control transparent). To drop
+  one, give every element that relies on it an explicit utility first.
 */
 @layer base {
   *,
@@ -143,6 +144,12 @@
   button:not(:disabled),
   [role='button']:not(:disabled) {
     cursor: pointer;
+  }
+
+  input:where(:not([type='button'], [type='reset'], [type='submit'])),
+  select,
+  textarea {
+    background-color: revert;
   }
 }
 
