@@ -50,7 +50,7 @@ UI icons are provided by [Lucide](https://lucide.dev/), licensed under the ISC L
 
 ## Core Application Libraries
 
-CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). The Prisma command-line tool also brings a few packages under EPL-2.0 and the Unlicense into the backend image, unmodified; [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) names them. This is not an exhaustive list — the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
+CozyVTT is built on widely-used open-source libraries distributed under permissive licenses (MIT, ISC, and Apache-2.0). Two sets of packages come with other licences, unmodified: libvips, the image library inside the prebuilt binaries that sharp loads (LGPL-3.0-or-later), and a few packages the Prisma command-line tool brings into the backend image (EPL-2.0 and the Unlicense). [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt) names them. This is not an exhaustive list: the complete dependency tree and each package's license are recorded in `backend/package-lock.json` and `frontend/package-lock.json`.
 
 | Package | Purpose | License |
 |---------|---------|---------|
@@ -73,4 +73,4 @@ CozyVTT is built on widely-used open-source libraries distributed under permissi
 | [otplib](https://github.com/yeojz/otplib) | Authenticator (two-factor) codes, with its `@otplib/*` parts and the `@noble/hashes` and `@scure/base` they use, all MIT | MIT |
 | [sharp](https://github.com/lovell/sharp) | Picture thumbnails, and picture sizes for Universal VTT export | Apache-2.0 |
 
-The tools that only build the app include [Lightning CSS](https://lightningcss.dev/), which Vite uses to minify the stylesheets, under the Mozilla Public License 2.0 (MPL-2.0). It runs unmodified while the app is built, and none of its code is part of an instance.
+The tools that only build or test the app include [Lightning CSS](https://lightningcss.dev/), which Vite uses to minify the stylesheets, under the Mozilla Public License 2.0 (MPL-2.0), and caniuse-lite, the browser-support data from [Can I Use](https://caniuse.com/) that Autoprefixer reads, under the Creative Commons Attribution 4.0 International License (CC-BY-4.0). Both are used unmodified while the app is built or tested, and none of their code or data is part of an instance.
