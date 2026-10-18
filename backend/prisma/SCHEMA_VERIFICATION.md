@@ -133,7 +133,7 @@
 
 ## Relationship Verification
 
-### User Relationships (6 at v1.0.0; 15 today)
+### User Relationships (6 at v1.0.0; 16 today)
 - ✅ ownedCampaigns → Campaign[] (@relation "CampaignOwner")
 - ✅ campaignMemberships → CampaignMembership[]
 - ✅ characters → Character[]
@@ -177,7 +177,7 @@
 
 - ✅ Provider: PostgreSQL
 - ✅ Client generator: prisma-client-js
-- ✅ Database URL from environment variable
+- ✅ Database URL from environment variable (`env("DATABASE_URL")` in the schema at v1.0.0; since 1.5.3 the schema names no address, and `prisma.config.ts` and the app's client read `DATABASE_URL` themselves)
 - ✅ All models use @db.Text for long strings
 - ✅ All timestamps properly configured
 

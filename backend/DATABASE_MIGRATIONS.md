@@ -132,8 +132,9 @@ about; the list is not exhaustive.
   author id of every creature whose author's account was already deleted,
   since the key cannot be added while any row names a missing user. Those ids
   point at nothing, so nothing that can be looked up is lost, and every
-  creature stays. It is safe to run twice: a second run finds nothing to clear
-  and makes the index and the key again only if they are missing.
+  creature stays. It is safe to run twice: a second run finds nothing to clear,
+  makes the index only if it is missing, and drops the key and adds the same
+  one again.
 
 ## Data migrations (one-off scripts)
 
@@ -341,7 +342,8 @@ If `prisma migrate dev` reports drift and offers a reset that deletes the
 database, answer no, and generate the migration as `docs/DEVELOPMENT.md`
 (Running Migrations) shows. On a database the backend ran against before
 1.5.3 it does that because of the sign-in `session` table, which no migration
-made until then; starting the backend once applies the one that does.
+made until then. `npx prisma migrate deploy` applies the one that does, and
+the backend container runs that command each time it starts.
 
 ## Production Deployment
 
