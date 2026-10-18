@@ -17,11 +17,13 @@ import { TOKEN_LIMITS } from './tokenLimits';
 
 // Tokens on a map, walls and lights are held to the app's own limits
 // (MAP_LIMITS, validators/walls.ts), so anything the app stores imports.
+// How many maps, pictures and sound files an archive holds is bounded by
+// MAX_FILE_COUNT, since each is a file in it, and how many creatures and
+// token templates by MAX_JSON_SIZE_BYTES, since each list is one data file.
+// The export checks the same bounds, so a campaign that exports imports
+// again. (Counts of 50 maps, 200 creatures, 500 templates and 500 files used
+// to refuse whole archives a campaign could export.)
 export const IMPORT_LIMITS = {
-  MAX_MAPS: 50,
-  MAX_CREATURES: 200,
-  MAX_TOKEN_TEMPLATES: 500,
-  MAX_ASSETS: 500,
   MAX_JSON_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB per JSON file
   MAX_FILE_COUNT: 1000,
   // How deeply a data file may nest objects and lists. An export reaches
@@ -77,11 +79,11 @@ export const ManifestSchema = z.object({
   exportedFrom: z.string().max(100),
   campaignName: z.string().min(1).max(200),
   gameSystem: z.string().max(50),
-  mapCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_MAPS),
+  mapCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_FILE_COUNT),
   tokenCount: z.number().int().min(0),
-  creatureCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_CREATURES),
-  tokenTemplateCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_TOKEN_TEMPLATES),
-  assetCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_ASSETS),
+  creatureCount: z.number().int().min(0),
+  tokenTemplateCount: z.number().int().min(0),
+  assetCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_FILE_COUNT),
   includesAudio: z.boolean(),
   totalSizeBytes: z.number().int().min(0),
 }).strip();
@@ -252,8 +254,8 @@ export const AssetEntrySchema = z.object({
 // import and listed, as an asset whose content does not match is.
 export const AssetManifestSchema = z.record(z.string().max(200), z.unknown())
   .refine(
-    (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_ASSETS,
-    { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_ASSETS} assets` }
+    (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_FILE_COUNT,
+    { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_FILE_COUNT} assets` }
   );
 
 // ── Types ───────────────────────────────────────────────────────────────────

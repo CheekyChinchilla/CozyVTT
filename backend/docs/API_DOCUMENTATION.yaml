@@ -9019,9 +9019,11 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: >-
-            The archive would be larger than the size setting. The message
-            gives its size and the limit, and says whether leaving out audio
-            would bring it under.
+            The archive would be one an import refuses: larger than the size
+            setting (the message gives its size and the limit, and says whether
+            leaving out audio would bring it under), more than 1,000 files (one
+            for each map and each picture or sound file), or with a data file
+            over 10 MB (all the creatures, say).
           content:
             application/json:
               schema:
@@ -9170,12 +9172,11 @@ paths:
         previews and exports, and run one archive operation at a time.
 
         The manifest is checked before anything is created. An archive whose
-        manifest gives more than 50 maps, 200 creatures, 500 token templates
-        or 500 assets is refused whole with 400 (`Import Failed`), as is one
-        whose asset manifest lists more than 500 assets; the preview route
-        refuses the same manifest with `Invalid Archive`. A creatures or
-        token templates file holding more than 200 or 500 entries keeps the
-        first ones and lists the rest in `skipped`.
+        manifest gives more than 1,000 maps or assets is refused whole with
+        400 (`Import Failed`), as is one whose asset manifest lists more than
+        1,000 assets; the preview route refuses the same manifest with
+        `Invalid Archive`. Creatures and token templates have no count limit
+        of their own: each list is one data file, held to 10 MB.
 
         Every file in the archive is unpacked through a counter and stopped
         as soon as it passes its limit. Each JSON file may unpack to 10 MB,

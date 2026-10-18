@@ -740,14 +740,7 @@ export async function importCampaign(
             const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report);
             if (Array.isArray(creaturesRaw)) {
               const creatures: Prisma.CreatureTemplateCreateManyInput[] = [];
-              if (creaturesRaw.length > IMPORT_LIMITS.MAX_CREATURES) {
-                report.skip(
-                  'creature',
-                  `${(creaturesRaw.length - IMPORT_LIMITS.MAX_CREATURES).toLocaleString('en-US')} creatures`,
-                  `An archive can carry ${IMPORT_LIMITS.MAX_CREATURES} creatures. These were the last in its list.`
-                );
-              }
-              for (const raw of creaturesRaw.slice(0, IMPORT_LIMITS.MAX_CREATURES)) {
+              for (const raw of creaturesRaw) {
                 const row = prepareCreature(raw, { remapAsset, report });
                 if (row) creatures.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
               }
@@ -763,14 +756,7 @@ export async function importCampaign(
             const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report);
             if (Array.isArray(templatesRaw)) {
               const templates: Prisma.TokenTemplateCreateManyInput[] = [];
-              if (templatesRaw.length > IMPORT_LIMITS.MAX_TOKEN_TEMPLATES) {
-                report.skip(
-                  'tokenTemplate',
-                  `${(templatesRaw.length - IMPORT_LIMITS.MAX_TOKEN_TEMPLATES).toLocaleString('en-US')} token templates`,
-                  `An archive can carry ${IMPORT_LIMITS.MAX_TOKEN_TEMPLATES} token templates. These were the last in its list.`
-                );
-              }
-              for (const raw of templatesRaw.slice(0, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES)) {
+              for (const raw of templatesRaw) {
                 const row = prepareTokenTemplate(raw, { remapAsset, report });
                 if (row) templates.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
               }
