@@ -50,7 +50,6 @@ import {
   drawPings,
   PING_DURATION_MS,
   type ActivePing,
-  type AoEAnchor,
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
@@ -62,6 +61,7 @@ import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
 import { useFogTool } from './map/tools/useFogTool';
 import { useLightTool } from './map/tools/useLightTool';
+import { useMeasureTools, type AoEShape } from './map/tools/useMeasureTools';
 import type { PointerAt } from './map/tools/types';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
@@ -118,14 +118,6 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   if (effect === 'shadow') return '#9b6dcc';
   if (effect === 'dream') return '#d4a0f0';
   return '#9370DB'; // wispy default = spirit-purple
-}
-
-type AoEShape = 'sphere' | 'cylinder' | 'cone' | 'line' | 'cube';
-
-interface AoEConfig {
-  shape: AoEShape;
-  sizeFt: number;
-  widthFt?: number; // line only, default 5
 }
 
 /** The DM's editing tool, from the wall, fog or light panel. */
@@ -232,37 +224,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // DM-only: toggle whether spirit-layer tokens are drawn on canvas
   const [dmShowSpiritTokens, setDmShowSpiritTokens] = useState(true);
 
-  // The measuring tool: the ruler or the AoE template, never both. Either can
-  // stay up beside a DM tool below; a DM tool takes the click first.
-  const [measureTool, setMeasureTool] = useState<'ruler' | 'aoe' | null>(null);
-  const showRuler = measureTool === 'ruler';
-  const showAoE = measureTool === 'aoe';
-
-  // Ruler tool
-  const [rulerOrigin, setRulerOrigin] = useState<{ x: number; y: number } | null>(null);
-  const [rulerColor, setRulerColor] = useState<'amber' | 'purple' | 'black'>('amber');
-
-  // AoE tool
-  const [aoeConfig, setAoEConfig] = useState<AoEConfig>({ shape: 'sphere', sizeFt: 20 });
-  // Held in map pixels, not grid coords, so an Alt-placed anchor can sit
-  // part-way into a square. Once set it is a fixed pivot — aiming a cone or
-  // line must never move it.
-  const [aoeAnchor, setAoEAnchor] = useState<AoEAnchor | null>(null);
-  // Whether Alt is down, read off each mousemove so the un-pinned preview shows
-  // what a click would actually place. Taking it from the event rather than
-  // keydown/keyup means it self-corrects if the window loses focus mid-press.
-  const aoeAltHeldRef = useRef(false);
-  // What a pinned template aims at. Unlike hoverMapPxRef this is *not* cleared
-  // when the cursor leaves the canvas: the AoE panel sits over the map, so
-  // aiming towards it would otherwise swing the template back to pointing right
-  // the moment the cursor crossed onto the panel.
-  const aoeAimRef = useRef<{ x: number; y: number } | null>(null);
-
   // Latest-ref to the per-layer draw dispatcher — assigned right after the
   // draw callbacks are defined below. The render loop and the animation hooks
   // call the newest closure through it.
   const drawLayerRef = useRef<(layer: MapLayer) => void>(() => {});
   const { markDirty } = useRenderLoop(drawLayerRef);
+
+  // The ruler and the AoE template (map/tools/useMeasureTools.ts).
+  const {
+    tool: measuring, track: trackMeasure,
+    showRuler, showAoE, handleToggleRuler, handleToggleAoE, putRulerAway,
+    rulerOrigin, rulerColor, setRulerColor,
+    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef,
+  } = useMeasureTools({ isDM, markDirty });
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
   const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
@@ -651,57 +625,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Effective ruler origin: players use their token position, DM uses clicked point
   const effectiveRulerOrigin = isDM ? rulerOrigin : (myToken ? myToken.position : null);
 
-  // Ruler and AoE are mutually exclusive — turning either on closes the other
-  // and drops its placement, so two templates can never share the map.
-  const handleToggleRuler = useCallback(() => {
-    setMeasureTool((prev) => {
-      if (prev === 'ruler') {
-        setRulerOrigin(null);
-        return null;
-      }
-      setAoEAnchor(null);
-      return 'ruler';
-    });
-  }, []);
-
-  const handleToggleAoE = useCallback(() => {
-    setMeasureTool((prev) => {
-      if (prev === 'aoe') {
-        setAoEAnchor(null);
-        return null;
-      }
-      setRulerOrigin(null);
-      return 'aoe';
-    });
-  }, []);
-
-  // Alt switches the AoE tool to free placement, so the preview has to follow
-  // the key, not just the mouse. Reading it off mousemove alone left a
-  // stationary cursor showing the opposite of what a click would place.
-  // Mousemove still refreshes it as a backstop, which is what recovers the flag
-  // if a keyup is missed — Alt focuses the menu bar in some browsers, and the
-  // window can lose focus mid-press.
-  useEffect(() => {
-    if (!showAoE) return;
-    const sync = (e: KeyboardEvent) => {
-      if (aoeAltHeldRef.current === e.altKey) return;
-      aoeAltHeldRef.current = e.altKey;
-      markDirty('overlay');
-    };
-    const clear = () => {
-      if (!aoeAltHeldRef.current) return;
-      aoeAltHeldRef.current = false;
-      markDirty('overlay');
-    };
-    window.addEventListener('keydown', sync);
-    window.addEventListener('keyup', sync);
-    window.addEventListener('blur', clear);
-    return () => {
-      window.removeEventListener('keydown', sync);
-      window.removeEventListener('keyup', sync);
-      window.removeEventListener('blur', clear);
-    };
-  }, [showAoE, markDirty]);
 
   /**
    * Play a brief ethereal audio cue when the spirit layer is toggled.
@@ -1459,19 +1382,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           setSelectedWallIds(new Set());
         } else if (wallMode) {
           setWallMode(null);
-        } else if (lightTool.escape!()) {
-          // The light tool put away.
-        } else if (showAoE) {
-          // Drop the placement first, then close the tool — the same two-stage
-          // escape as the wall tools above. The DM guide has always promised
-          // Esc dismisses this, but nothing here ever handled it.
-          //
-          // Last in the chain on purpose: the AoE overlay is not mutually
+        } else if (!lightTool.escape!()) {
+          // Last in the chain on purpose: the AoE template is not mutually
           // exclusive with the wall and light tools, so it can sit armed while
           // a wall is half-drawn. Esc has to cancel the more transient thing
           // first, or it would quietly close this instead of the wall.
-          if (aoeAnchor) setAoEAnchor(null);
-          else setMeasureTool((prev) => (prev === 'aoe' ? null : prev));
+          measuring.escape!();
         }
         return;
       }
@@ -2467,18 +2383,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     if (fogTool.down!(at)) return;
 
-    // If ruler is active and user is DM, set ruler origin on click
-    if (showRuler && isDM) {
-      setRulerOrigin(gridCoords);
-      return;
-    }
-
-    // AoE tool: click to set/move the anchor the template pivots about.
-    // Held in map pixels so Alt can place it anywhere, not just on a square.
-    if (showAoE) {
-      setAoEAnchor({ point: screenToMapPx(screenX, screenY), exact: e.altKey });
-      return;
-    }
+    if (measuring.down!(at)) return;
 
     // If we're already holding a token, place it on this click
     if (draggedToken && dragOffset) {
@@ -2551,10 +2456,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     if (token) {
       // Pick up token — disable ruler if it was active
-      if (showRuler) {
-        setMeasureTool(null);
-        setRulerOrigin(null);
-      }
+      if (showRuler) putRulerAway();
       console.log('👆 Picking up token:', token.name);
       setDraggedToken(token);
       setDragOffset({
@@ -2597,17 +2499,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Track raw map-px position (unquantised) for accurate ghost line in free-draw mode
     hoverMapPxRef.current = at.mapPx;
 
-    // AoE aim and Alt state, refreshed on every move for the reasons given
-    // where they are declared.
-    aoeAimRef.current = hoverMapPxRef.current;
-    aoeAltHeldRef.current = e.altKey;
-
-    // Aiming a pinned template turns it about a fixed point, so the angle
-    // changes with every pixel of cursor movement. The general hover repaint
-    // below only fires when the cursor crosses into a new *square*, which would
-    // make the sweep step round in jumps — the very thing this tool is meant to
-    // have stopped doing. The overlay layer alone is cheap to redraw.
-    if (showAoE) markDirty('overlay');
+    trackMeasure(at);
 
     // Update hover coordinates
     if (mapControls.isWithinBounds(gridCoords)) {
