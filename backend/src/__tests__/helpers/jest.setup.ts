@@ -13,3 +13,8 @@ const url = process.env.DATABASE_URL;
 if (url && !/[?&]connection_limit=/.test(url)) {
   process.env.DATABASE_URL = `${url}${url.includes('?') ? '&' : '?'}connection_limit=5`;
 }
+
+// TODO(cleanup): a test file that sets no UPLOAD_DIR of its own writes into
+// the real backend/uploads (campaignImportGeometry.test.ts and others left
+// about 470 files there over two full runs). Point UPLOAD_DIR at a fresh
+// temporary folder here for every worker, as the files that do set it do.
