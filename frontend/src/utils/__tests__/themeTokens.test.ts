@@ -7,27 +7,26 @@
  * the semantic tokens instead — see the alert and badge classes in index.css,
  * and the token list in its @theme block.
  *
- * Two areas are deliberately exempt because they are fixed-surface designs
- * rather than themed UI, and are listed explicitly so the exemption stays
- * visible and reviewable.
+ * Two areas are exempt, listed explicitly so the exemption stays visible and
+ * reviewable: the DM map overlays, a fixed-surface design, and the character
+ * sheets until they are on the theme tokens.
  */
 
 import { describe, it, expect } from 'vitest';
 
 /**
- * Fixed-surface designs, exempt by intent:
- *  - character sheets render as light "paper" cards, the way the physical
- *    sheets look, and keep their own palette (including the Call of Cthulhu
- *    sepia set, which index.css's @theme block documents as static)
- *  - the DM map overlays are deliberately dark panels floating over the map
+ * Exempt:
+ *  - the character sheets, for now: they still use raw palette colors (see the
+ *    TODO below)
+ *  - the DM map overlays, deliberately dark panels floating over the map
  */
 const EXEMPT = [
   // TODO(sheets): GAME_SYSTEMS.md's Styling rule has the sheets use the theme
   // tokens like the rest of the app, and they do not yet: they are half themed.
   // In a dark theme the D&D 5e saving throw names take the theme's light text
   // on the sheet's white paper, and the Call of Cthulhu sheet turns dark around
-  // its dark sepia text. Right: theme tokens throughout the sheets (the sepia
-  // scale stays the Call of Cthulhu exception), then this entry goes.
+  // its dark sepia text. Right: theme tokens throughout every sheet, the Call
+  // of Cthulhu sheet's sepia included, then this entry goes.
   '/src/components/character-sheets/',
   '/src/components/campaign/DmWallControls.tsx',
   '/src/components/campaign/DmLightControls.tsx',
