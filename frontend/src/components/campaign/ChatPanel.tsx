@@ -25,6 +25,12 @@ import type { ChatSystemBroadcast } from '@/types';
 /** Messages per page. The server caps this at 100. */
 const PAGE_SIZE = 50;
 
+/**
+ * How many pages a rejoin reads back looking for a message already shown.
+ * Past it, the list starts again from the newest pages.
+ */
+const MAX_RESYNC_PAGES = 10;
+
 /** The longest message the server accepts, in characters. */
 const MAX_MESSAGE_LENGTH = 2000;
 
@@ -201,11 +207,13 @@ export default function ChatPanel() {
    * Resync chat history after a WebSocket reconnect.
    *
    * The realtime stream may have missed messages while we were disconnected
-   * (chat is fire-and-forget over the socket — backend stores every message
-   * in Postgres, but only live subscribers see them in real time). On
-   * reconnect, refetch the last 50 messages and merge with what we already
-   * have, deduping by id. Any messages the user missed during the drop
-   * appear inline at the bottom.
+   * (the backend stores every message in Postgres, but only live subscribers
+   * see them in real time). On reconnect, read back from the newest message
+   * until a page holds one already shown, and merge, deduping by id: reading
+   * only the newest page left a lasting gap after a busy absence, behind
+   * which Load More cannot reach. When MAX_RESYNC_PAGES do not get back to
+   * what is shown, the list starts again from what was read, and Load More
+   * carries on from there.
    *
    * Driven by `joinedEpoch`, which counts joins of the campaign: every join
    * after the first is a rejoin. The transport's own reconnect comes before
@@ -217,12 +225,28 @@ export default function ChatPanel() {
 
     const resync = async () => {
       try {
-        const page = await getMessages(campaignId, PAGE_SIZE);
-        const fresh = page.messages;
+        const shown = new Set(messagesRef.current.filter((m) => !m.id.startsWith('temp-')).map((m) => m.id));
+        const joinsUp = (page: Message[]) => shown.size === 0 || page.some((m) => shown.has(m.id));
+        let page = await getMessages(campaignId, PAGE_SIZE);
+        const fresh = [...page.messages];
+        let joined = joinsUp(page.messages);
+        for (let read = 1; !joined && read < MAX_RESYNC_PAGES && page.pagination.hasMore && page.pagination.nextCursor; read++) {
+          page = await getMessages(campaignId, PAGE_SIZE, page.pagination.nextCursor);
+          fresh.push(...page.messages);
+          joined = joinsUp(page.messages);
+        }
 
         // mergeMessages already orders and dedupes; sorting again here on the
         // timestamp alone would undo the id tiebreak it applies.
-        setMessages((prev) => mergeMessages(prev, fresh));
+        if (joined || !page.pagination.hasMore) {
+          setMessages((prev) => mergeMessages(prev, fresh));
+        } else {
+          // Too much was missed to join up: keep only messages still being
+          // sent, and page back from what was read.
+          setMessages((prev) => mergeMessages(prev.filter((m) => m.id.startsWith('temp-')), fresh));
+          setHasMore(page.pagination.hasMore);
+          setCursor(page.pagination.nextCursor);
+        }
       } catch (err) {
         console.error('[ChatPanel] Failed to resync messages after reconnect:', err);
         // Non-fatal — user will still see new messages going forward
