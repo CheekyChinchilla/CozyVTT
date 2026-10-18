@@ -8,6 +8,10 @@
 // ============================================
 
 import type React from 'react';
+import type { useMapControls } from '@/hooks/useMapControls';
+
+/** Zoom, pan and the screen-to-grid conversion, as `useMapControls` gives them. */
+export type MapControls = ReturnType<typeof useMapControls>;
 
 /** Where a mouse event landed, in the three spaces the tools work in. */
 export interface PointerAt {

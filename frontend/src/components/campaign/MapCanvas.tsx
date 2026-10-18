@@ -61,6 +61,7 @@ import { exploredCellsFromCoverage, diffNew } from './map/exploration';
 import { rectFromDrag, segmentsInRect } from './map/mapSelection';
 import { useWallSelection } from './map/useWallSelection';
 import { useFogTool } from './map/tools/useFogTool';
+import { useLightTool } from './map/tools/useLightTool';
 import type { PointerAt } from './map/tools/types';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
@@ -101,7 +102,7 @@ import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
-import DmLightControls, { type LightToolMode, type LightPlacementDefaults } from '@/components/campaign/DmLightControls';
+import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
@@ -397,12 +398,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [lightSources, setLightSources] = useState<LightSource[]>([]);
   const lightSourcesRef = useRef<LightSource[]>([]);
   useEffect(() => { lightSourcesRef.current = lightSources; }, [lightSources]);
-  const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
-  const [lightPlacementDefaults, setLightPlacementDefaults] = useState<LightPlacementDefaults>({
-    brightRadius: 4, dimRadius: 8, color: '#ffcc66',
-  });
-  // Drag-to-move state for lights in select mode
-  const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
 
   // Always-current wall segments ref — socket handlers registered with [socket, currentMap?.id]
   // deps would otherwise close over stale wallSegments from registration time.
@@ -464,6 +459,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     mapHeight: currentMap?.height || 20,
     minZoom: 0.1, // Allow large maps to fully fit
     maxZoom: 3,
+  });
+
+  // The light tools (map/tools/useLightTool.ts).
+  const {
+    tool: lightTool,
+    selectedLightId, setSelectedLightId,
+    lightPlacementDefaults, setLightPlacementDefaults,
+    draggingLightRef,
+  } = useLightTool({
+    isDM, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
+    socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
   });
 
   // ============================================
@@ -1453,9 +1459,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           setSelectedWallIds(new Set());
         } else if (wallMode) {
           setWallMode(null);
-        } else if (lightMode) {
-          setLightMode(null);
-          setSelectedLightId(null);
+        } else if (lightTool.escape!()) {
+          // The light tool put away.
         } else if (showAoE) {
           // Drop the placement first, then close the tool — the same two-stage
           // escape as the wall tools above. The DM guide has always promised
@@ -2434,51 +2439,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
-    // TODO(maps): this checks isDM and not previewing, so during a player-view
-    // preview, where no light markers are drawn, a click still places, selects
-    // or drags a light with nothing on screen to show it. Ignore the light
-    // tool while previewing.
-    // Light tool: place or select/drag
-    if (lightMode && isDM) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      if (lightMode === 'light-place') {
-        const newLight: LightSource = {
-          id: randomId(),
-          x: Math.round(mapPx.x),
-          y: Math.round(mapPx.y),
-          brightRadius: lightPlacementDefaults.brightRadius,
-          dimRadius: lightPlacementDefaults.dimRadius,
-          color: lightPlacementDefaults.color,
-          enabled: true,
-        };
-        setLightSources((prev) => [...prev, newLight]);
-        setSelectedLightId(newLight.id);
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('light:add', ownEdits.tag({ mapId: currentMap.id, light: newLight }));
-        }
-        return;
-      }
-      if (lightMode === 'light-select') {
-        const hitR = 16 / mapControls.zoom;
-        let closest: LightSource | null = null;
-        let closestDist = Infinity;
-        for (const l of lightSources) {
-          const dx = mapPx.x - l.x;
-          const dy = mapPx.y - l.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d <= hitR && d < closestDist) { closest = l; closestDist = d; }
-        }
-        if (closest) {
-          setSelectedLightId(closest.id);
-          // Start drag-to-move
-          draggingLightRef.current = { id: closest.id, startX: mapPx.x, startY: mapPx.y };
-        } else {
-          setSelectedLightId(null);
-        }
-        return;
-      }
-    }
+    if (lightTool.down!(at)) return;
 
     // Door interaction: click near a door segment to toggle open/closed. Only
     // a door the map offers this viewer (doorAccess.ts): the DM any, a player
@@ -2798,20 +2759,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       return;
     }
 
-    // Light mode: handle right-pan and drag-to-move
-    if (lightMode && isDM) {
-      if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      // Drag-to-move: update light position in real time
-      if (draggingLightRef.current && (e.buttons & 1)) {
-        const mapPx = screenToMapPx(screenX, screenY);
-        const dragId = draggingLightRef.current.id;
-        setLightSources((prev) => prev.map((l) =>
-          l.id === dragId ? { ...l, x: Math.round(mapPx.x), y: Math.round(mapPx.y) } : l
-        ));
-        markDirty('overlay');
-      }
-      return;
-    }
+    if (lightTool.move!(at)) return;
 
     // Door hover detection in pan mode — changes cursor to pointer over a door
     // the map offers this viewer
@@ -2928,18 +2876,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         setSelectedWallIds(new Set());
       }
     }
-    // Commit light drag-to-move
-    if (draggingLightRef.current) {
-      const dragId = draggingLightRef.current.id;
-      draggingLightRef.current = null;
-      const movedLight = lightSourcesRef.current.find((l) => l.id === dragId);
-      if (movedLight) {
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('light:update', ownEdits.tag({ mapId: currentMap.id, light: movedLight }));
-        }
-      }
-    }
+    lightTool.up!();
     fogTool.up!();
     // Commit wall erase brush
     if (wallMode === 'wall-erase' && wallEraseBrushActiveRef.current) {
