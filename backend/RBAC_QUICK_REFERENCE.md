@@ -60,7 +60,13 @@ it, only while its owner is still a member (`ownerStillIn` in
 `routes/characters.ts`). Removing a member takes their characters out of the
 campaign in the same transaction; a character left naming a campaign by a
 removal from before that is its owner's alone, and its saves are not sent to
-that campaign.
+that campaign. The socket's hit point and hit dice events ask the same
+(`characterInCampaign` in `utils/characterCampaign.ts`).
+
+Only the owner assigns a character to a campaign (`POST
+/api/characters/:id/assign` with a `campaignId`). The owner, or the DM of the
+campaign the character is in, may take it out of that campaign (the same route
+with `campaignId` null); it stays with its owner.
 
 The top-level `notes` of a `CALL_OF_CTHULHU_7E` sheet, which the editor calls
 Keeper's Notes, belong to the Keeper: the DM of the character's campaign alone

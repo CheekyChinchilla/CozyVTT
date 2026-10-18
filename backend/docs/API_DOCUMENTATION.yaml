@@ -5042,12 +5042,17 @@ paths:
         - Characters
       summary: Assign character to campaign, or unassign it
       description: |
-        Owner only. A `campaignId` that is not a string or null answers 400
-        (`Validation Error`) before anything is looked up.
+        Assigning is the owner's alone. Unassigning is the owner's, or the
+        campaign DM's: the DM of the campaign the character is in may take it
+        out of that campaign, and it stays with its owner. Anyone else answers
+        403 (`Only the character owner can assign this character to a
+        campaign`, or `Only the character owner, or the DM of its campaign, can
+        take it out of a campaign`). A `campaignId` that is not a string or null
+        answers 400 (`Validation Error`) before anything is looked up.
         - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
           character: its `campaignId` column is cleared and it is removed from
-          the caller's membership `characterIds` in its previous campaign, if
-          it had one. No campaign membership is needed for this.
+          its owner's membership `characterIds` in its previous campaign, if
+          it had one. The owner needs no campaign membership for this.
         - Sending a `campaignId` assigns the character to that campaign. The
           campaign must exist (404 otherwise) and the caller must already be a
           member of it (403 otherwise). The character's `gameSystem` must

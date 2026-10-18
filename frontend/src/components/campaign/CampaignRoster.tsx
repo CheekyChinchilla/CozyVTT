@@ -12,6 +12,7 @@ import { characterTokenDrag, characterTokenRequest } from '@/utils/characterToke
 import { useAuth } from '@/contexts/AuthContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
 import { api } from '@/services/api';
+import { apiErrorMessage } from '@/utils/errors';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -243,7 +244,7 @@ export default function CampaignRoster() {
       await fetchRoster();
     } catch (error) {
       console.error('Error removing character from campaign:', error);
-      showToast('Failed to remove character from campaign', 'error');
+      showToast(apiErrorMessage(error) || 'Failed to remove character from campaign', 'error');
     }
   };
 
