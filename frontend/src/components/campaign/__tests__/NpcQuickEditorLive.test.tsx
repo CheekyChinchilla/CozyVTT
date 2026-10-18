@@ -132,3 +132,20 @@ it('keeps showing the newest quick change while an older one is still answered',
   await act(async () => { answers[1](); });
   expect(screen.getByText('7 / 9')).toBeInTheDocument();
 });
+
+// Create Blank showed the new stat block for editing at once, then put the
+// table's copy back when the server answered, dropping anything typed into it
+// meanwhile; the next key then started again from the blank block.
+it('keeps what is typed into a new stat block while it is being created', async () => {
+  let created: () => void = () => {};
+  updateToken.mockImplementationOnce((_c: string, _m: string, _id: string, changes: Partial<Token>) =>
+    new Promise((resolve) => { created = () => resolve({ token: { ...useGameStore.getState().tokens['cultist'], ...changes } }); }));
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'Add Stat Block' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Create Blank' }));
+  const speed = await screen.findByPlaceholderText('30 ft., fly 60 ft.');
+  fireEvent.change(speed, { target: { value: '40 ft.' } });
+
+  await act(async () => { created(); });
+  expect(screen.getByPlaceholderText('30 ft., fly 60 ft.')).toHaveValue('40 ft.');
+});

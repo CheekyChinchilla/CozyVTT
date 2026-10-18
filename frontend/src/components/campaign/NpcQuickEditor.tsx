@@ -284,10 +284,15 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     };
     statBlockEdits.current += 1;
+    const edit = statBlockEdits.current;
     setStatBlockDraft({ value: newBlock });
     setEditingStatBlock(true);
     setShowCreateStatBlock(false);
-    if (!(await saveUpdate({ statBlock: newBlock }))) setEditingStatBlock(false);
+    const created = await saveUpdate({ statBlock: newBlock });
+    // Typing into the new block while it was being created is a later edit,
+    // which stays the DM's until its own save.
+    if (statBlockEdits.current !== edit) return;
+    if (!created) setEditingStatBlock(false);
     setStatBlockDraft(null);
   }, [saveUpdate]);
 
