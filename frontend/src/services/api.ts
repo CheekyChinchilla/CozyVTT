@@ -65,6 +65,7 @@ import type {
   CampaignMembership,
 } from '@/types';
 import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/knownChoices';
+import { saveBlob } from '@/utils/download';
 
 // ============================================
 // API Client Configuration
@@ -993,11 +994,20 @@ class ApiClient {
   }
 
   /**
-   * Get the URL for downloading a UVTT export of a map.
-   * Uses the base URL so the browser can handle the file download with auth cookies.
+   * Save a map as a Universal VTT file. It is fetched first and saved once
+   * it has arrived, so a refusal (a map with no picture, or one that is not
+   * a PNG, JPEG, WebP or GIF image) rejects like any other request, with its
+   * message readable by `apiErrorMessage`; a plain download link saved the
+   * server's error as the file. The map's picture is inside the file, so it
+   * is fetched without the shared client's thirty-second limit.
    */
-  getExportUVTTUrl(campaignId: string, mapId: string): string {
-    return `/api/campaigns/${campaignId}/maps/${mapId}/export-uvtt`;
+  async downloadUVTTExport(campaignId: string, mapId: string, fileName: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/campaigns/${encodeURIComponent(campaignId)}/maps/${encodeURIComponent(mapId)}/export-uvtt`,
+      { credentials: 'include' }
+    );
+    if (!response.ok) throw await refusalFrom(response);
+    saveBlob(fileName, await response.blob());
   }
 
   /**
@@ -1298,16 +1308,7 @@ class ApiClient {
       }
     }
 
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    // Revoked a little later: some browsers start the download only after
-    // the click handler has returned.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    saveBlob(fileName, await response.blob());
     return 'saved';
   }
 

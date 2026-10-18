@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **Export as .uvtt says why a map cannot be exported, and saves only a real file.** The button was a plain download link, so a refusal, such as a map whose picture is not a PNG, JPEG, WebP or GIF image, was never shown and the browser's download failed or saved the error. The file is now fetched first and saved once it has arrived; a refusal shows the server's reason in the Map Library.
+
 - **The DM tool panels stay on the map.** The stack of Fog of War, Walls and Lights panels, once dragged, was fixed to the window, so it stayed put when the map moved or shrank and could be left off the map, and a tall stack covered the **Preview Player View** button, hiding the Lights panel's **Place** button on a short window. The stack now moves with the map and comes back onto it when the map shrinks, double-clicking the bar above it puts it back in its corner, and it scrolls above **Preview Player View**.
 
 - **A light's colour can be typed into the Lights panel.** The box beside the colour swatches undid every key until a whole colour was there, so nothing could be typed into it. It now takes a colour such as `#ff9933`, with or without the `#`, and goes back to the colour in use if you leave it unfinished.
