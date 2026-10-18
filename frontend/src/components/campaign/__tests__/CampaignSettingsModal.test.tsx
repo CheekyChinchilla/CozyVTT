@@ -9,15 +9,24 @@
  * to its first tab.
  */
 
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { Campaign } from '@/types';
 
 let current: Campaign;
-vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign: vi.fn(), userRole: 'DM' }) }));
+const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
+const updateCampaign = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign: vi.fn(), userRole: viewer.role }) }));
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }) }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: viewer.user }) }));
 vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
+vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign, deleteCampaign: vi.fn() } }));
+
+beforeEach(() => {
+  viewer.role = 'DM';
+  viewer.user = { id: 'dm', platformRole: 'USER' };
+  updateCampaign.mockReset().mockResolvedValue({});
+});
 
 import CampaignSettingsModal from '../CampaignSettingsModal';
 
@@ -38,5 +47,15 @@ describe('CampaignSettingsModal', () => {
     rerender(<CampaignSettingsModal isOpen onClose={() => undefined} />);
 
     expect((screen.getByPlaceholderText('Describe your campaign…') as HTMLTextAreaElement).value).toBe('Half-written notes');
+  });
+
+  // An emptied box left the description out of the request, so the old one
+  // stayed while the panel said the settings were saved.
+  it('clears the description when the box is emptied', async () => {
+    current = campaign();
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    fireEvent.change(screen.getByPlaceholderText('Describe your campaign…'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
+    await waitFor(() => expect(updateCampaign).toHaveBeenCalledWith('c1', { name: 'The Keep', description: null }));
   });
 });

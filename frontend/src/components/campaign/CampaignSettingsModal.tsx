@@ -125,11 +125,8 @@ export default function CampaignSettingsModal({
     try {
       await campaignService.updateCampaign(campaign.id, {
         name: trimmedName,
-        // TODO(ui): an emptied box sends undefined, which leaves the field out
-        // of the request, so the server keeps the old description while this
-        // panel says the settings were saved. Send null for an empty box; the
-        // server accepts it and clears the description.
-        description: description.trim() || undefined,
+        // An emptied box clears the description; leaving it out kept the old one.
+        description: description.trim() || null,
       });
       await refreshCampaign();
       showToast('Campaign settings saved', 'success');

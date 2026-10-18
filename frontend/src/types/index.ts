@@ -1131,7 +1131,8 @@ export interface CreateCampaignRequest {
 export interface UpdateCampaignRequest {
   name?: string;
   gameSystem?: GameSystem | null;
-  description?: string;
+  /** null clears it. */
+  description?: string | null;
   status?: CampaignStatus;
   vibeSettings?: VibeSettings;
   spiritLayerEnabled?: boolean;

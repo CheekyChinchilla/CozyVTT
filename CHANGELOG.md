@@ -57,6 +57,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Emptying a campaign's description in Campaign Settings clears it.** The old description stayed, while the panel said the settings were saved.
+
 - **Open Campaign after an import opens the campaign.** It went to an address that is no page, so the app sent you to the dashboard instead.
 
 - **Changing a creature's ability scores or Challenge Rating moves its saves and skills, and saves them.** The Creature Library's form showed the new bonuses and saved the old ones, so a Goblin given Dexterity 16 kept rolling Stealth +6; in a token's stat block, typing a score froze the creature's bonuses at the first digit typed. Both now follow the creature's proficiencies, an SRD creature's included.
