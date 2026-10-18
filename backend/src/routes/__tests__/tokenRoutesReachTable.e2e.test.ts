@@ -129,3 +129,19 @@ it('sends nothing for a map the DM has not switched to', async () => {
   await nothingToPlayer;
   await nothingToDm;
 });
+
+// A player may change a token they control as often as the request limit
+// lets them, and each re-send builds the map for every member, with sight on
+// a lit map. The map goes at most once in a short window, read as it stands
+// then, so a burst of changes reaches the table as one map carrying them all.
+it('sends a burst of changes as one map carrying them all', async () => {
+  const seen: MapChanged[] = [];
+  player.on('map.changed', (event: MapChanged) => seen.push(event));
+  const burst = ['a', 'b', 'c', 'd', 'e'];
+  await Promise.all(burst.map((name) => dmRest.post(tokens(shownId)).send({ name, position: { x: 1, y: 1 } }).expect(201)));
+  await new Promise((resolve) => setTimeout(resolve, 600));
+
+  expect(seen.length).toBeGreaterThan(0);
+  expect(seen.length).toBeLessThan(burst.length);
+  expect(names(seen[seen.length - 1])).toEqual(burst);
+});

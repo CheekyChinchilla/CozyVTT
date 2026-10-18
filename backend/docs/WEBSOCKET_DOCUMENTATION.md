@@ -48,8 +48,10 @@ Three things people expect on the socket are not there:
   `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). There is no
   token event for them: when the map is the one the campaign is showing, each
   route sends every connected member `map.changed` with the map as they may see
-  it (the event `map.change` sends), then the initiative order again while
-  something is in it. A script needs to send nothing more, and a player's edit
+  it (the event `map.change` sends), and the initiative order again while
+  something is in it. The map goes up to 100 ms after the change, at most once
+  in that time for each map and as it stands then, so a burst of changes
+  arrives as one map. A script needs to send nothing more, and a player's edit
   to a token they control reaches the table the same way. Moving a token is the
   one token change with socket events of its own (below).
 - **Starting, pausing, resuming and ending a session** are REST calls too
