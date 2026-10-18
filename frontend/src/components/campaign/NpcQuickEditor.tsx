@@ -51,6 +51,28 @@ const STAT_BLOCK_SAVE_DELAY_MS = 750;
 // unable to mark an NPC Deafened, Grappled or Petrified while a player
 // character could be.
 
+/**
+ * One field of the token as a quick control shows it: the table's value, or
+ * the DM's change in its place from when it is made until its save is
+ * answered, when the table's value is the answer: the change once stored, or
+ * what it was if refused. `show` numbers each change, and `drop(change)`
+ * clears only that one, so an older save answered late leaves a newer change
+ * showing; `drop()` clears whatever is shown.
+ */
+function useOwnChange<T>(live: T): [T, (value: T) => number, (change?: number) => void] {
+  const [own, setOwn] = useState<{ value: T; change: number } | null>(null);
+  const changes = useRef(0);
+  const show = useCallback((value: T) => {
+    changes.current += 1;
+    setOwn({ value, change: changes.current });
+    return changes.current;
+  }, []);
+  const drop = useCallback((change?: number) => {
+    setOwn((shown) => (shown && (change === undefined || shown.change === change) ? null : shown));
+  }, []);
+  return [own ? own.value : live, show, drop];
+}
+
 // ============================================
 // Props
 // ============================================
@@ -87,33 +109,52 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const { campaign, currentMap } = useCampaign();
   const { showToast } = useToast();
 
-  // Local editable state (mirrors token, updates on save)
-  const [name, setName] = useState(token.name);
-  const [hp, setHp] = useState<TokenHp | null>(token.hp ?? null);
-  const [showHpBar, setShowHpBar] = useState(token.showHpBar ?? false);
-  const [disposition, setDisposition] = useState<TokenDisposition | null>(token.disposition ?? null);
-  const [initiative, setInitiative] = useState<string>(token.initiative !== null && token.initiative !== undefined ? String(token.initiative) : '');
-  const [conditions, setConditions] = useState<string[]>(token.conditions ?? []);
+  // The token as the table holds it (the game store), which a change made
+  // anywhere else reaches: another tab, a script, a player on a token they
+  // control. A copy kept here hid those changes, and the next save put the
+  // copy's values back over them. The prop is the token as it was opened,
+  // for the moment it is not in the store.
+  const liveToken = useGameStore((s) => s.tokens[token.id]);
+  const current = liveToken ?? token;
+
+  // Each quick control shows the DM's change at once, in place of the
+  // table's value, until its save is answered: then the table's value again,
+  // which is the change once stored, or what it was if refused.
+  const [hp, showOwnHp, dropOwnHp] = useOwnChange<TokenHp | null>(current.hp ?? null);
+  const [showHpBar, showOwnHpBar, dropOwnHpBar] = useOwnChange(current.showHpBar ?? false);
+  const [disposition, showOwnDisposition, dropOwnDisposition] = useOwnChange<TokenDisposition | null>(current.disposition ?? null);
+  const [conditions, showOwnConditions, dropOwnConditions] = useOwnChange<string[]>(current.conditions ?? []);
+  const [controlledBy, showOwnController, dropOwnController] = useOwnChange<string | null>(current.controlledBy ?? null);
+  const controller = tokenControllerStanding(controlledBy, campaign?.memberships);
+
+  // Typed text is the DM's from the first key until it is saved, and stays
+  // in the box when the save is refused, with the reason shown.
+  const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const name = nameDraft ?? current.name;
+  const liveInitiative = current.initiative !== null && current.initiative !== undefined ? String(current.initiative) : '';
+  const [initiativeDraft, setInitiativeDraft] = useState<string | null>(null);
+  const initiative = initiativeDraft ?? liveInitiative;
+  const [notesDraft, setNotesDraft] = useState<string | null>(null);
+  const notes = notesDraft ?? (current.notes ?? '');
+
   // A condition of the DM's own, as typed.
   const [customCondition, setCustomCondition] = useState('');
   const offeredConditions = conditionsOffered(campaign?.gameSystem ?? null);
-  const [notes, setNotes] = useState(token.notes ?? '');
-  // Hidden and obscured are read from the token as the table holds it (the
-  // game store), never a copy here: a copy could say "hidden" while every
-  // player still saw the token, after a refused save or a change made from
-  // the token menu.
-  const liveToken = useGameStore((s) => s.tokens[token.id]);
-  const visible = liveToken?.visible ?? token.visible;
-  const obscured = liveToken?.obscured ?? token.obscured ?? false;
+  // Hidden and obscured are shown from the table alone, never ahead of it: a
+  // button saying "hidden" while every player still saw the token was worse
+  // than one that waits for the save.
+  const visible = current.visible;
+  const obscured = current.obscured ?? false;
   const [savingVisibility, setSavingVisibility] = useState(false);
-  const [controlledBy, setControlledBy] = useState<string | null>(token.controlledBy ?? null);
-  const controller = tokenControllerStanding(controlledBy, campaign?.memberships);
   const [isRemoving, setIsRemoving] = useState(false);
   // Set while the Remove confirmation is open.
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [enableHpPrompt, setEnableHpPrompt] = useState(false);
   const [newHpMax, setNewHpMax] = useState('');
-  const [statBlock, setStatBlock] = useState<NpcStatBlock | null>((token.statBlock as NpcStatBlock) ?? null);
+  // The stat block as typed, while it is the DM's (see the stat block saves
+  // below); otherwise the table's.
+  const [statBlockDraft, setStatBlockDraft] = useState<{ value: NpcStatBlock | null } | null>(null);
+  const statBlock = statBlockDraft ? statBlockDraft.value : ((current.statBlock as NpcStatBlock | null | undefined) ?? null);
   const [editingStatBlock, setEditingStatBlock] = useState(false);
   const [showCreateStatBlock, setShowCreateStatBlock] = useState(false);
 
@@ -128,7 +169,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [duplicateName, setDuplicateName] = useState('');
   const imageFileRef = useRef<HTMLInputElement>(null);
 
-  const tokenType = getEffectiveType(token);
+  const tokenType = getEffectiveType(current);
   const isNpc = tokenType === TokenType.NPC;
 
   // ── Generic update helper ──
@@ -157,37 +198,37 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     if (!hp) return;
     const newCurrent = Math.max(0, Math.min(hp.max, hp.current + delta));
     const newHp = { ...hp, current: newCurrent };
-    setHp(newHp);
-    if (!(await saveUpdate({ hp: newHp }))) setHp(hp);
-  }, [hp, saveUpdate]);
+    const shown = showOwnHp(newHp);
+    await saveUpdate({ hp: newHp });
+    dropOwnHp(shown);
+  }, [hp, saveUpdate, showOwnHp, dropOwnHp]);
 
   const setTempHp = useCallback(async (val: number) => {
     if (!hp) return;
     const newHp = { ...hp, temp: Math.max(0, val) };
-    setHp(newHp);
-    if (!(await saveUpdate({ hp: newHp }))) setHp(hp);
-  }, [hp, saveUpdate]);
+    const shown = showOwnHp(newHp);
+    await saveUpdate({ hp: newHp });
+    dropOwnHp(shown);
+  }, [hp, saveUpdate, showOwnHp, dropOwnHp]);
 
   const toggleShowHpBar = useCallback(async () => {
-    const next = !showHpBar;
-    setShowHpBar(next);
-    if (!(await saveUpdate({ showHpBar: next }))) setShowHpBar(!next);
-  }, [showHpBar, saveUpdate]);
+    const shown = showOwnHpBar(!showHpBar);
+    await saveUpdate({ showHpBar: !showHpBar });
+    dropOwnHpBar(shown);
+  }, [showHpBar, saveUpdate, showOwnHpBar, dropOwnHpBar]);
 
   const enableHpTracking = useCallback(async () => {
     const max = parseInt(newHpMax, 10);
     if (!max || max <= 0) return;
     const newHp: TokenHp = { current: max, max, temp: 0 };
-    const before = { hp, showHpBar };
-    setHp(newHp);
-    setShowHpBar(true);
+    const shownHp = showOwnHp(newHp);
+    const shownBar = showOwnHpBar(true);
     setEnableHpPrompt(false);
     setNewHpMax('');
-    if (!(await saveUpdate({ hp: newHp, showHpBar: true }))) {
-      setHp(before.hp);
-      setShowHpBar(before.showHpBar);
-    }
-  }, [newHpMax, hp, showHpBar, saveUpdate]);
+    await saveUpdate({ hp: newHp, showHpBar: true });
+    dropOwnHp(shownHp);
+    dropOwnHpBar(shownBar);
+  }, [newHpMax, saveUpdate, showOwnHp, dropOwnHp, showOwnHpBar, dropOwnHpBar]);
 
   // ── Stat block ──
   // Typed into a field at a time, so it is saved once typing pauses, or at
@@ -196,9 +237,14 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // player again. The waiting edit carries the save for the token it was
   // made on, and saves run one after another, so the last edit is the one
   // stored.
-  const pendingStatBlock = useRef<{ statBlock: NpcStatBlock; save: typeof saveUpdate } | null>(null);
+  //
+  // The typed stat block is the DM's until the last edit made is stored;
+  // then the table's again, so a change from elsewhere shows.
+  const pendingStatBlock = useRef<{ statBlock: NpcStatBlock; save: typeof saveUpdate; edit: number } | null>(null);
   const statBlockTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const statBlockSaves = useRef<Promise<void>>(Promise.resolve());
+  // Counts stat block edits, so a save knows whether another came after it.
+  const statBlockEdits = useRef(0);
 
   const flushStatBlock = useCallback(() => {
     if (statBlockTimer.current) clearTimeout(statBlockTimer.current);
@@ -208,7 +254,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     pendingStatBlock.current = null;
     // Typed text stays in the fields when a save is refused, with the reason
     // shown, so it can be put right and saved again.
-    statBlockSaves.current = statBlockSaves.current.then(async () => { await pending.save({ statBlock: pending.statBlock }); });
+    statBlockSaves.current = statBlockSaves.current.then(async () => {
+      const stored = await pending.save({ statBlock: pending.statBlock });
+      if (stored && statBlockEdits.current === pending.edit) setStatBlockDraft(null);
+    });
   }, []);
 
   const dropPendingStatBlock = useCallback(() => {
@@ -218,8 +267,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, []);
 
   const handleStatBlockChange = useCallback((updated: NpcStatBlock) => {
-    setStatBlock(updated);
-    pendingStatBlock.current = { statBlock: updated, save: saveUpdate };
+    setStatBlockDraft({ value: updated });
+    statBlockEdits.current += 1;
+    pendingStatBlock.current = { statBlock: updated, save: saveUpdate, edit: statBlockEdits.current };
     if (statBlockTimer.current) clearTimeout(statBlockTimer.current);
     statBlockTimer.current = setTimeout(flushStatBlock, STAT_BLOCK_SAVE_DELAY_MS);
   }, [saveUpdate, flushStatBlock]);
@@ -233,26 +283,24 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       speed: '30 ft.',
       abilities: { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 },
     };
-    setStatBlock(newBlock);
+    statBlockEdits.current += 1;
+    setStatBlockDraft({ value: newBlock });
     setEditingStatBlock(true);
     setShowCreateStatBlock(false);
-    if (!(await saveUpdate({ statBlock: newBlock }))) {
-      setStatBlock(null);
-      setEditingStatBlock(false);
-    }
+    if (!(await saveUpdate({ statBlock: newBlock }))) setEditingStatBlock(false);
+    setStatBlockDraft(null);
   }, [saveUpdate]);
 
   const handleRemoveStatBlock = useCallback(async () => {
     dropPendingStatBlock();
-    const before = statBlock;
-    setStatBlock(null);
+    statBlockEdits.current += 1;
+    setStatBlockDraft({ value: null });
     setEditingStatBlock(false);
     // After any stat block save still under way, so that one cannot land last.
-    let removed = false;
-    statBlockSaves.current = statBlockSaves.current.then(async () => { removed = await saveUpdate({ statBlock: null }); });
+    statBlockSaves.current = statBlockSaves.current.then(async () => { await saveUpdate({ statBlock: null }); });
     await statBlockSaves.current;
-    if (!removed) setStatBlock(before);
-  }, [statBlock, saveUpdate, dropPendingStatBlock]);
+    setStatBlockDraft(null);
+  }, [saveUpdate, dropPendingStatBlock]);
 
   // ── Token image ──
   const loadAssets = useCallback(async () => {
@@ -311,13 +359,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
   // Step 1: DM clicks save — try direct update, or prompt for name if SRD
   const handleSaveImageToCreature = useCallback(async () => {
-    if (!campaign || !token.creatureTemplateId || !token.imageUrl) return;
+    if (!campaign || !current.creatureTemplateId || !current.imageUrl) return;
     setIsSavingToCreature(true);
     setDuplicateWarning(null);
 
     try {
       // Direct update works for custom creatures
-      await api.updateCreature(campaign.id, token.creatureTemplateId, { imageUrl: token.imageUrl });
+      await api.updateCreature(campaign.id, current.creatureTemplateId, { imageUrl: current.imageUrl });
       setShowImagePicker(false);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -329,7 +377,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
       // SRD creature — fetch its name and show the name prompt
       try {
-        const original = await api.getCreature(campaign.id, token.creatureTemplateId);
+        const original = await api.getCreature(campaign.id, current.creatureTemplateId);
         setDuplicateName(original.name);
 
         // Check for existing duplicates to warn
@@ -347,26 +395,26 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
           );
         }
       } catch {
-        setDuplicateName(token.name);
+        setDuplicateName(current.name);
       }
       setShowDuplicateNamePrompt(true);
     } finally {
       setIsSavingToCreature(false);
     }
-  }, [campaign, token.creatureTemplateId, token.imageUrl, token.name]);
+  }, [campaign, current.creatureTemplateId, current.imageUrl, current.name]);
 
   // Step 2: DM confirms name — duplicate, rename, set image, relink token
   const handleConfirmDuplicate = useCallback(async () => {
-    if (!campaign || !token.creatureTemplateId || !token.imageUrl || !duplicateName.trim()) return;
+    if (!campaign || !current.creatureTemplateId || !current.imageUrl || !duplicateName.trim()) return;
     setIsSavingToCreature(true);
 
     try {
-      const duplicate = await api.duplicateCreature(campaign.id, token.creatureTemplateId);
+      const duplicate = await api.duplicateCreature(campaign.id, current.creatureTemplateId);
       const finalName = duplicateName.trim();
       // Update the duplicate with the chosen name and the image
       await api.updateCreature(campaign.id, duplicate.id, {
         name: finalName,
-        imageUrl: token.imageUrl,
+        imageUrl: current.imageUrl,
       });
       // Relink this token to the new custom creature
       await saveUpdate({ creatureTemplateId: duplicate.id });
@@ -378,23 +426,24 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     } finally {
       setIsSavingToCreature(false);
     }
-  }, [campaign, token.creatureTemplateId, token.imageUrl, duplicateName, saveUpdate]);
+  }, [campaign, current.creatureTemplateId, current.imageUrl, duplicateName, saveUpdate]);
 
   // ── Disposition ──
   const setTokenDisposition = useCallback(async (d: TokenDisposition) => {
-    const before = disposition;
-    setDisposition(d);
-    if (!(await saveUpdate({ disposition: d }))) setDisposition(before);
-  }, [disposition, saveUpdate]);
+    const shown = showOwnDisposition(d);
+    await saveUpdate({ disposition: d });
+    dropOwnDisposition(shown);
+  }, [saveUpdate, showOwnDisposition, dropOwnDisposition]);
 
   // ── Conditions ──
   const toggleCondition = useCallback(async (condition: string) => {
     const newConditions = conditions.includes(condition)
       ? conditions.filter((c) => c !== condition)
       : [...conditions, condition];
-    setConditions(newConditions);
-    if (!(await saveUpdate({ conditions: newConditions }))) setConditions(conditions);
-  }, [conditions, saveUpdate]);
+    const shown = showOwnConditions(newConditions);
+    await saveUpdate({ conditions: newConditions });
+    dropOwnConditions(shown);
+  }, [conditions, saveUpdate, showOwnConditions, dropOwnConditions]);
 
   // A typed condition is added once: one the list offers takes the list's
   // spelling, and one the token already has (in any capitals) adds nothing.
@@ -410,27 +459,26 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
   // ── Name save on blur ──
   const handleNameBlur = useCallback(async () => {
-    const trimmed = name.trim();
-    if (trimmed && trimmed !== token.name) {
-      await saveUpdate({ name: trimmed });
-    }
-  }, [name, token.name, saveUpdate]);
+    if (nameDraft === null) return;
+    const trimmed = nameDraft.trim();
+    if (trimmed && trimmed !== current.name && !(await saveUpdate({ name: trimmed }))) return;
+    setNameDraft(null);
+  }, [nameDraft, current.name, saveUpdate]);
 
   // ── Initiative save on blur ──
   const handleInitiativeBlur = useCallback(async () => {
-    const parsed = initiative !== '' ? parseInt(initiative, 10) : null;
-    const current = token.initiative ?? null;
-    if (parsed !== current) {
-      await saveUpdate({ initiative: parsed });
-    }
-  }, [initiative, token.initiative, saveUpdate]);
+    if (initiativeDraft === null) return;
+    const parsed = initiativeDraft !== '' ? parseInt(initiativeDraft, 10) : null;
+    if (parsed !== (current.initiative ?? null) && !(await saveUpdate({ initiative: parsed }))) return;
+    setInitiativeDraft(null);
+  }, [initiativeDraft, current.initiative, saveUpdate]);
 
   // ── Notes save on blur ──
   const handleNotesBlur = useCallback(async () => {
-    if (notes !== (token.notes ?? '')) {
-      await saveUpdate({ notes });
-    }
-  }, [notes, token.notes, saveUpdate]);
+    if (notesDraft === null) return;
+    if (notesDraft !== (current.notes ?? '') && !(await saveUpdate({ notes: notesDraft }))) return;
+    setNotesDraft(null);
+  }, [notesDraft, current.notes, saveUpdate]);
 
   // ── Visibility toggle ──
   // Shown from the store, so the button changes when the save is stored and
@@ -450,10 +498,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
   // ── Controller change ──
   const handleControllerChange = useCallback(async (userId: string | null) => {
-    const before = controlledBy;
-    setControlledBy(userId);
-    if (!(await saveUpdate({ controlledBy: userId }))) setControlledBy(before);
-  }, [controlledBy, saveUpdate]);
+    const shown = showOwnController(userId);
+    await saveUpdate({ controlledBy: userId });
+    dropOwnController(shown);
+  }, [saveUpdate, showOwnController, dropOwnController]);
 
   // ── Remove token ──
   const handleRemove = useCallback(async () => {
@@ -473,17 +521,17 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const hpPct = hp && hp.max > 0 ? Math.max(0, Math.min(1, hp.current / hp.max)) : 0;
   const hpColor = getHpColor(hpPct);
 
-  // Sync token changes from outside (if parent re-opens with different token)
+  // Opening the editor on another token starts it clean.
   useEffect(() => {
-    setName(token.name);
-    setHp(token.hp ?? null);
-    setShowHpBar(token.showHpBar ?? false);
-    setDisposition(token.disposition ?? null);
-    setInitiative(token.initiative !== null && token.initiative !== undefined ? String(token.initiative) : '');
-    setConditions(token.conditions ?? []);
-    setNotes(token.notes ?? '');
-    setControlledBy(token.controlledBy ?? null);
-    setStatBlock((token.statBlock as NpcStatBlock) ?? null);
+    setNameDraft(null);
+    setInitiativeDraft(null);
+    setNotesDraft(null);
+    dropOwnHp();
+    dropOwnHpBar();
+    dropOwnDisposition();
+    dropOwnConditions();
+    dropOwnController();
+    setStatBlockDraft(null);
     setEditingStatBlock(false);
     setShowCreateStatBlock(false);
     setShowImagePicker(false);
@@ -530,12 +578,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             <button
               onClick={handleOpenImagePicker}
               className="relative group shrink-0"
-              title={token.imageUrl ? 'Change token image' : 'Add a token image'}
+              title={current.imageUrl ? 'Change token image' : 'Add a token image'}
             >
-              {token.imageUrl ? (
+              {current.imageUrl ? (
                 <img
-                  src={token.imageUrl}
-                  alt={token.name}
+                  src={current.imageUrl}
+                  alt={current.name}
                   className="w-14 h-14 rounded-full object-cover border-2 border-moss-green/30"
                 />
               ) : (
@@ -556,7 +604,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             <input
               type="text"
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setNameDraft(e.target.value)}
               onBlur={handleNameBlur}
               // min-w-0 is load-bearing: a flex child defaults to min-width:auto,
               // and an <input>'s intrinsic minimum is wide enough that a long
@@ -623,7 +671,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     assets={assets}
                     // imageUrl may hold a bare id or a full /api/assets path,
                     // so match on containment rather than equality.
-                    selectedId={assets.find((a) => token.imageUrl?.includes(a.id))?.id ?? null}
+                    selectedId={assets.find((a) => current.imageUrl?.includes(a.id))?.id ?? null}
                     onSelect={(asset) => (asset ? handleSelectImage(asset.id) : handleClearImage())}
                     columns={5}
                     gapClass="gap-1.5"
@@ -634,7 +682,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                         onClick={handleClearImage}
                         title="Use colored-letter placeholder"
                         className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
-                          !token.imageUrl
+                          !current.imageUrl
                             ? 'border-moss-green ring-1 ring-moss-green/30 bg-ink-muted/25'
                             : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
                         }`}
@@ -647,7 +695,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 )}
 
                 {/* Save to creature template option */}
-                {token.creatureTemplateId && token.imageUrl && (
+                {current.creatureTemplateId && current.imageUrl && (
                   <div className="mt-2 space-y-1.5">
                     {showDuplicateNamePrompt ? (
                       <div className="rounded-cozy border border-moss-green/30 bg-parchment/40 p-2.5 space-y-2">
@@ -878,7 +926,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                     <div className="glass-panel p-3 max-h-96 overflow-y-auto">
                       <StatBlockViewer
                         statBlock={statBlock}
-                        tokenName={token.name}
+                        tokenName={current.name}
                         gameSystem={campaign?.gameSystem ?? null}
                       />
                     </div>
@@ -953,7 +1001,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               <input
                 type="number"
                 value={initiative}
-                onChange={(e) => setInitiative(e.target.value)}
+                onChange={(e) => setInitiativeDraft(e.target.value)}
                 onBlur={handleInitiativeBlur}
                 placeholder="e.g. 14"
                 className="input-cozy input-cozy-number w-full text-sm"
@@ -965,7 +1013,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               <section>
                 <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Sight</h3>
                 <TokenVisionField
-                  value={token.sightRadius ?? 0}
+                  value={current.sightRadius ?? 0}
                   onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
                   feetPerSquare={currentMap?.feetPerSquare ?? 5}
                 />
@@ -1050,7 +1098,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               </h3>
               <textarea
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => setNotesDraft(e.target.value)}
                 onBlur={handleNotesBlur}
                 placeholder="Guard post, special abilities, loot…"
                 rows={3}
