@@ -42,7 +42,7 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 - Atmosphere effects and ambient audio
 - Character HP updates
 
-Two things people expect on the socket are not there:
+Three things people expect on the socket are not there:
 
 - **Creating, editing and deleting a token** are REST calls (`POST`, `PUT` and
   `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). There is no
@@ -57,6 +57,14 @@ Two things people expect on the socket are not there:
   `PUT /api/campaigns/{campaignId}/resume` and `PUT .../sessions/{sessionId}/end`). The
   socket only carries the `session.*` announcements the server broadcasts when
   one of them happens.
+- **Saving the vibe periods** is a REST call (`PUT /api/campaigns/{campaignId}/vibe`);
+  switching period is `vibe.update`. The save sends every connected member
+  `vibe.settings.updated` with `campaignId`, the stored `vibeSettings`,
+  `currentVibe`, `updatedBy` and `timestamp`. `currentVibe` is the period in
+  force under the spelling it was saved with, or `null` once that period was
+  renamed or deleted. When the period in force has a new track, or the vibe
+  ended, `atmosphere.audio.updated` follows with the new track or none, unless
+  the DM has another track playing over the vibe.
 
 ### Architecture
 
@@ -1290,6 +1298,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `token:disappeared` | `tokens.ts` |
 | `user.joined` | `events.ts` |
 | `user.left` | `events.ts` |
+| `vibe.settings.updated` | `vibeSave.ts` |
 | `vibe.updated` | `vibe.ts` |
 | `wall:added` | `walls.ts` |
 | `wall:removed` | `walls.ts` |

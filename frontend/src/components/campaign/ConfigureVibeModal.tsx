@@ -393,7 +393,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
     try {
       const result = await api.updateVibeSettings(campaign.id, newSettings);
       // Patch local context so VibeTracker reflects new periods immediately
-      updateVibeSettings(result.vibeSettings);
+      updateVibeSettings(result.vibeSettings, result.currentVibe);
       showToast('Vibe periods saved!', 'success');
       setTimeout(onClose, 900);
     } catch (err) {

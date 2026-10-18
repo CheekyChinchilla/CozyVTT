@@ -3042,11 +3042,19 @@ paths:
         that does not belong to another campaign. Anything else is a 400
         naming the period. Switching to a period plays its track for
         everyone; a period without one silences the table. Period names must
-        be unique ignoring case. If the current period no longer exists in
-        the new list it is cleared (matched ignoring case). Other fields, at
-        the top level or in a period, are stored as sent, except
+        be unique ignoring case. The current period stays current when the new
+        list still has it, matched ignoring case, and takes the spelling it is
+        saved with; otherwise (renamed or deleted) it is cleared. Other fields,
+        at the top level or in a period, are stored as sent, except
         `atmosphereAudio`, which is ignored in favour of the stored value.
-        Nothing is broadcast.
+
+        Every connected member is then sent `vibe.settings.updated` with
+        `campaignId`, the stored `vibeSettings`, the `currentVibe` the save
+        left, `updatedBy` and `timestamp`. When the current period's track
+        changes, or the current period is cleared, the table's ambient track
+        follows (`atmosphere.audio.updated`): the period's new track, or none.
+        A track other than the period's that the DM put on over the vibe is
+        left playing.
       operationId: updateVibe
       security:
         - cookieAuth: []
@@ -3112,6 +3120,7 @@ paths:
                   currentVibe:
                     type: string
                     nullable: true
+                    description: The current period as saved, or null when the save cleared it.
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
