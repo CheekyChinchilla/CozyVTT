@@ -29,7 +29,6 @@ import type {
   CoC7eBackstory,
   CoC7eAppearance,
   CoC7eConditions,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 
@@ -40,7 +39,7 @@ import { apiErrorMessage } from '@/utils/errors';
  * server stores the schema's parsed sheet, so anything this editor writes has
  * to be declared there too.
  */
-interface CoC7eFormData extends CoC7eCharacterData, SheetChrome {
+interface CoC7eFormData extends CoC7eCharacterData {
   /**
    * Not declared by `CoC7eCharacterData` or the schema, which keep the
    * investigator's name at the top level as `investigatorName`, so the server
@@ -285,7 +284,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   // Auto-calculate derived stats
   useEffect(() => {
     const char = formData.characteristics;
-    const age = formData.age || 30;
+    // Stored as text since ages were allowed to be typed; the maths needs the number.
+    const age = Number(formData.age) || 30;
 
     if (char) {
       const con = char.CON?.regular || 0;
@@ -691,7 +691,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
           <div className="grid grid-cols-4 gap-3">
             <NumberField
-              value={formData.age ?? 0}
+              value={Number(formData.age) || 0}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"

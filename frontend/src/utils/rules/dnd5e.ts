@@ -596,8 +596,8 @@ export type Dnd5eAbilityName = (typeof DND5E_ABILITY_NAMES)[number];
 export interface Dnd5eCustomSkill {
   name: string;
   ability: Dnd5eAbilityName;
-  proficient: boolean;
-  expertise: boolean;
+  proficient?: boolean;
+  expertise?: boolean;
   /** Anything the maths cannot know about — a magic item, a feat. */
   otherBonus?: number;
 }

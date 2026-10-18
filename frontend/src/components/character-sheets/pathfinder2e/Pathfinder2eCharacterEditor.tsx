@@ -40,7 +40,6 @@ import type {
   PF2eSpellSlots,
   PF2eAppearance,
   PF2ePersonality,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
@@ -79,7 +78,7 @@ import { assetNameFrom } from '@/utils/assetName';
  * declares it, so it is saved with the sheet. The server stores the schema's
  * parsed sheet, so anything this editor writes has to be declared there too.
  */
-interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChrome {
+interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'> {
   /** Absent, not null, for a sheet with none: the schema refuses null. */
   spellcasting?: PF2eEditorSpellcasting;
 }
@@ -1431,7 +1430,7 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1478,7 +1477,7 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
                 <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <button onClick={() => { const newFocusSpells = formData.spellcasting!.focusSpells.spells.filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1504,7 +1503,7 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newInnateSpells = formData.spellcasting!.innateSpells.filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

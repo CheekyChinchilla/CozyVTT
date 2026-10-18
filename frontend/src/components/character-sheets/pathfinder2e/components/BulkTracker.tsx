@@ -9,18 +9,7 @@
 import React from 'react';
 import { Package } from 'lucide-react';
 
-export interface InventoryItem {
-  name: string;
-  quantity: number;
-  bulk: number | string; // Can be: 1, 0.1, "L", "—"
-  equippable: boolean;
-  equipped: boolean;
-  requiresAttunement: boolean;
-  attuned: boolean;
-  invested: boolean; // PF2e specific: invested magic items
-  value: number;
-  notes?: string;
-}
+import type { PF2eInventoryItem as InventoryItem } from '@/types/game-systems';
 
 export interface BulkData {
   current: number;
@@ -36,7 +25,7 @@ interface BulkTrackerProps {
 /**
  * Convert bulk value to number for calculation
  */
-const bulkToNumber = (bulk: number | string): number => {
+const bulkToNumber = (bulk: number | string | undefined): number => {
   if (typeof bulk === 'number') return bulk;
   if (bulk === 'L') return 0.1;
   if (bulk === '—' || bulk === '-') return 0;
@@ -49,7 +38,9 @@ const bulkToNumber = (bulk: number | string): number => {
 export const calculateTotalBulk = (inventory: InventoryItem[]): number => {
   return inventory.reduce((total, item) => {
     const itemBulk = bulkToNumber(item.bulk);
-    return total + (itemBulk * item.quantity);
+    // TODO(sheets): an item with no quantity makes the total NaN. Right: count
+    // a missing quantity as 1.
+    return total + (itemBulk * item.quantity!);
   }, 0);
 };
 
@@ -160,10 +151,13 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => 
                     <span className="font-semibold">Qty:</span> {item.quantity}
                   </div>
                   <div>
-                    <span className="font-semibold">Bulk:</span> {formatBulk(item.bulk)}
-                    {item.quantity > 1 && (
+                    {/* TODO(sheets): formatBulk calls toString on an item's bulk, so an item
+                        saved with none (the schema allows it) throws and the sheet shows its
+                        error screen. Right: show a dash, and treat a missing quantity as 1. */}
+                    <span className="font-semibold">Bulk:</span> {formatBulk(item.bulk!)}
+                    {item.quantity! > 1 && (
                       <span className="text-stone-500">
-                        {' '}(× {item.quantity} = {(bulkToNumber(item.bulk) * item.quantity).toFixed(1)})
+                        {' '}(× {item.quantity} = {(bulkToNumber(item.bulk) * item.quantity!).toFixed(1)})
                       </span>
                     )}
                   </div>

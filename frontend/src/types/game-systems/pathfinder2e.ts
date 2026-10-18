@@ -1,8 +1,13 @@
 /**
  * Pathfinder 2e Character Data Type Definitions (Frontend)
- * Mirrors backend types from backend/src/game-systems/pathfinder2e.ts
+ *
+ * The shape the backend's schema accepts (backend/src/validators/game-systems/
+ * pathfinder2e.schema.ts), which decides what is stored. A field the schema lets be
+ * absent is optional here, since the server sends a sheet as it was stored.
+ * backend/src/__tests__/keepInStep.test.ts fails when the two disagree.
  */
 
+import type { SheetChrome } from './sheetChrome';
 import type { FeatureEntry } from '@/utils/featureEntries';
 
 /**
@@ -194,17 +199,17 @@ export interface PF2eProficiencies {
  */
 export interface PF2eStrike {
   name: string;
-  type: 'melee' | 'ranged';
-  attackBonus: number | null;
-  damageRoll: string;
-  damageType: string;
-  attributeModifier: string;
-  proficiencyRank: PF2eProficiencyRank;
-  itemBonus: number;
-  traits: string[];
-  range: number | null;
+  type?: 'melee' | 'ranged';
+  attackBonus?: number | null;
+  damageRoll?: string;
+  damageType?: string;
+  attributeModifier?: string;
+  proficiencyRank?: PF2eProficiencyRank;
+  itemBonus?: number;
+  traits?: string[];
+  range?: number | null;
   savingThrow?: string;
-  notes: string;
+  notes?: string;
 }
 
 /**
@@ -222,15 +227,15 @@ export interface PF2eCurrency {
  */
 export interface PF2eInventoryItem {
   name: string;
-  quantity: number;
-  bulk: number | string;
-  equippable: boolean;
-  equipped: boolean;
-  requiresAttunement: boolean;
-  attuned: boolean;
-  invested: boolean;
-  value: number;
-  notes: string;
+  quantity?: number;
+  bulk?: number | string;
+  equippable?: boolean;
+  equipped?: boolean;
+  requiresAttunement?: boolean;
+  attuned?: boolean;
+  invested?: boolean;
+  value?: number;
+  notes?: string;
 }
 
 /**
@@ -246,9 +251,9 @@ export interface PF2eBulk {
  * Feat entry
  */
 export interface PF2eFeat {
-  level: number;
+  level?: number;
   name: string;
-  notes: string;
+  notes?: string;
   /** What the editor's text box under the feat holds. */
   description?: string;
 }
@@ -349,58 +354,58 @@ export interface PF2eFocusSpells {
  * Innate spell
  */
 export interface PF2eInnateSpell {
-  rank: number;
+  rank?: number;
   name: string;
-  tradition: string;
-  frequency: string;
-  notes: string;
+  tradition?: string;
+  frequency?: string;
+  notes?: string;
 }
 
 /**
  * Spellcasting
  */
 export interface PF2eSpellcasting {
-  tradition: string;
-  type: string;
-  keyAttribute: string;
-  spellAttackBonus: PF2eSpellAttackBonus;
-  spellDC: PF2eSpellDC;
-  cantrips: PF2eCantrip[];
-  slots: PF2eSpellSlots;
-  spells: PF2eSpell[];
-  focusSpells: PF2eFocusSpells;
-  innateSpells: PF2eInnateSpell[];
-  rituals: PF2eRitual[];
+  tradition?: string;
+  type?: string;
+  keyAttribute?: string;
+  spellAttackBonus?: PF2eSpellAttackBonus;
+  spellDC?: PF2eSpellDC;
+  cantrips?: PF2eCantrip[];
+  slots?: PF2eSpellSlots;
+  spells?: PF2eSpell[];
+  focusSpells?: PF2eFocusSpells;
+  innateSpells?: PF2eInnateSpell[];
+  rituals?: PF2eRitual[];
 }
 
 /**
  * Character appearance
  */
 export interface PF2eAppearance {
-  age: number;
-  height: string;
-  weight: string;
-  eyes: string;
-  skin: string;
-  hair: string;
+  age?: string | number | null;
+  height?: string;
+  weight?: string;
+  eyes?: string;
+  skin?: string;
+  hair?: string;
 }
 
 /**
  * Character personality
  */
 export interface PF2ePersonality {
-  traits: string;
-  ideals: string;
-  bonds: string;
-  flaws: string;
+  traits?: string;
+  ideals?: string;
+  bonds?: string;
+  flaws?: string;
 }
 
 /**
  * Allies and organizations
  */
 export interface PF2eAlliesAndOrganizations {
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
 }
 
 /**
@@ -415,7 +420,7 @@ export interface PF2eAlliesAndOrganizations {
  * OPTIONAL fields:
  * - All other fields (can be added progressively)
  */
-export interface PF2eCharacterData {
+export interface PF2eCharacterData extends SheetChrome {
   // Required: Core identity
   characterName: string;
   class: string;

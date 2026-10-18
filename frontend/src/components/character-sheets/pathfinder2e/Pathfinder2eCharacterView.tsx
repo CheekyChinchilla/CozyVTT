@@ -36,7 +36,6 @@ import type {
   PF2eCharacterData,
   PF2eSkill,
   PF2eSpellSlots,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { isHexColor } from '@/utils/styleAllowlists';
 
@@ -97,7 +96,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   onEdit,
   onRoll,
 }) => {
-  const data = character.data as PF2eCharacterData & SheetChrome;
+  const data = character.data as PF2eCharacterData;
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
@@ -853,7 +852,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <div className="mb-4">
             <h4 className="font-semibold text-purple-800 mb-2">Spells</h4>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const rankSpells = spellcasting.spells.filter((s) => s.rank === rank);
+              const rankSpells = (spellcasting.spells ?? []).filter((s) => s.rank === rank);
               if (rankSpells.length === 0) return null;
 
               return (

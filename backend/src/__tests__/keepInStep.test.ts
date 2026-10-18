@@ -101,6 +101,12 @@
  * above it names one too; when an update of that package asks for the same
  * version or a newer one, the override is no longer needed, and left in place
  * it would hold the package back.
+ *
+ * The character sheets. Each is declared twice: the Zod schema, which decides
+ * what is stored, and the frontend type every sheet component trusts. The
+ * frontend cannot import the schema, so the TypeScript compiler compares the
+ * two here, field by field: names, whether a field can be absent or null,
+ * arrays and the values a field takes (helpers/sheetTypeParity.ts).
  */
 
 import crypto from 'crypto';
@@ -110,6 +116,7 @@ import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
+import { sheetTypeMismatches } from './helpers/sheetTypeParity';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -641,3 +648,25 @@ describe.each(['backend', 'frontend'])('the npm overrides in %s/package.json', (
     expect(wrong).toEqual([]);
   });
 });
+
+describe('the character sheets, as the schemas take them and the frontend types describe them', () => {
+  const schemas = 'backend/src/validators/game-systems';
+  const types = 'frontend/src/types';
+  const mismatches = sheetTypeMismatches([
+    { label: 'D&D 5e', schemaModule: `${schemas}/dnd5e.schema`, schemaExport: 'dnd5eCharacterDataSchema',
+      typeModule: `${types}/game-systems/dnd5e`, typeExport: 'DnD5eCharacterData' },
+    { label: 'Pathfinder 2e', schemaModule: `${schemas}/pathfinder2e.schema`, schemaExport: 'pathfinder2eCharacterDataSchema',
+      typeModule: `${types}/game-systems/pathfinder2e`, typeExport: 'PF2eCharacterData' },
+    { label: 'Call of Cthulhu 7e', schemaModule: `${schemas}/callOfCthulhu7e.schema`, schemaExport: 'callOfCthulhu7eCharacterDataSchema',
+      typeModule: `${types}/game-systems/callOfCthulhu7e`, typeExport: 'CoC7eCharacterData' },
+    { label: 'Shadowrun 6e', schemaModule: `${schemas}/shadowrun6e.schema`, schemaExport: 'shadowrun6eCharacterDataSchema',
+      typeModule: `${types}/game-systems/shadowrun6e`, typeExport: 'SR6CharacterData' },
+    { label: 'Flexible', schemaModule: `${schemas}/flexible.schema`, schemaExport: 'flexibleCharacterDataSchema',
+      typeModule: `${types}/flexible-character-sheet`, typeExport: 'FlexibleCharacterData' },
+  ]);
+
+  it.each(Object.keys(mismatches))('%s: the frontend type matches what the schema takes', (label) => {
+    expect(mismatches[label]).toEqual([]);
+  });
+});
+

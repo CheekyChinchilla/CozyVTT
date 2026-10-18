@@ -22,7 +22,6 @@ import { Character } from '../../../types';
 import type {
   CoC7eCharacterData,
   CoC7eCharacteristics,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
@@ -79,7 +78,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   onRoll,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const data = character.data as CoC7eCharacterData & SheetChrome;
+  const data = character.data as CoC7eCharacterData;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');

@@ -25,7 +25,6 @@ import { Character } from '../../../types';
 import type {
   DnD5eCharacterData,
   DnD5eSavingThrow,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { StatBlock } from './components/StatBlock';
 import { SkillsList } from './components/SkillsList';
@@ -105,7 +104,7 @@ const COLOR_PRESETS = [
  */
 export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ character, onEdit, onRoll, onSpendHitDie }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
-  const data = character.data as DnD5eCharacterData & SheetChrome;
+  const data = character.data as DnD5eCharacterData;
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
@@ -349,8 +348,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               // and going stale.
               customSkills={readCustomSkills(data).map((custom) => ({
                 name: custom.name,
-                proficient: custom.proficient,
-                expertise: custom.expertise,
+                proficient: custom.proficient === true,
+                expertise: custom.expertise === true,
                 bonus: dnd5eCustomSkillBonus(data, custom),
               }))}
               onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}

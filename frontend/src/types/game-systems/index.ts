@@ -47,14 +47,4 @@ export type GameSystemCharacterData =
   | SR6CharacterData
   | CoC7eCharacterData;
 
-/**
- * Fields the app stores on every character sheet, whatever the game system.
- *
- * `themeColor` is the header colour chosen in the editor: a preset name or a
- * `#RRGGBB` colour. No game system defines it, so every system's server-side
- * schema declares it explicitly. The server stores the parsed sheet, and a
- * key no schema declares does not survive a save.
- */
-export interface SheetChrome {
-  themeColor?: string;
-}
+export type { SheetChrome } from './sheetChrome';

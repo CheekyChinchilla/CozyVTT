@@ -30,7 +30,6 @@ import type {
   DnD5eSpellSlots,
   DnD5eAppearance,
   DnD5ePersonality,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
@@ -82,7 +81,7 @@ import { assetNameFrom } from '@/utils/assetName';
  * field is declared on both sides, so this adds nothing but the editor's own
  * chrome.
  */
-type DnD5eFormData = DnD5eCharacterData & SheetChrome;
+type DnD5eFormData = DnD5eCharacterData;
 
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -2490,7 +2489,7 @@ min={1}
               </label>
               <button
                 onClick={() => {
-                  const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index);
+                  const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
                 className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
