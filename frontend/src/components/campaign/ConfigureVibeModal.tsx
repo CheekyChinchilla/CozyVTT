@@ -19,6 +19,7 @@ import { apiErrorMessage } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import { settableAudioAssets } from '@/utils/audioAssets';
 import { vibePeriodAudioAssetId } from '@/utils/vibeAudio';
+import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 // ============================================
 // Default presets (mirrors backend vibe-presets.ts)
@@ -96,7 +97,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
           <input
             type="text"
             value={period.name}
-            maxLength={50}
+            maxLength={CAMPAIGN_LIMITS.maxVibePeriodNameLength}
             onChange={(e) => onChange(index, { ...period, name: e.target.value })}
             className="input-cozy w-full"
             placeholder="e.g. dawn, midday, twilight..."
@@ -338,11 +339,11 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
   const validate = (): string | null => {
     if (periods.length === 0) return 'At least one period is required.';
-    if (periods.length > 20) return 'Maximum 20 periods allowed.';
+    if (periods.length > CAMPAIGN_LIMITS.maxVibePeriods) return `Maximum ${CAMPAIGN_LIMITS.maxVibePeriods} periods allowed.`;
     const names = periods.map((p) => p.name.trim().toLowerCase());
     for (const name of names) {
       if (!name) return 'All period names must be non-empty.';
-      if (name.length > 50) return 'Period names must be 50 characters or fewer.';
+      if (name.length > CAMPAIGN_LIMITS.maxVibePeriodNameLength) return `Period names must be ${CAMPAIGN_LIMITS.maxVibePeriodNameLength} characters or fewer.`;
     }
     const unique = new Set(names);
     if (unique.size !== names.length) return 'Period names must be unique.';

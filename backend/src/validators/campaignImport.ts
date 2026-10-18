@@ -6,7 +6,7 @@
 
 import { z } from 'zod';
 import { GameSystem } from '@prisma/client';
-import { VibeSettingsSchema } from './campaigns';
+import { ImportVibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
@@ -97,7 +97,7 @@ export const CampaignSettingsSchema = z.object({
   gameSystem: z.unknown().optional(),
   // Both fall back to the default when an archive carries a value outside the
   // allowlist, so one bad field does not refuse the whole campaign.
-  vibeSettings: VibeSettingsSchema.optional().catch(undefined),
+  vibeSettings: ImportVibeSettingsSchema.optional().catch(undefined),
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
   spiritLayerStyle: z.string().max(100, { abort: true }).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),

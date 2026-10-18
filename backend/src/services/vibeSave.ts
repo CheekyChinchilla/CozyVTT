@@ -11,10 +11,96 @@
 
 import { Server } from 'socket.io';
 import type { Prisma } from '@prisma/client';
-import { findVibePeriod, normalizeVibeSettings, VibeSettings } from '../utils/vibe-presets';
+import { prisma } from '../config/database';
+import { findVibePeriod, normalizeVibeSettings, preserveAtmosphereAudio } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
-import { readJsonObject } from '../utils/prisma-json';
+import { readJsonObject, toJson } from '../utils/prisma-json';
+import { getSocketInstance } from '../websocket/utils';
+import logger from '../utils/logger';
+import type { VibeSettingsInput } from '../validators/campaigns';
 import { lastAmbientVolume, setCampaignAmbientAudio } from './atmosphereAudio';
+import { canReadAsset } from './permissions';
+
+/**
+ * Why a period's track cannot be saved, or null when each can be. A period's
+ * audio names an asset the whole table fetches while that period is the vibe,
+ * so the save asks the same question the ambient setter asks: may this DM
+ * open this track to the room? Never as an admin, for the same reason the
+ * setter refuses that.
+ */
+export async function vibeAudioRefusal(
+  campaignId: string,
+  actingUserId: string,
+  settings: Pick<VibeSettingsInput, 'periods'>,
+): Promise<string | null> {
+  const checked = new Map<string, boolean>();
+  for (const period of settings.periods) {
+    if (period.audio === null) continue;
+    const assetId = vibePeriodAudioAssetId(period.audio);
+    let allowed = false;
+    if (assetId) {
+      if (checked.has(assetId)) {
+        allowed = checked.get(assetId) === true;
+      } else {
+        const asset = await prisma.asset.findUnique({ where: { id: assetId } });
+        allowed = !!asset
+          && asset.type === 'AUDIO'
+          && !(asset.scope === 'CAMPAIGN' && asset.campaignId !== campaignId)
+          && (await canReadAsset(asset, actingUserId, false));
+        checked.set(assetId, allowed);
+      }
+    }
+    if (!allowed) return `The "${period.name}" period's audio must be an audio track available to this campaign, or none`;
+  }
+  return null;
+}
+
+/**
+ * Save a campaign's vibe settings, for both routes that take them. The
+ * stored atmosphere track is kept (preserveAtmosphereAudio); the period in
+ * force stays the vibe under its saved spelling, written only while it is
+ * still the one read, so a switch made meanwhile stands, and the vibe ends
+ * once that period is renamed or deleted. The table is then told
+ * (announceVibeSave). The periods' tracks must have passed vibeAudioRefusal.
+ */
+export async function saveVibeSettings(
+  campaignId: string,
+  actingUserId: string,
+  settings: VibeSettingsInput,
+): Promise<{ vibeSettings: Prisma.JsonValue; currentVibe: string | null }> {
+  const before = await prisma.campaign.findUnique({
+    where: { id: campaignId },
+    select: { currentVibe: true, vibeSettings: true },
+  });
+  await prisma.campaign.update({
+    where: { id: campaignId },
+    data: { vibeSettings: toJson(preserveAtmosphereAudio(settings, before?.vibeSettings)) },
+  });
+  const vibeBefore = before?.currentVibe ?? null;
+  const vibeAfter = vibeAfterSave(settings, vibeBefore);
+  if (vibeAfter !== vibeBefore) {
+    await prisma.campaign.updateMany({
+      where: { id: campaignId, currentVibe: vibeBefore },
+      data: { currentVibe: vibeAfter },
+    });
+  }
+  const saved = await prisma.campaign.findUniqueOrThrow({
+    where: { id: campaignId },
+    select: { vibeSettings: true, currentVibe: true },
+  });
+
+  // The save is stored; a failure to tell the table is logged, and the
+  // pages catch up when they next load the campaign.
+  try {
+    await announceVibeSave(getSocketInstance(), campaignId, actingUserId, {
+      currentVibe: vibeBefore,
+      vibeSettings: before?.vibeSettings ?? null,
+    }, saved);
+  } catch (err) {
+    logger.warn('Vibe save not broadcast', { err, campaignId });
+  }
+  return saved;
+}
 
 /**
  * The vibe a save leaves: the period in force under its saved spelling, or
@@ -22,7 +108,7 @@ import { lastAmbientVolume, setCampaignAmbientAudio } from './atmosphereAudio';
  * a switch matches them, so a change only to a period's capitals keeps it in
  * force; pages match the stored name exactly, so it takes the new spelling.
  */
-export function vibeAfterSave(saved: VibeSettings, currentVibe: string | null): string | null {
+export function vibeAfterSave(saved: { periods: readonly { name: string }[] }, currentVibe: string | null): string | null {
   if (!currentVibe) return null;
   return findVibePeriod(saved, currentVibe)?.name ?? null;
 }

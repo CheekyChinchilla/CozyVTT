@@ -2427,7 +2427,8 @@ paths:
         such as `Invalid input: expected string, received number`.
         Unknown fields are ignored. Changing `gameSystem` after characters
         have been created logs a warning, but the change is still allowed.
-        Nothing is broadcast; open pages see the change on their next fetch.
+        Nothing is broadcast, except for `vibeSettings` (below); open pages
+        see the other changes on their next fetch.
       operationId: updateCampaign
       security:
         - cookieAuth: []
@@ -2468,30 +2469,30 @@ paths:
                 vibeSettings:
                   type: object
                   description: >-
-                    Replaces the campaign's atmosphere settings. Validated more
-                    loosely than `PUT /api/campaigns/{campaignId}/vibe`: only
-                    `periods` is required (0 to 20 entries), `enabled` and any
-                    other top-level field are stored as sent without a check,
-                    a period needs no `audio` field, names need not be unique,
-                    and a period `audio` is not checked against the asset
-                    library (switching to a period whose track the DM may not
-                    open plays nothing). Unknown fields inside a period are
-                    dropped. `atmosphereAudio` is ignored and the stored value
-                    kept. The current period is not cleared when it disappears
-                    from the list, unlike on the dedicated vibe route.
+                    Replaces the campaign's atmosphere settings, checked and
+                    saved exactly as `PUT /api/campaigns/{campaignId}/vibe`
+                    does (see there): the same rules for the periods, the
+                    same check of each period's track, the current period
+                    kept or cleared, and `vibe.settings.updated` sent to the
+                    table. They are saved after the other fields; a track the
+                    DM may not play to the table refuses the whole request
+                    with 400 before anything is written.
                   required: [periods]
                   properties:
                     periods:
                       type: array
+                      minItems: 1
                       maxItems: 20
+                      description: At least one period; names must be unique ignoring case.
                       items:
                         type: object
                         required: [name, hue, filter]
                         properties:
                           name:
                             type: string
-                            maxLength: 100
-                            description: May be empty here; the dedicated vibe route requires 1 to 50 characters.
+                            minLength: 1
+                            maxLength: 50
+                            description: Trimmed; must contain something other than whitespace.
                           hue:
                             type: string
                             pattern: '^#[0-9A-Fa-f]{6}$'
@@ -3108,11 +3109,12 @@ paths:
         period is *current* is done over the socket (`vibe.update`), not here.
         Each period's `hue` must be a `#RRGGBB` colour and its `filter` may use
         only `brightness()`, `saturate()`, `contrast()` and `hue-rotate()`,
-        the functions the atmosphere editor produces; anything else is a 400.
-        A period's `audio` must be present: null for no track, or the id of
-        an audio asset the DM can read (their admin rights are not counted)
-        that does not belong to another campaign. Anything else is a 400
-        naming the period. Switching to a period plays its track for
+        the functions the atmosphere editor produces. A period's `audio` is
+        null (or absent) for no track, or the id of an audio asset the DM can
+        read (their admin rights are not counted) that does not belong to
+        another campaign; anything else is a 400 naming the period. Other
+        problems answer 400 with each one led by its field, such as
+        `vibeSettings.periods.0.name: A period needs a name`. Switching to a period plays its track for
         everyone; a period without one silences the table. Period names must
         be unique ignoring case. The current period stays current when the new
         list still has it, matched ignoring case, and takes the spelling it is
@@ -3145,10 +3147,11 @@ paths:
               properties:
                 vibeSettings:
                   type: object
-                  required: [enabled, periods]
+                  required: [periods]
                   properties:
                     enabled:
                       type: boolean
+                      description: Stored as sent; absent is read as on.
                     periods:
                       type: array
                       minItems: 1
@@ -3156,7 +3159,7 @@ paths:
                       description: At least one period; names must be unique ignoring case.
                       items:
                         type: object
-                        required: [name, hue, filter, audio]
+                        required: [name, hue, filter]
                         properties:
                           name:
                             type: string
@@ -3177,7 +3180,7 @@ paths:
                             description: >-
                               The id of an audio asset to play for the whole
                               table while this period is the vibe, or null
-                              for no audio.
+                              (or absent) for no audio.
       responses:
         '200':
           description: Atmosphere settings updated

@@ -192,3 +192,41 @@ it('leaves a switch that landed while the save was on its way', async () => {
   }
   expect((await stored()).currentVibe).toBe('Dusk');
 });
+
+// PUT /api/campaigns/:campaignId took vibe settings too, checked by rules of
+// its own: no check that a period's track was one the DM may play to the
+// table, the vibe left naming a period it had renamed, and nothing sent to
+// the table. Both routes now save the periods the same way.
+describe('vibe settings saved through PUT /api/campaigns/:campaignId', () => {
+  const saveThroughSettings = (periods: unknown[]) =>
+    dmRest.put(`/api/campaigns/${campaignId}`).send({ vibeSettings: { enabled: true, periods } });
+
+  it('ends the vibe, and tells the table, when the period in force is renamed', async () => {
+    await start(dawnTrack);
+    const saved = waitForEvent<SettingsSaved>(player, 'vibe.settings.updated');
+    expect((await saveThroughSettings([dawn({ name: 'Sunrise' }), dusk])).status).toBe(200);
+    expect((await saved).currentVibe).toBeNull();
+    expect((await stored()).currentVibe).toBeNull();
+  });
+
+  it('refuses a period whose track the DM may not play to the table', async () => {
+    await start(null);
+    const res = await saveThroughSettings([dawn({ audio: '00000000-0000-4000-8000-000000000000' }), dusk]);
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/Dawn/);
+  });
+
+  it('refuses two periods of the same name', async () => {
+    await start(null);
+    const res = await saveThroughSettings([dawn(), dawn({ name: 'dawn' })]);
+    expect(res.status).toBe(400);
+  });
+});
+
+// PUT /vibe refused a period with no `audio` key, which the other route took.
+it('saves a period sent with no audio as one without a track', async () => {
+  await start(null);
+  const res = await dmRest.put(`/api/campaigns/${campaignId}/vibe`).send({ vibeSettings: { enabled: true, periods: [{ name: 'Dawn', hue: '#FFB347', filter: 'none' }] } });
+  expect(res.status).toBe(200);
+  expect(res.body.vibeSettings.periods[0].audio).toBeNull();
+});

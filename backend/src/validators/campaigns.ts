@@ -46,9 +46,8 @@ export const CampaignInviteSchema = z.object({
     .optional(),
 });
 
-/** One atmosphere period: a named hue and filter, with optional audio. */
-export const VibePeriodSchema = z.object({
-  name: z.string().max(100),
+/** A period's colour, filter and track, as every writer reads them. */
+const vibePeriodLook = {
   hue: z.string().regex(HEX_COLOR_PATTERN, 'A period hue must be a #RRGGBB colour'),
   // `abort` stops the check after it on an over-long value. Without it, Zod
   // runs every check in the chain whether or not an earlier one failed.
@@ -56,19 +55,45 @@ export const VibePeriodSchema = z.object({
     .string()
     .max(200, { abort: true })
     .refine(isSafeVibeFilter, 'A period filter may only use brightness(), saturate(), contrast() and hue-rotate()'),
-  audio: z.string().max(500).nullable().optional(),
+  // An asset id, or none. A period sent without one has none.
+  audio: z.string().max(500).nullable().optional().transform((audio) => audio ?? null),
+};
+
+/** One atmosphere period, as the period editor makes it. */
+export const VibePeriodSchema = z.object({
+  name: z.string().trim()
+    .min(1, 'A period needs a name')
+    .max(CAMPAIGN_LIMITS.maxVibePeriodNameLength, `A period's name may be at most ${CAMPAIGN_LIMITS.maxVibePeriodNameLength} characters`),
+  ...vibePeriodLook,
 }).strip();
 
 /**
- * A campaign's atmosphere settings. `periods` is the part with a fixed shape;
- * the rest (the current period name) is stored as sent, which is why unknown
- * keys pass through here. Atmosphere audio is not among them: the route
- * replaces whatever the client sent with what is stored, through
- * `preserveAtmosphereAudio`. Shared with the campaign importer so the two
- * agree on what a period looks like.
+ * A campaign's atmosphere settings, as both settings routes save them
+ * (`PUT /campaigns/:id/vibe` and `PUT /campaigns/:id`, through saveVibeSettings
+ * in services/vibeSave.ts). `periods` is the part with a fixed shape; other
+ * keys are stored as sent, which is why they pass through here, except
+ * atmosphere audio, which the save keeps as stored.
  */
 export const VibeSettingsSchema = z.object({
-  periods: z.array(VibePeriodSchema).max(20),
+  enabled: z.boolean({ error: 'enabled must be true or false' }).optional(),
+  periods: z.array(VibePeriodSchema)
+    .min(1, 'A campaign needs at least one vibe period')
+    .max(CAMPAIGN_LIMITS.maxVibePeriods, `A campaign may have at most ${CAMPAIGN_LIMITS.maxVibePeriods} vibe periods`)
+    .refine(
+      (periods) => new Set(periods.map((p) => p.name.toLowerCase())).size === periods.length,
+      'Each vibe period needs a different name'
+    ),
+}).passthrough();
+
+export type VibeSettingsInput = z.output<typeof VibeSettingsSchema>;
+
+/**
+ * Vibe settings as a campaign import reads them: the same look for each
+ * period, without the editor's rules on names and counts, so an archive from
+ * an older version keeps its periods.
+ */
+export const ImportVibeSettingsSchema = z.object({
+  periods: z.array(z.object({ name: z.string().max(100), ...vibePeriodLook }).strip()).max(CAMPAIGN_LIMITS.maxVibePeriods),
 }).passthrough();
 
 const COOLDOWN_MESSAGE = 'chatCooldownSeconds must be an integer between 1 and 300';
