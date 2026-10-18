@@ -31,6 +31,9 @@ class FakeAudio {
   }
   pause() {}
   load() {}
+  removeAttribute(name: string) {
+    if (name === 'src') this.src = '';
+  }
   play() {
     return Promise.resolve();
   }

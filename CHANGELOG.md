@@ -59,6 +59,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The session timer counts from the session's start after Resume Session.** On the DM's screen it could start again from zero, and then disagree with itself after a reload.
 
+- **Firefox no longer logs "Invalid URI. Load of media resource failed" on every campaign page.** The ambient audio player was emptied in a way that pointed it at the page itself.
+
 - **A character taken out of a campaign leaves the campaign page at once.** Its sheet and rolls stayed on offer there, on the map's token menu and elsewhere, until the page was reloaded.
 
 - **A token goes back where it stands when whoever was carrying it loses their connection.** Everyone else kept seeing it where it was last carried until it next moved or the map was reloaded.
