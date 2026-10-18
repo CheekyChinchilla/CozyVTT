@@ -12,6 +12,7 @@ import logger from '../utils/logger';
 import { acceptInvitationSchema } from '../validators/invitations';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
 import { clearKeeperNotes } from '../utils/keeperNotes';
+import { standingInvitation } from '../utils/invitationState';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const invitations = await prisma.campaignInvitation.findMany({
       where: {
         userId,
-        status: 'PENDING',
+        ...standingInvitation(),
       },
       include: {
         campaign: {

@@ -35,6 +35,7 @@ import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
 import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
 import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validators/inviteSearchLimits';
 import { escapeLikePattern } from '../utils/likePattern';
+import { standingInvitation, isStanding } from '../utils/invitationState';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -750,9 +751,9 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
       select: { userId: true },
     });
 
-    // Find pending invitation user IDs
+    // Those already invited, by an invitation that still stands
     const pendingInvitations = await prisma.campaignInvitation.findMany({
-      where: { campaignId, status: 'PENDING' },
+      where: { campaignId, ...standingInvitation() },
       select: { userId: true },
     });
 
@@ -865,7 +866,7 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
       },
     });
 
-    if (existingInvitation && existingInvitation.status === 'PENDING') {
+    if (existingInvitation && isStanding(existingInvitation)) {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'User already has a pending invitation to this campaign',

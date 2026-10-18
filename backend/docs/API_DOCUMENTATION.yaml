@@ -2641,7 +2641,8 @@ paths:
       description: |
         Searches, by part of the display name and ignoring case, the users who
         are *not* already a member of the campaign, have no pending
-        invitation to it (one past its `expiresAt` included), and are not
+        invitation to it that is still in date (one past its `expiresAt`
+        does not count), and are not
         waiting for an administrator's
         approval. Used by the DM-side invite picker. DM only.
 
@@ -2716,8 +2717,8 @@ paths:
         not text, `expiresInDays` is not a whole number up to 365, the user is
         already a member, or they already have a pending invitation ("User
         already has a pending invitation to this campaign"). One whose
-        `expiresAt` has passed is still pending until the invitee declines it.
-        A user whose earlier invitation was accepted or declined (and who is
+        `expiresAt` has passed does not count: the user is invited again.
+        A user whose earlier invitation was accepted, declined or ran out (and who is
         no longer a member) gets that same invitation back as PENDING, with a
         new `createdAt` and expiry. The invited user's open connections
         receive `invitation.received` (`{ invitationId, campaignId,
@@ -3185,8 +3186,8 @@ paths:
         Returns the authenticated user's pending campaign invitations (status
         `PENDING`), ordered newest first, with the inviting campaign's summary
         info included so the UI can render an invitation card without
-        additional fetches. An invitation whose `expiresAt` has passed is
-        still listed; accepting it answers 400.
+        additional fetches. An invitation whose `expiresAt` has passed is not
+        listed; accepting it answers 400.
 
         The errors this route and `/accept` and `/decline` below send
         themselves (400, 403, 404 and 500) carry only `message`, without the
