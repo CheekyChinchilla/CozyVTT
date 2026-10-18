@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **The Spirit Layer panel shows the veil and the style as the server has them.** Opening the veil marked it open on your screen before the server answered, so after a refusal your screen said the players could cross while they could not; a refused style stayed picked, though the table kept the old one. The switch now waits for the server, and a refused style goes back to the one in use, with the reason.
+
 - **Edit Token shows changes made elsewhere while it is open, and no longer undoes them.** It kept the token as it was when opened, so a condition a player added to their own token, damage dealt from another tab or a rename did not show, and the next change made in it put the old values back. It now follows the token as the table has it; what you are typing in a box stays there until it is saved.
 
 - **A token whose controller is no longer a player says so.** A token keeps naming whoever controlled it after they become a spectator or leave the campaign, though they can no longer move it. The Token Manager's list showed it with a **Player** chip, and Edit Token's **Controlled By** showed **Nobody** while its hint said "This player can move the token on the map." Both now name that person as no longer a player (or a former member, once they have left), and the hint says they cannot move it.
