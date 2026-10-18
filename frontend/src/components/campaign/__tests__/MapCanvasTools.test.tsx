@@ -717,7 +717,8 @@ describe('the right button', () => {
     expect(screen.queryByText('Remove from Map')).not.toBeInTheDocument();
   });
 
-  it('still opens the token menu while the fog tool is up (as it is: F353)', () => {
+  // A pan with the right button ended in the token menu (F353).
+  it('opens no token menu while the fog tool is up', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19));
@@ -727,7 +728,21 @@ describe('the right button', () => {
 
     fireEvent.contextMenu(surface(), square(0, 19));
 
-    expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+    expect(screen.queryByText('Remove from Map')).not.toBeInTheDocument();
+  });
+
+  it('opens no token or door menu while the light tool is up', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [seg('d1', 100, 100, 200, 100, 'door-closed')] }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 0, 19));
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+
+    fireEvent.contextMenu(surface(), square(0, 19));
+    fireEvent.contextMenu(surface(), px(150, 104));
+
+    expect(screen.queryByText('Remove from Map')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Lock/)).not.toBeInTheDocument();
   });
 });
 

@@ -2203,8 +2203,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (!canvasRef.current || !currentMap) return;
-    // Right-button was used for panning in wall mode — don't open any context menu
-    if (wallMode && isDM) return;
+    // The right button pans while a wall, fog or light tool is up, so no menu
+    // opens: some browsers send this event as the button goes down, before
+    // any drag, so a drag cannot be told from a click here.
+    if ((wallMode || fogMode || lightMode) && isDM) return;
 
     // Always close any open door context menu first
     setDoorContextMenu(null);
