@@ -38,8 +38,10 @@ function playingTrack(vibeSettings: Prisma.JsonValue): string | null {
 /**
  * Tell the table about a save, and move the soundtrack with the vibe.
  *
- * `before` is the campaign as it was stored before the save, `saved` as the
- * save left it. Every period's track was checked before the save was stored,
+ * `before` is the campaign as it was stored before the save, `saved` as it
+ * is stored after it: its vibe and what is playing are read fresh, so a
+ * switch that landed meanwhile, and the track that switch started, are left
+ * as they are. Every period's track was checked before the save was stored,
  * so a refusal here is a track removed in between: the table is then
  * silenced, as a switch to that period would.
  */
@@ -63,7 +65,7 @@ export async function announceVibeSave(
   const now = saved.currentVibe ? findVibePeriod(normalizeVibeSettings(saved.vibeSettings), saved.currentVibe) : null;
   const oldTrack = was ? vibePeriodAudioAssetId(was.audio) : null;
   const newTrack = now ? vibePeriodAudioAssetId(now.audio) : null;
-  const playing = playingTrack(before.vibeSettings);
+  const playing = playingTrack(saved.vibeSettings);
   const vibeHasTheSoundtrack = playing === null || playing === oldTrack;
   if (newTrack === oldTrack || !vibeHasTheSoundtrack || playing === newTrack) return;
 

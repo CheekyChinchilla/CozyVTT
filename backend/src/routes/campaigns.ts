@@ -596,14 +596,24 @@ router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, re
       select: { currentVibe: true, vibeSettings: true },
     });
 
-    // The period in force stays the vibe under its saved spelling, and the
-    // vibe ends once it is renamed or deleted.
-    const updatedCampaign = await prisma.campaign.update({
+    await prisma.campaign.update({
       where: { id: campaignId },
-      data: {
-        vibeSettings: toJson(preserveAtmosphereAudio(vibeSettings, campaign?.vibeSettings)),
-        currentVibe: vibeAfterSave(vibeSettings as VibeSettings, campaign?.currentVibe ?? null),
-      },
+      data: { vibeSettings: toJson(preserveAtmosphereAudio(vibeSettings, campaign?.vibeSettings)) },
+    });
+
+    // The period in force stays the vibe under its saved spelling, and the
+    // vibe ends once it is renamed or deleted. Written only while the vibe
+    // is still the one read above: a switch that landed meanwhile stands.
+    const vibeBefore = campaign?.currentVibe ?? null;
+    const vibeAfter = vibeAfterSave(vibeSettings as VibeSettings, vibeBefore);
+    if (vibeAfter !== vibeBefore) {
+      await prisma.campaign.updateMany({
+        where: { id: campaignId, currentVibe: vibeBefore },
+        data: { currentVibe: vibeAfter },
+      });
+    }
+    const updatedCampaign = await prisma.campaign.findUniqueOrThrow({
+      where: { id: campaignId },
       select: {
         id: true,
         vibeSettings: true,

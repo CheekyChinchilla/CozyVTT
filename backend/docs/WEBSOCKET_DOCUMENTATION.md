@@ -64,9 +64,10 @@ Three things people expect on the socket are not there:
   `vibe.settings.updated` with `campaignId`, the stored `vibeSettings`,
   `currentVibe`, `updatedBy` and `timestamp`. `currentVibe` is the period in
   force under the spelling it was saved with, or `null` once that period was
-  renamed or deleted. When the period in force has a new track, or the vibe
-  ended, `atmosphere.audio.updated` follows with the new track or none, unless
-  the DM has another track playing over the vibe.
+  renamed or deleted. When the period in force has a new track,
+  `atmosphere.audio.updated` follows with it if the table was playing the old
+  one or nothing; when the vibe ends while its track plays, with none. A track
+  the DM put on over the vibe is left playing.
 
 ### Architecture
 

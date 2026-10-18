@@ -22,6 +22,7 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupCampaigns, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent, expectNoEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import { readJsonObject, toJson } from '../../utils/prisma-json';
+import { prisma as appPrisma } from '../../config/database';
 import type { Socket as ClientSocket } from 'socket.io-client';
 
 jest.setTimeout(30000);
@@ -169,4 +170,25 @@ it('sends the periods when no vibe is in force, and starts nothing', async () =>
   expect(event.currentVibe).toBeNull();
   expect(event.vibeSettings.periods.map((p) => p.name)).toEqual(['Dawn', 'Dusk', 'Night']);
   await noTrack;
+});
+
+// The save reads the vibe, then writes it. A switch that lands in between
+// (vibe.update from another tab) used to be put back to what the save read.
+it('leaves a switch that landed while the save was on its way', async () => {
+  await start(dawnTrack);
+  const stale = await appPrisma.campaign.findUniqueOrThrow({ where: { id: campaignId }, select: { currentVibe: true, vibeSettings: true } });
+  await prisma.campaign.update({ where: { id: campaignId }, data: { currentVibe: 'Dusk' } });
+  const realFindUnique = appPrisma.campaign.findUnique.bind(appPrisma.campaign);
+  const spy = jest.spyOn(appPrisma.campaign, 'findUnique').mockImplementation(((args: { select?: Record<string, boolean> }) => {
+    const keys = Object.keys(args.select ?? {}).sort().join(',');
+    return keys === 'currentVibe,vibeSettings' ? Promise.resolve(stale) : realFindUnique(args as never);
+  }) as never);
+  try {
+    const saved = waitForEvent<SettingsSaved>(player, 'vibe.settings.updated');
+    expect((await save([dawn({ hue: '#FF0000' }), dusk])).status).toBe(200);
+    expect((await saved).currentVibe).toBe('Dusk');
+  } finally {
+    spy.mockRestore();
+  }
+  expect((await stored()).currentVibe).toBe('Dusk');
 });

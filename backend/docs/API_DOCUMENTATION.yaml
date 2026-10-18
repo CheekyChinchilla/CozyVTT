@@ -3050,11 +3050,13 @@ paths:
 
         Every connected member is then sent `vibe.settings.updated` with
         `campaignId`, the stored `vibeSettings`, the `currentVibe` the save
-        left, `updatedBy` and `timestamp`. When the current period's track
-        changes, or the current period is cleared, the table's ambient track
-        follows (`atmosphere.audio.updated`): the period's new track, or none.
-        A track other than the period's that the DM put on over the vibe is
-        left playing.
+        left, `updatedBy` and `timestamp`. The current period is written only
+        while it is still the one the save read, so a switch made meanwhile
+        stands. When the current period's track changes, the table is sent
+        `atmosphere.audio.updated` with the new one, if it is playing the old
+        one or nothing; when the save clears the current period while its
+        track plays, with none. A track the DM put on over the vibe is left
+        playing.
       operationId: updateVibe
       security:
         - cookieAuth: []
