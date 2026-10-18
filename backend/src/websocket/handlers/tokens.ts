@@ -240,6 +240,11 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
    * letting it go is the carrier's to send, so a tab that closed or a
    * connection that dropped mid-hold left the token drawn at the last frame
    * on everyone else's screen.
+   *
+   * A drag let go without a drop stays recorded until now, and the DM may
+   * since have hidden the token and moved it somewhere secret, so who is
+   * told is decided again from the map as it is, as for a refused drop: a
+   * screen the map would not give the token to now is told it has gone.
    */
   socket.on('disconnect', () => {
     const campaignId = socket.campaignId;
@@ -249,14 +254,24 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
     for (const [tokenId, drag] of held) {
       void bestEffort('token drag release on disconnect', async () => {
         const audience = await drag.deciding;
-        const map = await prisma.map.findUnique({ where: { id: drag.mapId }, select: { tokens: true, campaignId: true } });
+        const map = await prisma.map.findUnique({
+          where: { id: drag.mapId },
+          include: { campaign: { select: { currentMapId: true } } },
+        });
         if (!map || map.campaignId !== campaignId) return;
-        const token = readTokens(map.tokens).find((t) => t.id === tokenId);
+        const tokens = readTokens(map.tokens);
+        const token = tokens.find((t) => t.id === tokenId);
         if (!token) return;
+        const told = stillInCampaign(await campaignSockets(io, campaignId), campaignId).filter((s) => audience.holding.has(s.id));
+        const playerIds = told
+          .map((s) => s as unknown as AuthenticatedSocket)
+          .filter((a) => a.role !== 'DM' && a.userId)
+          .map((a) => a.userId as string);
+        const spiritVisibility = await getSpiritVisibilityBatch(campaignId, playerIds);
         const back = { tokenId, mapId: drag.mapId, x: token.position.x, y: token.position.y, movedBy: null };
-        for (const s of stillInCampaign(await campaignSockets(io, campaignId), campaignId)) {
-          if (!audience.holding.has(s.id)) continue;
-          if (audience.recipients.get(s.id)?.sees(token)) s.emit('token.moved', back);
+        for (const s of told) {
+          const recipient = frameRecipient(s as unknown as AuthenticatedSocket, map, tokens, tokenId, spiritVisibility);
+          if (recipient?.sees(token)) s.emit('token.moved', back);
           else s.emit('token:disappeared', { tokenId, mapId: drag.mapId });
         }
       });

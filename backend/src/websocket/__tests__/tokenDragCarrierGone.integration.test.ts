@@ -23,23 +23,27 @@ const runId = randomUUID().slice(0, 8);
 let server: WsTestServer;
 let dmId: string;
 let playerId: string;
+let watcherId: string;
 let campaignId: string;
 let mapId: string;
 let dmCookie: string;
 let playerCookie: string;
+let watcherCookie: string;
 
 type Moved = { tokenId: string; x: number; y: number; dragging?: boolean };
 
 beforeAll(async () => {
-  const [dm, player] = await Promise.all(['dm', 'player'].map((name) =>
+  const [dm, player, watcher] = await Promise.all(['dm', 'player', 'watcher'].map((name) =>
     prisma.user.create({ data: { email: `carriergone-${name}-${runId}@test.cozyvtt.local`, passwordHash: 'not-used-by-socket-auth', displayName: `Carrier ${name}` } })));
   dmId = dm.id;
   playerId = player.id;
+  watcherId = watcher.id;
   campaignId = (await prisma.campaign.create({ data: { name: `Carrier gone ${runId}`, ownerId: dmId, vibeSettings: {}, status: 'ACTIVE' } })).id;
   await prisma.campaignMembership.createMany({
     data: [
       { userId: dmId, campaignId, role: 'DM', characterIds: [] },
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
+      { userId: watcherId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
   mapId = (await prisma.map.create({
@@ -51,7 +55,7 @@ beforeAll(async () => {
   })).id;
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: mapId } });
   server = await createWsTestServer();
-  [dmCookie, playerCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId)]);
+  [dmCookie, playerCookie, watcherCookie] = await Promise.all([server.loginAs(dmId), server.loginAs(playerId), server.loginAs(watcherId)]);
 });
 
 afterAll(async () => {
@@ -59,8 +63,17 @@ afterAll(async () => {
   await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: null } });
   await prisma.map.deleteMany({ where: { campaignId } });
   await prisma.campaign.deleteMany({ where: { id: campaignId } });
-  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId] } } });
+  await prisma.user.deleteMany({ where: { id: { in: [dmId, playerId, watcherId] } } });
   await prisma.$disconnect();
+});
+
+const placeHero = (extra: Record<string, unknown> = {}) => prisma.map.update({
+  where: { id: mapId },
+  data: { tokens: [{ id: 'hero', name: 'Hero', imageUrl: '', position: { x: 2, y: 3 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, controlledBy: playerId, rotation: 0, conditions: [], metadata: {}, ...extra }] },
+});
+
+beforeEach(async () => {
+  await placeHero();
 });
 
 it('sends the token back where it stands when its carrier disconnects', async () => {
@@ -78,4 +91,28 @@ it('sends the token back where it stands when its carrier disconnects', async ()
   const moved = await back;
   expect(moved).toMatchObject({ tokenId: 'hero', x: 2, y: 3 });
   expect(moved.dragging).toBeFalsy();
+});
+
+// The carrier let go without putting it down (Esc), so its drag was never
+// closed; the DM then hid the token and moved it somewhere secret. The
+// release on the carrier's disconnect must not send that place to players.
+it('sends a token the DM has since hidden to no player', async () => {
+  const dm = await server.connectAndAuth(dmCookie, campaignId);
+  const watcher = await server.connectAndAuth(watcherCookie, campaignId);
+  const player = await server.connectAndAuth(playerCookie, campaignId);
+
+  const frame = waitForEvent<Moved>(watcher, 'token.moved');
+  player.emit('token.move.start', { tokenId: 'hero', mapId });
+  player.emit('token.move', { tokenId: 'hero', mapId, x: 9, y: 9 });
+  await frame;
+  await placeHero({ visible: false, position: { x: 15, y: 15 } });
+
+  const leaked: Moved[] = [];
+  watcher.on('token.moved', (data: Moved) => leaked.push(data));
+  const toDm = waitForEvent<Moved>(dm, 'token.moved', 5000);
+  player.disconnect();
+
+  expect(await toDm).toMatchObject({ tokenId: 'hero', x: 15, y: 15 });
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  expect(leaked).toEqual([]);
 });

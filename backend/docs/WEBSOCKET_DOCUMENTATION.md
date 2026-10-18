@@ -726,8 +726,9 @@ socket.on('token.moved', (data) => {
 A carried token's release comes from its carrier. When a socket disconnects
 partway through a drag, every socket its frames reached is sent `token.moved`
 with the token's stored position and `movedBy: null`, or `token:disappeared`
-where that socket no longer sees the token there, so no screen keeps drawing
-it at the last frame.
+where that socket would not be sent the token now (decided from the map as it
+is then, so a token the DM has since hidden or moved to the other plane is not
+given away), and no screen keeps drawing it at the last frame.
 
 ---
 
