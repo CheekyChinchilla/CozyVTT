@@ -47,7 +47,10 @@ it('runs again a transaction PostgreSQL refuses at COMMIT, and the second run se
   const outcomes = await Promise.all([stepDown(a.id, b.id), stepDown(b.id, a.id)]);
 
   expect(outcomes.sort()).toEqual(['refused', 'stepped down']);
-  expect(runs).toBe(3);
+  // At least one run again. PostgreSQL may refuse a retry as well, or both
+  // first runs, when another test file writes users at the same moment (its
+  // conflict checks are not exact), so a full parallel run can take more.
+  expect(runs).toBeGreaterThanOrEqual(3);
   expect(await prisma.user.count({ where: { id: { in: [a.id, b.id] }, platformRole: 'ADMIN' } })).toBe(1);
 });
 
@@ -92,7 +95,7 @@ it.each([
   const outcomes = await Promise.all([firstRun, stepDown(b.id, a.id, true)]);
 
   expect(outcomes.sort()).toEqual(['refused', 'stepped down']);
-  expect(runs).toBe(3);
+  expect(runs).toBeGreaterThanOrEqual(3); // more under load, as above
   expect(await prisma.user.count({ where: { id: { in: [a.id, b.id] }, platformRole: 'ADMIN' } })).toBe(1);
 });
 
