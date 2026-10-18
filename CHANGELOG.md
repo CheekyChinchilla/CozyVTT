@@ -32,6 +32,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The DM's spirit token button on the map toolbar says what a click does.** While spirit tokens were shown, its tooltip read "Hiding spirit tokens (click to show)"; it now reads "Spirit tokens shown, click to hide".
+
 - **Panning with the right mouse button under the fog or light tool no longer opens a token or door menu.** The right button pans the map while any wall, fog or light tool is up. The wall tools already kept the menus closed, and now the fog and light tools do too; press **Esc** to put the tool away and right-click as usual.
 
 - **Clicking near a polygon's first corner closes the shape.** The **Polygon** wall tool placed one more corner there instead, unless the map happened to start at the very top left of the page, so a double-click was the only way to finish a shape.

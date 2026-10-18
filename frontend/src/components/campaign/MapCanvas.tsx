@@ -2534,14 +2534,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         {userRole === 'DM' && (
           <>
             <div className="w-px h-6 bg-moss-green/20" />
-            {/* TODO(ui): while dmShowSpiritTokens is true the tokens are
-               shown, yet the title says "Hiding spirit tokens (click to
-               show)"; both branches say click to show. It should read
-               "Spirit tokens shown, click to hide" in that case. */}
             <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
               variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
-              title={dmShowSpiritTokens ? 'Hiding spirit tokens (click to show)' : 'Spirit tokens hidden — click to show'}
+              title={dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show'}
             >
               <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-purple' : 'text-stone-gray/40'}`} />
             </Button>

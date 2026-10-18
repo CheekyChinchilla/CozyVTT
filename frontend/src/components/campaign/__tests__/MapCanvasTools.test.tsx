@@ -777,3 +777,13 @@ describe('switching tools', () => {
     ]);
   });
 });
+
+describe("the DM's spirit token button", () => {
+  it('says what a click will do', () => {
+    render(<MapCanvas />);
+
+    fireEvent.click(screen.getByTitle('Spirit tokens shown, click to hide'));
+
+    expect(screen.getByTitle('Spirit tokens hidden — click to show')).toBeInTheDocument();
+  });
+});
