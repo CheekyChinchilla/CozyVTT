@@ -677,8 +677,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           </div>
 
           <div className="grid grid-cols-4 gap-3">
+            {/* TODO(typing): the age is stored as text and handed to this number box
+                as it is, which shows text that is not a number as blank. Right:
+                decide what such text should show, then pass the box a number. */}
             <NumberField
-              value={Number(formData.age) || 0}
+              value={(formData.age ?? 0) as number}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
