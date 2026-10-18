@@ -311,16 +311,19 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   }, [campaign]);
 
   // ── Delete creature ──
-  // TODO(ui): this removes the creature from the main list only, so deleting
-  // one from the Favorites section leaves its row there until the library is
-  // reopened. It should also drop it from `favoriteCreatures` and
-  // `favoriteIds`.
   const handleDelete = useCallback(async (creatureId: string) => {
     if (!campaign) return;
     setCreatureToDelete(null);
     try {
       await api.deleteCreature(campaign.id, creatureId);
       setCreatures((prev) => prev.filter((c) => c.id !== creatureId));
+      // A favourite goes from Favorites too, whichever list it was deleted from.
+      setFavoriteCreatures((prev) => prev.filter((c) => c.id !== creatureId));
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(creatureId);
+        return next;
+      });
       setTotal((prev) => prev - 1);
       if (expandedId === creatureId) setExpandedId(null);
     } catch (err) {

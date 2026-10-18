@@ -76,6 +76,22 @@ describe('deleting a custom creature', () => {
     await waitFor(() => expect(screen.queryByText('Boss Bat')).not.toBeInTheDocument());
   });
 
+  // The delete took the creature out of the main list only, so a favourite
+  // stayed under Favorites until the library was reopened.
+  it('takes a favourite out of Favorites too', async () => {
+    api.listCreatureFavorites.mockResolvedValue({ favoriteIds: ['c1'], creatures: [creature({})] });
+    render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await waitFor(() => expect(screen.getByText('Favorites')).toBeInTheDocument());
+    const [inFavorites] = await screen.findAllByText('Boss Bat');
+    await userEvent.click(inFavorites);
+    await userEvent.click(screen.getAllByRole('button', { name: 'Delete Boss Bat' })[0]);
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Delete creature' })).getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(api.deleteCreature).toHaveBeenCalledWith('campaign-1', 'c1'));
+    await waitFor(() => expect(screen.queryByText('Boss Bat')).not.toBeInTheDocument());
+    expect(screen.queryByText('Favorites')).not.toBeInTheDocument();
+  });
+
   it('offers no delete for an SRD creature', async () => {
     render(<CreatureLibrary isOpen onClose={() => {}} />);
     await userEvent.click(await screen.findByText('Goblin'));

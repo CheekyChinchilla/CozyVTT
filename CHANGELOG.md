@@ -64,6 +64,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The Creature Library and Token Templates say why a save was refused, and their boxes stop at the server's limits.** A creature or template the server turned down, such as one whose stat block is over 64 KB, showed only "Failed to create creature" or "Failed to update template"; so did a refused duplicate or delete of a creature, and a refused delete or picture upload for a template. They now show the server's reason, which names the field it is about. Each text box there and in a token's stat block stops at its limit as you type: 200 characters for a name, a creature type, a speed or a trait's name, 100 for an alignment, 500 for each defence, senses and languages, and 5,000 for a description or notes. Each list of traits or actions stops at 50 entries.
 
+- **Deleting a favourite creature takes it out of the Creature Library's Favorites too.** Its row stayed under **Favorites** until the library was reopened.
+
 - **Remove from Campaign works for the DM on any player's character.** The roster offered it, as the DM guide says, but the server refused anyone but the character's owner. The character stays with its owner. A refused removal now says why.
 
 - **A token added, changed or removed reaches everyone at once, from wherever it was changed.** The app's own pages told the table after each change, so a change from a script, a second tab, or a player editing a token they control (its conditions, say) reached nobody else until the map was next sent.
