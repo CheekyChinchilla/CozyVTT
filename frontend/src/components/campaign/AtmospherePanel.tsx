@@ -12,7 +12,7 @@
  * from the server and updates CampaignContext for all clients.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   X,
@@ -125,9 +125,9 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
   };
 
   // The slider moves locally while it is dragged, and the table is told once
-  // it is let go (or a key has moved it). Each send rewrites the campaign's
-  // atmosphere settings and restarts every player's fade, so one per step of
-  // a drag was twenty of each.
+  // its value is committed. Each send rewrites the campaign's atmosphere
+  // settings and restarts every player's fade, so one per step of a drag
+  // was twenty of each.
   const handleVolumeChange = (newVolume: number) => {
     setVolume(newVolume);
     setIsMuted(newVolume === 0);
@@ -142,6 +142,26 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
       });
     }
   };
+
+  // Committed is the slider's native `change` event, which a browser fires
+  // when a drag is let go, a key moves it, or touch or a screen reader sets
+  // it: once each. React's onChange is the `input` event, every step of a
+  // drag. Pointer-up and key-up, used before, miss a value set by a screen
+  // reader. The slider is shown only while a track plays, so the listener is
+  // attached as it appears.
+  const commitLatest = useRef(commitVolume);
+  useEffect(() => {
+    commitLatest.current = commitVolume;
+  });
+  const listened = useRef<{ slider: HTMLInputElement; listener: () => void } | null>(null);
+  const volumeSlider = useCallback((slider: HTMLInputElement | null) => {
+    if (listened.current) listened.current.slider.removeEventListener('change', listened.current.listener);
+    listened.current = null;
+    if (!slider) return;
+    const listener = () => commitLatest.current(parseFloat(slider.value));
+    slider.addEventListener('change', listener);
+    listened.current = { slider, listener };
+  }, []);
 
   const handleMuteToggle = () => {
     if (isMuted) {
@@ -348,10 +368,9 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                         min={0}
                         max={1}
                         step={0.05}
+                        ref={volumeSlider}
                         value={isMuted ? 0 : volume}
                         onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                        onPointerUp={(e) => commitVolume(parseFloat(e.currentTarget.value))}
-                        onKeyUp={(e) => commitVolume(parseFloat(e.currentTarget.value))}
                         className="flex-1 accent-moss-green"
                         title="Volume"
                       />
