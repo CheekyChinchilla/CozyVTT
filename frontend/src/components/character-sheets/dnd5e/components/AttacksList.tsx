@@ -126,7 +126,7 @@ const AttackRow: React.FC<{
           {(attack.additionalDamage ?? [])
             .filter((entry) => entry.damageRoll?.trim())
             .map((entry, idx) => {
-              const roll = entry.damageRoll.trim();
+              const roll = (entry.damageRoll ?? '').trim();
               const label = entry.label?.trim() || 'Alternate';
               const rollable = isClickable;
               return (

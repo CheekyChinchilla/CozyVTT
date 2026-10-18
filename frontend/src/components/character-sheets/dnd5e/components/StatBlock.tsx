@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { Dices } from 'lucide-react';
+import { shouldUseWhiteText } from '@/utils/themeColor';
 
 interface StatBlockProps {
   label: string;
@@ -21,18 +22,6 @@ interface StatBlockProps {
   onRoll?: () => void;
   onRollContext?: (e: React.MouseEvent) => void;
 }
-
-/**
- * Calculate luminance of a hex color to determine if text should be white or black
- */
-const shouldUseWhiteText = (hexColor: string): boolean => {
-  const hex = hexColor.replace('#', '');
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.5;
-};
 
 /**
  * StatBlock - Displays ability score and modifier

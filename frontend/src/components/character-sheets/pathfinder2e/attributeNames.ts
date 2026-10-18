@@ -20,23 +20,25 @@ const TRADITIONS = ['arcane', 'divine', 'primal', 'occult'];
 const CASTING_TYPES = ['prepared', 'spontaneous'];
 
 /** An attribute in full ("strength"), or the value as stored if it names none. */
-export function fullAttributeName(value: string): string {
-  return pf2eAttributeName(value) ?? value;
+export function fullAttributeName(value: string): string;
+export function fullAttributeName(value: string | undefined): string | undefined;
+export function fullAttributeName(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : (pf2eAttributeName(value) ?? value);
 }
 
 /** One of `allowed` in lower case, or the value as stored if it is none of them. */
-function lowerCaseChoice(value: string, allowed: readonly string[]): string {
+function lowerCaseChoice(value: string | undefined, allowed: readonly string[]): string | undefined {
   const lower = typeof value === 'string' ? value.trim().toLowerCase() : '';
   return allowed.includes(lower) ? lower : value;
 }
 
 /** A spellcasting tradition as the editor offers it. */
-export function editorTradition(value: string): string {
+export function editorTradition(value: string | undefined): string | undefined {
   return lowerCaseChoice(value, TRADITIONS);
 }
 
 /** A casting type, prepared or spontaneous, as the editor offers it. */
-export function editorCastingType(value: string): string {
+export function editorCastingType(value: string | undefined): string | undefined {
   return lowerCaseChoice(value, CASTING_TYPES);
 }
 

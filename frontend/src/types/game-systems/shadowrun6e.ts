@@ -1,7 +1,13 @@
 /**
  * Shadowrun 6e Character Data Type Definitions (Frontend)
- * Mirrors backend types from backend/src/game-systems/shadowrun6e.ts
+ *
+ * The shape the backend's schema accepts (backend/src/validators/game-systems/
+ * shadowrun6e.schema.ts), which decides what is stored. A field the schema lets be
+ * absent is optional here, since the server sends a sheet as it was stored.
+ * backend/src/__tests__/keepInStep.test.ts fails when the two disagree.
  */
+
+import type { SheetChrome } from './sheetChrome';
 
 /**
  * Karma tracking
@@ -15,7 +21,7 @@ export interface SR6Karma {
  * Personal data
  */
 export interface SR6PersonalData {
-  age: number;
+  age: string | number;
   sex: string;
   height: string;
   weight: string;
@@ -389,7 +395,7 @@ export interface SR6GearItem {
  * Character appearance
  */
 export interface SR6Appearance {
-  age: number;
+  age: string | number;
   height: string;
   weight: string;
   eyes: string;
@@ -419,7 +425,7 @@ export interface SR6Personality {
  * OPTIONAL fields:
  * - All other fields (can be added progressively)
  */
-export interface SR6CharacterData {
+export interface SR6CharacterData extends SheetChrome {
   // Required: Core identity
   characterName: string;
   metatype: string;

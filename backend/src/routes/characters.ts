@@ -164,9 +164,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       // It should answer 400 unless systemsCompatible(gameSystem, the
       // campaign's) holds, with the same message as the assign route.
       if (!gameSystem) {
-        // Prisma's GameSystem is a string-literal union; cast to the local enum
-        // type finalGameSystem was inferred from (identical string values).
-        finalGameSystem = campaign.gameSystem as GameSystem | null;
+        finalGameSystem = campaign.gameSystem;
       }
     }
 
@@ -338,7 +336,7 @@ router.get(
         // Only the names defined there: the list is a plain object, so
         // `constructor` or `__proto__` would otherwise find an inherited one.
         const template = Object.hasOwn(FLEXIBLE_TEMPLATES, templateName)
-          ? FLEXIBLE_TEMPLATES[templateName]
+          ? FLEXIBLE_TEMPLATES[templateName]()
           : undefined;
 
         if (!template) {

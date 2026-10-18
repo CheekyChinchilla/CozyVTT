@@ -1,7 +1,13 @@
 /**
  * Call of Cthulhu 7e Character Data Type Definitions (Frontend)
- * Mirrors backend types from backend/src/game-systems/callOfCthulhu7e.ts
+ *
+ * The shape the backend's schema accepts (backend/src/validators/game-systems/
+ * callOfCthulhu7e.schema.ts), which decides what is stored. A field the schema lets be
+ * absent is optional here, since the server sends a sheet as it was stored.
+ * backend/src/__tests__/keepInStep.test.ts fails when the two disagree.
  */
+
+import type { SheetChrome } from './sheetChrome';
 
 /**
  * Characteristic with regular, half, and fifth values
@@ -60,7 +66,7 @@ export interface CoC7eMagicPoints {
  */
 export interface CoC7eLuck {
   score: number;
-  notes: string;
+  notes?: string;
 }
 
 /**
@@ -242,11 +248,11 @@ export interface CoC7eCombat {
  * Conditions
  */
 export interface CoC7eConditions {
-  unconscious: boolean;
-  dying: boolean;
-  majorWound: boolean;
-  temporaryInsanity: boolean;
-  indefiniteInsanity: boolean;
+  unconscious?: boolean;
+  dying?: boolean;
+  majorWound?: boolean;
+  temporaryInsanity?: boolean;
+  indefiniteInsanity?: boolean;
 }
 
 /**
@@ -262,34 +268,34 @@ export interface CoC7eSpellsAndMythos {
  */
 export interface CoC7ePossession {
   name: string;
-  notes: string;
+  notes?: string;
 }
 
 /**
  * Wealth information
  */
 export interface CoC7eWealth {
-  spendingLevel: string;
-  cash: number;
-  assets: string;
-  notes: string;
+  spendingLevel?: string;
+  cash?: number;
+  assets?: string;
+  notes?: string;
 }
 
 /**
  * Backstory details
  */
 export interface CoC7eBackstory {
-  description: string;
-  personalDescription: string;
-  ideology: string;
-  significantPeople: string;
-  meaningfulLocations: string;
-  treasuredPossessions: string;
-  traits: string;
-  injuriesAndScars: string;
-  phobiasAndManias: string;
-  arcaneTomesAndSpells: string;
-  encountersWithStrangeEntities: string;
+  description?: string;
+  personalDescription?: string;
+  ideology?: string;
+  significantPeople?: string;
+  meaningfulLocations?: string;
+  treasuredPossessions?: string;
+  traits?: string;
+  injuriesAndScars?: string;
+  phobiasAndManias?: string;
+  arcaneTomesAndSpells?: string;
+  encountersWithStrangeEntities?: string;
 }
 
 /**
@@ -297,20 +303,20 @@ export interface CoC7eBackstory {
  */
 export interface CoC7eContact {
   name: string;
-  role: string;
-  notes: string;
+  role?: string;
+  notes?: string;
 }
 
 /**
  * Character appearance
  */
 export interface CoC7eAppearance {
-  age: number;
-  height: string;
-  weight: string;
-  eyes: string;
-  hair: string;
-  skin: string;
+  age?: string | number;
+  height?: string;
+  weight?: string;
+  eyes?: string;
+  hair?: string;
+  skin?: string;
 }
 
 /**
@@ -325,7 +331,7 @@ export interface CoC7eAppearance {
  * OPTIONAL fields:
  * - All other fields (can be added progressively)
  */
-export interface CoC7eCharacterData {
+export interface CoC7eCharacterData extends SheetChrome {
   // Required: Core identity
   investigatorName: string;
   occupation: string;
@@ -334,7 +340,7 @@ export interface CoC7eCharacterData {
 
   // Optional: Additional details
   playerName?: string;
-  age?: number;
+  age?: string | number;
   sex?: string;
   residence?: string;
   birthplace?: string;

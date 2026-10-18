@@ -9,39 +9,11 @@ import { Sparkles, Circle, CircleDot, BookOpen, Zap } from 'lucide-react';
 import { dnd5eSpellSaveDC, dnd5eSpellAttackBonus } from '@/utils/rules/dnd5e';
 import { SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 
-interface SpellSlot {
-  total: number;
-  expended: number;
-}
-
-interface Spell {
-  level: number;
-  name: string;
-  prepared: boolean;
-  ritual: boolean;
-  concentration: boolean;
-}
-
-/** The stored block. The lists are optional there, so they are here. */
-interface Spellcasting {
-  class: string;
-  ability: string;
-  spellSaveDC: number;
-  spellAttackBonus: number;
-  cantrips?: string[];
-  slots?: {
-    '1': SpellSlot;
-    '2': SpellSlot;
-    '3': SpellSlot;
-    '4': SpellSlot;
-    '5': SpellSlot;
-    '6': SpellSlot;
-    '7': SpellSlot;
-    '8': SpellSlot;
-    '9': SpellSlot;
-  };
-  spells?: Spell[];
-}
+import type {
+  DnD5eSpellcasting as Spellcasting,
+  DnD5eSpell as Spell,
+  DnD5eSpellSlot as SpellSlot,
+} from '@/types/game-systems';
 
 interface SpellcastingBlockProps {
   spellcasting: Spellcasting;
@@ -138,7 +110,7 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
   const saveDC = character ? dnd5eSpellSaveDC(character) : spellcasting.spellSaveDC;
   const attackBonus = character
     ? dnd5eSpellAttackBonus(character)
-    : spellcasting.spellAttackBonus;
+    : (spellcasting.spellAttackBonus ?? 0);
 
   // Every list is optional on the stored sheet: a block can name an ability
   // and hold nothing else, and reading the missing lists threw.

@@ -138,7 +138,7 @@ function repairSection(stored: unknown, index: number): FlexibleSection | null {
  * section is put in the shape its type reads: what cannot be shown is left
  * out, or shown as empty text. Keys beside `sections` are passed through.
  */
-export const initializeFlexibleData = (data: unknown): FlexibleCharacterData => {
+export const initializeFlexibleData = (data: unknown): FlexibleCharacterData & { sections: FlexibleSection[] } => {
   const sheet = asRecord(data);
   if (!sheet || !Array.isArray(sheet.sections)) {
     return { sections: [] };

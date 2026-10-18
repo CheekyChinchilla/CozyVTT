@@ -38,9 +38,6 @@ import type {
   PF2eHitPoints,
   PF2eFeats,
   PF2eSpellSlots,
-  PF2eAppearance,
-  PF2ePersonality,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
@@ -51,7 +48,7 @@ import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
-import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
 import {
   readPf2eSpellSlots,
   readPf2eCantrips,
@@ -70,6 +67,7 @@ import {
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
+import { COLOR_PRESETS } from './colorPresets';
 
 /**
  * The sheet as this editor holds it.
@@ -79,7 +77,7 @@ import { assetNameFrom } from '@/utils/assetName';
  * declares it, so it is saved with the sheet. The server stores the schema's
  * parsed sheet, so anything this editor writes has to be declared there too.
  */
-interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'>, SheetChrome {
+interface PF2eFormData extends Omit<PF2eCharacterData, 'spellcasting'> {
   /** Absent, not null, for a sheet with none: the schema refuses null. */
   spellcasting?: PF2eEditorSpellcasting;
 }
@@ -128,30 +126,10 @@ const TABS: Tab[] = [
   { id: 'bio', label: 'Biography', icon: User },
 ];
 
-const COLOR_PRESETS = [
-  { name: 'Pathfinder Blue', from: 'from-blue-700', to: 'to-blue-900', accent: 'blue-700', hex: '#1d4ed8' },
-  { name: 'Golden', from: 'from-amber-600', to: 'to-amber-800', accent: 'amber-600', hex: '#d97706' },
-  { name: 'Emerald', from: 'from-emerald-700', to: 'to-emerald-900', accent: 'emerald-700', hex: '#047857' },
-  { name: 'Royal Purple', from: 'from-purple-700', to: 'to-purple-900', accent: 'purple-700', hex: '#7e22ce' },
-  { name: 'Crimson', from: 'from-rose-700', to: 'to-rose-900', accent: 'rose-700', hex: '#be123c' },
-  { name: 'Teal', from: 'from-teal-700', to: 'to-teal-900', accent: 'teal-700', hex: '#0f766e' },
-  { name: 'Indigo', from: 'from-indigo-700', to: 'to-indigo-900', accent: 'indigo-700', hex: '#4338ca' },
-  { name: 'Slate', from: 'from-slate-700', to: 'to-slate-900', accent: 'slate-700', hex: '#334155' },
-];
-
 const PROFICIENCY_RANKS: ProficiencyRank[] = ['untrained', 'trained', 'expert', 'master', 'legendary'];
 
 const calculateModifier = (score: number): number => Math.floor((score - 10) / 2);
 const formatModifier = (mod: number): string => mod >= 0 ? `+${mod}` : `${mod}`;
-
-const shouldUseWhiteText = (hexColor: string): boolean => {
-  const hex = hexColor.replace('#', '');
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.5;
-};
 
 // TODO(sheets): the inventory's Bulk box stores what is typed as a string, so
 // an item typed as "2" counts as 0 here and in bulkToNumber in BulkTracker, and
@@ -257,11 +235,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
         typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
     } : undefined,
-    // TODO(typing): `{}` has none of the keys these types require, and the
-    // inputs below read straight off them. Pre-existing; cast so the
-    // behaviour for a sheet stored without one is exactly what it was.
-    appearance: (data.appearance || {}) as PF2eAppearance,
-    personality: (data.personality || {}) as PF2ePersonality,
+    appearance: data.appearance || {},
+    personality: data.personality || {},
     backstory: data.backstory || '',
     alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
     notes: data.notes || '',
@@ -1431,7 +1406,7 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1478,7 +1453,7 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
                 <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <button onClick={() => { const newFocusSpells = formData.spellcasting!.focusSpells.spells.filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -1504,7 +1479,7 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
                   <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newInnateSpells = formData.spellcasting!.innateSpells.filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>

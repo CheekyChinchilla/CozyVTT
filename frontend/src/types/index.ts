@@ -8,15 +8,9 @@ import type { CharacterHpInfo } from '@/utils/characterHp';
 // Enums
 // ============================================
 
-/**
- * Game system enum - mirrors backend GameSystem enum
- */
-export enum GameSystem {
-  DND_5E = 'DND_5E',
-  PATHFINDER_2E = 'PATHFINDER_2E',
-  SHADOWRUN_6E = 'SHADOWRUN_6E',
-  CALL_OF_CTHULHU_7E = 'CALL_OF_CTHULHU_7E',
-}
+import { GameSystem } from './gameSystem';
+
+export { GameSystem };
 
 export enum PlatformRole {
   ADMIN = 'ADMIN',

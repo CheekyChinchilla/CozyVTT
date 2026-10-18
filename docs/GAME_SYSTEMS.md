@@ -13,8 +13,8 @@ CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2
 3. [Reference systems](#reference-systems)
 4. [Naming conventions](#naming-conventions)
 5. [Step 1 — Prisma enum + migration](#step-1--prisma-enum--migration)
-6. [Step 2 — Backend character type](#step-2--backend-character-type)
-7. [Step 3 — Backend type index (`game-systems/index.ts`)](#step-3--backend-type-index-game-systemsindexts)
+6. [Step 2 — Backend character type (from the schema)](#step-2--backend-character-type-from-the-schema)
+7. [Step 3 — Backend enum (nothing to edit)](#step-3--backend-enum-nothing-to-edit)
 8. [Step 4 — Zod schema](#step-4--zod-schema)
 9. [Step 5 — Validator index (`validators/game-systems/index.ts`)](#step-5--validator-index-validatorsgame-systemsindexts)
 10. [Step 6 — Character templates](#step-6--character-templates)
@@ -37,14 +37,14 @@ So a "game system" in CozyVTT is really six coordinated pieces:
 
 | # | Piece | Location |
 |---|-------|----------|
-| 1 | Enum value | `backend/prisma/schema.prisma` + both `GameSystem` TS enums |
-| 2 | Character **type** (the data shape) | `backend/src/game-systems/` + `frontend/src/types/game-systems/` |
+| 1 | Enum value | `backend/prisma/schema.prisma` (the backend re-exports Prisma's) + the frontend enum in `frontend/src/types/gameSystem.ts` |
+| 2 | Character **type** (the data shape) | Decided by the Zod schema (piece 3); described for the frontend in `frontend/src/types/game-systems/`, which a test compares with the schema |
 | 3 | **Zod schema** (validation on save) | `backend/src/validators/game-systems/` |
-| 4 | **Templates** (blank + example starting data) | `backend/src/utils/character-templates/` and a blank factory in the validator index |
+| 4 | **Templates** (blank + example starting data) | `backend/src/utils/character-templates/` |
 | 5 | **Sheet component** (the UI) | `frontend/src/components/character-sheets/{system}/` |
 | 6 | **Display metadata + registration** (labels, the creation dropdown, the router) | `frontend/src/constants/game-systems.ts` + `CharacterSheetRouter.tsx` |
 
-Each of pieces 2–4 has a per-system file **and** an `index.ts` with a `switch` you extend. TypeScript will not compile until every switch handles the new enum value, which is your safety net — follow the compiler errors and you can't miss a spot.
+Pieces 3 and 4 each have a per-system file **and** an `index.ts` with a `switch` you extend. TypeScript will not compile until every switch handles the new enum value, which is your safety net — follow the compiler errors and you can't miss a spot.
 
 ### Design principle: almost everything is optional
 
@@ -268,7 +268,7 @@ viewer and the free-form custom roll input. See
 
 Copy from a system that's shaped like the one you're adding:
 
-- **Backend (all of steps 2–6): copy Shadowrun 6e.** It is fully wired through every backend registration point, so it shows the whole backend side of a system from start to finish. Files: `game-systems/shadowrun6e.ts`, `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in all three backend `index.ts` files.
+- **Backend (steps 4–6): copy Shadowrun 6e.** It is fully wired through every backend registration point, so it shows the whole backend side of a system from start to finish. Files: `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in both backend `index.ts` files.
 - **Frontend sheet (step 9): copy D&D 5e or Call of Cthulhu 7e.** These are the complete sheet implementations, split into `…CharacterSheet.tsx` (mode switcher) + `…CharacterView.tsx` + `…CharacterEditor.tsx` + a `components/` folder. (Shadowrun 6e's sheet is intentionally a single "not yet implemented" placeholder, so don't copy it for the UI — but it *is* the reference for the minimal single-file sheet shape.)
 
 > **Note on Shadowrun 6e:** it is deliberately **not listed in the character-creation dropdown** — its entry in `GAME_SYSTEM_OPTIONS` (`frontend/src/constants/game-systems.ts`) is commented out because its sheet isn't finished. That commented block is a perfect illustration of [Step 8](#step-8--frontend-display-metadata): a system is only selectable once it's in `GAME_SYSTEM_OPTIONS`.
@@ -315,109 +315,19 @@ npx prisma migrate dev --name add_my_system
 npx prisma generate
 ```
 
-`prisma generate` regenerates the Prisma client so `@prisma/client`'s `GameSystem` enum (used by the template layer) includes your value. Since Prisma 7, `migrate dev` no longer does that itself.
+`prisma generate` regenerates the Prisma client so `@prisma/client`'s `GameSystem` enum, which the whole backend imports through `game-systems/index.ts`, includes your value. Since Prisma 7, `migrate dev` no longer does that itself.
 
 ---
 
-## Step 2 — Backend character type
+## Step 2 — Backend character type (from the schema)
 
-Create `backend/src/game-systems/mySystem.ts` describing the data shape. Keep required fields minimal; everything else optional.
-
-```typescript
-// backend/src/game-systems/mySystem.ts
-
-export interface MySystemCharacterData {
-  // Identity — the only genuinely required field
-  characterName: string;
-  playerName?: string;
-
-  // Core stats (optional — filled in over time)
-  stats?: {
-    strength?: number;
-    dexterity?: number;
-    // …
-  };
-
-  hp?: { current?: number; maximum?: number; temporary?: number };
-
-  skills?: MySystemSkill[];
-  inventory?: MySystemItem[];
-  notes?: string;
-}
-
-export interface MySystemSkill {
-  name: string;
-  value?: number;
-  proficient?: boolean;
-}
-
-export interface MySystemItem {
-  name: string;
-  quantity?: number;
-  description?: string;
-}
-```
+There is no separate backend type to write. The Zod schema you write in Step 4 decides what a sheet holds, and the backend takes its TypeScript type from it (`export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>`), so the two cannot drift. Keep required fields minimal there; everything else optional.
 
 ---
 
-## Step 3 — Backend type index (`game-systems/index.ts`)
+## Step 3 — Backend enum (nothing to edit)
 
-Open `backend/src/game-systems/index.ts` and make **five** edits (the TS enum lives here too):
-
-```typescript
-// 1. Re-export your module
-export * from './mySystem';
-
-// 2. Import the type (near the other data-type imports)
-import { MySystemCharacterData } from './mySystem';
-
-// 3. Add the enum value (must match Prisma + the frontend enum)
-export enum GameSystem {
-  DND_5E = 'DND_5E',
-  PATHFINDER_2E = 'PATHFINDER_2E',
-  SHADOWRUN_6E = 'SHADOWRUN_6E',
-  CALL_OF_CTHULHU_7E = 'CALL_OF_CTHULHU_7E',
-  MY_SYSTEM = 'MY_SYSTEM',          // ← add
-}
-
-// 4. Add to the mapped type and the union
-export type CharacterDataBySystem = {
-  // …existing…
-  [GameSystem.MY_SYSTEM]: MySystemCharacterData;   // ← add
-};
-
-export type GameSystemCharacterData =
-  | DnD5eCharacterData
-  | PF2eCharacterData
-  | SR6CharacterData
-  | CoC7eCharacterData
-  | MySystemCharacterData;                          // ← add
-
-// 5. Add a structural type guard, then a case in BOTH switches below it
-export function isMySystemData(
-  data: unknown,
-  gameSystem?: string
-): data is MySystemCharacterData {
-  if (gameSystem && gameSystem !== GameSystem.MY_SYSTEM) return false;
-  const c = data as MySystemCharacterData;
-  return (
-    typeof c === 'object' &&
-    c !== null &&
-    'characterName' in c
-    // …add a couple more distinctive keys so the guard is meaningful…
-  );
-}
-```
-
-Then add a `case` to **`getTypedCharacterData`** and to the structural **`validateCharacterData`** (the boolean one in this file — distinct from the Zod one in Step 5):
-
-```typescript
-case GameSystem.MY_SYSTEM:
-  return isMySystemData(data) ? (data as CharacterDataBySystem[T]) : null;   // getTypedCharacterData
-// …
-case GameSystem.MY_SYSTEM:
-  return isMySystemData(data, gameSystem);                                    // validateCharacterData
-```
+`backend/src/game-systems/index.ts` re-exports Prisma's `GameSystem`, so the value you added in Step 1 reaches every backend file through `prisma generate`. `backend/src/__tests__/keepInStep.test.ts` checks that the frontend enum (Step 7) names the same values.
 
 ---
 
@@ -490,20 +400,7 @@ case GameSystem.MY_SYSTEM: {
 }
 ```
 
-Second, provide a **blank-character factory** and wire it into `getBlankCharacterTemplate`. This returns the minimal valid data object used to seed a brand-new character:
-
-```typescript
-case GameSystem.MY_SYSTEM:
-  return createBlankMySystemCharacter();
-
-// …lower in the file, next to the other createBlank* functions:
-function createBlankMySystemCharacter(): MySystemCharacterData {
-  return {
-    characterName: 'New Character',
-    // …minimal valid defaults…
-  };
-}
-```
+`getBlankCharacterTemplate`, which the tests build their sheets on, needs nothing of its own: it returns your system's `blank` starter sheet (Step 6) parsed by the schema, and throws if that sheet does not pass it. So the tests use the sheet players actually start from.
 
 ---
 
@@ -583,9 +480,9 @@ Then wire both getters into `backend/src/utils/character-templates/index.ts` —
 
 ## Step 7 — Frontend enum + character type
 
-The frontend keeps its own copy of the types (TypeScript doesn't cross the front/back boundary).
+The frontend keeps its own copy of the types: its image is built from `frontend/` alone, so it cannot import the backend's. Tests keep the copies in step.
 
-1. **Enum** — add your value to the `GameSystem` enum in `frontend/src/types/index.ts` (it must exactly mirror the backend enum):
+1. **Enum** — add your value to the `GameSystem` enum in `frontend/src/types/gameSystem.ts`, the frontend's one copy (`types/index.ts` and `types/game-systems/index.ts` re-export it). It must name exactly the values in `schema.prisma`; `keepInStep.test.ts` fails otherwise:
 
    ```typescript
    export enum GameSystem {
@@ -597,7 +494,7 @@ The frontend keeps its own copy of the types (TypeScript doesn't cross the front
    }
    ```
 
-2. **Character type** — create `frontend/src/types/game-systems/mySystem.ts` mirroring the backend data shape, and export it from `frontend/src/types/game-systems/index.ts`. Keep it in sync with the backend type by hand.
+2. **Character type** — create `frontend/src/types/game-systems/mySystem.ts` describing what the system's Zod schema accepts, export it from `frontend/src/types/game-systems/index.ts`, and have the sheet interface extend `SheetChrome`. A field the schema lets be absent, or fills in by default, is optional in the type: the server sends a sheet as it was stored, so a sheet saved before the field existed arrives without it. Add the pair to the sheet check at the end of `backend/src/__tests__/keepInStep.test.ts`, which compares the type with the schema field by field and fails on any difference in names, optionality, `null` or values. Inside a union it compares each object member field by field too; when a union has several objects, give them a field holding a different string in each (the Flexible sections' `type`), which the check pairs them by. A field the schema runs through `z.preprocess` takes anything, so it is not compared.
 
 ---
 
@@ -865,17 +762,15 @@ The exhaustive `switch`/`Record` types mean a missed backend registration point 
 
 **Backend**
 - [ ] `prisma/schema.prisma` — `GameSystem` enum value added; `prisma migrate dev` run
-- [ ] `game-systems/mySystem.ts` — character-data interface(s)
-- [ ] `game-systems/index.ts` — `export *`, type import, enum value, `CharacterDataBySystem`, `GameSystemCharacterData`, `isMySystemData` guard, cases in `getTypedCharacterData` + structural `validateCharacterData`
 - [ ] `validators/game-systems/mySystem.schema.ts` — Zod schema + inferred type
-- [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`, `createBlankMySystemCharacter()` + case in `getBlankCharacterTemplate`
+- [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`
 - [ ] `utils/character-templates/mySystem-templates.ts` — templates + `getMySystemTemplates` / `getMySystemTemplate`
 - [ ] `utils/character-templates/index.ts` — cases in `getTemplatesForGameSystem`, `getCharacterTemplate`, and `getAllTemplates`
 - [ ] Schema (and template) tests written and passing
 
 **Frontend**
-- [ ] `types/index.ts` — `GameSystem` enum value (mirrors backend)
-- [ ] `types/game-systems/mySystem.ts` — character-data type; exported from `types/game-systems/index.ts`
+- [ ] `types/gameSystem.ts` — `GameSystem` enum value (the same values as `schema.prisma`)
+- [ ] `types/game-systems/mySystem.ts` — character-data type, extending `SheetChrome`; exported from `types/game-systems/index.ts`, and paired with its schema in the sheet check in `backend/src/__tests__/keepInStep.test.ts`
 - [ ] `constants/game-systems.ts` — `GAME_SYSTEM_LABELS`, `GAME_SYSTEM_SHORT_LABELS`, `GAME_SYSTEM_DESCRIPTIONS`, **and `GAME_SYSTEM_OPTIONS`**
 - [ ] `components/character-sheets/mySystem/MySystemCharacterSheet.tsx` (+ View/Editor/components if using the full pattern)
 - [ ] `CharacterSheetRouter.tsx` — lazy import + `case`

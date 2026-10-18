@@ -8,25 +8,7 @@
 import React from 'react';
 import { Package, Coins, Star } from 'lucide-react';
 
-interface InventoryItem {
-  name: string;
-  quantity: number;
-  weight: number;
-  notes: string;
-  equippable: boolean;
-  equipped: boolean;
-  requiresAttunement: boolean;
-  attuned: boolean;
-  value: number;
-}
-
-interface Currency {
-  cp: number;
-  sp: number;
-  ep: number;
-  gp: number;
-  pp: number;
-}
+import type { DnD5eInventoryItem as InventoryItem, DnD5eCurrency as Currency } from '@/types/game-systems';
 
 interface InventoryListProps {
   inventory?: InventoryItem[];
@@ -116,7 +98,10 @@ const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
  * InventoryList - Displays inventory and currency
  */
 export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currency }) => {
-  const totalWeight = inventory?.reduce((sum, item) => sum + (item.weight * item.quantity), 0) || 0;
+  // TODO(sheets): an item with no weight or quantity makes the sum NaN, so the
+  // whole total shows 0.0. Right: count a missing weight as 0 and a missing
+  // quantity as 1.
+  const totalWeight = inventory?.reduce((sum, item) => sum + (item.weight! * item.quantity!), 0) || 0;
 
   // Calculate attunement slots (D&D 5e max: 3 attuned items)
   const attunedItems = inventory?.filter(item => item.attuned) || [];

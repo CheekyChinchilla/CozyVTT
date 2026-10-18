@@ -94,9 +94,12 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
             </div>
 
             {/* Feats List */}
+            {/* TODO(sheets): a feat with no level (the schema allows it) compares as
+                NaN here, which leaves its place to chance, and sort() reorders the
+                character's own list in place. Right: sort a copy, a missing level as 0. */}
             <div className="space-y-2">
               {categoryFeats
-                .sort((a, b) => a.level - b.level)
+                .sort((a, b) => a.level! - b.level!)
                 .map((feat, index) => (
                   <div
                     key={`${feat.name}-${index}`}

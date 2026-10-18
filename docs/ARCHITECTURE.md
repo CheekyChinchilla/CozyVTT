@@ -1058,16 +1058,21 @@ Each game system is a set of coordinated files that must be kept in sync, wired 
 ```
 Backend                              Frontend
 ─────────────────────────────────   ────────────────────────────────────
-game-systems/{system}.ts            types/game-systems/{system}.ts
-  TypeScript character type           Mirrored TypeScript type
+validators/game-systems/            types/game-systems/{system}.ts
+  {system}.schema.ts                  The sheet's TypeScript type, which
+  Zod schema: decides what is         keepInStep.test.ts compares with
+  stored, and the backend's type      the schema field by field
+  (z.infer)
+                                    components/character-sheets/{system}/
+utils/character-templates/            {System}CharacterSheet.tsx  ← the sheet
+  {system}-templates.ts               (optionally split into a
+  Named starting templates             …View / …Editor / components/ set)
 
-validators/game-systems/            components/character-sheets/{system}/
-  {system}.schema.ts                  {System}CharacterSheet.tsx  ← the sheet
-  Zod validation schema               (optionally split into a
-                                       …View / …Editor / components/ set)
-utils/character-templates/
-  {system}-templates.ts             constants/game-systems.ts
-  Named starting templates            Labels + the creation-dropdown options
+prisma/schema.prisma                constants/game-systems.ts
+  The GameSystem enum, which          Labels + the creation-dropdown options
+  game-systems/index.ts re-exports
+                                    types/gameSystem.ts
+                                      The frontend's GameSystem enum
 ```
 
 Character data round-trips as JSON:

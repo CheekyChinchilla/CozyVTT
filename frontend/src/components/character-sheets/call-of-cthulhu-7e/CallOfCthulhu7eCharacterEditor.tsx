@@ -24,12 +24,10 @@ import type {
   CoC7eCharacteristics,
   CoC7eDerivedStats,
   CoC7eSkills,
-  CoC7eCombat,
   CoC7eWealth,
   CoC7eBackstory,
   CoC7eAppearance,
   CoC7eConditions,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 
@@ -40,7 +38,7 @@ import { apiErrorMessage } from '@/utils/errors';
  * server stores the schema's parsed sheet, so anything this editor writes has
  * to be declared there too.
  */
-interface CoC7eFormData extends CoC7eCharacterData, SheetChrome {
+interface CoC7eFormData extends CoC7eCharacterData {
   /**
    * Not declared by `CoC7eCharacterData` or the schema, which keep the
    * investigator's name at the top level as `investigatorName`, so the server
@@ -73,6 +71,7 @@ import {
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
+import { COLOR_PRESETS } from './colorPresets';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -101,20 +100,6 @@ const TABS: Tab[] = [
   { id: 'combat', label: 'Combat', icon: Swords },
   { id: 'possessions', label: 'Possessions', icon: Package },
   { id: 'backstory', label: 'Backstory', icon: BookText },
-];
-
-// Call of Cthulhu color presets - Vintage 1920s aesthetic (same as view)
-const COLOR_PRESETS = [
-  { name: 'Dark Forest', from: 'from-green-900', to: 'to-green-800', accent: 'green-800', border: 'amber-600', hex: '#14532d' },
-  { name: 'Noir Shadow', from: 'from-slate-900', to: 'to-slate-800', accent: 'slate-800', border: 'amber-500', hex: '#0f172a' },
-  { name: 'Deep Sepia', from: 'from-sepia-900', to: 'to-sepia-800', accent: 'sepia-800', border: 'sepia-400', hex: '#2E2419' },
-  { name: 'Midnight Blue', from: 'from-blue-950', to: 'to-blue-900', accent: 'blue-900', border: 'amber-600', hex: '#172554' },
-  { name: 'Burgundy Wine', from: 'from-red-950', to: 'to-red-900', accent: 'red-900', border: 'amber-500', hex: '#450a0a' },
-  { name: 'Victorian Purple', from: 'from-purple-950', to: 'to-purple-900', accent: 'purple-900', border: 'amber-600', hex: '#3b0764' },
-  { name: 'Emerald Mist', from: 'from-emerald-900', to: 'to-emerald-800', accent: 'emerald-800', border: 'amber-600', hex: '#064e3b' },
-  { name: 'Charcoal Gray', from: 'from-gray-900', to: 'to-gray-800', accent: 'gray-800', border: 'amber-500', hex: '#111827' },
-  { name: 'Teal Shadow', from: 'from-teal-950', to: 'to-teal-900', accent: 'teal-900', border: 'amber-600', hex: '#042f2e' },
-  { name: 'Amber Dusk', from: 'from-amber-900', to: 'to-amber-800', accent: 'amber-800', border: 'amber-400', hex: '#78350f' },
 ];
 
 /**
@@ -168,19 +153,20 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   // Form state
   const [formData, setFormData] = useState<CoC7eFormData>(() => ({
     ...data,
-    // TODO(typing): `{}` has none of the keys these types require, and the
-    // effects and inputs below read straight off them. Pre-existing; the casts
-    // keep the behaviour for a sheet stored without one exactly as it was.
-    characteristics: (data.characteristics || {}) as CoC7eCharacteristics,
+    characteristics: data.characteristics || {},
+    // TODO(typing): `{}` has none of the keys CoC7eDerivedStats and CoC7eSkills
+    // require, and the effects and inputs below read straight off them, so a
+    // sheet stored without either block reads undefined where a number is
+    // expected. The casts keep that behaviour exactly as it was.
     derivedStats: (data.derivedStats || {}) as CoC7eDerivedStats,
     skills: (data.skills || {}) as CoC7eSkills,
-    combat: (data.combat || { weapons: [] }) as CoC7eCombat,
+    combat: data.combat || { weapons: [] },
     possessions: data.possessions || [],
-    wealth: (data.wealth || {}) as CoC7eWealth,
-    backstory: (data.backstory || {}) as CoC7eBackstory,
-    appearance: (data.appearance || {}) as CoC7eAppearance,
+    wealth: data.wealth || {},
+    backstory: data.backstory || {},
+    appearance: data.appearance || {},
     contacts: data.contacts || [],
-    conditions: (data.conditions || {}) as CoC7eConditions,
+    conditions: data.conditions || {},
   }));
 
   // Report the first edit up to whoever is hosting this sheet, so leaving with
@@ -285,7 +271,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   // Auto-calculate derived stats
   useEffect(() => {
     const char = formData.characteristics;
-    const age = formData.age || 30;
+    // Stored as text since ages were allowed to be typed; the maths needs the number.
+    const age = Number(formData.age) || 30;
 
     if (char) {
       const con = char.CON?.regular || 0;
@@ -690,8 +677,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           </div>
 
           <div className="grid grid-cols-4 gap-3">
+            {/* TODO(typing): the age is stored as text and handed to this number box
+                as it is, which shows text that is not a number as blank. Right:
+                decide what such text should show, then pass the box a number. */}
             <NumberField
-              value={formData.age ?? 0}
+              value={(formData.age ?? 0) as number}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"

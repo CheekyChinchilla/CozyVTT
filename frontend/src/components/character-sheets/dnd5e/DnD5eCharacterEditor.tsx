@@ -28,9 +28,6 @@ import type {
   DnD5eSkills,
   DnD5eSpellcasting,
   DnD5eSpellSlots,
-  DnD5eAppearance,
-  DnD5ePersonality,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
@@ -69,9 +66,10 @@ import {
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
-import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
 import { SHEET_LIST_MAX, SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
+import { COLOR_PRESETS } from './colorPresets';
 
 /**
  * The sheet as this editor holds it.
@@ -82,7 +80,7 @@ import { assetNameFrom } from '@/utils/assetName';
  * field is declared on both sides, so this adds nothing but the editor's own
  * chrome.
  */
-type DnD5eFormData = DnD5eCharacterData & SheetChrome;
+type DnD5eFormData = DnD5eCharacterData;
 
 interface DnD5eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -114,22 +112,6 @@ const TABS: Tab[] = [
   { id: 'bio', label: 'Biography', icon: User },
 ];
 
-// D&D 5e color presets for character sheets
-const COLOR_PRESETS = [
-  { name: 'Classic Red', from: 'from-red-700', to: 'to-red-900', accent: 'red-700', hex: '#b91c1c' },
-  { name: 'Royal Blue', from: 'from-blue-700', to: 'to-blue-900', accent: 'blue-700', hex: '#1d4ed8' },
-  { name: 'Forest Green', from: 'from-green-700', to: 'to-green-900', accent: 'green-700', hex: '#15803d' },
-  { name: 'Deep Purple', from: 'from-purple-700', to: 'to-purple-900', accent: 'purple-700', hex: '#7e22ce' },
-  { name: 'Amber Gold', from: 'from-amber-600', to: 'to-amber-800', accent: 'amber-600', hex: '#d97706' },
-  { name: 'Slate Gray', from: 'from-slate-700', to: 'to-slate-900', accent: 'slate-700', hex: '#334155' },
-  { name: 'Crimson', from: 'from-rose-700', to: 'to-rose-900', accent: 'rose-700', hex: '#be123c' },
-  { name: 'Teal', from: 'from-teal-700', to: 'to-teal-900', accent: 'teal-700', hex: '#0f766e' },
-  { name: 'Indigo', from: 'from-indigo-700', to: 'to-indigo-900', accent: 'indigo-700', hex: '#4338ca' },
-  { name: 'Emerald', from: 'from-emerald-700', to: 'to-emerald-900', accent: 'emerald-700', hex: '#047857' },
-  { name: 'Orange', from: 'from-orange-700', to: 'to-orange-900', accent: 'orange-700', hex: '#c2410c' },
-  { name: 'Pink', from: 'from-pink-700', to: 'to-pink-900', accent: 'pink-700', hex: '#be185d' },
-];
-
 /**
  * Calculate ability modifier from ability score
  */
@@ -142,26 +124,6 @@ const calculateModifier = (score: number): number => {
  */
 const formatModifier = (mod: number): string => {
   return mod >= 0 ? `+${mod}` : `${mod}`;
-};
-
-/**
- * Calculate luminance of a hex color to determine if text should be white or black
- * Returns true if text should be white (dark background), false if text should be black (light background)
- */
-const shouldUseWhiteText = (hexColor: string): boolean => {
-  // Remove # if present
-  const hex = hexColor.replace('#', '');
-
-  // Convert to RGB
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // Calculate relative luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-  // Return true for white text if luminance is less than 0.5 (dark background)
-  return luminance < 0.5;
 };
 
 /**
@@ -293,12 +255,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         : {}),
       // Ensure nested objects exist.
       //
-      // TODO(typing): `{}` is not a valid container — none of these has its keys,
-      // and the effects below read `.score` / `.proficient` off each entry. A
-      // sheet stored without one of these blocks therefore reads `undefined`
-      // where a number is expected. Pre-existing; the casts keep the behaviour
-      // exactly as it was rather than changing what a malformed sheet does.
-      stats: (own.stats || {}) as DnD5eStats,
+      // TODO(typing): `{}` has none of the keys DnD5eSavingThrows and DnD5eSkills
+      // require, and the effects below read `.proficient` off each entry, so a
+      // sheet stored without either block reads undefined where a value is
+      // expected. The casts keep that behaviour exactly as it was.
+      stats: own.stats || {},
       // A stored total that differs from what the scores give keeps the
       // difference as its other bonus, so the total survives the effects below.
       savingThrows: withRecordedOtherBonuses(
@@ -311,9 +272,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       ),
       hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
       deathSaves: own.deathSaves || { successes: 0, failures: 0 },
-      // Same TODO(typing) as the containers above: this default omits `class`,
-      // which the type requires. Cast rather than corrected.
-      spellcasting: (own.spellcasting
+      spellcasting: own.spellcasting
         ? {
             ...own.spellcasting,
             slots: withAllSlotLevels(own.spellcasting.slots),
@@ -331,7 +290,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             cantrips: [],
             slots: withAllSlotLevels(undefined),
             spells: [],
-          }) as DnD5eSpellcasting,
+          },
       currency: own.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
       inventory: own.inventory || [],
       attacks: own.attacks || [],
@@ -346,9 +305,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // featuresAndTraits is not defaulted here: the spread above has already
       // settled it, folding in the template-era `features` field. Re-reading
       // `data` would throw that away.
-      // Same TODO(typing) as the containers above.
-      appearance: (own.appearance || {}) as DnD5eAppearance,
-      personality: (own.personality || {}) as DnD5ePersonality,
+      appearance: own.appearance || {},
+      personality: own.personality || {},
       alliesAndOrganizations: own.alliesAndOrganizations || { name: '', description: '' },
     };
   });
@@ -2490,7 +2448,7 @@ min={1}
               </label>
               <button
                 onClick={() => {
-                  const newSpells = formData.spellcasting!.spells.filter((_, i) => i !== index);
+                  const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
                 className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"

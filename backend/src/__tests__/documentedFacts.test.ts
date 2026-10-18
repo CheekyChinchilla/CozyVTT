@@ -670,10 +670,11 @@ describe('what the comments in the backend source point to', () => {
   });
 
   // The Shadowrun types cited /Examples/Shadowrun_character.json, a file the
-  // repository does not have.
+  // repository does not have. Those types are gone and nothing cites an
+  // example file now; this keeps any new citation true.
   it('name only example character files that exist', () => {
+    expect(sources.length).toBeGreaterThan(0);
     const cited = sources.flatMap((rel) => [...read(rel).matchAll(/\/Examples\/([\w.-]+)/g)].map((m) => ({ rel, file: m[1] })));
-    expect(cited.length).toBeGreaterThan(0);
     expect(cited.filter(({ file }) => !fs.existsSync(path.join(root, 'Examples', file))).map(({ rel, file }) => `${rel}: ${file}`)).toEqual([]);
   });
 });

@@ -36,9 +36,10 @@ import type {
   PF2eCharacterData,
   PF2eSkill,
   PF2eSpellSlots,
-  SheetChrome,
 } from '../../../types/game-systems';
 import { isHexColor } from '@/utils/styleAllowlists';
+import { COLOR_PRESETS } from './colorPresets';
+import { shouldUseWhiteText } from '@/utils/themeColor';
 
 interface Pathfinder2eCharacterViewProps {
   character: Character;
@@ -71,33 +72,12 @@ const formatSpellRank = (rank: number): string => {
   return rank + (suffixes[(v - 20) % 10] || suffixes[v] || suffixes[0]);
 };
 
-// Pathfinder 2e color presets (matching editor)
-const COLOR_PRESETS = [
-  { name: 'Pathfinder Blue', from: 'from-blue-700', to: 'to-blue-900', accent: 'blue-700', hex: '#1d4ed8' },
-  { name: 'Golden', from: 'from-amber-600', to: 'to-amber-800', accent: 'amber-600', hex: '#d97706' },
-  { name: 'Emerald', from: 'from-emerald-700', to: 'to-emerald-900', accent: 'emerald-700', hex: '#047857' },
-  { name: 'Royal Purple', from: 'from-purple-700', to: 'to-purple-900', accent: 'purple-700', hex: '#7e22ce' },
-  { name: 'Crimson', from: 'from-rose-700', to: 'to-rose-900', accent: 'rose-700', hex: '#be123c' },
-  { name: 'Teal', from: 'from-teal-700', to: 'to-teal-900', accent: 'teal-700', hex: '#0f766e' },
-  { name: 'Indigo', from: 'from-indigo-700', to: 'to-indigo-900', accent: 'indigo-700', hex: '#4338ca' },
-  { name: 'Slate', from: 'from-slate-700', to: 'to-slate-900', accent: 'slate-700', hex: '#334155' },
-];
-
-const shouldUseWhiteText = (hexColor: string): boolean => {
-  const hex = hexColor.replace('#', '');
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance < 0.5;
-};
-
 export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps> = ({
   character,
   onEdit,
   onRoll,
 }) => {
-  const data = character.data as PF2eCharacterData & SheetChrome;
+  const data = character.data as PF2eCharacterData;
   const [selectedColor, setSelectedColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
@@ -853,7 +833,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <div className="mb-4">
             <h4 className="font-semibold text-purple-800 mb-2">Spells</h4>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const rankSpells = spellcasting.spells.filter((s) => s.rank === rank);
+              const rankSpells = (spellcasting.spells ?? []).filter((s) => s.rank === rank);
               if (rankSpells.length === 0) return null;
 
               return (

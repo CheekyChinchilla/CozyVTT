@@ -33,7 +33,7 @@
 /** One feature or trait. `description` is empty for anything a player typed. */
 export interface FeatureEntry {
   name: string;
-  description: string;
+  description?: string;
 }
 
 /** How the editor has always split its comma-separated textbox. */
@@ -133,18 +133,21 @@ export function mergeFeatureEntries(...lists: FeatureEntry[][]): FeatureEntry[] 
   const merged: FeatureEntry[] = [...first];
   const sameName = (a: FeatureEntry, b: FeatureEntry) =>
     a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
-  const sameText = (a: FeatureEntry, b: FeatureEntry) =>
-    a.description.trim() === b.description.trim();
+  // TODO(sheets): the schema lets an entry have no description, and .trim() on
+  // a missing one throws, so merging a list holding such an entry fails.
+  // Right: treat a missing description as empty text.
+  const text = (entry: FeatureEntry) => entry.description!.trim();
+  const sameText = (a: FeatureEntry, b: FeatureEntry) => text(a) === text(b);
 
   for (const list of later) {
     for (const entry of list) {
       // Already here in full, or adds no text to an entry of that name.
-      if (merged.some((kept) => sameName(kept, entry) && (sameText(kept, entry) || !entry.description.trim()))) {
+      if (merged.some((kept) => sameName(kept, entry) && (sameText(kept, entry) || !text(entry)))) {
         continue;
       }
 
       // Fills the empty description of an entry of that name.
-      const blank = merged.findIndex((kept) => sameName(kept, entry) && !kept.description.trim());
+      const blank = merged.findIndex((kept) => sameName(kept, entry) && !text(kept));
       if (blank !== -1) {
         merged[blank] = { ...merged[blank], description: entry.description };
         continue;

@@ -101,6 +101,20 @@
  * above it names one too; when an update of that package asks for the same
  * version or a newer one, the override is no longer needed, and left in place
  * it would hold the package back.
+ *
+ * The character sheets. Each is declared twice: the Zod schema, which decides
+ * what is stored, and the frontend type every sheet component trusts. The
+ * frontend cannot import the schema, so the TypeScript compiler compares the
+ * two here, field by field: names, whether a field can be absent or null,
+ * arrays and the values a field takes (helpers/sheetTypeParity.ts).
+ *
+ * The Basic Flexible sheet. The server offers it as a starter sheet, and its
+ * four sections are the Flexible editor's Attributes, Skills, Inventory and
+ * Background section templates. Compared here, ids aside.
+ *
+ * The game systems. The database decides them (the GameSystem enum in
+ * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
+ * declares its own enum, which has to name the same values.
  */
 
 import crypto from 'crypto';
@@ -110,6 +124,9 @@ import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
+import { sheetTypeMismatches } from './helpers/sheetTypeParity';
+import ts from 'typescript';
+import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -641,3 +658,86 @@ describe.each(['backend', 'frontend'])('the npm overrides in %s/package.json', (
     expect(wrong).toEqual([]);
   });
 });
+
+describe('the character sheets, as the schemas take them and the frontend types describe them', () => {
+  const schemas = 'backend/src/validators/game-systems';
+  const types = 'frontend/src/types';
+  const mismatches = sheetTypeMismatches([
+    { label: 'D&D 5e', schemaModule: `${schemas}/dnd5e.schema`, schemaExport: 'dnd5eCharacterDataSchema',
+      typeModule: `${types}/game-systems/dnd5e`, typeExport: 'DnD5eCharacterData' },
+    { label: 'Pathfinder 2e', schemaModule: `${schemas}/pathfinder2e.schema`, schemaExport: 'pathfinder2eCharacterDataSchema',
+      typeModule: `${types}/game-systems/pathfinder2e`, typeExport: 'PF2eCharacterData' },
+    { label: 'Call of Cthulhu 7e', schemaModule: `${schemas}/callOfCthulhu7e.schema`, schemaExport: 'callOfCthulhu7eCharacterDataSchema',
+      typeModule: `${types}/game-systems/callOfCthulhu7e`, typeExport: 'CoC7eCharacterData' },
+    { label: 'Shadowrun 6e', schemaModule: `${schemas}/shadowrun6e.schema`, schemaExport: 'shadowrun6eCharacterDataSchema',
+      typeModule: `${types}/game-systems/shadowrun6e`, typeExport: 'SR6CharacterData' },
+    { label: 'Flexible', schemaModule: `${schemas}/flexible.schema`, schemaExport: 'flexibleCharacterDataSchema',
+      typeModule: `${types}/flexible-character-sheet`, typeExport: 'FlexibleCharacterData' },
+  ]);
+
+  it.each(Object.keys(mismatches))('%s: the frontend type matches what the schema takes', (label) => {
+    expect(mismatches[label]).toEqual([]);
+  });
+});
+
+describe('the Basic Flexible sheet and the editor\'s section templates', () => {
+  /** A literal from the frontend source as a plain value; every id is '<id>'. */
+  function literal(node: ts.Expression): unknown {
+    if (ts.isParenthesizedExpression(node)) return literal(node.expression);
+    if (ts.isObjectLiteralExpression(node)) {
+      return Object.fromEntries(node.properties.map((p) => {
+        if (!ts.isPropertyAssignment(p)) throw new Error(`unexpected ${ts.SyntaxKind[p.kind]} in a section template`);
+        const name = p.name.getText();
+        return [name, name === 'id' ? '<id>' : literal(p.initializer)];
+      }));
+    }
+    if (ts.isArrayLiteralExpression(node)) return node.elements.map((e) => literal(e));
+    if (ts.isStringLiteral(node)) return node.text;
+    if (ts.isNumericLiteral(node)) return Number(node.text);
+    if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+    if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+    throw new Error(`unexpected ${ts.SyntaxKind[node.kind]} in a section template; teach this test to read it`);
+  }
+
+  function editorSection(id: string): unknown {
+    const file = 'frontend/src/components/character-sheets/flexible/utils/section-templates.ts';
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    let found: unknown;
+    const visit = (node: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const idProp = node.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'id');
+        const create = node.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'create');
+        if (idProp && create && ts.isPropertyAssignment(idProp) && ts.isStringLiteral(idProp.initializer) && idProp.initializer.text === id
+          && ts.isPropertyAssignment(create) && ts.isArrowFunction(create.initializer)) {
+          found = literal(create.initializer.body as ts.Expression);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    if (found === undefined) throw new Error(`no '${id}' section template in ${file}`);
+    return found;
+  }
+
+  const withoutIds = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, v) => (key === 'id' ? '<id>' : v)));
+
+  it('has the editor\'s Attributes, Skills, Inventory and Background sections', () => {
+    const sections = (flexibleBasicTemplate().data as { sections: unknown[] }).sections;
+    expect(withoutIds(sections)).toEqual(['attributes', 'skills', 'inventory', 'background'].map(editorSection));
+  });
+});
+
+describe('the game systems', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum GameSystem \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum GameSystem \{([^}]*)\}/.exec(read('frontend/src/types/gameSystem.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a GameSystem enum moved; update this test');
+    const prisma = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(prisma);
+  });
+});
+
