@@ -125,6 +125,12 @@ interface AoEConfig {
   widthFt?: number; // line only, default 5
 }
 
+/** The DM's editing tool, from the wall, fog or light panel. */
+type DmTool =
+  | { kind: 'wall'; mode: NonNullable<WallToolMode> }
+  | { kind: 'fog'; mode: NonNullable<FogToolMode> }
+  | { kind: 'light'; mode: NonNullable<LightToolMode> };
+
 interface MapCanvasProps {
   onEditToken?: (token: Token) => void;
 }
@@ -223,13 +229,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // DM-only: toggle whether spirit-layer tokens are drawn on canvas
   const [dmShowSpiritTokens, setDmShowSpiritTokens] = useState(true);
 
+  // The measuring tool: the ruler or the AoE template, never both. Either can
+  // stay up beside a DM tool below; a DM tool takes the click first.
+  const [measureTool, setMeasureTool] = useState<'ruler' | 'aoe' | null>(null);
+  const showRuler = measureTool === 'ruler';
+  const showAoE = measureTool === 'aoe';
+
   // Ruler tool
-  const [showRuler, setShowRuler] = useState(false);
   const [rulerOrigin, setRulerOrigin] = useState<{ x: number; y: number } | null>(null);
   const [rulerColor, setRulerColor] = useState<'amber' | 'purple' | 'black'>('amber');
 
   // AoE tool
-  const [showAoE, setShowAoE] = useState(false);
   const [aoeConfig, setAoEConfig] = useState<AoEConfig>({ shape: 'sphere', sizeFt: 20 });
   // Held in map pixels, not grid coords, so an Alt-placed anchor can sit
   // part-way into a square. Once set it is a fixed pivot — aiming a cone or
@@ -281,8 +291,24 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Cache invalidation flag for the wall layer.
   const wallCacheValidRef = useRef(false);
 
+  // The DM's editing tool: one wall, fog or light mode at a time. Each
+  // setter below sets its own kind, or clears the tool only when it is of its
+  // kind, so putting one panel's tool away leaves another panel's alone.
+  const [dmTool, setDmTool] = useState<DmTool | null>(null);
+  const wallMode: WallToolMode = dmTool?.kind === 'wall' ? dmTool.mode : null;
+  const fogMode: FogToolMode = dmTool?.kind === 'fog' ? dmTool.mode : null;
+  const lightMode: LightToolMode = dmTool?.kind === 'light' ? dmTool.mode : null;
+  const setWallMode = useCallback((mode: WallToolMode) => {
+    setDmTool((prev) => (mode ? { kind: 'wall', mode } : prev?.kind === 'wall' ? null : prev));
+  }, []);
+  const setFogMode = useCallback((mode: FogToolMode) => {
+    setDmTool((prev) => (mode ? { kind: 'fog', mode } : prev?.kind === 'fog' ? null : prev));
+  }, []);
+  const setLightMode = useCallback((mode: LightToolMode) => {
+    setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
+  }, []);
+
   // Wall tool state (DM only)
-  const [wallMode, setWallMode] = useState<WallToolMode>(null);
   const [wallType, setWallType] = useState<import('@/types/walls').WallType>('wall');
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [snapToEndpoint, setSnapToEndpoint] = useState(false);
@@ -364,7 +390,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [lightSources, setLightSources] = useState<LightSource[]>([]);
   const lightSourcesRef = useRef<LightSource[]>([]);
   useEffect(() => { lightSourcesRef.current = lightSources; }, [lightSources]);
-  const [lightMode, setLightMode] = useState<LightToolMode>(null);
   const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
   const [lightPlacementDefaults, setLightPlacementDefaults] = useState<LightPlacementDefaults>({
     brightRadius: 4, dimRadius: 8, color: '#ffcc66',
@@ -373,7 +398,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
 
   // Fog selection tool state (DM only)
-  const [fogMode, setFogMode] = useState<FogToolMode>(null);
   // Fog selection drag: anchor is fixed on mousedown, current follows the
   // cursor. Both in map pixels — the fog raster is top-left origin like map
   // pixels, so the box never touches the bottom-left grid convention.
@@ -667,26 +691,24 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Ruler and AoE are mutually exclusive — turning either on closes the other
   // and drops its placement, so two templates can never share the map.
   const handleToggleRuler = useCallback(() => {
-    setShowRuler((prev) => {
-      if (prev) {
+    setMeasureTool((prev) => {
+      if (prev === 'ruler') {
         setRulerOrigin(null);
-      } else {
-        setShowAoE(false);
-        setAoEAnchor(null);
+        return null;
       }
-      return !prev;
+      setAoEAnchor(null);
+      return 'ruler';
     });
   }, []);
 
   const handleToggleAoE = useCallback(() => {
-    setShowAoE((prev) => {
-      if (prev) {
+    setMeasureTool((prev) => {
+      if (prev === 'aoe') {
         setAoEAnchor(null);
-      } else {
-        setShowRuler(false);
-        setRulerOrigin(null);
+        return null;
       }
-      return !prev;
+      setRulerOrigin(null);
+      return 'aoe';
     });
   }, []);
 
@@ -1491,7 +1513,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           // a wall is half-drawn. Esc has to cancel the more transient thing
           // first, or it would quietly close this instead of the wall.
           if (aoeAnchor) setAoEAnchor(null);
-          else setShowAoE(false);
+          else setMeasureTool((prev) => (prev === 'aoe' ? null : prev));
         }
         return;
       }
@@ -2627,7 +2649,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     if (token) {
       // Pick up token — disable ruler if it was active
       if (showRuler) {
-        setShowRuler(false);
+        setMeasureTool(null);
         setRulerOrigin(null);
       }
       console.log('👆 Picking up token:', token.name);
