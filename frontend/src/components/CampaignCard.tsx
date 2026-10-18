@@ -179,7 +179,7 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
       </div>
 
       {/* Hover Overlay Effect */}
-      <div className="absolute inset-0 rounded-lg bg-linear-to-br from-moss-green/5 to-spirit-purple/5
+      <div className="absolute inset-0 rounded-lg bg-linear-to-br/srgb from-moss-green/5 to-spirit-purple/5
                       opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
            style={{ transform: 'translateZ(-1px)' }} />
     </button>

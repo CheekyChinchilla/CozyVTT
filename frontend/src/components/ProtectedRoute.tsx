@@ -36,7 +36,7 @@ export default function ProtectedRoute({
   // user to sign in again.
   if (loading && serverUnreachable) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div role="alert" className="glass-panel max-w-md w-full p-8 text-center space-y-4">
           <h1 className="text-2xl font-bold text-brand-ink font-heading">Can't reach the server</h1>
           <p className="text-stone-gray">
@@ -54,7 +54,7 @@ export default function ProtectedRoute({
   // Show loading state while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="glass-panel p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-moss-green mx-auto mb-4"></div>
           <p className="text-brand-ink">Loading...</p>
@@ -77,7 +77,7 @@ export default function ProtectedRoute({
   // Check role-based access if required
   if (requireRole && user.platformRole !== requireRole) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div className="glass-panel max-w-md w-full p-8 text-center space-y-4">
           <div className="flex justify-center">
             <div className="bg-spirit-red/10 rounded-full p-4">

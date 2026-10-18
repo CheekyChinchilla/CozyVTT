@@ -49,7 +49,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     if (this.props.fallback) return this.props.fallback;
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel max-w-lg w-full p-8 text-center space-y-6">
           {/* Icon */}
           <div className="flex justify-center">

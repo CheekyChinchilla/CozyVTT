@@ -149,7 +149,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
        message.metadata.action !== 'session.paused' &&
        message.metadata.action !== 'session.ended' &&
        message.metadata.action !== 'session.resumed' && (
-        <div className="mt-2 pt-2 border-t border-current/10">
+        <div className="mt-2 pt-2 border-t">
           <pre className="text-xs opacity-70 font-mono">
             {JSON.stringify(message.metadata, null, 2)}
           </pre>

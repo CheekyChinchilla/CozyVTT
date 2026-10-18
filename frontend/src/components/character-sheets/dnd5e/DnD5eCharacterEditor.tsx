@@ -1034,7 +1034,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
     const headerClasses = isCustomColor
       ? `${headerTextColor} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -1083,7 +1083,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       : 'hover:bg-stone-50'
                   }`}
                 >
-                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r ${color.from} ${color.to}`} />
+                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}
@@ -1197,7 +1197,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               placeholder="Character Name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
                 errors.characterName ? 'border-red-300' : 'border-white/20'
-              } rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
+              } rounded px-3 py-1 ${headerTextColor} focus:outline-hidden focus:border-white/40`}
             />
             {/* Player name is who owns this character, not free text — it is
                 filled from their display name when the character is created
@@ -1226,14 +1226,14 @@ min={1}
                 value={formData.race || ''}
                 onChange={(e) => updateField('race', e.target.value)}
                 placeholder="Race"
-                className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
+                className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
               />
               <input
                 type="text"
                 value={formData.class || ''}
                 onChange={(e) => updateField('class', e.target.value)}
                 placeholder="Class"
-                className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
+                className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
               />
             </div>
           </div>
@@ -1350,7 +1350,7 @@ min={2}
               : {};
             const circleClasses = isCustomColor
               ? 'w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2'
-              : `w-12 h-12 rounded-full bg-linear-to-br ${selectedColor.from} ${selectedColor.to} flex items-center justify-center shadow-lg border-2`;
+              : `w-12 h-12 rounded-full bg-linear-to-br/srgb ${selectedColor.from} ${selectedColor.to} flex items-center justify-center shadow-lg border-2`;
 
             // Determine border color based on theme
             const borderColor = isCustomColor ? customColorHex : selectedColor.hex;

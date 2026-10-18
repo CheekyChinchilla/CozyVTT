@@ -219,7 +219,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
         <div className="relative h-16 rounded-lg overflow-hidden ring-1 ring-moss-green/20">
           {/* Simulated map background */}
           <div
-            className="absolute inset-0 bg-linear-to-br from-success via-success to-warning"
+            className="absolute inset-0 bg-linear-to-br/srgb from-success via-success to-warning"
             style={{ filter: period.filter || undefined }}
           />
           {/* Hue overlay */}

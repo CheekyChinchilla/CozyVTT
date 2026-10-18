@@ -166,7 +166,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     // from the background, with readableTextOn in utils/color.ts.
     const headerClasses = isCustomColor
       ? 'text-white p-6 rounded-t-lg relative'
-      : `bg-linear-to-r ${themeColor.from} ${themeColor.to} text-white p-6 rounded-t-lg relative`;
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.to} text-white p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>

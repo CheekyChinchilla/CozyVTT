@@ -73,7 +73,7 @@ export function UploadProgressBar({ progress, label }: UploadProgressBarProps) {
         className="h-2 w-full bg-moss-green/10 rounded-full overflow-hidden"
       >
         <div
-          className="h-full bg-linear-to-r from-moss-green to-moss-green/70 rounded-full transition-all duration-300 ease-out"
+          className="h-full bg-linear-to-r/srgb from-moss-green to-moss-green/70 rounded-full transition-all duration-300 ease-out"
           style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
         />
       </div>

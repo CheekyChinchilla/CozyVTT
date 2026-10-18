@@ -161,7 +161,7 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
   return (
     <div className="space-y-4">
       {/* Spellcasting Header */}
-      <div className="p-4 bg-linear-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
+      <div className="p-4 bg-linear-to-br/srgb from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
         <div className="flex items-center space-x-2 mb-3">
           <Sparkles className="w-5 h-5 text-blue-600" />
           <h4 className="font-semibold text-stone-800">

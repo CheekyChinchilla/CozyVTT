@@ -131,7 +131,7 @@ export default function MFASetupPage() {
   // had answered.
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">
         <Loader2 className="w-8 h-8 text-brand-ink animate-spin" aria-label="Loading" />
       </div>
     );
@@ -142,7 +142,7 @@ export default function MFASetupPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
       <div className="glass-panel max-w-lg w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">

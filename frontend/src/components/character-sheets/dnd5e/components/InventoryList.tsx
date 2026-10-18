@@ -46,7 +46,7 @@ const CurrencyDisplay: React.FC<{ currency: Currency }> = ({ currency }) => {
   ];
 
   return (
-    <div className="p-4 bg-linear-to-br from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-lg">
+    <div className="p-4 bg-linear-to-br/srgb from-yellow-50 to-amber-50 border-2 border-yellow-300 rounded-lg">
       <div className="flex items-center space-x-2 mb-3">
         <Coins className="w-5 h-5 text-yellow-700" />
         <h4 className="font-semibold text-stone-800">Currency</h4>
@@ -130,7 +130,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currenc
 
       {/* Attunement Slots Tracker */}
       {inventory && inventory.some(item => item.requiresAttunement || item.attuned) && (
-        <div className="p-4 bg-linear-to-br from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg">
+        <div className="p-4 bg-linear-to-br/srgb from-purple-50 to-indigo-50 border-2 border-purple-200 rounded-lg">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center space-x-2">
               <Star className="w-5 h-5 text-purple-600" />
@@ -146,7 +146,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currenc
                 key={idx}
                 className={`flex-1 h-2 rounded-full ${
                   idx < attunedCount
-                    ? 'bg-linear-to-r from-purple-500 to-indigo-500'
+                    ? 'bg-linear-to-r/srgb from-purple-500 to-indigo-500'
                     : 'bg-stone-200'
                 }`}
               />

@@ -311,7 +311,7 @@ export default function CharacterEditorPage() {
   // Loading state — full-page skeleton
   if (loading) {
     return (
-      <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <CharacterSheetSkeleton />
       </div>
     );
@@ -320,7 +320,7 @@ export default function CharacterEditorPage() {
   // Error state
   if (error || !character) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
           <AlertCircle className="w-12 h-12 text-spirit-red mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
@@ -338,7 +338,7 @@ export default function CharacterEditorPage() {
   // Permission denied state
   if (permissionError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
           <Lock className="w-12 h-12 text-sunset-orange mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
@@ -366,7 +366,7 @@ export default function CharacterEditorPage() {
       onConfirm={() => navigate('/characters')}
       onCancel={() => setConfirmLeave(false)}
     />
-    <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <div className="glass-panel m-4 p-4">
         <div className="flex items-center justify-between gap-4">

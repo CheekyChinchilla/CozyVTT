@@ -152,7 +152,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
     const headerClasses = isCustomColor
       ? `${headerTextColor} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -253,7 +253,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">
                 {ability.slice(0, 3)}
               </div>
-              <div className="relative w-16 h-16 rounded-full bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-lg border-2 border-blue-900">
+              <div className="relative w-16 h-16 rounded-full bg-linear-to-br/srgb from-blue-600 to-blue-800 flex items-center justify-center shadow-lg border-2 border-blue-900">
                 <span className="text-2xl font-bold text-white">
                   {formatModifier(abilityData.modifier)}
                 </span>
@@ -365,7 +365,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   const renderCombatStats = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Armor Class */}
-      <div className="bg-linear-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+      <div className="bg-linear-to-br/srgb from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-blue-800 mb-2 flex items-center">
           <Shield className="w-4 h-4 mr-2" />
           Armor Class
@@ -388,7 +388,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Class DC */}
-      <div className="bg-linear-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
+      <div className="bg-linear-to-br/srgb from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-purple-800 mb-2 flex items-center">
           <Target className="w-4 h-4 mr-2" />
           Class DC
@@ -409,7 +409,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Initiative */}
-      <div className="bg-linear-to-br from-amber-50 to-amber-100 border-2 border-amber-300 rounded-lg p-4">
+      <div className="bg-linear-to-br/srgb from-amber-50 to-amber-100 border-2 border-amber-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center">
           <Zap className="w-4 h-4 mr-2" />
           Initiative
@@ -430,7 +430,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Speed */}
-      <div className="bg-linear-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
+      <div className="bg-linear-to-br/srgb from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-green-800 mb-2">Speed</h3>
         <div className="text-3xl font-bold text-green-800">
           {data.speed?.land || 30} ft.
@@ -446,7 +446,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render HP and conditions
   const renderHitPoints = () => (
-    <div className="bg-linear-to-r from-red-50 to-red-100 border-2 border-red-300 rounded-lg p-4">
+    <div className="bg-linear-to-r/srgb from-red-50 to-red-100 border-2 border-red-300 rounded-lg p-4">
       <h3 className="text-lg font-bold text-red-800 mb-3 flex items-center">
         <Heart className="w-5 h-5 mr-2" />
         Hit Points
@@ -752,7 +752,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     const spellcasting = data.spellcasting;
 
     return (
-      <div className="bg-linear-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
+      <div className="bg-linear-to-br/srgb from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
         <h3 className="text-lg font-bold text-purple-800 mb-4 flex items-center">
           <Sparkles className="w-5 h-5 mr-2" />
           Spellcasting

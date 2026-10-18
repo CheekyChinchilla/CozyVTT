@@ -513,7 +513,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
     const headerClasses = isCustomColor
       ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
-      : `bg-linear-to-r ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
+      : `bg-linear-to-r/srgb ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -543,7 +543,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                       : 'hover:bg-stone-50'
                   }`}
                 >
-                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r ${color.from} ${color.to}`} />
+                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}

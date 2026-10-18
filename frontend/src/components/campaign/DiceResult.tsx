@@ -178,7 +178,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       </div>
 
       {/* Breakdown */}
-      <div className="mt-2 pt-2 border-t border-current/10">
+      <div className="mt-2 pt-2 border-t">
         <div className="text-xs text-ink-secondary space-y-1">
           {/* Formula */}
           {breakdown?.formula && (

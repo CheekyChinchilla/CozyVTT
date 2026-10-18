@@ -60,7 +60,7 @@ export const StatBlock: React.FC<StatBlockProps> = ({
     : {};
   const circleClasses = isCustomColor
     ? 'w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2'
-    : `w-12 h-12 rounded-full bg-linear-to-br ${colorFrom} ${colorTo} flex items-center justify-center shadow-lg border-2`;
+    : `w-12 h-12 rounded-full bg-linear-to-br/srgb ${colorFrom} ${colorTo} flex items-center justify-center shadow-lg border-2`;
 
   const borderColor = isCustomColor ? customColor : colorHex;
   const borderStyle = { borderColor };

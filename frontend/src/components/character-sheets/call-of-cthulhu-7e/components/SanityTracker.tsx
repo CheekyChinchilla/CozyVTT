@@ -57,7 +57,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
   const dangerLevel = getDangerLevel();
 
   return (
-    <div className="bg-linear-to-br from-purple-900/20 to-indigo-900/20 border-2 border-purple-800/50 rounded-lg p-4 space-y-3">
+    <div className="bg-linear-to-br/srgb from-purple-900/20 to-indigo-900/20 border-2 border-purple-800/50 rounded-lg p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">

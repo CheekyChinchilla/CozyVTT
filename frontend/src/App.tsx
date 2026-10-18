@@ -44,7 +44,7 @@ function MascotImage({ className = '' }: { className?: string }) {
 function PageLoader() {
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20"
+      className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20"
       aria-live="polite"
       aria-label="Loading page"
     >
@@ -77,7 +77,7 @@ function App() {
           </a>
           {/* Global toast notifications */}
           <ToastContainer />
-          <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+          <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public Routes */}

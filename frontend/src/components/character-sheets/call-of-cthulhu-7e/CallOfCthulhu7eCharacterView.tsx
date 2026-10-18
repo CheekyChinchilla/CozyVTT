@@ -125,7 +125,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     // colour from the background, with readableTextOn in utils/color.ts.
     const headerClasses = isCustomColor
       ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
-      : `bg-linear-to-r ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
+      : `bg-linear-to-r/srgb ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -159,7 +159,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                       : 'hover:bg-stone-50'
                   }`}
                 >
-                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r ${color.from} ${color.to}`} />
+                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}
@@ -496,7 +496,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     <div className="space-y-6">
       {/* Wealth */}
       {data.wealth && (
-        <div className="bg-linear-to-br from-amber-100 to-yellow-50 border-2 border-amber-400 rounded-lg p-5">
+        <div className="bg-linear-to-br/srgb from-amber-100 to-yellow-50 border-2 border-amber-400 rounded-lg p-5">
           <h3 className="text-lg font-bold text-amber-900 mb-4 flex items-center space-x-2">
             <Package className="w-5 h-5" />
             <span>Wealth & Assets</span>

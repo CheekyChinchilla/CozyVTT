@@ -168,7 +168,7 @@ export default function AssetLibraryPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <div className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-7xl mx-auto px-6 py-6">

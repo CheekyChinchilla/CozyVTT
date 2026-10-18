@@ -652,7 +652,7 @@ export default function ProfilePage() {
   // ──────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <header className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-4">

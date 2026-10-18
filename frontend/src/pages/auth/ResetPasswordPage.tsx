@@ -84,7 +84,7 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
       <main id="main-content" className="glass-panel max-w-md w-full p-8 space-y-6">
 
         {success ? (

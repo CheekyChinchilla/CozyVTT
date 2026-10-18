@@ -220,7 +220,7 @@ function CampaignPageContent() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="text-center space-y-4">
           <Loader2 className="w-12 h-12 text-brand-ink animate-spin mx-auto" />
           <p className="text-stone-gray">Loading campaign...</p>
@@ -232,7 +232,7 @@ function CampaignPageContent() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="card-cozy max-w-md text-center space-y-4">
           <p className="text-spirit-red font-medium">{error}</p>
           <Button onClick={() => navigate('/dashboard')}>
@@ -247,7 +247,7 @@ function CampaignPageContent() {
   // No campaign loaded
   if (!campaign) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="card-cozy max-w-md text-center space-y-4">
           <p className="text-stone-gray">Campaign not found</p>
           <Button onClick={() => navigate('/dashboard')}>
@@ -260,7 +260,7 @@ function CampaignPageContent() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="h-screen flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header Bar */}
       <header className="flex items-center justify-between px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="flex items-center gap-3">
