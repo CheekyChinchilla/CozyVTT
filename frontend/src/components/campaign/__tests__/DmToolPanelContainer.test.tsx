@@ -27,6 +27,18 @@ describe('DmToolPanelContainer', () => {
     expect(stack.className).toMatch(/(^|\s)\*:shrink-0(\s|$)/);
   });
 
+  // The handle is the stack's first child, so it scrolled away with the
+  // panels and the stack could not be moved until scrolled back up.
+  it('keeps the drag handle in view while the stack scrolls', () => {
+    render(
+      <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>
+        <p>Fog of War</p>
+      </DmToolPanelContainer>
+    );
+    const classes = screen.getByTitle(/Drag to move the panels/).className.split(/\s+/);
+    expect(classes).toEqual(expect.arrayContaining(['sticky', 'top-0']));
+  });
+
   it('gives the panel stack one fixed width, so long notes wrap', () => {
     const { container } = render(
       <DmToolPanelContainer containerRef={createRef<HTMLDivElement>()}>
