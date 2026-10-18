@@ -150,9 +150,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [canSeed, setCanSeed] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
-  // Kept apart from `error`, which every list load clears: the list loads
-  // again 300 ms after the library opens, and a failed import's reason shown
-  // in that time vanished with it.
+  // Kept apart from `error`, which every list load clears, so a failed
+  // import's reason stays up when the list loads again.
   const [seedError, setSeedError] = useState<string | null>(null);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -227,7 +226,6 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     return () => clearTimeout(searchTimeoutRef.current);
   }, [searchQuery]);
 
-  // ── Place creature on map ──
   // ── Seed SRD creatures ──
   const handleSeedSrd = useCallback(async () => {
     if (!campaign || isSeeding) return;
