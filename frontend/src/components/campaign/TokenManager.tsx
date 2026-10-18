@@ -74,6 +74,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const [tokenSize, setTokenSize] = useState({ width: 1, height: 1 });
   const [tokenLayer, setTokenLayer] = useState<TokenLayer>(TokenLayer.TOKEN);
   const [assignTo, setAssignTo] = useState<string>('none');
+  // The character a Player token stands for; empty for none.
+  const [characterId, setCharacterId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
 
   // ── Token type fields ──
@@ -123,6 +125,22 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   // ── Derived values ──
   // Only a player can be given a token; the server refuses a spectator.
   const players = campaign?.memberships?.filter((m) => m.role === 'PLAYER') ?? [];
+  const characters = [...(campaign?.characters ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  const ownerName = (userId: string) =>
+    campaign?.memberships?.find((m) => m.userId === userId)?.user?.displayName ?? 'unknown owner';
+  const pickedCharacter = tokenType === TokenType.PLAYER ? characters.find((c) => c.id === characterId) : undefined;
+
+  // Picking a character names the token after it, unless a name is typed or
+  // it still has the last character's, and gives it to the character's owner
+  // while they are a player; the DM can change either before placing it.
+  const pickCharacter = (id: string) => {
+    const previous = characters.find((c) => c.id === characterId);
+    const next = characters.find((c) => c.id === id);
+    setCharacterId(id);
+    if (!next) return;
+    if (!tokenName.trim() || tokenName === previous?.name) setTokenName(next.name);
+    setAssignTo(players.some((m) => m.userId === next.userId) ? next.userId : 'none');
+  };
   const otherMaps = (campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id);
   const canAdd = !!tokenName.trim() && !!currentMap;
 
@@ -180,7 +198,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       // Build type-specific payload
       const basePayload = {
         name: tokenName.trim(),
-        imageUrl: selectedAsset?.id || '',
+        imageUrl: selectedAsset?.id || pickedCharacter?.tokenImageUrl || '',
         position,
         size: tokenSize,
         type: tokenType,
@@ -192,6 +210,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       if (tokenType === TokenType.PLAYER) {
         tokenPayload = {
           ...basePayload,
+          characterId: pickedCharacter?.id ?? null,
           layer: tokenLayer,
           visible: true,
           controlledBy: assignTo !== 'none' ? assignTo : null,
@@ -241,6 +260,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setTokenSize({ width: 1, height: 1 });
       setTokenLayer(TokenLayer.TOKEN);
       setAssignTo('none');
+      setCharacterId('');
       setDisplayMode('pog');
       setHpMax(0);
       setTokenNotes('');
@@ -256,7 +276,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     } finally {
       setIsAdding(false);
     }
-  }, [campaign, currentMap, selectedAsset, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden]);
+  }, [campaign, currentMap, selectedAsset, pickedCharacter, tokenName, tokenSize, tokenLayer, assignTo, tokenType, displayMode, disposition, hpMax, tokenNotes, showHpBar, initiative, sightRadius, placeHidden]);
 
   // ============================================
   // Token List Actions
@@ -416,10 +436,40 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   </div>
                   {tokenType === TokenType.PLAYER && (
                     <p className="text-[10px] text-stone-gray/60 mt-1">
-                      Player tokens link to a character sheet. For summoned creatures, use NPC type and assign a player as controller.
+                      A player token stands for a character: the token opens its sheet and rolls with its numbers. For summoned creatures, use NPC type and assign a player as controller.
                     </p>
                   )}
                 </div>
+
+                {/* The character a Player token stands for */}
+                {tokenType === TokenType.PLAYER && (
+                  <div className="mb-3">
+                    {characters.length > 0 ? (
+                      <>
+                        <label htmlFor="token-manager-character" className="text-xs text-stone-gray font-medium block mb-1">
+                          Character
+                        </label>
+                        <select
+                          id="token-manager-character"
+                          value={characterId}
+                          onChange={(e) => pickCharacter(e.target.value)}
+                          className="input-cozy w-full text-sm"
+                        >
+                          <option value="">No character</option>
+                          {characters.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name} ({ownerName(c.userId)})
+                            </option>
+                          ))}
+                        </select>
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-stone-gray/60">
+                        No characters are in this campaign yet. A player brings one from their Characters page.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {/* Asset picker grid */}
                 <div className="mb-3">
@@ -726,10 +776,11 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                 {/* Assign to player (NPC and Player only) */}
                 {tokenType !== TokenType.OBJECT && players.length > 0 && (
                   <div className="mb-3">
-                    <label className="text-xs text-stone-gray font-medium block mb-1">
+                    <label htmlFor="token-manager-controller" className="text-xs text-stone-gray font-medium block mb-1">
                       Controlled by
                     </label>
                     <select
+                      id="token-manager-controller"
                       value={assignTo}
                       onChange={(e) => setAssignTo(e.target.value)}
                       className="input-cozy w-full text-sm"

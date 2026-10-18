@@ -211,6 +211,7 @@ Click **Token Manager** (the crossed-swords icon) in the campaign header to open
 The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to move into position.
 
 - **Token Type** — **Player**, **NPC / Creature** or **Object**
+- **Character** — for a Player token, the character it stands for, listed by name with its owner in brackets. The token then opens that character's sheet and rolls with its numbers. Picking one names the token after the character if you have not typed a name, sets **Controlled by** to its owner while they are a player, and uses the character's token picture if you pick no image. **No character** leaves the token linked to nothing. Dragging a character from the roster, or **Add to Map** on it, does the same in one step
 - **Token image** — Upload one, pick a token image from your library, or leave it empty for a placeholder
 - **Token Name** — Shown when anyone points at the token
 - **Display Mode** — Pog, Top-Down or Full Art (see below)
