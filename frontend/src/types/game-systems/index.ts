@@ -1,7 +1,8 @@
 /**
  * Game Systems Type Definitions Index (Frontend)
- * Exports all game system types and provides utility types
- * Mirrors backend structure from backend/src/game-systems/index.ts
+ * Exports all game system types and provides utility types.
+ * Each sheet type follows its Zod schema in backend/src/validators/game-systems/,
+ * and backend/src/__tests__/keepInStep.test.ts fails when one drifts.
  */
 
 // Export all D&D 5e types
