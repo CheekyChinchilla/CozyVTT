@@ -1062,3 +1062,42 @@ describe("a player's door under manual fog", () => {
     expect(sentOf('wall:update')).toEqual([]);
   });
 });
+
+describe('a click on a token beside a door', () => {
+  // Square (2, 17) runs from x 100 to 150 and y 100 to 150; the door is its
+  // left edge. The door's reach is 12 screen pixels, which at the zoom that
+  // fits a map to the screen covers most of a square.
+  const door = seg('d1', 100, 100, 100, 150, 'door-closed');
+
+  it('picks the token up, leaving the door', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [door] }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 2, 17));
+
+    click(px(105, 125));
+
+    expect(sentOf('token.move.start')).toHaveLength(1);
+    expect(sentOf('wall:update')).toEqual([]);
+  });
+
+  it('puts a held token down there, leaving the door', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [door] }) });
+    render(<MapCanvas />);
+    show(token('tok-goblin', 'Goblin', 5, 17));
+    click(square(5, 17));
+
+    click(px(105, 125));
+
+    expect(sentOf('token.move.end')).toEqual([expect.objectContaining({ tokenId: 'tok-goblin', x: 2, y: 17 })]);
+    expect(sentOf('wall:update')).toEqual([]);
+  });
+
+  it('still opens the door from an empty square', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [door] }) });
+    render(<MapCanvas />);
+
+    click(px(105, 125));
+
+    expect(sentOf('wall:update')).toHaveLength(1);
+  });
+});

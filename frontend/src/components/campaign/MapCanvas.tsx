@@ -1308,6 +1308,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const { tool: doorTool, doorAt, setDoorType, hoveredDoorId, setHoveredDoorId } = useDoorTool({
     mapId: currentMap?.id, wallSegments, doorViewer, zoom: mapControls.zoom,
     wallMode, fogMode, lightMode, holdingToken: draggedToken !== null,
+    tokenTakesClick: ({ gridCoords }) => draggedToken !== null || getMovableTokenAtPosition(gridCoords.x, gridCoords.y) !== null,
     carryWallHistory, socket, ownEdits, showToast, markDirty,
   });
 

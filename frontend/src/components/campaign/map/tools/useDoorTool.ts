@@ -28,6 +28,11 @@ interface UseDoorToolArgs {
   lightMode: LightToolMode;
   /** Whether a token is held, which leaves the hover pointer to it. */
   holdingToken: boolean;
+  /**
+   * Whether a click would pick a token up or put the held one down. Those
+   * win: zoomed out, a door's reach covers most of the square beside it.
+   */
+  tokenTakesClick: (at: PointerAt) => boolean;
   carryWallHistory: (change: (walls: WallSegment[]) => WallSegment[]) => void;
   socket: ToolSocketSource | null | undefined;
   ownEdits: OwnEdits;
@@ -36,7 +41,7 @@ interface UseDoorToolArgs {
 }
 
 export function useDoorTool({
-  mapId, wallSegments, doorViewer, zoom, wallMode, fogMode, lightMode, holdingToken,
+  mapId, wallSegments, doorViewer, zoom, wallMode, fogMode, lightMode, holdingToken, tokenTakesClick,
   carryWallHistory, socket, ownEdits, showToast, markDirty,
 }: UseDoorToolArgs) {
   const [hoveredDoorId, setHoveredDoorId] = useState<string | null>(null); // for pointer cursor in pan mode
@@ -57,9 +62,9 @@ export function useDoorTool({
 
   const tool: MapTool = {
     // Click near a door segment to toggle open/closed.
-    down({ mapPx }: PointerAt) {
-      if (wallMode || fogMode || lightMode) return false;
-      const door = doorAt(mapPx);
+    down(at: PointerAt) {
+      if (wallMode || fogMode || lightMode || tokenTakesClick(at)) return false;
+      const door = doorAt(at.mapPx);
       if (!door) return false;
       if (door.type === 'door-locked') {
         showToast('This door is locked.', 'info');
