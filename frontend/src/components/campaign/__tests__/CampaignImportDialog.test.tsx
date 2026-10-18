@@ -13,7 +13,8 @@ import userEvent from '@testing-library/user-event';
 
 const { previewCampaignImport, importCampaign } = vi.hoisted(() => ({ previewCampaignImport: vi.fn(), importCampaign: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: { previewCampaignImport, importCampaign } }));
-vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('react-router', () => ({ useNavigate: () => navigate }));
 
 import CampaignImportDialog from '../CampaignImportDialog';
 
@@ -31,6 +32,7 @@ function chooseArchive() {
 beforeEach(() => {
   previewCampaignImport.mockReset();
   importCampaign.mockReset();
+  navigate.mockReset();
 });
 
 describe('CampaignImportDialog', () => {
@@ -106,6 +108,14 @@ describe('CampaignImportDialog done screen', () => {
     expect(screen.getByRole('list', { name: 'Changed to fit' }).textContent).toBe(
       'Map "Cellar": shortened the notes of 1 token to 5,000 characters.'
     );
+  });
+
+  // It went to /campaign/<id>, which is no page, and the app sent that on to
+  // the dashboard.
+  it('opens the imported campaign at its page', async () => {
+    await importArchive({ warnings: [], skipped: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Campaign' }));
+    expect(navigate).toHaveBeenCalledWith('/campaigns/c1');
   });
 
   it('counts the maps that were made, not the ones the archive held', async () => {

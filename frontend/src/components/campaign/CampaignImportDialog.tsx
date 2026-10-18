@@ -329,7 +329,7 @@ export default function CampaignImportDialog({
               <Button
                 onClick={() => {
                 handleClose();
-                navigate(`/campaign/${result.campaignId}`);
+                navigate(`/campaigns/${result.campaignId}`);
                 }}
                 className="flex-1"
               >
