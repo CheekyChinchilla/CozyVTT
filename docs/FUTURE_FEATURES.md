@@ -287,8 +287,9 @@ _Nothing at present._
   Pathfinder 2e, Call of Cthulhu) draws its own header: the Save and Cancel
   cluster, the palette button, the colour presets and the name and token
   picture fields, with no shared component between them. The Flexible editor
-  repeats Save, Cancel and the token picture, and each editor and its view
-  declare their own `COLOR_PRESETS`. 1.2.2 fixed three separate
+  repeats Save, Cancel and the token picture. (The colour presets are shared:
+  each system's view and editor read one `colorPresets.ts`, and the header
+  text colour comes from `utils/themeColor.ts`.) 1.2.2 fixed three separate
   duplicate-control bugs that all had the same shape, a page or modal drawing
   Save, Cancel or Edit that the sheet already draws, plus an overlap that had
   to be corrected in three files where one should have done. The rule that

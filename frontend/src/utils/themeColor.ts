@@ -19,3 +19,16 @@ export function toStoredHexColor(value: string): string | null {
   const short = /^#([0-9A-Fa-f])([0-9A-Fa-f])([0-9A-Fa-f])$/.exec(trimmed);
   return short ? `#${short[1]}${short[1]}${short[2]}${short[2]}${short[3]}${short[3]}` : null;
 }
+
+/**
+ * Whether text on a header of this `#rrggbb` colour should be white: true when
+ * the colour's perceived brightness is under half, false for dark text.
+ */
+export function shouldUseWhiteText(hexColor: string): boolean {
+  const hex = hexColor.replace('#', '');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance < 0.5;
+}

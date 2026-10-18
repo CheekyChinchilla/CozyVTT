@@ -66,9 +66,10 @@ import {
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
-import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
 import { SHEET_LIST_MAX, SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
+import { COLOR_PRESETS } from './colorPresets';
 
 /**
  * The sheet as this editor holds it.
@@ -111,22 +112,6 @@ const TABS: Tab[] = [
   { id: 'bio', label: 'Biography', icon: User },
 ];
 
-// D&D 5e color presets for character sheets
-const COLOR_PRESETS = [
-  { name: 'Classic Red', from: 'from-red-700', to: 'to-red-900', accent: 'red-700', hex: '#b91c1c' },
-  { name: 'Royal Blue', from: 'from-blue-700', to: 'to-blue-900', accent: 'blue-700', hex: '#1d4ed8' },
-  { name: 'Forest Green', from: 'from-green-700', to: 'to-green-900', accent: 'green-700', hex: '#15803d' },
-  { name: 'Deep Purple', from: 'from-purple-700', to: 'to-purple-900', accent: 'purple-700', hex: '#7e22ce' },
-  { name: 'Amber Gold', from: 'from-amber-600', to: 'to-amber-800', accent: 'amber-600', hex: '#d97706' },
-  { name: 'Slate Gray', from: 'from-slate-700', to: 'to-slate-900', accent: 'slate-700', hex: '#334155' },
-  { name: 'Crimson', from: 'from-rose-700', to: 'to-rose-900', accent: 'rose-700', hex: '#be123c' },
-  { name: 'Teal', from: 'from-teal-700', to: 'to-teal-900', accent: 'teal-700', hex: '#0f766e' },
-  { name: 'Indigo', from: 'from-indigo-700', to: 'to-indigo-900', accent: 'indigo-700', hex: '#4338ca' },
-  { name: 'Emerald', from: 'from-emerald-700', to: 'to-emerald-900', accent: 'emerald-700', hex: '#047857' },
-  { name: 'Orange', from: 'from-orange-700', to: 'to-orange-900', accent: 'orange-700', hex: '#c2410c' },
-  { name: 'Pink', from: 'from-pink-700', to: 'to-pink-900', accent: 'pink-700', hex: '#be185d' },
-];
-
 /**
  * Calculate ability modifier from ability score
  */
@@ -139,26 +124,6 @@ const calculateModifier = (score: number): number => {
  */
 const formatModifier = (mod: number): string => {
   return mod >= 0 ? `+${mod}` : `${mod}`;
-};
-
-/**
- * Calculate luminance of a hex color to determine if text should be white or black
- * Returns true if text should be white (dark background), false if text should be black (light background)
- */
-const shouldUseWhiteText = (hexColor: string): boolean => {
-  // Remove # if present
-  const hex = hexColor.replace('#', '');
-
-  // Convert to RGB
-  const r = parseInt(hex.substr(0, 2), 16);
-  const g = parseInt(hex.substr(2, 2), 16);
-  const b = parseInt(hex.substr(4, 2), 16);
-
-  // Calculate relative luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-
-  // Return true for white text if luminance is less than 0.5 (dark background)
-  return luminance < 0.5;
 };
 
 /**
