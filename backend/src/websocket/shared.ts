@@ -343,16 +343,25 @@ export function buildWsFogState(map: { width: number; height: number; gridSize: 
 }
 
 /**
- * Load fog state from DB, rebuilding from scratch if the stored cell size no longer
- * matches the map's current grid size (e.g. after a cellPx migration or grid resize).
+ * Load fog state from DB. A grid of the map's columns and rows is kept, at the
+ * map's cell size: a grid-size change draws the same squares larger or
+ * smaller, so what was revealed stays revealed. Anything else, a different
+ * width or height or a grid that is not one cell per square (such as one
+ * stored before fog cells were squares), is rebuilt fully hidden.
  * Throws FogTooLargeError for a map too large for fog, whatever is stored.
  */
 export function loadFogState(map: { width: number; height: number; gridSize: number }, stored: FogState | null): FogState {
   const expected = buildWsFogState(map);
-  if (!stored || stored.cellPx !== expected.cellPx || stored.fogCols !== expected.fogCols || stored.fogRows !== expected.fogRows) {
+  if (
+    !stored
+    || stored.fogCols !== expected.fogCols
+    || stored.fogRows !== expected.fogRows
+    || !Array.isArray(stored.revealed)
+    || stored.revealed.length !== expected.revealed.length
+  ) {
     return expected; // Reset: stale/misaligned fog data
   }
-  return stored;
+  return stored.cellPx === expected.cellPx ? stored : { ...stored, cellPx: expected.cellPx };
 }
 
 export function applyWsFogOperation(fog: FogState, operation: FogOperation): void {

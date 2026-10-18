@@ -205,6 +205,22 @@ async function tellMapReadersAs(
  * change to what players are sent. The change is saved by then, so a failure
  * here is logged, never answered as the change having failed.
  */
+/** A map's walls with every end moved by `kx` across and `ky` down, to whole pixels. */
+function scaledWalls(stored: unknown, kx: number, ky: number): WallSegment[] {
+  const walls = (Array.isArray(stored) ? stored : []) as WallSegment[];
+  return walls.map((w) => ({
+    ...w,
+    x1: Math.round(w.x1 * kx), y1: Math.round(w.y1 * ky),
+    x2: Math.round(w.x2 * kx), y2: Math.round(w.y2 * ky),
+  }));
+}
+
+/** A map's lights moved the same way; their radii are in squares and stay. */
+function scaledLights(stored: unknown, kx: number, ky: number): LightSource[] {
+  const lights = (Array.isArray(stored) ? stored : []) as LightSource[];
+  return lights.map((l) => ({ ...l, x: Math.round(l.x * kx), y: Math.round(l.y * ky) }));
+}
+
 async function resendIfCurrent(campaignId: string, map: Parameters<typeof broadcastMapData>[2]): Promise<void> {
   try {
     const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
@@ -1058,11 +1074,36 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    // Update the map
-    const updatedMap = await prisma.map.update({
-      where: { id },
-      data: updateData,
+    // Walls, doors and lights are stored in map pixels, and the picture is
+    // drawn across width × gridSize by height × gridSize, so when either side
+    // of that changes they scale with it, each axis by its own change, and
+    // stay on the art. Read and written under the map's lock, so no wall edit
+    // lands between the two.
+    const size = (field: 'width' | 'height' | 'gridSize') =>
+      typeof updateData[field] === 'number' ? (updateData[field] as number) : existingMap[field];
+    const kx = (size('width') * size('gridSize')) / (existingMap.width * existingMap.gridSize);
+    const ky = (size('height') * size('gridSize')) / (existingMap.height * existingMap.gridSize);
+    const { updatedMap, moved } = await withMapsLocked([id], async (tx) => {
+      if (kx === 1 && ky === 1) return { updatedMap: await tx.map.update({ where: { id }, data: updateData }), moved: null };
+      const current = await tx.map.findUniqueOrThrow({ where: { id }, select: { wallSegments: true, lights: true } });
+      const walls = scaledWalls(current.wallSegments, kx, ky);
+      const lights = scaledLights(current.lights, kx, ky);
+      updateData.wallSegments = toJson(walls);
+      updateData.lights = toJson(lights);
+      return {
+        updatedMap: await tx.map.update({ where: { id }, data: updateData }),
+        moved: { wallsBefore: current.wallSegments, walls, lightsBefore: current.lights, lights },
+      };
     });
+
+    // Open pages hold the walls and lights they loaded, and would go on
+    // drawing them where they were, and send them back with their next bulk
+    // edit. They are told as a bulk replace is, with no operation id, so the
+    // DM's own page takes them too.
+    if (moved) {
+      await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, moved.wallsBefore, moved.walls));
+      await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => lightsReplacedSentTo(role, id, moved.lightsBefore, moved.lights));
+    }
 
     // Any per-map flag change reaches every connected client at once, as one
     // event carrying all of them, so a client never holds a stale flag.
