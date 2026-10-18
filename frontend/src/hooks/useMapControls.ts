@@ -62,28 +62,54 @@ export function useMapControls(config: MapControlsConfig) {
     [minZoom, maxZoom]
   );
 
-  /**
-   * Zoom in by 0.25
-   */
-  const zoomIn = useCallback(() => {
-    setZoom((prev) => clampZoom(prev + 0.25));
-  }, [clampZoom]);
+  // The view as it was last set, which every change works from. State only
+  // updates on the next render, so two wheel notches before it both read the
+  // old zoom and the second undid the first.
+  const viewRef = useRef<{ zoom: number; pan: PanOffset }>({ zoom: 1, pan: { x: 0, y: 0 } });
+  const setView = useCallback((nextZoom: number, nextPan: PanOffset) => {
+    viewRef.current = { zoom: nextZoom, pan: nextPan };
+    setZoom(nextZoom);
+    setPanOffset(nextPan);
+  }, []);
 
   /**
-   * Zoom out by 0.25
+   * Zoom to `value`, keeping the screen point `about` where it is. Without
+   * one the pan is left alone, which zooms about the map's top-left corner.
    */
-  const zoomOut = useCallback(() => {
-    setZoom((prev) => clampZoom(prev - 0.25));
-  }, [clampZoom]);
+  const zoomTo = useCallback(
+    (value: number, about?: ScreenCoordinates) => {
+      const { zoom: current, pan } = viewRef.current;
+      const next = clampZoom(value);
+      if (!about) {
+        setView(next, pan);
+        return;
+      }
+      // The world point under `about` must stay fixed:
+      // (about - pan) / zoom = (about - newPan) / newZoom
+      const scale = next / current;
+      setView(next, { x: about.x + (pan.x - about.x) * scale, y: about.y + (pan.y - about.y) * scale });
+    },
+    [clampZoom, setView]
+  );
+
+  /** Zoom in by 0.25, about `about` (the canvas centre, for the button). */
+  const zoomIn = useCallback((about?: ScreenCoordinates) => {
+    zoomTo(viewRef.current.zoom + 0.25, about);
+  }, [zoomTo]);
+
+  /** Zoom out by 0.25, about `about` (the canvas centre, for the button). */
+  const zoomOut = useCallback((about?: ScreenCoordinates) => {
+    zoomTo(viewRef.current.zoom - 0.25, about);
+  }, [zoomTo]);
 
   /**
    * Set zoom to specific value
    */
   const setZoomLevel = useCallback(
     (value: number) => {
-      setZoom(clampZoom(value));
+      zoomTo(value);
     },
-    [clampZoom]
+    [zoomTo]
   );
 
   /**
@@ -110,19 +136,17 @@ export function useMapControls(config: MapControlsConfig) {
       const panX = (canvasWidth - mapWidthPx * fitZoom) / 2;
       const panY = (canvasHeight - mapHeightPx * fitZoom) / 2;
 
-      setZoom(fitZoom);
-      setPanOffset({ x: panX, y: panY });
+      setView(fitZoom, { x: panX, y: panY });
     },
-    [mapWidth, mapHeight, gridSize, clampZoom]
+    [mapWidth, mapHeight, gridSize, clampZoom, setView]
   );
 
   /**
    * Reset zoom to 1x and center pan (legacy — prefer fitToScreen)
    */
   const resetView = useCallback(() => {
-    setZoom(1);
-    setPanOffset({ x: 0, y: 0 });
-  }, []);
+    setView(1, { x: 0, y: 0 });
+  }, [setView]);
 
   /**
    * Handle mouse wheel zoom
@@ -136,21 +160,16 @@ export function useMapControls(config: MapControlsConfig) {
       const mouseX = e.clientX - canvasRect.left;
       const mouseY = e.clientY - canvasRect.top;
 
-      // Calculate zoom delta (0.1 per wheel notch)
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      const newZoom = clampZoom(zoom + delta);
+      // A tenth per mouse notch, which browsers send as 100 pixels or 3
+      // lines; a trackpad's small deltas zoom a little each. Capped at a
+      // button's step, for a hard flick.
+      const pixels = e.deltaMode === 1 ? e.deltaY * (100 / 3) : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+      const step = Math.max(-0.25, Math.min(0.25, -pixels / 1000));
 
-      // Zoom towards the cursor: the world coordinate under the mouse must stay fixed.
-      // Invariant: (mouseX - panX) / zoom = (mouseX - newPanX) / newZoom
-      // Solving: newPanX = mouseX + (panX - mouseX) * (newZoom / zoom)
-      const scale = newZoom / zoom;
-      const newPanX = mouseX + (panOffset.x - mouseX) * scale;
-      const newPanY = mouseY + (panOffset.y - mouseY) * scale;
-
-      setZoom(newZoom);
-      setPanOffset({ x: newPanX, y: newPanY });
+      // Zoom towards the cursor: the world coordinate under the mouse stays fixed.
+      zoomTo(viewRef.current.zoom + step, { x: mouseX, y: mouseY });
     },
-    [zoom, panOffset, clampZoom]
+    [zoomTo]
   );
 
   /**
@@ -160,9 +179,9 @@ export function useMapControls(config: MapControlsConfig) {
     (e: MouseEvent | React.MouseEvent) => {
       isDraggingRef.current = true;
       dragStartRef.current = { x: e.clientX, y: e.clientY };
-      panStartRef.current = { ...panOffset };
+      panStartRef.current = { ...viewRef.current.pan };
     },
-    [panOffset]
+    []
   );
 
   /**
@@ -174,11 +193,11 @@ export function useMapControls(config: MapControlsConfig) {
     const deltaX = e.clientX - dragStartRef.current.x;
     const deltaY = e.clientY - dragStartRef.current.y;
 
-    setPanOffset({
+    setView(viewRef.current.zoom, {
       x: panStartRef.current.x + deltaX,
       y: panStartRef.current.y + deltaY,
     });
-  }, []);
+  }, [setView]);
 
   /**
    * Stop dragging (pan)

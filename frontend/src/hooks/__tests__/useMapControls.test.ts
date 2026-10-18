@@ -113,3 +113,45 @@ describe('zoom', () => {
     expect(result.current.getScaledGridSize()).toBe(100);
   });
 });
+
+/** A wheel event as the browser sends one, over a canvas at the page's corner. */
+function wheel(deltaY: number, at = { x: 200, y: 100 }, deltaMode = 0): WheelEvent {
+  return { deltaY, deltaMode, clientX: at.x, clientY: at.y, preventDefault: () => {} } as unknown as WheelEvent;
+}
+const RECT = { left: 0, top: 0 } as DOMRect;
+
+describe('zooming (F358)', () => {
+  // The buttons zoomed about the map's corner, so the middle of the screen
+  // slid away; they now zoom about the point they are given.
+  it('keeps the point it is given still when a button zooms', () => {
+    const { result } = setup();
+    const centre = { x: 400, y: 300 };
+    const before = result.current.screenToGrid(centre);
+    act(() => { result.current.zoomIn(centre); });
+    expect(result.current.zoom).toBe(1.25);
+    expect(result.current.screenToGrid(centre)).toEqual(before);
+    act(() => { result.current.zoomOut(centre); });
+    expect(result.current.screenToGrid(centre)).toEqual(before);
+  });
+
+  // Each event read the zoom of the last render, so a second notch before the
+  // page drew again was lost.
+  it('counts every wheel notch, even two before the next render', () => {
+    const { result } = setup();
+    const handleWheel = result.current.handleWheel;
+    act(() => {
+      handleWheel(wheel(-100), RECT);
+      handleWheel(wheel(-100), RECT);
+    });
+    expect(result.current.zoom).toBeCloseTo(1.2);
+  });
+
+  // A trackpad sends many small deltas; each counted as a whole notch.
+  it('zooms by how far the wheel turned', () => {
+    const { result } = setup();
+    act(() => { result.current.handleWheel(wheel(-10), RECT); });
+    expect(result.current.zoom).toBeCloseTo(1.01);
+    act(() => { result.current.handleWheel(wheel(-3, undefined, 1), RECT); });
+    expect(result.current.zoom).toBeCloseTo(1.11);
+  });
+});

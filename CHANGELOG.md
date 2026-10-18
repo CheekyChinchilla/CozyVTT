@@ -33,6 +33,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The map's Zoom In and Zoom Out buttons zoom about the middle of the view.** They zoomed about the map's top-left corner, so what you were looking at slid away. The mouse wheel zooms by how far it turns, so a trackpad no longer zooms a whole step for each tiny movement, and a quick turn of the wheel no longer loses steps.
+
 - **A player opening or closing a door while you drag walls keeps their change.** Dropping the dragged walls put the door back as it was for everyone, and undoing a moved wall corner could do the same.
 
 - **Clicking a token beside a door picks the token up, or puts the one you are holding down there.** Zoomed out, as when the map is fitted to the screen, the click opened or closed the door for everyone instead. A click on an empty square still opens the door.

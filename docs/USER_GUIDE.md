@@ -606,7 +606,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 
 | Control | What it does |
 |---|---|
-| **Zoom Out**, **Zoom In** | Change the zoom, from 10% to 300%. The current zoom is shown between them, and the mouse wheel zooms too, towards the pointer |
+| **Zoom Out**, **Zoom In** | Change the zoom, from 10% to 300%, keeping the middle of the map view where it is. The current zoom is shown between them, and the mouse wheel zooms too, towards the pointer |
 | **Fit to Screen** | Shows the whole map in the space available |
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |

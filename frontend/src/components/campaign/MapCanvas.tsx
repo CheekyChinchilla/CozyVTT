@@ -2491,7 +2491,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-xs">
         {/* Zoom Out */}
         <Button
-          onClick={mapControls.zoomOut}
+          onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
           disabled={mapControls.zoom <= mapControls.minZoom}
           variant="secondary" className="p-2"
           title="Zoom Out"
@@ -2506,7 +2506,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
         {/* Zoom In */}
         <Button
-          onClick={mapControls.zoomIn}
+          onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
           disabled={mapControls.zoom >= mapControls.maxZoom}
           variant="secondary" className="p-2"
           title="Zoom In"
