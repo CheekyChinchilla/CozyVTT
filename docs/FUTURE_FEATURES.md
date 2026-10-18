@@ -79,7 +79,6 @@ _Nothing at present._
 - `1.5.4` **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
 - `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
 - `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
-- `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
 
 ### Maps
 
@@ -186,28 +185,21 @@ _Nothing at present._
   candidate, so wait until it is stable with a patch release or two, and move
   to the `prisma-client` generator with it. **Defer** TypeScript 7.
 
-- **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
-  from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser
-  (`backend/src/utils/dice-parser.ts`) uses it only to add, subtract,
-  multiply and divide numbers it has built itself, so no typed text reaches
-  it, yet it is about 18 MB installed and brings nine packages of its own.
-  Every major version of it is one more upgrade to check. Replacing it means
-  writing and testing an evaluator for those four operators; the exact totals
-  in the dice parser's tests are its specification. **Do** as a separate
-  small project, not tied to a release, and before the dice grammar lets
-  anything other than numbers and those operators through.
+- **Remove the mathjs package.** `1.5.4` The dice parser
+  (`backend/src/utils/dice-parser.ts`) now works out totals itself, with the
+  exact totals in its tests as the specification, and nothing imports mathjs
+  any more. The package is still listed in `backend/package.json` and
+  `THIRD_PARTY_LICENSES.md`, about 18 MB installed with nine packages of its
+  own. **Do** once the maintainer agrees to the dependency change.
 
-- **One dice grammar for both sides.** The server owns the real parser
-  (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks,
-  `utils/diceExpression.ts` and a private one inside `DiceRoller`, which accept
-  things the server refuses, such as `2d6+` and `dddd`. That is survivable for a
-  roll about to be sent, because the server answers immediately and the person is
-  still looking at the box, and saved macros close the dangerous half by
-  validating server-side before anything is stored. But three implementations of
-  one grammar is two too many. The fix is extracting the parser into something
-  both sides import, which today means introducing a shared package where none
-  exists, and that is why it has not been done yet. **Revisit** when a second thing
-  needs shared logic, or if the checks disagree in a way a user notices.
+- **One dice grammar for both sides.** `1.5.4` The parser is now one file
+  kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
+  (checked by `visionParity.test.ts`), and the Dice panel checks expressions
+  and rolls a paused table's dice with it. One character-set check is left,
+  `frontend/src/utils/diceExpression.ts`, which decides whether a value on a
+  character sheet is offered as a roll and accepts things the parser refuses,
+  such as `2d6+` and `dddd`. **Do** by having it call the parser, after checking
+  what each sheet's rolls send through it.
 
 - **Two backend suites still stub `file-type`.** The backend tests load the
   real library (`backend/jest.config.js` compiles it to CommonJS), and

@@ -3649,9 +3649,12 @@ paths:
       summary: Save a macro
       description: >
         The expression is rolled once and the result discarded, to prove it can be
-        rolled at all. An expression that only looks like dice — `2d6+`, `dddd` —
-        is refused here, with 400, and does not become a button that fails every
-        time it is pressed. Both fields are trimmed and must not be empty. Any
+        rolled at all. An expression that only looks like dice — `2d6+`, `dddd`,
+        `1d20 5` with no operator between the terms — is refused here, with 400,
+        and does not become a button that fails every time it is pressed; so is
+        one that could divide by zero (`1d20/0`) or whose total could pass a
+        32-bit integer for any roll of its dice (`9999*9999*9999`). Both fields
+        are trimmed and must not be empty. Any
         member, spectators included, may save macros. A player may keep 50 per
         campaign; saving another answers 400.
       operationId: createDiceMacro

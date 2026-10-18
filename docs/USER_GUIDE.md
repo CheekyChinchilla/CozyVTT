@@ -562,6 +562,7 @@ edit or delete them. See the
 - `1d20+5` — Roll a d20 and add 5
 - `2d6-1` — Roll 2d6 and subtract 1
 - `4d6dl1`: Roll four d6s and drop the lowest one
+- `1d20*2`, `4d6/2`: multiply or divide; multiplication and division come first, and a fractional total is rounded down
 
 One roll can hold up to 100 dice in all (the [Player Guide](PLAYER_GUIDE.md#the-dice-roller) lists the other limits).
 

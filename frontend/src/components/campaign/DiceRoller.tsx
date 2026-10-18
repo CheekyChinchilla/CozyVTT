@@ -7,7 +7,8 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { getDiceRolls } from '@/services/dice.service';
 import api from '@/services/api';
 import { mayDisplayRoll, visibleRolls } from '@/utils/secretRolls';
-import type { DiceRolledEvent, DiceRolledSecretEvent, DiceRollDetail, DiceMacro } from '@/types';
+import type { DiceRolledEvent, DiceRolledSecretEvent, DiceMacro } from '@/types';
+import { rollDice as rollExpression, parseDiceExpression, DiceParserError } from '@/utils/dice-parser';
 import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -25,94 +26,30 @@ function rollKey(roll: DiceRolledEvent): string {
   return roll.id ?? `${roll.userId}-${roll.timestamp}`;
 }
 
-// ============================================
-// Local (offline) dice evaluator
-// Used when session is paused — no server, no DB, no DM visibility
-// Handles: NdS, NdSkh/klN, modifiers (+/-N), chained groups (2d6+1d4+3)
-// ============================================
-
-function localRoll(sides: number): number {
-  return Math.floor(Math.random() * sides) + 1;
-}
-
-function evaluateLocalRoll(
+/**
+ * A roll worked out in the browser, for a paused table: no server, no
+ * database, no DM visibility. It uses the server's own parser (the same
+ * file, byte for byte), so it reads every expression as a running table
+ * would. Call it with an expression `validateExpression` has passed.
+ */
+function rollLocally(
   expression: string,
   user: { id: string; displayName: string },
   characterName?: string,
   purpose?: string,
-): DiceRolledEvent | null {
-  try {
-    const expr = expression.trim().replace(/\s+/g, '');
-
-    // Tokenise by splitting on + / - boundaries (keeping signs)
-    const tokens = expr.match(/[+-]?[^+-]+/g);
-    if (!tokens || tokens.length === 0) return null;
-
-    const detailRolls: DiceRollDetail[] = [];
-    const formulaParts: string[] = [];
-    let total = 0;
-
-    for (const token of tokens) {
-      const negative = token.startsWith('-');
-      const sign = negative ? -1 : 1;
-      const part = token.replace(/^[+-]/, '');
-
-      // Dice group: NdS or NdSkh/klK
-      const diceMatch = part.match(/^(\d+)d(\d+)(?:(kh|kl)(\d+))?$/i);
-      if (diceMatch) {
-        const count = Math.min(parseInt(diceMatch[1]), 100);
-        const sides = Math.min(parseInt(diceMatch[2]), 1000);
-        const keepMode = diceMatch[3]?.toLowerCase() as 'kh' | 'kl' | undefined;
-        const keepCount = diceMatch[4] ? Math.min(parseInt(diceMatch[4]), count) : undefined;
-
-        const results = Array.from({ length: count }, () => localRoll(sides));
-
-        let kept: number[] | undefined;
-        let groupTotal: number;
-
-        if (keepMode && keepCount) {
-          const sorted = [...results].sort((a, b) => b - a);
-          kept = keepMode === 'kh' ? sorted.slice(0, keepCount) : sorted.slice(count - keepCount);
-          groupTotal = kept.reduce((s, v) => s + v, 0);
-        } else {
-          groupTotal = results.reduce((s, v) => s + v, 0);
-        }
-
-        const effectiveTotal = sign * groupTotal;
-        total += effectiveTotal;
-        formulaParts.push(negative && formulaParts.length > 0 ? `- ${groupTotal}` : String(groupTotal));
-        detailRolls.push({ type: 'dice', notation: part.toLowerCase(), count, sides, results, total: groupTotal, kept });
-      } else {
-        // Plain modifier
-        const modValue = parseInt(part, 10);
-        if (isNaN(modValue)) return null;
-        const effectiveMod = sign * modValue;
-        total += effectiveMod;
-        formulaParts.push(
-          negative && formulaParts.length > 0 ? `- ${modValue}` : (sign < 0 ? String(effectiveMod) : `+${modValue}`),
-        );
-        detailRolls.push({ type: 'modifier', value: effectiveMod });
-      }
-    }
-
-    if (detailRolls.length === 0) return null;
-
-    const formula = formulaParts.join(' + ').replace(/\+ \+/g, '+').replace(/\+ -/g, '- ') + ` = ${total}`;
-
-    return {
-      userId: user.id,
-      userName: user.displayName,
-      characterName: characterName?.trim() || null,
-      expression,
-      result: total,
-      breakdown: { expression, rolls: detailRolls, total, formula },
-      purpose: purpose?.trim() || null,
-      timestamp: new Date().toISOString(),
-      secret: false,
-    };
-  } catch {
-    return null;
-  }
+): DiceRolledEvent {
+  const breakdown = rollExpression(expression);
+  return {
+    userId: user.id,
+    userName: user.displayName,
+    characterName: characterName?.trim() || null,
+    expression,
+    result: breakdown.total,
+    breakdown,
+    purpose: purpose?.trim() || null,
+    timestamp: new Date().toISOString(),
+    secret: false,
+  };
 }
 
 // Quick roll button configurations with whimsical forest colors
@@ -403,36 +340,14 @@ export default function DiceRoller() {
   // Input Validation
   // ============================================
 
+  /** Why the server would refuse this expression, in its words, or null. */
   const validateExpression = (expr: string): string | null => {
-    if (!expr.trim()) {
-      return 'Expression cannot be empty';
+    try {
+      parseDiceExpression(expr);
+      return null;
+    } catch (err) {
+      return err instanceof DiceParserError ? `Invalid dice expression: ${err.message}` : 'Invalid dice expression';
     }
-
-    // Check length limit (200 characters)
-    if (expr.length > 200) {
-      return 'Expression too long (max 200 characters)';
-    }
-
-    // Basic validation for dice notation
-    const dicePattern = /^[\dd+\-*/khldisavw\s]+$/i;
-    if (!dicePattern.test(expr)) {
-      return 'Invalid characters in expression';
-    }
-
-    // Check for maximum dice count (100)
-    const diceMatches = expr.match(/(\d+)d/gi);
-    if (diceMatches) {
-      const totalDice = diceMatches.reduce((sum, match) => {
-        const count = parseInt(match.replace(/d/i, ''));
-        return sum + count;
-      }, 0);
-
-      if (totalDice > 100) {
-        return 'Too many dice (max 100 per roll)';
-      }
-    }
-
-    return null;
   };
 
   // ============================================
@@ -451,12 +366,8 @@ export default function DiceRoller() {
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
-      const localResult = evaluateLocalRoll(expr, user, characterName.trim(), purpose.trim());
-      if (localResult) {
-        setRolls((prev) => [localResult, ...prev]);
-      } else {
-        setError('Could not evaluate expression locally');
-      }
+      const localResult = rollLocally(expr, user, characterName.trim(), purpose.trim());
+      setRolls((prev) => [localResult, ...prev]);
       clearPendingRoll();
       return;
     }

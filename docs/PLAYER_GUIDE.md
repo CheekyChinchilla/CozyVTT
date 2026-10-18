@@ -230,7 +230,7 @@ Type directly into the expression input and press **Enter** or **Roll**. The opt
 | `4d6kl3` | Four d6s, keep lowest three |
 | `4d6dl1` | Four d6s, drop the lowest one |
 
-One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Anything over those limits is refused with a message saying which.
+One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Its total must stay within about 2.1 billion either way, however the dice land, and it can never divide by something that could be zero, so `1d20/0` and `9999*9999*9999` are refused. Spaces are fine around `+`, `-`, `*` and `/`, but two terms need an operator between them: `1d20 5` is refused, where `1d20+5` is meant. Anything over those limits is refused with a message saying which, and a roll made while the session is paused follows exactly the same rules.
 
 *GIF pending — Typing a dice expression and seeing the result in the Dice panel.*
 
