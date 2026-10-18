@@ -58,6 +58,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A new invitation appears on the dashboard without pressing Refresh:** when you come back to the tab, or within a minute while it is open.
+
 - **Pop-up messages leave one at a time, each after its own few seconds.** A message arriving while others were up made them all wait for it, so messages that came one after another left together; in the Asset Library a message stayed up as long as the page kept changing.
 
 - **An invitation names the campaign's DM.** The dashboard and the invitation named the campaign's owner as its DM, which is wrong once the owner has handed the game over.
