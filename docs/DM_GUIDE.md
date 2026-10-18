@@ -1217,7 +1217,7 @@ Players see the result straight away: a creature a new light shows appears on th
 
 #### Editing & Moving Lights
 
-Switch to **Select** mode to click on a light. You can then drag it to reposition, adjust its radii and color, untick **Enabled** to put it out (an extinguished torch), or click **Delete Light**.
+Switch to **Select** mode to click on a light. You can then drag it to reposition, adjust its radii and color, untick **Enabled** to put it out (an extinguished torch), or click **Delete Light**. Press **Esc** to put the light tool away.
 
 > **Tip:** The DM always sees light icons on the map. Toggle **Preview Player View** to see how the bright/dim zones actually look to players; the icons are hidden there, as they are for players.
 

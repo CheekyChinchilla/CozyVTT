@@ -495,9 +495,9 @@ describe('the light tools', () => {
     })]);
   });
 
-  // The keyboard listener is not registered again when the light tool is
-  // chosen, so Escape reads the tool as it was before: none.
-  it('stays up on Escape (as it is: the keyboard listener misses the light tool)', () => {
+  // The keyboard listener was not registered again when the light tool was
+  // chosen, so Escape read the tool as it had been before: none.
+  it('puts the tool away on Escape', () => {
     render(<MapCanvas />);
     fireEvent.click(screen.getByText('Lights'));
     fireEvent.click(screen.getByText('Place'));
@@ -505,7 +505,7 @@ describe('the light tools', () => {
     press('Escape');
     click(px(260, 240));
 
-    expect(sentOf('light:add')).toHaveLength(1);
+    expect(sentOf('light:add')).toEqual([]);
   });
 });
 

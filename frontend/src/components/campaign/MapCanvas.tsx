@@ -1565,10 +1565,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  // TODO(maps): lightMode is read above but missing here, so choosing the
-  // light tool leaves this listener with the tool as it was, and Escape does
-  // not put the light tool away. List lightMode.
-  }, [wallMode, wallInProgress, polygonPoints, showAoE, aoeAnchor, isDM, currentMap, undoWalls, redoWalls, socket, wallSegments, selectedWallIds, deleteSelectedWalls, moveSelectedWalls]);
+  }, [wallMode, lightMode, wallInProgress, polygonPoints, showAoE, aoeAnchor, isDM, currentMap, undoWalls, redoWalls, socket, wallSegments, selectedWallIds, deleteSelectedWalls, moveSelectedWalls]);
 
   // ============================================
   // Close Polygon — commits all polygon edges as one wall history entry
