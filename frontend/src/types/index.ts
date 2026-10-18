@@ -604,6 +604,15 @@ export interface CampaignInvitation {
   };
 }
 
+/** An invitation as the campaign's DM lists them. */
+export interface CampaignInvitationSummary {
+  id: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string | null;
+  user: { displayName: string };
+}
+
 // ============================================
 // Session
 // ============================================

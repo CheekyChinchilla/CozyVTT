@@ -47,6 +47,7 @@ import type {
   PersonalNote,
   PersonalNoteSummary,
   CampaignInvitation,
+  CampaignInvitationSummary,
   ApiError,
   SystemStats,
   AdminHealth,
@@ -566,9 +567,22 @@ class ApiClient {
   async inviteUserToCampaign(
     campaignId: string,
     userId: string,
-    sendEmail = false
+    sendEmail = false,
+    expiresInDays?: number
   ): Promise<{ message: string; emailSent: boolean }> {
-    const response = await this.client.post(`/api/campaigns/${campaignId}/invite`, { userId, sendEmail });
+    const response = await this.client.post(`/api/campaigns/${campaignId}/invite`, { userId, sendEmail, expiresInDays });
+    return response.data;
+  }
+
+  /** The campaign's invitations that still stand (DM only). */
+  async listCampaignInvitations(campaignId: string): Promise<{ invitations: CampaignInvitationSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/invitations`);
+    return response.data;
+  }
+
+  /** Withdraw a pending invitation (DM only); the player no longer has it. */
+  async withdrawCampaignInvitation(campaignId: string, invitationId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/campaigns/${campaignId}/invitations/${invitationId}`);
     return response.data;
   }
 

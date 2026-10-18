@@ -90,7 +90,8 @@ describe('InvitePlayerModal', () => {
     fireEvent.click(screen.getByRole('button', { name: /send invitation/i }));
 
     await vi.waitFor(() => expect(onSuccess).toHaveBeenCalled());
-    expect(inviteUserToCampaign).toHaveBeenCalledWith('camp-1', 'u-alicia', false);
+    // An invitation from the app runs out after 14 days.
+    expect(inviteUserToCampaign).toHaveBeenCalledWith('camp-1', 'u-alicia', false, 14);
   });
 
   it('says when more people match than are shown', async () => {

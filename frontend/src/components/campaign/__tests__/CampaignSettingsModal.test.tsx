@@ -16,8 +16,12 @@ import type { Campaign } from '@/types';
 let current: Campaign;
 const viewer = vi.hoisted(() => ({ role: 'DM', user: { id: 'dm', platformRole: 'USER' } }));
 const updateCampaign = vi.hoisted(() => vi.fn());
+const invitationsApi = vi.hoisted(() => ({ listCampaignInvitations: vi.fn(), withdrawCampaignInvitation: vi.fn() }));
+vi.mock('@/services/api', () => ({ default: invitationsApi, api: invitationsApi }));
 vi.mock('@/contexts/CampaignContext', () => ({ useCampaign: () => ({ campaign: current, refreshCampaign: vi.fn(), userRole: viewer.role }) }));
-vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+// Stable, as the real one is.
+const showToast = vi.hoisted(() => vi.fn());
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: viewer.user }) }));
 vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign, deleteCampaign: vi.fn() } }));
@@ -26,6 +30,8 @@ beforeEach(() => {
   viewer.role = 'DM';
   viewer.user = { id: 'dm', platformRole: 'USER' };
   updateCampaign.mockReset().mockResolvedValue({});
+  invitationsApi.listCampaignInvitations.mockReset().mockResolvedValue({ invitations: [] });
+  invitationsApi.withdrawCampaignInvitation.mockReset().mockResolvedValue({ message: 'Invitation withdrawn' });
 });
 
 import CampaignSettingsModal from '../CampaignSettingsModal';
@@ -82,5 +88,22 @@ describe('the Danger Zone', () => {
     current = { ...campaign(), ownerId } as Campaign;
     render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
     expect(tabs()).not.toBeNull();
+  });
+});
+
+// A DM could not see who had been invited, nor take an invitation back.
+describe('pending invitations', () => {
+  it('lists them under Members and withdraws one', async () => {
+    invitationsApi.listCampaignInvitations.mockResolvedValue({
+      invitations: [{ id: 'inv-1', userId: 'u-gwen', createdAt: '2026-10-18T00:00:00.000Z', expiresAt: '2026-11-01T00:00:00.000Z', user: { displayName: 'Gwen' } }],
+    });
+    current = campaign();
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+
+    expect(await screen.findByText('Gwen')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Withdraw the invitation to Gwen' }));
+    await waitFor(() => expect(invitationsApi.withdrawCampaignInvitation).toHaveBeenCalledWith('c1', 'inv-1'));
+    await waitFor(() => expect(screen.queryByText('Gwen')).toBeNull());
   });
 });

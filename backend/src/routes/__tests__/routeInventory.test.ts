@@ -153,6 +153,9 @@ const TESTED: Record<string, string> = {
   'GET /api/assets/audio/:id': 'routes/__tests__/atmosphereAudioAccess.e2e.test.ts',
   'PATCH /api/assets/:id/scope': 'routes/__tests__/assetScopeAndReferences.e2e.test.ts',
   'POST /api/invitations/:id/accept': 'routes/__tests__/invitationAccept.e2e.test.ts',
+  'GET /api/invitations': 'routes/__tests__/invitationList.e2e.test.ts',
+  'GET /api/campaigns/:campaignId/invitations': 'routes/__tests__/invitationWithdraw.e2e.test.ts',
+  'DELETE /api/campaigns/:campaignId/invitations/:invitationId': 'routes/__tests__/invitationWithdraw.e2e.test.ts',
   'GET /api/users': 'routes/__tests__/userRoutes.e2e.test.ts',
   'GET /api/users/:id': 'routes/__tests__/userRoutes.e2e.test.ts',
   'GET /api/users/:id/preferences': 'routes/__tests__/userRoutes.e2e.test.ts',
@@ -186,7 +189,6 @@ const TESTED: Record<string, string> = {
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
-  'GET /api/invitations',
   'POST /api/invitations/:id/decline',
 ];
 

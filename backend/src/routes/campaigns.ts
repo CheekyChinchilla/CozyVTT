@@ -991,6 +991,50 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
 });
 
 /**
+ * GET /api/campaigns/:campaignId/invitations
+ * The campaign's invitations that still stand (pending and in date), newest
+ * first, so the DM can see who has been asked and withdraw one.
+ * Requires: Campaign DM role
+ */
+router.get('/:campaignId/invitations', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+    const invitations = await prisma.campaignInvitation.findMany({
+      where: { campaignId, ...standingInvitation() },
+      select: { id: true, userId: true, createdAt: true, expiresAt: true, user: { select: { displayName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json({ invitations });
+  } catch (error) {
+    logger.error('Error listing campaign invitations', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to list invitations' });
+  }
+});
+
+/**
+ * DELETE /api/campaigns/:campaignId/invitations/:invitationId
+ * Withdraw a pending invitation: it is deleted, so the player no longer has
+ * it and can be invited again. One of another campaign, or one already
+ * answered, is answered 404 as an unknown one is.
+ * Requires: Campaign DM role
+ */
+router.delete('/:campaignId/invitations/:invitationId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, invitationId } = req.params;
+    const { count } = await prisma.campaignInvitation.deleteMany({
+      where: { id: invitationId, campaignId, status: 'PENDING' },
+    });
+    if (count === 0) {
+      return res.status(404).json({ error: 'Not Found', message: 'Invitation not found' });
+    }
+    return res.json({ message: 'Invitation withdrawn' });
+  } catch (error) {
+    logger.error('Error withdrawing invitation', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to withdraw invitation' });
+  }
+});
+
+/**
  * DELETE /api/campaigns/:campaignId/members/:userId
  * Remove a member from the campaign
  * Requires: Campaign DM role

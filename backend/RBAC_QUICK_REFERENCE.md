@@ -648,6 +648,16 @@ req.campaignMembership = {
 }
 ```
 
+## Invitations
+
+The campaign's DM invites (`POST /api/campaigns/:campaignId/invite`), lists
+the invitations that still stand (`GET .../invitations`) and withdraws one
+(`DELETE .../invitations/:invitationId`), all behind `campaignDM`. Only the
+invited user accepts or declines. An invitation past its `expiresAt` counts
+as none everywhere (`standingInvitation` in `utils/invitationState.ts`).
+Withdrawing an invitation of another campaign answers 404, as an unknown one
+does.
+
 ---
 
 ## Ownership is not the DM role

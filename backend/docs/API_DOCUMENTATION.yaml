@@ -2818,6 +2818,77 @@ paths:
                 error: Too Many Requests
                 message: You have sent 20 invitation emails in the last hour, the most this server allows. Send this invitation without the email, or try again in 42 minutes.
 
+  /api/campaigns/{campaignId}/invitations:
+    get:
+      tags:
+        - Campaigns
+      summary: List the campaign's invitations that still stand
+      description: >-
+        The campaign's pending invitations that have not passed their
+        `expiresAt`, newest first (DM only). Invitations sent from the web app
+        expire after 14 days.
+      operationId: listCampaignInvitations
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: The invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invitations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        userId: { type: string, format: uuid }
+                        createdAt: { type: string, format: date-time }
+                        expiresAt: { type: string, format: date-time, nullable: true }
+                        user:
+                          type: object
+                          properties:
+                            displayName: { type: string }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/invitations/{invitationId}:
+    delete:
+      tags:
+        - Campaigns
+      summary: Withdraw a pending invitation
+      description: >-
+        Deletes a pending invitation of this campaign (DM only), so the invited
+        user no longer has it and can be invited again. An invitation of
+        another campaign, one already accepted or declined, or an unknown id
+        answers 404 (`Invitation not found`).
+      operationId: withdrawCampaignInvitation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Invitation withdrawn }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   /api/campaigns/{campaignId}/members/{userId}:
     delete:
       tags:

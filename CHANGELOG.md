@@ -25,6 +25,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **See and withdraw the invitations you have sent.** **Campaign Settings → Members** now lists the players you have invited who have not answered, under **Invited**, with an **×** to withdraw each one. An invitation sent from the app now runs out after 14 days; until now it never did.
+
 - **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
 
 - **Jump to newest in the chat and the Dice panel.** While you are scrolled up, neither list pulls you down when something new arrives, and nothing said that anything had. A **Jump to newest** button now appears at the bottom of the list and takes you down to it.
@@ -54,6 +56,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
   - *Invitations.* `GET /api/invitations` gives each invitation's campaign a `dm` (`{ displayName }`, or null): the member who holds the DM seat. `owner` is still sent.
   - *Invitations.* An invitation past its `expiresAt` no longer counts as pending: `GET /api/invitations` leaves it out, `GET /api/campaigns/:campaignId/invitable-users` offers its user again, and `POST /api/campaigns/:campaignId/invite` invites them again (it answered 400 `User already has a pending invitation to this campaign`).
+  - *Invitations.* New, DM only: `GET /api/campaigns/:campaignId/invitations` lists the invitations that still stand, and `DELETE /api/campaigns/:campaignId/invitations/:invitationId` withdraws one (404 `Invitation not found` for another campaign's, an answered one or an unknown id). The web app now sends `expiresInDays: 14` with each invitation; the route's own default is still no expiry.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 

@@ -57,7 +57,7 @@ Your DM invites you by typing part of your display name into a search and pickin
 2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards. An invitation sent while the dashboard is open shows up when you come back to the tab, or within a minute
 3. Each invitation shows the campaign name and, after **DM:**, who runs the campaign
 4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
-5. Or click **Decline** if it's not for you
+5. Or click **Decline** if it's not for you. An invitation runs out after 14 days, and the DM can withdraw it before you answer; either way it leaves your dashboard
 
 *Screenshot pending — Pending invitations section.*
 
