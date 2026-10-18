@@ -6924,9 +6924,7 @@ paths:
 
         While anything is in the initiative order it is sent again to every
         connected member (`initiative.state`), since a player's spirit-layer
-        token placed on the current map moves them to the spirit plane. No
-        map event is sent: other open pages see the new token only on their
-        next map update or reload.
+        token placed on the current map moves them to the spirit plane.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -7020,8 +7018,7 @@ paths:
         again to every connected member (`initiative.state`), each as they
         may see it, whenever anything is in the order, whether or not this
         token is a combatant. Any other update sends the order again only if
-        this token is in it. No map event is sent: other open pages see the
-        change only on their next map update or reload.
+        this token is in it.
       operationId: updateToken
       security:
         - cookieAuth: []
@@ -7195,8 +7192,6 @@ paths:
         connected member (`initiative.state`), even when that empties it.
         Otherwise the order is sent again only while anything is in it, since
         removing a player's spirit-layer token can move them between planes.
-        No map event is sent: other open pages see the token go only on their
-        next map update or reload.
       operationId: deleteToken
       security:
         - cookieAuth: []
