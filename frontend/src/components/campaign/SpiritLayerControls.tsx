@@ -4,7 +4,7 @@
 // Spirit Layer Implementation
 // ============================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Eye, EyeOff, Ghost, Layers, X, Loader2 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -14,6 +14,7 @@ import campaignService from '@/services/campaign.service';
 import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import { parseSpiritStyle } from '@/utils/styleAllowlists';
+import { apiErrorMessage } from '@/utils/errors';
 
 // ============================================
 // Spirit Layer Style Options
@@ -58,6 +59,9 @@ const SPIRIT_STYLES = [
 ] as const;
 
 type SpiritStyleId = (typeof SPIRIT_STYLES)[number]['id'];
+
+/** How long the veil switch waits for the server's answer before it can be pressed again. */
+const VEIL_WAIT_MS = 5000;
 
 /** Effect animation types available for the Custom style */
 type CustomEffectId = 'wispy' | 'ethereal' | 'shadow' | 'dream';
@@ -137,80 +141,75 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
   // Spirit Layer Toggle
   // ============================================
 
-  const handleToggleLayer = useCallback(async () => {
+  // Opening or closing the veil is the server's to do. The page changes when
+  // its broadcast arrives (spirit_layer.toggled, sent to every member, this
+  // one included), and a refusal comes back as a message; marking it open
+  // here first left the page saying so after a refusal. The switch waits
+  // meanwhile, for a few seconds at most.
+  const handleToggleLayer = useCallback(() => {
     if (!socket || !campaign) return;
-    setIsTogglingLayer(true);
     setErrorMsg(null);
+    setIsTogglingLayer(true);
+    socket.emitSpiritLayerToggle({ visible: !enabled });
+  }, [socket, campaign, enabled]);
 
-    const newVisible = !enabled;
+  useEffect(() => {
+    setIsTogglingLayer(false);
+  }, [enabled]);
 
-    try {
-      socket.emitSpiritLayerToggle({ visible: newVisible });
-      // Optimistic update — the WS broadcast will also arrive and confirm
-      updateCampaignSpiritLayer(newVisible);
-    } catch {
-      setErrorMsg('Failed to toggle spirit layer');
-    } finally {
-      setIsTogglingLayer(false);
-    }
-  }, [socket, campaign, enabled, updateCampaignSpiritLayer]);
+  useEffect(() => {
+    if (!isTogglingLayer) return;
+    const timer = setTimeout(() => setIsTogglingLayer(false), VEIL_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [isTogglingLayer]);
 
   // ============================================
   // Style Selector
   // ============================================
 
-  const handleStyleSelect = async (styleId: SpiritStyleId) => {
+  // The veil as the page holds it now, for a save that answers after the
+  // server has opened or closed it: the answer must not put back the veil
+  // as it was when the save began.
+  const enabledNow = useRef(enabled);
+  useEffect(() => {
+    enabledNow.current = enabled;
+  }, [enabled]);
+
+  // A style is saved, then announced to the table. The picker shows the
+  // choice meanwhile and goes back to the stored style when the save is
+  // refused, saying why.
+  const saveStyle = async (encoded: string, failure: string) => {
     if (!campaign) return;
+    setIsSavingStyle(true);
+    setErrorMsg(null);
+    try {
+      await campaignService.updateCampaign(campaign.id, { spiritLayerStyle: encoded });
+      updateCampaignSpiritLayer(enabledNow.current, encoded);
+      socket?.emitSpiritLayerStyleChange(encoded);
+    } catch (err) {
+      const stored = parseStyle(campaign.spiritLayerStyle ?? 'wispy');
+      setSelectedStyle(stored.styleId);
+      setCustomColor(stored.customColor);
+      setCustomEffect(stored.customEffect);
+      setErrorMsg(apiErrorMessage(err) || failure);
+    } finally {
+      setIsSavingStyle(false);
+    }
+  };
+
+  const handleStyleSelect = (styleId: SpiritStyleId) => {
     setSelectedStyle(styleId);
-
-    const encoded = encodeStyle(styleId, customColor, customEffect);
-    setIsSavingStyle(true);
-    setErrorMsg(null);
-    try {
-      await campaignService.updateCampaign(campaign.id, { spiritLayerStyle: encoded });
-      updateCampaignSpiritLayer(enabled, encoded);
-      socket?.emitSpiritLayerStyleChange(encoded);
-    } catch {
-      setErrorMsg('Failed to save style');
-    } finally {
-      setIsSavingStyle(false);
-    }
+    void saveStyle(encodeStyle(styleId, customColor, customEffect), 'Failed to save style');
   };
 
-  const handleCustomColorChange = async (color: string) => {
-    if (!campaign) return;
+  const handleCustomColorChange = (color: string) => {
     setCustomColor(color);
-
-    const encoded = encodeStyle('custom', color, customEffect);
-    setIsSavingStyle(true);
-    setErrorMsg(null);
-    try {
-      await campaignService.updateCampaign(campaign.id, { spiritLayerStyle: encoded });
-      updateCampaignSpiritLayer(enabled, encoded);
-      socket?.emitSpiritLayerStyleChange(encoded);
-    } catch {
-      setErrorMsg('Failed to save colour');
-    } finally {
-      setIsSavingStyle(false);
-    }
+    void saveStyle(encodeStyle('custom', color, customEffect), 'Failed to save colour');
   };
 
-  const handleCustomEffectChange = async (effect: CustomEffectId) => {
-    if (!campaign) return;
+  const handleCustomEffectChange = (effect: CustomEffectId) => {
     setCustomEffect(effect);
-
-    const encoded = encodeStyle('custom', customColor, effect);
-    setIsSavingStyle(true);
-    setErrorMsg(null);
-    try {
-      await campaignService.updateCampaign(campaign.id, { spiritLayerStyle: encoded });
-      updateCampaignSpiritLayer(enabled, encoded);
-      socket?.emitSpiritLayerStyleChange(encoded);
-    } catch {
-      setErrorMsg('Failed to save effect');
-    } finally {
-      setIsSavingStyle(false);
-    }
+    void saveStyle(encodeStyle('custom', customColor, effect), 'Failed to save effect');
   };
 
   // ============================================
@@ -369,6 +368,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                       <button
                         key={style.id}
                         onClick={() => handleStyleSelect(style.id as SpiritStyleId)}
+                        aria-pressed={isSelected}
                         className={`text-left p-3 rounded-cozy border-2 transition-all ${
                           isSelected
                             ? 'border-spirit-purple bg-spirit-purple/10'

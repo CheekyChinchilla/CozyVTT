@@ -72,7 +72,7 @@ When a player accepts, they'll choose which of their characters to bring. Once t
 
 > **Note:** If registration is closed on your instance, the platform administrator will need to create accounts for your players before you can invite them.
 
-**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat and ping the map, and keeps private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or edit a character sheet at the table, not even through a token that still names them from when they were a player: such a token is treated as nobody's, so they see it as any other player would and it gives them no sight on a lit map. A character they brought while a player stays in the roster, but they cannot edit it while they are a spectator; you can. They can still add one of their own characters to the roster, take one out, or delete it. Edit Token and the Token Manager offer only players as a token's controller. Everyone you invite joins as a player, and the app has no control yet for making someone a spectator; the role can only be set through the API (`PUT /api/campaigns/{campaignId}/members/{userId}/role`).
+**Spectators.** A member can also be a spectator: someone watching the game without a character in it. A spectator sees the map as a player with no token does, can read and write in the chat and ping the map, and keeps private notes and dice macros of their own, but cannot roll dice or initiative, move or edit tokens, or edit a character sheet at the table, not even through a token that still names them from when they were a player: such a token is treated as nobody's, so they see it as any other player would and it gives them no sight on a lit map. A character they brought while a player stays in the roster, but they cannot edit it while they are a spectator; you can. They can still add one of their own characters to the roster, take one out, or delete it. Edit Token and the Token Manager offer only players as a token's controller. A token still naming someone who has since become a spectator, or left the campaign, says so in both (*not a player* in the Token Manager's list, *no longer a player* in **Controlled By**), and they cannot move it; choose a player or **Nobody**. Everyone you invite joins as a player, and the app has no control yet for making someone a spectator; the role can only be set through the API (`PUT /api/campaigns/{campaignId}/members/{userId}/role`).
 
 ### The Campaign Roster
 
@@ -82,7 +82,7 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
-**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner.
+**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner; you can do it to any player's character, and the player can bring it back with **Assign to Campaign** on their Characters page.
 
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
@@ -180,7 +180,7 @@ A map made before version 1.5.1 may be larger than this. It still opens, and Edi
 
 ### Switching Maps
 
-Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate.
+Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map on screen, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again.
 
 *GIF pending — Switching maps, showing player view update.*
 
@@ -211,6 +211,7 @@ Click **Token Manager** (the crossed-swords icon) in the campaign header to open
 The Token Manager opens on the form for a new token. Fill in what applies, then click **Place on Map**; the token appears in the middle of the current map, ready to move into position.
 
 - **Token Type** — **Player**, **NPC / Creature** or **Object**
+- **Character** — for a Player token, the character it stands for, listed by name with its owner in brackets. The token then opens that character's sheet and rolls with its numbers. Picking one names the token after the character if you have not typed a name, sets **Controlled by** to its owner while they are a player, and uses the character's token picture if you pick no image. **No character** leaves the token linked to nothing. Dragging a character from the roster, or **Add to Map** on it, does the same in one step
 - **Token image** — Upload one, pick a token image from your library, or leave it empty for a placeholder
 - **Token Name** — Shown when anyone points at the token
 - **Display Mode** — Pog, Top-Down or Full Art (see below)
@@ -263,9 +264,9 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
-- Apply or remove conditions. All fifteen D&D 5e conditions are offered here, the same set the character sheet uses. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
+- Apply or remove conditions. A D&D 5e campaign is offered all fifteen D&D 5e conditions, the same set the character sheet uses, and a Call of Cthulhu campaign the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system you can also type a condition of your own, such as *Frightened 2* or *Blessed*, and press Enter or **+** to add it; it can be up to 60 characters, and a token can carry up to 50 conditions. Typing a listed condition adds the listed one, and one the token already has is not added twice. Click a condition above the list to take it off. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
-If a change cannot be saved, for example while the connection is down, a message says why and the control goes back to what it was. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
+If a change cannot be saved, for example while the connection is down, a message says why. A button or a list goes back to what it was; what you typed into a box (the name, initiative, notes or the stat block) stays there, so you can put it right and save it again. Changes made to the token elsewhere while the editor is open, by you in another tab or by a player on their own token, show as they arrive. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
 
 *Screenshot pending — NPC quick editor popup with image picker.*
 
@@ -420,7 +421,16 @@ Click **Create Custom** at the top of the Creature Library to create a custom cr
 
 Custom creatures are scoped to your campaign and fully editable. **Delete** on a custom creature asks first, naming it; tokens already on a map keep their own copy of its stats. A custom creature belongs to the campaign: if the account that made it is deleted, it stays in the campaign's library, and whoever runs the campaign can still edit or delete it.
 
-A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it. The token quick editor's message says why ("Stat block is too large (64 KB maximum)"), but the Creature Library and Token Templates forms show only a general failure such as "Failed to update creature". If a very long stat block will not save there, shorten its text and try again.
+A stat block can hold up to 64 KB of text in all, about ten times the largest creature in the SRD (the Vampire). That is room for very long homebrew descriptions; a stat block over it is refused when you save it, with a message saying it is too large (64 KB maximum). If a very long stat block will not save, shorten its text and try again. Each box also stops at its own limit as you type:
+
+| Box | Longest |
+|---|---|
+| Name, Creature Type, Speed, a trait's or action's name | 200 characters |
+| Alignment | 100 characters |
+| Damage Vulnerabilities, Resistances and Immunities, Condition Immunities, Senses, Languages | 500 characters each |
+| A trait's or action's description, Notes | 5,000 characters |
+
+Each list of traits, actions, bonus actions, reactions or legendary actions holds up to 50 entries. When the server refuses a creature or template for any other reason, the form shows that reason, naming the field it is about.
 
 ### Saving Throws and Skills
 
@@ -468,13 +478,18 @@ earlier are read, not rewritten. CozyVTT works backwards from the printed bonus 
 show the right checkboxes — an SRD Goblin opens already showing Stealth as
 expertise, still at its printed +6. Where a printed value doesn't fit the rules
 (the Night Hag is one), it's kept exactly as published and shown as an override.
+Change its Dexterity or CR and the bonuses it is proficient in follow: give that
+Goblin Dexterity 16 and its Stealth becomes +7.
 
 **In Pathfinder 2e** this section looks different, because PF2e works
 differently: creature stat blocks print final modifiers rather than deriving them
 from proficiency ranks. You'll see **Fortitude, Reflex and Will** instead of six
-ability saves, a **Level** instead of a Challenge Rating, and you enter each
-modifier directly. CozyVTT warns if a number looks far off for the creature's
-level, but never changes it.
+ability saves, a **Level** instead of a Challenge Rating, **Attribute Modifiers**
+(Str +4, Dex -1) instead of ability scores, and you enter each modifier directly.
+CozyVTT warns if a number looks far off for the creature's level, but never
+changes it. The stat block then reads as Pathfinder prints one: its level, its
+modifiers, and Fort, Ref and Will. A D&D creature used in a Pathfinder campaign
+keeps its Challenge Rating, shown as CR.
 
 ### Editing Custom Creatures
 
@@ -537,7 +552,7 @@ For **NPC-type templates**, the edit form includes the full stat block editor �
 
 ### Copying Templates to Another Campaign
 
-If you DM multiple campaigns, you can copy a template from one campaign to another. Expand the template, click **Copy**, and pick the target campaign from the list. You must have the DM role in both campaigns.
+If you DM multiple campaigns, you can copy a template from one campaign to another. Expand the template, click **Copy**, and pick the target campaign from the list. A message at the top of the library names the campaign the copy went to, or says why it could not be made. You must have the DM role in both campaigns.
 
 ---
 
@@ -780,7 +795,7 @@ This is perfect for behind-the-screen perception checks, wandering monster rolls
 
 ### The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders. Each period can also carry an **audio track**, picked from the same set the Atmosphere panel plays: switching to that period starts the track looping for everyone at the table, and switching to a period without one silences the table. If the tracker has been switched off for the campaign, the panel says so in place of the periods, and saving the period editor turns it back on.
+The **Vibe Tracker**, in the **Session** tab of the right sidebar, sets the time of day for the scene. A new campaign has four periods, dawn, day, dusk and night; click one to switch. Each period tints the whole map for everyone with its own colour filter, fading over a few seconds, and its name shows in the header. The gear beside the tracker opens the period editor, where you can rename periods, add or remove them, and set each one's colour and filter with sliders. Each period can also carry an **audio track**, picked from the same set the Atmosphere panel plays: switching to that period starts the track looping for everyone at the table, and switching to a period without one silences the table. Saving the period editor updates everyone's tracker at once. Edit the period in force and its new colour applies straight away, and a new track for it starts playing. Rename or delete the period in force and the vibe ends for everyone: the tint fades and its track stops, though a track you put on from the Atmosphere panel keeps playing. Pick a period to set the vibe again. Changing only the capitals of a name, such as dawn to Dawn, keeps that period in force. If the tracker has been switched off for the campaign, the panel says so in place of the periods, and saving the period editor turns it back on.
 
 Switching the period as the story moves on, from a bright afternoon to a cold night on the road, sets the mood before you say a word.
 
@@ -888,7 +903,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, and drag the bar above them to move the stack), then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, and drag the bar above them to move the stack anywhere on the map; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up
@@ -1115,9 +1130,9 @@ from can export that section on its own, or export the map as a PNG instead and
 
 ### Exporting a Universal VTT file
 
-Open the **Map Library** and click the **download** button (**Export as .uvtt file**) on the map's card, between the pencil and the bin. Your browser saves the map as a `.uvtt` file named after it. A script or a tool built on the unsupported HTTP surface can fetch the same file (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only). Importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
+Open the **Map Library** and click the **download** button (**Export as .uvtt file**) on the map's card, between the pencil and the bin. Your browser saves the map as a `.uvtt` file named after it once the whole file has arrived, which for a large map picture can take a few seconds. A script or a tool built on the unsupported HTTP surface can fetch the same file (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`, DM only). Importing that file back gives a map that sees and lights the same way, with the limits of the format: a window is written as an open doorway, because the format has no windows and a wall in its place would block sight, so it comes back as an open door; a locked door comes back as an ordinary closed door; and a switched-off light is kept and comes back switched off, though other tools may show it lit. Tokens, fog and the spirit layer are not included.
 
-A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture an older version of CozyVTT stored as a PDF, cannot be exported: the server refuses the download, and the browser's download fails with no message from CozyVTT. Choose a map picture for it in **Edit Map**, then export it again.
+A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture an older version of CozyVTT stored as a PDF, cannot be exported: the Map Library says so, and nothing is saved. Choose a map picture for it in **Edit Map**, then export it again.
 
 ### Undo / Redo
 
@@ -1208,7 +1223,7 @@ Two practical consequences when you are building a map:
 1. Open the **Lights** panel among the DM tool panels at the top right of the map
 2. Click **Place**, then click on the map to drop a light
 3. Choose a **preset** (Candle, Torch, Lamp, Lantern, Campfire) or dial in custom bright and dim radii
-4. Pick a color from the palette or enter a custom hex
+4. Pick a color from the palette, or type a hex colour such as `#ff9933` (the `#` is optional); it applies once all six digits are in
 
 Players see the result straight away: a creature a new light shows appears on their screens, and one left in the dark when a light is moved, switched off or removed disappears. Opening or closing a door works the same way. With dynamic lighting on, a player can open or close only a door one of their characters can see, and with fog of war on only a door beside a square you have revealed to them; spectators cannot open or close doors at all.
 

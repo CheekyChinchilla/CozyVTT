@@ -6,16 +6,14 @@
 
 import type { NpcStatBlock } from '@/types';
 import { formatSaveList, formatSkillList } from './statBlockProficiency';
+import { abilityModifier, formatModifier } from '@/utils/rules/dnd5e';
 
 interface Props {
   statBlock: NpcStatBlock;
   tokenName: string;
 }
 
-function abilityMod(score: number): string {
-  const m = Math.floor((score - 10) / 2);
-  return m >= 0 ? `+${m}` : `${m}`;
-}
+const abilityMod = (score: number) => formatModifier(abilityModifier(score));
 
 export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
   return (

@@ -585,10 +585,6 @@ class SocketClient {
   // Map Events
   // ============================================
 
-  emitMapChange(mapId: string) {
-    this.socket?.emit('map.change', { mapId });
-  }
-
   onMapChanged(callback: EventCallback<{ mapId: string; mapData: CampaignMap; spiritVisible?: boolean }>) {
     this.addListener('map.changed', callback);
   }

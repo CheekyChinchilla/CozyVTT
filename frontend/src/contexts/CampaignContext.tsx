@@ -18,7 +18,7 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast } from '@/types';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
@@ -94,8 +94,8 @@ interface CampaignContextState {
   activeVibeEffect: { hue: string; filter: string } | null;
   /** Called when vibe.updated WebSocket arrives — updates currentVibe + activeVibeEffect */
   updateVibe: (period: string, hue: string, filter: string) => void;
-  /** Called after saving ConfigureVibeModal — patches campaign.vibeSettings in local state */
-  updateVibeSettings: (settings: VibeSettings) => void;
+  /** The vibe periods as saved, and the vibe they leave in force (null for none) */
+  updateVibeSettings: (settings: VibeSettings, currentVibe: string | null) => void;
   /** Current open session (id, sessionNumber, startedAt) — null when no active session */
   activeSession: { id: string; sessionNumber: number; startedAt: string } | null;
   /** Set active session — called by SessionControls after start/resume REST response */
@@ -141,6 +141,12 @@ interface VibeSettingsBlob {
     volume?: number;
     loop?: boolean;
   };
+}
+
+/** The tint of the vibe in force: the period named `currentVibe`, or none. */
+function vibeEffectOf(settings: VibeSettings | undefined, currentVibe: string | null | undefined): { hue: string; filter: string } | null {
+  const period = currentVibe ? settings?.periods?.find((p) => p.name === currentVibe) : undefined;
+  return period ? { hue: period.hue, filter: period.filter } : null;
 }
 
 export function CampaignProvider({ children }: CampaignProviderProps) {
@@ -208,17 +214,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       setActiveAtmosphereAudio(null);
     }
 
-    // Initialize vibe effect from saved campaign state
-    if (data.currentVibe && data.vibeSettings?.periods) {
-      const activePeriod = (data.vibeSettings.periods as VibePeriod[]).find(
-        (p) => p.name === data.currentVibe,
-      );
-      setActiveVibeEffect(
-        activePeriod ? { hue: activePeriod.hue, filter: activePeriod.filter } : null,
-      );
-    } else {
-      setActiveVibeEffect(null);
-    }
+    setActiveVibeEffect(vibeEffectOf(data.vibeSettings, data.currentVibe));
   }, []);
 
   // Load campaign data
@@ -371,10 +367,26 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     setActiveVibeEffect({ hue, filter });
   }, []);
 
-  // Patch campaign.vibeSettings after ConfigureVibeModal saves
-  const updateVibeSettings = useCallback((settings: VibeSettings) => {
-    setCampaign((prev) => (prev ? { ...prev, vibeSettings: settings } : null));
+  // The vibe periods as saved, and the vibe they leave in force: from the
+  // DM's own save, and from the broadcast every member's page is sent.
+  const updateVibeSettings = useCallback((settings: VibeSettings, currentVibe: string | null) => {
+    setCampaign((prev) => (prev ? { ...prev, vibeSettings: settings, currentVibe } : null));
+    setActiveVibeEffect(vibeEffectOf(settings, currentVibe));
   }, []);
+
+  // The DM saved the vibe periods. Every page shows them and the vibe's tint,
+  // so each takes the periods and the vibe the save left: an edited period in
+  // force shows its new colour, and one renamed or deleted ends the vibe.
+  useEffect(() => {
+    const handleVibeSettings = (data: VibeSettingsUpdatedBroadcast) => {
+      if (shownCampaignId.current !== data?.campaignId) return;
+      updateVibeSettings(data.vibeSettings, data.currentVibe);
+    };
+    socketClient.on('vibe.settings.updated', handleVibeSettings);
+    return () => {
+      socketClient.off('vibe.settings.updated', handleVibeSettings);
+    };
+  }, [updateVibeSettings]);
 
   // Update campaign.status in local state (called by session WebSocket listeners)
   const updateCampaignStatus = useCallback((status: CampaignStatus) => {

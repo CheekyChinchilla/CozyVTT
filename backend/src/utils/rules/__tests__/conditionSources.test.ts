@@ -26,6 +26,16 @@ const CONDITION_CONSUMERS = [
 ];
 
 /**
+ * What each takes from utils/conditions: the D&D 5e sheet the list itself,
+ * the token editor the list for the campaign's system (conditionsOffered,
+ * which hands it the same list in D&D 5e).
+ */
+const SHARED_IMPORT: Record<string, string> = {
+  'components/campaign/NpcQuickEditor.tsx': 'conditionsOffered',
+  'components/character-sheets/dnd5e/DnD5eCharacterEditor.tsx': 'DND5E_CONDITIONS',
+};
+
+/**
  * A local condition list: an array literal holding several of the fifteen
  * names. Deliberately loose — it is looking for the shape of a hand-rolled
  * list, not one exact spelling of it.
@@ -46,9 +56,14 @@ describe('D&D 5e conditions have a single source', () => {
     expect(declaresOwnConditionList(source)).toBe(false);
   });
 
-  it.each(CONDITION_CONSUMERS)('%s imports DND5E_CONDITIONS', (file) => {
+  it.each(CONDITION_CONSUMERS)('%s takes its list from utils/conditions', (file) => {
     const source = readFileSync(path.join(FRONTEND, file), 'utf8');
-    expect(source).toMatch(/DND5E_CONDITIONS/);
+    expect(source).toMatch(new RegExp(`import \\{[^}]*\\b${SHARED_IMPORT[file]}\\b[^}]*\\} from '@/utils/conditions'`));
+  });
+
+  it('gives the token editor the D&D 5e list in a D&D 5e campaign', () => {
+    const source = readFileSync(path.join(FRONTEND, 'utils/conditions.ts'), 'utf8');
+    expect(source).toMatch(/case GameSystem\.DND_5E:\s*return DND5E_CONDITIONS;/);
   });
 
   it('the shared list holds all fifteen conditions', () => {

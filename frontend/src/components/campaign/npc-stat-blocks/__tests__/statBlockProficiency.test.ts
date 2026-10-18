@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import type { NpcStatBlock } from '@/types';
 import {
+  changeAbilitiesOrRating,
+  formatSaveList,
+  formatSkillList,
   getProficiencyBonus,
   readSaveRows,
   readSkillRows,
@@ -256,5 +259,52 @@ describe('removeCustomSkill', () => {
     const removed = removeCustomSkill(sb, 'basketWeaving');
 
     expect(removed.skills).toEqual({ stealth: 6 });
+  });
+});
+
+/**
+ * Changing an ability score or the challenge rating moves every save and
+ * skill that follows it, a creature from the SRD included.
+ *
+ * Its rows carry no proficiency, so they were inferred from the stored total
+ * against the new numbers, which no longer fit: the row froze as custom and
+ * kept its old total. A Goblin given Dexterity 16 kept Stealth +6, and typing
+ * "16" passed through Dexterity 1 and froze every row there. Each row's level
+ * is now recorded before the change, so the totals follow it.
+ */
+describe('changeAbilitiesOrRating', () => {
+  const stealth = (sb: NpcStatBlock) => readSkillRows(sb).find((r) => r.key === 'stealth')!;
+
+  it("keeps the Goblin's Stealth expertise when its Dexterity rises", () => {
+    const changed = changeAbilitiesOrRating(goblin, { abilities: { ...goblin.abilities, dex: 16 } });
+    expect(changed.skills?.stealth).toBe(7);
+    expect(stealth(changed).level).toBe('expertise');
+  });
+
+  it('follows the score typed, through the digits on the way', () => {
+    let sb = goblin;
+    for (const dex of [1, 16]) sb = changeAbilitiesOrRating(sb, { abilities: { ...sb.abilities, dex } });
+    expect(sb.skills?.stealth).toBe(7);
+  });
+
+  it('moves the totals with the challenge rating', () => {
+    // CR 5: proficiency +3, so expertise in Stealth with Dex 14 is 2 + 6.
+    expect(changeAbilitiesOrRating(goblin, { challengeRating: '5' }).skills?.stealth).toBe(8);
+  });
+
+  it('keeps a value set by hand', () => {
+    const custom = setBonusOverride(goblin, 'skills', 'stealth', 11);
+    expect(changeAbilitiesOrRating(custom, { abilities: { ...custom.abilities, dex: 18 } }).skills?.stealth).toBe(11);
+  });
+});
+
+describe('formatSaveList and formatSkillList', () => {
+  it('print negative bonuses with a minus and name the ability or skill', () => {
+    expect(formatSaveList({ dex: -1, wis: 3 })).toBe('Dex -1, Wis +3');
+    expect(formatSkillList({ sleightOfHand: -2, perception: 4 })).toBe('Sleight of Hand -2, Perception +4');
+  });
+
+  it('prints a save it does not know as written, uncut', () => {
+    expect(formatSaveList({ fortitude: 5 })).toBe('Fortitude +5');
   });
 });

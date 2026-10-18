@@ -964,22 +964,40 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
       });
     }
 
-    // Only owner can assign/unassign character
+    const unassigning = !campaignId || campaignId === '';
+
+    // The owner assigns and unassigns their character. The DM of the
+    // campaign it is in may also take it out of that campaign, as the DM
+    // guide says; it stays with its owner. A character still naming a
+    // campaign its owner has left is the owner's alone, as for reading and
+    // editing it. Nobody else may do either.
     if (character.userId !== userId) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Only the character owner can assign this character to a campaign',
-      });
+      const runsItsCampaign = unassigning && character.campaignId !== null
+        && (await prisma.campaignMembership.findUnique({
+          where: { userId_campaignId: { userId, campaignId: character.campaignId } },
+          select: { role: true },
+        }))?.role === 'DM'
+        && (await ownerStillIn(character.userId, character.campaignId));
+      if (!runsItsCampaign) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: unassigning
+            ? 'Only the character owner, or the DM of its campaign, can take it out of a campaign'
+            : 'Only the character owner can assign this character to a campaign',
+        });
+      }
     }
+    const ownerId = character.userId;
 
     // Handle unassignment (campaignId is null, empty string, or undefined)
-    if (!campaignId || campaignId === '') {
-      // Remove from previous campaign's membership characterIds if assigned
+    if (unassigning) {
+      // Remove from previous campaign's membership characterIds if assigned:
+      // the owner's membership, whoever asked.
       if (character.campaignId) {
         const previousMembership = await prisma.campaignMembership.findUnique({
           where: {
             userId_campaignId: {
-              userId,
+              userId: ownerId,
               campaignId: character.campaignId,
             },
           },
@@ -989,7 +1007,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
           await prisma.campaignMembership.update({
             where: {
               userId_campaignId: {
-                userId,
+                userId: ownerId,
                 campaignId: character.campaignId,
               },
             },
@@ -1020,7 +1038,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
           broadcastToCampaign(character.campaignId, 'roster.updated', {
             action: 'character.unassigned',
             characterId: id,
-            userId,
+            userId: ownerId,
             // As every roster.updated does: the campaign page follows the
             // event only for its own campaign.
             campaignId: character.campaignId,

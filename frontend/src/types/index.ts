@@ -1404,6 +1404,15 @@ export interface VibeUpdatedBroadcast {
   audio?: string;
 }
 
+/** The DM saved the vibe periods: the periods as saved, and the vibe they leave in force. */
+export interface VibeSettingsUpdatedBroadcast {
+  campaignId: string;
+  vibeSettings: VibeSettings;
+  currentVibe: string | null;
+  updatedBy: string;
+  timestamp: string;
+}
+
 // Atmosphere Events
 export interface AtmosphereEffectSetEvent {
   effect: string | null;

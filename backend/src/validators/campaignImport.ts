@@ -11,6 +11,7 @@ import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
+import { TOKEN_LIMITS } from './tokenLimits';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
@@ -51,8 +52,8 @@ const ImportHpSchema = TokenHpSchema.nullable().optional().catch(null);
 // Conditions are kept one at a time, so an over-long entry costs itself and
 // not the list.
 const ImportConditionsSchema = z
-  .array(z.string().trim().max(60).catch(''))
-  .max(50)
+  .array(z.string().trim().max(TOKEN_LIMITS.maxConditionLength).catch(''))
+  .max(TOKEN_LIMITS.maxConditions)
   .catch([])
   .transform((conditions) => conditions.filter((c) => c.length > 0));
 

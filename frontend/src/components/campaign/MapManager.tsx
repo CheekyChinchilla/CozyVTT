@@ -371,22 +371,11 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     }
   };
 
-  // TODO(ui): a refused export (422, such as a map whose picture is not a
-  // PNG, JPEG, WebP or GIF image) is never shown: the link below downloads
-  // whatever the server answers, and the catch cannot see an HTTP status.
-  // Fetch the file first, save it only when it arrives, and show the
-  // server's message with setError when it is refused.
   const handleExport = async (map: Map) => {
     if (!campaign?.id) return;
+    setError(null);
     try {
-      const url = api.getExportUVTTUrl(campaign.id, map.id);
-      // Use a hidden link to trigger the download with session cookies
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${map.name}.uvtt`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await api.downloadUVTTExport(campaign.id, map.id, `${map.name}.uvtt`);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to export map.');
     }
@@ -481,10 +470,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         } else {
           performSwitch(map, []);
         }
-      } catch {
+      } catch (err: unknown) {
+        // Without the tokens there is nothing to offer to bring along, and
+        // switching anyway could leave the party behind unasked.
         setIsSwitching(false);
         setCurrentMapTokens([]);
-        performSwitch(map, []);
+        setError(apiErrorMessage(err) || 'Could not read the tokens on this map, so the switch was stopped. Try again.');
       }
     } else {
       performSwitch(map, []);

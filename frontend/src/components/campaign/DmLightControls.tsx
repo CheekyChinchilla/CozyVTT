@@ -135,8 +135,14 @@ export default function DmLightControls({
   const [localBright, setLocalBright] = useState<number | null>(null);
   const [localDim, setLocalDim] = useState<number | null>(null);
 
+  // The colour box as typed. Only a complete colour is applied, so the box
+  // holds what is typed until then; it showed the colour in use instead,
+  // which undid every key.
+  const [colourDraft, setColourDraft] = useState<string | null>(null);
+
   // Sync local overrides when selected light changes externally
   useEffect(() => {
+    setColourDraft(null);
     setLocalBright(null);
     setLocalDim(null);
   }, [selectedLight?.id]);
@@ -391,15 +397,19 @@ export default function DmLightControls({
                   />
                   <input
                     type="text"
-                    value={displayColor}
+                    value={colourDraft ?? displayColor}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (/^#[0-9a-fA-F]{6}$/.test(v)) {
-                        const lower = v.toLowerCase();
-                        if (isEditing) updateSelected({ color: lower });
-                        else updateDefaults({ color: lower });
+                      setColourDraft(v);
+                      const hex = /^#?([0-9a-fA-F]{6})$/.exec(v.trim());
+                      if (hex) {
+                        const colour = `#${hex[1].toLowerCase()}`;
+                        if (isEditing) updateSelected({ color: colour });
+                        else updateDefaults({ color: colour });
                       }
                     }}
+                    onBlur={() => setColourDraft(null)}
+                    aria-label="Light colour"
                     className="flex-1 text-[10px] bg-stone-800 border border-stone-600 rounded-sm px-1.5 py-0.5 text-stone-300 font-mono"
                     maxLength={7}
                     placeholder="#ffcc66"

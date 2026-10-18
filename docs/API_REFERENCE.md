@@ -1048,6 +1048,9 @@ Enforced on every creature, token-template and campaign-import write:
   JSON); a larger one answers `400`.
 
 Failures return `400` with `{ "error": "Validation Error", "message": "..." }`.
+For a creature or token template, `message` lists every problem, joined with
+`; `, each starting with the field it is about:
+`statBlock.traits.0.description: Too big: expected string to have <=5000 characters`.
 A campaign import applies the same limits but does not refuse: it cuts text and
 lists over them down to them, leaves a stat block it cannot store off a token or
 template, and leaves out a creature whose stat block it cannot store, saying so

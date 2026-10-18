@@ -471,7 +471,7 @@ The DM controls when initiative advances — after your turn, they'll click **Ne
 
 ## The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one.
+The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
 
 *Screenshot pending — Vibe tracker showing the current period.*
 

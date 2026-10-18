@@ -101,6 +101,8 @@ const TESTED: Record<string, string> = {
   'GET /api/campaigns/:campaignId/token-templates/:id': 'routes/__tests__/tokenTemplates.e2e.test.ts',
   'POST /api/campaigns/:campaignId/token-templates': 'routes/__tests__/tokenTemplates.e2e.test.ts',
   'POST /api/campaigns/:campaignId/token-templates/:id/copy-to/:targetCampaignId': 'routes/__tests__/assetReferenceChecks.e2e.test.ts',
+  'PUT /api/campaigns/:campaignId/token-templates/:id': 'routes/__tests__/statBlockRefusals.e2e.test.ts',
+  'POST /api/campaigns/:campaignId/token-templates/from-token': 'routes/__tests__/statBlockRefusals.e2e.test.ts',
   'POST /api/campaigns/:campaignId/maps': 'routes/__tests__/mapSizeInput.e2e.test.ts',
   'GET /api/campaigns/:campaignId/maps': 'routes/__tests__/mapSettings.e2e.test.ts',
   'POST /api/campaigns/:campaignId/maps/import-uvtt': 'routes/__tests__/mapSizeInput.e2e.test.ts',
@@ -183,9 +185,7 @@ const TESTED: Record<string, string> = {
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
-  'PUT /api/campaigns/:campaignId/token-templates/:id',
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
-  'POST /api/campaigns/:campaignId/token-templates/from-token',
   'GET /api/invitations',
   'POST /api/invitations/:id/decline',
 ];

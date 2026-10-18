@@ -10,8 +10,9 @@ import type { NpcStatBlock } from '@/types';
 import { ABILITY_KEYS, CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
 import ProficiencyEditor from './ProficiencyEditor';
 import Pf2eProficiencyEditor from './Pf2eProficiencyEditor';
-import { recomputeDerivedBonuses } from './statBlockProficiency';
+import { changeAbilitiesOrRating } from './statBlockProficiency';
 import { readAttributeModifiers, setAttributeModifier } from './pf2eStatBlock';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 
 interface StatBlockEditorProps {
   statBlock: NpcStatBlock;
@@ -57,19 +58,14 @@ export default function StatBlockEditor({
   // Bonuses marked as overrides keep their value.
   const updateAbility = useCallback(
     (ab: keyof NpcStatBlock['abilities'], value: number) => {
-      onChange(
-        recomputeDerivedBonuses({
-          ...statBlock,
-          abilities: { ...statBlock.abilities, [ab]: value },
-        })
-      );
+      onChange(changeAbilitiesOrRating(statBlock, { abilities: { ...statBlock.abilities, [ab]: value } }));
     },
     [statBlock, onChange]
   );
 
   const updateChallengeRating = useCallback(
     (cr: string) => {
-      onChange(recomputeDerivedBonuses({ ...statBlock, challengeRating: cr || undefined }));
+      onChange(changeAbilitiesOrRating(statBlock, { challengeRating: cr || undefined }));
     },
     [statBlock, onChange]
   );
@@ -97,6 +93,7 @@ export default function StatBlockEditor({
                 value={statBlock.creatureType || ''}
                 onChange={(e) => update({ creatureType: e.target.value })}
                 placeholder="Medium humanoid"
+                maxLength={STAT_BLOCK_LIMITS.maxCreatureTypeLength}
                 className="input-cozy w-full text-xs"
               />
             </div>
@@ -107,6 +104,7 @@ export default function StatBlockEditor({
                 value={statBlock.alignment || ''}
                 onChange={(e) => update({ alignment: e.target.value })}
                 placeholder="neutral evil"
+                maxLength={STAT_BLOCK_LIMITS.maxAlignmentLength}
                 className="input-cozy w-full text-xs"
               />
             </div>
@@ -174,6 +172,7 @@ export default function StatBlockEditor({
               value={statBlock.speed}
               onChange={(e) => update({ speed: e.target.value })}
               placeholder="30 ft., fly 60 ft."
+              maxLength={STAT_BLOCK_LIMITS.maxSpeedLength}
               className="input-cozy w-full text-xs"
             />
           </div>
@@ -253,6 +252,7 @@ export default function StatBlockEditor({
                 type="text"
                 value={(statBlock[field] as string) || ''}
                 onChange={(e) => update({ [field]: e.target.value || undefined })}
+                maxLength={STAT_BLOCK_LIMITS.maxDetailLength}
                 className="input-cozy w-full text-xs"
               />
             </div>
@@ -291,6 +291,7 @@ export default function StatBlockEditor({
             value={statBlock.notes || ''}
             onChange={(e) => update({ notes: e.target.value || undefined })}
             placeholder="Additional notes..."
+            maxLength={STAT_BLOCK_LIMITS.maxNotesLength}
             rows={2}
             className="input-cozy w-full text-xs resize-none"
           />
@@ -354,12 +355,14 @@ function ActionListEditor({
               value={item.name}
               onChange={(e) => updateItem(i, { name: e.target.value })}
               placeholder="Ability name"
+              maxLength={STAT_BLOCK_LIMITS.maxEntryNameLength}
               className="input-cozy w-full text-xs font-semibold"
             />
             <textarea
               value={item.description}
               onChange={(e) => updateItem(i, { description: e.target.value })}
               placeholder="Description..."
+              maxLength={STAT_BLOCK_LIMITS.maxEntryDescriptionLength}
               rows={2}
               className="input-cozy w-full text-xs resize-none"
             />
@@ -377,7 +380,8 @@ function ActionListEditor({
       <button
         type="button"
         onClick={addItem}
-        className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors"
+        disabled={items.length >= STAT_BLOCK_LIMITS.maxListEntries}
+        className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Plus className="w-3 h-3" /> Add entry
       </button>

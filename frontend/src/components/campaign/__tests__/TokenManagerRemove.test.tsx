@@ -74,6 +74,7 @@ describe('removing a token in the Token Manager', () => {
 
     await waitFor(() => expect(api.deleteToken).toHaveBeenCalledWith('campaign-1', 'map-1', 'goblin'));
     await waitFor(() => expect(useGameStore.getState().tokens['goblin']).toBeUndefined());
-    expect(emitMapChange).toHaveBeenCalledWith('map-1');
+    // The server tells the table; the page sends no map.change of its own.
+    expect(emitMapChange).not.toHaveBeenCalled();
   });
 });

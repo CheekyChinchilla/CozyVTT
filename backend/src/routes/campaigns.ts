@@ -11,8 +11,9 @@ import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiv
 import { broadcastMapData } from '../websocket/shared';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
-import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
+import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
+import { announceVibeSave, vibeAfterSave } from '../services/vibeSave';
 import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from '../services/campaignExporter';
 import { CAMPAIGN_ARCHIVE_MAX_BYTES, megabytes } from '../utils/campaignArchiveSize';
 import { previewCampaignImport, importCampaign, importTempDirectory, IMPORT_FAILED_MESSAGE } from '../services/campaignImporter';
@@ -590,33 +591,46 @@ router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, re
       }
     }
 
-    // If campaign has a currentVibe, verify it still exists in the new periods
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
       select: { currentVibe: true, vibeSettings: true },
     });
 
-    const updateData: Prisma.CampaignUpdateInput = {
-      vibeSettings: toJson(preserveAtmosphereAudio(vibeSettings, campaign?.vibeSettings)),
-    };
-
-    // Reset currentVibe if current period no longer exists in new settings
-    if (campaign?.currentVibe) {
-      const period = findVibePeriod(vibeSettings as VibeSettings, campaign.currentVibe);
-      if (!period) {
-        updateData.currentVibe = null;
-      }
-    }
-
-    const updatedCampaign = await prisma.campaign.update({
+    await prisma.campaign.update({
       where: { id: campaignId },
-      data: updateData,
+      data: { vibeSettings: toJson(preserveAtmosphereAudio(vibeSettings, campaign?.vibeSettings)) },
+    });
+
+    // The period in force stays the vibe under its saved spelling, and the
+    // vibe ends once it is renamed or deleted. Written only while the vibe
+    // is still the one read above: a switch that landed meanwhile stands.
+    const vibeBefore = campaign?.currentVibe ?? null;
+    const vibeAfter = vibeAfterSave(vibeSettings as VibeSettings, vibeBefore);
+    if (vibeAfter !== vibeBefore) {
+      await prisma.campaign.updateMany({
+        where: { id: campaignId, currentVibe: vibeBefore },
+        data: { currentVibe: vibeAfter },
+      });
+    }
+    const updatedCampaign = await prisma.campaign.findUniqueOrThrow({
+      where: { id: campaignId },
       select: {
         id: true,
         vibeSettings: true,
         currentVibe: true,
       },
     });
+
+    // The save is stored; a failure to tell the table is logged, and the
+    // pages catch up when they next load the campaign.
+    try {
+      await announceVibeSave(getSocketInstance(), campaignId, req.session.userId!, {
+        currentVibe: campaign?.currentVibe ?? null,
+        vibeSettings: campaign?.vibeSettings ?? null,
+      }, updatedCampaign);
+    } catch (err) {
+      logger.warn('Vibe save not broadcast', { err, campaignId });
+    }
 
     return res.status(200).json({
       message: 'Vibe settings updated successfully',

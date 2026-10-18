@@ -25,9 +25,9 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 import type { CreatureTemplate, NpcStatBlock } from '@/types';
 import { TokenType, GameSystem, AssetType, TokenDisposition } from '@/types';
 import {
@@ -36,7 +36,9 @@ import {
   ProficiencyEditor,
   Pf2eProficiencyEditor,
 } from './npc-stat-blocks';
-import { CHALLENGE_RATINGS } from '@/utils/rules/dnd5e';
+import { changeAbilitiesOrRating } from './npc-stat-blocks/statBlockProficiency';
+import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks/pf2eStatBlock';
+import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -104,7 +106,6 @@ interface CreatureLibraryProps {
 
 export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProps) {
   const { campaign, currentMap } = useCampaign();
-  const { socket } = useWebSocket();
 
   // ── Search & filter state ──
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,9 +150,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
   const [canSeed, setCanSeed] = useState(false);
   const [isSeeding, setIsSeeding] = useState(false);
   const [seedResult, setSeedResult] = useState<string | null>(null);
-  // Kept apart from `error`, which every list load clears: the list loads
-  // again 300 ms after the library opens, and a failed import's reason shown
-  // in that time vanished with it.
+  // Kept apart from `error`, which every list load clears, so a failed
+  // import's reason stays up when the list loads again.
   const [seedError, setSeedError] = useState<string | null>(null);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -226,7 +226,6 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     return () => clearTimeout(searchTimeoutRef.current);
   }, [searchQuery]);
 
-  // ── Place creature on map ──
   // ── Seed SRD creatures ──
   const handleSeedSrd = useCallback(async () => {
     if (!campaign || isSeeding) return;
@@ -290,13 +289,12 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
         tokenPayload
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place creature on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap, socket]);
+  }, [campaign, currentMap]);
 
   // ── Duplicate creature ──
   const handleDuplicate = useCallback(async (creatureId: string) => {
@@ -305,26 +303,29 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       const duplicate = await api.duplicateCreature(campaign.id, creatureId);
       setCreatures((prev) => [duplicate, ...prev]);
       setTotal((prev) => prev + 1);
-    } catch {
-      setError('Failed to duplicate creature');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to duplicate creature');
     }
   }, [campaign]);
 
   // ── Delete creature ──
-  // TODO(ui): this removes the creature from the main list only, so deleting
-  // one from the Favorites section leaves its row there until the library is
-  // reopened. It should also drop it from `favoriteCreatures` and
-  // `favoriteIds`.
   const handleDelete = useCallback(async (creatureId: string) => {
     if (!campaign) return;
     setCreatureToDelete(null);
     try {
       await api.deleteCreature(campaign.id, creatureId);
       setCreatures((prev) => prev.filter((c) => c.id !== creatureId));
+      // A favourite goes from Favorites too, whichever list it was deleted from.
+      setFavoriteCreatures((prev) => prev.filter((c) => c.id !== creatureId));
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        next.delete(creatureId);
+        return next;
+      });
       setTotal((prev) => prev - 1);
       if (expandedId === creatureId) setExpandedId(null);
-    } catch {
-      setError('Failed to delete creature');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to delete creature');
     }
   }, [campaign, expandedId]);
 
@@ -372,8 +373,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       } else {
         setFavoriteCreatures((prev) => prev.filter((c) => c.id !== creatureId));
       }
-    } catch {
-      // non-critical, fail silently
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Could not change your favourites');
     }
   }, [campaign, creatures]);
 
@@ -762,50 +763,68 @@ function CreatureRow({
 
   return (
     <div>
-      {/* Summary row */}
-      <button
-        onClick={onToggle}
-        className="w-full text-left px-4 py-2.5 flex items-center gap-3 hover:bg-moss-green/5 transition-colors"
-      >
-        {/* Creature avatar — image if available, colored initial otherwise */}
-        {creature.imageUrl ? (
-          <img
-            src={creature.imageUrl}
-            alt={creature.name}
-            className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
-          />
-        ) : (
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
-              creature.disposition === 'hostile' ? 'bg-danger' :
-              creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
-            }`}
-          >
-            {creature.name.charAt(0).toUpperCase()}
-          </div>
-        )}
-
-        <div className="flex-1 min-w-0">
-          <div className="text-sm font-medium text-ink-black truncate">{creature.name}</div>
-          <div className="text-[10px] text-stone-gray/60 flex gap-2">
-            {creature.challengeRating && <span>CR {creature.challengeRating}</span>}
-            {statBlock.creatureType && <span className="truncate">{statBlock.creatureType}</span>}
-          </div>
-        </div>
-
-        {/* Source badge */}
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
-          creature.source === 'srd'
-            ? 'bg-info/10 text-info-ink'
-            : 'bg-moss-green/10 text-brand-ink'
-        }`}>
-          {creature.source === 'srd' ? 'SRD' : 'Custom'}
-        </span>
-
-        {/* Favorite star */}
+      {/* Summary row. The star is a button of its own, laid over the row's
+          button in the gap left for it: a button inside a button is not valid
+          HTML, and a screen reader read the two as one control. */}
+      <div className="relative hover:bg-moss-green/5 transition-colors">
         <button
-          onClick={(e) => { e.stopPropagation(); onToggleFavorite(); }}
-          className="shrink-0 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
+          type="button"
+          onClick={onToggle}
+          aria-expanded={isExpanded}
+          className="w-full text-left px-4 py-2.5 flex items-center gap-3"
+        >
+          {/* Creature avatar — image if available, colored initial otherwise */}
+          {creature.imageUrl ? (
+            <img
+              src={creature.imageUrl}
+              alt={creature.name}
+              className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
+            />
+          ) : (
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
+                creature.disposition === 'hostile' ? 'bg-danger' :
+                creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
+              }`}
+            >
+              {creature.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium text-ink-black truncate">{creature.name}</div>
+            <div className="text-[10px] text-stone-gray/60 flex gap-2">
+              {creature.challengeRating && <span>CR {creature.challengeRating}</span>}
+              {statBlock.creatureType && <span className="truncate">{statBlock.creatureType}</span>}
+            </div>
+          </div>
+
+          {/* Source badge */}
+          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+            creature.source === 'srd'
+              ? 'bg-info/10 text-info-ink'
+              : 'bg-moss-green/10 text-brand-ink'
+          }`}>
+            {creature.source === 'srd' ? 'SRD' : 'Custom'}
+          </span>
+
+          {/* Room for the favourite star */}
+          <span className="w-4.5 shrink-0" aria-hidden="true" />
+
+          {/* Expand icon */}
+          {isExpanded ? (
+            <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
+          ) : (
+            <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
+          )}
+        </button>
+
+        {/* Favorite star, over the room left for it: the row's right padding,
+            the chevron and the gap before it come to 2.75rem. */}
+        <button
+          type="button"
+          onClick={onToggleFavorite}
+          className="absolute top-1/2 right-11 -translate-y-1/2 p-0.5 rounded-sm hover:bg-warning/10 transition-colors"
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
@@ -814,14 +833,7 @@ function CreatureRow({
               : 'text-stone-gray/30 hover:text-warning-ink'
           }`} />
         </button>
-
-        {/* Expand icon */}
-        {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
-        ) : (
-          <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
-        )}
-      </button>
+      </div>
 
       {/* Expanded details */}
       {isExpanded && (
@@ -901,7 +913,8 @@ function NameDescriptionList({
         <button
           type="button"
           onClick={() => onChange([...items, { name: '', description: '' }])}
-          className="text-[10px] text-brand-ink hover:text-brand-ink/80 flex items-center gap-0.5"
+          disabled={items.length >= STAT_BLOCK_LIMITS.maxListEntries}
+          className="text-[10px] text-brand-ink hover:text-brand-ink/80 flex items-center gap-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-2.5 h-2.5" /> Add
         </button>
@@ -918,6 +931,7 @@ function NameDescriptionList({
                 onChange(updated);
               }}
               placeholder="Name"
+              maxLength={STAT_BLOCK_LIMITS.maxEntryNameLength}
               className="input-cozy w-full text-[11px]"
             />
             <textarea
@@ -928,6 +942,7 @@ function NameDescriptionList({
                 onChange(updated);
               }}
               placeholder="Description"
+              maxLength={STAT_BLOCK_LIMITS.maxEntryDescriptionLength}
               rows={2}
               className="input-cozy w-full text-[11px] resize-y"
             />
@@ -1029,6 +1044,28 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
     ...proficiencyFields,
   };
 
+  // Ability scores and CR feed every derived save and skill, so a change
+  // moves them, as in the token editor: the form used to show the new totals
+  // and save the old ones. Pathfinder modifiers are printed values, not derived.
+  const changeNumbers = (changes: Partial<Pick<NpcStatBlock, 'abilities' | 'challengeRating'>>) => {
+    if (isPf2e) return;
+    const next = changeAbilitiesOrRating(workingStatBlock, changes);
+    setProficiencyFields({ savingThrows: next.savingThrows, skills: next.skills, proficiencies: next.proficiencies });
+  };
+  const scoreSetters: Record<AbilityKey, (value: number) => void> = {
+    str: setStr, dex: setDex, con: setCon, int: setInt, wis: setWis, cha: setCha,
+  };
+  const changeScore = (ability: AbilityKey, value: number) => {
+    scoreSetters[ability](value);
+    changeNumbers({ abilities: { ...workingStatBlock.abilities, [ability]: value } });
+  };
+
+  // A Pathfinder stat block holds attribute modifiers (the token editor writes
+  // them, and rolls and the viewer read them); there is no score behind them.
+  const [attributeModifiers, setAttributeModifiers] = useState<Record<AbilityKey, number>>(() =>
+    readAttributeModifiers(sb ?? workingStatBlock)
+  );
+
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -1040,7 +1077,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
 
     // Merge the proficiency edits over the source before assembling, so the
     // carry-forward below sees the current saves and skills.
-    const statBlock = buildCreatureStatBlock({ ...sb, ...proficiencyFields, level }, {
+    const statBlock = buildCreatureStatBlock({ ...sb, ...proficiencyFields, level, ...(isPf2e ? { attributeModifiers } : {}) }, {
       ac,
       hpMax,
       speed,
@@ -1082,8 +1119,8 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
         const creature = await api.createCreature(campaignId, payload);
         onCreated(creature);
       }
-    } catch {
-      setFormError(isEdit ? 'Failed to update creature' : 'Failed to create creature');
+    } catch (err) {
+      setFormError(apiErrorMessage(err) || (isEdit ? 'Failed to update creature' : 'Failed to create creature'));
     } finally {
       setIsSubmitting(false);
     }
@@ -1112,6 +1149,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="e.g. Goblin Boss"
+          maxLength={STAT_BLOCK_LIMITS.maxNameLength}
           className="input-cozy w-full text-sm"
         />
       </div>
@@ -1139,6 +1177,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             value={creatureType}
             onChange={(e) => setCreatureType(e.target.value)}
             placeholder="Small humanoid"
+            maxLength={STAT_BLOCK_LIMITS.maxCreatureTypeLength}
             className="input-cozy w-full text-xs"
           />
         </div>
@@ -1149,6 +1188,7 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             value={alignment}
             onChange={(e) => setAlignment(e.target.value)}
             placeholder="neutral evil"
+            maxLength={STAT_BLOCK_LIMITS.maxAlignmentLength}
             className="input-cozy w-full text-xs"
           />
         </div>
@@ -1190,7 +1230,10 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             <select
               id="creature-cr"
               value={cr}
-              onChange={(e) => setCr(e.target.value)}
+              onChange={(e) => {
+                setCr(e.target.value);
+                changeNumbers({ challengeRating: e.target.value || undefined });
+              }}
               className="input-cozy w-full text-xs"
             >
               <option value="">—</option>
@@ -1216,35 +1259,51 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             type="text"
             value={speed}
             onChange={(e) => setSpeed(e.target.value)}
+            maxLength={STAT_BLOCK_LIMITS.maxSpeedLength}
             className="input-cozy w-full text-xs"
           />
         </div>
       </div>
 
-      {/* Ability scores */}
-      <div>
-        <label className="text-[10px] text-stone-gray block mb-0.5">Ability Scores</label>
-        <div className="grid grid-cols-6 gap-1.5">
-          {([
-            ['STR', str, setStr],
-            ['DEX', dex, setDex],
-            ['CON', con, setCon],
-            ['INT', int, setInt],
-            ['WIS', wis, setWis],
-            ['CHA', cha, setCha],
-          ] as const).map(([label, val, setter]) => (
-            <div key={label} className="text-center">
-              <label className="text-[8px] font-bold text-brand-ink block">{label}</label>
-              <input
-                type="number"
-                value={val}
-                onChange={(e) => (setter as (v: number) => void)(parseInt(e.target.value, 10) || 10)}
-                className="input-cozy w-full text-xs text-center"
-              />
-            </div>
-          ))}
+      {/* Ability scores, or a Pathfinder creature's attribute modifiers */}
+      {isPf2e ? (
+        <div>
+          <label className="text-[10px] text-stone-gray block mb-0.5">Attribute Modifiers</label>
+          <div className="grid grid-cols-6 gap-1.5">
+            {ABILITY_KEYS.map((ability) => (
+              <div key={ability} className="text-center">
+                <label className="text-[8px] font-bold text-brand-ink block">{PF2E_ATTRIBUTE_LABELS[ability]}</label>
+                <input
+                  type="number"
+                  value={attributeModifiers[ability]}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    setAttributeModifiers((prev) => ({ ...prev, [ability]: Number.isFinite(parsed) ? parsed : 0 }));
+                  }}
+                  className="input-cozy w-full text-xs text-center"
+                />
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div>
+          <label className="text-[10px] text-stone-gray block mb-0.5">Ability Scores</label>
+          <div className="grid grid-cols-6 gap-1.5">
+            {ABILITY_KEYS.map((ability) => (
+              <div key={ability} className="text-center">
+                <label className="text-[8px] font-bold text-brand-ink block">{ability.toUpperCase()}</label>
+                <input
+                  type="number"
+                  value={workingStatBlock.abilities[ability]}
+                  onChange={(e) => changeScore(ability, parseInt(e.target.value, 10) || 10)}
+                  className="input-cozy w-full text-xs text-center"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Saves & skills — derived from the ability scores and CR above. This
           form had no fields for these at all, which is why editing a duplicated
@@ -1320,27 +1379,27 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Damage Vulnerabilities</label>
-                <input type="text" value={damageVulnerabilities} onChange={(e) => setDamageVulnerabilities(e.target.value)} placeholder="fire" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={damageVulnerabilities} onChange={(e) => setDamageVulnerabilities(e.target.value)} placeholder="fire" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Damage Resistances</label>
-                <input type="text" value={damageResistances} onChange={(e) => setDamageResistances(e.target.value)} placeholder="cold, bludgeoning" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={damageResistances} onChange={(e) => setDamageResistances(e.target.value)} placeholder="cold, bludgeoning" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Damage Immunities</label>
-                <input type="text" value={damageImmunities} onChange={(e) => setDamageImmunities(e.target.value)} placeholder="poison" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={damageImmunities} onChange={(e) => setDamageImmunities(e.target.value)} placeholder="poison" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Condition Immunities</label>
-                <input type="text" value={conditionImmunities} onChange={(e) => setConditionImmunities(e.target.value)} placeholder="charmed, frightened" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={conditionImmunities} onChange={(e) => setConditionImmunities(e.target.value)} placeholder="charmed, frightened" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Senses</label>
-                <input type="text" value={senses} onChange={(e) => setSenses(e.target.value)} placeholder="darkvision 60 ft." className="input-cozy w-full text-[11px]" />
+                <input type="text" value={senses} onChange={(e) => setSenses(e.target.value)} placeholder="darkvision 60 ft." maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
               <div>
                 <label className="text-[10px] text-stone-gray block mb-0.5">Languages</label>
-                <input type="text" value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="Common, Goblin" className="input-cozy w-full text-[11px]" />
+                <input type="text" value={languages} onChange={(e) => setLanguages(e.target.value)} placeholder="Common, Goblin" maxLength={STAT_BLOCK_LIMITS.maxDetailLength} className="input-cozy w-full text-[11px]" />
               </div>
             </div>
 

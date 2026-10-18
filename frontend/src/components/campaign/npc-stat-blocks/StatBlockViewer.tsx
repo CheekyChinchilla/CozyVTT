@@ -10,6 +10,8 @@ import { GameSystem } from '@/types';
 import Dnd5eStatBlock from './Dnd5eStatBlock';
 import GenericStatBlock from './GenericStatBlock';
 import { formatSaveList, formatSkillList } from './statBlockProficiency';
+import { PF2E_ATTRIBUTE_LABELS, PF2E_SAVES, formatPf2eSaves, readAttributeModifiers } from './pf2eStatBlock';
+import { ABILITY_KEYS, formatModifier } from '@/utils/rules/dnd5e';
 
 interface StatBlockViewerProps {
   statBlock: NpcStatBlock;
@@ -31,11 +33,11 @@ export default function StatBlockViewer({ statBlock, tokenName, gameSystem }: St
 }
 
 // ─── Pathfinder 2e ───────────────────────────────────────────────
+// As a Pathfinder stat block prints it: the creature's level, its attribute
+// modifiers (there is no score behind them) and Fort, Ref and Will. A D&D
+// creature borrowed into the campaign keeps its challenge rating, called CR.
 function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; tokenName: string }) {
-  const mod = (score: number) => {
-    const m = Math.floor((score - 10) / 2);
-    return m >= 0 ? `+${m}` : `${m}`;
-  };
+  const modifiers = readAttributeModifiers(statBlock);
 
   return (
     <div className="space-y-2 text-xs">
@@ -50,9 +52,11 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
 
       {/* Key stats */}
       <div className="flex gap-4 flex-wrap text-ink">
-        {statBlock.challengeRating && (
-          <div><span className="font-semibold text-danger-ink">Level</span> {statBlock.challengeRating}</div>
-        )}
+        {typeof statBlock.level === 'number' ? (
+          <div><span className="font-semibold text-danger-ink">Level</span> {statBlock.level}</div>
+        ) : statBlock.challengeRating ? (
+          <div><span className="font-semibold text-danger-ink">CR</span> {statBlock.challengeRating}</div>
+        ) : null}
         <div><span className="font-semibold text-danger-ink">AC</span> {statBlock.ac}</div>
         {statBlock.hpMax != null && (
           <div>
@@ -63,19 +67,18 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
         <div><span className="font-semibold text-danger-ink">Speed</span> {statBlock.speed}</div>
       </div>
 
-      {/* Abilities */}
+      {/* Attribute modifiers */}
       <div className="grid grid-cols-6 gap-1 text-center bg-danger/10 rounded-sm p-1.5">
-        {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
+        {ABILITY_KEYS.map((ab) => (
           <div key={ab}>
-            <div className="text-[9px] font-bold text-danger-ink uppercase">{ab}</div>
-            <div className="text-ink">{statBlock.abilities[ab]}</div>
-            <div className="text-[10px] text-ink-muted">{mod(statBlock.abilities[ab])}</div>
+            <div className="text-[9px] font-bold text-danger-ink uppercase">{PF2E_ATTRIBUTE_LABELS[ab]}</div>
+            <div className="text-ink">{formatModifier(modifiers[ab])}</div>
           </div>
         ))}
       </div>
 
       {/* Defenses & senses */}
-      <StatBlockDetailLines statBlock={statBlock} accentColor="danger" />
+      <StatBlockDetailLines statBlock={statBlock} accentColor="danger" pf2e />
 
       {/* Abilities and actions */}
       <StatBlockActionSections statBlock={statBlock} accentColor="danger" />
@@ -142,12 +145,18 @@ const ACCENTS = {
 
 type AccentName = keyof typeof ACCENTS;
 
-function StatBlockDetailLines({ statBlock, accentColor }: { statBlock: NpcStatBlock; accentColor: AccentName }) {
+function StatBlockDetailLines({ statBlock, accentColor, pf2e = false }: { statBlock: NpcStatBlock; accentColor: AccentName; pf2e?: boolean }) {
   const accent = ACCENTS[accentColor].text;
   const lines: Array<{ label: string; value: string }> = [];
 
   if (statBlock.savingThrows && Object.keys(statBlock.savingThrows).length > 0) {
-    lines.push({ label: 'Saving Throws', value: formatSaveList(statBlock.savingThrows) });
+    // Pathfinder's three saves as it prints them; anything else (a D&D
+    // creature's six) as written.
+    const saves = statBlock.savingThrows;
+    const pf2eKeys: string[] = PF2E_SAVES.map((save) => save.key);
+    const others = Object.fromEntries(Object.entries(saves).filter(([key]) => !pf2e || !pf2eKeys.includes(key)));
+    const value = [pf2e ? formatPf2eSaves(saves) : '', formatSaveList(others)].filter(Boolean).join(', ');
+    if (value) lines.push({ label: 'Saving Throws', value });
   }
   if (statBlock.skills && Object.keys(statBlock.skills).length > 0) {
     lines.push({ label: 'Skills', value: formatSkillList(statBlock.skills) });

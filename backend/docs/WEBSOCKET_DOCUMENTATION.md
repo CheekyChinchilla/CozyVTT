@@ -42,21 +42,32 @@ CozyVTT uses Socket.io for real-time bidirectional communication between clients
 - Atmosphere effects and ambient audio
 - Character HP updates
 
-Two things people expect on the socket are not there:
+Three things people expect on the socket are not there:
 
 - **Creating, editing and deleting a token** are REST calls (`POST`, `PUT` and
-  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). Those routes
-  send the other connected clients no token event (only the initiative order
-  again, while something is in it); the web client follows each call with a
-  `map.change` for the map, so the table reloads it. A script that changes a
-  token over REST does the same, as the DM: `map.change` is the DM's alone.
-  Moving a token is the one token change with socket events of its own
-  (below).
+  `DELETE` under `/api/campaigns/{campaignId}/maps/{id}/tokens`). There is no
+  token event for them: when the map is the one the campaign is showing, each
+  route sends every connected member `map.changed` with the map as they may see
+  it (the event `map.change` sends), and the initiative order again while
+  something is in it. The map goes up to 100 ms after the change, at most once
+  in that time for each map and as it stands then, so a burst of changes
+  arrives as one map. A script needs to send nothing more, and a player's edit
+  to a token they control reaches the table the same way. Moving a token is the
+  one token change with socket events of its own (below).
 - **Starting, pausing, resuming and ending a session** are REST calls too
   (`POST /api/campaigns/{campaignId}/sessions`, then `PUT .../sessions/{sessionId}/pause`,
   `PUT /api/campaigns/{campaignId}/resume` and `PUT .../sessions/{sessionId}/end`). The
   socket only carries the `session.*` announcements the server broadcasts when
   one of them happens.
+- **Saving the vibe periods** is a REST call (`PUT /api/campaigns/{campaignId}/vibe`);
+  switching period is `vibe.update`. The save sends every connected member
+  `vibe.settings.updated` with `campaignId`, the stored `vibeSettings`,
+  `currentVibe`, `updatedBy` and `timestamp`. `currentVibe` is the period in
+  force under the spelling it was saved with, or `null` once that period was
+  renamed or deleted. When the period in force has a new track,
+  `atmosphere.audio.updated` follows with it if the table was playing the old
+  one or nothing; when the vibe ends while its track plays, with none. A track
+  the DM put on over the vibe is left playing.
 
 ### Architecture
 
@@ -1290,6 +1301,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `token:disappeared` | `tokens.ts` |
 | `user.joined` | `events.ts` |
 | `user.left` | `events.ts` |
+| `vibe.settings.updated` | `vibeSave.ts` |
 | `vibe.updated` | `vibe.ts` |
 | `wall:added` | `walls.ts` |
 | `wall:removed` | `walls.ts` |

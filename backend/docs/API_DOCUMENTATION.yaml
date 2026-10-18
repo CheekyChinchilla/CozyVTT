@@ -3042,11 +3042,21 @@ paths:
         that does not belong to another campaign. Anything else is a 400
         naming the period. Switching to a period plays its track for
         everyone; a period without one silences the table. Period names must
-        be unique ignoring case. If the current period no longer exists in
-        the new list it is cleared (matched ignoring case). Other fields, at
-        the top level or in a period, are stored as sent, except
+        be unique ignoring case. The current period stays current when the new
+        list still has it, matched ignoring case, and takes the spelling it is
+        saved with; otherwise (renamed or deleted) it is cleared. Other fields,
+        at the top level or in a period, are stored as sent, except
         `atmosphereAudio`, which is ignored in favour of the stored value.
-        Nothing is broadcast.
+
+        Every connected member is then sent `vibe.settings.updated` with
+        `campaignId`, the stored `vibeSettings`, the `currentVibe` the save
+        left, `updatedBy` and `timestamp`. The current period is written only
+        while it is still the one the save read, so a switch made meanwhile
+        stands. When the current period's track changes, the table is sent
+        `atmosphere.audio.updated` with the new one, if it is playing the old
+        one or nothing; when the save clears the current period while its
+        track plays, with none. A track the DM put on over the vibe is left
+        playing.
       operationId: updateVibe
       security:
         - cookieAuth: []
@@ -3112,6 +3122,7 @@ paths:
                   currentVibe:
                     type: string
                     nullable: true
+                    description: The current period as saved, or null when the save cleared it.
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -5042,12 +5053,18 @@ paths:
         - Characters
       summary: Assign character to campaign, or unassign it
       description: |
-        Owner only. A `campaignId` that is not a string or null answers 400
-        (`Validation Error`) before anything is looked up.
+        Assigning is the owner's alone. Unassigning is the owner's, or the
+        campaign DM's: the DM of the campaign the character is in may take it
+        out of that campaign while its owner is still a member, and it stays
+        with its owner. Anyone else answers
+        403 (`Only the character owner can assign this character to a
+        campaign`, or `Only the character owner, or the DM of its campaign, can
+        take it out of a campaign`). A `campaignId` that is not a string or null
+        answers 400 (`Validation Error`) before anything is looked up.
         - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
           character: its `campaignId` column is cleared and it is removed from
-          the caller's membership `characterIds` in its previous campaign, if
-          it had one. No campaign membership is needed for this.
+          its owner's membership `characterIds` in its previous campaign, if
+          it had one. The owner needs no campaign membership for this.
         - Sending a `campaignId` assigns the character to that campaign. The
           campaign must exist (404 otherwise) and the caller must already be a
           member of it (403 otherwise). The character's `gameSystem` must
@@ -6871,7 +6888,12 @@ paths:
         - Maps
       summary: Add token to map
       description: |
-        Add a new token to the map (DM only). Every field is checked against
+        Add a new token to the map (DM only). When the map is the one the
+        campaign is showing, every connected member is then sent
+        `map.changed` with the map as they may see it, as `map.change` sends
+        it; a map the DM has not switched to sends nothing. The map goes up to
+        100 ms later, at most once in that time for each map, as it stands
+        then, so a burst of token changes is sent as one map. Every field is checked against
         the token schema and stored as parsed: a position keeps only `x` and
         `y`, `rotation` is 0 to 360, the flags are booleans and the ids are
         UUIDs. A `characterId` must name a character of this campaign, or the
@@ -6906,9 +6928,7 @@ paths:
 
         While anything is in the initiative order it is sent again to every
         connected member (`initiative.state`), since a player's spirit-layer
-        token placed on the current map moves them to the spirit plane. No
-        map event is sent: other open pages see the new token only on their
-        next map update or reload.
+        token placed on the current map moves them to the spirit plane.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -6953,7 +6973,10 @@ paths:
         - Maps
       summary: Update token
       description: |
-        Update a token. The DM may update any token and any field. A player may
+        Update a token. When the map is the one the campaign is showing, every
+        connected member is then sent `map.changed` with the map as they may
+        see it, a player's own change included, up to 100 ms later and at most
+        once in that time for each map (as for adding a token). The DM may update any token and any field. A player may
         update only a token that names them in `controlledBy`, and only its
         `position`, `rotation` and `conditions`; every other field of the body
         below, `size` and `sightRadius` included, answers 403 for a player
@@ -7000,8 +7023,7 @@ paths:
         again to every connected member (`initiative.state`), each as they
         may see it, whenever anything is in the order, whether or not this
         token is a combatant. Any other update sends the order again only if
-        this token is in it. No map event is sent: other open pages see the
-        change only on their next map update or reload.
+        this token is in it.
       operationId: updateToken
       security:
         - cookieAuth: []
@@ -7168,13 +7190,14 @@ paths:
         - Maps
       summary: Delete token
       description: >-
-        Remove a token from the map (DM only). If it is a combatant, it
+        Remove a token from the map (DM only). When the map is the one the
+        campaign is showing, every connected member is then sent
+        `map.changed` without it (up to 100 ms later, as for adding a token).
+        If it is a combatant, it
         leaves the initiative order and the order is sent again to every
         connected member (`initiative.state`), even when that empties it.
         Otherwise the order is sent again only while anything is in it, since
         removing a player's spirit-layer token can move them between planes.
-        No map event is sent: other open pages see the token go only on their
-        next map update or reload.
       operationId: deleteToken
       security:
         - cookieAuth: []
@@ -8113,7 +8136,10 @@ paths:
         '400':
           description: >-
             `error` is `Validation Error`; `message` joins every validation
-            problem with `; `.
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
           content:
             application/json:
               schema:
@@ -8251,7 +8277,10 @@ paths:
         '400':
           description: >-
             `error` is `Validation Error`; `message` joins every validation
-            problem with `; `. An empty body is refused.
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`. An empty body is refused.
           content:
             application/json:
               schema:
@@ -8638,7 +8667,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -8697,7 +8735,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
@@ -8758,7 +8805,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
 

@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import { NpcStatBlockSchema } from './statBlock';
+import { TOKEN_LIMITS } from './tokenLimits';
 
 /** How many squares a token occupies. */
 /**
@@ -51,8 +52,8 @@ export const TokenHpSchema = z.object({
  * storage, and blanks dropped so an empty chip cannot appear on the map.
  */
 export const TokenConditionsSchema = z
-  .array(z.string().trim().min(1).max(60))
-  .max(50)
+  .array(z.string().trim().min(1).max(TOKEN_LIMITS.maxConditionLength))
+  .max(TOKEN_LIMITS.maxConditions)
   .transform((conditions) => conditions.filter((c) => c.length > 0));
 
 /**

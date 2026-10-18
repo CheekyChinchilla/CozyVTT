@@ -122,4 +122,13 @@ describe('ConfigureVibeModal', () => {
     await waitFor(() => expect(putVibe).toHaveBeenCalled());
     expect(putVibe.mock.calls[0][1].periods[0].audio).toBe(OWN.id);
   });
+
+  // A rename or delete of the period in force ends the vibe; the DM's page
+  // takes that from the answer, as everyone else's does from the broadcast.
+  it('takes the vibe the save leaves in force', async () => {
+    putVibe.mockResolvedValue({ vibeSettings: { enabled: true, periods: [{ ...day, name: 'Noon' }] }, currentVibe: null });
+    render(<ConfigureVibeModal onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save Periods' }));
+    await waitFor(() => expect(updateVibeSettings).toHaveBeenCalledWith({ enabled: true, periods: [{ ...day, name: 'Noon' }] }, null));
+  });
 });

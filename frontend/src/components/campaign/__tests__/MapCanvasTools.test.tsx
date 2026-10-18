@@ -135,6 +135,7 @@ vi.mock('@/services/api', () => {
 
 import MapCanvas from '../MapCanvas';
 import { useGameStore } from '@/stores/gameStore';
+import mapService from '@/services/map.service';
 
 const seg = (id: string, x1: number, y1: number, x2: number, y2: number, type: WallSegment['type'] = 'wall'): WallSegment =>
   ({ id, x1, y1, x2, y2, type });
@@ -1189,5 +1190,21 @@ describe('moving the pointer (F351)', () => {
     } finally {
       attach.mockRestore();
     }
+  });
+});
+
+// A refused Global Illumination change put the switch back and said nothing,
+// so the DM could not tell it had been refused, or why.
+describe('the Global Illumination switch', () => {
+  it('says why a change was refused, and shows the switch as the map has it', async () => {
+    h.set({ currentMap: mapWith({ lightingEnabled: true, globalIllumination: true }) });
+    vi.mocked(mapService.updateMap).mockRejectedValueOnce({ response: { status: 429, data: { message: 'Too many requests, please slow down' } } });
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByText(/^Lights/));
+    const toggle = screen.getByLabelText('Global illumination') as HTMLInputElement;
+    await act(async () => { fireEvent.click(toggle); });
+
+    expect(await screen.findByText('Too many requests, please slow down')).toBeTruthy();
+    expect((screen.getByLabelText('Global illumination') as HTMLInputElement).checked).toBe(true);
   });
 });

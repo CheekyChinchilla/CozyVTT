@@ -2130,7 +2130,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         characterTokenRequest(dragData, position, targetLayer),
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
     } catch (err) {
       showToast(apiErrorMessage(err) || `Could not place ${dragData.name} on the map`, 'error');
     }
@@ -2668,8 +2667,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setCurrentMap({ ...currentMap, globalIllumination: on });
               try {
                 await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
-              } catch {
+              } catch (err) {
                 setCurrentMap(before);
+                showToast(apiErrorMessage(err) || 'Could not change Global Illumination', 'error');
               }
             }}
             placementDefaults={lightPlacementDefaults}
@@ -3140,7 +3140,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       conditions: [],
                     });
                     useGameStore.getState().addToken(result.token);
-                    socket?.emitMapChange(currentMap.id);
                   } catch (err) {
                     // A copy is a new token, so an older one whose fields predate
                     // validation is refused: say which, so the DM can fix it in Edit Token.
@@ -3190,7 +3189,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const token = contextMenu.token;
                     setContextMenu(null);
                     try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
                     } catch (err) {
                       showToast(apiErrorMessage(err) || (token.visible ? 'Could not hide the token from players' : 'Could not show the token to players'), 'error');
                     }
@@ -3209,7 +3208,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const token = contextMenu.token;
                     setContextMenu(null);
                     try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
                     } catch (err) {
                       showToast(apiErrorMessage(err) || (token.obscured ? "Could not reveal the token's identity" : "Could not obscure the token's identity"), 'error');
                     }
@@ -3233,7 +3232,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.SPIRIT });
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
-                        socket?.emitMapChange(currentMap.id);
                       } catch (err) {
                         showToast(apiErrorMessage(err) || 'Could not send the token to the spirit realm', 'error');
                       } finally {
@@ -3255,7 +3253,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.TOKEN });
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
-                        socket?.emitMapChange(currentMap.id);
                       } catch (err) {
                         showToast(apiErrorMessage(err) || 'Could not return the token to the material plane', 'error');
                       } finally {
@@ -3349,7 +3346,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           try {
             await api.deleteToken(campaign.id, currentMap.id, token.id);
             useGameStore.getState().removeToken(token.id);
-            socket?.emitMapChange(currentMap.id);
           } catch (err) {
             showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
           }
