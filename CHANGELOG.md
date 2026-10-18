@@ -52,10 +52,13 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* `character.hp.update` refuses a `delta` that is not a whole number from -100000 to 100000 (`delta must be a whole number of hit points from -100000 to 100000`), and for D&D 5e and Pathfinder 2e takes a negative one from `hp.temporary` first. It and `character.hitdice.spend` act on a character only when it names the socket's campaign and its owner is still a member, as the REST routes decide; they read the members' lists of character ids before.
   - *Campaigns.* `PUT /api/campaigns/:campaignId` takes a `status` of `PREPARATION`, `COMPLETED` or `ARCHIVED` only, answering 400 `Invalid status. Must be one of: PREPARATION, COMPLETED, ARCHIVED; starting, pausing and ending a session set the others`, and none while a session is running or paused (400 `End the session before changing the campaign status`, storing nothing from the request).
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
+  - *Invitations.* `GET /api/invitations` gives each invitation's campaign a `dm` (`{ displayName }`, or null): the member who holds the DM seat. `owner` is still sent.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **An invitation names the campaign's DM.** The dashboard and the invitation named the campaign's owner as its DM, which is wrong once the owner has handed the game over.
 
 - **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators. A DM the game was handed to was offered **Delete Campaign**, which the server refused.
 

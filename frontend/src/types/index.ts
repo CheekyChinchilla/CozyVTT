@@ -597,6 +597,10 @@ export interface CampaignInvitation {
     owner?: {
       displayName: string;
     };
+    /** The member who runs the game, which is not the owner once it is handed over. */
+    dm?: {
+      displayName: string;
+    } | null;
   };
 }
 

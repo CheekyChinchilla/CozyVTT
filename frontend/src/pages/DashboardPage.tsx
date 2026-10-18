@@ -414,7 +414,7 @@ export default function DashboardPage() {
                     )}
                     <div className="flex items-center justify-between text-xs text-warm-gray">
                       <span>
-                        DM: {invitation.campaign?.owner?.displayName}
+                        {invitation.campaign?.dm && `DM: ${invitation.campaign.dm.displayName}`}
                       </span>
                       <button className="text-brand-ink hover:underline font-medium">
                         View Invitation →

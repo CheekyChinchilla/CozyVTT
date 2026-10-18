@@ -42,13 +42,17 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             description: true,
             gameSystem: true,
             status: true,
-            // TODO(ui): the dashboard and InvitationModal show this owner as
-            // "DM:", which is wrong once the game has been handed over. Send
-            // the member whose role is DM and show that.
             owner: {
               select: {
                 displayName: true,
               },
+            },
+            // Who runs the game, which is not the owner once it has been
+            // handed over; the invitation names this member as its DM.
+            memberships: {
+              where: { role: 'DM' },
+              take: 1,
+              select: { user: { select: { displayName: true } } },
             },
           },
         },
@@ -58,7 +62,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       },
     });
 
-    return res.json(invitations);
+    return res.json(invitations.map(({ campaign: { memberships, ...campaign }, ...invitation }) => ({
+      ...invitation,
+      campaign: { ...campaign, dm: memberships[0]?.user ?? null },
+    })));
   } catch (error) {
     logger.error('Error fetching invitations', { err: error });
     return res.status(500).json({ message: 'Failed to fetch invitations' });

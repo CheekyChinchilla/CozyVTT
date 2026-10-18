@@ -3236,6 +3236,14 @@ paths:
                             not be the member who holds the DM seat.
                           properties:
                             displayName: { type: string }
+                        dm:
+                          type: object
+                          nullable: true
+                          description: >-
+                            The member who holds the DM seat, which the app
+                            shows as the campaign's DM; null if nobody does.
+                          properties:
+                            displayName: { type: string }
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
