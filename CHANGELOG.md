@@ -32,6 +32,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The ruler counts alternating diagonals at the map's own scale.** On a map using the alternating diagonal rule, each diagonal square was counted as 5 ft, and every second one as 10 ft, whatever the map's **Grid Scale**, so on a map at 10 ft a square diagonals measured half their distance.
+
 - **A player who right-clicks a creature or an object on the map no longer gets an empty menu.** The menu has nothing for a player there, so none opens.
 
 - **A character dragged from the roster that cannot be placed on the map says why.** Nothing appeared and there was no message.
