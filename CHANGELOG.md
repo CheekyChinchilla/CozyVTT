@@ -65,6 +65,14 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **What the table refuses is shown as a message, and the Dice panel shows only what happened to its own rolls.** Every refusal, such as a token move during a pause, initiative rolled after combat has started, or a chat message held back by the cooldown, went to the Dice panel's banner, in a tab you might not have open, and a roll still on its way could lose its **Rolling...** state. Refusals now appear as a message at the top right of the page, once each, and the Dice panel's banner is for its own rolls. A roll that reached the panel twice is listed once.
 
+- **Chat times move on.** A message's time stayed at "just now", or wherever it was when the message arrived, until the page was reloaded; it now updates each minute.
+
+- **Enter no longer sends a chat message or a roll while you are picking characters in an input method,** as Japanese, Chinese and Korean typing does. It now confirms the characters, as it should. The same goes for the boxes in **Saved** rolls and in a token's custom roll.
+
+- **The Dice and Chat boxes keep the keyboard after you roll or send.** Each roll, and each chat message while the DM's chat cooldown was on, took the cursor out of the box, so you had to click back in every time.
+
+- **A failed Load More in chat no longer leaves its message up for good, or makes the list jump later.** The message clears when the next Load More works and has a close button, and a message that arrives later no longer moves you away from where you were reading.
+
 - **A chat message that does not get through says so.** One sent as the connection dropped, or refused by the chat cooldown, stayed marked *sending…* for good. It is now marked **Not sent** with the reason, and **Retry** sends it again without ever posting it twice; **Discard** removes it. A message over 2,000 characters can no longer be typed: the box stops there and counts the characters as you near it. Messages that arrive while the chat history is still loading are no longer lost.
 
 - **Saving Campaign Settings, removing a player and handing over the DM seat leave the table as it is.** Each one rebuilt the whole campaign page: every token picture was fetched again, a chat message being typed was lost, and the settings reopened on **General**. Several saves in a minute could reach the limit of 300 requests a minute, after which token pictures failed to load until it passed.

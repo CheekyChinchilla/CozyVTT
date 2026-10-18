@@ -431,6 +431,8 @@ export default function DiceRoller() {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Enter while an input method is composing confirms the candidate.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       rollDice(expression);
@@ -726,8 +728,11 @@ export default function DiceRoller() {
               onChange={(e) => setExpression(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 font-mono text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
           </div>
 
@@ -740,8 +745,11 @@ export default function DiceRoller() {
               placeholder="Character"
               // The longest name and purpose the server stores with a roll.
               maxLength={200}
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
 
             <input
@@ -751,8 +759,11 @@ export default function DiceRoller() {
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Purpose"
               maxLength={300}
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
           </div>
 

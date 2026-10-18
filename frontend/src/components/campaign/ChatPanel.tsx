@@ -4,7 +4,7 @@
 // ============================================
 
 import { useState, useEffect, useLayoutEffect, useRef, FormEvent, KeyboardEvent } from 'react';
-import { MessageCircle, Send, Loader, AlertCircle, Eraser } from 'lucide-react';
+import { MessageCircle, Send, Loader, AlertCircle, Eraser, X } from 'lucide-react';
 import { useParams } from 'react-router';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
@@ -241,17 +241,20 @@ export default function ChatPanel() {
     try {
       setIsLoadingMore(true);
 
+      // Hand back exactly what the server gave us. It decides what a position
+      // in the history is; the panel does not construct one.
+      const page = await getMessages(campaignId, PAGE_SIZE, cursor ?? undefined);
+
       // Older messages are added above what is on screen, which would otherwise
       // push the reader's place down by the height of the new page and make a
-      // second Load More impossible to aim at. Remember where the bottom was.
+      // second Load More impossible to aim at. Remember where the bottom was,
+      // now that the page is here: taken before the request, a failed one left
+      // it set for whatever message came next, which then jumped the list.
       const container = messagesContainerRef.current;
       restoreScrollRef.current = container
         ? container.scrollHeight - container.scrollTop
         : null;
-
-      // Hand back exactly what the server gave us. It decides what a position
-      // in the history is; the panel does not construct one.
-      const page = await getMessages(campaignId, PAGE_SIZE, cursor ?? undefined);
+      setError(null);
 
       // Merged rather than prepended: a page that overlaps what is on screen
       // would otherwise show its messages twice, duplicate keys and all.
@@ -403,6 +406,8 @@ export default function ChatPanel() {
    * Handle Enter key (submit) and Shift+Enter (newline)
    */
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Enter while an input method is composing confirms the candidate.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -561,7 +566,15 @@ export default function ChatPanel() {
       {error && (
         <div className="mx-4 mt-4 p-3 bg-danger/10 border border-danger/30 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-danger-ink shrink-0" />
-          <p className="text-sm text-danger-ink">{error}</p>
+          <p className="text-sm text-danger-ink flex-1">{error}</p>
+          <button
+            type="button"
+            onClick={() => setError(null)}
+            aria-label="Dismiss"
+            className="p-1 rounded-sm text-danger-ink hover:bg-danger/10"
+          >
+            <X className="w-4 h-4" aria-hidden="true" />
+          </button>
         </div>
       )}
 
@@ -633,10 +646,13 @@ export default function ChatPanel() {
               placeholder="Type a message... (Enter to send, Shift+Enter for new line)"
               aria-label="Chat message"
               aria-describedby="chat-hint"
-              className="input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px]"
+              className={`input-cozy flex-1 text-sm resize-none min-h-[60px] max-h-[120px] ${canSend ? '' : 'opacity-50 cursor-not-allowed'}`}
               rows={2}
               maxLength={MAX_MESSAGE_LENGTH}
-              disabled={!canSend}
+              // Read-only through the cooldown, not disabled: disabling the
+              // box threw keyboard focus to the page after every message.
+              readOnly={!canSend}
+              aria-disabled={!canSend}
             />
             <Button
               type="submit"

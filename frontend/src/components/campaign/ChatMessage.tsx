@@ -4,6 +4,7 @@
 // ============================================
 
 import { memo } from 'react';
+import { useMinuteClock } from '@/hooks/useMinuteClock';
 import { Bot, Shield } from 'lucide-react';
 import type { Message, MessageType } from '@/types';
 
@@ -21,7 +22,7 @@ interface ChatMessageProps {
 /**
  * Format timestamp as relative time (e.g., "2 minutes ago")
  */
-function formatRelativeTime(timestamp: string): string {
+function formatRelativeTime(timestamp: string, now: number): string {
   // Handle undefined, null, or empty timestamps
   if (!timestamp) {
     return 'unknown time';
@@ -35,8 +36,7 @@ function formatRelativeTime(timestamp: string): string {
     return 'unknown time';
   }
 
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = now - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
@@ -90,6 +90,8 @@ function getMessageStyle(type: MessageType): { bg: string; textColor: string; bo
 }
 
 function ChatMessageInner({ message, isCurrentUser = false, isPending = false, notSentReason, onRetry, onDiscard }: ChatMessageProps) {
+  // The row is memoised, so without this its "just now" never moved on.
+  const now = useMinuteClock();
   const { bg, textColor, borderColor } = getMessageStyle(message.type);
   const isSystem = message.type === 'SYSTEM';
   const isDM = message.type === 'DM';
@@ -132,7 +134,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
           <span className="text-xs text-stone-gray/50 italic">sending…</span>
         ) : (
           <span className="text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
-            {formatRelativeTime(message.createdAt)}
+            {formatRelativeTime(message.createdAt, now)}
           </span>
         )}
       </div>

@@ -34,7 +34,8 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
   };
 
   const onEnter = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') submit();
+    // Enter while an input method is composing confirms the candidate.
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
   };
 
   return (
