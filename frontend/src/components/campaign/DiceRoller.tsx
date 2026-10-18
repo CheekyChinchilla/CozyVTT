@@ -7,11 +7,13 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { getDiceRolls } from '@/services/dice.service';
 import api from '@/services/api';
 import { mayDisplayRoll, visibleRolls } from '@/utils/secretRolls';
-import type { DiceRolledEvent, DiceRolledSecretEvent, DiceRollDetail, DiceMacro } from '@/types';
+import type { DiceRolledEvent, DiceRolledSecretEvent, DiceMacro } from '@/types';
+import { rollDice as rollExpression, parseDiceExpression, DiceParserError } from '@/utils/dice-parser';
 import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import DiceMacroManager from './DiceMacroManager';
+import JumpToNewest from './JumpToNewest';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -25,94 +27,30 @@ function rollKey(roll: DiceRolledEvent): string {
   return roll.id ?? `${roll.userId}-${roll.timestamp}`;
 }
 
-// ============================================
-// Local (offline) dice evaluator
-// Used when session is paused — no server, no DB, no DM visibility
-// Handles: NdS, NdSkh/klN, modifiers (+/-N), chained groups (2d6+1d4+3)
-// ============================================
-
-function localRoll(sides: number): number {
-  return Math.floor(Math.random() * sides) + 1;
-}
-
-function evaluateLocalRoll(
+/**
+ * A roll worked out in the browser, for a paused table: no server, no
+ * database, no DM visibility. It uses the server's own parser (the same
+ * file, byte for byte), so it reads every expression as a running table
+ * would. Call it with an expression `validateExpression` has passed.
+ */
+function rollLocally(
   expression: string,
   user: { id: string; displayName: string },
   characterName?: string,
   purpose?: string,
-): DiceRolledEvent | null {
-  try {
-    const expr = expression.trim().replace(/\s+/g, '');
-
-    // Tokenise by splitting on + / - boundaries (keeping signs)
-    const tokens = expr.match(/[+-]?[^+-]+/g);
-    if (!tokens || tokens.length === 0) return null;
-
-    const detailRolls: DiceRollDetail[] = [];
-    const formulaParts: string[] = [];
-    let total = 0;
-
-    for (const token of tokens) {
-      const negative = token.startsWith('-');
-      const sign = negative ? -1 : 1;
-      const part = token.replace(/^[+-]/, '');
-
-      // Dice group: NdS or NdSkh/klK
-      const diceMatch = part.match(/^(\d+)d(\d+)(?:(kh|kl)(\d+))?$/i);
-      if (diceMatch) {
-        const count = Math.min(parseInt(diceMatch[1]), 100);
-        const sides = Math.min(parseInt(diceMatch[2]), 1000);
-        const keepMode = diceMatch[3]?.toLowerCase() as 'kh' | 'kl' | undefined;
-        const keepCount = diceMatch[4] ? Math.min(parseInt(diceMatch[4]), count) : undefined;
-
-        const results = Array.from({ length: count }, () => localRoll(sides));
-
-        let kept: number[] | undefined;
-        let groupTotal: number;
-
-        if (keepMode && keepCount) {
-          const sorted = [...results].sort((a, b) => b - a);
-          kept = keepMode === 'kh' ? sorted.slice(0, keepCount) : sorted.slice(count - keepCount);
-          groupTotal = kept.reduce((s, v) => s + v, 0);
-        } else {
-          groupTotal = results.reduce((s, v) => s + v, 0);
-        }
-
-        const effectiveTotal = sign * groupTotal;
-        total += effectiveTotal;
-        formulaParts.push(negative && formulaParts.length > 0 ? `- ${groupTotal}` : String(groupTotal));
-        detailRolls.push({ type: 'dice', notation: part.toLowerCase(), count, sides, results, total: groupTotal, kept });
-      } else {
-        // Plain modifier
-        const modValue = parseInt(part, 10);
-        if (isNaN(modValue)) return null;
-        const effectiveMod = sign * modValue;
-        total += effectiveMod;
-        formulaParts.push(
-          negative && formulaParts.length > 0 ? `- ${modValue}` : (sign < 0 ? String(effectiveMod) : `+${modValue}`),
-        );
-        detailRolls.push({ type: 'modifier', value: effectiveMod });
-      }
-    }
-
-    if (detailRolls.length === 0) return null;
-
-    const formula = formulaParts.join(' + ').replace(/\+ \+/g, '+').replace(/\+ -/g, '- ') + ` = ${total}`;
-
-    return {
-      userId: user.id,
-      userName: user.displayName,
-      characterName: characterName?.trim() || null,
-      expression,
-      result: total,
-      breakdown: { expression, rolls: detailRolls, total, formula },
-      purpose: purpose?.trim() || null,
-      timestamp: new Date().toISOString(),
-      secret: false,
-    };
-  } catch {
-    return null;
-  }
+): DiceRolledEvent {
+  const breakdown = rollExpression(expression);
+  return {
+    userId: user.id,
+    userName: user.displayName,
+    characterName: characterName?.trim() || null,
+    expression,
+    result: breakdown.total,
+    breakdown,
+    purpose: purpose?.trim() || null,
+    timestamp: new Date().toISOString(),
+    secret: false,
+  };
 }
 
 // Quick roll button configurations with whimsical forest colors
@@ -180,37 +118,25 @@ export default function DiceRoller() {
   const rollsEndRef = useRef<HTMLDivElement>(null);
   const rollsContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+  /** Rolls that arrived live while the history was being read, by key. */
+  const liveDuringRead = useRef<Set<string> | null>(null);
+  /** A roll arrived below while the reader was scrolled up. */
+  const [newBelow, setNewBelow] = useState(false);
 
   /**
-   * Safety net for the "Rolling…" state.
-   *
-   * A roll is only ever ended by a message coming back from the server, so
-   * anything that loses that message leaves the button disabled until the user
-   * reloads. The listener bug that caused this in practice is fixed in the
-   * socket client, but a roll can still be lost if the connection drops between
-   * the emit and the reply — and a control that can wedge with no way out
-   * should always have one.
+   * End the "Rolling…" state. The roll coming back as `dice.rolled` ends it,
+   * and so does the server's answer to the roll, which also comes when the
+   * roll was refused or never answered (see `rollDice` in the socket client),
+   * so the button cannot stay disabled.
    */
-  const rollTimeoutRef = useRef<number | null>(null);
-  const ROLL_TIMEOUT_MS = 10000;
-
   const clearPendingRoll = useCallback(() => {
-    if (rollTimeoutRef.current !== null) {
-      clearTimeout(rollTimeoutRef.current);
-      rollTimeoutRef.current = null;
-    }
     setIsRolling(false);
   }, []);
 
-  // A pending roll cannot be answered while the socket is down, and drop the
-  // timer on unmount so it cannot fire against a gone component.
+  // A pending roll cannot be answered while the socket is down.
   useEffect(() => {
     if (status !== 'connected') clearPendingRoll();
   }, [status, clearPendingRoll]);
-
-  useEffect(() => () => {
-    if (rollTimeoutRef.current !== null) clearTimeout(rollTimeoutRef.current);
-  }, []);
 
   // Confirm clear history
   const [confirmClear, setConfirmClear] = useState(false);
@@ -257,23 +183,28 @@ export default function DiceRoller() {
   useEffect(() => {
     if (!campaign?.id) return;
     let cancelled = false;
+    const isRejoin = rejoins > 0;
+    liveDuringRead.current = new Set();
 
     const loadHistory = async () => {
       try {
         const fetched = await getDiceRolls(campaign.id, 50);
         if (cancelled) return;
         const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'DM'));
+        const arrivedLive = liveDuringRead.current ?? new Set<string>();
+        liveDuringRead.current = null;
 
-        // TODO(play): suspected, not reproduced. This merge only adds, and
-        // the DM's clear reaches only members online at the time, so a member
-        // who was offline then keeps the cleared rolls after rejoining, until
-        // they reload. On a rejoin, take the server's list as the history,
-        // keeping only rolls that arrived live since it was fetched.
         setRolls((prev) => {
-          // Merge rather than replace: a roll can land live between mount and
-          // this response, and it must not be lost or duplicated.
-          const seen = new Set(prev.map(rollKey));
-          const merged = [...prev, ...visible.filter((r) => !seen.has(rollKey(r)))];
+          // Merged, not replaced, on the first load: a roll can land live
+          // between mount and this response, and it must not be lost or
+          // duplicated. On a rejoin the server's list is the history: a clear
+          // made while this page was away reached only the pages online, and
+          // merging kept every cleared roll. Kept beside it are the rolls that
+          // arrived while it was being read, and rolls made in this browser
+          // during a pause, which the server never had.
+          const held = isRejoin ? prev.filter((r) => !r.id || arrivedLive.has(rollKey(r))) : prev;
+          const seen = new Set(held.map(rollKey));
+          const merged = [...held, ...visible.filter((r) => !seen.has(rollKey(r)))];
           merged.sort(
             (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
@@ -337,13 +268,12 @@ export default function DiceRoller() {
       // Someone else's secret roll is not mine to see. The server does not send
       // them, so reaching this is already wrong; drop it rather than draw it.
       if (!mayDisplayRoll(data, user?.id, userRole === 'DM')) return;
+      liveDuringRead.current?.add(rollKey(data));
 
       // Newest first in state; the list renders oldest-first, chat style.
-      setRolls((prev) => {
-        const updated = [data, ...prev];
-        // Keep only last 50 rolls
-        return updated.length > 50 ? updated.slice(0, 50) : updated;
-      });
+      // A roll already listed (sent twice, or loaded with the history while
+      // it was on its way) is not added again.
+      setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(data)) ? prev : [data, ...prev].slice(0, 50)));
     };
 
     socket.onDiceRolled(handleDiceRolled);
@@ -368,14 +298,9 @@ export default function DiceRoller() {
         ...data,
         secret: true, // Keep secret flag for styling
       };
+      liveDuringRead.current?.add(rollKey(auditRoll));
 
-      setRolls((prev) => {
-        const updated = [auditRoll, ...prev];
-        if (updated.length > 50) {
-          return updated.slice(0, 50);
-        }
-        return updated;
-      });
+      setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(auditRoll)) ? prev : [auditRoll, ...prev].slice(0, 50)));
     };
 
     socket.onDiceRolledSecret(handleSecretRollAudit);
@@ -385,35 +310,6 @@ export default function DiceRoller() {
       socket.off('dice.rolled.secret', handleSecretRollAudit);
     };
   }, [socket, userRole]);
-
-  // Handle WebSocket errors (rate limiting)
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleError = (data: { message: string }) => {
-      console.log('[DiceRoller] Received error event:', data);
-
-      // Check if it's a rate limit error
-      if (data.message.includes('Rate limit exceeded')) {
-        setError(data.message);
-        clearPendingRoll();
-        // Only set cooldown if not already in cooldown (prevent reset)
-        if (!isInCooldown.current) {
-          isInCooldown.current = true;
-          setRateLimitCooldown(20); // 20 seconds cooldown
-        }
-      } else {
-        setError(data.message);
-        clearPendingRoll();
-      }
-    };
-
-    socket.on('error', handleError);
-
-    return () => {
-      socket.off('error', handleError);
-    };
-  }, [socket]);
 
   // Countdown timer for rate limit cooldown
   useEffect(() => {
@@ -456,36 +352,14 @@ export default function DiceRoller() {
   // Input Validation
   // ============================================
 
+  /** Why the server would refuse this expression, in its words, or null. */
   const validateExpression = (expr: string): string | null => {
-    if (!expr.trim()) {
-      return 'Expression cannot be empty';
+    try {
+      parseDiceExpression(expr);
+      return null;
+    } catch (err) {
+      return err instanceof DiceParserError ? `Invalid dice expression: ${err.message}` : 'Invalid dice expression';
     }
-
-    // Check length limit (200 characters)
-    if (expr.length > 200) {
-      return 'Expression too long (max 200 characters)';
-    }
-
-    // Basic validation for dice notation
-    const dicePattern = /^[\dd+\-*/khldisavw\s]+$/i;
-    if (!dicePattern.test(expr)) {
-      return 'Invalid characters in expression';
-    }
-
-    // Check for maximum dice count (100)
-    const diceMatches = expr.match(/(\d+)d/gi);
-    if (diceMatches) {
-      const totalDice = diceMatches.reduce((sum, match) => {
-        const count = parseInt(match.replace(/d/i, ''));
-        return sum + count;
-      }, 0);
-
-      if (totalDice > 100) {
-        return 'Too many dice (max 100 per roll)';
-      }
-    }
-
-    return null;
   };
 
   // ============================================
@@ -504,12 +378,8 @@ export default function DiceRoller() {
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
-      const localResult = evaluateLocalRoll(expr, user, characterName.trim(), purpose.trim());
-      if (localResult) {
-        setRolls((prev) => [localResult, ...prev]);
-      } else {
-        setError('Could not evaluate expression locally');
-      }
+      const localResult = rollLocally(expr, user, characterName.trim(), purpose.trim());
+      setRolls((prev) => [localResult, ...prev]);
       clearPendingRoll();
       return;
     }
@@ -533,24 +403,28 @@ export default function DiceRoller() {
     setError(null);
     setIsRolling(true);
 
-    // The roll is fire-and-forget, so nothing but a reply ends this state. If
-    // the connection drops in between, release the button rather than leaving
-    // it disabled until the user works out that a reload is the only way on.
-    if (rollTimeoutRef.current !== null) clearTimeout(rollTimeoutRef.current);
-    rollTimeoutRef.current = window.setTimeout(() => {
-      rollTimeoutRef.current = null;
-      setIsRolling(false);
-      setError("That roll didn't come back — check your connection and try again.");
-    }, ROLL_TIMEOUT_MS);
-
     console.log('[DiceRoller] Rolling dice:', expr, 'secret:', isSecret);
 
-    socket.emitDiceRoll({
-      expression: expr.trim(),
-      characterName: characterName.trim() || undefined,
-      purpose: purpose.trim() || undefined,
-      secret: isSecret,
-    });
+    // Only the answer to this roll is this panel's to show: it used to take
+    // every `error` on the socket as a refused roll, chat and token refusals
+    // included.
+    void socket
+      .rollDice({
+        expression: expr.trim(),
+        characterName: characterName.trim() || undefined,
+        purpose: purpose.trim() || undefined,
+        secret: isSecret,
+      })
+      .then((answer) => {
+        clearPendingRoll();
+        if (answer.ok) return;
+        setError(answer.error);
+        // The server's flood ceiling: wait it out before rolling again.
+        if (answer.error.startsWith('Rate limit exceeded') && !isInCooldown.current) {
+          isInCooldown.current = true;
+          setRateLimitCooldown(20);
+        }
+      });
 
     // Reset secret roll checkbox after rolling
     if (isSecret) {
@@ -569,6 +443,8 @@ export default function DiceRoller() {
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Enter while an input method is composing confirms the candidate.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       rollDice(expression);
@@ -612,10 +488,21 @@ export default function DiceRoller() {
   const newestIsMine = newestRoll !== undefined && newestRoll.userId === user?.id;
   useLayoutEffect(() => {
     const container = rollsContainerRef.current;
-    if (!container || (!wasAtBottomRef.current && !newestIsMine)) return;
+    if (!container || newestRollKey === null) return;
+    if (!wasAtBottomRef.current && !newestIsMine) {
+      setNewBelow(true);
+      return;
+    }
     container.scrollTo({ top: container.scrollHeight });
     wasAtBottomRef.current = true;
+    setNewBelow(false);
   }, [newestRollKey, newestIsMine]);
+
+  const jumpToNewest = () => {
+    rollsContainerRef.current?.scrollTo({ top: rollsContainerRef.current.scrollHeight });
+    wasAtBottomRef.current = true;
+    setNewBelow(false);
+  };
 
   /**
    * Only scrolling up leaves the bottom, so a position short of it that the
@@ -626,8 +513,12 @@ export default function DiceRoller() {
     const container = rollsContainerRef.current;
     if (!container) return;
     const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-    if (atBottom) wasAtBottomRef.current = true;
-    else if (container.scrollTop < lastScrollTopRef.current) wasAtBottomRef.current = false;
+    if (atBottom) {
+      wasAtBottomRef.current = true;
+      setNewBelow(false);
+    } else if (container.scrollTop < lastScrollTopRef.current) {
+      wasAtBottomRef.current = false;
+    }
     lastScrollTopRef.current = container.scrollTop;
   };
 
@@ -636,8 +527,10 @@ export default function DiceRoller() {
   };
 
   const handleConfirmClear = () => {
-    socket?.emitClearDiceHistory();
     setConfirmClear(false);
+    void socket?.clearDiceHistory().then((answer) => {
+      if (!answer.ok) setError(answer.error);
+    });
   };
 
   // ============================================
@@ -713,6 +606,7 @@ export default function DiceRoller() {
       </div>
 
       {/* Roll list — a running log, oldest first, like the chat beside it */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
@@ -747,13 +641,15 @@ export default function DiceRoller() {
           </div>
         )}
       </div>
+      {newBelow && <JumpToNewest onClick={jumpToNewest} />}
+      </div>
 
       {/* Input Area */}
       <div className="shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs">
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
           <p className="text-xs text-warm-amber text-center mb-2 italic">
-            Session paused: your rolls stay on your own screen.
+            Session paused: rolls from this tab stay on your own screen.
           </p>
         )}
         {isSpectator && (
@@ -862,8 +758,11 @@ export default function DiceRoller() {
               onChange={(e) => setExpression(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 font-mono text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
           </div>
 
@@ -876,8 +775,11 @@ export default function DiceRoller() {
               placeholder="Character"
               // The longest name and purpose the server stores with a roll.
               maxLength={200}
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
 
             <input
@@ -887,8 +789,11 @@ export default function DiceRoller() {
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Purpose"
               maxLength={300}
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
           </div>
 

@@ -132,7 +132,7 @@ The page has three main areas:
 - Campaign name and description at the top
 - The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
-- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character
+- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character. The minus buttons are damage, so in D&D 5e and Pathfinder 2e your temporary hit points go first
 - Click a character to read its sheet. Right-click one for a menu: **View Character Sheet** for anyone's character, and for your own **Roll...**, **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
 
@@ -208,12 +208,13 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 - **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - Scroll up to read the history — the full session log is preserved
+- A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and a message that did get through after all is not posted twice if you retry within ten minutes; **Discard** removes it
 
 ### The Dice Roller
 
 *Screenshot pending — Dice roller panel.*
 
-Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it.
+Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
 Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. Supported notation:
@@ -229,7 +230,7 @@ Type directly into the expression input and press **Enter** or **Roll**. The opt
 | `4d6kl3` | Four d6s, keep lowest three |
 | `4d6dl1` | Four d6s, drop the lowest one |
 
-One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Anything over those limits is refused with a message saying which.
+One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Its total must stay within about 2.1 billion either way, however the dice land, and it can never divide by something that could be zero, so `1d20/0` and `9999*9999*9999` are refused. Spaces are fine around `+`, `-`, `*` and `/`, but two terms need an operator between them: `1d20 5` is refused, where `1d20+5` is meant. Anything over those limits is refused with a message saying which, and a roll made while the session is paused follows exactly the same rules.
 
 *GIF pending — Typing a dice expression and seeing the result in the Dice panel.*
 
@@ -258,7 +259,7 @@ that never works.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
-One thing to know: if the DM has **paused** the session, your rolls are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh.
+One thing to know: if the DM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
 ---
 
@@ -374,7 +375,7 @@ Once the DM has added your token to the tracker, you roll for yourself — you d
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
-Roll before the DM clicks **Start Combat**. Once combat has started, the dice icon and **Roll Initiative** are no longer offered to you, and the server refuses a roll; if your initiative needs changing, ask your DM.
+Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
@@ -406,7 +407,7 @@ Your own skills show up with the rest on your sheet and in the right-click roll 
 
 At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5 d10` means you have five d10 hit dice and three of them are unspent.
 
-**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**.
+**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**. If the roll doesn't go through (the connection dropped, or too many rolls at once), a message says why and the die is not spent.
 
 It rolls **one** die, not the whole pool — spending is one die at a time, and the rules let you decide whether to spend another after seeing each result. So click again if you want a second.
 
@@ -577,7 +578,7 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 |--------|--------------|
 | Preparation | No session has been run yet — you can move your token |
 | 🟢 Live | Session is active — you can move your token |
-| 🟡 Paused | DM paused — token movement disabled, and your rolls stay in your own browser: the DM and other players don't see them |
+| 🟡 Paused | DM paused — token movement disabled, and your rolls from the Dice tab stay in your own browser: the DM and other players don't see them. Rolls from your sheet or a **Roll...** menu still reach the table |
 | ⚫ Inactive | The last session has ended — token movement disabled |
 
 The campaign card on the dashboard calls a **Live** campaign **Active**.

@@ -82,7 +82,7 @@ The left sidebar's **Campaign Roster** shows all players currently in your campa
 
 **Placing a character.** Drag any character from the roster onto the canvas, or right-click it and choose **Add to Map**, which drops it in the centre of the current map. Either works whether or not the character has a token picture: one without a picture is drawn as a coloured circle with its initial, the same as a creature with no art. The token is created as a **player** token, controlled by whoever owns the character while they are a player, so they can move it themselves; a character of your own, or one a spectator owns, is placed with no controller, so you move it. Only the controller can, and the map is drawn from the controller's point of view; change it any time in **Edit Token → Controlled By**.
 
-**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner.
+**Hit points and the character menu.** A character with hit points on its sheet shows a bar on its roster card. You get **−5**, **−** (one down), **+** (one up) and **+5** buttons on every character; a player has them on their own character only. The minus buttons are damage: in D&D 5e and Pathfinder 2e they take temporary hit points first, as the rules do, and only what is left comes off the character's hit points. The plus buttons heal and never add temporary hit points. Click a character to read its sheet, or right-click it for **View Character Sheet**, **Roll...**, **Edit Character Sheet**, **Add to Map** and **Remove from Campaign**. Remove from Campaign takes the character out of the campaign and leaves it with its owner.
 
 **Stacking tokens is a DM privilege.** Players are stopped from finishing a move on a square someone else is standing in — the rules say you cannot end your move in another creature's space, and the map now enforces it. You are exempt: place a rider on a mount, pile up a swarm or arrange scenery however you need to. A creature at zero hit points does not block anyone; it is drawn faded and can be stood on. Players only know a creature is down if they can see its hit points, so for them this applies to characters, their own tokens and creatures whose **Show HP bar** is on; a creature whose bar you keep off still looks standing to them, and still blocks its square, until you remove it. And if you do stack a token on top of a player's, they can still click the square and get their own token back.
 
@@ -325,7 +325,7 @@ If a token doesn't have a stat block, or you're running one of the systems above
 
 ### Roll History
 
-The **Dice** tab keeps the rolls made in your campaign in a scrolling list, oldest at the top and newest at the bottom. It's stored on the server, so it survives a refresh, a navigation away and back, and a dropped connection — yours and your players'. Come back the next evening and last session's rolls are still there. Initiative rolls are the exception: their entries in the list are not stored and are gone after a reload.
+The **Dice** tab keeps the rolls made in your campaign in a scrolling list, oldest at the top and newest at the bottom. It's stored on the server, so it survives a refresh, a navigation away and back, and a dropped connection — yours and your players'. Come back the next evening and last session's rolls are still there, initiative rolls included. An initiative roll for a token not every player can see (hidden, on the spirit layer, or on a map you have not switched to) is kept as a secret roll: you and whoever rolled it see it.
 
 **What each person sees.** Players see the open rolls plus their own secret ones. You see everything, including your players' secret rolls, marked as such — the same oversight you have live. That filtering happens on the server, so a player reloading the page never picks up a roll they weren't meant to see.
 
@@ -335,7 +335,7 @@ Your players are told this plainly now. The secret-roll checkbox used to read "o
 
 **Clearing it.** Only you can, using the **Clear** button (with a trash icon) at the top of the Dice panel, and confirming with **Clear History**. It empties the panel for everyone and stays empty when they reload. The rolls aren't destroyed — they're hidden from the panel from that point on, so a dispute about what someone rolled an hour ago is still settleable from the database. Ending a session does *not* clear history; if you want a clean slate, clear it yourself.
 
-> **One exception.** While a session is **paused**, players' rolls are worked out in their own browser and never sent to the server — that's deliberate, so a paused table can still fiddle with dice without it counting. Those rolls aren't in the history and won't survive a refresh.
+> **One exception.** While a session is **paused**, players' rolls from the **Dice** tab are worked out in their own browser and never sent to the server — that's deliberate, so a paused table can still fiddle with dice without it counting. Those rolls aren't in the history and won't survive a refresh. A roll from a character sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
 ### Managing Token Visibility
 
@@ -721,6 +721,9 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 - Changes the campaign status to **Live** (green indicator in the header)
 - Lets players move their tokens again if the last session had ended (a paused session is continued with **Resume Session**, below)
 - Logs a system message in chat announcing the session has started
+- Starts the timer beside the session number, which counts from the start, breaks included
+
+**Start Session** is there only while no session is running or paused: a paused session is resumed or ended first, so each session has one start and one end.
 
 *GIF pending — Starting a session and seeing the status change.*
 
@@ -730,15 +733,17 @@ Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
 - Disables token movement for players
-- Shows players a banner above the map: *Session is paused. Token movement is disabled, and your dice rolls stay on your own screen.*
+- Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
 
-Click **Resume Session** when you're ready to continue. Anything you change on the map during the break, such as tokens you hide, move or add, or a map you switch to, stays as you left it: the snapshot pausing takes is a record of where the break began, not something the app puts back.
+Click **Resume Session** when you're ready to continue. The same session carries on, and its timer still counts from when it started. Anything you change on the map during the break, such as tokens you hide, move or add, or a map you switch to, stays as you left it: the snapshot pausing takes is a record of where the break began, not something the app puts back.
 
 ### Ending a Session
 
 Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens until you start the next session. Nothing needs saving: token positions, fog, walls, lights, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
+
+Untick **Save game state** in the dialog to take no new snapshot. If you paused during the session, the snapshot taken then stays with the record. An ended session cannot be resumed; the next game is a new session.
 
 The dialog also offers a **Session Notes** box. Whatever you write there is kept with that session and shown to **everyone in the campaign** under **Session → Past Sessions**, newest first, with the date and how long you played. It is the recap your players read before the next game, so write it for them rather than as a private reminder — there is nowhere here that hides notes from the table.
 
@@ -800,7 +805,7 @@ Combatants are the tokens already on your map — you don't type names in by han
 
 Each combatant shows its token's name, portrait and HP, and follows the token: change any of them on the token and every tracker updates. A player sees a creature's HP there only when its **Show HP bar** is on or they control the token (a character's token carries no HP of its own, so a player's own hit points stay on the sheet and roster card), and never sees a hidden creature listed at all, nor one standing on a map you have not switched to, nor one on the other plane from them, so an ambusher you add to the order before revealing it stays your secret; rolling its initiative shows in your Dice panel alone. A creature that is merely out of a player's sight, in the dark or under fog, is still listed, so hide a token to keep it out of the order. A combatant joins with its token's details but **not an initiative value** — a combatant joins the order showing **—** until something rolls for it. Joining the fight and having a place in it are separate steps, so a token added to tonight's fight never arrives carrying last week's result. Set a value by clicking the dash beside a combatant, or use the dice button on the row to roll one.
 
-**Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel. They can only roll before you click **Start Combat**; once combat has started, the option is gone for them and the server refuses it, so only you can change their initiative.
+**Players can roll their own.** Once you've added a player's token, a dice button appears for them too — but only on their own row, and only for a token they control. They can also right-click their token on the map and pick **Roll Initiative** from the **Roll...** menu. Either way it lands in your turn order and the roll shows in the **Dice** panel. They roll once, and only before you click **Start Combat**; a second roll is refused, and once combat has started the option is gone for them, so only you can change their initiative. Removing their token from the order and adding it again lets them roll again.
 
 You keep everything else: only you decide who is in the fight, drag the order around, type a value in by hand, advance the turn, or end combat. You can still roll for any combatant, players included — useful when someone is away from the keyboard as the fight starts. A player who isn't in the tracker yet has nothing to roll: the option doesn't appear until you add them.
 

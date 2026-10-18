@@ -58,13 +58,16 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
    */
   const detail = Array.isArray(breakdown?.rolls) ? breakdown.rolls : [];
 
-  // Determine if critical success or fail (for d20 rolls)
-  const isCriticalSuccess = detail.some(
-    (r) => r.notation === '1d20' && r.results?.includes(20)
-  );
-  const isCriticalFail = detail.some(
-    (r) => r.notation === '1d20' && r.results?.includes(1)
-  );
+  // A critical is a single d20 kept, however it was written: `1d20`, `d20`,
+  // advantage (`2d20kh1`) or disadvantage (`2d20kl1`). Looking only for a
+  // group written `1d20` missed the commonest of them.
+  const keptD20 = detail
+    .filter((r) => r.type === 'dice' && r.sides === 20)
+    .map((r) => r.kept ?? r.results ?? [])
+    .filter((kept) => kept.length === 1)
+    .map((kept) => kept[0]);
+  const isCriticalSuccess = keptD20.includes(20);
+  const isCriticalFail = keptD20.includes(1);
 
   // Color scheme based on result type
   const getResultColor = () => {
@@ -197,7 +200,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                     <span className="font-mono text-xs opacity-80">{roll.notation}:</span>
                     <div className="flex gap-1">
                       {roll.results?.map((r, rIdx) => {
-                        const isKept = roll.kept ? roll.kept.includes(r) : true;
+                        const isKept = keptMarks(roll)[rIdx];
                         const isCrit20 = r === 20 && roll.sides === 20;
                         const isCrit1 = r === 1 && roll.sides === 20;
 
@@ -255,4 +258,22 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       )}
     </motion.div>
   );
+}
+
+/**
+ * Which of a group's dice it kept, by position. Counted, not looked up by
+ * value: with equal values, as [14, 14] keeping one, looking each up marked
+ * every one kept and struck none through.
+ */
+function keptMarks(roll: { results?: number[]; kept?: number[] }): boolean[] {
+  const results = roll.results ?? [];
+  if (!roll.kept) return results.map(() => true);
+  const left = new Map<number, number>();
+  for (const value of roll.kept) left.set(value, (left.get(value) ?? 0) + 1);
+  return results.map((value) => {
+    const remaining = left.get(value) ?? 0;
+    if (remaining === 0) return false;
+    left.set(value, remaining - 1);
+    return true;
+  });
 }

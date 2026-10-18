@@ -2450,7 +2450,16 @@ paths:
                   nullable: true
                 status:
                   type: string
-                  enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED, ARCHIVED]
+                  enum: [PREPARATION, COMPLETED, ARCHIVED]
+                  description: >-
+                    Set between sessions only. ACTIVE, PAUSED and INACTIVE are
+                    set by starting, pausing and ending a session, and a value
+                    outside this list answers 400 with `Invalid status. Must be
+                    one of: PREPARATION, COMPLETED, ARCHIVED; starting, pausing
+                    and ending a session set the others`. While a session is
+                    running or paused, any `status` answers 400 with `End the
+                    session before changing the campaign status` and nothing
+                    in the request is stored.
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -3640,9 +3649,12 @@ paths:
       summary: Save a macro
       description: >
         The expression is rolled once and the result discarded, to prove it can be
-        rolled at all. An expression that only looks like dice — `2d6+`, `dddd` —
-        is refused here, with 400, and does not become a button that fails every
-        time it is pressed. Both fields are trimmed and must not be empty. Any
+        rolled at all. An expression that only looks like dice — `2d6+`, `dddd`,
+        `1d20 5` with no operator between the terms — is refused here, with 400,
+        and does not become a button that fails every time it is pressed; so is
+        one that could divide by zero (`1d20/0`) or whose total could pass a
+        32-bit integer for any roll of its dice (`9999*9999*9999`). Both fields
+        are trimmed and must not be empty. Any
         member, spectators included, may save macros. A player may keep 50 per
         campaign; saving another answers 400.
       operationId: createDiceMacro
@@ -4326,10 +4338,13 @@ paths:
         past the highest session number so far. Sets the campaign ACTIVE and
         its `lastPlayedAt` to now, posts a "Session N has started!" system
         message to chat, and broadcasts `session.started` (`{ sessionId,
-        sessionNumber, startedAt }`) to the campaign. Refused only while the
-        campaign's status is ACTIVE. A PAUSED campaign is not refused: the
-        paused session is left without an end time and the new one becomes
-        the campaign's `activeSession`.
+        sessionNumber, startedAt }`) to the campaign. Refused while a session
+        is running or paused (one with no end time), whatever the campaign's
+        status says; a paused session is resumed or ended first. Start,
+        pause, end, resume and a `status` change in
+        `PUT /api/campaigns/{campaignId}` run one at a time for each
+        campaign, so two Starts at once make one session and the other is
+        refused.
       operationId: startSession
       security:
         - cookieAuth: []
@@ -4352,7 +4367,9 @@ paths:
                       sessionNumber: { type: integer }
                       startedAt: { type: string, format: date-time }
         '400':
-          description: The campaign's status is already ACTIVE
+          description: >-
+            A session is running or paused: `A session is already active or
+            paused. Resume or end it first.`
           content:
             application/json:
               schema:
@@ -4371,9 +4388,9 @@ paths:
         layer setting into the session's saved state (replacing any earlier
         snapshot), sets the campaign PAUSED, posts a "Session N has been
         paused" system message, and broadcasts `session.paused`
-        (`{ sessionId, sessionNumber }`). The campaign's status is not
-        checked. The session keeps no end time, so `PUT .../resume` reopens
-        it. 400 when the session has already ended.
+        (`{ sessionId, sessionNumber }`). The session keeps no end time, so
+        `PUT .../resume` reopens it. 400 with `Session has already ended`,
+        or `Session is already paused` while the campaign is PAUSED.
       operationId: pauseSession
       security:
         - cookieAuth: []
@@ -4399,7 +4416,7 @@ paths:
                     type: boolean
                     description: Always true.
         '400':
-          description: The session has already ended
+          description: The session has already ended, or is already paused
           content:
             application/json:
               schema:
@@ -4425,9 +4442,11 @@ paths:
         `session.ended` (`{ sessionId, sessionNumber }`). With `saveState`
         the current game state (the current map's tokens and annotations,
         map id, vibe and spirit layer setting) is captured into the session;
-        without it the session's saved state is set to null, discarding any
-        snapshot taken at pause. The body is not schema-validated. 400 when
-        the session has already ended.
+        with `saveState: false` the saved state is left as it was, so a
+        snapshot taken at pause stays. 400 with `Session has already ended`,
+        or when the body does not match the schema below (`saveState must be
+        true or false`, `Session notes must be text`, `Session notes are
+        limited to 2000 characters`).
       operationId: endSession
       security:
         - cookieAuth: []
@@ -4449,16 +4468,15 @@ paths:
                 saveState:
                   type: boolean
                   default: true
-                  description: Any truthy value saves the state, and so does omitting the field.
                 notes:
                   type: string
+                  maxLength: 2000
+                  nullable: true
                   description: >-
-                    The session recap. Any truthy value is converted to a
-                    string and cut to its first 2000 characters, without
-                    trimming; an empty or missing value leaves the existing
+                    The session recap, at most 2000 characters, stored
+                    trimmed. Empty, blank, null or missing leaves the existing
                     notes alone. Editing them afterwards uses
-                    `PUT .../sessions/{sessionId}/notes`, which refuses an
-                    over-long recap instead of cutting it.
+                    `PUT .../sessions/{sessionId}/notes`, with the same limit.
       responses:
         '200':
           description: Session ended
@@ -4473,7 +4491,7 @@ paths:
                     type: boolean
                     description: The `saveState` value as sent (true when omitted).
         '400':
-          description: The session has already ended
+          description: The session has already ended, or the body is invalid
           content:
             application/json:
               schema:
@@ -4556,17 +4574,18 @@ paths:
     put:
       tags:
         - Sessions
-      summary: Resume last session
+      summary: Resume the paused session
       description: >
-        Reopen the campaign's most recently started session (DM only), whether
-        it was paused or ended: its end time is cleared, the campaign is set
-        ACTIVE with `lastPlayedAt` now, a "Session N has been resumed!"
-        system message is posted, and `session.resumed` (`{ sessionId,
-        sessionNumber, startedAt }`) is broadcast. The campaign's current
-        status is not checked, so a call while a session is running succeeds
-        too and posts another "resumed" message. The table is left exactly
-        as it is: everything is stored as it is played, and the snapshot taken
-        at pause is a record kept with the session, never written back.
+        Carry on with the paused session (DM only): the campaign is set ACTIVE
+        with `lastPlayedAt` now, a "Session N has been resumed!" system
+        message is posted, and `session.resumed` (`{ sessionId,
+        sessionNumber, startedAt }`) is broadcast, `startedAt` being when the
+        session first started. An ended session is not reopened. 400 with
+        `There is no paused session to resume` when no session is open, or
+        `The session is not paused` while it is running. The table is left
+        exactly as it is: everything is stored as it is played, and the
+        snapshot taken at pause is a record kept with the session, never
+        written back.
       operationId: resumeSession
       security:
         - cookieAuth: []
@@ -4590,14 +4609,17 @@ paths:
                         format: uuid
                       sessionNumber:
                         type: integer
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: The campaign has never had a session
+                      startedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: No session is paused
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   # ============================================
   # CHARACTERS
@@ -5039,7 +5061,7 @@ paths:
           `action` set to `character.assigned` and `characterId`, `userId`
           and `campaignId`. Unassigning a character that had a campaign
           broadcasts `roster.updated` to that campaign, with `action` set to
-          `character.unassigned` and `characterId` and `userId`.
+          `character.unassigned` and `characterId`, `userId` and `campaignId`.
       operationId: assignCharacterToCampaign
       security:
         - cookieAuth: []
@@ -10729,8 +10751,10 @@ paths:
         ordered by id, so the order is the same on every request and page.
         Secret rolls are filtered server-side before anything is
         sent: a player receives public rolls plus their own secret ones, a DM
-        receives everything. Rolls older than the last history clear are
-        omitted; the rows themselves are kept, so a DM can still audit them.
+        receives everything. Initiative rolls that threw dice are included,
+        as a secret roll when the token was not sent to every player. Rolls
+        older than the last history clear are omitted; the rows themselves
+        are kept, so a DM can still audit them.
       operationId: getCampaignDiceRolls
       security:
         - cookieAuth: []

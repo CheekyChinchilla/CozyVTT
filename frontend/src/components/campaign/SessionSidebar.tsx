@@ -24,6 +24,7 @@ import SessionControls from './SessionControls';
 import SessionHistory from './SessionHistory';
 import PersonalNotes from './PersonalNotes';
 import type { ChatMessageBroadcast } from '@/types';
+import { optionalStorage } from '@/utils/optionalStorage';
 
 type RailTab = 'chat' | 'dice' | 'initiative' | 'notes' | 'session';
 
@@ -40,7 +41,7 @@ const TABS: { key: RailTab; label: string; icon: LucideIcon }[] = [
 ];
 
 function loadInitialTab(): RailTab {
-  const stored = localStorage.getItem(TAB_STORAGE_KEY);
+  const stored = optionalStorage.getItem(TAB_STORAGE_KEY);
   return TABS.some((t) => t.key === stored) ? (stored as RailTab) : 'chat';
 }
 
@@ -57,7 +58,7 @@ export default function SessionSidebar() {
 
   useEffect(() => {
     activeTabRef.current = activeTab;
-    localStorage.setItem(TAB_STORAGE_KEY, activeTab);
+    optionalStorage.setItem(TAB_STORAGE_KEY, activeTab);
     if (activeTab === 'chat') {
       setUnreadChat(0);
     }
@@ -94,11 +95,14 @@ export default function SessionSidebar() {
 
   return (
     <aside className="h-full flex flex-col bg-parchment/30 border-l border-moss-green/20">
-      {/* Tab bar */}
+      {/* Tab bar. Five labelled tabs need about 400 px and the rail is often
+          narrower (356 px at 1440 wide), which cut the last tab off; below
+          that only the open tab shows its label, and the others keep theirs
+          for screen readers and as a hover title. */}
       <div
         role="tablist"
         aria-label="Session panels"
-        className="flex items-stretch gap-1 px-2 pt-2 border-b border-moss-green/20 shrink-0"
+        className="@container flex items-stretch gap-1 px-2 pt-2 border-b border-moss-green/20 shrink-0"
       >
         {TABS.map(({ key, label, icon: Icon }, index) => {
           const active = activeTab === key;
@@ -112,6 +116,7 @@ export default function SessionSidebar() {
               tabIndex={active ? 0 : -1}
               onClick={() => setActiveTab(key)}
               onKeyDown={(e) => handleTabKeyDown(e, index)}
+              title={label}
               className={cn(
                 'flex-1 flex items-center justify-center gap-1.5 px-2 py-2 rounded-t-lg',
                 'text-xs font-medium transition-colors duration-150',
@@ -122,7 +127,7 @@ export default function SessionSidebar() {
               )}
             >
               <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span>{label}</span>
+              <span className={active ? undefined : 'sr-only @min-[26rem]:not-sr-only'}>{label}</span>
               {key === 'chat' && unreadChat > 0 && (
                 <span
                   className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand text-canvas text-[10px] font-bold flex items-center justify-center"

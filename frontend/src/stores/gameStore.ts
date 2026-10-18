@@ -9,13 +9,13 @@
 //
 // BOUNDARY RULE (do not blur it):
 //   - zustand (this store) owns LIVE SESSION STATE fed by sockets:
-//     token positions, token lists and combat/initiative today; walls /
-//     fog / lights may move here in future (they are currently
-//     MapCanvas-local state with their own undo/redo history).
+//     token positions, token lists, combat/initiative and characters' hit
+//     points today; walls / fog / lights may move here in future (they are
+//     currently MapCanvas-local state with their own undo/redo history).
 //   - react-query owns SERVER RESOURCES fetched over REST (campaign
 //     lists, characters, assets, map metadata).
 //   - CampaignContext owns campaign-level metadata and low-frequency
-//     UI state (vibe, atmosphere, session, HP cache).
+//     UI state (vibe, atmosphere, session).
 //   Never represent the same datum in two of these places.
 //
 // Write access: components and socket handlers mutate ONLY through the
@@ -28,6 +28,7 @@
 import { create } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import type { CombatState, Position, Token } from '@/types';
+import type { CharacterHpInfo } from '@/utils/characterHp';
 
 /** Combat is inactive until the DM starts it; matches the server's default. */
 /** The same record without `key`, or the same record when it has none. */
@@ -73,6 +74,12 @@ interface GameState {
    */
   peekTokenId: string | null;
   peekSource: 'tracker' | 'map' | null;
+  /**
+   * Characters' hit points by character id, seeded from the roster and
+   * kept current by `character.hp.updated`. Read by the roster and the
+   * map's HP bars; here so a change in a fight re-renders only those.
+   */
+  characterHp: Record<string, CharacterHpInfo>;
 
   // ---- Actions (named after the events that drive them) ----
   /** Wholesale replace — map load, map change, reconnect resync. */
@@ -95,6 +102,10 @@ interface GameState {
   setCombatState: (combat: CombatState) => void;
   /** Point at a token from either side; pass null to clear. */
   setPeekToken: (tokenId: string | null, source: 'tracker' | 'map') => void;
+  /** `character.hp.updated`: one character's hit points. */
+  setCharacterHp: (characterId: string, hp: CharacterHpInfo) => void;
+  /** The roster's answer: every character it lists that has hit points. */
+  seedCharacterHp: (entries: { id: string; hp: CharacterHpInfo | null }[]) => void;
   /** Session teardown. */
   clearGameState: () => void;
 }
@@ -106,6 +117,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   combat: EMPTY_COMBAT,
   peekTokenId: null,
   peekSource: null,
+  characterHp: {},
 
   setTokens: (list) =>
     set({
@@ -179,8 +191,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ peekTokenId: tokenId, peekSource: tokenId === null ? null : source });
   },
 
+  setCharacterHp: (characterId, hp) => set((s) => ({ characterHp: { ...s.characterHp, [characterId]: hp } })),
+
+  seedCharacterHp: (entries) =>
+    set((s) => {
+      const characterHp = { ...s.characterHp };
+      for (const { id, hp } of entries) {
+        if (hp) characterHp[id] = hp;
+      }
+      return { characterHp };
+    }),
+
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null }),
+    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, characterHp: {} }),
 }));
 
 // ============================================
@@ -239,6 +262,11 @@ export function useTokenList(): Token[] {
  */
 export function useTokenListIgnoringMovement(): Token[] {
   return useStoreWithEqualityFn(useGameStore, selectTokenList, tokenArrayEqualIgnoringMovement);
+}
+
+/** Characters' hit points by character id, for the roster and the map's HP bars. */
+export function useCharacterHp(): Record<string, CharacterHpInfo> {
+  return useGameStore((s) => s.characterHp);
 }
 
 /** The whole combat snapshot — for the initiative tracker, which renders it all. */

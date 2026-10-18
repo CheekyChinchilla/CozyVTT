@@ -7,6 +7,7 @@ import { X, Shield, User as UserIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
+import { useTableRoll } from '@/hooks/useTableRoll';
 import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
 import type { Campaign, Character, GameSystem, CampaignMembership } from '@/types';
@@ -64,6 +65,7 @@ export default function CharacterSheetViewerModal({
   // and click-to-roll are a bonus in the first case rather than a requirement.
   const ws = useOptionalWebSocket();
   const socket = ws?.socket;
+  const tableRoll = useTableRoll(socket);
   const [character, setCharacter] = useState(initialCharacter);
   const [ownerName, setOwnerName] = useState<string>('');
   const [showEditor, setShowEditor] = useState(false);
@@ -180,14 +182,11 @@ export default function CharacterSheetViewerModal({
     }
   };
 
-  // Handle click-to-roll — emit dice roll via WebSocket
-  const handleRoll = (expression: string, purpose: string) => {
-    if (socket) {
-      // Named so the panel heads the entry with the character whose sheet this
-      // is, not with whoever happens to be reading it.
-      socket.emitDiceRoll({ expression, purpose, characterName: publicName ?? character.name });
-    }
-  };
+  // Handle click-to-roll: rolls at the table, and says so when refused.
+  // Named so the panel heads the entry with the character whose sheet this
+  // is, not with whoever happens to be reading it.
+  const handleRoll = (expression: string, purpose: string) =>
+    tableRoll({ expression, purpose, characterName: publicName ?? character.name });
 
   // Passed to the sheet views only when this viewer may roll; without it the
   // stats render as plain text rather than clickable rolls.

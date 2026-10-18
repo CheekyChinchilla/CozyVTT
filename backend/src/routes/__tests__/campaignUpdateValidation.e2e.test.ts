@@ -77,7 +77,7 @@ describe('accepted bodies', () => {
     const res = await put({
       name: '  Renamed  ',
       description: 'A description',
-      status: 'PAUSED',
+      status: 'COMPLETED',
       gameSystem: 'DND_5E',
       spiritLayerEnabled: true,
       spiritLayerStyle: 'custom:#7c3aed:wispy',
@@ -93,7 +93,7 @@ describe('accepted bodies', () => {
     const stored = await prisma.campaign.findUniqueOrThrow({ where: { id: campaignId } });
     expect(stored.name).toBe('Renamed');
     expect(stored.description).toBe('A description');
-    expect(stored.status).toBe('PAUSED');
+    expect(stored.status).toBe('COMPLETED');
     expect(stored.gameSystem).toBe('DND_5E');
     expect(stored.spiritLayerEnabled).toBe(true);
     expect(stored.spiritLayerStyle).toBe('custom:#7c3aed:wispy');

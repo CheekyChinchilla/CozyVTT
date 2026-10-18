@@ -168,11 +168,9 @@ export default function CampaignInfo() {
         <InvitePlayerModal
           campaignId={campaign.id}
           onClose={() => setShowInviteModal(false)}
-          onSuccess={() => {
-            setShowInviteModal(false);
-            // Refresh page to show updated member list
-            window.location.reload();
-          }}
+          // The invite dialog says it was sent. Nothing on the campaign
+          // changes until it is accepted, which the roster hears about.
+          onSuccess={() => setShowInviteModal(false)}
         />
       )}
     </div>

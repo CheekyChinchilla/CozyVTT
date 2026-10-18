@@ -4,6 +4,7 @@
 // ============================================
 
 import { memo } from 'react';
+import { useMinuteClock } from '@/hooks/useMinuteClock';
 import { Bot, Shield } from 'lucide-react';
 import type { Message, MessageType } from '@/types';
 
@@ -12,12 +13,16 @@ interface ChatMessageProps {
   isCurrentUser?: boolean;
   /** True while the message is optimistically displayed before server confirmation */
   isPending?: boolean;
+  /** Why the server did not take this message, when it did not. */
+  notSentReason?: string;
+  onRetry?: (message: Message) => void;
+  onDiscard?: (message: Message) => void;
 }
 
 /**
  * Format timestamp as relative time (e.g., "2 minutes ago")
  */
-function formatRelativeTime(timestamp: string): string {
+function formatRelativeTime(timestamp: string, now: number): string {
   // Handle undefined, null, or empty timestamps
   if (!timestamp) {
     return 'unknown time';
@@ -31,8 +36,7 @@ function formatRelativeTime(timestamp: string): string {
     return 'unknown time';
   }
 
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
+  const diffMs = now - date.getTime();
   const diffSec = Math.floor(diffMs / 1000);
   const diffMin = Math.floor(diffSec / 60);
   const diffHour = Math.floor(diffMin / 60);
@@ -85,7 +89,9 @@ function getMessageStyle(type: MessageType): { bg: string; textColor: string; bo
   }
 }
 
-function ChatMessageInner({ message, isCurrentUser = false, isPending = false }: ChatMessageProps) {
+function ChatMessageInner({ message, isCurrentUser = false, isPending = false, notSentReason, onRetry, onDiscard }: ChatMessageProps) {
+  // The row is memoised, so without this its "just now" never moved on.
+  const now = useMinuteClock();
   const { bg, textColor, borderColor } = getMessageStyle(message.type);
   const isSystem = message.type === 'SYSTEM';
   const isDM = message.type === 'DM';
@@ -99,7 +105,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
     <div
       className={`p-3 rounded-lg border ${bg} ${borderColor} transition-all hover:shadow-xs ${
         isPending ? 'opacity-60' : ''
-      }`}
+      } ${notSentReason ? 'border-danger/40' : ''}`}
     >
       {/* Message Header */}
       <div className="flex items-center gap-2 mb-1">
@@ -124,11 +130,11 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
         </span>
 
         {/* Timestamp / pending indicator */}
-        {isPending ? (
+        {notSentReason ? null : isPending ? (
           <span className="text-xs text-stone-gray/50 italic">sending…</span>
         ) : (
           <span className="text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
-            {formatRelativeTime(message.createdAt)}
+            {formatRelativeTime(message.createdAt, now)}
           </span>
         )}
       </div>
@@ -137,6 +143,18 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
       <p className={`text-sm ${textColor} whitespace-pre-wrap wrap-break-word`}>
         {message.content}
       </p>
+
+      {notSentReason && (
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" role="status">
+          <span className="text-danger-ink">Not sent: {notSentReason}</span>
+          <button type="button" onClick={() => onRetry?.(message)} className="font-medium text-brand-ink underline hover:no-underline">
+            Retry
+          </button>
+          <button type="button" onClick={() => onDiscard?.(message)} className="font-medium text-stone-gray underline hover:no-underline">
+            Discard
+          </button>
+        </div>
+      )}
 
       {/* Metadata (e.g., dice roll results) - hide for internal system actions */}
       {message.metadata &&

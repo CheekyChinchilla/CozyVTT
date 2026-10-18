@@ -33,7 +33,7 @@ vi.mock('@/contexts/WebSocketContext', () => ({
     socket: {
       onDiceRolled: (handler: (roll: DiceRolledEvent) => void) => { live.deliver = handler; },
       onDiceRolledSecret: vi.fn(), onDiceHistoryCleared: vi.fn(),
-      on: vi.fn(), off: vi.fn(), emitDiceRoll: vi.fn(),
+      on: vi.fn(), off: vi.fn(), rollDice: vi.fn().mockResolvedValue({ ok: true, id: "r" }),
     },
     status: 'connected',
     reconnectCount: 0,

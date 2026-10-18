@@ -14,6 +14,7 @@ const character = {
 } as unknown as Character;
 const stored = { ...character, data: { background: 'Scholar' }, updatedAt: '2026-01-01T00:00:09.000Z' } as unknown as Character;
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'owner', platformRole: 'USER' } }),
 }));

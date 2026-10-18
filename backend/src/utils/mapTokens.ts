@@ -14,16 +14,14 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { createTurnQueue } from './turnQueue';
 
 /**
- * The last writer in line for each map in this process. A writer waits for
- * the one before it here, holding nothing, and only then opens its
- * transaction: the advisory lock waits inside a transaction, so a queue of
- * writers behind it each held a pooled connection, and a burst of edits to
- * one map could take the whole pool from every other request.
+ * Writers in line for each map in this process (see utils/turnQueue.ts): a
+ * writer waits for the one before it, holding nothing, and only then opens its
+ * transaction, so a burst of edits to one map cannot take the whole pool.
  */
-const lastInLine = new Map<string, Promise<void>>();
-const waiting = new Map<string, number>();
+const mapTurns = createTurnQueue();
 
 /**
  * How many writers in this process are waiting their turn for a map, not
@@ -31,28 +29,7 @@ const waiting = new Map<string, number>();
  * reached the lock before it goes on.
  */
 export function writersWaitingFor(mapId: string): number {
-  return waiting.get(mapId) ?? 0;
-}
-
-/** Wait for this map's turn; the returned function hands it to the next writer. */
-async function turnFor(mapId: string): Promise<() => void> {
-  const before = lastInLine.get(mapId) ?? Promise.resolve();
-  let release!: () => void;
-  const mine = new Promise<void>((resolve) => { release = resolve; });
-  const tail = before.then(() => mine);
-  lastInLine.set(mapId, tail);
-  waiting.set(mapId, (waiting.get(mapId) ?? 0) + 1);
-  try {
-    await before;
-  } finally {
-    const left = (waiting.get(mapId) ?? 1) - 1;
-    if (left > 0) waiting.set(mapId, left);
-    else waiting.delete(mapId);
-  }
-  return () => {
-    release();
-    if (lastInLine.get(mapId) === tail) lastInLine.delete(mapId);
-  };
+  return mapTurns.waitingFor(mapId);
 }
 
 /**
@@ -61,7 +38,7 @@ async function turnFor(mapId: string): Promise<() => void> {
  * moves between the same pair of maps cannot wait on each other. A caller
  * reads the tokens it changes through `tx`, after the lock, never before.
  *
- * Writers in this process take their turn for each map first (turnFor), so
+ * Writers in this process take their turn for each map first (mapTurns), so
  * only one of them per map holds a connection; the advisory lock still
  * covers any other process writing the same database.
  */
@@ -72,7 +49,7 @@ export async function withMapsLocked<T>(
   const ids = [...new Set(mapIds)].sort();
   const releases: Array<() => void> = [];
   try {
-    for (const mapId of ids) releases.push(await turnFor(mapId));
+    for (const mapId of ids) releases.push(await mapTurns.turnFor(mapId));
     return await prisma.$transaction(async (tx) => {
       for (const mapId of ids) {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}))`;

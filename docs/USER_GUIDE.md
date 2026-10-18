@@ -180,9 +180,11 @@ The campaign page is your command center during play. It's a three-column worksp
 
 - **Left Sidebar** — Campaign info, the campaign roster, and (for DMs) the token roster
 - **Center Canvas** — The battle map where tokens live and adventures happen
-- **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, **Notes** and **Session** (vibe, session controls and past sessions); a badge on the Chat tab shows unread messages while you're on another tab
+- **Right Sidebar** — a tabbed panel with **Chat**, **Dice**, **Initiative**, **Notes** and **Session** (vibe, session controls and past sessions); a badge on the Chat tab shows unread messages while you're on another tab. When the panel is too narrow for every name, the tabs other than the open one show only their icon; point at one to see its name
 
 You can **drag the dividers** between the columns to resize them, and collapse the side columns entirely to give the map more room. Your layout and last-used tab are remembered per browser. The **header bar** across the top contains navigation, connection status, and DM controls.
+
+**In a window narrower than 1024 pixels**, such as a laptop with two windows side by side, a tablet or a phone, the page first shows a **Desktop Required** notice. Click **Continue anyway** to open the table there: it keeps the same three-column desktop layout, so the panels are cramped, and the header's buttons wrap onto a second row. Your browser remembers the choice, so the notice does not come back; clearing the site's data for your CozyVTT brings it back. A layout made for phones is planned for a later release.
 
 ---
 
@@ -536,7 +538,11 @@ The **Chat** panel on the right sidebar is how everyone communicates during a se
 
 *Screenshot pending — Chat panel with example messages.*
 
-Type your message in the input field and press **Enter** to send. Messages show your display name and a timestamp. System messages (like session start/stop events) appear in a different style.
+Type your message in the input field and press **Enter** to send. Messages show your display name and a timestamp. System messages (like session start/stop events) appear in a different style. A message can be up to 2,000 characters; the count appears under the box as you get close.
+
+Your message shows as *sending…* until the server has it. If it doesn't get through (the connection dropped, or the DM's chat cooldown hasn't run out yet), it is marked **Not sent** with the reason. Click **Retry** to send it again, or **Discard** to remove it. If the first try did reach the server after all, retrying within ten minutes does not post it twice (a restart of the server in between forgets that it arrived).
+
+While you are scrolled up reading earlier messages, new ones don't pull you down; a **Jump to newest** button appears at the bottom instead, and takes you to them. The **Dice** panel does the same for new rolls.
 
 ### Rolling Dice
 
@@ -558,6 +564,7 @@ edit or delete them. See the
 - `1d20+5` — Roll a d20 and add 5
 - `2d6-1` — Roll 2d6 and subtract 1
 - `4d6dl1`: Roll four d6s and drop the lowest one
+- `1d20*2`, `4d6/2`: multiply or divide; multiplication and division come first, and a fractional total is rounded down
 
 One roll can hold up to 100 dice in all (the [Player Guide](PLAYER_GUIDE.md#the-dice-roller) lists the other limits).
 
@@ -818,7 +825,7 @@ If a character sheet window says **Error Loading Character Sheet**, that sheet h
 
 ### I lost connection mid-session
 
-CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, and the map the table moved to are all brought up to date once you're back. A chat message you send while disconnected is not delivered: it stays marked *sending…*, so send it again after you reconnect. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
+CozyVTT reconnects by itself for as long as the connection is away, trying again every few seconds at first and then every 30 seconds, and at once when you come back to a tab or a phone screen you had left. The connection indicator shows **Connecting...** meanwhile. Your session state (token positions, etc.) is preserved, and chat messages other people sent while you were away, a pause or the end of the session, the map the table moved to, the vibe, the weather and ambient track, the spirit layer, and a dice history the DM cleared are all brought up to date once you're back. A chat message you send while disconnected is marked **Not sent**; click **Retry** once you are back. If the indicator shows **Connection Error** or **Disconnected**, press **Retry**, or refresh the page; everything should be right where you left it.
 
 If the page says "You were removed from this campaign." or "This campaign was deleted.", the DM has removed you or the campaign is gone, and the page takes you to your dashboard.
 

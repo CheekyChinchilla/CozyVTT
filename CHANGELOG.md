@@ -23,6 +23,12 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The app needs Firefox 128 or newer.** Chrome and Edge 111 and Safari 16.4 are still enough.
 
+### Added
+
+- **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
+
+- **Jump to newest in the chat and the Dice panel.** While you are scrolled up, neither list pulls you down when something new arrives, and nothing said that anything had. A **Jump to newest** button now appears at the bottom of the list and takes you down to it.
+
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
@@ -30,11 +36,86 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Walls and lights.* `PUT /api/campaigns/:campaignId/maps/:id` changing `width`, `height` or `gridSize` scales every wall end and light position by the change in the map's drawn size on each axis, rounded to whole pixels; light radii are unchanged. Every page reading the map is then sent `walls:replaced` and `lights:replaced`, as for a bulk replace and with no `opId`. Stored fog and explored areas are kept across a `gridSize`-only change, at the new cell size.
   - *Walls and lights.* `wall:remove` of an id the map does not have answers `error` with `Wall segment not found` and writes nothing; it wrote the list again and sent everyone `wall:removed`. A `light:update` that sets a light to the values it already has sends anyone but the DM nothing, where players were sent `light:updated` and, on a lit map, the map again.
   - *Walls and lights.* A player's `wall:update` on a map with fog of war on is refused with `You cannot see that door` unless a square revealed to them lies beside the door's middle, before any `That door is locked`. The refusal is followed by `wall:updated` with the door as it was, as other refusals are.
+  - *Sessions.* Start, pause, end and resume, and a `status` change through `PUT /api/campaigns/:campaignId`, run one at a time for each campaign. `POST /api/campaigns/:campaignId/sessions` answers 400 `A session is already active or paused. Resume or end it first.` while a session has no end time (it was refused only while the campaign was ACTIVE), and starts one for a campaign marked ACTIVE or PAUSED with none open. `PUT .../sessions/:sessionId/pause` answers 400 `Session is already paused` while the campaign is PAUSED. `PUT /api/campaigns/:campaignId/resume` carries on only with a paused session, answering 400 `There is no paused session to resume` or `The session is not paused`; it reopened the latest session, ended or not, and answered 404 for a campaign with none. Its `session` now has `startedAt`.
+  - *Sessions.* `PUT .../sessions/:sessionId/end` checks its body: `saveState` a boolean (400 `saveState must be true or false`; any value counted, so `"false"` saved) and `notes` text of at most 2000 characters (400 `Session notes must be text` or `Session notes are limited to 2000 characters`; longer notes were cut), stored trimmed. `saveState: false` leaves the saved state as it was, where it was set to null.
+  - *Live table: events.* `chat.message` may be sent with an acknowledgement, which the server answers with `{ ok: true, id }` (the stored message's id) or `{ ok: false, error }`, and then sends no `error` event; a refusal past the flood ceiling is answered the same way, every time. It also takes `clientId`, 1 to 64 letters, digits, hyphens or underscores (otherwise refused with `clientId must be 1 to 64 letters, digits, hyphens or underscores`): it comes back on the sender's own copy of the broadcast, and a message sent again with the same `clientId` within 10 minutes is stored and sent once, answered with the first id. Without an acknowledgement, refusals are `error` events as before. Each member's copy is now sent to their sockets one by one.
+  - *Dice.* Every place that checks or rolls an expression (`dice.roll`, `initiative.roll`, saved rolls through `POST /api/campaigns/:campaignId/macros` and `PUT .../macros/:macroId`) refuses two terms with only a space between them (`Missing an operator between "1d20" and "5"`), an expression that could divide by zero (`It could divide by zero`) and one whose total could fall outside a 32-bit integer (`The total could be too large`), judged from every roll its dice could make. On the socket these come prefixed `Invalid dice expression: `, or `Invalid expression: ` for `initiative.roll`.
+  - *Live table: events.* `dice.roll` and `dice.clearHistory` may be sent with an acknowledgement, answered `{ ok: true, id }` (the stored roll's id) or `{ ok: true }` for a clear, or `{ ok: false, error }`, with no `error` event; a roll past the flood ceiling is answered so every time. Without one, refusals are `error` events as before. The web client now sends `character.hitdice.spend` only after the roll it pays for is answered `ok`.
+  - *Initiative.* An `initiative.roll` that throws dice is stored in the dice history (so `GET /api/campaigns/:campaignId/dice-rolls` returns it) and its `dice.rolled` entry has the stored `id`. A roll for a token not sent to every non-DM member is stored with `secret: true` and sent as a secret roll (`dice.rolled` to the roller, `dice.rolled.secret` to the other DMs). The roller's copy names an obscured token; everyone else's, and the stored roll, say "Unknown creature". A player's second roll for a token already rolled in this fight answers `error` with `You have rolled initiative for this fight already. Ask your DM to change it.`; a roll for a token deleted meanwhile answers `Token not found`. A player's roll is counted against the `dice.roll` ceiling before it is checked.
+  - *Character data.* The `roster.updated` that `POST /api/characters/:id/assign` sends when it unassigns a character now carries `campaignId`, as every other one does.
+  - *Maps.* `map.ping` naming a map that is not the campaign's, or a map the sender may not read (a player's ping on a map the DM has not switched to), is dropped without an answer; it went to the DM's sockets.
+  - *Tokens.* When a socket disconnects partway through a drag, every socket its `token.move` frames reached is sent `token.moved` with the token's stored position and `movedBy: null` (or `token:disappeared` where it no longer sees the token there).
+  - *Character data.* `character.hp.update` refuses a `delta` that is not a whole number from -100000 to 100000 (`delta must be a whole number of hit points from -100000 to 100000`), and for D&D 5e and Pathfinder 2e takes a negative one from `hp.temporary` first. It and `character.hitdice.spend` act on a character only when it names the socket's campaign and its owner is still a member, as the REST routes decide; they read the members' lists of character ids before.
+  - *Campaigns.* `PUT /api/campaigns/:campaignId` takes a `status` of `PREPARATION`, `COMPLETED` or `ARCHIVED` only, answering 400 `Invalid status. Must be one of: PREPARATION, COMPLETED, ARCHIVED; starting, pausing and ending a session set the others`, and none while a session is running or paused (400 `End the session before changing the campaign status`, storing nothing from the request).
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **Ending a session with Save game state unticked keeps the snapshot taken when you paused.** It threw that snapshot away.
+
+- **Starting, pausing and ending a session from two tabs at once can no longer leave two sessions open, or an ended session marked Paused.** Two **Start Session** clicks at the same moment started two sessions with the same number, and a **Pause Session** landing beside an **End Session** left the ended session marked **Paused**. Each step now waits for the one before it. If an earlier version left a campaign marked **Paused** or **Active** with no session open, **Session Controls** offer **Start Session**.
+
+- **The session timer counts from the session's start after Resume Session.** On the DM's screen it could start again from zero, and then disagree with itself after a reload.
+
+- **The paused-session notices say which rolls stay private.** They said a player's dice rolls stay on their own screen, but only rolls from the **Dice** tab do; a roll from a sheet, the roster or the map's **Roll...** menu still goes to the whole table.
+
+- **Advantage, disadvantage and a plain d20 show their critical in the Dice panel,** and dice dropped by keep or drop are struck through even when they match a die that was kept. Only a roll written `1d20` showed a critical, so **Adv** and **Dis** never did, and with equal values, such as two 14s on advantage, nothing was struck through.
+
+- **Personal notes follow your theme.** A link in a note is blue, the text takes the theme's ink colour, and the quote bar and divider lines take its accent; the styles meant for them never applied, so links looked like plain text and the quote bar was always amber.
+
+- **Firefox no longer logs "Invalid URI. Load of media resource failed" on every campaign page.** The ambient audio player was emptied in a way that pointed it at the page itself.
+
+- **A character taken out of a campaign leaves the campaign page at once.** Its sheet and rolls stayed on offer there, on the map's token menu and elsewhere, until the page was reloaded.
+
+- **A token goes back where it stands when whoever was carrying it loses their connection.** Everyone else kept seeing it where it was last carried until it next moved or the map was reloaded.
+
+- **Reset Explored Areas clears every player's memory of the map,** even one whose memory was being saved as you clicked it. That player kept everything they had explored.
+
+- **Damage from the roster's minus buttons takes temporary hit points first,** in D&D 5e and Pathfinder 2e, as both games' rules do. It came straight off the character's hit points and left the temporary ones untouched.
+
+- **Initiative rolls stay in the Dice panel after a reload,** where they used to vanish. A roll for a token not every player can see (hidden, on the spirit layer, on a map you have not switched to) is kept as a secret roll, seen by you and whoever rolled it. A player who rolls for their own obscured token now sees their token's name on the roll as it comes in, where it said *Unknown creature*; everyone else still sees *Unknown creature*, and so does the history after a reload.
+
+- **A player rolls initiative once per fight.** They could roll again and again until combat started and keep the best. A second roll is now refused; you can still change their number, and taking their token out of the order and putting it back lets them roll again.
+
+- **A token deleted while its initiative was being rolled no longer appears in the order.**
+
+- **A dice expression is read the same way everywhere, and one that cannot work is refused when it is typed or saved.** While a session was paused, players' rolls were worked out in the browser by a reader that knew only dice, keep and plus or minus: `4d6dl1` came out as 4, `1d20*2` as 1, and `1d20+5*2` as 1d20+5. They now follow the server's rules exactly. `1d20 5` rolled a 205-sided die, because the space was dropped; two terms now need an operator between them. An expression that could divide by zero, such as `1d20/0`, or whose total could pass about 2.1 billion, such as `9999*9999*9999`, is refused with the reason, where it used to fail with "Failed to roll dice" every time; a saved roll like that could be stored, and now cannot. A saved roll stored before this update that breaks these rules is refused when used, with the reason; edit it to fix it.
+
+- **A roll from a character sheet, the roster or the map's Roll... menu says why when it does not go through,** and spending a hit die keeps the die when its roll is refused. These rolls gave no sign at all when the server turned them down (too many rolls at once, a dropped connection), and the hit die was taken anyway.
+
+- **What the table refuses is shown as a message, and the Dice panel shows only what happened to its own rolls.** Every refusal, such as a token move during a pause, initiative rolled after combat has started, or a chat message held back by the cooldown, went to the Dice panel's banner, in a tab you might not have open, and a roll still on its way could lose its **Rolling...** state. Refusals now appear as a message at the top right of the page, once each, and the Dice panel's banner is for its own rolls. A roll that reached the panel twice is listed once.
+
+- **Coming back after a dropped connection brings back what the DM changed meanwhile:** the vibe and its tint, the weather and the ambient track, the spirit layer, and a dice history the DM cleared. The page kept the old tint, the rain and the music, and every cleared roll, until it was reloaded.
+
+- **Coming back after a long disconnect fills in every chat message you missed.** Only the newest 50 were fetched, so after a busy stretch away the messages before them were missing until you reloaded, and **Load More** could not reach them. The chat now reads back until it joins up with what you had.
+
+- **Chat times move on.** A message's time stayed at "just now", or wherever it was when the message arrived, until the page was reloaded; it now updates each minute.
+
+- **Enter no longer sends a chat message or a roll while you are picking characters in an input method,** as Japanese, Chinese and Korean typing does. It now confirms the characters, as it should. The same goes for the boxes in **Saved** rolls and in a token's custom roll.
+
+- **The Dice and Chat boxes keep the keyboard after you roll or send.** Each roll, and each chat message while the DM's chat cooldown was on, took the cursor out of the box, so you had to click back in every time.
+
+- **A failed Load More in chat no longer leaves its message up for good, or makes the list jump later.** The message clears when the next Load More works and has a close button, and a message that arrives later no longer moves you away from where you were reading.
+
+- **A chat message that does not get through says so.** One sent as the connection dropped, or refused by the chat cooldown, stayed marked *sending…* for good. It is now marked **Not sent** with the reason, and **Retry** sends it again; a message that did get through after all is not posted twice if you retry within ten minutes. **Discard** removes it. A message over 2,000 characters can no longer be typed: the box stops there and counts the characters as you near it. Messages that arrive while the chat history is still loading are no longer lost.
+
+- **Saving Campaign Settings, removing a player and handing over the DM seat leave the table as it is.** Each one rebuilt the whole campaign page: every token picture was fetched again, a chat message being typed was lost, and the settings reopened on **General**. Several saves in a minute could reach the limit of 300 requests a minute, after which token pictures failed to load until it passed.
+
+- **Sending an invitation leaves the page as it is.** **Invite Player** in the left sidebar reloaded the page, which hid the message saying the invitation was sent; from **Campaign Settings** that message appeared twice.
+
+- **The Campaign Roster keeps its list while it updates.** It went blank with "Loading roster..." whenever someone joined or a character was brought in, which dropped a character you were dragging from it, and two updates close together could leave the older list showing.
+
+- **A campaign that is still loading when you open another one can no longer replace it,** and a campaign link that was refused no longer sends you to the dashboard after you have moved on to another page.
+
+- **Hit point changes during a fight do less work.** Each one redrew everything on the campaign page; now only the roster and the map's health bars are redrawn.
+
+- **The Session tab at the top of the right-hand panel is no longer cut off.** At the panel's usual width the five tabs did not fit, and the last one ran past the edge. When there is no room for every name, the tabs other than the open one show only their icon; point at one to see its name.
+
+- **The campaign page no longer scrolls sideways.** A hidden label beside the header's last button made the whole page 32 pixels wider than the window at any size, and at phone width the DM's header ran far off the side; the header now wraps onto a second row.
+
+- **The campaign page opens when the browser refuses to store site data,** as some private windows and blocked-site settings do. It stopped with an error; now the panel sizes and the last tab are simply not remembered.
 
 - **Moving the pointer over the map does less work.** The whole map page was worked out again for every pixel the pointer moved, and the mouse wheel's listener was taken off and put back each time; now the page updates only when the pointer reaches another square.
 

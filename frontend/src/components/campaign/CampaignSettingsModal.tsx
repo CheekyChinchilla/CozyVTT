@@ -748,11 +748,9 @@ export default function CampaignSettingsModal({
         <InvitePlayerModal
           campaignId={campaign.id}
           onClose={() => setShowInviteModal(false)}
-          onSuccess={() => {
-            setShowInviteModal(false);
-            refreshCampaign();
-            showToast('Invitation sent!', 'success');
-          }}
+          // The invite dialog says it was sent. Nothing on the campaign
+          // changes until it is accepted, which the roster hears about.
+          onSuccess={() => setShowInviteModal(false)}
         />
       )}
     </>

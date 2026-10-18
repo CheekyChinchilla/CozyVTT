@@ -4,12 +4,13 @@
  * Supports real-time updates via WebSocket
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useGameStore } from '@/stores/gameStore';
+import { useGameStore, useCharacterHp } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTableRoll } from '@/hooks/useTableRoll';
 import { api } from '@/services/api';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
@@ -25,8 +26,10 @@ import type { CampaignRole, GameSystem, Character, RosterMember } from '@/types'
 import { TokenLayer } from '@/types';
 
 export default function CampaignRoster() {
-  const { campaign, currentMap, userRole, characterHpCache, seedCharacterHpCache } = useCampaign();
+  const { campaign, currentMap, userRole } = useCampaign();
+  const characterHpCache = useCharacterHp();
   const { socket } = useWebSocket();
+  const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [roster, setRoster] = useState<RosterMember[]>([]);
@@ -40,24 +43,30 @@ export default function CampaignRoster() {
   const [rollPicker, setRollPicker] = useState<{ x: number; y: number; characterId: string } | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
 
-  // Fetch roster data
+  // Each fetch is numbered and only the newest answer is shown: two
+  // refetches can answer out of order.
+  const rosterSeq = useRef(0);
+
+  // Fetch roster data. "Loading roster..." is for the first load only; a
+  // refetch keeps the list on screen, so a drag or hover on it carries on.
   const fetchRoster = async () => {
     if (!campaign?.id) return;
+    const seq = ++rosterSeq.current;
 
     try {
-      setLoading(true);
       const response = await api.getCampaignCharacters(campaign.id);
+      if (seq !== rosterSeq.current) return;
       setRoster(response.roster);
 
-      // Seed the HP cache in CampaignContext so MapCanvas can render player HP bars
+      // Seed the HP cache so MapCanvas can render player HP bars
       const hpEntries = response.roster.flatMap((m) =>
         m.characters.map((c) => ({ id: c.id, hp: c.hp }))
       );
-      seedCharacterHpCache(hpEntries);
+      useGameStore.getState().seedCharacterHp(hpEntries);
     } catch (error) {
       console.error('Error fetching campaign roster:', error);
     } finally {
-      setLoading(false);
+      if (seq === rosterSeq.current) setLoading(false);
     }
   };
 
@@ -428,9 +437,7 @@ export default function CampaignRoster() {
           }
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
-          onRoll={(expression, purpose, characterName) => {
-            socket?.emitDiceRoll({ expression, purpose, characterName });
-          }}
+          onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
           onClose={() => setRollPicker(null)}
         />
       )}

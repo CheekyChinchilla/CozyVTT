@@ -266,7 +266,7 @@ export default function DiceMacroManager({
                 aria-label="Macro expression"
                 className="flex-1 min-w-0 font-mono"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && canAdd) {
+                  if (e.key === 'Enter' && canAdd && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     void handleAdd();
                   }

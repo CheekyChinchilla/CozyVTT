@@ -23,7 +23,7 @@ vi.mock('@/contexts/WebSocketContext', () => ({
     socket: {
       on: (event: string, handler: Handler) => handlers.set(event, handler),
       off: (event: string) => handlers.delete(event),
-      emitDiceRoll: vi.fn(),
+      rollDice: vi.fn().mockResolvedValue({ ok: true, id: "r" }),
       emitHitDiceSpend: vi.fn(),
     },
   }),

@@ -71,20 +71,11 @@ _Nothing at present._
 - `1.5.4` **In Chrome, the document reader shows a blocked page for a PDF.** Chrome's PDF viewer does not run in the reader's sandboxed frame; opening the file directly works (`DocumentReader.tsx`).
 - `1.5.4` **In Firefox, asset cards fade in twice as the library opens,** because their hover transition also covers their opacity (`AssetCard.tsx`).
 - `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
-- `1.5.4` **At phone width the campaign page scrolls sideways behind its "Desktop Required" notice** (`CampaignPage.tsx`).
 - `1.5.4` **In Firefox, the Upload Asset dialog refuses Ogg and WAV audio files** with "Invalid file type". Firefox names them `application/ogg` and `audio/x-wav`, which the dialog's own list does not include; the server would take them. Upload them from another browser, or as MP3 (`AssetUploadModal.tsx`).
 
 ### Play and connection
 
-- `1.5.4` **A chat message sent while the connection is dropping is lost and stays "sending…".** It is emitted with no acknowledgement, and the server refuses one that arrives before the socket rejoins (`ChatPanel.tsx`).
-- `1.5.4` **Initiative rolls vanish from the dice log on reload.** `handlers/initiative.ts` broadcasts the entry but never stores it.
-- `1.5.4` **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
-- `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
-- `1.5.4` **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
-- `1.5.4` **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
-- `1.5.4` **Saving Campaign Settings reloads the whole live table,** every token picture included, and reopens the settings on General. Several saves in a minute can reach the 300 requests a minute limit, after which token pictures fail to load until it passes (`CampaignContext.tsx`).
 - `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
-- `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
 
 ### Maps
 
@@ -109,6 +100,7 @@ _Nothing at present._
 ### User-facing
 
 - `1.5.4` **Animated maps and tokens.** Review, and add if it can be done safely. Today a token can be a GIF, and a WebP map or token is accepted whether or not it is animated, but the map canvas draws its picture only when the map layer repaints (on a pan, a zoom or a change of map), so an animated map does not play. An animated PNG is refused everywhere: the upload's content check names it `image/apng`, which no asset type lists. An animated picture carries no script, unlike SVG, so the guards that matter stay as they are: the content check, the image library limited to its PNG, JPEG, WebP and GIF readers (`utils/sharpInput.ts`), and the page's security policy. What an animation adds is size: every frame is decoded by the server when it makes a thumbnail and by every player's browser, so a file of a few megabytes can unpack to gigabytes. Needs: limits on the width, height, frame count and total pixels of an animated upload, read from the image library's metadata before anything else, with the thumbnail made from the first frame; then, for maps, a canvas that repaints the map layer on each frame without redrawing tokens, walls and fog, and a way to pause animation for players who ask for less motion.
+- **A campaign page for phones and tablets** ([#31](https://github.com/CheekyChinchilla/CozyVTT/issues/31)). Below 1024 pixels the page now offers **Continue anyway** (1.5.4), but keeps its three-column desktop layout. A real small-screen layout also needs the chat list to hold and draw fewer messages: today it keeps every message loaded in a long session in memory and draws them all, which a phone's memory feels first. Window the list, or keep the newest few hundred and let **Load More** fetch older ones again. **Do** after 1.5.4.
 - **Sound effects.** Dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
 - **Browser notifications.** Desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
 - **Per-user default dice color.** Surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice log (`DiceRoller.tsx` and `DiceResult.tsx`) and the socket roll payload metadata, then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
@@ -191,28 +183,21 @@ _Nothing at present._
   candidate, so wait until it is stable with a patch release or two, and move
   to the `prisma-client` generator with it. **Defer** TypeScript 7.
 
-- **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
-  from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser
-  (`backend/src/utils/dice-parser.ts`) uses it only to add, subtract,
-  multiply and divide numbers it has built itself, so no typed text reaches
-  it, yet it is about 18 MB installed and brings nine packages of its own.
-  Every major version of it is one more upgrade to check. Replacing it means
-  writing and testing an evaluator for those four operators; the exact totals
-  in the dice parser's tests are its specification. **Do** as a separate
-  small project, not tied to a release, and before the dice grammar lets
-  anything other than numbers and those operators through.
+- **Remove the mathjs package.** `1.5.4` The dice parser
+  (`backend/src/utils/dice-parser.ts`) now works out totals itself, with the
+  exact totals in its tests as the specification, and nothing imports mathjs
+  any more. The package is still listed in `backend/package.json` and
+  `THIRD_PARTY_LICENSES.md`, about 18 MB installed with nine packages of its
+  own. **Do** once the maintainer agrees to the dependency change.
 
-- **One dice grammar for both sides.** The server owns the real parser
-  (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks,
-  `utils/diceExpression.ts` and a private one inside `DiceRoller`, which accept
-  things the server refuses, such as `2d6+` and `dddd`. That is survivable for a
-  roll about to be sent, because the server answers immediately and the person is
-  still looking at the box, and saved macros close the dangerous half by
-  validating server-side before anything is stored. But three implementations of
-  one grammar is two too many. The fix is extracting the parser into something
-  both sides import, which today means introducing a shared package where none
-  exists, and that is why it has not been done yet. **Revisit** when a second thing
-  needs shared logic, or if the checks disagree in a way a user notices.
+- **One dice grammar for both sides.** `1.5.4` The parser is now one file
+  kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
+  (checked by `visionParity.test.ts`), and the Dice panel checks expressions
+  and rolls a paused table's dice with it. One character-set check is left,
+  `frontend/src/utils/diceExpression.ts`, which decides whether a value on a
+  character sheet is offered as a roll and accepts things the parser refuses,
+  such as `2d6+` and `dddd`. **Do** by having it call the parser, after checking
+  what each sheet's rolls send through it.
 
 - **Two backend suites still stub `file-type`.** The backend tests load the
   real library (`backend/jest.config.js` compiles it to CommonJS), and

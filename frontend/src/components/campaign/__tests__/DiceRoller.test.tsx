@@ -10,7 +10,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
-const emitDiceRoll = vi.fn();
+const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
 
 vi.mock('framer-motion', () => ({
   motion: new Proxy({}, { get: () => (props: Record<string, unknown>) => {
@@ -30,7 +30,7 @@ vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({
     socket: {
       onDiceRolled: vi.fn(), onDiceRolledSecret: vi.fn(), onDiceHistoryCleared: vi.fn(),
-      on: vi.fn(), off: vi.fn(), emitDiceRoll,
+      on: vi.fn(), off: vi.fn(), rollDice,
     },
     status: 'connected',
     reconnectCount: 0,
@@ -59,7 +59,7 @@ describe('DiceRoller for a spectator', () => {
     fireEvent.change(screen.getByPlaceholderText(/2d6\+3/), { target: { value: '1d20' } });
     fireEvent.click(screen.getByRole('button', { name: /^Roll$/ }));
 
-    expect(emitDiceRoll).not.toHaveBeenCalled();
+    expect(rollDice).not.toHaveBeenCalled();
     expect(await screen.findByText(/Spectators watch the dice/)).toBeTruthy();
   });
 });

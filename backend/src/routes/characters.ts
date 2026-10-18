@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
+import { ownerStillIn } from '../utils/characterCampaign';
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
@@ -82,18 +83,6 @@ const CHARACTER_SUMMARY_SELECT = {
   campaign: { select: { id: true, name: true } },
 } as const;
 
-/**
- * Whether a character's owner is still a member of the campaign it names. A
- * member removed before removals took their characters out of the campaign
- * left characters naming it; those are the owner's alone.
- */
-async function ownerStillIn(ownerId: string, campaignId: string): Promise<boolean> {
-  const owner = await prisma.campaignMembership.findUnique({
-    where: { userId_campaignId: { userId: ownerId, campaignId } },
-    select: { userId: true },
-  });
-  return owner !== null;
-}
 
 
 /**
@@ -1032,10 +1021,9 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
             action: 'character.unassigned',
             characterId: id,
             userId,
-            // TODO(play): no campaignId, unlike every other roster.updated, so
-            // the campaign page's member and character lists (CampaignContext)
-            // skip it and keep offering the character's sheet and rolls until
-            // a reload. Send campaignId: character.campaignId here.
+            // As every roster.updated does: the campaign page follows the
+            // event only for its own campaign.
+            campaignId: character.campaignId,
           });
         } catch (error) {
           logger.error('Failed to broadcast roster update', { err: error });

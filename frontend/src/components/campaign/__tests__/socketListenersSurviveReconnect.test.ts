@@ -59,6 +59,7 @@ class FakeSocket {
 
 const sockets = vi.hoisted(() => [] as unknown[]);
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('socket.io-client', () => ({
   io: () => {
     const s = new FakeSocket();

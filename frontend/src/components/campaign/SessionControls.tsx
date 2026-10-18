@@ -65,9 +65,12 @@ export default function SessionControls() {
   const [isEndModalOpen, setIsEndModalOpen] = useState(false);
 
   const status = campaign?.status ?? CampaignStatus.PREPARATION;
-  const elapsed = useSessionTimer(
-    status === CampaignStatus.ACTIVE ? (activeSession?.startedAt ?? null) : null,
-  );
+  // The buttons follow the open session, running or paused, and the status
+  // says which: a campaign an older version left marked PAUSED or ACTIVE
+  // with its session already ended still offers Start.
+  const isPaused = !!activeSession && status === CampaignStatus.PAUSED;
+  const isRunning = !!activeSession && !isPaused;
+  const elapsed = useSessionTimer(isRunning ? activeSession.startedAt : null);
 
   // ============================================
   // Session Actions
@@ -113,10 +116,12 @@ export default function SessionControls() {
     try {
       const result = await api.resumeSession(campaign.id);
       updateCampaignStatus(CampaignStatus.ACTIVE);
+      // The timer counts from the session's start, as it does for everyone
+      // else and after a reload.
       setActiveSession({
         id: result.session.id,
         sessionNumber: result.session.sessionNumber,
-        startedAt: new Date().toISOString(), // Resume resets timer display to now
+        startedAt: result.session.startedAt,
       });
       showToast(`Session ${result.session.sessionNumber} resumed!`, 'success');
     } catch (err) {
@@ -149,9 +154,7 @@ export default function SessionControls() {
 
   if (userRole !== 'DM') return null;
 
-  const isActive = status === CampaignStatus.ACTIVE;
-  const isPaused = status === CampaignStatus.PAUSED;
-  const isInactive = status === CampaignStatus.INACTIVE;
+  const isInactive = !activeSession && status === CampaignStatus.INACTIVE;
   const isPrep = status === CampaignStatus.PREPARATION;
 
   return (
@@ -169,7 +172,7 @@ export default function SessionControls() {
             <div className="flex items-center gap-2 text-xs text-stone-gray">
               <Hash className="w-3 h-3" />
               <span className="font-medium">{activeSession.sessionNumber}</span>
-              {isActive && elapsed && (
+              {isRunning && elapsed && (
                 <>
                   <span className="text-brand-ink/30">·</span>
                   <span className="font-mono text-brand-ink">{elapsed}</span>
@@ -183,7 +186,7 @@ export default function SessionControls() {
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-parchment/60 border border-moss-green/15">
           <div
             className={`w-2 h-2 rounded-full shrink-0 ${
-              isActive
+              isRunning
                 ? 'bg-success animate-pulse'
                 : isPaused
                   ? 'bg-warm-amber'
@@ -191,14 +194,14 @@ export default function SessionControls() {
             }`}
           />
           <span className="text-sm font-medium text-stone-gray capitalize">
-            {isActive ? 'Active' : isPaused ? 'Paused' : isInactive ? 'Inactive' : 'Preparation'}
+            {isRunning ? 'Active' : isPaused ? 'Paused' : isPrep ? 'Preparation' : 'Inactive'}
           </span>
         </div>
 
         {/* Action Buttons */}
         <div className="space-y-2">
-          {/* Start Session — PREPARATION or INACTIVE (new session, no resume) */}
-          {(isPrep || isInactive) && (
+          {/* Start Session: no session open */}
+          {!activeSession && (
             <Button
               onClick={handleStart}
               disabled={isLoading}
@@ -209,7 +212,7 @@ export default function SessionControls() {
             </Button>
           )}
 
-          {/* Resume Session — PAUSED only (same session; the map stays as the DM left it) */}
+          {/* Resume Session: a paused session, the map as the DM left it */}
           {isPaused && (
             <Button
               onClick={handleResume}
@@ -221,8 +224,8 @@ export default function SessionControls() {
             </Button>
           )}
 
-          {/* Pause Session — ACTIVE only */}
-          {isActive && (
+          {/* Pause Session: a running session */}
+          {isRunning && (
             <Button
               onClick={handlePause}
               disabled={isLoading}
@@ -233,8 +236,8 @@ export default function SessionControls() {
             </Button>
           )}
 
-          {/* End Session — ACTIVE or PAUSED */}
-          {(isActive || isPaused) && (
+          {/* End Session: running or paused */}
+          {activeSession && (
             <button
               onClick={() => setIsEndModalOpen(true)}
               disabled={isLoading}
@@ -249,7 +252,7 @@ export default function SessionControls() {
         {/* Paused hint */}
         {isPaused && (
           <p className="text-xs text-warm-gray text-center italic">
-            Players can't move tokens, and their dice rolls stay on their own screens.
+            Players can't move tokens. Their rolls from the Dice tab stay on their own screens; rolls from a sheet or a Roll menu still reach the table.
           </p>
         )}
 

@@ -491,3 +491,48 @@ describe('parseDiceExpression agrees with rollDice', () => {
     expect(validatorAccepts).toBe(rollerAccepts);
   });
 });
+
+/**
+ * Two numbers with only a space between them are refused.
+ *
+ * Whitespace was removed before anything else, so `1d20 5` became `1d205`
+ * and rolled a 205-sided die, and `2d6 3` rolled 2d63, with nothing to say
+ * the space had been read as nothing.
+ */
+describe('a space is not an operator', () => {
+  it.each(['1d20 5', '2d6 3', '4d6 kh3', '1 2'])('refuses %j', (expression) => {
+    expect(() => rollDice(expression)).toThrow(/Missing an operator/);
+  });
+
+  it.each([['1d1 + 5', 6], ['  2d1  *  3  ', 6], ['adv + 1', null]] as const)('still reads %j', (expression, total) => {
+    const result = rollDice(expression);
+    if (total !== null) expect(result.total).toBe(total);
+  });
+});
+
+/**
+ * An expression that could divide by zero, or total more than the dice log
+ * stores, is refused before it is rolled or saved.
+ *
+ * `1d20/0` totalled Infinity and `9999*9999*9999` a number past 32 bits; both
+ * passed validation, so a macro could be saved that answered "Failed to roll
+ * dice" every time it was used, and an initiative fallback put Infinity in
+ * the tracker. Validation rolls once, so the limit is worked out from the
+ * lowest and highest each die can roll, not from one roll: `1d1000*9999*999`
+ * fits on a low roll and not on a high one.
+ */
+describe('totals the dice log can store', () => {
+  it.each(['1d20/0', '0/0', '5/0', '1-0/0', '5/0d6', '1d20/2d1kh0'])('refuses %j, which divides by zero', (expression) => {
+    expect(() => rollDice(expression)).toThrow(/divide by zero/);
+    expect(() => parseDiceExpression(expression)).toThrow(DiceParserError);
+  });
+
+  it.each(['9999*9999*9999', '1d1000*9999*999', '-9999*9999*99', '100d1000*9999*3'])('refuses %j, whose total could be too large', (expression) => {
+    expect(() => rollDice(expression)).toThrow(/too large/);
+  });
+
+  it.each([['9999*9999', 99980001], ['1d1/1d1', 1], ['1d1000*2000', null], ['-9999*999', -9989001]] as const)('accepts %j', (expression, total) => {
+    const result = rollDice(expression);
+    if (total !== null) expect(result.total).toBe(total);
+  });
+});

@@ -72,12 +72,19 @@ export const VibeSettingsSchema = z.object({
 
 const COOLDOWN_MESSAGE = 'chatCooldownSeconds must be an integer between 1 and 300';
 
+/**
+ * The statuses settings may set, between sessions. ACTIVE, PAUSED and
+ * INACTIVE say where a session is, so only the session routes set them: one
+ * set here put the campaign page out of step with its sessions.
+ */
+const SETTABLE_STATUSES = [CampaignStatus.PREPARATION, CampaignStatus.COMPLETED, CampaignStatus.ARCHIVED] as const;
+
 /** PUT /api/campaigns/:campaignId. Every field optional; each is checked when present. */
 export const UpdateCampaignSchema = z.object({
   name: z.string().trim().min(1, 'Campaign name is required').max(200, 'Campaign name must be 200 characters or fewer').optional(),
   description: z.string().max(5000, 'Description must be 5000 characters or fewer').nullable().optional(),
-  status: z.nativeEnum(CampaignStatus, {
-    error: `Invalid status. Must be one of: ${Object.values(CampaignStatus).join(', ')}`,
+  status: z.enum(SETTABLE_STATUSES, {
+    error: `Invalid status. Must be one of: ${SETTABLE_STATUSES.join(', ')}; starting, pausing and ending a session set the others`,
   }).optional(),
   gameSystem: z.nativeEnum(GameSystem, {
     error: `Invalid game system. Must be one of: ${Object.values(GameSystem).join(', ')}`,
