@@ -84,8 +84,8 @@ const EMPTY_REVEALED: ReadonlySet<number> & Set<number> = new Set<number>();
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
-import { controlsToken } from '@/utils/tokenControl';
-import { dmTokenControls } from '@/utils/tokenControls';
+import { controlsToken } from '@/utils/tokenOwnership';
+import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
@@ -247,7 +247,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
   const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
 
-  // Tokens this viewer controls, by the server's definition (utils/tokenControl.ts).
+  // Tokens this viewer controls, by the server's definition (utils/tokenOwnership.ts).
   const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id, userRole), [user?.id, userRole]);
 
   // Whether manual fog applies on this map. Absent on an older payload means
@@ -3201,7 +3201,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 Save as Template
               </button>
 
-              {/* Hide from / Reveal to players — every token; see utils/tokenControls.ts */}
+              {/* Hide from / Reveal to players — every token; see utils/dmTokenMenu.ts */}
               {controls.hide && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
@@ -3220,7 +3220,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 </button>
               )}
 
-              {/* Obscure / Reveal identity — every token; see utils/tokenControls.ts */}
+              {/* Obscure / Reveal identity — every token; see utils/dmTokenMenu.ts */}
               {controls.obscure && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"

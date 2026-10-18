@@ -10,7 +10,7 @@
 
 import type { CampaignMembership, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
-import { controlsToken } from '@/utils/tokenControl';
+import { controlsToken } from '@/utils/tokenOwnership';
 import { tokenCentre } from '@/utils/tokenCentre';
 import { tokenSentTo } from '@/utils/tokenMask';
 

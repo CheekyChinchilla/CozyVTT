@@ -37,7 +37,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 
 import type { CombatantEntry, Token } from '@/types';
 import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
-import { controlsToken } from '@/utils/tokenControl';
+import { controlsToken } from '@/utils/tokenOwnership';
 
 // ---------------------------------------------------------------------------
 // Helpers
