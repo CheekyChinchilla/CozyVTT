@@ -24,7 +24,6 @@ import type {
   CoC7eCharacteristics,
   CoC7eDerivedStats,
   CoC7eSkills,
-  CoC7eCombat,
   CoC7eWealth,
   CoC7eBackstory,
   CoC7eAppearance,
@@ -167,19 +166,20 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   // Form state
   const [formData, setFormData] = useState<CoC7eFormData>(() => ({
     ...data,
-    // TODO(typing): `{}` has none of the keys these types require, and the
-    // effects and inputs below read straight off them. Pre-existing; the casts
-    // keep the behaviour for a sheet stored without one exactly as it was.
-    characteristics: (data.characteristics || {}) as CoC7eCharacteristics,
+    characteristics: data.characteristics || {},
+    // TODO(typing): `{}` has none of the keys CoC7eDerivedStats and CoC7eSkills
+    // require, and the effects and inputs below read straight off them, so a
+    // sheet stored without either block reads undefined where a number is
+    // expected. The casts keep that behaviour exactly as it was.
     derivedStats: (data.derivedStats || {}) as CoC7eDerivedStats,
     skills: (data.skills || {}) as CoC7eSkills,
-    combat: (data.combat || { weapons: [] }) as CoC7eCombat,
+    combat: data.combat || { weapons: [] },
     possessions: data.possessions || [],
-    wealth: (data.wealth || {}) as CoC7eWealth,
-    backstory: (data.backstory || {}) as CoC7eBackstory,
-    appearance: (data.appearance || {}) as CoC7eAppearance,
+    wealth: data.wealth || {},
+    backstory: data.backstory || {},
+    appearance: data.appearance || {},
     contacts: data.contacts || [],
-    conditions: (data.conditions || {}) as CoC7eConditions,
+    conditions: data.conditions || {},
   }));
 
   // Report the first edit up to whoever is hosting this sheet, so leaving with

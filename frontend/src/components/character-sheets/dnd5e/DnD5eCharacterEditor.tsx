@@ -28,8 +28,6 @@ import type {
   DnD5eSkills,
   DnD5eSpellcasting,
   DnD5eSpellSlots,
-  DnD5eAppearance,
-  DnD5ePersonality,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
@@ -292,12 +290,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         : {}),
       // Ensure nested objects exist.
       //
-      // TODO(typing): `{}` is not a valid container — none of these has its keys,
-      // and the effects below read `.score` / `.proficient` off each entry. A
-      // sheet stored without one of these blocks therefore reads `undefined`
-      // where a number is expected. Pre-existing; the casts keep the behaviour
-      // exactly as it was rather than changing what a malformed sheet does.
-      stats: (own.stats || {}) as DnD5eStats,
+      // TODO(typing): `{}` has none of the keys DnD5eSavingThrows and DnD5eSkills
+      // require, and the effects below read `.proficient` off each entry, so a
+      // sheet stored without either block reads undefined where a value is
+      // expected. The casts keep that behaviour exactly as it was.
+      stats: own.stats || {},
       // A stored total that differs from what the scores give keeps the
       // difference as its other bonus, so the total survives the effects below.
       savingThrows: withRecordedOtherBonuses(
@@ -310,9 +307,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       ),
       hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
       deathSaves: own.deathSaves || { successes: 0, failures: 0 },
-      // Same TODO(typing) as the containers above: this default omits `class`,
-      // which the type requires. Cast rather than corrected.
-      spellcasting: (own.spellcasting
+      spellcasting: own.spellcasting
         ? {
             ...own.spellcasting,
             slots: withAllSlotLevels(own.spellcasting.slots),
@@ -330,7 +325,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             cantrips: [],
             slots: withAllSlotLevels(undefined),
             spells: [],
-          }) as DnD5eSpellcasting,
+          },
       currency: own.currency || { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
       inventory: own.inventory || [],
       attacks: own.attacks || [],
@@ -345,9 +340,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       // featuresAndTraits is not defaulted here: the spread above has already
       // settled it, folding in the template-era `features` field. Re-reading
       // `data` would throw that away.
-      // Same TODO(typing) as the containers above.
-      appearance: (own.appearance || {}) as DnD5eAppearance,
-      personality: (own.personality || {}) as DnD5ePersonality,
+      appearance: own.appearance || {},
+      personality: own.personality || {},
       alliesAndOrganizations: own.alliesAndOrganizations || { name: '', description: '' },
     };
   });

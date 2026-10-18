@@ -38,8 +38,6 @@ import type {
   PF2eHitPoints,
   PF2eFeats,
   PF2eSpellSlots,
-  PF2eAppearance,
-  PF2ePersonality,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
@@ -256,11 +254,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
         typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
     } : undefined,
-    // TODO(typing): `{}` has none of the keys these types require, and the
-    // inputs below read straight off them. Pre-existing; cast so the
-    // behaviour for a sheet stored without one is exactly what it was.
-    appearance: (data.appearance || {}) as PF2eAppearance,
-    personality: (data.personality || {}) as PF2ePersonality,
+    appearance: data.appearance || {},
+    personality: data.personality || {},
     backstory: data.backstory || '',
     alliesAndOrganizations: data.alliesAndOrganizations || { name: '', description: '' },
     notes: data.notes || '',
