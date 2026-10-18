@@ -265,9 +265,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   );
   const effectiveFogState = fogEnabled ? fogState : null;
 
-  // Cache invalidation flag for the wall layer.
-  const wallCacheValidRef = useRef(false);
-
   // The DM's editing tool: one wall, fog or light mode at a time. Each
   // setter below sets its own kind, or clears the tool only when it is of its
   // kind, so putting one panel's tool away leaves another panel's alone.
@@ -476,7 +473,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const commitWalls = useCallback((next: WallSegment[]) => {
     pushWallHistory(next);
-    wallCacheValidRef.current = false;
     const socketInstance = socket?.getSocket();
     if (socketInstance && currentMap) {
       socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
@@ -611,7 +607,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Opening or closing a door is not an undoable edit: carried into the
     // whole history, so undo never closes a door again.
     carryWallHistory((walls) => walls.map(s => s.id === door.id ? updated : s));
-    wallCacheValidRef.current = false;
     socket?.getSocket()?.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
     setDoorContextMenu(null);
   }, [currentMap, socket, carryWallHistory, ownEdits]);
@@ -1063,8 +1058,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     resetWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
     setLightSources((currentMap.lights as LightSource[] | undefined) ?? []);
 
-    // Invalidate wall cache and offscreen lighting canvas when map changes
-    wallCacheValidRef.current = false;
+    // Drop the offscreen lighting canvases when the map changes
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
@@ -1133,21 +1127,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       carryWallHistory((walls) => walls.some((s) => s.id === data.segment.id)
         ? walls.map((s) => s.id === data.segment.id ? data.segment : s)
         : [...walls, data.segment]);
-      wallCacheValidRef.current = false;
     };
 
     const handleWallRemoved = (data: { mapId: string; segmentId: string; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
       carryWallHistory((walls) => walls.filter((s) => s.id !== data.segmentId));
-      wallCacheValidRef.current = false;
     };
 
     const handleWallUpdated = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
       carryWallHistory((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
-      wallCacheValidRef.current = false;
     };
 
     const handleWallsReplaced = (data: { mapId: string; segments: WallSegment[]; opId?: string }) => {
@@ -1155,7 +1146,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       if (!currentMap || data.mapId !== currentMap.id) return;
       // The full stored list, from another page, the API or walls:request.
       carryWallHistory(() => data.segments);
-      wallCacheValidRef.current = false;
     };
 
     const handleFogUpdated = (data: { mapId: string; fogState: FogState }) => {
@@ -1441,7 +1431,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         }
         const prev = undoWalls();
         if (prev !== null) {
-          wallCacheValidRef.current = false;
           const socketInstance = socket?.getSocket();
           if (socketInstance) {
             socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: prev }));
@@ -1451,7 +1440,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         e.preventDefault();
         const next = redoWalls();
         if (next !== null) {
-          wallCacheValidRef.current = false;
           const socketInstance = socket?.getSocket();
           if (socketInstance) {
             socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
@@ -1484,7 +1472,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
     const next = [...wallSegments, ...newSegs];
     pushWallHistory(next);
-    wallCacheValidRef.current = false;
     setPolygonPoints([]);
     // Save to server
     const socketInstance = socket?.getSocket();
@@ -2174,7 +2161,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           if (replace) {
             const newSegs = wallSegments.filter((s) => !replace.remove.includes(s.id)).concat(replace.add);
             pushWallHistory(newSegs);
-            wallCacheValidRef.current = false;
 
             const socketInstance = socket?.getSocket();
             if (socketInstance && currentMap) {
@@ -2203,7 +2189,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       // Optimistic local add (push to undo history)
       pushWallHistory([...wallSegments, newSeg]);
-      wallCacheValidRef.current = false;
 
       // Emit to server
       const socketInstance = socket?.getSocket();
@@ -2321,7 +2306,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         const segB: WallSegment = { id: randomId(), x1: cp.x, y1: cp.y, x2: hit.x2, y2: hit.y2, type: hit.type };
         const newSegs = wallSegments.filter((s) => s.id !== hit.id).concat(segA, segB);
         pushWallHistory(newSegs);
-        wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
           socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: hit.id }));
@@ -2372,7 +2356,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         const newType = door.type === 'door-closed' ? 'door-open' : 'door-closed';
         const updated = { ...door, type: newType } as WallSegment;
         carryWallHistory((walls) => walls.map((s) => s.id === door.id ? updated : s));
-        wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
           socketInstance.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
@@ -2534,7 +2517,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           return seg;
         });
         replaceWallHistory(updated);
-        wallCacheValidRef.current = false;
         markDirty('overlay');
         return;
       }
@@ -2558,7 +2540,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg
         );
         replaceWallHistory(preview);
-        wallCacheValidRef.current = false;
         markDirty('overlay');
         return;
       }
@@ -2756,7 +2737,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         const finalSegments = wallSegments;
         if (preDrag) replaceWallHistory(preDrag);
         pushWallHistory(finalSegments);
-        wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
           socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: finalSegments }));
@@ -2777,7 +2757,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       if (erased.size > 0) {
         const newSegs = wallSegments.filter((s) => !erased.has(s.id));
         pushWallHistory(newSegs);
-        wallCacheValidRef.current = false;
         const socketInstance = socket?.getSocket();
         if (socketInstance && currentMap) {
           socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: newSegs }));
@@ -2813,7 +2792,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           }
           const next = [...wallSegments, ...newSegs];
           pushWallHistory(next);
-          wallCacheValidRef.current = false;
           const socketInstance = socket?.getSocket();
           if (socketInstance) {
             socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
@@ -3405,7 +3383,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             onUndo={() => {
               const prev = undoWalls();
               if (prev !== null) {
-                wallCacheValidRef.current = false;
                 const socketInstance = socket?.getSocket();
                 if (socketInstance && currentMap) {
                   socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: prev }));
@@ -3415,7 +3392,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             onRedo={() => {
               const next = redoWalls();
               if (next !== null) {
-                wallCacheValidRef.current = false;
                 const socketInstance = socket?.getSocket();
                 if (socketInstance && currentMap) {
                   socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
@@ -3433,7 +3409,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 selectedWallIds.has(s.id) ? { ...s, type: newType } : s
               );
               pushWallHistory(updated);
-              wallCacheValidRef.current = false;
               const socketInstance = socket?.getSocket();
               if (socketInstance) {
                 socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: updated }));
@@ -3478,7 +3453,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               const removeIds = new Set([a!.seg.id, b!.seg.id]);
               const newSegs = wallSegments.filter((s) => !removeIds.has(s.id)).concat(merged);
               pushWallHistory(newSegs);
-              wallCacheValidRef.current = false;
               const socketInstance = socket?.getSocket();
               if (socketInstance) {
                 socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: newSegs }));
