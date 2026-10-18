@@ -58,6 +58,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Pop-up messages leave one at a time, each after its own few seconds.** A message arriving while others were up made them all wait for it, so messages that came one after another left together; in the Asset Library a message stayed up as long as the page kept changing.
+
 - **An invitation names the campaign's DM.** The dashboard and the invitation named the campaign's owner as its DM, which is wrong once the owner has handed the game over.
 
 - **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators. A DM the game was handed to was offered **Delete Campaign**, which the server refused.

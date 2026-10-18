@@ -13,13 +13,15 @@ import type { ToastItem } from '@/contexts/ToastContext';
 // Individual Toast Card
 // ============================================
 
-function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => void }) {
-  // Auto-dismiss timer
+function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
+  // Auto-dismiss timer. `onDismiss` is the provider's stable dismissToast, so
+  // the timer runs once from when the card appears: a fresh function on each
+  // draw restarted every card's timer whenever another message arrived.
   useEffect(() => {
     if (toast.duration <= 0) return;
-    const timer = setTimeout(onDismiss, toast.duration);
+    const timer = setTimeout(() => onDismiss(toast.id), toast.duration);
     return () => clearTimeout(timer);
-  }, [toast.duration, onDismiss]);
+  }, [toast.id, toast.duration, onDismiss]);
 
   const { icon, styles } = getToastAppearance(toast.type);
 
@@ -44,7 +46,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
           <p className="text-sm font-medium wrap-break-word">{toast.message}</p>
         </div>
         <button
-          onClick={onDismiss}
+          onClick={() => onDismiss(toast.id)}
           className="shrink-0 ml-2 hover:opacity-70 transition-opacity focus:outline-hidden focus:ring-2 focus:ring-current rounded-sm"
           aria-label="Dismiss notification"
         >
@@ -99,14 +101,7 @@ export default function ToastContainer() {
       <AnimatePresence mode="sync">
         {toasts.map((toast) => (
           <div key={toast.id} className="pointer-events-auto">
-            {/* TODO(ui): a new onDismiss on every render restarts each card's
-                timer (its effect depends on it), so adding a toast makes every
-                open toast leave together. Pass a stable function, such as
-                dismissToast with the id read inside ToastCard. */}
-            <ToastCard
-              toast={toast}
-              onDismiss={() => dismissToast(toast.id)}
-            />
+            <ToastCard toast={toast} onDismiss={dismissToast} />
           </div>
         ))}
       </AnimatePresence>

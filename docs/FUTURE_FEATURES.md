@@ -64,7 +64,6 @@ _Nothing at present._
 
 ### Play and connection
 
-- `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
 
 ### Maps
 
