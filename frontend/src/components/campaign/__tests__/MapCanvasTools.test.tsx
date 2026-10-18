@@ -1101,3 +1101,37 @@ describe('a click on a token beside a door', () => {
     expect(sentOf('wall:update')).toHaveLength(1);
   });
 });
+
+describe("a player's door toggle during the DM's wall drag", () => {
+  const door = seg('d1', 500, 500, 600, 500, 'door-closed');
+  const opened = { ...door, type: 'door-open' as const };
+
+  it('survives the drop of a moved selection', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, door] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    down(px(150, 100));
+    move(px(150, 120));
+    fire('wall:updated', { mapId: 'map-a', segment: opened });
+    move(px(150, 150));
+    up(px(150, 150));
+
+    expect(lastWalls()).toEqual([{ ...WALL_A, y1: 150, y2: 150 }, opened]);
+  });
+
+  it("survives the undo of an endpoint drag", () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, door] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    down(px(200, 100));
+    move(px(220, 100));
+    fire('wall:updated', { mapId: 'map-a', segment: opened });
+    move(px(250, 100));
+    up(px(250, 100));
+    press('z', { ctrlKey: true });
+
+    expect(lastWalls()).toEqual([WALL_A, opened]);
+  });
+});

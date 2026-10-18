@@ -452,7 +452,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     wallInProgress, polygonPoints, splitHoverPoint, hoveredWallId, nearEndpoint,
     wallErasedIdsRef, wallBrushPointsRef, WALL_ERASE_RADIUS, POLYGON_CLOSE_RADIUS,
     selectedWallIds, setSelectedWallIds, wallMarquee, wallDragEndpointRef, selectedEndpoint,
-    deleteSelectedWalls, moveSelectedWalls,
+    deleteSelectedWalls, moveSelectedWalls, carryIntoDrags,
   } = useWallTool({
     isDM, currentMap, wallMode, setWallMode, wallSegments,
     pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
@@ -968,11 +968,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // too, so a player's door toggle or a change made through the API reaches
     // it. They are carried into the whole undo history, so the DM's undo does
     // not put back what someone else changed. The role plays no part, so a
-    // DM handover without a reload changes nothing here.
+    // DM handover without a reload changes nothing here. A wall drag in
+    // progress takes them too, so its drop does not put them back.
+    const carryIncoming = (change: (walls: WallSegment[]) => WallSegment[]) => {
+      carryWallHistory(change);
+      carryIntoDrags(change);
+    };
     const handleWallAdded = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      carryWallHistory((walls) => walls.some((s) => s.id === data.segment.id)
+      carryIncoming((walls) => walls.some((s) => s.id === data.segment.id)
         ? walls.map((s) => s.id === data.segment.id ? data.segment : s)
         : [...walls, data.segment]);
     };
@@ -980,20 +985,20 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const handleWallRemoved = (data: { mapId: string; segmentId: string; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      carryWallHistory((walls) => walls.filter((s) => s.id !== data.segmentId));
+      carryIncoming((walls) => walls.filter((s) => s.id !== data.segmentId));
     };
 
     const handleWallUpdated = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
-      carryWallHistory((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
+      carryIncoming((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
     };
 
     const handleWallsReplaced = (data: { mapId: string; segments: WallSegment[]; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
       if (!currentMap || data.mapId !== currentMap.id) return;
       // The full stored list, from another page, the API or walls:request.
-      carryWallHistory(() => data.segments);
+      carryIncoming(() => data.segments);
     };
 
     const handleFogUpdated = (data: { mapId: string; fogState: FogState }) => {

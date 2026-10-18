@@ -33,6 +33,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A player opening or closing a door while you drag walls keeps their change.** Dropping the dragged walls put the door back as it was for everyone, and undoing a moved wall corner could do the same.
+
 - **Clicking a token beside a door picks the token up, or puts the one you are holding down there.** Zoomed out, as when the map is fitted to the screen, the click opened or closed the door for everyone instead. A click on an empty square still opens the door.
 
 - **Switching maps lets go of whatever you were holding on the last one.** A token you were moving stayed in your hand on the new map, while everyone else still saw it at your pointer on the old one; it now goes back where it was picked up. A half-drawn wall or polygon, and a wall selection, no longer carry over either, so they cannot join the old map's points to the new map's. **Esc** now puts a token you are holding back, as a right-click does.

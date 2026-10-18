@@ -259,6 +259,18 @@ export function useWallTool({
     }
   }, [wallMode]);
 
+  /**
+   * A change someone else made, carried into any drag in progress. A drag
+   * previews from the walls as they were when it began and its drop puts that
+   * back as the undo point, so without this a player's door toggle in the
+   * middle of the DM's drag was undone for everyone.
+   */
+  const carryIntoDrags = (change: (walls: WallSegment[]) => WallSegment[]) => {
+    if (wallMoveRef.current) wallMoveRef.current.preDragState = change(wallMoveRef.current.preDragState);
+    const endpoint = wallDragEndpointRef.current;
+    if (endpoint?.preDragState) endpoint.preDragState = change(endpoint.preDragState);
+  };
+
   /** Step the walls back one edit, or forward again, and send the result. */
   const undoEdit = () => {
     const prev = undoWalls();
@@ -530,13 +542,8 @@ export function useWallTool({
             move.hasDragged = true;
           }
           if (!move.hasDragged) { markDirty('overlay'); return true; }
-          // Previewed against where the drag began, so the offset never compounds.
-          // TODO(maps): a wall change from someone else that arrives during the
-          // drag is carried into the history, but this preview starts again from
-          // preDragState, taken before it, and the drop sends that list, so a
-          // player's door toggle in the middle of the DM's drag is undone for
-          // everyone. Carry incoming changes into preDragState too, and into the
-          // endpoint drag's.
+          // Previewed against where the drag began, so the offset never
+          // compounds. Changes from others reach preDragState (carryIntoDrags).
           const preview = move.preDragState.map((seg) =>
             selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg
           );
@@ -884,7 +891,7 @@ export function useWallTool({
 
   return {
     tool, selectKey, undoKey, redoKey: redoEdit, panel,
-    commitWalls,
+    commitWalls, carryIntoDrags,
     wallType, wallColor, snapToGrid, brushSize, snapPoint, findWallAtPoint,
     wallInProgress, polygonPoints, splitHoverPoint, hoveredWallId, nearEndpoint,
     wallErasedIdsRef, wallBrushPointsRef, WALL_ERASE_RADIUS, POLYGON_CLOSE_RADIUS,
