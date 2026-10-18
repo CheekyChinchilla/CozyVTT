@@ -59,6 +59,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The session timer counts from the session's start after Resume Session.** On the DM's screen it could start again from zero, and then disagree with itself after a reload.
 
+- **Advantage, disadvantage and a plain d20 show their critical in the Dice panel,** and dice dropped by keep or drop are struck through even when they match a die that was kept. Only a roll written `1d20` showed a critical, so **Adv** and **Dis** never did, and with equal values, such as two 14s on advantage, nothing was struck through.
+
 - **Personal notes follow your theme.** A link in a note is blue, the text takes the theme's ink colour, and the quote bar and divider lines take its accent; the styles meant for them never applied, so links looked like plain text and the quote bar was always amber.
 
 - **Firefox no longer logs "Invalid URI. Load of media resource failed" on every campaign page.** The ambient audio player was emptied in a way that pointed it at the page itself.
