@@ -59,6 +59,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **Hit point changes during a fight do less work.** Each one redrew everything on the campaign page; now only the roster and the map's health bars are redrawn.
 
+- **The Session tab at the top of the right-hand panel is no longer cut off.** At the panel's usual width the five tabs did not fit, and the last one ran past the edge. When there is no room for every name, the tabs other than the open one show only their icon; point at one to see its name.
+
 - **The campaign page no longer scrolls sideways.** A hidden label beside the header's last button made the whole page 32 pixels wider than the window at any size, and at phone width the DM's header ran far off the side; the header now wraps onto a second row.
 
 - **The campaign page opens when the browser refuses to store site data,** as some private windows and blocked-site settings do. It stopped with an error; now the panel sizes and the last tab are simply not remembered.
