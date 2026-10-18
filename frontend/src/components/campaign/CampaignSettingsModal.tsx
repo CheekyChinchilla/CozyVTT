@@ -32,6 +32,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import type { CampaignMembership } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { isCampaignOwner } from '@/utils/campaignRoles';
 
 interface CampaignSettingsModalProps {
   isOpen: boolean;
@@ -63,6 +64,7 @@ export default function CampaignSettingsModal({
   const isDmViewer = userRole === 'DM';
   const { showToast } = useToast();
   const { user } = useAuth();
+  const mayDelete = isCampaignOwner(campaign, user?.id) || user?.platformRole === 'ADMIN';
   const navigate = useNavigate();
 
   // ── Tab ─────────────────────────────────────
@@ -273,21 +275,18 @@ export default function CampaignSettingsModal({
                 {/* ── Tabs ── */}
                 <div className="flex gap-1 mt-4">
                   {(
-                    /* TODO(ui): a DM who is neither the owner nor an admin,
-                       such as one the game was handed to, still gets the
-                       Danger Zone tab, and the server refuses its Delete
-                       Campaign. Offer the tab only to the owner or an admin. */
-                    (isDmViewer
-                      ? [
-                          { id: 'general', label: 'General' },
-                          { id: 'chat', label: 'Chat' },
-                          { id: 'members', label: 'Members' },
-                          { id: 'danger', label: 'Danger Zone' },
-                        ]
-                      : [
-                          { id: 'members', label: 'Members' },
-                          { id: 'danger', label: 'Danger Zone' },
-                        ]) as { id: SettingsTab; label: string }[]
+                    [
+                      ...(isDmViewer
+                        ? [
+                            { id: 'general', label: 'General' },
+                            { id: 'chat', label: 'Chat' },
+                          ]
+                        : []),
+                      { id: 'members', label: 'Members' },
+                      // Only Delete Campaign is here, which the server leaves
+                      // to the owner or an administrator, whatever their role.
+                      ...(mayDelete ? [{ id: 'danger', label: 'Danger Zone' }] : []),
+                    ] as { id: SettingsTab; label: string }[]
                   ).map((tab) => (
                     <button
                       key={tab.id}

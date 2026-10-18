@@ -47,7 +47,7 @@ Once inside the campaign, click the **Campaign Settings** button (gear icon in t
 - **General** — the **Campaign Name** and **Description**, saved with **Save Changes**, and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
 - **Chat** — **Enable message cooldown**, off by default, makes everyone in the chat, you included, wait between messages, for the **Cooldown duration** you set (1 to 300 seconds). While someone waits, a line under their chat box counts down, such as "Wait 5s before sending another message"
 - **Members** — everyone in the campaign, with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
-- **Danger Zone** — **Delete Campaign**, for the campaign's owner, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
+- **Danger Zone** — **Delete Campaign**, shown only to the campaign's owner (whether or not they are still its DM) and to administrators, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
 
 *Screenshot pending — Campaign settings panel.*
 

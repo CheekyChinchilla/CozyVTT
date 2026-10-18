@@ -59,3 +59,28 @@ describe('CampaignSettingsModal', () => {
     await waitFor(() => expect(updateCampaign).toHaveBeenCalledWith('c1', { name: 'The Keep', description: null }));
   });
 });
+
+// Only the owner or an administrator may delete a campaign, and the server
+// refused anyone else; the Danger Zone, which holds only Delete Campaign, was
+// offered to every DM, such as one the game was handed to.
+describe('the Danger Zone', () => {
+  const tabs = () => screen.queryByRole('button', { name: 'Danger Zone' });
+
+  it('is not offered to a DM who is neither the owner nor an administrator', () => {
+    current = { ...campaign(), ownerId: 'someone-else' } as Campaign;
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    expect(tabs()).toBeNull();
+  });
+
+  it.each([
+    ['the owner, as DM', 'DM', 'USER', 'dm'],
+    ['the owner, as a player after handing the seat over', 'PLAYER', 'USER', 'dm'],
+    ['an administrator who does not own it', 'DM', 'ADMIN', 'someone-else'],
+  ])('is offered to %s', (_who, role, platformRole, ownerId) => {
+    viewer.role = role;
+    viewer.user = { id: 'dm', platformRole };
+    current = { ...campaign(), ownerId } as Campaign;
+    render(<CampaignSettingsModal isOpen onClose={() => undefined} />);
+    expect(tabs()).not.toBeNull();
+  });
+});

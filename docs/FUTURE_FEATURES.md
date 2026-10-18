@@ -50,7 +50,6 @@ _Nothing at present._
 
 ### Campaigns and assets
 
-- `1.5.4` **A DM who is neither the owner nor an admin is offered Delete Campaign,** which the server refuses (`CampaignSettingsModal.tsx`).
 - `1.5.4` **A refused asset move shows only "Forbidden".** `AssetDetailPanel.tsx` reads the reply's short `error` label instead of its `message`.
 - `1.5.4` **Vibe settings are validated two ways, and the campaign name and description boxes stop short of the server's limits.** `PUT /api/campaigns/:id/vibe` checks with `validateVibeSettings` and `PUT /api/campaigns/:id` with `VibeSettingsSchema`, which disagree; the settings panel caps the name and description at 100 and 1000 characters against the server's 200 and 5000.
 - `1.5.4` **The dashboard shows a new invitation only after Refresh.** The page has no socket to hear `invitation.received`, and its query does not refetch on focus (`DashboardPage.tsx`).

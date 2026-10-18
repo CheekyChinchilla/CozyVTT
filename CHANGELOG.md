@@ -57,6 +57,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators. A DM the game was handed to was offered **Delete Campaign**, which the server refused.
+
 - **Emptying a campaign's description in Campaign Settings clears it.** The old description stayed, while the panel said the settings were saved.
 
 - **Open Campaign after an import opens the campaign.** It went to an address that is no page, so the app sent you to the dashboard instead.
