@@ -78,6 +78,10 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // The template whose Delete button was clicked, until it is confirmed or cancelled.
   const [templateToDelete, setTemplateToDelete] = useState<TokenTemplate | null>(null);
   const [copyMenuId, setCopyMenuId] = useState<string | null>(null);
+  // The template being copied, while the copy is on its way: one at a time.
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  // What the last copy did, named for the campaign it went to.
+  const [notice, setNotice] = useState<string | null>(null);
   const [dmCampaigns, setDmCampaigns] = useState<Campaign[]>([]);
 
   // ── Fetch templates ──
@@ -85,6 +89,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
     if (!campaign) return;
     setIsLoading(true);
     setError(null);
+    setNotice(null);
     try {
       const result = await api.listTokenTemplates(campaign.id, {
         search: searchQuery || undefined,
@@ -191,19 +196,21 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   }, []);
 
   // ── Copy to campaign ──
-  const handleCopyToCampaign = useCallback(async (templateId: string, targetCampaignId: string) => {
-    if (!campaign) return;
+  const handleCopyToCampaign = useCallback(async (template: TokenTemplate, target: Campaign) => {
+    if (!campaign || copyingId) return;
+    setCopyingId(template.id);
+    setNotice(null);
+    setError(null);
     try {
-      // TODO(ui): a copy that works only closes the menu, with nothing to say
-      // it happened, and a refusal shows the fixed sentence below without the
-      // server's reason. Confirm the copy with a toast naming the campaign, and
-      // show apiErrorMessage(err) on failure.
-      await api.copyTokenTemplateToCampaign(campaign.id, templateId, targetCampaignId);
+      await api.copyTokenTemplateToCampaign(campaign.id, template.id, target.id);
+      setNotice(`Copied "${template.name}" to ${target.name}.`);
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to copy template');
+    } finally {
+      setCopyingId(null);
       setCopyMenuId(null);
-    } catch {
-      setError('Failed to copy template');
     }
-  }, [campaign]);
+  }, [campaign, copyingId]);
 
   return (
     <>
@@ -280,6 +287,11 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
                 {error}
               </div>
             )}
+            {notice && (
+              <div role="status" className="mx-4 mt-2 text-xs text-success-ink bg-success/10 border border-success/20 rounded-cozy px-3 py-2">
+                {notice}
+              </div>
+            )}
 
             {/* Template List */}
             <div className="flex-1 overflow-y-auto">
@@ -313,7 +325,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
                       onEdit={() => handleEdit(template)}
                       onDelete={() => setTemplateToDelete(template)}
                       onToggleCopyMenu={() => setCopyMenuId(copyMenuId === template.id ? null : template.id)}
-                      onCopyToCampaign={(targetId) => handleCopyToCampaign(template.id, targetId)}
+                      isCopying={copyingId === template.id}
+                      onCopyToCampaign={(target) => handleCopyToCampaign(template, target)}
                     />
                   ))}
                 </div>
@@ -370,13 +383,15 @@ interface TemplateRowProps {
   isExpanded: boolean;
   isPlacing: boolean;
   showCopyMenu: boolean;
+  /** A copy of this template is on its way. */
+  isCopying: boolean;
   dmCampaigns: Campaign[];
   onToggle: () => void;
   onPlace: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onToggleCopyMenu: () => void;
-  onCopyToCampaign: (targetCampaignId: string) => void;
+  onCopyToCampaign: (target: Campaign) => void;
 }
 
 function TemplateRow({
@@ -384,6 +399,7 @@ function TemplateRow({
   isExpanded,
   isPlacing,
   showCopyMenu,
+  isCopying,
   dmCampaigns,
   onToggle,
   onPlace,
@@ -473,8 +489,9 @@ function TemplateRow({
                   {dmCampaigns.map((c) => (
                     <button
                       key={c.id}
-                      onClick={() => onCopyToCampaign(c.id)}
-                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-moss-green/5 transition-colors truncate"
+                      onClick={() => onCopyToCampaign(c)}
+                      disabled={isCopying}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-moss-green/5 transition-colors truncate disabled:opacity-50 disabled:cursor-wait"
                     >
                       {c.name}
                     </button>

@@ -66,6 +66,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **Copying a token template to another campaign says it worked, naming the campaign, or says why it was refused.** A copy that worked only closed the menu, a refused one showed "Failed to copy template", and picking the campaign twice in quick succession made two copies.
+
 - **Deleting a favourite creature takes it out of the Creature Library's Favorites too.** Its row stayed under **Favorites** until the library was reopened.
 
 - **Remove from Campaign works for the DM on any player's character.** The roster offered it, as the DM guide says, but the server refused anyone but the character's owner. The character stays with its owner. A refused removal now says why.

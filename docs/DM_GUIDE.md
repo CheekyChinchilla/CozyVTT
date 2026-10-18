@@ -551,7 +551,7 @@ For **NPC-type templates**, the edit form includes the full stat block editor â€
 
 ### Copying Templates to Another Campaign
 
-If you DM multiple campaigns, you can copy a template from one campaign to another. Expand the template, click **Copy**, and pick the target campaign from the list. You must have the DM role in both campaigns.
+If you DM multiple campaigns, you can copy a template from one campaign to another. Expand the template, click **Copy**, and pick the target campaign from the list. A message at the top of the library names the campaign the copy went to, or says why it could not be made. You must have the DM role in both campaigns.
 
 ---
 
