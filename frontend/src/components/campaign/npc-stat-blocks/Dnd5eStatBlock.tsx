@@ -48,7 +48,7 @@ export default function Dnd5eStatBlock({ statBlock, tokenName }: Props) {
       </div>
 
       {/* ── Ability Scores ── */}
-      <div className="grid grid-cols-6 gap-1 text-center bg-warning/10 rounded p-1.5 border border-warning/10">
+      <div className="grid grid-cols-6 gap-1 text-center bg-warning/10 rounded-sm p-1.5 border border-warning/10">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
           <div key={ab}>
             <div className="text-[9px] font-bold text-warning-ink uppercase">{ab}</div>

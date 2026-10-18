@@ -60,7 +60,7 @@ export const StatBlock: React.FC<StatBlockProps> = ({
     : {};
   const circleClasses = isCustomColor
     ? 'w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2'
-    : `w-12 h-12 rounded-full bg-gradient-to-br ${colorFrom} ${colorTo} flex items-center justify-center shadow-lg border-2`;
+    : `w-12 h-12 rounded-full bg-linear-to-br ${colorFrom} ${colorTo} flex items-center justify-center shadow-lg border-2`;
 
   const borderColor = isCustomColor ? customColor : colorHex;
   const borderStyle = { borderColor };
@@ -95,7 +95,7 @@ export const StatBlock: React.FC<StatBlockProps> = ({
         {/* Dice badge shown on hover when clickable */}
         {isClickable && (
           <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            <div className="w-4 h-4 rounded-full bg-red-700 flex items-center justify-center shadow">
+            <div className="w-4 h-4 rounded-full bg-red-700 flex items-center justify-center shadow-sm">
               <Dices className="w-2.5 h-2.5 text-white" />
             </div>
           </div>
@@ -103,7 +103,7 @@ export const StatBlock: React.FC<StatBlockProps> = ({
       </div>
 
       {/* Score Box */}
-      <div className="px-3 py-1 bg-stone-100 border-2 border-stone-300 rounded">
+      <div className="px-3 py-1 bg-stone-100 border-2 border-stone-300 rounded-sm">
         <span className="text-sm font-semibold text-stone-700">
           {score}
         </span>

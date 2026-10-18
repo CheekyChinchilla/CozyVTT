@@ -129,7 +129,7 @@ function MapPreviewCanvas({
       ref={canvasRef}
       width={PREVIEW_PX}
       height={PREVIEW_PX}
-      className="w-full rounded border border-moss-green/30 bg-parchment/50"
+      className="w-full rounded-sm border border-moss-green/30 bg-parchment/50"
       style={{ aspectRatio: '1 / 1' }}
       aria-label="Grid alignment preview"
     />
@@ -516,7 +516,7 @@ export default function CreateMapModal({
 
                   {/* Zoom control */}
                   <div className="flex items-center gap-2">
-                    <ZoomOut className="w-4 h-4 text-stone-gray/50 flex-shrink-0" />
+                    <ZoomOut className="w-4 h-4 text-stone-gray/50 shrink-0" />
                     <input
                       type="range"
                       min="0.1"
@@ -527,13 +527,13 @@ export default function CreateMapModal({
                       className="flex-1 accent-moss-green cursor-pointer"
                       aria-label="Preview zoom level"
                     />
-                    <ZoomIn className="w-4 h-4 text-stone-gray/50 flex-shrink-0" />
+                    <ZoomIn className="w-4 h-4 text-stone-gray/50 shrink-0" />
                   </div>
 
                   {/* Auto-detect suggestion banner */}
                   {detectedGrid && (
                     <div className="flex items-start gap-2 p-2.5 bg-warning/10 border border-warning/30 rounded-lg">
-                      <Sparkles className="w-4 h-4 text-warning-ink flex-shrink-0 mt-0.5" />
+                      <Sparkles className="w-4 h-4 text-warning-ink shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-warning-ink">Grid detected</p>
                         <p className="text-xs text-warning-ink mt-0.5">
@@ -543,11 +543,11 @@ export default function CreateMapModal({
                           </span>
                         </p>
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
+                      <div className="flex gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={applyDetectedGrid}
-                          className="text-xs px-2 py-1 bg-warning text-white rounded hover:bg-warning transition-colors"
+                          className="text-xs px-2 py-1 bg-warning text-white rounded-sm hover:bg-warning transition-colors"
                         >
                           Apply
                         </button>
@@ -579,7 +579,7 @@ export default function CreateMapModal({
             </div>
 
             {/* Footer */}
-            <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-sm border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
+            <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-xs border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
               <Button
                 type="button"
                 onClick={onClose}

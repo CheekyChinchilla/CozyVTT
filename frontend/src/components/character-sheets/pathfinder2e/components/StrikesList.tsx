@@ -83,7 +83,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
         return (
           <div
             key={`${strike.name}-${index}`}
-            className={`bg-white border-2 border-stone-200 rounded-lg p-4 shadow-sm transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 hover:shadow-md select-none' : 'hover:shadow-md'}`}
+            className={`bg-white border-2 border-stone-200 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 hover:shadow-md select-none' : 'hover:shadow-md'}`}
             onClick={isClickable ? () => onRoll!(attackExpr, attackPurpose) : undefined}
             onContextMenu={isClickable && onRollContext ? (e) => { e.preventDefault(); onRollContext(e, attackExpr, attackPurpose); } : undefined}
             title={isClickable ? `Left-click: roll attack  |  Right-click: Fortune / Misfortune` : undefined}

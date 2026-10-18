@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
 // The bundle visualizer (a devDependency), loaded only for npm run build:analyze
@@ -16,6 +17,7 @@ const visualizerPlugin = process.env.ANALYZE === 'true'
 export default defineConfig({
   plugins: [
     react(),
+    tailwindcss(),
     ...(visualizerPlugin ? [visualizerPlugin] : []),
   ],
   resolve: {

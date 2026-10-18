@@ -218,7 +218,7 @@ export default function ImportCharacterModal({
         {/* Error Display */}
         {error && (
           <div className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-spirit-red flex-shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-spirit-red shrink-0 mt-0.5" />
             <div>
               <h4 className="font-semibold text-spirit-red mb-1">Import Error</h4>
               <p className="text-sm text-ink">{error}</p>
@@ -231,7 +231,7 @@ export default function ImportCharacterModal({
           <div className="space-y-6">
             <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-4">
               <div className="flex items-start gap-3 mb-4">
-                <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+                <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-semibold text-brand-ink mb-1">
                     {isTemplate ? 'Sheet Loaded Successfully' : 'Character Loaded Successfully'}
@@ -249,7 +249,7 @@ export default function ImportCharacterModal({
             {nameConflict && (
               <div className="bg-sunset-orange/10 border border-sunset-orange/30 rounded-lg p-4">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-sunset-orange flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-sunset-orange shrink-0 mt-0.5" />
                   <div>
                     <h4 className="font-semibold text-sunset-orange mb-1">Name Conflict</h4>
                     <p className="text-sm text-ink">
@@ -282,7 +282,7 @@ export default function ImportCharacterModal({
                     onChange={(e) => setImportName(e.target.value)}
                     maxLength={200}
                     className="w-full px-3 py-2 rounded-lg border border-moss-green/30 bg-paper text-ink
-                             focus:outline-none focus:ring-2 focus:ring-moss-green/50"
+                             focus:outline-hidden focus:ring-2 focus:ring-moss-green/50"
                   />
                 </div>
 
@@ -300,7 +300,7 @@ export default function ImportCharacterModal({
                       maxLength={2000}
                       placeholder="What this template is for, and who it suits."
                       className="w-full px-3 py-2 rounded-lg border border-moss-green/30 bg-paper text-ink
-                               focus:outline-none focus:ring-2 focus:ring-moss-green/50 resize-none"
+                               focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 resize-none"
                     />
                   </div>
                 )}
@@ -322,7 +322,7 @@ export default function ImportCharacterModal({
                   <label className="block text-sm font-medium text-ink mb-2">
                     {isTemplate ? 'Sheet Data' : 'Character Data'}
                   </label>
-                  <div className="bg-paper rounded border border-moss-green/20 p-3 max-h-48 overflow-y-auto">
+                  <div className="bg-paper rounded-sm border border-moss-green/20 p-3 max-h-48 overflow-y-auto">
                     <pre className="text-xs text-ink-muted whitespace-pre-wrap">
                       {JSON.stringify(previewData.data, null, 2)}
                     </pre>

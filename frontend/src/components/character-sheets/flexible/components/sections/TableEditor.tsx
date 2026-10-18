@@ -87,13 +87,13 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                     value={column.name}
                     onChange={(e) => updateColumnName(column.id, e.target.value)}
                     maxLength={SHEET_NAME_MAX}
-                    className="flex-1 bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-sm font-semibold text-brand-ink"
+                    className="flex-1 bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-sm font-semibold text-brand-ink"
                     placeholder="Column name"
                   />
                   {section.columns.length > 1 && (
                     <button
                       onClick={() => removeColumn(column.id)}
-                      className="p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                      className="p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
                       title="Remove column"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -105,7 +105,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
             <th className="px-2 py-2 w-12">
               <button
                 onClick={addColumn}
-                className="p-1 rounded bg-moss-green/10 text-brand-ink hover:bg-moss-green/20"
+                className="p-1 rounded-sm bg-moss-green/10 text-brand-ink hover:bg-moss-green/20"
                 title="Add column"
               >
                 <Plus className="w-4 h-4" />
@@ -128,7 +128,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                     value={row.cells[column.id] || ''}
                     onChange={(e) => updateCell(row.id, column.id, e.target.value)}
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="w-full bg-transparent border-b border-transparent focus:border-moss-green focus:outline-none text-warm-gray"
+                    className="w-full bg-transparent border-b border-transparent focus:border-moss-green focus:outline-hidden text-warm-gray"
                     placeholder="-"
                   />
                 </td>
@@ -136,7 +136,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
               <td className="px-2 py-2">
                 <button
                   onClick={() => removeRow(row.id)}
-                  className="p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                  className="p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
                   title="Remove row"
                 >
                   <Trash2 className="w-3 h-3" />

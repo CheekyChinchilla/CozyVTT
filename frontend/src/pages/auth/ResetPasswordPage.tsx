@@ -84,7 +84,7 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
       <main id="main-content" className="glass-panel max-w-md w-full p-8 space-y-6">
 
         {success ? (
@@ -137,7 +137,7 @@ export default function ResetPasswordPage({ invite = false }: ResetPasswordPageP
 
             {error && (
               <div role="alert" className="flex items-start gap-2 bg-danger/10 border border-danger/30 rounded-lg p-3">
-                <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 shrink-0" />
                 <p className="text-sm text-danger-ink">{error}</p>
               </div>
             )}

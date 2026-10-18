@@ -279,7 +279,7 @@ export default function SetupWizardPage() {
   if (checkingStatus) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20"
+        className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20"
         aria-live="polite"
         aria-label="Checking setup status"
       >
@@ -289,7 +289,7 @@ export default function SetupWizardPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
       <div className="glass-panel max-w-3xl w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -436,15 +436,15 @@ function Step1Welcome() {
         <h3 className="font-semibold text-brand-ink">What we'll set up:</h3>
         <ul className="space-y-2 text-sm text-stone-gray">
           <li className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
             <span>Create your administrator account</span>
           </li>
           <li className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
             <span>Configure basic system settings</span>
           </li>
           <li className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
             <span>Complete the installation process</span>
           </li>
         </ul>
@@ -689,7 +689,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
               onChange={(e) =>
                 setData({ ...data, enableRegistration: e.target.checked })
               }
-              className="mt-1 h-4 w-4 text-warm-amber focus:ring-warm-amber border-warm-gray/30 rounded"
+              className="mt-1 h-4 w-4 text-warm-amber focus:ring-warm-amber border-warm-gray/30 rounded-sm"
             />
             <div className="flex-1">
               <label

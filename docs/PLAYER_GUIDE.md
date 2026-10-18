@@ -598,7 +598,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 **I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
 
-**CozyVTT won't open on my tablet or old computer.** It needs a browser from 2023 or later: Chrome or Edge 111, Firefox 114 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer. An older browser does not load the app, so update the browser or use another device.
+**CozyVTT won't open on my tablet or old computer.** It needs Chrome or Edge 111, Firefox 128 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer: Chrome, Edge and Safari from 2023, Firefox from 2024. An older browser may not load the app, or may draw parts of it wrongly, so update the browser or use another device.
 
 **I lost connection.** CozyVTT reconnects by itself; **Retry** beside the connection indicator in the header tries at once. Your session state is saved on the server.
 

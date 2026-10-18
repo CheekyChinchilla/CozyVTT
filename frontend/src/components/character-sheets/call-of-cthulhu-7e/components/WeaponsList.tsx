@@ -132,7 +132,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="text"
                         value={weapon.name}
                         onChange={(e) => handleWeaponChange(index, 'name', e.target.value)}
-                        className="w-full bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-full bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                       />
                     ) : (
                       <div className="flex items-center gap-1">
@@ -149,7 +149,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="text"
                         value={weapon.skill}
                         onChange={(e) => handleWeaponChange(index, 'skill', e.target.value)}
-                        className="w-full bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-full bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                       />
                     ) : (
                       <span className="text-sepia-700">{weapon.skill}</span>
@@ -163,7 +163,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="number"
                         value={weapon.skillValue}
                         onChange={(e) => handleWeaponChange(index, 'skillValue', parseInt(e.target.value) || 0)}
-                        className="w-16 bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-16 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         min={0}
                         max={99}
                       />
@@ -183,7 +183,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="text"
                         value={weapon.damage}
                         onChange={(e) => handleWeaponChange(index, 'damage', e.target.value)}
-                        className="w-20 bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-20 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="1d6"
                       />
                     ) : (
@@ -198,7 +198,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="text"
                         value={weapon.range}
                         onChange={(e) => handleWeaponChange(index, 'range', e.target.value)}
-                        className="w-20 bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-20 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="Touch"
                       />
                     ) : (
@@ -213,7 +213,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="number"
                         value={weapon.attacks}
                         onChange={(e) => handleWeaponChange(index, 'attacks', parseInt(e.target.value) || 1)}
-                        className="w-12 bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         min={1}
                       />
                     ) : (
@@ -228,7 +228,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="number"
                         value={weapon.ammo || ''}
                         onChange={(e) => handleWeaponChange(index, 'ammo', e.target.value ? parseInt(e.target.value) : null)}
-                        className="w-12 bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="—"
                         min={0}
                       />
@@ -244,7 +244,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         type="number"
                         value={weapon.malfunction || ''}
                         onChange={(e) => handleWeaponChange(index, 'malfunction', e.target.value ? parseInt(e.target.value) : null)}
-                        className="w-12 bg-white/50 border border-sepia-400 rounded px-2 py-1 text-sm text-center focus:outline-none focus:ring-2 focus:ring-sepia-500"
+                        className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="—"
                         min={1}
                         max={100}
@@ -259,7 +259,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     <td className="px-3 py-2">
                       <button
                         onClick={() => handleDeleteWeapon(index)}
-                        className="p-1 hover:bg-red-100 rounded text-red-600 hover:text-red-700 transition-colors"
+                        className="p-1 hover:bg-red-100 rounded-sm text-red-600 hover:text-red-700 transition-colors"
                         title="Delete weapon"
                       >
                         <Trash2 className="w-4 h-4" />

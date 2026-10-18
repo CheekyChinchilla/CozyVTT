@@ -80,13 +80,13 @@ export default function Toast({
             aria-atomic="true"
             className={`glass-panel border-2 ${getStyles()} shadow-lg rounded-lg p-4 flex items-start gap-3`}
           >
-            <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
+            <div className="shrink-0 mt-0.5">{getIcon()}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium break-words">{message}</p>
+              <p className="text-sm font-medium wrap-break-word">{message}</p>
             </div>
             <button
               onClick={onClose}
-              className="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity"
+              className="shrink-0 ml-2 hover:opacity-70 transition-opacity"
               aria-label="Close notification"
             >
               <X className="w-4 h-4" />

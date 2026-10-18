@@ -127,7 +127,7 @@ export default function NewDocumentDialog({
             className="flex-1"
             maxLength={MAX_DOCUMENT_NAME_LENGTH}
           />
-          <div className="flex rounded-lg border border-moss-green/30 overflow-hidden flex-shrink-0" role="radiogroup" aria-label="Format">
+          <div className="flex rounded-lg border border-moss-green/30 overflow-hidden shrink-0" role="radiogroup" aria-label="Format">
             {(['md', 'txt'] as const).map((f) => (
               <button
                 key={f}

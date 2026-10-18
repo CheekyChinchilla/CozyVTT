@@ -36,7 +36,7 @@ const painted = (name: string) => document.documentElement.style.getPropertyValu
 /** Every theme colour the page was painted with. */
 const allPainted = () =>
   Array.from(document.documentElement.style)
-    .filter((name) => name.startsWith('--color-'))
+    .filter((name) => name.startsWith('--rgb-'))
     .map((name) => [name, painted(name)] as const);
 
 let applyUserPreferences: (prefs: UserPreferences | null) => void = () => undefined;
@@ -57,8 +57,8 @@ describe('a Custom theme stored as hex colours', () => {
 
     render(<ThemeProvider><Grab /></ThemeProvider>);
 
-    await waitFor(() => expect(painted('--color-bg-base')).toBe('250 246 236'));
-    expect(painted('--color-accent')).toBe('212 165 90');
+    await waitFor(() => expect(painted('--rgb-bg-base')).toBe('250 246 236'));
+    expect(painted('--rgb-accent')).toBe('212 165 90');
     expect(allPainted().filter(([, value]) => value.includes('NaN') || value.includes('#'))).toEqual([]);
   });
 
@@ -69,7 +69,7 @@ describe('a Custom theme stored as hex colours', () => {
 
     act(() => applyUserPreferences({ themeId: 'custom', customThemeColors: CUSTOM }));
 
-    expect(painted('--color-bg-base')).toBe('250 246 236');
+    expect(painted('--rgb-bg-base')).toBe('250 246 236');
     expect(allPainted().filter(([, value]) => value.includes('NaN') || value.includes('#'))).toEqual([]);
   });
 
@@ -80,7 +80,7 @@ describe('a Custom theme stored as hex colours', () => {
 
     render(<ThemeProvider><Grab /></ThemeProvider>);
 
-    await waitFor(() => expect(painted('--color-bg-base')).not.toBe(''));
+    await waitFor(() => expect(painted('--rgb-bg-base')).not.toBe(''));
     expect(allPainted().filter(([, value]) => value.includes('NaN') || value.includes('red'))).toEqual([]);
   });
 });

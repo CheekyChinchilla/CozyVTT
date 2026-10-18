@@ -97,7 +97,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
 
   return (
     <div
-      className={`p-3 rounded-lg border ${bg} ${borderColor} transition-all hover:shadow-sm ${
+      className={`p-3 rounded-lg border ${bg} ${borderColor} transition-all hover:shadow-xs ${
         isPending ? 'opacity-60' : ''
       }`}
     >
@@ -134,7 +134,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false }:
       </div>
 
       {/* Message Content */}
-      <p className={`text-sm ${textColor} whitespace-pre-wrap break-words`}>
+      <p className={`text-sm ${textColor} whitespace-pre-wrap wrap-break-word`}>
         {message.content}
       </p>
 

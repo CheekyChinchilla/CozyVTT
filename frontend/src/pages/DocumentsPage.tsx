@@ -157,7 +157,7 @@ export default function DocumentsPage() {
                   key={doc.id}
                   className="glass-panel p-4 flex items-center gap-4"
                 >
-                  <div className="p-2 rounded-lg bg-moss-green/10 flex-shrink-0">
+                  <div className="p-2 rounded-lg bg-moss-green/10 shrink-0">
                     <FileText className="w-6 h-6 text-moss-green" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -173,7 +173,7 @@ export default function DocumentsPage() {
                       {doc.description ? ` · ${doc.description}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
                       type="button"
                       variant="secondary"

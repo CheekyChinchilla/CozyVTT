@@ -34,7 +34,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ section, onUpdate }) => 
         value={section.value}
         onChange={handleChange}
         maxLength={SHEET_LONG_TEXT_MAX}
-        className="w-full min-h-[150px] p-4 bg-parchment/20 border border-moss-green/20 rounded-lg focus:border-moss-green focus:outline-none text-warm-gray resize-none"
+        className="w-full min-h-[150px] p-4 bg-parchment/20 border border-moss-green/20 rounded-lg focus:border-moss-green focus:outline-hidden text-warm-gray resize-none"
         placeholder="Enter text content..."
       />
       <div className="mt-2 text-sm text-stone-gray text-right">

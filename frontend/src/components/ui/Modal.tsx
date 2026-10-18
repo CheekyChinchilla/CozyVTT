@@ -71,8 +71,8 @@ export default function Modal({
   };
 
   const modalRef = useFocusTrap(open, handleClose);
-  const zBackdrop = layer === 'overlay' ? 'z-[60]' : 'z-40';
-  const zDialog = layer === 'overlay' ? 'z-[60]' : 'z-50';
+  const zBackdrop = layer === 'overlay' ? 'z-60' : 'z-40';
+  const zDialog = layer === 'overlay' ? 'z-60' : 'z-50';
 
   // Portal to <body>: ancestors with transform/filter/backdrop-filter (e.g.
   // .glass-panel) create containing blocks that would trap position:fixed
@@ -86,7 +86,7 @@ export default function Modal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cn('fixed inset-0 bg-black/50 backdrop-blur-sm', zBackdrop)}
+            className={cn('fixed inset-0 bg-black/50 backdrop-blur-xs', zBackdrop)}
             onClick={closeOnBackdrop ? handleClose : undefined}
             aria-hidden="true"
           />
@@ -111,7 +111,7 @@ export default function Modal({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between mb-6 flex-shrink-0">
+              <div className="flex items-center justify-between mb-6 shrink-0">
                 <div className="flex items-center gap-3">
                   {Icon && (
                     <div className="p-2 rounded-lg bg-brand/10" aria-hidden="true">
@@ -129,7 +129,7 @@ export default function Modal({
                   disabled={closeDisabled}
                   className="p-2 rounded-lg hover:bg-ink/10 transition-colors
                              disabled:opacity-50 disabled:cursor-not-allowed
-                             focus:outline-none focus:ring-2 focus:ring-brand"
+                             focus:outline-hidden focus:ring-2 focus:ring-brand"
                   aria-label="Close dialog"
                 >
                   <X className="w-5 h-5 text-ink-muted" aria-hidden="true" />
@@ -140,7 +140,7 @@ export default function Modal({
               {fitViewport ? <div className="flex-1 min-h-0 flex flex-col">{children}</div> : children}
 
               {/* Footer */}
-              {footer && <div className="flex gap-3 justify-end pt-4 flex-shrink-0">{footer}</div>}
+              {footer && <div className="flex gap-3 justify-end pt-4 shrink-0">{footer}</div>}
             </motion.div>
           </div>
         </>

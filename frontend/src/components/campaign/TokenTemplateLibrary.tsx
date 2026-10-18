@@ -215,7 +215,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
           {/* Backdrop */}
           <motion.div
             key="token-tpl-backdrop"
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -233,12 +233,12 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
           >
             {/* Header */}
             <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <Stamp className="w-5 h-5 text-brand-ink flex-shrink-0" />
+              <Stamp className="w-5 h-5 text-brand-ink shrink-0" />
               <h2 className="flex-1 text-base font-bold text-brand-ink">Token Templates</h2>
               <span className="text-xs text-stone-gray/60">
                 {total} template{total !== 1 ? 's' : ''}
               </span>
-              <Button onClick={onClose} variant="secondary" className="p-1.5 flex-shrink-0" title="Close">
+              <Button onClick={onClose} variant="secondary" className="p-1.5 shrink-0" title="Close">
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -411,10 +411,10 @@ function TemplateRow({
           <img
             src={api.storedAssetSrc(template.imageUrl, 'tokens')}
             alt={template.name}
-            className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-moss-green/20"
+            className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
           />
         ) : (
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm ${
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
             template.disposition === 'hostile' ? 'bg-danger' :
             template.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
           }`}>
@@ -430,14 +430,14 @@ function TemplateRow({
           </div>
         </div>
 
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${typeColors[template.type] || typeColors.object}`}>
+        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${typeColors[template.type] || typeColors.object}`}>
           {template.type}
         </span>
 
         {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-stone-gray/40 flex-shrink-0" />
+          <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-stone-gray/40 flex-shrink-0" />
+          <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
         )}
       </button>
 
@@ -706,7 +706,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       </div>
 
       {formError && (
-        <div className="text-xs text-danger-ink bg-danger/10 rounded px-2 py-1">{formError}</div>
+        <div className="text-xs text-danger-ink bg-danger/10 rounded-sm px-2 py-1">{formError}</div>
       )}
 
       {/* Name */}
@@ -802,7 +802,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
             // A bar needs hit points to show; start from 10 as the form always has.
             if (e.target.checked && hpMaxText.trim() === '') setHpMaxText('10');
           }}
-          className="rounded border-moss-green/30 ml-2"
+          className="rounded-sm border-moss-green/30 ml-2"
         />
         <label htmlFor="template-hp" className="text-[10px] text-stone-gray">Show HP Bar</label>
       </div>

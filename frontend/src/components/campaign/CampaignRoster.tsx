@@ -491,7 +491,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             header indicators, which sit next to the words "Live"/"Connected" —
             so colour alone would fail WCAG 1.4.1. Hence the label. No pulse
             either: a roster can show many of these at once. */}
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <div
             className={`p-1.5 rounded-full ${
               member.role === 'DM' ? 'bg-moss-green/20' : 'bg-spirit-purple/20'
@@ -538,7 +538,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             return (
             <div
               key={character.id}
-              className="rounded bg-paper/50 hover:bg-paper/70 transition-colors"
+              className="rounded-sm bg-paper/50 hover:bg-paper/70 transition-colors"
             >
               <div
                 onClick={() => onCharacterClick(character.id)}
@@ -619,12 +619,12 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => onHpDelta(character.id, -5)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
                         title="−5 HP"
                       >−5</button>
                       <button
                         onClick={() => onHpDelta(character.id, -1)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
                         title="−1 HP"
                       ><Minus className="w-3 h-3" /></button>
                       <span className="flex-1 text-center text-xs font-semibold text-stone-gray">
@@ -633,12 +633,12 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                       </span>
                       <button
                         onClick={() => onHpDelta(character.id, 1)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
                         title="+1 HP"
                       ><Plus className="w-3 h-3" /></button>
                       <button
                         onClick={() => onHpDelta(character.id, 5)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
                         title="+5 HP"
                       >+5</button>
                     </div>

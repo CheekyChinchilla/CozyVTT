@@ -1034,7 +1034,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
     const headerClasses = isCustomColor
       ? `${headerTextColor} p-6 rounded-t-lg relative`
-      : `bg-gradient-to-r ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+      : `bg-linear-to-r ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -1083,7 +1083,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       : 'hover:bg-stone-50'
                   }`}
                 >
-                  <div className={`w-full h-6 rounded mb-1 bg-gradient-to-r ${color.from} ${color.to}`} />
+                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}
@@ -1099,7 +1099,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   type="color"
                   value={customColorHex || '#b91c1c'}
                   onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="w-12 h-12 rounded cursor-pointer border-2 border-stone-300"
+                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300"
                   title="Pick a custom color"
                 />
 
@@ -1117,7 +1117,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     }}
                     placeholder="#b91c1c"
                     aria-label="Custom colour hex code"
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                   />
                   <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #b91c1c)</div>
                   {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
@@ -1126,9 +1126,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
               {/* Custom Color Preview */}
               {isCustomColor && customColorHex && /^#[0-9A-Fa-f]{6}$/.test(customColorHex) && (
-                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded">
+                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded-sm">
                   <div
-                    className="w-8 h-8 rounded"
+                    className="w-8 h-8 rounded-sm"
                     style={{ background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }}
                   />
                   <span className="text-sm font-medium">Custom: {customColorHex}</span>
@@ -1148,7 +1148,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             buttons. */}
         <div className="flex items-start space-x-4 min-w-0">
           {/* Token Image Upload */}
-          <div className="flex-shrink-0 relative group">
+          <div className="shrink-0 relative group">
             <input
               type="file"
               id="token-upload"
@@ -1197,7 +1197,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               placeholder="Character Name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
                 errors.characterName ? 'border-red-300' : 'border-white/20'
-              } rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`}
+              } rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
             />
             {/* Player name is who owns this character, not free text — it is
                 filled from their display name when the character is created
@@ -1217,7 +1217,7 @@ min={1}
                   onChange={(v: number) => updateField('level', v)}
                   className={`w-16 bg-white/10 border ${
                     errors.level ? 'border-red-300' : 'border-white/20'
-                  } rounded px-2 py-0.5 text-sm ${headerTextColor} focus:outline-none focus:border-white/40`}
+                  } rounded px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
                 fallback={1}
                 />
               </div>
@@ -1226,14 +1226,14 @@ min={1}
                 value={formData.race || ''}
                 onChange={(e) => updateField('race', e.target.value)}
                 placeholder="Race"
-                className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`}
+                className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
               />
               <input
                 type="text"
                 value={formData.class || ''}
                 onChange={(e) => updateField('class', e.target.value)}
                 placeholder="Class"
-                className={`bg-white/10 border border-white/20 rounded px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-none focus:border-white/40`}
+                className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
               />
             </div>
           </div>
@@ -1245,7 +1245,7 @@ min={1}
 min={0}
             value={formData.experiencePoints}
             onChange={(v: number) => updateField('experiencePoints', v)}
-            className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded px-2 py-1 ${headerTextColor} text-right focus:outline-none focus:border-white/40`}
+            className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`}
           fallback={0}
           />
         </div>
@@ -1293,7 +1293,7 @@ min={0}
             value={formData.alignment || ''}
             onChange={(e) => updateField('alignment', e.target.value)}
             placeholder="e.g., Lawful Good"
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
         </div>
         <div>
@@ -1304,7 +1304,7 @@ min={0}
             value={formData.background || ''}
             onChange={(e) => updateField('background', e.target.value)}
             placeholder="e.g., Sage"
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
         </div>
       </div>
@@ -1318,7 +1318,7 @@ min={2}
             max={6}
             value={formData.proficiencyBonus}
             onChange={(v: number) => updateField('proficiencyBonus', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           fallback={2}
           />
         </div>
@@ -1328,7 +1328,7 @@ min={2}
             id="inspiration"
             checked={formData.inspiration || false}
             onChange={(e) => updateField('inspiration', e.target.checked)}
-            className="w-5 h-5 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+            className="w-5 h-5 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
           />
           <label htmlFor="inspiration" className="text-sm font-semibold text-stone-700">
             Inspiration
@@ -1350,7 +1350,7 @@ min={2}
               : {};
             const circleClasses = isCustomColor
               ? 'w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-2'
-              : `w-12 h-12 rounded-full bg-gradient-to-br ${selectedColor.from} ${selectedColor.to} flex items-center justify-center shadow-lg border-2`;
+              : `w-12 h-12 rounded-full bg-linear-to-br ${selectedColor.from} ${selectedColor.to} flex items-center justify-center shadow-lg border-2`;
 
             // Determine border color based on theme
             const borderColor = isCustomColor ? customColorHex : selectedColor.hex;
@@ -1379,7 +1379,7 @@ min={1}
                   }
                   className={`w-16 px-2 py-1 text-center font-semibold border-2 ${
                     error ? 'border-red-500' : 'border-stone-300'
-                  } rounded focus:outline-none focus:ring-2 focus:ring-red-500`}
+                  } rounded focus:outline-hidden focus:ring-2 focus:ring-red-500`}
                 fallback={10}
                 />
                 {error && <div className="text-xs text-red-600">{error}</div>}
@@ -1400,7 +1400,7 @@ min={1}
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
             return (
-              <div key={ability} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded">
+              <div key={ability} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded-sm">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -1409,7 +1409,7 @@ min={1}
                     onChange={(e) =>
                       updateField(`savingThrows.${ability}.proficient`, e.target.checked)
                     }
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
                   />
                   <label htmlFor={`save-${ability}`} className="text-sm font-medium text-stone-800 capitalize">
                     {ability}
@@ -1421,7 +1421,7 @@ min={1}
                     onChange={(v: number) => updateField(`savingThrows.${ability}.otherBonus`, v)}
                     aria-label={`Other bonus to ${ability.charAt(0).toUpperCase() + ability.slice(1)} saves`}
                     title="Other bonus"
-                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     fallback={0}
                   />
                   <span className={`w-8 text-right text-sm font-semibold ${saveData.proficient ? 'text-red-700' : 'text-stone-600'}`}>
@@ -1452,7 +1452,7 @@ min={1}
             const abilityAbbr = ability.slice(0, 3).toUpperCase();
 
             return (
-              <div key={skill} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded">
+              <div key={skill} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded-sm">
                 <div className="flex items-center space-x-2">
                   {/* Proficiency Checkbox */}
                   <input
@@ -1466,7 +1466,7 @@ min={1}
                         updateField(`skills.${skill}.expertise`, false);
                       }
                     }}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
                   />
                   {/* Expertise Checkbox (double circle) */}
                   <input
@@ -1492,7 +1492,7 @@ min={1}
                     onChange={(v: number) => updateField(`skills.${skill}.otherBonus`, v)}
                     aria-label={`Other bonus to ${skillLabel}`}
                     title="Other bonus"
-                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     fallback={0}
                   />
                   <span
@@ -1560,14 +1560,14 @@ min={1}
                   onChange={(e) => updateField(`customSkills.${index}.name`, e.target.value)}
                   placeholder="e.g. Thieves' Tools"
                   maxLength={60}
-                  className="flex-1 min-w-[9rem] px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="flex-1 min-w-36 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
 
                 <select
                   value={custom.ability}
                   onChange={(e) => updateField(`customSkills.${index}.ability`, e.target.value)}
                   aria-label={`Ability used by ${custom.name || 'this skill'}`}
-                  className="px-2 py-1 text-sm border border-stone-300 rounded bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="px-2 py-1 text-sm border border-stone-300 rounded-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 >
                   {DND5E_ABILITY_NAMES.map((ability) => (
                     <option key={ability} value={ability}>
@@ -1586,7 +1586,7 @@ min={1}
                         updateField(`customSkills.${index}.expertise`, false);
                       }
                     }}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
                   />
                   Prof
                 </label>
@@ -1608,7 +1608,7 @@ min={1}
                   <NumberField
                     value={custom.otherBonus ?? 0}
                     onChange={(v: number) => updateField(`customSkills.${index}.otherBonus`, v)}
-                    className="w-14 px-1 py-1 text-sm border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-14 px-1 py-1 text-sm border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     fallback={0}
                   />
                 </div>
@@ -1666,7 +1666,7 @@ min={1}
               max={MAX_BONUS_OVERRIDE}
               value={formData.passivePerceptionBonus ?? 0}
               onChange={(v: number) => updateField('passivePerceptionBonus', v)}
-              className="w-20 px-2 py-1 border border-stone-300 rounded text-center font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-20 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
               fallback={0}
             />
           </div>
@@ -1698,7 +1698,7 @@ min={1}
 min={0}
             value={formData.armorClass}
             onChange={(v: number) => updateField('armorClass', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
           fallback={10}
           />
         </div>
@@ -1723,7 +1723,7 @@ min={0}
 min={0}
             value={formData.speed}
             onChange={(v: number) => updateField('speed', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
           fallback={30}
           />
         </div>
@@ -1744,7 +1744,7 @@ min={0}
             max={MAX_BONUS_OVERRIDE}
             value={formData.initiativeBonus ?? 0}
             onChange={(v: number) => updateField('initiativeBonus', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
             fallback={0}
           />
           <p className="mt-1 text-xs text-stone-500">
@@ -1764,7 +1764,7 @@ min={0}
 min={0}
               value={formData.hp?.maximum}
               onChange={(v: number) => updateField('hp.maximum', v)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
             fallback={0}
             />
           </div>
@@ -1774,7 +1774,7 @@ min={0}
 min={0}
               value={formData.hp?.current}
               onChange={(v: number) => updateField('hp.current', v)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-red-700 focus:outline-hidden focus:ring-2 focus:ring-red-500"
             fallback={0}
             />
           </div>
@@ -1784,7 +1784,7 @@ min={0}
 min={0}
               value={formData.hp?.temporary}
               onChange={(v: number) => updateField('hp.temporary', v)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-blue-700 focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-blue-700 focus:outline-hidden focus:ring-2 focus:ring-red-500"
             fallback={0}
             />
           </div>
@@ -1827,7 +1827,7 @@ min={0}
                 onChange={(e) => updateField(`hitDice.${index}.class`, e.target.value)}
                 placeholder="Fighter"
                 aria-label="Class"
-                className="min-w-0 px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
               <input
                 type="text"
@@ -1836,7 +1836,7 @@ min={0}
                 placeholder="d10"
                 aria-label="Hit die"
                 title="One hit die — d10 for a fighter. Something like 2d6 works too if your game uses it."
-                className="min-w-0 px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
               <NumberField
                 min={0}
@@ -1844,7 +1844,7 @@ min={0}
                 onChange={(v: number) => updateField(`hitDice.${index}.remaining`, v)}
                 aria-label="Hit dice left"
                 title="How many are unspent right now"
-                className="min-w-0 px-1 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-1 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 fallback={0}
               />
               <span className="text-stone-400 select-none" aria-hidden="true">/</span>
@@ -1854,7 +1854,7 @@ min={0}
                 onChange={(v: number) => updateField(`hitDice.${index}.maximum`, v)}
                 aria-label="Hit dice at full"
                 title="How many this pool holds when nothing is spent"
-                className="min-w-0 px-1 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-1 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 fallback={0}
               />
               <button
@@ -1902,7 +1902,7 @@ min={0}
                       updateField('deathSaves.successes', i - 1);
                     }
                   }}
-                  className="w-6 h-6 text-green-700 border-stone-300 rounded focus:ring-2 focus:ring-green-500"
+                  className="w-6 h-6 text-green-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-green-500"
                 />
               ))}
             </div>
@@ -1922,7 +1922,7 @@ min={0}
                       updateField('deathSaves.failures', i - 1);
                     }
                   }}
-                  className="w-6 h-6 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                  className="w-6 h-6 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
                 />
               ))}
             </div>
@@ -1935,7 +1935,7 @@ min={0}
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Conditions</h3>
         <div className="grid grid-cols-3 gap-2">
           {conditions.map((condition) => (
-            <label key={condition} className="flex items-center space-x-2 cursor-pointer hover:bg-stone-100 p-1 rounded">
+            <label key={condition} className="flex items-center space-x-2 cursor-pointer hover:bg-stone-100 p-1 rounded-sm">
               <input
                 type="checkbox"
                 checked={(formData.conditions || []).includes(condition.toLowerCase())}
@@ -1947,7 +1947,7 @@ min={0}
                     updateField('conditions', currentConditions.filter((c: string) => c !== condition.toLowerCase()));
                   }
                 }}
-                className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
               />
               <span className="text-sm text-stone-700">{condition}</span>
             </label>
@@ -2028,7 +2028,7 @@ min={0}
                   value={attack.name || ''}
                   onChange={(e) => updateField(`attacks.${index}.name`, e.target.value)}
                   placeholder="Attack Name"
-                  className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
                 <button
                   onClick={() => {
@@ -2047,7 +2047,7 @@ min={0}
                   <NumberField
 value={attack.attackBonus}
                     onChange={(v: number) => updateField(`attacks.${index}.attackBonus`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   fallback={0}
                   />
                 </div>
@@ -2058,7 +2058,7 @@ value={attack.attackBonus}
                     value={attack.damageRoll || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageRoll`, e.target.value)}
                     placeholder="e.g., 1d8+3"
-                    className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
@@ -2068,7 +2068,7 @@ value={attack.attackBonus}
                     value={attack.damageType || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageType`, e.target.value)}
                     placeholder="e.g., slashing"
-                    className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   />
                 </div>
                 <div>
@@ -2077,7 +2077,7 @@ value={attack.attackBonus}
 min={0}
                     value={attack.range}
                     onChange={(v: number) => updateField(`attacks.${index}.range`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   fallback={0}
                   />
                 </div>
@@ -2156,7 +2156,7 @@ min={0}
                     maxLength={MAX_WEAPON_PROPERTY_LENGTH}
                     placeholder="Add your own property"
                     aria-label="Add a custom weapon property"
-                    className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   />
                   <button
                     type="button"
@@ -2204,7 +2204,7 @@ min={0}
                         )
                       }
                       placeholder="When (e.g. Two-handed)"
-                      className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <input
                       type="text"
@@ -2216,7 +2216,7 @@ min={0}
                         )
                       }
                       placeholder="1d10+3"
-                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <input
                       type="text"
@@ -2228,7 +2228,7 @@ min={0}
                         )
                       }
                       placeholder="slashing"
-                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <button
                       type="button"
@@ -2253,7 +2253,7 @@ min={0}
                   value={attack.notes || ''}
                   onChange={(e) => updateField(`attacks.${index}.notes`, e.target.value)}
                   placeholder="e.g., silvered, returns when thrown"
-                  className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
               </div>
             </div>
@@ -2286,7 +2286,7 @@ min={0}
             onChange={(e) => updateField('spellcasting.class', e.target.value)}
             placeholder="e.g., Wizard — leave blank if you don't cast"
             aria-label="Spellcasting Class"
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
           <p className="mt-1 text-xs text-stone-600">
             Shown as the heading on your sheet. There was no field for this, so every
@@ -2301,7 +2301,7 @@ min={0}
             onChange={(e) => updateField('spellcasting.ability', e.target.value)}
             placeholder="e.g., Intelligence"
             aria-label="Spellcasting Ability"
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
         </div>
       </div>
@@ -2327,7 +2327,7 @@ min={0}
             value={formData.spellcasting?.spellSaveDCOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellSaveDCOtherBonus', v)}
             aria-label="Spell save DC other bonus"
-            className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
             fallback={0}
           />
         </div>
@@ -2346,7 +2346,7 @@ min={0}
             value={formData.spellcasting?.spellAttackOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellAttackOtherBonus', v)}
             aria-label="Spell attack other bonus"
-            className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
             fallback={0}
           />
         </div>
@@ -2374,7 +2374,7 @@ min={0}
           }}
           placeholder="Enter cantrips separated by commas (e.g., Fire Bolt, Mage Hand, Prestidigitation)"
           rows={2}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
         />
         <ListLimitNote full={cantripsTurnedAway || parseCommaSeparated(cantripsText).length >= SHEET_LIST_MAX} />
       </div>
@@ -2397,7 +2397,7 @@ min={0}
                       max={SPELL_SLOTS_MAX}
                       value={slotData.total}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.total`, v)}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                       fallback={0}
                     />
                   </div>
@@ -2412,7 +2412,7 @@ min={0}
                       max={slotData.total}
                       value={Math.min(slotData.expended, slotData.total)}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.expended`, v)}
-                      className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                       fallback={0}
                     />
                   </div>
@@ -2450,7 +2450,7 @@ min={1}
                 max={9}
                 value={spell.level}
                 onChange={(v: number) => updateField(`spellcasting.spells.${index}.level`, v)}
-                className="w-14 px-2 py-1 border border-stone-300 rounded text-center font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-14 px-2 py-1 border border-stone-300 rounded-sm text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 title="Spell Level"
               fallback={1}
               />
@@ -2459,14 +2459,14 @@ min={1}
                 value={spell.name || ''}
                 onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)}
                 placeholder="Spell Name"
-                className="flex-1 px-2 py-1 border border-stone-300 rounded font-medium focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
               <label className="flex items-center space-x-1 cursor-pointer" title="Prepared">
                 <input
                   type="checkbox"
                   checked={spell.prepared || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.prepared`, e.target.checked)}
-                  className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                  className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
                 />
                 <span className="text-xs text-stone-600">Prep</span>
               </label>
@@ -2475,7 +2475,7 @@ min={1}
                   type="checkbox"
                   checked={spell.ritual || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.ritual`, e.target.checked)}
-                  className="w-4 h-4 text-blue-700 border-stone-300 rounded focus:ring-2 focus:ring-blue-500"
+                  className="w-4 h-4 text-blue-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-blue-500"
                 />
                 <span className="text-xs text-stone-600">Rit</span>
               </label>
@@ -2484,7 +2484,7 @@ min={1}
                   type="checkbox"
                   checked={spell.concentration || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.concentration`, e.target.checked)}
-                  className="w-4 h-4 text-purple-700 border-stone-300 rounded focus:ring-2 focus:ring-purple-500"
+                  className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
                 />
                 <span className="text-xs text-stone-600">Con</span>
               </label>
@@ -2529,7 +2529,7 @@ min={1}
 min={0}
                 value={formData.currency?.[currency.key]}
                 onChange={(v: number) => updateField(`currency.${currency.key}`, v)}
-                className="w-full px-2 py-2 border border-stone-300 rounded-lg text-center font-bold focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-2 py-2 border border-stone-300 rounded-lg text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
               fallback={0}
               />
             </div>
@@ -2575,7 +2575,7 @@ min={0}
                   value={item.name || ''}
                   onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)}
                   placeholder="Item Name"
-                  className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
                 <button
                   onClick={() => {
@@ -2594,7 +2594,7 @@ min={0}
 min={0}
                     value={item.quantity}
                     onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   fallback={1}
                   />
                 </div>
@@ -2608,7 +2608,7 @@ min={0}
                     integer={false}
                     value={item.weight}
                     onChange={(v: number) => updateField(`inventory.${index}.weight`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   fallback={0}
                   />
                 </div>
@@ -2618,7 +2618,7 @@ min={0}
 min={0}
                     value={item.value}
                     onChange={(v: number) => updateField(`inventory.${index}.value`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   fallback={0}
                   />
                 </div>
@@ -2630,7 +2630,7 @@ min={0}
                   value={item.notes || ''}
                   onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)}
                   placeholder="Item description or notes"
-                  className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                  className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
               </div>
               <div className="flex items-center space-x-4 text-sm">
@@ -2639,7 +2639,7 @@ min={0}
                     type="checkbox"
                     checked={item.equipped || false}
                     onChange={(e) => updateField(`inventory.${index}.equipped`, e.target.checked)}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
                   />
                   <span className="text-stone-700">Equipped</span>
                 </label>
@@ -2648,7 +2648,7 @@ min={0}
                     type="checkbox"
                     checked={item.requiresAttunement || false}
                     onChange={(e) => updateField(`inventory.${index}.requiresAttunement`, e.target.checked)}
-                    className="w-4 h-4 text-purple-700 border-stone-300 rounded focus:ring-2 focus:ring-purple-500"
+                    className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
                   />
                   <span className="text-stone-700">Requires Attunement</span>
                 </label>
@@ -2658,7 +2658,7 @@ min={0}
                       type="checkbox"
                       checked={item.attuned || false}
                       onChange={(e) => updateField(`inventory.${index}.attuned`, e.target.checked)}
-                      className="w-4 h-4 text-purple-700 border-stone-300 rounded focus:ring-2 focus:ring-purple-500"
+                      className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
                     />
                     <span className="text-stone-700">Attuned</span>
                   </label>
@@ -2704,7 +2704,7 @@ min={0}
                 onChange={(e) => updateField('proficiencies.armor', e.target.value)}
                 placeholder="Light Armor, Medium Armor, Shields"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
               />
             </div>
 
@@ -2716,7 +2716,7 @@ min={0}
                 onChange={(e) => updateField('proficiencies.weapons', e.target.value)}
                 placeholder="Simple Weapons, Martial Weapons, or specific weapons (Daggers, Longswords, Shortbows)"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
               />
             </div>
 
@@ -2728,7 +2728,7 @@ min={0}
                 onChange={(e) => updateField('proficiencies.tools', e.target.value)}
                 placeholder="Thieves' Tools, Smith's Tools, Calligrapher's Supplies, Musical Instruments, Vehicles (Land/Water)"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
               />
             </div>
 
@@ -2740,7 +2740,7 @@ min={0}
                 onChange={(e) => updateField('proficiencies.languages', e.target.value)}
                 placeholder="Common, Elvish, Dwarvish, Draconic"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
               />
             </div>
           </div>
@@ -2755,7 +2755,7 @@ min={0}
                 updateField('featuresAndTraits', [...featureRows, { name: '', description: '' }])
               }
               disabled={listIsFull(featureRows)}
-              className={`px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm ${ADD_BUTTON_OFF}`}
+              className={`px-3 py-1 bg-red-600 text-white rounded-sm hover:bg-red-700 text-sm ${ADD_BUTTON_OFF}`}
             >
               + Add Feature
             </button>
@@ -2785,7 +2785,7 @@ min={0}
                       }
                       placeholder="Feature name, e.g. Darkvision"
                       aria-label={`Feature ${index + 1} name`}
-                      className="flex-1 px-2 py-1 border border-stone-300 rounded font-semibold focus:outline-none focus:ring-2 focus:ring-red-500"
+                      className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <button
                       onClick={() =>
@@ -2813,7 +2813,7 @@ min={0}
                     placeholder="Description (optional)"
                     aria-label={`Feature ${index + 1} description`}
                     rows={2}
-                    className="w-full px-2 py-1 text-sm border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   />
                 </div>
               ))}
@@ -2830,7 +2830,7 @@ min={0}
             onChange={(e) => updateField('additionalFeaturesAndTraits', e.target.value)}
             placeholder="Describe any additional features, traits, or special abilities in detail..."
             rows={8}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
         </div>
       </div>
@@ -2850,7 +2850,7 @@ min={0}
               type="text"
               value={formData.appearance?.age || ''}
               onChange={(e) => updateField('appearance.age', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2860,7 +2860,7 @@ min={0}
               value={formData.appearance?.height || ''}
               onChange={(e) => updateField('appearance.height', e.target.value)}
               placeholder="e.g., 5'7&quot;"
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2870,7 +2870,7 @@ min={0}
               value={formData.appearance?.weight || ''}
               onChange={(e) => updateField('appearance.weight', e.target.value)}
               placeholder="e.g., 130 lbs"
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2879,7 +2879,7 @@ min={0}
               type="text"
               value={formData.appearance?.eyes || ''}
               onChange={(e) => updateField('appearance.eyes', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2888,7 +2888,7 @@ min={0}
               type="text"
               value={formData.appearance?.skin || ''}
               onChange={(e) => updateField('appearance.skin', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2897,7 +2897,7 @@ min={0}
               type="text"
               value={formData.appearance?.hair || ''}
               onChange={(e) => updateField('appearance.hair', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -2914,7 +2914,7 @@ min={0}
               onChange={(e) => updateField('personality.traits', e.target.value)}
               placeholder="Describe your character's personality traits..."
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2924,7 +2924,7 @@ min={0}
               onChange={(e) => updateField('personality.ideals', e.target.value)}
               placeholder="What drives your character? What do they believe in?"
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2934,7 +2934,7 @@ min={0}
               onChange={(e) => updateField('personality.bonds', e.target.value)}
               placeholder="What connections does your character have?"
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2944,7 +2944,7 @@ min={0}
               onChange={(e) => updateField('personality.flaws', e.target.value)}
               placeholder="What are your character's weaknesses or flaws?"
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -2958,7 +2958,7 @@ min={0}
           onChange={(e) => updateField('backstory', e.target.value)}
           placeholder="Tell your character's story..."
           rows={6}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
         />
       </div>
 
@@ -2973,7 +2973,7 @@ min={0}
               value={formData.alliesAndOrganizations?.name || ''}
               onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)}
               placeholder="e.g., The Arcane Brotherhood"
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
           <div>
@@ -2983,7 +2983,7 @@ min={0}
               onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)}
               placeholder="Describe your allies and organizations..."
               rows={3}
-              className="w-full px-2 py-1 border border-stone-300 rounded focus:outline-none focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
             />
           </div>
         </div>
@@ -2997,7 +2997,7 @@ min={0}
           onChange={(e) => updateField('treasure', e.target.value)}
           placeholder="Special items, treasure, or other important notes..."
           rows={4}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
         />
       </div>
     </div>

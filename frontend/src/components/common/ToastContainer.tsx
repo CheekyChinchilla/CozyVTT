@@ -37,15 +37,15 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: () => vo
         aria-atomic="true"
         className={`glass-panel border-2 ${styles} shadow-lg rounded-lg p-4 flex items-start gap-3 min-w-[280px] max-w-sm`}
       >
-        <div className="flex-shrink-0 mt-0.5" aria-hidden="true">
+        <div className="shrink-0 mt-0.5" aria-hidden="true">
           {icon}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium break-words">{toast.message}</p>
+          <p className="text-sm font-medium wrap-break-word">{toast.message}</p>
         </div>
         <button
           onClick={onDismiss}
-          className="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity focus:outline-none focus:ring-2 focus:ring-current rounded"
+          className="shrink-0 ml-2 hover:opacity-70 transition-opacity focus:outline-hidden focus:ring-2 focus:ring-current rounded-sm"
           aria-label="Dismiss notification"
         >
           <X className="w-4 h-4" aria-hidden="true" />
@@ -94,7 +94,7 @@ export default function ToastContainer() {
   return (
     <div
       aria-label="Notifications"
-      className="fixed top-4 right-4 z-[9998] flex flex-col gap-2 pointer-events-none"
+      className="fixed top-4 right-4 z-9998 flex flex-col gap-2 pointer-events-none"
     >
       <AnimatePresence mode="sync">
         {toasts.map((toast) => (

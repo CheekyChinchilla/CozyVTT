@@ -23,7 +23,7 @@ export default function LoadingOverlay({ show, message, contained = false }: Loa
       className={`${
         contained ? 'absolute' : 'fixed'
       } inset-0 z-50 flex flex-col items-center justify-center
-        bg-paper-white/80 backdrop-blur-sm`}
+        bg-paper-white/80 backdrop-blur-xs`}
     >
       <div
         role="status"
@@ -73,7 +73,7 @@ export function UploadProgressBar({ progress, label }: UploadProgressBarProps) {
         className="h-2 w-full bg-moss-green/10 rounded-full overflow-hidden"
       >
         <div
-          className="h-full bg-gradient-to-r from-moss-green to-moss-green/70 rounded-full transition-all duration-300 ease-out"
+          className="h-full bg-linear-to-r from-moss-green to-moss-green/70 rounded-full transition-all duration-300 ease-out"
           style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
         />
       </div>

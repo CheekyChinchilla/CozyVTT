@@ -470,7 +470,7 @@ export default function ChatPanel() {
         {/* Header skeleton */}
         <div className="flex items-center gap-2 p-4 border-b border-moss-green/20">
           <MessageCircle className="w-5 h-5 text-brand-ink/40" />
-          <div className="h-5 w-10 bg-moss-green/15 rounded animate-pulse" />
+          <div className="h-5 w-10 bg-moss-green/15 rounded-sm animate-pulse" />
         </div>
         {/* Message skeletons */}
         <div className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -528,7 +528,7 @@ export default function ChatPanel() {
       {/* Error Display */}
       {error && (
         <div className="mx-4 mt-4 p-3 bg-danger/10 border border-danger/30 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-danger-ink flex-shrink-0" />
+          <AlertCircle className="w-4 h-4 text-danger-ink shrink-0" />
           <p className="text-sm text-danger-ink">{error}</p>
         </div>
       )}

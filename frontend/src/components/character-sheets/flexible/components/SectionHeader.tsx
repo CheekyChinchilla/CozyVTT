@@ -29,7 +29,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
       {showToggle && onToggle && (
         <button
           type="button"
-          className="p-1 rounded hover:bg-moss-green/10 transition-colors"
+          className="p-1 rounded-sm hover:bg-moss-green/10 transition-colors"
           aria-label={isCollapsed ? 'Expand section' : 'Collapse section'}
         >
           {isCollapsed ? (

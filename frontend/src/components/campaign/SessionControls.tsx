@@ -182,7 +182,7 @@ export default function SessionControls() {
         {/* Status badge */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-parchment/60 border border-moss-green/15">
           <div
-            className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            className={`w-2 h-2 rounded-full shrink-0 ${
               isActive
                 ? 'bg-success animate-pulse'
                 : isPaused

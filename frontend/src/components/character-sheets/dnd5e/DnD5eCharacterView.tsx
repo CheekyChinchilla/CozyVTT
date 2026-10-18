@@ -166,7 +166,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     // from the background, with readableTextOn in utils/color.ts.
     const headerClasses = isCustomColor
       ? 'text-white p-6 rounded-t-lg relative'
-      : `bg-gradient-to-r ${themeColor.from} ${themeColor.to} text-white p-6 rounded-t-lg relative`;
+      : `bg-linear-to-r ${themeColor.from} ${themeColor.to} text-white p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -185,7 +185,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       <div className="flex items-start justify-between pr-24">
         <div className="flex items-start space-x-4">
           {/* Token Image */}
-          <div className="flex-shrink-0">
+          <div className="shrink-0">
             {character.tokenImageUrl ? (
               <img
                 src={character.tokenImageUrl}
@@ -302,7 +302,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               return (
                 <div
                   key={key}
-                  className={`flex items-center justify-between py-1 px-2 rounded group ${onRoll ? 'cursor-pointer hover:bg-red-50 select-none' : ''}`}
+                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-red-50 select-none' : ''}`}
                   onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
                   onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                   title={onRoll ? `Left-click: roll  |  Right-click: Advantage / Disadvantage` : undefined}
@@ -837,7 +837,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-red-50 transition-colors text-left"
             >
-              <Dices className="w-3.5 h-3.5 text-red-700 flex-shrink-0" />
+              <Dices className="w-3.5 h-3.5 text-red-700 shrink-0" />
               {label}
             </button>
           ))}

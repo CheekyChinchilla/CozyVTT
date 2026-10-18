@@ -35,29 +35,29 @@ const TEXT_TOKENS: TextToken[] = [
   { label: 'ink-secondary', on: [...BACKGROUNDS], threshold: AA_TEXT, resolve: (c) => c.inkSecondary },
   // text-stone-gray / text-ink-muted — 597 uses (the most common text color in the app)
   { label: 'ink-muted (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-ink-muted'] },
+    resolve: (_c, d) => d['--rgb-ink-muted'] },
   // text-brand-ink — 471 uses (brand is also a fill in ~290 places, which keeps
   // the authored color; only the text variant is derived)
   { label: 'brand-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-brand-ink'] },
+    resolve: (_c, d) => d['--rgb-brand-ink'] },
   // text-warm-amber / text-accent — 74 uses, now routed through accent-ink
   { label: 'accent-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-accent-ink'] },
+    resolve: (_c, d) => d['--rgb-accent-ink'] },
   // text-spirit / text-spirit-purple — 98 uses
   { label: 'spirit-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-spirit-ink'] },
+    resolve: (_c, d) => d['--rgb-spirit-ink'] },
   // text-spirit-red / text-danger and .alert-danger
   { label: 'danger-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-danger-ink'] },
+    resolve: (_c, d) => d['--rgb-danger-ink'] },
   // .alert-success / .badge-success
   { label: 'success-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-success-ink'] },
+    resolve: (_c, d) => d['--rgb-success-ink'] },
   // .alert-warning / .badge-warning
   { label: 'warning-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-warning-ink'] },
+    resolve: (_c, d) => d['--rgb-warning-ink'] },
   // .alert-info
   { label: 'info-ink (derived)', on: [...BACKGROUNDS], threshold: AA_TEXT,
-    resolve: (_c, d) => d['--color-info-ink'] },
+    resolve: (_c, d) => d['--rgb-info-ink'] },
 ];
 
 describe('preset theme contrast', () => {
@@ -83,7 +83,7 @@ describe('preset theme contrast', () => {
 
     // Button labels sit on the accent fill, not on a page background
     it('accent button label meets AA against the accent fill', () => {
-      const accentText = derived['--color-accent-text'];
+      const accentText = derived['--rgb-accent-text'];
       const ratio = contrastRatioChannels(accentText, theme.colors.accent);
       expect(
         ratio,
@@ -98,7 +98,7 @@ describe('derived tokens never weaken an authored color', () => {
     const derived = deriveReadableTokens(theme.colors);
     // inkMuted is clamped, so it may change — but only ever to improve contrast
     const before = contrastRatioChannels(theme.colors.inkMuted, theme.colors.bgBase);
-    const after = contrastRatioChannels(derived['--color-ink-muted'], theme.colors.bgBase);
+    const after = contrastRatioChannels(derived['--rgb-ink-muted'], theme.colors.bgBase);
     expect(after).toBeGreaterThanOrEqual(Math.min(before, AA_LARGE));
   });
 });

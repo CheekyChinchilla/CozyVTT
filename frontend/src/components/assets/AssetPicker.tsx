@@ -127,13 +127,13 @@ export default function AssetPicker({
           <img
             src={api.getAssetUrl(selectedAssetId, dir)}
             alt={selectedAsset?.name ?? 'Selected asset'}
-            className="w-12 h-12 object-cover rounded"
+            className="w-12 h-12 object-cover rounded-sm"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
           />
           <span className="text-sm text-brand-ink font-medium truncate flex-1">
             {selectedAsset?.name ?? 'Selected'}
           </span>
-          <Check className="w-4 h-4 text-brand-ink flex-shrink-0" />
+          <Check className="w-4 h-4 text-brand-ink shrink-0" />
         </div>
       )}
 
@@ -154,7 +154,7 @@ export default function AssetPicker({
                   placeholder={searchPlaceholder}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 text-sm bg-paper-white border border-moss-green/20 rounded focus:outline-none focus:ring-1 focus:ring-moss-green text-stone-gray"
+                  className="w-full pl-8 pr-3 py-1.5 text-sm bg-paper-white border border-moss-green/20 rounded-sm focus:outline-hidden focus:ring-1 focus:ring-moss-green text-stone-gray"
                 />
               </div>
 

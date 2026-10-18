@@ -353,7 +353,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
           {/* Backdrop */}
           <motion.div
             key="token-backdrop"
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -592,7 +592,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             type="checkbox"
                             checked={showHpBar}
                             onChange={(e) => setShowHpBar(e.target.checked)}
-                            className="rounded"
+                            className="rounded-sm"
                           />
                           <span className="text-xs text-stone-gray">Show HP bar to players</span>
                         </label>
@@ -637,7 +637,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                         type="checkbox"
                         checked={placeHidden}
                         onChange={(e) => setPlaceHidden(e.target.checked)}
-                        className="rounded"
+                        className="rounded-sm"
                       />
                       <span className="text-xs text-stone-gray">Hidden from players on placement</span>
                     </label>
@@ -806,10 +806,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                               <img
                                 src={token.imageUrl}
                                 alt={token.name}
-                                className="w-9 h-9 rounded-full object-cover flex-shrink-0 border border-moss-green/20"
+                                className="w-9 h-9 rounded-full object-cover shrink-0 border border-moss-green/20"
                               />
                             ) : (
-                              <div className="w-9 h-9 rounded-full bg-stone-gray/10 flex items-center justify-center flex-shrink-0">
+                              <div className="w-9 h-9 rounded-full bg-stone-gray/10 flex items-center justify-center shrink-0">
                                 <Swords className="w-4 h-4 text-stone-gray/30" />
                               </div>
                             )}
@@ -830,7 +830,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                   {isSpirit ? 'Spirit' : 'Material'}
                                 </span>
                                 {!token.visible && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-stone-gray/10 text-stone-gray">
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-stone-gray/10 text-stone-gray">
                                     Hidden
                                   </span>
                                 )}
@@ -840,7 +840,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                    Show the chip only when the controller is found, or
                                    say the controller is no longer a player. */}
                                 {token.controlledBy && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-warm-amber/10 text-warm-amber">
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-warm-amber/10 text-warm-amber">
                                     {players.find((p) => p.userId === token.controlledBy)?.user?.displayName ?? 'Player'}
                                   </span>
                                 )}
@@ -848,12 +848,12 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             </div>
 
                             {/* Action buttons */}
-                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <div className="flex items-center gap-0.5 shrink-0">
                               {/* Obscure / reveal identity */}
                               <button
                                 onClick={() => handleToggleObscured(token)}
                                 disabled={isTogglingVis}
-                                className="p-1.5 rounded hover:bg-moss-green/10 transition-colors"
+                                className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
                                 title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
                               >
                                 <HelpCircle className={`w-3.5 h-3.5 ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`} />
@@ -863,7 +863,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                               <button
                                 onClick={() => handleToggleVisibility(token)}
                                 disabled={isTogglingVis}
-                                className="p-1.5 rounded hover:bg-moss-green/10 transition-colors"
+                                className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
                                 title={token.visible ? 'Hide from players' : 'Show to players'}
                               >
                                 {isTogglingVis ? (
@@ -884,7 +884,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                               <button
                                 onClick={() => handleToggleLayer(token)}
                                 disabled={isTogglingLyr}
-                                className="p-1.5 rounded hover:bg-spirit-purple/10 transition-colors"
+                                className="p-1.5 rounded-sm hover:bg-spirit-purple/10 transition-colors"
                                 title={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
                               >
                                 {isTogglingLyr ? (
@@ -919,7 +919,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                               <button
                                 onClick={() => setTokenToRemove(token)}
                                 disabled={isDeleting}
-                                className="p-1.5 rounded hover:bg-danger/10 transition-colors"
+                                className="p-1.5 rounded-sm hover:bg-danger/10 transition-colors"
                                 title="Remove from map"
                                 aria-label={`Remove ${token.name} from map`}
                               >
@@ -949,7 +949,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                                     <button
                                       key={m.id}
                                       onClick={() => handleMoveToMap(token, m.id)}
-                                      className="w-full text-left px-2 py-1.5 text-xs text-charcoal hover:bg-moss-green/10 rounded flex items-center gap-1.5 transition-colors"
+                                      className="w-full text-left px-2 py-1.5 text-xs text-charcoal hover:bg-moss-green/10 rounded-sm flex items-center gap-1.5 transition-colors"
                                     >
                                       <ChevronRight className="w-3 h-3 text-stone-gray/40" />
                                       {m.name}

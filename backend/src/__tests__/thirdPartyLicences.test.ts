@@ -138,6 +138,7 @@ describe('THIRD_PARTY_LICENSES.md', () => {
     React: ['frontend', 'react'],
     'React Router': ['frontend', 'react-router'],
     Vite: ['frontend', 'vite'],
+    'Tailwind CSS': ['frontend', 'tailwindcss'],
     Playwright: ['frontend', '@playwright/test'],
     Zustand: ['frontend', 'zustand'],
     'TanStack Query': ['frontend', '@tanstack/react-query'],

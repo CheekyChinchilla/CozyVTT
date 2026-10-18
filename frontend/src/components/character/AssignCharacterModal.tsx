@@ -114,7 +114,7 @@ export default function AssignCharacterModal({
                   <h3 className="font-semibold text-brand-ink mb-2">Character</h3>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg bg-moss-green/10 border-2 border-moss-green/30
-                                  flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  flex items-center justify-center overflow-hidden shrink-0">
                       {character.tokenImageUrl ? (
                         <img
                           src={character.tokenImageUrl}
@@ -160,7 +160,7 @@ export default function AssignCharacterModal({
                   ) : compatibleCampaigns.length === 0 ? (
                     <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                       <div className="flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                        <AlertCircle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm text-stone-gray">
                             No compatible campaigns found. Create a campaign with the same

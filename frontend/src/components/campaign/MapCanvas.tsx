@@ -3406,14 +3406,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {(previewing
         ? previewedPlane === 'spirit'
         : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-sm animate-pulse-soft">
+        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-xs animate-pulse-soft">
           <Ghost className="w-3.5 h-3.5 text-spirit-purple" />
           <span className="text-xs font-semibold text-spirit-purple">Spirit Realm</span>
         </div>
       )}
 
       {/* Toolbar - Glassmorphism */}
-      <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-sm">
+      <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-xs">
         {/* Zoom Out */}
         <Button
           onClick={mapControls.zoomOut}
@@ -3425,7 +3425,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </Button>
 
         {/* Zoom Level Display */}
-        <span className="text-xs text-stone-gray font-mono min-w-[4rem] text-center">
+        <span className="text-xs text-stone-gray font-mono min-w-16 text-center">
           {Math.round(mapControls.zoom * 100)}%
         </span>
 
@@ -3773,7 +3773,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
               onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
               aria-label="Player or token to preview as"
-              className="px-2 py-1.5 rounded text-xs bg-ink/85 text-paper border border-ink/40"
+              className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
             >
               {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
               {(['players', 'tokens'] as const).map((group) => {
@@ -3817,7 +3817,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       {/* AoE panel */}
       {showAoE && currentMap && (
-        <div className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-sm">
+        <div className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs">
           <p className="text-xs font-semibold text-brand-ink">AoE Shape</p>
 
           {/* Shape selector */}
@@ -3877,7 +3877,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <button
                   key={ft}
                   onClick={() => setAoEConfig((prev) => ({ ...prev, sizeFt: ft }))}
-                  className="text-xs px-1.5 py-0.5 rounded bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink border border-moss-green/20 transition-colors"
+                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink border border-moss-green/20 transition-colors"
                 >
                   {ft} ft
                 </button>
@@ -3913,7 +3913,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       {/* Hover Coordinates */}
       {hoverCoords && !hoverToken && (
-        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-sm">
+        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
           <span className="text-xs text-stone-gray font-mono font-semibold">
             ({hoverCoords.x}, {hoverCoords.y})
           </span>
@@ -3942,7 +3942,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         /** One labelled row. The labels line up, so the panel reads as a list. */
         const Row = ({ label, children }: { label: string; children: ReactNode }) => (
           <div className="flex items-baseline gap-2">
-            <span className="w-[4.75rem] shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
+            <span className="w-19 shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
               {label}
             </span>
             <span className="min-w-0 text-sm text-brand-ink">{children}</span>
@@ -3950,7 +3950,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         );
 
         return (
-          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-sm w-[22rem] max-w-[calc(100%-2rem)] shadow-lg">
+          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg">
             <div className="flex items-start gap-3.5">
               {/* Large enough to actually recognise the art. On the map a token
                   is often only a few dozen pixels at play zoom, which is what
@@ -3959,11 +3959,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <img
                   src={image.src}
                   alt=""
-                  className="w-[4.5rem] h-[4.5rem] rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
+                  className="w-18 h-18 rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
                 />
               ) : (
                 <div
-                  className="w-[4.5rem] h-[4.5rem] rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
+                  className="w-18 h-18 rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
                   style={{ backgroundColor: placeholderColor(hoverToken) }}
                   aria-hidden="true"
                 >
@@ -4090,7 +4090,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-sm border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
           style={{
             left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
             top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
@@ -4383,7 +4383,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                           .map((targetMap) => (
                             <button
                               key={targetMap.id}
-                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded transition-colors"
+                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
                               onClick={async () => {
                                 if (!campaign?.id || !currentMap?.id) return;
                                 const token = contextMenu.token;
@@ -4511,7 +4511,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           Same flex-column sizing as the token menu above; see the note there. */}
       {doorContextMenu && (
         <div
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-sm border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
           style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >

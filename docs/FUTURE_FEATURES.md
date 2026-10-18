@@ -185,21 +185,15 @@ _Nothing at present._
   against the backend's developer tools: an npm override gives the coverage
   tool js-yaml 4 in place of the js-yaml 3 it asks for, and Node's own watch
   mode restarts the development server in place of nodemon. **Done** for
-  TypeScript: 6.0 in both packages. **Done** for the advisory against Tailwind
-  CSS 3's selector parser: an npm override gives it the fixed release, and the
-  built stylesheets are byte for byte the same. Dependabot held back major
+  TypeScript: 6.0 in both packages. **Done** for Tailwind CSS: version 4,
+  which leaves no advisory against the app's build tools and needs Firefox
+  128 where 114 was enough. Dependabot held back major
   versions of npm packages until 1.5.3; since then each comes as a pull
   request of its own, apart from those it names as waiting, and its automatic
   security pull requests are turned on once 1.5.3 is on `main`.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
-  to the `prisma-client` generator with it. **Do** Tailwind CSS 4 in 1.5.4,
-  before that release's bug fixes, with every page compared before and after
-  in each theme: it renames or changes the meaning of many classes the app
-  uses, raises Firefox's minimum from 114 to 128, and clears the one advisory
-  left against the app's build tools, in the file-matching package braces,
-  which Tailwind CSS 3 brings with it and which has no fixed release.
-  **Defer** TypeScript 7.
+  to the `prisma-client` generator with it. **Defer** TypeScript 7.
 
 - **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
   from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser

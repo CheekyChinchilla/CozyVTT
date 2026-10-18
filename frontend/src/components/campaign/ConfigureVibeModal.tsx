@@ -208,7 +208,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
         </div>
 
         {/* Computed filter string */}
-        <p className="text-xs font-mono text-stone-gray bg-parchment px-2 py-1 rounded border border-moss-green/20 truncate">
+        <p className="text-xs font-mono text-stone-gray bg-parchment px-2 py-1 rounded-sm border border-moss-green/20 truncate">
           {period.filter || 'brightness(1.0) saturate(1.0)'}
         </p>
       </div>
@@ -219,7 +219,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
         <div className="relative h-16 rounded-lg overflow-hidden ring-1 ring-moss-green/20">
           {/* Simulated map background */}
           <div
-            className="absolute inset-0 bg-gradient-to-br from-success via-success to-warning"
+            className="absolute inset-0 bg-linear-to-br from-success via-success to-warning"
             style={{ filter: period.filter || undefined }}
           />
           {/* Hue overlay */}
@@ -227,7 +227,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
             className="absolute inset-0"
             style={{ backgroundColor: period.hue, opacity: 0.15, mixBlendMode: 'multiply' }}
           />
-          <span className="absolute bottom-1 right-2 text-xs text-white/80 drop-shadow capitalize">
+          <span className="absolute bottom-1 right-2 text-xs text-white/80 drop-shadow-sm capitalize">
             {period.name}
           </span>
         </div>

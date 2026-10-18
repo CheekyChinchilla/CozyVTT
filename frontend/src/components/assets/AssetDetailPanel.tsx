@@ -219,7 +219,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs"
           onClick={onClose}
         >
           <motion.div
@@ -231,7 +231,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 p-6">
+            <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <h2 className="text-2xl font-bold text-brand-ink mb-1 truncate">
@@ -379,7 +379,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                         <select
                           value={moveCampaignId}
                           onChange={(e) => setMoveCampaignId(e.target.value)}
-                          className="w-full px-3 py-2 bg-paper-white border border-moss-green/30 rounded-lg text-stone-gray text-sm focus:outline-none focus:border-moss-green"
+                          className="w-full px-3 py-2 bg-paper-white border border-moss-green/30 rounded-lg text-stone-gray text-sm focus:outline-hidden focus:border-moss-green"
                         >
                           <option value="">— choose a campaign —</option>
                           {campaignsForPicker.map((c) => (

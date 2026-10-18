@@ -19,9 +19,9 @@ export default function CampaignInfo() {
     return (
       <div className="glass-panel p-4">
         <div className="animate-pulse space-y-3">
-          <div className="h-6 bg-warm-gray/20 rounded w-3/4" />
-          <div className="h-4 bg-warm-gray/20 rounded w-full" />
-          <div className="h-4 bg-warm-gray/20 rounded w-5/6" />
+          <div className="h-6 bg-warm-gray/20 rounded-sm w-3/4" />
+          <div className="h-4 bg-warm-gray/20 rounded-sm w-full" />
+          <div className="h-4 bg-warm-gray/20 rounded-sm w-5/6" />
         </div>
       </div>
     );

@@ -246,7 +246,7 @@ export default function InvitePlayerModal({
               checked={sendEmail && emailAvailable}
               onChange={(e) => setSendEmail(e.target.checked)}
               disabled={sending || !emailAvailable}
-              className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
+              className="w-4 h-4 rounded-sm border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
             />
           </div>
           <div>

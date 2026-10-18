@@ -19,7 +19,7 @@ export default function TableSkeleton({ rows = 5, columns = 4 }: TableSkeletonPr
         {[...Array(columns)].map((_, c) => (
           <div
             key={c}
-            className={`h-4 bg-moss-green/15 rounded ${COL_WIDTHS[c % COL_WIDTHS.length]}`}
+            className={`h-4 bg-moss-green/15 rounded-sm ${COL_WIDTHS[c % COL_WIDTHS.length]}`}
           />
         ))}
       </div>
@@ -29,7 +29,7 @@ export default function TableSkeleton({ rows = 5, columns = 4 }: TableSkeletonPr
         <div
           key={r}
           className={`flex gap-4 px-4 py-3 border-b border-moss-green/5 ${
-            r % 2 === 0 ? 'bg-moss-green/[0.02]' : ''
+            r % 2 === 0 ? 'bg-moss-green/2' : ''
           }`}
         >
           {[...Array(columns)].map((_, c) => (

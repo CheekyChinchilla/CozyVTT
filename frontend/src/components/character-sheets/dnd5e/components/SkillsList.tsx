@@ -112,7 +112,7 @@ const SkillRow: React.FC<{
         {isClickable && (
           <Dices className="w-3 h-3 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />
         )}
-        <span className="text-sm font-semibold text-stone-900 min-w-[3rem] text-right">
+        <span className="text-sm font-semibold text-stone-900 min-w-12 text-right">
           {formatBonus(skill.bonus)}
         </span>
       </div>
@@ -157,7 +157,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
       {/* Passive Perception */}
       {passivePerception !== undefined && (
         <div className="mt-4 pt-3 border-t border-stone-200">
-          <div className="flex items-center justify-between px-2 py-1 bg-red-50 rounded">
+          <div className="flex items-center justify-between px-2 py-1 bg-red-50 rounded-sm">
             <span className="text-sm font-semibold text-stone-700">
               Passive Perception
             </span>

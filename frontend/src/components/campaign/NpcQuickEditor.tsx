@@ -483,7 +483,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
         {/* Backdrop */}
         <motion.div
           key="npc-editor-backdrop"
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -513,7 +513,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             {/* Token image — clickable to change */}
             <button
               onClick={handleOpenImagePicker}
-              className="relative group flex-shrink-0"
+              className="relative group shrink-0"
               title={token.imageUrl ? 'Change token image' : 'Add a token image'}
             >
               {token.imageUrl ? (
@@ -545,11 +545,11 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
               // min-w-0 is load-bearing: a flex child defaults to min-width:auto,
               // and an <input>'s intrinsic minimum is wide enough that a long
               // token name pushed the badge and close button off the panel edge.
-              className="flex-1 min-w-0 text-base font-bold text-brand-ink bg-transparent border-b border-transparent hover:border-moss-green/30 focus:border-moss-green focus:outline-none px-0"
+              className="flex-1 min-w-0 text-base font-bold text-brand-ink bg-transparent border-b border-transparent hover:border-moss-green/30 focus:border-moss-green focus:outline-hidden px-0"
             />
 
             {/* Badge */}
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
               tokenType === TokenType.OBJECT
                 ? 'bg-stone-gray/10 text-stone-gray'
                 : 'bg-moss-green/10 text-brand-ink'
@@ -558,7 +558,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             </span>
 
             {/* Close */}
-            <Button onClick={onClose} variant="secondary" className="p-1.5 flex-shrink-0" title="Close">
+            <Button onClick={onClose} variant="secondary" className="p-1.5 shrink-0" title="Close">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -639,7 +639,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                           This is an SRD creature. A custom copy will be created in your campaign library.
                         </p>
                         {duplicateWarning && (
-                          <p className="text-[11px] text-warning-ink bg-warning/10 rounded px-2 py-1">
+                          <p className="text-[11px] text-warning-ink bg-warning/10 rounded-sm px-2 py-1">
                             {duplicateWarning}
                           </p>
                         )}
@@ -754,7 +754,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
                     {/* Temp HP */}
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-stone-gray w-16 flex-shrink-0">Temp HP:</span>
+                      <span className="text-xs text-stone-gray w-16 shrink-0">Temp HP:</span>
                       <input
                         type="number"
                         min={0}
@@ -770,7 +770,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                         type="checkbox"
                         checked={showHpBar}
                         onChange={toggleShowHpBar}
-                        className="rounded"
+                        className="rounded-sm"
                       />
                       <span className="text-xs text-stone-gray">Show HP bar to players</span>
                     </label>

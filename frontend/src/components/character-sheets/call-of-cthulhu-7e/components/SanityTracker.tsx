@@ -57,7 +57,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
   const dangerLevel = getDangerLevel();
 
   return (
-    <div className="bg-gradient-to-br from-purple-900/20 to-indigo-900/20 border-2 border-purple-800/50 rounded-lg p-4 space-y-3">
+    <div className="bg-linear-to-br from-purple-900/20 to-indigo-900/20 border-2 border-purple-800/50 rounded-lg p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
@@ -97,7 +97,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
               type="number"
               value={current}
               onChange={(e) => onChange?.current(parseInt(e.target.value) || 0)}
-              className="w-full text-center text-xl font-bold text-white bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded"
+              className="w-full text-center text-xl font-bold text-white bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
               min={0}
               max={maximum}
             />
@@ -114,7 +114,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
               type="number"
               value={starting}
               onChange={(e) => onChange?.starting(parseInt(e.target.value) || 0)}
-              className="w-full text-center text-xl font-bold text-purple-100 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-purple-500 rounded"
+              className="w-full text-center text-xl font-bold text-purple-100 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
               min={0}
               max={99}
             />
@@ -139,7 +139,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
       {current <= maximum * 0.25 && (
         <div className="bg-red-900/30 border border-red-700 rounded-md p-2">
           <div className="flex items-center space-x-2 text-red-200 text-xs">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+            <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
               Warning: Your investigator is approaching total madness. Losing more SAN may result in indefinite insanity.
             </span>

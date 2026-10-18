@@ -789,7 +789,7 @@ Click **Sign Out** in the Danger Zone section, or **Logout** at the top of the d
 
 ### CozyVTT does not open on an old phone, tablet or computer
 
-CozyVTT needs a browser from 2023 or later: Chrome or Edge 111, Firefox 114 or Safari 16.4 (iPadOS 16.4 on an iPad), or a newer version. An older browser does not load the app. Update the browser, or the device's system software if that is what holds the browser back. An iPad that cannot update past iPadOS 15 needs another device. A phone or computer that installs its browser updates is not affected.
+CozyVTT needs Chrome or Edge 111, Firefox 128 or Safari 16.4 (iPadOS 16.4 on an iPad), or a newer version: Chrome, Edge and Safari from 2023, Firefox from 2024. An older browser may not load the app, or may draw parts of it wrongly. Update the browser, or the device's system software if that is what holds the browser back. An iPad that cannot update past iPadOS 15 needs another device. A phone or computer that installs its browser updates is not affected.
 
 ### I can't connect to my campaign
 

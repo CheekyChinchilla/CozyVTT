@@ -15,15 +15,15 @@ export default function ChatMessageSkeleton({ variant = 'medium' }: ChatMessageS
     <div className="p-3 rounded-lg border border-stone-gray/10 bg-parchment/20 animate-pulse">
       {/* Header: username + timestamp */}
       <div className="flex items-center gap-2 mb-2">
-        <div className="h-3 w-20 bg-stone-gray/20 rounded" />
-        <div className="h-3 w-12 bg-stone-gray/10 rounded" />
+        <div className="h-3 w-20 bg-stone-gray/20 rounded-sm" />
+        <div className="h-3 w-12 bg-stone-gray/10 rounded-sm" />
       </div>
 
       {/* Message body */}
       <div className="space-y-1.5">
-        <div className={`h-4 bg-stone-gray/10 rounded ${bodyWidth}`} />
+        <div className={`h-4 bg-stone-gray/10 rounded-sm ${bodyWidth}`} />
         {variant !== 'short' && (
-          <div className="h-4 bg-stone-gray/10 rounded w-3/5" />
+          <div className="h-4 bg-stone-gray/10 rounded-sm w-3/5" />
         )}
       </div>
     </div>

@@ -49,7 +49,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
           {section.items.map((item) => (
             <Reorder.Item key={item.id} value={item}>
               <div className="flex items-center gap-2 p-2 bg-parchment/30 border border-moss-green/20 rounded-lg group hover:bg-parchment/50 transition-colors">
-                <div className="flex-shrink-0 cursor-grab active:cursor-grabbing">
+                <div className="shrink-0 cursor-grab active:cursor-grabbing">
                   <GripVertical className="w-5 h-5 text-stone-gray" />
                 </div>
 
@@ -57,7 +57,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
                   onClick={() =>
                     updateItem(item.id, { checked: !item.checked })
                   }
-                  className="flex-shrink-0"
+                  className="shrink-0"
                 >
                   {item.checked ? (
                     <CheckSquare className="w-5 h-5 text-brand-ink" />
@@ -71,13 +71,13 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
                   value={item.text}
                   onChange={(e) => updateItem(item.id, { text: e.target.value })}
                   maxLength={SHEET_SHORT_TEXT_MAX}
-                  className="flex-1 bg-transparent border-none focus:outline-none text-warm-gray"
+                  className="flex-1 bg-transparent border-none focus:outline-hidden text-warm-gray"
                   placeholder="Enter item text..."
                 />
 
                 <button
                   onClick={() => removeItem(item.id)}
-                  className="flex-shrink-0 p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                  className="shrink-0 p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
                   title="Remove item"
                 >
                   <Trash2 className="w-4 h-4" />

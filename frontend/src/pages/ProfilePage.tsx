@@ -179,7 +179,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-soft-cream border border-moss-green/30 rounded-xl shadow-2xl w-full max-w-sm">
@@ -215,7 +215,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
 
           {/* Zoom slider */}
           <div className="flex items-center gap-3">
-            <ZoomOut className="w-4 h-4 text-stone-gray flex-shrink-0" aria-hidden="true" />
+            <ZoomOut className="w-4 h-4 text-stone-gray shrink-0" aria-hidden="true" />
             <label htmlFor="avatar-zoom" className="sr-only">Zoom</label>
             <input
               id="avatar-zoom"
@@ -227,7 +227,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
               onChange={(e) => handleZoomChange(Number(e.target.value))}
               className="flex-1 accent-moss-green"
             />
-            <ZoomIn className="w-4 h-4 text-stone-gray flex-shrink-0" aria-hidden="true" />
+            <ZoomIn className="w-4 h-4 text-stone-gray shrink-0" aria-hidden="true" />
           </div>
           <p className="text-xs text-warm-gray text-center">
             Saved as 512×512 JPEG. Drag to reposition, slide to zoom.
@@ -652,7 +652,7 @@ export default function ProfilePage() {
   // ──────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <header className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-4">
@@ -685,7 +685,7 @@ export default function ProfilePage() {
 
           <div className="flex items-start gap-6">
             {/* Avatar */}
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <div
                 className="relative group cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
@@ -726,7 +726,7 @@ export default function ProfilePage() {
                   Remove Avatar
                 </button>
               )}
-              {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-[5rem]">{avatarError}</p>}
+              {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-20">{avatarError}</p>}
               {avatarSuccess && (
                 <p className="mt-1 text-xs text-brand-ink flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" /> {avatarSuccess}
@@ -766,7 +766,7 @@ export default function ProfilePage() {
               {/* Role (read-only) */}
               <div>
                 <label className="block text-xs font-medium text-stone-gray mb-1">Platform Role</label>
-                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-moss-green/10 text-brand-ink border border-moss-green/20">
+                <span className="inline-block px-2 py-0.5 rounded-sm text-xs font-medium bg-moss-green/10 text-brand-ink border border-moss-green/20">
                   {user?.platformRole}
                 </span>
               </div>
@@ -983,7 +983,7 @@ export default function ProfilePage() {
               {!deleteConfirmOpen && (
                 <button
                   onClick={() => setDeleteConfirmOpen(true)}
-                  className="ml-4 flex-shrink-0 text-sm py-1.5 px-3 rounded-lg border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors font-medium"
+                  className="ml-4 shrink-0 text-sm py-1.5 px-3 rounded-lg border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors font-medium"
                 >
                   Delete Account
                 </button>
@@ -993,7 +993,7 @@ export default function ProfilePage() {
             {deleteConfirmOpen && (
               <form onSubmit={handleDeleteAccount} className="space-y-3 p-4 rounded-lg bg-danger/10 border border-danger/30">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
                   <div className="text-sm text-danger-ink space-y-1">
                     <p className="font-semibold">This will permanently delete:</p>
                     <ul className="list-disc list-inside text-xs space-y-0.5">
@@ -1015,7 +1015,7 @@ export default function ProfilePage() {
                 </div>
 
                 {deleteError && (
-                  <p className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded p-2">{deleteError}</p>
+                  <p className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-sm p-2">{deleteError}</p>
                 )}
 
                 <div>

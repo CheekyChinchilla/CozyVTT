@@ -53,7 +53,7 @@ describe('Toast', () => {
     render(<Toast show message={long} onClose={noop} />);
 
     const text = screen.getByText(long);
-    expect(text.className).toContain('break-words');
+    expect(text.className).toContain('wrap-break-word');
     expect(text.className).not.toContain('truncate');
     expect(text.className).not.toContain('whitespace-nowrap');
   });

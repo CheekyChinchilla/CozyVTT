@@ -44,7 +44,7 @@ function MascotImage({ className = '' }: { className?: string }) {
 function PageLoader() {
   return (
     <div
-      className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20"
+      className="min-h-screen flex items-center justify-center bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20"
       aria-live="polite"
       aria-label="Loading page"
     >
@@ -69,15 +69,15 @@ function App() {
           {/* Skip to main content — WCAG 2.4.1 Bypass Blocks */}
           <a
             href="#main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999]
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-9999
                        focus:px-4 focus:py-2 focus:bg-moss-green focus:text-white focus:rounded-lg
-                       focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-warm-amber"
+                       focus:shadow-lg focus:outline-hidden focus:ring-2 focus:ring-warm-amber"
           >
             Skip to main content
           </a>
           {/* Global toast notifications */}
           <ToastContainer />
-          <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+          <div className="min-h-screen bg-linear-to-br from-soft-cream via-parchment to-warm-amber/20">
         <Suspense fallback={<PageLoader />}>
         <Routes>
           {/* Public Routes */}

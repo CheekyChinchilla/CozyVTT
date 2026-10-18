@@ -64,7 +64,7 @@ function Pf2eStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; toke
       </div>
 
       {/* Abilities */}
-      <div className="grid grid-cols-6 gap-1 text-center bg-danger/10 rounded p-1.5">
+      <div className="grid grid-cols-6 gap-1 text-center bg-danger/10 rounded-sm p-1.5">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => (
           <div key={ab}>
             <div className="text-[9px] font-bold text-danger-ink uppercase">{ab}</div>
@@ -96,7 +96,7 @@ function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; token
       </div>
 
       {/* Characteristics — CoC uses STR/CON/SIZ/DEX/INT/POW/APP/EDU */}
-      <div className="grid grid-cols-6 gap-1 text-center bg-success/10 rounded p-1.5">
+      <div className="grid grid-cols-6 gap-1 text-center bg-success/10 rounded-sm p-1.5">
         {(['str', 'dex', 'con', 'int', 'wis', 'cha'] as const).map((ab) => {
           // Map D&D ability names to CoC equivalents for display
           const cocLabel = ab === 'wis' ? 'POW' : ab === 'cha' ? 'APP' : ab.toUpperCase();

@@ -160,7 +160,7 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
                   onChange={(e) => onChange?.(field.key, e.target.value)}
                   placeholder={field.placeholder}
                   rows={field.rows || 3}
-                  className="w-full bg-white/50 border border-sepia-400 rounded-md px-3 py-2 text-sm text-sepia-900 placeholder:text-sepia-400 focus:outline-none focus:ring-2 focus:ring-sepia-500 resize-y"
+                  className="w-full bg-white/50 border border-sepia-400 rounded-md px-3 py-2 text-sm text-sepia-900 placeholder:text-sepia-400 focus:outline-hidden focus:ring-2 focus:ring-sepia-500 resize-y"
                 />
               ) : (
                 <div className="bg-parchment-light/50 border border-sepia-300 rounded-md px-3 py-2 min-h-[60px]">

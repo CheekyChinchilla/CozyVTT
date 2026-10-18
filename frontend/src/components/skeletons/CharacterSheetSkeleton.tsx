@@ -11,7 +11,7 @@ export default function CharacterSheetSkeleton() {
         <div className="w-24 h-9 bg-moss-green/10 rounded-lg" /> {/* Back button */}
         <div className="flex-1 space-y-1.5">
           <div className="h-7 w-48 bg-moss-green/15 rounded-lg" /> {/* Character name */}
-          <div className="h-4 w-32 bg-stone-gray/10 rounded" />   {/* Game system */}
+          <div className="h-4 w-32 bg-stone-gray/10 rounded-sm" />   {/* Game system */}
         </div>
         <div className="w-20 h-9 bg-moss-green/10 rounded-lg" /> {/* Save button */}
       </div>
@@ -32,11 +32,11 @@ export default function CharacterSheetSkeleton() {
         <div className="space-y-4">
           {/* Ability scores block */}
           <div className="glass-panel p-4 space-y-3">
-            <div className="h-5 w-32 bg-moss-green/15 rounded" />
+            <div className="h-5 w-32 bg-moss-green/15 rounded-sm" />
             <div className="grid grid-cols-3 gap-2">
               {[...Array(6)].map((_, i) => (
                 <div key={i} className="space-y-1">
-                  <div className="h-3 w-full bg-stone-gray/10 rounded" />
+                  <div className="h-3 w-full bg-stone-gray/10 rounded-sm" />
                   <div className="h-10 bg-moss-green/10 rounded-lg" />
                 </div>
               ))}
@@ -45,7 +45,7 @@ export default function CharacterSheetSkeleton() {
 
           {/* HP block */}
           <div className="glass-panel p-4 space-y-2">
-            <div className="h-5 w-24 bg-moss-green/15 rounded" />
+            <div className="h-5 w-24 bg-moss-green/15 rounded-sm" />
             <div className="h-12 bg-moss-green/10 rounded-lg" />
           </div>
         </div>
@@ -54,19 +54,19 @@ export default function CharacterSheetSkeleton() {
         <div className="md:col-span-2 space-y-4">
           {/* Skills block */}
           <div className="glass-panel p-4 space-y-3">
-            <div className="h-5 w-24 bg-moss-green/15 rounded" />
+            <div className="h-5 w-24 bg-moss-green/15 rounded-sm" />
             <div className="grid grid-cols-2 gap-2">
               {[...Array(8)].map((_, i) => (
-                <div key={i} className="h-8 bg-stone-gray/10 rounded" />
+                <div key={i} className="h-8 bg-stone-gray/10 rounded-sm" />
               ))}
             </div>
           </div>
 
           {/* Equipment block */}
           <div className="glass-panel p-4 space-y-3">
-            <div className="h-5 w-28 bg-moss-green/15 rounded" />
+            <div className="h-5 w-28 bg-moss-green/15 rounded-sm" />
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-10 bg-stone-gray/10 rounded" />
+              <div key={i} className="h-10 bg-stone-gray/10 rounded-sm" />
             ))}
           </div>
         </div>

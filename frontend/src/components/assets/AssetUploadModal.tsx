@@ -344,7 +344,7 @@ export default function AssetUploadModal({
             {/* Locked context banner */}
             {lockedLabel && (
               <div className="flex items-center gap-2 px-3 py-2 bg-moss-green/10 border border-moss-green/20 rounded-lg text-sm text-brand-ink">
-                <MapPin className="w-4 h-4 flex-shrink-0" />
+                <MapPin className="w-4 h-4 shrink-0" />
                 <span>{lockedLabel}</span>
               </div>
             )}
@@ -471,7 +471,7 @@ export default function AssetUploadModal({
             {/* AVATAR auto-scope notice */}
             {isAvatarType && !defaultScope && (
               <div className="flex items-center gap-2 px-3 py-2 bg-parchment/50 border border-moss-green/20 rounded-lg text-sm text-stone-gray">
-                <User className="w-4 h-4 flex-shrink-0 text-brand-ink" />
+                <User className="w-4 h-4 shrink-0 text-brand-ink" />
                 <span>Avatars are always saved to your Personal library.</span>
               </div>
             )}
@@ -486,7 +486,7 @@ export default function AssetUploadModal({
                   value={selectedCampaignId}
                   onChange={(e) => setSelectedCampaignId(e.target.value)}
                   disabled={uploading}
-                  className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-warm-amber text-stone-gray disabled:opacity-50"
+                  className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-warm-amber text-stone-gray disabled:opacity-50"
                 >
                   <option value="">-- Select a campaign --</option>
                   {dropdownCampaigns.map((campaign) => (
@@ -571,7 +571,7 @@ export default function AssetUploadModal({
                 disabled={uploading}
                 maxLength={ASSET_LIMITS.maxNameLength}
                 placeholder="Enter asset name..."
-                className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
+                className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
             </div>
 
@@ -587,7 +587,7 @@ export default function AssetUploadModal({
                 maxLength={ASSET_LIMITS.maxDescriptionLength}
                 placeholder="Enter asset description..."
                 rows={3}
-                className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray resize-none disabled:opacity-50"
+                className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray resize-none disabled:opacity-50"
               />
             </div>
 
@@ -604,7 +604,7 @@ export default function AssetUploadModal({
                 disabled={uploading}
                 maxLength={ASSET_LIMITS.maxTagLength}
                 placeholder="Type a tag and press Enter..."
-                className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
+                className="w-full px-4 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray disabled:opacity-50"
               />
               {atTagLimit && (
                 <p className="text-xs text-warm-gray mt-1">

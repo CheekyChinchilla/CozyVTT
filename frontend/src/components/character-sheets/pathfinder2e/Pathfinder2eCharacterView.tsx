@@ -152,7 +152,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
     const headerClasses = isCustomColor
       ? `${headerTextColor} p-6 rounded-t-lg relative`
-      : `bg-gradient-to-r ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+      : `bg-linear-to-r ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -253,13 +253,13 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">
                 {ability.slice(0, 3)}
               </div>
-              <div className="relative w-16 h-16 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-lg border-2 border-blue-900">
+              <div className="relative w-16 h-16 rounded-full bg-linear-to-br from-blue-600 to-blue-800 flex items-center justify-center shadow-lg border-2 border-blue-900">
                 <span className="text-2xl font-bold text-white">
                   {formatModifier(abilityData.modifier)}
                 </span>
                 {onRoll && (
                   <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    <div className="w-4 h-4 rounded-full bg-blue-700 flex items-center justify-center shadow">
+                    <div className="w-4 h-4 rounded-full bg-blue-700 flex items-center justify-center shadow-sm">
                       <Dices className="w-2.5 h-2.5 text-white" />
                     </div>
                   </div>
@@ -365,7 +365,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   const renderCombatStats = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Armor Class */}
-      <div className="bg-gradient-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+      <div className="bg-linear-to-br from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-blue-800 mb-2 flex items-center">
           <Shield className="w-4 h-4 mr-2" />
           Armor Class
@@ -388,7 +388,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Class DC */}
-      <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
+      <div className="bg-linear-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-purple-800 mb-2 flex items-center">
           <Target className="w-4 h-4 mr-2" />
           Class DC
@@ -409,7 +409,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Initiative */}
-      <div className="bg-gradient-to-br from-amber-50 to-amber-100 border-2 border-amber-300 rounded-lg p-4">
+      <div className="bg-linear-to-br from-amber-50 to-amber-100 border-2 border-amber-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center">
           <Zap className="w-4 h-4 mr-2" />
           Initiative
@@ -430,7 +430,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Speed */}
-      <div className="bg-gradient-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
+      <div className="bg-linear-to-br from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-green-800 mb-2">Speed</h3>
         <div className="text-3xl font-bold text-green-800">
           {data.speed?.land || 30} ft.
@@ -446,7 +446,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render HP and conditions
   const renderHitPoints = () => (
-    <div className="bg-gradient-to-r from-red-50 to-red-100 border-2 border-red-300 rounded-lg p-4">
+    <div className="bg-linear-to-r from-red-50 to-red-100 border-2 border-red-300 rounded-lg p-4">
       <h3 className="text-lg font-bold text-red-800 mb-3 flex items-center">
         <Heart className="w-5 h-5 mr-2" />
         Hit Points
@@ -533,7 +533,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             return (
               <div
                 key={skillName}
-                className={`bg-white border border-stone-200 rounded p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
+                className={`bg-white border border-stone-200 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
                 onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
                 onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                 title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
@@ -565,7 +565,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                 return (
                   <div
                     key={index}
-                    className={`bg-amber-50 border border-amber-200 rounded p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
+                    className={`bg-amber-50 border border-amber-200 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
                     onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
                     onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                     title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
@@ -752,7 +752,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     const spellcasting = data.spellcasting;
 
     return (
-      <div className="bg-gradient-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
+      <div className="bg-linear-to-br from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
         <h3 className="text-lg font-bold text-purple-800 mb-4 flex items-center">
           <Sparkles className="w-5 h-5 mr-2" />
           Spellcasting
@@ -915,7 +915,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <h4 className="font-semibold text-purple-800 mb-2">Rituals</h4>
             <div className="space-y-2">
               {spellcasting.rituals.map((ritual, index) => (
-                <div key={index} className="bg-white border border-purple-200 rounded p-2 text-sm">
+                <div key={index} className="bg-white border border-purple-200 rounded-sm p-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-purple-800">
                       {typeof ritual === 'string' ? ritual : ritual.name}
@@ -936,7 +936,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <h4 className="font-semibold text-purple-800 mb-2">Innate Spells</h4>
             <div className="space-y-2">
               {spellcasting.innateSpells.map((spell, index) => (
-                <div key={index} className="bg-white border border-purple-200 rounded p-2 text-sm">
+                <div key={index} className="bg-white border border-purple-200 rounded-sm p-2 text-sm">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-purple-800">{spell.name}</span>
                     <span className="text-xs text-purple-600">{spell.frequency}</span>
@@ -1088,7 +1088,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-blue-50 transition-colors text-left"
             >
-              <Dices className="w-3.5 h-3.5 text-blue-700 flex-shrink-0" />
+              <Dices className="w-3.5 h-3.5 text-blue-700 shrink-0" />
               {label}
             </button>
           ))}

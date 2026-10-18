@@ -109,7 +109,7 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
       onClick={() => navigate(`/campaigns/${campaign.id}`)}
       className="group relative glass-panel p-6 text-left transition-all duration-300
                  hover:scale-105 hover:shadow-xl hover:shadow-moss-green/20
-                 focus:outline-none focus:ring-2 focus:ring-moss-green/50 focus:scale-105
+                 focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 focus:scale-105
                  active:scale-100"
       style={{
         transformStyle: 'preserve-3d',
@@ -179,7 +179,7 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
       </div>
 
       {/* Hover Overlay Effect */}
-      <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-moss-green/5 to-spirit-purple/5
+      <div className="absolute inset-0 rounded-lg bg-linear-to-br from-moss-green/5 to-spirit-purple/5
                       opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
            style={{ transform: 'translateZ(-1px)' }} />
     </button>

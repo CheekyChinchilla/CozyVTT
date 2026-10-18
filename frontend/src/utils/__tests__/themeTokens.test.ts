@@ -5,7 +5,7 @@
  * theme: an error box built from them stays pale pink on a dark theme, and grey
  * text keeps its light-mode shade on a dark panel. Every themed surface must use
  * the semantic tokens instead — see the alert and badge classes in index.css,
- * and the token list in tailwind.config.js.
+ * and the token list in its @theme block.
  *
  * Two areas are deliberately exempt because they are fixed-surface designs
  * rather than themed UI, and are listed explicitly so the exemption stays
@@ -18,7 +18,7 @@ import { describe, it, expect } from 'vitest';
  * Fixed-surface designs, exempt by intent:
  *  - character sheets render as light "paper" cards, the way the physical
  *    sheets look, and keep their own palette (including the Call of Cthulhu
- *    sepia set, which tailwind.config.js documents as static)
+ *    sepia set, which index.css's @theme block documents as static)
  *  - the DM map overlays are deliberately dark panels floating over the map
  */
 const EXEMPT = [

@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Upgrading from 1.5.3
+
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is no new setting, no setting is removed, and there is no database change or manual step. The frontend container is rebuilt for the new styles.
+
+#### What you will notice
+
+- **The app needs Firefox 128 or newer.** Chrome and Edge 111 and Safari 16.4 are still enough.
+
+### Changed
+
+- **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
+
+### Security
+
+- **The last security advisory against the tools that build CozyVTT is cleared.** It was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release. Tailwind CSS 4 does not use it. It was only ever in the build tools, never in an instance.
+
 ## [1.5.3] - 2026-10-17
 
 ### Upgrading from 1.5.2
