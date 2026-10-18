@@ -38,6 +38,9 @@ export function errorHandler(
   const stack = 'stack' in fields && typeof fields.stack === 'string' ? fields.stack : undefined;
   const tooLarge = rawStatus === 413 || parserType === 'entity.too.large';
   const notJson = parserType === 'entity.parse.failed';
+  // TODO(accounts): body-parser's own 415s (`charset.unsupported`,
+  // `encoding.unsupported`) fall through to the 500 below. Answer them 415 as
+  // the caller's mistake, like the two cases above.
 
   if (tooLarge || notJson) {
     // The caller's mistake, not the server's, and never logged with its

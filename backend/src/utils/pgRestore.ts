@@ -303,6 +303,12 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
  * is, so an unusual one (a Unix socket, a passwordless local server) still
  * connects the way it did.
  */
+// TODO(backups): the address goes to pg_dump and psql with its query string,
+// and libpq refuses what it does not know: `?schema=` and `?connection_limit=`
+// ("invalid URI query parameter") and `sslmode=no-verify` ("invalid sslmode
+// value"), all of which the app's pg pool accepts, so every backup and restore
+// fails there. Drop the parameters prismaClient.ts handles itself, and pass the
+// schema with --schema, so the tools get only what libpq reads.
 export function pgConnection(dbUrl: string): { dbname: string; env: Record<string, string> } {
   const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
   let parsed: URL;
