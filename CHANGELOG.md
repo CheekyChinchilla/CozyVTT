@@ -36,6 +36,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Fog of war fades away over the squares you reveal.** The fade was meant to play on each player's screen as fog lifted, but it never drew, and the map was redrawn about 24 times for nothing each time fog changed.
+
 - **The AoE Shape tool's cone has the right shape for your game.** In D&D 5e its far corners fell about a tenth short, and its far edge came to a point; it is now as wide at its far end as it is long, as the rules describe. In Pathfinder 2e it is now a quarter circle, the shape that game uses.
 
 - **Walls, doors and lights stay on the map's picture when you change its Width, Height or Grid Size.** They stayed where they were while the picture stretched, so none lined up with the art any more and had to be redrawn. Changing only the **Grid Size** also keeps the fog you revealed and what each player has explored; it used to cover the whole map again.

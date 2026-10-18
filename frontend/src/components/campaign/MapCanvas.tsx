@@ -251,7 +251,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
-  const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
+  // Fog reveal fade. The DM's fog is drawn on the terrain layer and anyone
+  // else's, a preview included, on the overlay, so each frame repaints that.
+  const revealOpacityRef = useFogRevealAnimation(
+    () => markDirty(isDM && !previewing ? 'terrain' : 'overlay'),
+    fogState,
+    revealedCells
+  );
 
   // Tokens this viewer controls, by the server's definition (utils/tokenOwnership.ts).
   const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id, userRole), [user?.id, userRole]);

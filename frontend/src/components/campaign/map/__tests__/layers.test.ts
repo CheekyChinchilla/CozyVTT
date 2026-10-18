@@ -221,6 +221,35 @@ describe('drawFog', () => {
     expect(ctx.calls).toHaveLength(0);
   });
 
+  // The fade was read only for cells still hidden, while the cells it was
+  // started for were the ones just revealed, so nothing ever faded (F343).
+  it('fades the fog out over a cell a player has just had revealed', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[4, 0.5]]) }, viewport3x3);
+    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
+    expect(fills).toHaveLength(9);
+    expect(fills.filter((f) => f.fillStyle === 'rgba(15, 12, 25, 0.5)')).toHaveLength(1);
+  });
+
+  it('fades the DM\'s fog out the same way, from its own strength', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: true,
+      fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
+      revealedCells: null,
+      revealOpacity: new Map([[0, 0.5]]),
+    }, viewport3x3);
+    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
+    expect(fills).toHaveLength(8);
+    expect(fills.filter((f) => f.fillStyle === 'rgba(15, 12, 25, 0.275)')).toHaveLength(1);
+  });
+
+  it('draws a hidden cell at full strength whatever the fade holds', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[0, 0.5]]) }, viewport3x3);
+    for (const f of ctx.calls.filter((c) => c.method === 'fillRect')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
+  });
+
   it('DM fog uses the full fog grid, not revealedCells', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
