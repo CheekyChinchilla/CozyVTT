@@ -10,6 +10,7 @@
  * - Map annotations
  */
 
+import type { CampaignStatus, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import type { Token } from '../websocket/shared';
@@ -80,15 +81,33 @@ export async function captureGameState(
 }
 
 /**
- * Get the most recent session for a campaign
- * Useful for resuming the last session
+ * Run `work` holding the campaign's row, so that the session steps for one
+ * campaign (start, pause, end, resume, and a status change in settings) run
+ * one at a time, each seeing what the one before it left. Without it two
+ * Starts both found no session running and made two, and a Pause beside an
+ * End marked the ended session PAUSED.
  *
- * @param campaignId - Campaign ID
- * @returns Session record or null
+ * `campaign` is null when the campaign does not exist.
  */
-export async function getLastSession(campaignId: string) {
-  return await prisma.session.findFirst({
-    where: { campaignId },
+export async function withSessionsHeld<T>(
+  campaignId: string,
+  work: (tx: Prisma.TransactionClient, campaign: { status: CampaignStatus } | null) => Promise<T>,
+): Promise<T> {
+  return prisma.$transaction(async (tx) => {
+    const [campaign] = await tx.$queryRaw<{ status: CampaignStatus }[]>`
+      SELECT status FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
+    return work(tx, campaign ?? null);
+  });
+}
+
+/**
+ * The session that has started and not ended, running or paused. There is at
+ * most one while every step goes through `withSessionsHeld`; older versions
+ * could leave two, and the newest is the one the campaign page shows.
+ */
+export async function openSession(tx: Prisma.TransactionClient, campaignId: string) {
+  return tx.session.findFirst({
+    where: { campaignId, endedAt: null },
     orderBy: { startedAt: 'desc' },
   });
 }
@@ -100,8 +119,8 @@ export async function getLastSession(campaignId: string) {
  * @param campaignId - Campaign ID
  * @returns Next session number
  */
-export async function getNextSessionNumber(campaignId: string): Promise<number> {
-  const lastSession = await prisma.session.findFirst({
+export async function getNextSessionNumber(campaignId: string, db: Prisma.TransactionClient = prisma): Promise<number> {
+  const lastSession = await db.session.findFirst({
     where: { campaignId },
     orderBy: { sessionNumber: 'desc' },
     select: { sessionNumber: true },

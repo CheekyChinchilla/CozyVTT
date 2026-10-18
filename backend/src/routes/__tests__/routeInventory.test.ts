@@ -76,6 +76,7 @@ const TESTED: Record<string, string> = {
   'POST /api/campaigns/:campaignId/sessions': 'routes/__tests__/sessionResume.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/sessions/:sessionId/pause': 'routes/__tests__/sessionResume.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/resume': 'routes/__tests__/sessionResume.e2e.test.ts',
+  'PUT /api/campaigns/:campaignId/sessions/:sessionId/end': 'routes/__tests__/sessionLifecycle.e2e.test.ts',
   'GET /api/campaigns/:campaignId/export': 'routes/__tests__/campaignArchiveLimits.e2e.test.ts',
   'POST /api/campaigns/import/preview': 'routes/__tests__/campaignImportBounds.e2e.test.ts',
   'POST /api/campaigns/import': 'routes/__tests__/campaignImportAllowlist.e2e.test.ts',
@@ -182,7 +183,6 @@ const TESTED: Record<string, string> = {
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
-  'PUT /api/campaigns/:campaignId/sessions/:sessionId/end',
   'PUT /api/campaigns/:campaignId/token-templates/:id',
   'DELETE /api/campaigns/:campaignId/token-templates/:id',
   'POST /api/campaigns/:campaignId/token-templates/from-token',

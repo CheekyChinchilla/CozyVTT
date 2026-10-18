@@ -5,7 +5,7 @@ import { authenticated, campaignMember, campaignDM, adminOnly } from '../middlew
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM, canReadMap, canReadAsset } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
-import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
+import { captureGameState, getNextSessionNumber, withSessionsHeld, openSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
 import { broadcastMapData } from '../websocket/shared';
@@ -19,7 +19,7 @@ import { previewCampaignImport, importCampaign, importTempDirectory, IMPORT_FAIL
 import { ArchiveRefusedError } from '../utils/archive';
 import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
-import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
+import { UpdateSessionNotesSchema, EndSessionSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
 import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
 import type { Prisma } from '@prisma/client';
@@ -104,6 +104,18 @@ async function removeUploadedArchive(file: Express.Multer.File | undefined): Pro
   if (file?.path) await fsp.rm(file.path, { force: true }).catch(() => undefined);
 }
 
+// ── Session steps ───────────────────────────────────────────────────────────
+// A step that cannot go ahead returns one of these from inside
+// `withSessionsHeld`, and the route answers with it once the hold is let go.
+interface SessionRefusal { refused: 400 | 404; message: string }
+
+function sessionRefusal(refused: 400 | 404, message: string): SessionRefusal {
+  return { refused, message };
+}
+
+function sendSessionRefusal(res: Response, { refused, message }: SessionRefusal) {
+  return res.status(refused).json({ error: refused === 404 ? 'Not Found' : 'Bad Request', message });
+}
 
 /**
  * Campaign Routes
@@ -500,14 +512,18 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       updateData.gameSystem = gameSystem;
     }
 
-    const campaign = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: updateData,
-    });
+    // A status is set between sessions only, under the same hold as the
+    // session steps, so a Start cannot slip in beside it.
+    const outcome = status === undefined
+      ? { campaign: await prisma.campaign.update({ where: { id: campaignId }, data: updateData }) }
+      : await withSessionsHeld(campaignId, async (tx) => (await openSession(tx, campaignId))
+        ? sessionRefusal(400, 'End the session before changing the campaign status')
+        : { campaign: await tx.campaign.update({ where: { id: campaignId }, data: updateData }) });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
 
     return res.status(200).json({
       message: 'Campaign updated successfully',
-      campaign,
+      campaign: outcome.campaign,
     });
   } catch (error) {
     logger.error('Error updating campaign', { err: error });
@@ -1896,45 +1912,26 @@ router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedReques
   try {
     const { campaignId } = req.params;
 
-    // Check if there's already an active session
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { status: true },
-    });
-
-    if (!campaign) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Campaign not found',
+    // Refused while a session is open, running or paused: a paused one is
+    // resumed or ended, or it would be left without an end time for good.
+    // The campaign's status is not consulted, so a campaign an older version
+    // left marked ACTIVE or PAUSED with no session open can start again.
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      if (!campaign) return sessionRefusal(404, 'Campaign not found');
+      if (await openSession(tx, campaignId)) {
+        return sessionRefusal(400, 'A session is already active or paused. Resume or end it first.');
+      }
+      const sessionNumber = await getNextSessionNumber(campaignId, tx);
+      const session = await tx.session.create({ data: { campaignId, sessionNumber } });
+      await tx.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'ACTIVE', lastPlayedAt: new Date() },
       });
-    }
-
-    if (campaign.status === 'ACTIVE') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'A session is already active. Please end or pause the current session first.',
-      });
-    }
-
-    // Get next session number
-    const sessionNumber = await getNextSessionNumber(campaignId);
-
-    // Create new session
-    const session = await prisma.session.create({
-      data: {
-        campaignId,
-        sessionNumber,
-      },
+      return { session };
     });
-
-    // Update campaign status to ACTIVE
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'ACTIVE',
-        lastPlayedAt: new Date(),
-      },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session } = outcome;
+    const { sessionNumber } = session;
 
     // Send system message
     await sendSystemMessage(
@@ -1977,40 +1974,21 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
   try {
     const { campaignId, sessionId } = req.params;
 
-    // Verify session exists and belongs to campaign
-    const session = await prisma.session.findFirst({
-      where: {
-        id: sessionId,
-        campaignId,
-      },
+    // The snapshot is taken under the hold, so an End sent at the same moment
+    // waits, and then ends the session this left paused.
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      const session = await tx.session.findFirst({ where: { id: sessionId, campaignId } });
+      if (!campaign || !session) return sessionRefusal(404, 'Session not found');
+      if (session.endedAt) return sessionRefusal(400, 'Session has already ended');
+      if (campaign.status === 'PAUSED') return sessionRefusal(400, 'Session is already paused');
+
+      const gameState = await captureGameState(campaignId, sessionId);
+      await tx.session.update({ where: { id: sessionId }, data: { savedState: toJson(gameState) } });
+      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } });
+      return { session };
     });
-
-    if (!session) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Session not found',
-      });
-    }
-
-    if (session.endedAt) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Session has already ended',
-      });
-    }
-
-    // Capture and save current game state
-    const gameState = await captureGameState(campaignId, sessionId);
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { savedState: toJson(gameState) },
-    });
-
-    // Update campaign status to PAUSED
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'PAUSED' },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session } = outcome;
 
     // Send system message
     await sendSystemMessage(
@@ -2047,52 +2025,37 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
 router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, sessionId } = req.params;
-    const { saveState = true, notes } = req.body;
-
-    // Verify session exists and belongs to campaign
-    const session = await prisma.session.findFirst({
-      where: {
-        id: sessionId,
-        campaignId,
-      },
-    });
-
-    if (!session) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Session not found',
-      });
-    }
-
-    if (session.endedAt) {
+    const parsed = EndSessionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
       return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Session has already ended',
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request',
       });
     }
+    const saveState = parsed.data.saveState ?? true;
+    const notes = parsed.data.notes?.trim();
 
-    // Capture game state if requested
-    let savedState = null;
-    if (saveState) {
-      const gameState = await captureGameState(campaignId, sessionId);
-      savedState = gameState;
-    }
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      const session = await tx.session.findFirst({ where: { id: sessionId, campaignId } });
+      if (!campaign || !session) return sessionRefusal(404, 'Session not found');
+      if (session.endedAt) return sessionRefusal(400, 'Session has already ended');
 
-    // Update session with end time, optional notes, and saved state
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        endedAt: new Date(),
-        savedState: toJson(savedState),
-        ...(notes ? { notes: String(notes).slice(0, 2000) } : {}),
-      },
+      // Unticked, the snapshot taken at pause (if any) is kept as it was.
+      const savedState = saveState ? toJson(await captureGameState(campaignId, sessionId)) : undefined;
+      await tx.session.update({
+        where: { id: sessionId },
+        data: {
+          endedAt: new Date(),
+          ...(savedState !== undefined ? { savedState } : {}),
+          ...(notes ? { notes } : {}),
+        },
+      });
+      // INACTIVE: the session formally ended, not just paused.
+      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'INACTIVE' } });
+      return { session };
     });
-
-    // Update campaign status to INACTIVE (session formally ended, not just paused)
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'INACTIVE' },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session } = outcome;
 
     // Send system message
     await sendSystemMessage(
@@ -2135,36 +2098,23 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
   try {
     const { campaignId } = req.params;
 
-    // Get the most recent session
-    const lastSession = await getLastSession(campaignId);
-
-    if (!lastSession) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'No previous session found',
-      });
-    }
-
     // The live state is the state: everything is stored as it is played, so
     // the snapshot pause took is a record of where the break began and is
     // never written back. Restoring it undid whatever the DM did during the
     // break, silently: a token hidden then was shown to players again, a
     // moved one jumped back, an added one vanished, a map switch reverted.
-
-    // Clear endedAt to "reopen" the session
-    await prisma.session.update({
-      where: { id: lastSession.id },
-      data: { endedAt: null },
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      const session = await openSession(tx, campaignId);
+      if (!campaign || !session) return sessionRefusal(400, 'There is no paused session to resume');
+      if (campaign.status !== 'PAUSED') return sessionRefusal(400, 'The session is not paused');
+      await tx.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'ACTIVE', lastPlayedAt: new Date() },
+      });
+      return { session };
     });
-
-    // Update campaign status to ACTIVE
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'ACTIVE',
-        lastPlayedAt: new Date(),
-      },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session: lastSession } = outcome;
 
     // Send system message
     await sendSystemMessage(
@@ -2189,6 +2139,7 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
       session: {
         id: lastSession.id,
         sessionNumber: lastSession.sessionNumber,
+        startedAt: lastSession.startedAt,
       },
     });
   } catch (error) {

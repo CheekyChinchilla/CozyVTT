@@ -721,6 +721,9 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 - Changes the campaign status to **Live** (green indicator in the header)
 - Lets players move their tokens again if the last session had ended (a paused session is continued with **Resume Session**, below)
 - Logs a system message in chat announcing the session has started
+- Starts the timer beside the session number, which counts from the start, breaks included
+
+**Start Session** is there only while no session is running or paused: a paused session is resumed or ended first, so each session has one start and one end.
 
 *GIF pending — Starting a session and seeing the status change.*
 
@@ -734,11 +737,13 @@ Need a break? Click **Pause Session**. This:
 
 *Screenshot pending — Paused session indicator from player view.*
 
-Click **Resume Session** when you're ready to continue. Anything you change on the map during the break, such as tokens you hide, move or add, or a map you switch to, stays as you left it: the snapshot pausing takes is a record of where the break began, not something the app puts back.
+Click **Resume Session** when you're ready to continue. The same session carries on, and its timer still counts from when it started. Anything you change on the map during the break, such as tokens you hide, move or add, or a map you switch to, stays as you left it: the snapshot pausing takes is a record of where the break began, not something the app puts back.
 
 ### Ending a Session
 
 Click **End Session** when the adventure is done for the night. The campaign becomes **Inactive**, so players cannot move tokens until you start the next session. Nothing needs saving: token positions, fog, walls, lights, chat and the dice history are stored as you play, and a snapshot of the current map's tokens, the vibe and the spirit layer is kept with the session record as a note of where the night ended; nothing is ever restored from it. An initiative order is not part of that; it lasts only while the server is running, so end combat before you finish if you want a clean slate.
+
+Untick **Save game state** in the dialog to take no new snapshot. If you paused during the session, the snapshot taken then stays with the record. An ended session cannot be resumed; the next game is a new session.
 
 The dialog also offers a **Session Notes** box. Whatever you write there is kept with that session and shown to **everyone in the campaign** under **Session → Past Sessions**, newest first, with the date and how long you played. It is the recap your players read before the next game, so write it for them rather than as a private reminder — there is nowhere here that hides notes from the table.
 
