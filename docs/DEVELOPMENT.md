@@ -608,7 +608,10 @@ Some of those deserve a note:
   when the creature and stat block limits file
   (`backend/src/validators/statBlockLimits.ts`, copied as
   `frontend/src/constants/statBlockLimits.ts` for the Creature Library, Token
-  Templates and stat block editor) differs between the two,
+  Templates and stat block editor) differs between the two, when the token
+  condition limits file (`backend/src/validators/tokenLimits.ts`, copied as
+  `frontend/src/constants/tokenLimits.ts` for the token editor's condition
+  box) differs between the two,
   when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when

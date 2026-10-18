@@ -30,6 +30,7 @@ import type {
   CoC7eConditions,
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
+import { COC7E_CONDITIONS } from '@/utils/conditions';
 
 /**
  * The sheet as this editor holds it: `CoC7eCharacterData` plus `themeColor`,
@@ -106,18 +107,6 @@ const TABS: Tab[] = [
  * Calculate damage bonus and build from STR + SIZ
  * Based on Call of Cthulhu 7e rules
  */
-/**
- * The five conditions the sheet tracks, in the order the rulebook introduces
- * them: the three that follow from hit points, then the two from Sanity.
- */
-const COC_CONDITIONS: { key: keyof CoC7eConditions; label: string }[] = [
-  { key: 'majorWound', label: 'Major Wound' },
-  { key: 'dying', label: 'Dying' },
-  { key: 'unconscious', label: 'Unconscious' },
-  { key: 'temporaryInsanity', label: 'Temporary Insanity' },
-  { key: 'indefiniteInsanity', label: 'Indefinite Insanity' },
-];
-
 /** The appearance fields the official sheet records, in its own order. */
 const COC_APPEARANCE_FIELDS: { key: keyof CoC7eAppearance; label: string }[] = [
   { key: 'age', label: 'Age' },
@@ -927,7 +916,7 @@ value={formData.derivedStats?.luck?.score}
       <div className="mt-6">
         <h3 className="text-lg font-bold text-sepia-900 mb-3">Current Conditions</h3>
         <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
-          {COC_CONDITIONS.map(({ key, label }) => (
+          {COC7E_CONDITIONS.map(({ key, label }) => (
             <label key={key} className="flex items-center gap-2 text-sm text-sepia-900 cursor-pointer">
               <input
                 type="checkbox"

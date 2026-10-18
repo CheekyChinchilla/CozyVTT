@@ -56,6 +56,10 @@
  * template or token over them and the forms stop each box at them. The file is
  * kept identical in both packages.
  *
+ * The limits on a token's conditions. The server refuses a token over them and
+ * the token editor's condition box stops at them. The file is kept identical in
+ * both packages.
+ *
  * The session secret examples. A production server refuses the example values
  * for SESSION_SECRET, so a self-hoster who copies a block as written is told
  * to generate one; the guide's example was once changed without the list of
@@ -387,6 +391,12 @@ describe('the character sheet limits', () => {
 describe('the creature and stat block limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/statBlockLimits.ts')).toBe(read('backend/src/validators/statBlockLimits.ts'));
+  });
+});
+
+describe('the limits on a token\'s conditions', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/tokenLimits.ts')).toBe(read('backend/src/validators/tokenLimits.ts'));
   });
 });
 

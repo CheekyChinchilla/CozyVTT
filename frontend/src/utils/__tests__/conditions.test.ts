@@ -10,10 +10,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   CONDITION_ABBREVIATIONS,
+  COC7E_CONDITIONS,
   DND5E_CONDITIONS,
   MAX_CONDITION_BADGES,
   conditionAbbreviation,
+  conditionsOffered,
 } from '../conditions';
+import { GameSystem } from '@/types/gameSystem';
 
 describe('condition abbreviations', () => {
   it('gives every condition a distinct code', () => {
@@ -34,10 +37,21 @@ describe('condition abbreviations', () => {
   // held for both while the editors disagreed with each other. They now compare
   // against the one exported list instead.
 
-  it('has a code for every condition, and no codes for anything else', () => {
-    const listed = DND5E_CONDITIONS.map((c) => c.toLowerCase()).sort();
+  it('has a code for every listed condition, and no codes for anything else', () => {
+    const names = [...DND5E_CONDITIONS, ...COC7E_CONDITIONS.map((c) => c.label)];
+    const listed = [...new Set(names.map((c) => c.toLowerCase()))].sort();
     const coded = Object.keys(CONDITION_ABBREVIATIONS).sort();
     expect(coded).toEqual(listed);
+  });
+
+  it('lists D&D 5e\'s conditions in D&D 5e, Call of Cthulhu\'s in Call of Cthulhu, and none elsewhere', () => {
+    expect(conditionsOffered(GameSystem.DND_5E)).toBe(DND5E_CONDITIONS);
+    expect(conditionsOffered(GameSystem.CALL_OF_CTHULHU_7E)).toEqual([
+      'Major Wound', 'Dying', 'Unconscious', 'Temporary Insanity', 'Indefinite Insanity',
+    ]);
+    expect(conditionsOffered(GameSystem.PATHFINDER_2E)).toEqual([]);
+    expect(conditionsOffered(GameSystem.SHADOWRUN_6E)).toEqual([]);
+    expect(conditionsOffered(null)).toEqual([]);
   });
 
   it('offers the complete set of 5e conditions', () => {

@@ -20,11 +20,13 @@ import {
   Loader2,
   Image as ImageIcon,
   Save,
+  Plus,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/contexts/ToastContext';
 import { apiErrorMessage } from '@/utils/errors';
-import { DND5E_CONDITIONS } from '@/utils/conditions';
+import { conditionsOffered } from '@/utils/conditions';
+import { TOKEN_LIMITS } from '@/constants/tokenLimits';
 import api from '@/services/api';
 import { useGameStore } from '@/stores/gameStore';
 import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/types';
@@ -43,9 +45,10 @@ const STAT_BLOCK_SAVE_DELAY_MS = 750;
 // Constants
 // ============================================
 
-// Conditions come from utils/conditions. This file used to keep its own
-// hand-picked twelve, which left a DM unable to mark an NPC Deafened, Grappled
-// or Petrified while a player character could be.
+// The listed conditions come from utils/conditions, for the campaign's game
+// system. This file used to keep its own hand-picked twelve, which left a DM
+// unable to mark an NPC Deafened, Grappled or Petrified while a player
+// character could be.
 
 // ============================================
 // Props
@@ -90,6 +93,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   const [disposition, setDisposition] = useState<TokenDisposition | null>(token.disposition ?? null);
   const [initiative, setInitiative] = useState<string>(token.initiative !== null && token.initiative !== undefined ? String(token.initiative) : '');
   const [conditions, setConditions] = useState<string[]>(token.conditions ?? []);
+  // A condition of the DM's own, as typed.
+  const [customCondition, setCustomCondition] = useState('');
+  const offeredConditions = conditionsOffered(campaign?.gameSystem ?? null);
   const [notes, setNotes] = useState(token.notes ?? '');
   // Hidden and obscured are read from the token as the table holds it (the
   // game store), never a copy here: a copy could say "hidden" while every
@@ -387,6 +393,18 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setConditions(newConditions);
     if (!(await saveUpdate({ conditions: newConditions }))) setConditions(conditions);
   }, [conditions, saveUpdate]);
+
+  // A typed condition is added once: one the list offers takes the list's
+  // spelling, and one the token already has (in any capitals) adds nothing.
+  const typedCondition = customCondition.trim();
+  const canAddCondition = typedCondition !== '' && conditions.length < TOKEN_LIMITS.maxConditions;
+  const addCustomCondition = useCallback(() => {
+    if (!canAddCondition) return;
+    const same = (c: string) => c.toLowerCase() === typedCondition.toLowerCase();
+    setCustomCondition('');
+    if (conditions.some(same)) return;
+    void toggleCondition(offeredConditions.find(same) ?? typedCondition);
+  }, [canAddCondition, typedCondition, conditions, offeredConditions, toggleCondition]);
 
   // ── Name save on blur ──
   const handleNameBlur = useCallback(async () => {
@@ -973,25 +991,54 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                 </div>
               )}
 
-              {/* Conditions grid */}
-              <div className="flex flex-wrap gap-1">
-                {DND5E_CONDITIONS.map((c) => {
-                  const active = conditions.includes(c);
-                  return (
-                    <button
-                      key={c}
-                      onClick={() => toggleCondition(c)}
-                      className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
-                        active
-                          ? 'border-warning/50 bg-warning/15 text-warning-ink'
-                          : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                      }`}
-                    >
-                      {c}
-                    </button>
-                  );
-                })}
-              </div>
+              {/* The game system's conditions */}
+              {offeredConditions.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-2">
+                  {offeredConditions.map((c) => {
+                    const active = conditions.includes(c);
+                    return (
+                      <button
+                        key={c}
+                        onClick={() => toggleCondition(c)}
+                        className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
+                          active
+                            ? 'border-warning/50 bg-warning/15 text-warning-ink'
+                            : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                        }`}
+                      >
+                        {c}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* A condition of the DM's own, in any game system */}
+              <form
+                className="flex gap-1.5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  addCustomCondition();
+                }}
+              >
+                <input
+                  type="text"
+                  value={customCondition}
+                  onChange={(e) => setCustomCondition(e.target.value)}
+                  maxLength={TOKEN_LIMITS.maxConditionLength}
+                  placeholder={offeredConditions.length > 0 ? 'Another condition' : 'A condition, such as Frightened 2'}
+                  aria-label="Add a condition"
+                  className="input-cozy flex-1 min-w-0 text-xs"
+                />
+                <button
+                  type="submit"
+                  disabled={!canAddCondition}
+                  aria-label="Add condition"
+                  className="px-2 py-1 text-xs rounded-cozy border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </form>
             </section>
 
             {/* ── DM Notes ── */}
