@@ -5,6 +5,12 @@
 # change behaviour, apart from the ones named under ignore below, each with
 # the reason it waits and when to remove it.
 #
+# Each new release waits before Dependabot proposes it, so a hijacked
+# publish is usually caught and pulled first: an npm package 3 days for a
+# patch, 7 for a minor and 14 for a major; an action or a base image, which
+# have no such steps here, 7 days. The wait applies to these version updates
+# only, never to a security update.
+#
 # Alerts for a published advisory are turned on in the repository's
 # settings, and so are security update pull requests once a release is on
 # main. GitHub opens those against the default branch whatever target-branch
@@ -16,6 +22,10 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      semver-patch-days: 3
+      semver-minor-days: 7
+      semver-major-days: 14
     groups:
       backend-minor-and-patch:
         update-types: [minor, patch]
@@ -51,6 +61,10 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      semver-patch-days: 3
+      semver-minor-days: 7
+      semver-major-days: 14
     groups:
       frontend-minor-and-patch:
         update-types: [minor, patch]
@@ -79,6 +93,8 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -92,6 +108,8 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: node
         update-types: [version-update:semver-major]
@@ -101,6 +119,8 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: node
         update-types: [version-update:semver-major]
@@ -115,6 +135,8 @@ updates:
     target-branch: dev
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     ignore:
       - dependency-name: postgres
         update-types: [version-update:semver-major]

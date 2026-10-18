@@ -765,8 +765,11 @@ when to remove the entry: Tailwind CSS 4, TypeScript 7 and TypeScript 6.1
 (until typescript-eslint accepts it) among them, and `@types/node`, which
 moves with the Node major. Node and nginx move to a new
 major or stable line by hand, and PostgreSQL's major version never through
-Dependabot, since its data has to be dumped and restored. Dependabot alerts
-for published advisories are on. Its automatic security pull requests are
+Dependabot, since its data has to be dumped and restored. A new release
+waits before Dependabot proposes it (`cooldown`): an npm package 3 days for a
+patch, 7 for a minor and 14 for a major, an action or base image 7 days, so
+a hijacked publish is usually pulled first. Security updates do not wait.
+Dependabot alerts for published advisories are on. Its automatic security pull requests are
 turned on in the repository's settings once 1.5.3 is on `main`; GitHub opens
 those against `main` whatever `target-branch` says.
 

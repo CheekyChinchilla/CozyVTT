@@ -5408,6 +5408,9 @@ paths:
         | AVATAR | PNG, JPEG, WebP |
         | DOCUMENT | PDF; plain text or Markdown |
 
+        An animated PNG is identified as `image/apng` and refused (`Invalid
+        file type`) for every type that takes PNG.
+
         The original filename's extension matters only where the bytes
         cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
