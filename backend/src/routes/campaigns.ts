@@ -1982,7 +1982,7 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
       if (session.endedAt) return sessionRefusal(400, 'Session has already ended');
       if (campaign.status === 'PAUSED') return sessionRefusal(400, 'Session is already paused');
 
-      const gameState = await captureGameState(campaignId, sessionId);
+      const gameState = await captureGameState(campaignId, sessionId, tx);
       await tx.session.update({ where: { id: sessionId }, data: { savedState: toJson(gameState) } });
       await tx.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } });
       return { session };
@@ -2041,7 +2041,7 @@ router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: Authe
       if (session.endedAt) return sessionRefusal(400, 'Session has already ended');
 
       // Unticked, the snapshot taken at pause (if any) is kept as it was.
-      const savedState = saveState ? toJson(await captureGameState(campaignId, sessionId)) : undefined;
+      const savedState = saveState ? toJson(await captureGameState(campaignId, sessionId, tx)) : undefined;
       await tx.session.update({
         where: { id: sessionId },
         data: {

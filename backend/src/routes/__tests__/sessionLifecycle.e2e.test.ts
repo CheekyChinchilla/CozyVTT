@@ -45,6 +45,7 @@ jest.mock('../../services/sessionState', () => {
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { MAX_SESSION_NOTES_LENGTH } from '../../validators/sessionNotes';
+import { captureGameState, sessionStepsWaitingFor } from '../../services/sessionState';
 import {
   prisma,
   createTestUser,
@@ -79,8 +80,10 @@ describe('session lifecycle', () => {
 
   /**
    * Send `first`, hold it at `step`, send `second`, and let `first` go once
-   * `second` is waiting on a lock (2 s at most). `second` must still be
-   * waiting then: the campaign is held while `first` runs.
+   * `second` is waiting its turn (2 s at most). `second` must still be
+   * waiting then: the campaign is held while `first` runs. It waits in the
+   * backend's queue, holding no database connection, so nothing waits on a
+   * lock in the database meanwhile.
    */
   const beside = async <A, B>(step: Held, first: () => Promise<A>, second: () => Promise<B>) => {
     let entered!: () => void;
@@ -92,13 +95,16 @@ describe('session lifecycle', () => {
     await inStep;
     let secondFinished = false;
     const secondDone = second().then((r) => { secondFinished = true; return r; });
-    for (let waited = 0; waited < 2000 && !secondFinished; waited += 25) {
-      const [{ waiting }] = await prisma.$queryRaw<{ waiting: bigint }[]>`SELECT count(*) AS waiting FROM pg_locks WHERE NOT granted`;
-      if (waiting > 0n) break;
+    for (let waited = 0; waited < 2000 && !secondFinished && sessionStepsWaitingFor(campaignId) === 0; waited += 25) {
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
     // Held, `second` can only finish after `first` is let go.
     expect(secondFinished).toBe(false);
+    expect(sessionStepsWaitingFor(campaignId)).toBe(1);
+    const [{ waiting }] = await prisma.$queryRaw<{ waiting: bigint }[]>`
+      SELECT count(*) AS waiting FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+      WHERE NOT l.granted AND a.datname = current_database()`;
+    expect(waiting).toBe(0n);
     release();
     return Promise.all([firstDone, secondDone]);
   };
@@ -214,6 +220,10 @@ describe('session lifecycle', () => {
 
       expect(ended.status).toBe(200);
       expect([200, 400]).toContain(paused.status);
+      // The snapshot is read through the step's own transaction: through the
+      // shared client it needed a second connection while holding one.
+      const call = jest.mocked(captureGameState).mock.calls.at(-1)!;
+      expect(call[2]).toBeDefined();
       expect((await sessionRow(id)).endedAt).not.toBeNull();
       expect((await campaignRow()).status).toBe('INACTIVE');
     });
