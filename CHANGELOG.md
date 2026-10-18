@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **The Token Manager says why the server refused.** **Place on Map**, hiding, obscuring, moving between the planes, removing a token and uploading a picture each showed a fixed sentence, such as "Failed to add token to map", when the server turned them down. They now show its reason, such as a map already holding 1,000 tokens.
+
 - **A Player token from the Token Manager can stand for a character.** The **Player** type said it linked to a character sheet, then made a token linked to nothing, which opened no sheet and rolled no character's numbers. A **Character** list now picks the character: the token is named after it unless you typed a name, controlled by its owner while they are a player, and given the character's token picture if you chose none.
 
 - **A token's conditions follow the campaign's game system, and you can type your own.** Edit Token offered the fifteen D&D 5e conditions in every game system and nothing else. A D&D 5e campaign still gets those fifteen, and a Call of Cthulhu campaign now gets the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system, Pathfinder 2e and Flexible included, a box adds a condition of your own, such as *Frightened 2* or *Blessed*, up to 60 characters. Conditions already on a token are kept as they are.

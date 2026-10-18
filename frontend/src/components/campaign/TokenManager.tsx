@@ -176,8 +176,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setAssets((prev) => [asset, ...prev]);
       setSelectedAsset(asset);
       setTokenName((prev) => prev || asset.name || baseName);
-    } catch {
-      setUploadError('Upload failed — check file type and size');
+    } catch (err) {
+      setUploadError(apiErrorMessage(err) || 'Upload failed — check file type and size');
     } finally {
       setIsUploading(false);
     }
@@ -268,11 +268,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
       setInitiative('');
       setSightRadius(0);
       setPlaceHidden(tokenType === TokenType.OBJECT);
-    } catch {
-      // TODO(ui): a refusal is reported only as this fixed sentence, without
-      // the reason the server gave. Show apiErrorMessage(err) first, as the
-      // move to another map below does.
-      setError('Failed to add token to map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to add token to map');
     } finally {
       setIsAdding(false);
     }
@@ -287,8 +284,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     setTogglingVisibilityId(token.id);
     try {
       await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
-    } catch {
-      setError('Failed to toggle token visibility');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to toggle token visibility');
     } finally {
       setTogglingVisibilityId(null);
     }
@@ -299,8 +296,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     setTogglingVisibilityId(token.id);
     try {
       await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
-    } catch {
-      setError('Failed to toggle token identity');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to toggle token identity');
     } finally {
       setTogglingVisibilityId(null);
     }
@@ -313,8 +310,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     try {
       await api.updateToken(campaign.id, currentMap.id, token.id, { layer: newLayer });
       useGameStore.getState().patchToken(token.id, { layer: newLayer });
-    } catch {
-      setError('Failed to move token between layers');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to move token between layers');
     } finally {
       setTogglingLayerId(null);
     }
@@ -349,8 +346,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
     try {
       await api.deleteToken(campaign.id, currentMap.id, token.id);
       useGameStore.getState().removeToken(token.id);
-    } catch {
-      setError('Failed to remove token from map');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to remove token from map');
     } finally {
       setDeletingId(null);
     }
