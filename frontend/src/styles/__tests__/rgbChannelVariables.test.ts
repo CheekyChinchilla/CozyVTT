@@ -7,22 +7,18 @@
  */
 
 import { it, expect } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'fs';
-import path from 'path';
 
-const SRC = path.resolve(__dirname, '../..');
+const stylesheets = import.meta.glob<string>('/src/**/*.css', { query: '?raw', import: 'default', eager: true });
 
-function stylesheets(dir: string): string[] {
-  return readdirSync(dir).flatMap((name) => {
-    const full = path.join(dir, name);
-    if (statSync(full).isDirectory()) return name === 'node_modules' ? [] : stylesheets(full);
-    return name.endsWith('.css') ? [full] : [];
-  });
-}
+it('reads the stylesheets as text, so the check is looking at the right files', () => {
+  // Vitest reads a stylesheet as empty unless vitest.config.ts includes it.
+  expect(stylesheets['/src/styles/note-markdown.css']).toContain('.prose-notes');
+  expect(stylesheets['/src/index.css']).toContain('--rgb-brand-ink');
+});
 
 it('wraps every --rgb-* variable in rgb()', () => {
-  const bare = stylesheets(SRC).flatMap((file) =>
-    readFileSync(file, 'utf8').split('\n').flatMap((line, i) =>
-      /(?<!rgba?\()var\(--rgb-/.test(line) ? [`${path.relative(SRC, file)}:${i + 1}: ${line.trim()}`] : []));
+  const bare = Object.entries(stylesheets).flatMap(([file, source]) =>
+    source.split('\n').flatMap((line, i) =>
+      /(?<!rgba?\()var\(--rgb-/.test(line) ? [`${file}:${i + 1}: ${line.trim()}`] : []));
   expect(bare).toEqual([]);
 });

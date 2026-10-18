@@ -27,8 +27,10 @@ export default defineConfig({
     // `?raw` included. The bundled font stylesheet is read as text by
     // src/__tests__/fonts.test.ts, which checks every file it names, and
     // index.css by src/__tests__/reducedMotion.test.tsx, which checks its
-    // reduce motion rules. No test imports either one as a stylesheet.
-    css: { include: [/src\/assets\/fonts\/fonts\.css/, /src\/index\.css/] },
+    // reduce motion rules. No test imports either one as a stylesheet. Every
+    // stylesheet, the ones in src/styles too, is read by
+    // src/styles/__tests__/rgbChannelVariables.test.ts.
+    css: { include: [/src\/assets\/fonts\/fonts\.css/, /src\/index\.css/, /src\/styles\/[^/]+\.css/] },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
