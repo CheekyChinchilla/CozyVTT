@@ -28,6 +28,9 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import path from 'path';
+import { shortenFileName, MAX_ORIGINAL_NAME_LENGTH } from '../validators/assets';
+import { ASSET_LIMITS } from '../validators/assetLimits';
+import { cutText } from '../utils/cutText';
 import fs from 'fs';
 import type { File as ArchiveEntry } from 'unzipper';
 import { Prisma } from '@prisma/client';
@@ -288,9 +291,10 @@ async function identifyAsset(
  * `rules.png`.
  */
 function displayName(originalName: string, type: ImportableAssetType, ext: string): string {
-  if (isAllowedExtension(type, path.extname(originalName))) return originalName;
+  // Cut to what an upload keeps, extension kept: the archive allows longer.
+  if (isAllowedExtension(type, path.extname(originalName))) return shortenFileName(originalName, MAX_ORIGINAL_NAME_LENGTH);
   const base = originalName.replace(/\.[^.]*$/, '') || 'asset';
-  return `${base}.${ext}`;
+  return shortenFileName(`${base}.${ext}`, MAX_ORIGINAL_NAME_LENGTH);
 }
 
 // ── Preview ───────────────────────────────────────────────────────
@@ -688,7 +692,7 @@ export async function importCampaign(
                 mimeType: a.mimeType,
                 fileSize: a.fileSize,
                 filePath: a.finalPath.replace(/\\/g, '/'),
-                name: a.originalName.replace(/\.[^.]+$/, ''),
+                name: cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
                 createdAt: new Date(importedAt + i),
               })),
             });

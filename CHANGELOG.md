@@ -57,10 +57,13 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Invitations.* `GET /api/invitations` gives each invitation's campaign a `dm` (`{ displayName }`, or null): the member who holds the DM seat. `owner` is still sent.
   - *Invitations.* An invitation past its `expiresAt` no longer counts as pending: `GET /api/invitations` leaves it out, `GET /api/campaigns/:campaignId/invitable-users` offers its user again, and `POST /api/campaigns/:campaignId/invite` invites them again (it answered 400 `User already has a pending invitation to this campaign`).
   - *Invitations.* New, DM only: `GET /api/campaigns/:campaignId/invitations` lists the invitations that still stand, and `DELETE /api/campaigns/:campaignId/invitations/:invitationId` withdraws one (404 `Invitation not found` for another campaign's, an answered one or an unknown id). The web app now sends `expiresInDays: 14` with each invitation; the route's own default is still no expiry.
+  - *Campaign archives.* An imported asset's `name` is cut to 200 characters and its `originalName` to 255 (extension kept), as an upload's are; the archive may still give names up to 500.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A campaign import keeps picture and sound names within an upload's limits.** A name in the archive could be up to 500 characters and was stored as it was, longer than an uploaded file's name may be and too long for most computers to save the file under. It is now cut to 200 characters for its name, and to 255 for its file name, keeping the extension.
 
 - **An invitation that has run out no longer stands in the way.** It stayed pending for good: the player was still shown it (and refused when accepting), and you could neither find them in **Invite Player** nor invite them again.
 
