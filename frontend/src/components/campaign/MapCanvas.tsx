@@ -2667,8 +2667,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setCurrentMap({ ...currentMap, globalIllumination: on });
               try {
                 await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
-              } catch {
+              } catch (err) {
                 setCurrentMap(before);
+                showToast(apiErrorMessage(err) || 'Could not change Global Illumination', 'error');
               }
             }}
             placementDefaults={lightPlacementDefaults}

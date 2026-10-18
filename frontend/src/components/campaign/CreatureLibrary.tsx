@@ -373,8 +373,8 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       } else {
         setFavoriteCreatures((prev) => prev.filter((c) => c.id !== creatureId));
       }
-    } catch {
-      // non-critical, fail silently
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Could not change your favourites');
     }
   }, [campaign, creatures]);
 

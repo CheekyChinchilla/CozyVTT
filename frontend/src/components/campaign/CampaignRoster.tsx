@@ -37,6 +37,8 @@ export default function CampaignRoster() {
   // User IDs with at least one live connection to this campaign.
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  // The last load failed, so an empty list is not an empty campaign.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [editorCharacter, setEditorCharacter] = useState<Character | null>(null);
   const [_viewerLoading, setViewerLoading] = useState(false);
@@ -58,6 +60,7 @@ export default function CampaignRoster() {
       const response = await api.getCampaignCharacters(campaign.id);
       if (seq !== rosterSeq.current) return;
       setRoster(response.roster);
+      setLoadFailed(false);
 
       // Seed the HP cache so MapCanvas can render player HP bars
       const hpEntries = response.roster.flatMap((m) =>
@@ -65,7 +68,9 @@ export default function CampaignRoster() {
       );
       useGameStore.getState().seedCharacterHp(hpEntries);
     } catch (error) {
-      console.error('Error fetching campaign roster:', error);
+      if (seq !== rosterSeq.current) return;
+      setLoadFailed(true);
+      showToast(apiErrorMessage(error) || 'Could not load the roster', 'error');
     } finally {
       if (seq === rosterSeq.current) setLoading(false);
     }
@@ -123,7 +128,7 @@ export default function CampaignRoster() {
       const { character } = await api.getCharacter(characterId);
       setSelectedCharacter(character);
     } catch (error) {
-      console.error('Error fetching character:', error);
+      showToast(apiErrorMessage(error) || 'Could not open that character sheet', 'error');
     } finally {
       setViewerLoading(false);
     }
@@ -166,8 +171,7 @@ export default function CampaignRoster() {
         const { character } = await api.getCharacter(contextMenu.characterId);
         setEditorCharacter(character);
       } catch (error) {
-        console.error('Error fetching character for editing:', error);
-        showToast('Failed to load character for editing', 'error');
+        showToast(apiErrorMessage(error) || 'Failed to load character for editing', 'error');
       }
     }
   };
@@ -226,8 +230,7 @@ export default function CampaignRoster() {
       useGameStore.getState().addToken(result.token);
       showToast(`${character.name} placed on the map`, 'success');
     } catch (error) {
-      console.error('Failed to place character on map:', error);
-      showToast('Could not place that character on the map', 'error');
+      showToast(apiErrorMessage(error) || 'Could not place that character on the map', 'error');
     }
   };
 
@@ -313,6 +316,17 @@ export default function CampaignRoster() {
       {loading ? (
         <div className="text-center py-4">
           <p className="text-sm text-warm-gray">Loading roster...</p>
+        </div>
+      ) : roster.length === 0 && loadFailed ? (
+        <div className="text-center py-4 space-y-2">
+          <p className="text-sm text-warm-gray">The roster could not be loaded.</p>
+          <button
+            type="button"
+            onClick={() => { void fetchRoster(); }}
+            className="text-xs text-brand-ink underline hover:text-brand-ink/80"
+          >
+            Try again
+          </button>
         </div>
       ) : roster.length === 0 ? (
         <div className="text-center py-4">

@@ -27,6 +27,8 @@ export default function InvitationModal({
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // Why the characters could not be loaded, so none is not taken for none owned.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const { toast, showToast, hideToast } = useToast();
 
@@ -44,7 +46,7 @@ export default function InvitationModal({
 
         setCharacters(compatible);
       } catch (error) {
-        console.error('Error fetching characters:', error);
+        setLoadError(apiErrorMessage(error) || 'Please try again later');
       } finally {
         setLoading(false);
       }
@@ -69,7 +71,6 @@ export default function InvitationModal({
       await api.acceptInvitation(invitation.id, selectedCharacterIds);
       onAccept();
     } catch (error) {
-      console.error('Error accepting invitation:', error);
       showToast(apiErrorMessage(error) || 'Failed to accept invitation', 'error');
     } finally {
       setProcessing(false);
@@ -83,7 +84,6 @@ export default function InvitationModal({
       await api.declineInvitation(invitation.id);
       onDecline();
     } catch (error) {
-      console.error('Error declining invitation:', error);
       showToast(apiErrorMessage(error) || 'Failed to decline invitation', 'error');
     } finally {
       setProcessing(false);
@@ -155,6 +155,15 @@ export default function InvitationModal({
             {loading ? (
               <div className="text-center py-8">
                 <p className="text-sm text-warm-gray">Loading characters...</p>
+              </div>
+            ) : loadError ? (
+              <div className="text-center py-8 px-4 rounded-lg bg-parchment/50">
+                <p className="text-sm text-warm-gray mb-2">
+                  Your characters could not be loaded: {loadError}
+                </p>
+                <p className="text-xs text-warm-gray">
+                  You can still join without characters and add them later.
+                </p>
               </div>
             ) : characters.length === 0 ? (
               <div className="text-center py-8 px-4 rounded-lg bg-parchment/50">

@@ -60,4 +60,13 @@ describe('InvitationModal', () => {
   it('offers a Flexible campaign only unassigned Flexible characters', async () => {
     expect(await offered(null)).toEqual(['Wanderer']);
   });
+
+  // A failed load showed "No compatible characters available", as if the
+  // player had none, and wrote the reason to the console alone.
+  it('says the characters could not be loaded, and why', async () => {
+    listCharacters.mockRejectedValue({ response: { status: 429, data: { message: 'Too many requests, please slow down' } } });
+    render(<InvitationModal invitation={invitationTo(GameSystem.DND_5E)} onClose={vi.fn()} onAccept={vi.fn()} onDecline={vi.fn()} />);
+    expect(await screen.findByText('Your characters could not be loaded: Too many requests, please slow down')).toBeTruthy();
+    expect(screen.queryByText('No compatible characters available')).toBeNull();
+  });
 });

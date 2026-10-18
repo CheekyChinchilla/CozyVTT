@@ -309,12 +309,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     try {
       const res = await api.listAssets({ type: AssetType.TOKEN, limit: 100, usable: true });
       setAssets(res.assets);
-    } catch {
-      console.error('NpcQuickEditor: failed to load token assets');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Could not load your token pictures', 'error');
     } finally {
       setIsLoadingAssets(false);
     }
-  }, [assets.length]);
+  }, [assets.length, showToast]);
 
   const handleOpenImagePicker = useCallback(() => {
     setShowImagePicker(true);
@@ -350,12 +350,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       setAssets((prev) => [asset, ...prev]);
       await saveUpdate({ imageUrl: asset.id });
       setShowImagePicker(false);
-    } catch {
-      console.error('NpcQuickEditor: image upload failed');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Could not upload that picture', 'error');
     } finally {
       setIsUploadingImage(false);
     }
-  }, [campaign, saveUpdate]);
+  }, [campaign, saveUpdate, showToast]);
 
   // Step 1: DM clicks save — try direct update, or prompt for name if SRD
   const handleSaveImageToCreature = useCallback(async () => {
@@ -370,7 +370,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status !== 403) {
-        console.error('NpcQuickEditor: failed to save image to creature template');
+        showToast(apiErrorMessage(err) || 'Could not save the picture to the creature', 'error');
         setIsSavingToCreature(false);
         return;
       }
@@ -401,7 +401,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     } finally {
       setIsSavingToCreature(false);
     }
-  }, [campaign, current.creatureTemplateId, current.imageUrl, current.name]);
+  }, [campaign, current.creatureTemplateId, current.imageUrl, current.name, showToast]);
 
   // Step 2: DM confirms name — duplicate, rename, set image, relink token
   const handleConfirmDuplicate = useCallback(async () => {
@@ -421,12 +421,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       setShowDuplicateNamePrompt(false);
       setDuplicateWarning(null);
       setShowImagePicker(false);
-    } catch {
-      console.error('NpcQuickEditor: failed to duplicate SRD creature');
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Could not make a custom copy of the creature', 'error');
     } finally {
       setIsSavingToCreature(false);
     }
-  }, [campaign, current.creatureTemplateId, current.imageUrl, duplicateName, saveUpdate]);
+  }, [campaign, current.creatureTemplateId, current.imageUrl, duplicateName, saveUpdate, showToast]);
 
   // ── Disposition ──
   const setTokenDisposition = useCallback(async (d: TokenDisposition) => {

@@ -69,3 +69,12 @@ it('adds a favourite from the star without opening the row', async () => {
   expect(rows).toHaveLength(2);
   for (const each of rows) expect(each).toHaveAttribute('aria-expanded', 'false');
 });
+
+// The star failed silently: a refused favourite simply did not change.
+it('says why a favourite could not be changed', async () => {
+  api.toggleCreatureFavorite.mockRejectedValue({ response: { status: 429, data: { message: 'Too many requests, please slow down' } } });
+  render(<CreatureLibrary isOpen onClose={() => {}} />);
+  await screen.findByText('Boss Bat');
+  await userEvent.click(screen.getByRole('button', { name: 'Add to favorites' }));
+  expect(await screen.findByText('Too many requests, please slow down')).toBeInTheDocument();
+});

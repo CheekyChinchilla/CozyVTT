@@ -67,6 +67,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A screen reader reads a Creature Library row and its favourite star as two controls,** and says whether the row is open. The star sat inside the row's button, which is not valid in a web page, so the two were read as one.
 
+- **More actions say why when they fail.** Loading, uploading and saving a token picture in Edit Token, making a custom copy of an SRD creature for it, opening a sheet from the Campaign Roster, a creature favourite, the **Global Illumination** switch, and loading your characters in an invitation each failed with nothing on screen. They now say what went wrong. A roster that will not load says so, with **Try again**, where it showed *No members yet*, and an invitation says your characters could not be loaded where it said you had none. Switching maps now stops, saying why, when the tokens on the map on screen cannot be read; it switched without offering to bring them.
+
 - **The Atmosphere panel's volume slider tells the table however it is moved,** by touch or a screen reader as well as by mouse or keyboard. The volume was sent only when a mouse button or a key was let go, so a value set any other way stayed on your screen alone.
 
 - **Export as .uvtt says why a map cannot be exported, and saves only a real file.** The button was a plain download link, so a refusal, such as a map whose picture is not a PNG, JPEG, WebP or GIF image, was never shown and the browser's download failed or saved the error. The file is now fetched first and saved once it has arrived; a refusal shows the server's reason in the Map Library.

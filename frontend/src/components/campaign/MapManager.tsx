@@ -470,10 +470,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         } else {
           performSwitch(map, []);
         }
-      } catch {
+      } catch (err: unknown) {
+        // Without the tokens there is nothing to offer to bring along, and
+        // switching anyway could leave the party behind unasked.
         setIsSwitching(false);
         setCurrentMapTokens([]);
-        performSwitch(map, []);
+        setError(apiErrorMessage(err) || 'Could not read the tokens on this map, so the switch was stopped. Try again.');
       }
     } else {
       performSwitch(map, []);

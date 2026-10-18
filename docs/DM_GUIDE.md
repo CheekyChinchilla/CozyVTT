@@ -180,7 +180,7 @@ A map made before version 1.5.1 may be larger than this. It still opens, and Edi
 
 ### Switching Maps
 
-Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate.
+Open the **Map Library** and click **Set Active** on the map you want. This immediately updates the view for all connected players — no need to coordinate. When there are tokens on the map on screen, you are first asked which to bring along. If they cannot be read (a dropped connection, say), the switch stops and the Map Library says why; click **Set Active** again.
 
 *GIF pending — Switching maps, showing player view update.*
 
