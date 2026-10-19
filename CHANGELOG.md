@@ -89,6 +89,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The D&D 5e editor says what to fix before a save is refused.** It let **Race** or **Class** be emptied, **Armor Class** or maximum hit points go to 0, a custom skill's **Other** take any number and the spell save DC fall below 1, and then the server refused the save, often for a box on another tab. The boxes now stop where a sheet does, and **Save** lists anything still to fix, opens the tab it is on and marks the box. A character stored without hit points saves as it was.
+
 - **A row added by mistake no longer stops a D&D 5e sheet from saving.** **+ Add Attack**, **+ Add Item** and **+ Add Spell** made a row with no name, and **+ Add Hit Die** one with no class, and the sheet could not be saved until each was filled in or removed. A row nobody has typed in is now left out when the sheet is saved, and a new hit die starts with the character's class.
 
 - **A D&D 5e character's Proficiency Bonus follows their level.** Raising **Level** left **Proficiency Bonus** where it was, so every save, skill and spell number worked out from it stayed a level behind. It now moves with **Level** when it was the old level's bonus. A bonus set by hand to something else is kept, and the sheet shows what the level gives under it, with a button to use that. See [Levelling up (D&D 5e)](docs/PLAYER_GUIDE.md#levelling-up-dd-5e).

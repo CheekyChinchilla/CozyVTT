@@ -34,7 +34,9 @@ describe('manual bonuses in the D&D 5e editor', () => {
     fireEvent.click(screen.getByRole('button', { name: /Combat/ }));
     expect(range(screen.getByLabelText('Initiative — other bonus'))).toEqual(expected);
     fireEvent.click(screen.getByRole('button', { name: /Spells/ }));
-    expect(range(screen.getByLabelText('Spell save DC other bonus'))).toEqual(expected);
+    // Higher, where -30 would take the DC below the 1 the server stores:
+    // 8 + proficiency 2 + Intelligence 0 leaves -9.
+    expect(range(screen.getByLabelText('Spell save DC other bonus'))).toEqual(['-9', String(MAX_BONUS_OVERRIDE)]);
     expect(range(screen.getByLabelText('Spell attack other bonus'))).toEqual(expected);
   });
 

@@ -85,3 +85,9 @@ export const DND5E_CUSTOM_SKILLS_MAX = 30;
  * two-handed die or a spell's damage at a higher level.
  */
 export const DND5E_ATTACK_DAMAGE_ROLLS_MAX = 10;
+
+/**
+ * D&D 5e: properties on one attack. The rules name eleven, and a weapon
+ * carries a few.
+ */
+export const DND5E_WEAPON_PROPERTIES_MAX = 20;

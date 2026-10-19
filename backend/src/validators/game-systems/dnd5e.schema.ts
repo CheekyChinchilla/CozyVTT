@@ -12,7 +12,12 @@ import {
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
-import { DND5E_ATTACK_DAMAGE_ROLLS_MAX, DND5E_CUSTOM_SKILLS_MAX, SPELL_SLOTS_MAX } from './sheetLimits';
+import {
+  DND5E_ATTACK_DAMAGE_ROLLS_MAX,
+  DND5E_CUSTOM_SKILLS_MAX,
+  DND5E_WEAPON_PROPERTIES_MAX,
+  SPELL_SLOTS_MAX,
+} from './sheetLimits';
 import { sheetList } from './sheetLists';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
 
@@ -211,7 +216,7 @@ const attackSchema = z.object({
   // common case, not the limit — a homebrew game may name any number more, and
   // the sheet draws a badge for whatever is stored. Bounded only so the field
   // cannot be used as storage, the same reason token conditions are bounded.
-  properties: z.array(z.string().max(60)).max(20).optional(),
+  properties: z.array(z.string().max(60)).max(DND5E_WEAPON_PROPERTIES_MAX).optional(),
   notes: longText.optional(),
   additionalDamage: z.array(additionalDamageSchema).max(DND5E_ATTACK_DAMAGE_ROLLS_MAX).optional(),
 });
