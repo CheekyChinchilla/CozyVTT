@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A screen reader names every box in the Pathfinder 2e character editor, and the boxes stop at the length a sheet stores.** Most boxes, every proficiency rank among them, were announced by their placeholder or by nothing; each is now named, such as "Proficiency in Athletics" or "Item bonus to Will saves". Only the character's name stopped at the length the server keeps, so a long paste anywhere else got the save refused; every text box now stops there.
+
 - **A Pathfinder 2e item's value keeps fractions of a gold piece.** The **Value** box took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. An item's quantity can also be 0, and a strike's range of 0 shows as 0 where it showed an empty box.
 
 - **The Pathfinder 2e sheet and editor agree on more of a character.** The sheet wrote a Dex Cap of -1 as "+-1", showed a land Speed of 0 as 30 ft., and ran the paragraphs of personality, backstory, allies and notes together; it now writes them as typed. An innate spell's notes, which the sheet showed, can be edited. A strike's proficiency rank did nothing; the editor now shows what the rank, attribute and item bonus give beside the attack bonus, which stays as typed.
