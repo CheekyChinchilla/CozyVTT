@@ -1211,23 +1211,23 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // Check if this is the current map
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { currentMapId: true },
+    // The current map is never deleted. Checked and deleted under the
+    // campaign's row lock, which making a map current also takes: a switch to
+    // this map landing between the check and the delete was undone by it,
+    // leaving the campaign with no current map.
+    const deleted = await prisma.$transaction(async (tx) => {
+      const [campaign] = await tx.$queryRaw<Array<{ currentMapId: string | null }>>`
+        SELECT "currentMapId" FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
+      if (campaign?.currentMapId === id) return false;
+      await tx.map.delete({ where: { id } });
+      return true;
     });
-
-    if (campaign?.currentMapId === id) {
+    if (!deleted) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Cannot delete the current map. Set a different map as current first.',
       });
     }
-
-    // Delete the map
-    await prisma.map.delete({
-      where: { id },
-    });
 
     // Combatants that stood on it leave the order with it.
     if (removeCombatants(campaignId, (c) => c.mapId === id)) {
@@ -1274,20 +1274,29 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
       });
     }
 
-    // Update the campaign's currentMapId
-    const updatedCampaign = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { currentMapId: id },
-      include: {
-        currentMap: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true,
+    // Under the campaign's row lock, which a delete also takes, and only
+    // while the map is still there: one deleted meanwhile answers 404, as an
+    // unknown map does, where the foreign key's refusal was a 500.
+    const updatedCampaign = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
+      if (!(await tx.map.findUnique({ where: { id }, select: { id: true } }))) return null;
+      return tx.campaign.update({
+        where: { id: campaignId },
+        data: { currentMapId: id },
+        include: {
+          currentMap: {
+            select: {
+              id: true,
+              name: true,
+              imageUrl: true,
+            },
           },
         },
-      },
+      });
     });
+    if (!updatedCampaign) {
+      return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
+    }
 
     // Every page goes onto the new map, each member's as they may see it,
     // whoever asked: the DM's page, another tab or a script.
