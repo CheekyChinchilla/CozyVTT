@@ -1532,7 +1532,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   </span>
                 </div>
                 <NumberField
-min={1}
+                  aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`}
+                  min={1}
                   max={30}
                   value={abilityData.score}
                   onChange={(v: number) => updateField(`stats.${ability}.score`, v)
@@ -2011,7 +2012,7 @@ min={1}
                 value={die.die ?? (die.total ? hitDieExpression(die) ?? '' : '')}
                 onChange={(e) => updateField(`hitDice.${index}.die`, e.target.value)}
                 placeholder="d10"
-                aria-label="Hit die"
+                aria-label={`Hit die of row ${index + 1}`}
                 maxLength={50}
                 title="One hit die — d10 for a fighter. Something like 2d6 works too if your game uses it."
                 className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -2023,7 +2024,7 @@ min={1}
                 max={die.maximum ?? hitDiceMaximum(die) ?? undefined}
                 value={Math.min(die.remaining, die.maximum ?? hitDiceMaximum(die) ?? die.remaining)}
                 onChange={(v: number) => updateField(`hitDice.${index}.remaining`, v)}
-                aria-label="Hit dice left"
+                aria-label={`Hit dice left in row ${index + 1}`}
                 title="How many are unspent right now"
                 className="min-w-0 px-1 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 fallback={0}
@@ -2033,7 +2034,7 @@ min={1}
                 min={0}
                 value={die.maximum ?? hitDiceMaximum(die) ?? 0}
                 onChange={(v: number) => updateField(`hitDice.${index}.maximum`, v)}
-                aria-label="Hit dice at full"
+                aria-label={`Hit dice in row ${index + 1} at full`}
                 title="How many this pool holds when nothing is spent"
                 className="min-w-0 px-1 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 fallback={0}

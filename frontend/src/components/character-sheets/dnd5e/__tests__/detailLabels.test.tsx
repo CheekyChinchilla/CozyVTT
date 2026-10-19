@@ -36,11 +36,13 @@ describe('the character details', () => {
 describe.each([
   ['Stats & Skills', /Stats/, [
     'Character name', 'Level', 'Race', 'Class', 'Experience Points', 'Proficiency Bonus',
+    'Strength score', 'Charisma score',
     "Name of skill 1", "Other bonus to Thieves' Tools",
   ]],
   ['Combat', /Combat/, [
     'Armor Class', 'Initiative', 'Speed (ft)', 'Maximum hit points', 'Current hit points', 'Temporary hit points',
     'Death save success 1', 'Death save failure 3',
+    'Class of hit dice 1', 'Hit die of row 1', 'Hit dice left in row 1', 'Hit dice in row 1 at full',
     'Name of attack 1', 'Attack Bonus', 'Damage Roll', 'Damage Type', 'Range (ft)', 'Notes',
     'When damage roll 1 applies', 'Damage roll 1', 'Damage type of roll 1',
   ]],

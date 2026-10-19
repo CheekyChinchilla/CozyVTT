@@ -42,9 +42,9 @@ describe('the boxes', () => {
 
   it('stop a hit die pool\'s dice left at the dice it holds', async () => {
     const save = open({ hitDice: [{ class: 'Fighter', die: 'd10', maximum: 3, remaining: 3 }] }, /Combat/);
-    expect(screen.getByLabelText('Hit dice left')).toHaveAttribute('max', '3');
+    expect(screen.getByLabelText('Hit dice left in row 1')).toHaveAttribute('max', '3');
 
-    fireEvent.change(screen.getByLabelText('Hit dice at full'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Hit dice in row 1 at full'), { target: { value: '2' } });
     expect(((await save()).hitDice as { remaining: number }[])[0].remaining).toBe(2);
   });
 });
