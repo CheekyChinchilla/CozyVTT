@@ -125,6 +125,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
 
+- **A refused template sheet save names the boxes to fix.** **Edit Template** said only "Template data does not match game system schema" when the server turned a sheet down, so whoever was over a limit could not tell which box to shorten. It now names each box the server refused and why, as the character sheet editors do.
+
 - **Edit Template no longer offers a token picture it cannot use.** The sheet in **Edit Template** had the character sheet's picture box, which uploaded the picture to your own library and then left it off the template, since a template's picture has to be a global one. The box is gone from template sheets; character sheets keep theirs.
 
 - **A character's name reads on a pale header colour.** The read-only D&D 5e, Pathfinder 2e and Call of Cthulhu sheets drew their header text white on every colour, so on a pale custom colour such as white, or the pale Amber Gold and Golden presets, the name could hardly be read, and a Pathfinder sheet's header differed from its editor's. The header text, its softer lines and its **Edit** button are now dark on a pale colour and light on a dark one, chosen by the same rule as the editors.

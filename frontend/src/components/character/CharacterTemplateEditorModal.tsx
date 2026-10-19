@@ -12,6 +12,8 @@ import { useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/contexts/ToastContext';
+import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import type { Character, CharacterData, CharacterTemplate } from '@/types';
 import { TEMPLATE_PICTURE_NOT_USED } from '@/utils/templatePicture';
 import Modal from '@/components/ui/Modal';
@@ -162,14 +164,10 @@ export default function CharacterTemplateEditorModal({
     } catch (err) {
       // The user chose to keep editing; the dialog has said why.
       if (isStaleCharacterSave(err)) throw err;
-      // TODO(ui): a refused sheet is reported here as "Template data does not
-      // match game system schema", with no box named, so a player whose
-      // template sheet is over a limit cannot tell what to shorten. Say it as
-      // the character editors do, with refusedSaveMessage from
-      // utils/sheetSaveRefusal and apiValidationIssues.
+      // Name each box the server refused, as the character editors do, so
+      // whoever is over a limit knows what to shorten.
       showToast(
-        (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
-          'Failed to save the sheet',
+        refusedSaveMessage(apiValidationIssues(err) ?? [], apiErrorMessage(err), 'Failed to save the sheet'),
         'error'
       );
       throw err;
