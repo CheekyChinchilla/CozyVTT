@@ -188,17 +188,15 @@ export default function CharacterSheetViewerModal({
   const handleRoll = (expression: string, purpose: string) =>
     tableRoll({ expression, purpose, characterName: publicName ?? character.name });
 
-  // Passed to the sheet views only when this viewer may roll; without it the
-  // stats render as plain text rather than clickable rolls.
-  // TODO(ui): on the Characters page there is no socket, yet the owner still
-  // gets this handler, so the stats look clickable and a click rolls nothing.
-  // Pass a handler only when there is a live socket to roll on.
-  const rollHandler = canRoll ? handleRoll : undefined;
+  // Passed to the sheet views only when this viewer may roll and there is a
+  // table to roll at; without it the stats render as plain text. The
+  // Characters page has no socket, so its sheets offer no rolls.
+  const rollHandler = canRoll && socket ? handleRoll : undefined;
 
-  // Spending follows the same rule as rolling. The server checks it again —
-  // owner or DM — so this only decides whether the control is offered.
-  const spendHitDie = canRoll
-    ? (index: number) => socket?.emitHitDiceSpend({ characterId: character.id, index })
+  // Spending follows the same rule as rolling. The server checks it again
+  // (owner or DM), so this only decides whether the control is offered.
+  const spendHitDie = canRoll && socket
+    ? (index: number) => socket.emitHitDiceSpend({ characterId: character.id, index })
     : undefined;
 
   // Render appropriate character sheet view based on game system
