@@ -441,6 +441,21 @@ async function issueResetLinkFor(user: { id: string; email: string; displayName:
   }
 }
 
+/** The reset links being issued after their answer went, by account. */
+const issuingResetLinks = new Map<string, Promise<void>>();
+
+/** Reset links still being issued, which the tests wait for. */
+export const resetLinksBeingIssued = {
+  get count(): number {
+    return issuingResetLinks.size;
+  },
+
+  /** Settles once none is being issued: at once when none is. */
+  async finished(): Promise<void> {
+    while (issuingResetLinks.size > 0) await Promise.all([...issuingResetLinks.values()]);
+  },
+};
+
 /**
  * POST /api/auth/forgot-password
  * Request a password reset email
@@ -456,16 +471,18 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
       where: { email: email.toLowerCase() },
     });
 
-    if (user) {
-      // Only a known address reaches the writes that issue a link, so a failure
-      // in them must not change the answer: a 500 here and a 200 for an unknown
-      // address would show which addresses have accounts while it lasted. It is
-      // logged for the administrator and the person gets the usual answer.
-      try {
-        await issueResetLinkFor(user);
-      } catch (issueError) {
-        logger.error('Failed to issue a password reset link', { err: issueError, userId: user.id });
-      }
+    // Only a known address reaches the writes that issue a link, so the
+    // answer goes before them: waiting would let the time taken tell which
+    // addresses have accounts, and a failure in them must not change the
+    // answer either. A failure is logged for the administrator. A request
+    // while a link is on its way finds it as it would find one just issued.
+    if (user && !issuingResetLinks.has(user.id)) {
+      const issuing = issueResetLinkFor(user)
+        .catch((issueError: unknown) => {
+          logger.error('Failed to issue a password reset link', { err: issueError, userId: user.id });
+        })
+        .finally(() => issuingResetLinks.delete(user.id));
+      issuingResetLinks.set(user.id, issuing);
     }
 
     // Always return the same response to prevent email enumeration

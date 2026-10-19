@@ -36,12 +36,18 @@ import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
+import { resetLinksBeingIssued } from '../auth';
 import logger from '../../utils/logger';
 
 const app = createTestApp();
 const created: string[] = [];
 
-const ask = (email: string) => request(app).post('/api/auth/forgot-password').send({ email });
+/** Ask for a link, and wait for it to be issued, which happens after the answer. */
+async function ask(email: string) {
+  const res = await request(app).post('/api/auth/forgot-password').send({ email });
+  await resetLinksBeingIssued.finished();
+  return res;
+}
 
 afterAll(async () => {
   await cleanupUsers(created);

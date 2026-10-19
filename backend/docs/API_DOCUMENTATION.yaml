@@ -881,7 +881,7 @@ paths:
         - Authentication
       summary: Request password reset
       description: |
-        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
+        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the link to be issued or the email to be sent, so a known address answers as quickly as an unknown one, and a failed send is only logged. A request while the account's link is still being issued counts as one within the 5 minutes below. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
         The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
         For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does, and its used and expired link rows are removed. This happens even when SMTP is not configured and no email is sent.

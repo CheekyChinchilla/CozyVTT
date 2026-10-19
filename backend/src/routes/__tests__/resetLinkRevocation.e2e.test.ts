@@ -33,6 +33,7 @@ import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { resetLinksBeingIssued } from '../auth';
 
 const app = createTestApp();
 const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
@@ -65,10 +66,14 @@ afterAll(async () => {
 it('voids the older link when a new one is requested from the sign-in page', async () => {
   const u = await user('forgot');
   expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
+  // The link is issued after the answer.
+  await resetLinksBeingIssued.finished();
   // A second request within five minutes issues nothing (see
   // forgotPasswordCooldown.e2e); age the first link past that.
   await prisma.passwordResetToken.updateMany({ where: { userId: u.id }, data: { createdAt: new Date(Date.now() - 6 * 60 * 1000) } });
   expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
+  // The link is issued after the answer.
+  await resetLinksBeingIssued.finished();
 
   expect(sentReset).toHaveBeenCalledTimes(2);
   const tokens = (sentReset.mock.calls as unknown as unknown[][]).map((call) => call[1] as string);
