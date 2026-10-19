@@ -52,3 +52,25 @@ describe('D&D 5e spell slots', () => {
     expect(issuePaths(data)).toEqual([]);
   });
 });
+
+// Pathfinder 2e held used slots to 0 to 20 but not to the total, so a rank
+// could show a negative number left; D&D's rule now applies to it too.
+describe('Pathfinder 2e spell slots', () => {
+  function pf2eWithSlots(rank1: { total: number; expended: number }): Record<string, unknown> {
+    const sheet = getBlankCharacterTemplate(GameSystem.PATHFINDER_2E) as unknown as Record<string, Record<string, unknown>>;
+    const spellcasting = sheet.spellcasting;
+    return { ...sheet, spellcasting: { ...spellcasting, slots: { ...(spellcasting.slots as Record<string, unknown>), '1': rank1 } } };
+  }
+  const pf2eIssuePaths = (data: unknown): string[] => {
+    const result = validateCharacterData(GameSystem.PATHFINDER_2E, data);
+    return result.success ? [] : result.errors.issues.map((issue) => issue.path.join('.'));
+  };
+
+  it('refuses more slots used than the total', () => {
+    expect(pf2eIssuePaths(pf2eWithSlots({ total: 2, expended: 3 }))).toContain('spellcasting.slots.1.expended');
+  });
+
+  it('takes every slot used', () => {
+    expect(pf2eIssuePaths(pf2eWithSlots({ total: 3, expended: 3 }))).toEqual([]);
+  });
+});

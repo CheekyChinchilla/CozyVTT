@@ -316,12 +316,18 @@ const slotCountSchema = z.number().int().min(0, slotCountMessage).max(SPELL_SLOT
 
 /**
  * Bounded so that a total cannot be a number no sheet could use: a caster has
- * at most four slots of a rank, and the sheet shows what is left of them.
+ * at most four slots of a rank, and the sheet shows what is left of them, so
+ * no more can be used than the total.
  */
-const spellSlotSchema = z.object({
-  total: slotCountSchema,
-  expended: slotCountSchema,
-});
+const spellSlotSchema = z
+  .object({
+    total: slotCountSchema,
+    expended: slotCountSchema,
+  })
+  .refine((slot) => slot.expended <= slot.total, {
+    message: 'Used slots cannot be more than the total',
+    path: ['expended'],
+  });
 
 /**
  * Spell slots

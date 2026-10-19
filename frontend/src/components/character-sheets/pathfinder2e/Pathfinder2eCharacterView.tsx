@@ -820,7 +820,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               const slot = spellcasting.slots?.[rank.toString() as keyof PF2eSpellSlots] || { total: 0, expended: 0 };
               if (slot.total === 0) return null;
 
-              const remaining = slot.total - slot.expended;
+              // Never below none, whatever a sheet from elsewhere stores.
+              const remaining = Math.max(0, slot.total - slot.expended);
 
               return (
                 <div key={rank} className="bg-white border border-purple-200 rounded-lg p-2">

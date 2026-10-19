@@ -199,6 +199,12 @@ function changedOnOpen(sheet: PF2eFormData): string[] {
     const dc = spellcasting.spellDC?.dc;
     const nowDC = pf2eSpellDC(sheet);
     if (typeof dc === 'number' && dc !== nowDC) changes.push(`spell DC (${dc} to ${nowDC})`);
+    const storedSlots = (spellcasting.slots ?? {}) as unknown as Record<string, { expended?: unknown; used?: unknown } | undefined>;
+    const readSlots = readPf2eSpellSlots(spellcasting.slots) as unknown as Record<string, { expended: number }>;
+    for (const [rank, slot] of Object.entries(readSlots)) {
+      const stored = storedSlots[rank]?.expended || storedSlots[rank]?.used;
+      if (typeof stored === 'number' && stored > slot.expended) changes.push(`rank ${rank} spell slots used (${stored} to ${slot.expended})`);
+    }
     const points = spellcasting.focusSpells?.focusPoints;
     const inPool = withPointsInPool(spellcasting.focusSpells).focusPoints.current;
     if (points && typeof points.current === 'number' && points.current !== inPool) {
@@ -1463,7 +1469,7 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting
                   <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
                   <div className="flex flex-col space-y-1">
                     <NumberField
-min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.total`, v)} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
+min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}`, { total: v, expended: Math.min(slots.expended, Math.max(0, v)) })} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
                     <NumberField
 min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded-sm text-xs text-center text-purple-700 focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
                   </div>

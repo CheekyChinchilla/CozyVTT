@@ -80,6 +80,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* `GET /api/assets` takes `sort` (`date`, `name` or `size`), and `search` also matches an asset that has it as a whole tag, whatever its case.
   - *Maps.* Every map route answers another campaign's map, and a player's request for a map the DM is preparing, with 404 `Map not found`, as for an unknown id; it said `Map not found in this campaign`.
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` on an asset whose uploader's account was deleted answers 400, admins included.
+  - A Pathfinder 2e sheet with more spell slots of a rank used than the rank's total is refused with 400, as a D&D 5e sheet already was.
 
 - **The placeholders in the D&D 5e editor's header take the header's own colour.** **Character Name**, **Race** and **Class** showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
 
@@ -92,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **Pathfinder 2e spell slots never show more used than there are.** Lowering a rank's **Total** left its **Used** count above it, which saved, and the sheet then showed a negative number of slots left. Lowering the total now brings the used count down with it, a character stored with more used opens with them brought down and a note saying so, and the sheet never shows fewer than none left. As for D&D 5e, the server now refuses more used than the total.
 
 - **A Pathfinder 2e lore named with "Lore" rolls under its own name.** A lore skill named as the rulebook writes them, such as Warfare Lore from the built-in Fighter, rolled as "Warfare Lore Lore Check". "Lore" is now added only to a name without it.
 
