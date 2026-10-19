@@ -34,7 +34,7 @@ const HEADER_COLOURS = /\/character-sheets\/[^/]+\/colorPresets\.ts$/;
  * colours (friendly tokens are drawn teal).
  */
 const RAW_COLOR =
-  /\b(?:text|bg|border|ring|divide|placeholder|from|via|to)-(?:red|rose|pink|fuchsia|green|emerald|amber|yellow|orange|blue|indigo|sky|cyan|purple|violet|stone|gray|slate|zinc|neutral|sepia)-\d{2,3}\b/g;
+  /\b(?:text|bg|border(?:-[trblxyse])?|ring|divide|placeholder|from|via|to|fill|stroke|outline|decoration|accent)-(?:red|rose|pink|fuchsia|green|emerald|amber|yellow|orange|blue|indigo|sky|cyan|purple|violet|stone|gray|slate|zinc|neutral|sepia)-\d{2,3}\b/g;
 
 // Vite inlines every component's source at build time, so the check needs no
 // filesystem access and runs in the same environment as the rest of the suite.
