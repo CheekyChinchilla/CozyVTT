@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Cthulhu Mythos typed on a Call of Cthulhu sheet lowers maximum Sanity.** The sheet kept Cthulhu Mythos twice, and the only box you could type in, under **Spells & Mythos**, changed neither maximum Sanity nor the skill that is rolled. The box now sets the skill, maximum Sanity follows it, and it stops at 99. An investigator whose two copies differ opens with the larger, which is the one you raised.
+
 - **The built-in Call of Cthulhu investigators' numbers follow from their characteristics.** The blank investigator had a major wound threshold of 1 for 10 hit points; the Private Investigator had 13 hit points where CON 60 and SIZ 65 give 12, a major wound of 1, and SIZ, APP and EDU halves rounded up. They now start with the numbers the rules give. Investigators already made are not changed; the editor works their numbers out again when they are next saved.
 
 - **A Call of Cthulhu major wound threshold rounds up.** A major wound is damage of at least half an investigator's maximum hit points in one attack, but the editor halved and rounded down, so at 13 hit points it named 6, which is under half. It now names 7; the threshold is saved the next time the investigator is saved.

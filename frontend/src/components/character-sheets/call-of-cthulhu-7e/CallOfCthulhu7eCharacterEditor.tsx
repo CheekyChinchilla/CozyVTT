@@ -120,6 +120,25 @@ const COC_APPEARANCE_FIELDS: { key: keyof CoC7eAppearance; label: string }[] = [
 ];
 
 /**
+ * The sheet with one Cthulhu Mythos. It is stored twice: the skill, which sets
+ * maximum Sanity and is rolled, and the Spells & Mythos box, which was the
+ * only one the editor let a player change. Both take the larger, which is
+ * whichever the player last raised, and the box edits the skill from here on.
+ */
+function withOneCthulhuMythos(sheet: CoC7eFormData): CoC7eFormData {
+  const skill = sheet.skills?.cthulhuMythos;
+  const mythos = Math.max(skill?.currentValue ?? 0, sheet.spellsAndMythos?.cthulhuMythos ?? 0);
+  return {
+    ...sheet,
+    skills: {
+      ...sheet.skills,
+      cthulhuMythos: { baseValue: 0, improvementChecked: false, ...skill, currentValue: mythos },
+    } as CoC7eSkills,
+    spellsAndMythos: { spells: [], ...sheet.spellsAndMythos, cthulhuMythos: mythos },
+  };
+}
+
+/**
  * CallOfCthulhu7eCharacterEditor - Editable CoC 7e character sheet
  */
 export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEditorProps> = ({
@@ -142,7 +161,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const keeperNotesShown = typeof data.notes === 'string';
 
   // Form state
-  const [formData, setFormData] = useState<CoC7eFormData>(() => ({
+  const [formData, setFormData] = useState<CoC7eFormData>(() => withOneCthulhuMythos({
     ...data,
     characteristics: data.characteristics || {},
     // TODO(typing): `{}` has none of the keys CoC7eDerivedStats and CoC7eSkills
@@ -1090,20 +1109,20 @@ value={formData.wealth?.cash}
         <h3 className="text-lg font-bold text-sepia-900 mb-3">Spells &amp; Mythos</h3>
         <div className="bg-white border border-sepia-400 rounded-md p-3 space-y-3">
           <div>
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Cthulhu Mythos</label>
+            <label htmlFor="coc-cthulhu-mythos" className="text-xs text-sepia-600 uppercase block mb-1">Cthulhu Mythos</label>
+            {/* The skill itself: maximum Sanity is 99 less it, so it stops at 99. */}
             <NumberField
-              value={formData.spellsAndMythos?.cthulhuMythos}
+              id="coc-cthulhu-mythos"
+              value={formData.skills?.cthulhuMythos?.currentValue}
               min={0}
-              max={100}
+              max={99}
               fallback={0}
               onChange={(v: number) => {
-                setFormData({
-                  ...formData,
-                  spellsAndMythos: {
-                    cthulhuMythos: v,
-                    spells: formData.spellsAndMythos?.spells ?? [],
-                  },
-                });
+                setFormData((prev) => ({
+                  ...prev,
+                  skills: { ...prev.skills, cthulhuMythos: { ...prev.skills?.cthulhuMythos, currentValue: v } } as CoC7eSkills,
+                  spellsAndMythos: { spells: prev.spellsAndMythos?.spells ?? [], cthulhuMythos: v },
+                }));
               }}
               className="w-24 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             />
