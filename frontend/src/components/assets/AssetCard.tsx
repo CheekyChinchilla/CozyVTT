@@ -52,8 +52,12 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
    * document fell through to an <img> with no source and rendered as a broken
    * picture.
    */
+  const [pictureFailed, setPictureFailed] = useState(false);
+  // A picture that fails to load is shown as its type's icon, as audio and
+  // documents are. Kept in state: the fallback used to change React's own
+  // nodes, which React does not expect.
   const showsPicture =
-    asset.type === AssetType.MAP || asset.type === AssetType.TOKEN || asset.type === AssetType.AVATAR;
+    !pictureFailed && (asset.type === AssetType.MAP || asset.type === AssetType.TOKEN || asset.type === AssetType.AVATAR);
 
   // Get asset thumbnail URL
   const getThumbnailUrl = (): string => {
@@ -146,11 +150,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 alt={asset.name}
                 loading="lazy"
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null; // prevent recursive error
-                  target.style.display = 'none';
-                }}
+                onError={() => setPictureFailed(true)}
               />
             )}
           </div>
@@ -255,14 +255,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             alt={asset.name}
             loading="lazy"
             className="w-full h-full object-cover transition-transform group-hover:scale-110"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const iconDiv = document.createElement('div');
-              iconDiv.className = 'flex items-center justify-center w-full h-full';
-              iconDiv.innerHTML = '<div></div>';
-              target.parentElement?.appendChild(iconDiv);
-            }}
+            onError={() => setPictureFailed(true)}
           />
         )}
 

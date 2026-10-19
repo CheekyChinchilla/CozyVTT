@@ -133,3 +133,21 @@ describe('the Campaign choice', () => {
     expect(screen.queryByRole('option', { name: 'Friday game' })).not.toBeInTheDocument();
   });
 });
+
+// The preview's fallback replaced React's children with innerHTML, so the next
+// render that touched the preview (a move, say) found its nodes gone.
+describe('a preview that fails to load', () => {
+  it('says so, and the panel goes on working', () => {
+    const map = { ...asset, type: AssetType.MAP, name: 'Lost map', canChange: true } as unknown as Asset;
+    const { rerender } = render(<AssetDetailPanel asset={map} onClose={vi.fn()} onDelete={vi.fn()} />);
+    fireEvent.error(screen.getByAltText('Lost map'));
+    expect(screen.getByText('Preview not available')).toBeInTheDocument();
+
+    // A render that replaces the preview: React removes the picture it put
+    // there, which the old fallback had already taken out.
+    const track = { ...map, id: 'a2', type: AssetType.AUDIO, name: 'Rain' } as unknown as Asset;
+    expect(() => rerender(<AssetDetailPanel asset={track} onClose={vi.fn()} onDelete={vi.fn()} />)).not.toThrow();
+    expect(screen.queryByText('Preview not available')).not.toBeInTheDocument();
+  });
+});
+

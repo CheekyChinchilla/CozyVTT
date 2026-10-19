@@ -154,4 +154,18 @@ describe('AssetGrid', () => {
     expect(container.querySelectorAll('img[src="x"]')).toHaveLength(0);
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
   });
+
+  // The fallback used to replace the button's children itself, React's
+  // selection overlay among them. When the selection then moved, React went to
+  // remove an overlay that was no longer there and threw, blanking the picker.
+  it('keeps working when a selected thumbnail fails and the selection then moves', async () => {
+    const { rerender } = render(<AssetGrid type={AssetType.TOKEN} selectedId="a1" onSelect={vi.fn()} />);
+    fireEvent.error(await screen.findByAltText('Goblin'));
+    expect(await screen.findByText('Goblin')).toBeInTheDocument();
+
+    expect(() => rerender(<AssetGrid type={AssetType.TOKEN} selectedId="b2" onSelect={vi.fn()} />)).not.toThrow();
+    expect(screen.getByText('Goblin')).toBeInTheDocument();
+    expect(screen.getByAltText('Ogre')).toBeInTheDocument();
+  });
 });
+

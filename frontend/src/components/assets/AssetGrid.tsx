@@ -59,25 +59,6 @@ const COLUMN_CLASS: Record<number, string> = {
   5: 'grid-cols-5',
 };
 
-/**
- * Broken-image fallback: swap the thumbnail for the asset's name.
- *
- * SECURITY: the name is written with textContent, never innerHTML, so a
- * maliciously-named asset like `<img onerror=...>` is rendered as literal
- * text rather than executed. Preserved verbatim from the original pickers —
- * do not "simplify" this into innerHTML.
- */
-function renderNameFallback(target: HTMLImageElement, name: string): void {
-  target.style.display = 'none';
-  const parent = target.parentElement;
-  if (!parent) return;
-  parent.classList.add('bg-moss-green/10', 'flex', 'items-center', 'justify-center');
-  const span = document.createElement('span');
-  span.className = 'text-xs text-stone-gray/50 p-1 text-center';
-  span.textContent = name;
-  parent.replaceChildren(span);
-}
-
 export default function AssetGrid({
   type,
   selectedId,
@@ -96,6 +77,8 @@ export default function AssetGrid({
 }: AssetGridProps) {
   const [fetched, setFetched] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(false);
+  // Thumbnails that failed to load, shown as their names instead.
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
 
   const controlled = providedAssets !== undefined;
   const assets = controlled ? providedAssets : fetched;
@@ -166,12 +149,23 @@ export default function AssetGrid({
                 : 'border-transparent hover:border-moss-green/40'
             }`}
           >
-            <img
-              src={api.getAssetUrl(asset.id, dir)}
-              alt={asset.name}
-              className="w-full h-full object-cover"
-              onError={(e) => renderNameFallback(e.target as HTMLImageElement, asset.name)}
-            />
+            {/* A thumbnail that fails to load is shown as the asset's name,
+                rendered by React as text, so a name like `<img onerror=...>`
+                is never markup. Kept in state: the fallback used to replace
+                the button's children itself, React's selection overlay among
+                them, and React then failed to remove that overlay. */}
+            {failed.has(asset.id) ? (
+              <span className="flex w-full h-full items-center justify-center bg-moss-green/10 text-xs text-stone-gray/50 p-1 text-center">
+                {asset.name}
+              </span>
+            ) : (
+              <img
+                src={api.getAssetUrl(asset.id, dir)}
+                alt={asset.name}
+                className="w-full h-full object-cover"
+                onError={() => setFailed((prev) => new Set(prev).add(asset.id))}
+              />
+            )}
             {isSelected && (
               <div className="absolute inset-0 bg-moss-green/25 flex items-center justify-center">
                 <Check className={`${checkSize} text-brand-ink drop-shadow-sm`} />

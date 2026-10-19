@@ -79,6 +79,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A picture that fails to load no longer breaks the asset pickers.** In a picker such as the one in **Edit Map**, choosing another picture after the chosen one had failed to load could blank the window. The Asset Library's cards now show the asset's type icon where a picture fails, where they showed nothing, and its detail panel says "Preview not available" as before.
+
 - **The Asset Library's detail panel slides away when you close it,** as it slides in when it opens. It vanished at once. Its close button is also named for screen readers now.
 
 - **In Firefox, the Asset Library's cards fade in once as it opens.** Each card faded in, vanished and faded in again.

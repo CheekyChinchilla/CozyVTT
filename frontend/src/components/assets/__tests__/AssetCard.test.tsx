@@ -106,3 +106,14 @@ describe('AssetCard transitions', () => {
     expect(card.className).not.toMatch(/\btransition-all\b/);
   });
 });
+
+// The fallback hid the picture and appended an empty element of its own to a
+// node React owns, so the card showed nothing at all where the picture was.
+describe('AssetCard picture that fails to load', () => {
+  it.each(['grid', 'list'] as const)('is replaced by the asset type\'s icon in %s view', (viewMode) => {
+    const { container } = renderCard(asset(AssetType.MAP, 'm.png'), viewMode);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('svg.lucide-map-pin')).not.toBeNull();
+  });
+});

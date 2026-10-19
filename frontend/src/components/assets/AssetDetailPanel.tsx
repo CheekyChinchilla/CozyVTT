@@ -54,6 +54,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const [moving, setMoving] = useState(false);
   const [moveError, setMoveError] = useState<string | null>(null);
   const [moveSuccess, setMoveSuccess] = useState(false);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   // Campaigns the user belongs to
   const [userCampaigns, setUserCampaigns] = useState<Campaign[]>([]);
@@ -72,6 +73,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
     setMoveCampaignId('');
     setMoveError(null);
     setMoveSuccess(false);
+    setPreviewFailed(false);
   }, [asset.id]);
 
   // ---------- Permission helpers ----------
@@ -283,24 +285,18 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                       <audio src={getAssetUrl()} controls className="mx-auto" />
                     </div>
                   </div>
+                ) : previewFailed ? (
+                  // In state, as React renders it: the fallback used to
+                  // replace React's own nodes here with innerHTML.
+                  <div className="flex items-center justify-center h-64">
+                    <div className="text-stone-gray/40">Preview not available</div>
+                  </div>
                 ) : (
                   <img
                     src={getAssetUrl()}
                     alt={currentAsset.name}
                     className="w-full h-auto"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.onerror = null;
-                      target.style.display = 'none';
-                      const parent = target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = `
-                          <div class="flex items-center justify-center h-64">
-                            <div class="text-stone-gray/40">Preview not available</div>
-                          </div>
-                        `;
-                      }
-                    }}
+                    onError={() => setPreviewFailed(true)}
                   />
                 )}
               </div>
