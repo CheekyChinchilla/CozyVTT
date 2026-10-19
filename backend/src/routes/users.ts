@@ -4,7 +4,7 @@ import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, signInLocke
 import { prisma } from '../config/database';
 import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
-import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
+import { sanitizeUser, hashPassword, verifyPassword, answeredBusy } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
@@ -401,6 +401,7 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request<{ id: 
       user: sanitizeUser(updatedUser),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     // Another account took the new address after the check above.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(400).json({ error: 'Bad Request', message: 'Email already in use' });
@@ -676,6 +677,7 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       notice: 'This temporary password will only be displayed once. The user will be required to change it on next login, and any active sessions have been signed out.',
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error resetting password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',

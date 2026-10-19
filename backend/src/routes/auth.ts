@@ -1,7 +1,7 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
 import qrcode from 'qrcode';
-import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError } from '../services/auth';
+import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError, answeredBusy } from '../services/auth';
 import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
@@ -245,6 +245,7 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       user: sanitizeUser(user),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     // Only a refusal of what was sent is explained; anything else is the
     // server's, and its text stays in the log.
     if (error instanceof RegistrationError) {
@@ -332,6 +333,7 @@ router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Reques
       mustChangePassword: user.mustChangePassword,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in login', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -565,6 +567,7 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
       message: 'Password has been reset successfully',
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in reset-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -647,6 +650,7 @@ router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: R
       message: 'Password changed successfully',
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in change-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -708,6 +712,7 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
 
     return res.status(200).json({ message: 'Account deleted successfully' });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error deleting account', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete account' });
   }
@@ -770,6 +775,7 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
       secret,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in MFA setup', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to setup MFA' });
   }
@@ -838,6 +844,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
       backupCodes: plainCodes,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in MFA verify', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify MFA token' });
   }
@@ -986,6 +993,7 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
 
     return res.status(200).json(response);
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in MFA verify-login', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify MFA' });
   }
@@ -1056,6 +1064,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
 
     return res.status(200).json({ message: 'MFA disabled successfully' });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error disabling MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to disable MFA' });
   }
@@ -1104,6 +1113,7 @@ router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Req
       backupCodes: plainCodes,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error regenerating backup codes', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to regenerate backup codes' });
   }

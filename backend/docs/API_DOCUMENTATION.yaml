@@ -551,6 +551,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   # ============================================
   # AUTHENTICATION
@@ -673,6 +675,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/login:
     post:
@@ -792,6 +796,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/logout:
     post:
@@ -1011,6 +1017,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/change-password:
     post:
@@ -1096,6 +1104,8 @@ paths:
               example:
                 error: Rate Limited
                 message: Too many wrong passwords, please try again later
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   # ============================================
   # MFA
@@ -1171,6 +1181,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/verify:
     post:
@@ -1243,6 +1255,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/verify-login:
     post:
@@ -1324,6 +1338,8 @@ paths:
                 message: Invalid authentication code. Please try again.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/disable:
     post:
@@ -1405,6 +1421,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/backup-codes:
     post:
@@ -1474,6 +1492,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/account:
     delete:
@@ -1607,6 +1627,8 @@ paths:
                 message: Too many wrong passwords, please try again later
         '500':
           $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/registration-status:
     get:
@@ -1945,6 +1967,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: Failed to update user
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
     delete:
       tags:
@@ -2089,6 +2113,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/users/{id}/preferences:
     get:
@@ -10241,6 +10267,8 @@ paths:
           description: >-
             `Email is already in use`, including when another request created an
             account with the address after the check (this answered 500 before 1.5.2).
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/admin/users/invite:
     post:
@@ -10324,7 +10352,10 @@ paths:
         '502':
           description: The invitation email could not be delivered; no account was created
         '503':
-          description: SMTP is not configured on this instance
+          description: >-
+            SMTP is not configured on this instance, or the server is too busy
+            to hash a password (the message is then `The server is busy, try
+            again in a moment.`, with a `Retry-After` of 5 seconds)
 
   /api/admin/users/{id}/resend-invite:
     post:
@@ -13609,6 +13640,23 @@ components:
           example:
             error: Too Many Requests
             message: Upload rate limit reached. Please slow down and try again in a minute.
+
+    ServerBusy:
+      description: >-
+        Service Unavailable - Too many password hashes or checks are running
+        or waiting (2 run at once, 50 may wait, each for at most 10
+        seconds). Never counted as a wrong password by the sign-in limits.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before trying again (5)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Service Unavailable
+            message: The server is busy, try again in a moment.
 
     ServerError:
       description: Internal Server Error - Something went wrong on the server.

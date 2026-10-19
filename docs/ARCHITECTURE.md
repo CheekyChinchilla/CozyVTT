@@ -662,6 +662,8 @@ erDiagram
 
 CozyVTT uses **express-session** with **connect-pg-simple** to store sessions in PostgreSQL, through a `pg` pool of its own (`sessionPool` in `config/session.ts`), apart from the Prisma client's. This means sessions survive server restarts and scale to multiple processes.
 
+Every password hash and check goes through `hashPassword` and `verifyPassword` (`services/auth.ts`), which run at most `HASH_SLOTS` (2) at once: Argon2id takes 64 MB a hash and a libuv thread, which file reads share. At most `HASH_QUEUE_MAX` (50) wait, each for at most `HASH_WAIT_MS` (10 seconds, inside the sign-in limiters' 15-second wait); past either the call throws `ServerBusyError`, which each route that hashes answers with 503 through `answeredBusy`, never counting it as a wrong password.
+
 ```mermaid
 sequenceDiagram
     participant C as Client

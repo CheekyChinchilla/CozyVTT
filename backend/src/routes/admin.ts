@@ -25,7 +25,7 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { UpdateSystemSettingsSchema } from '../validators/systemSettings';
 import { parseDisplayName, MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
-import { hashPassword, sanitizeUser } from '../services/auth';
+import { hashPassword, sanitizeUser, answeredBusy } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeAdminLog } from '../services/systemLog';
@@ -419,6 +419,7 @@ router.post('/users', async (req, res) => {
       ...(emailSent ? {} : { temporaryPassword }),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error creating user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create user' });
   }
@@ -519,6 +520,7 @@ router.post('/users/invite', async (req, res) => {
       expiresInDays: INVITE_EXPIRY_DAYS,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error inviting user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to invite user' });
   }

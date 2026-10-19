@@ -1,7 +1,7 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
 import { setupState } from '../services/systemSettings';
-import { RegistrationError } from '../services/auth';
+import { RegistrationError, answeredBusy } from '../services/auth';
 import { clientUser } from './auth';
 import { setUpInstance, SetupAlreadyRunError } from '../services/setup';
 import { setupTokenMatches, setupTokenHint } from '../services/setupToken';
@@ -98,6 +98,7 @@ router.post('/init', async (req: Request, res: Response) => {
       user: await clientUser(user),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     if (error instanceof SetupAlreadyRunError) {
       // Another wizard submitted at the same moment got there first.
       return res.status(400).json({

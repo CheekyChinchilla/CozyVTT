@@ -1,5 +1,6 @@
 import argon2 from 'argon2';
 import crypto from 'crypto';
+import type { Response } from 'express';
 import { prisma } from '../config/database';
 import { User, PlatformRole, type Prisma } from '@prisma/client';
 import { validatePasswordStrength, validateEmail } from '../utils/validation';
@@ -71,22 +72,110 @@ export interface LoginInput {
 }
 
 /**
+ * How many password hashes or checks run at once. Each takes 64 MB and a
+ * thread of libuv's four, which file reads share, and a correct password is
+ * never counted by the sign-in limits, so a flood of sign-ins with one could
+ * otherwise fill the pool, stall file serving and push the container towards
+ * its memory limit.
+ */
+export const HASH_SLOTS = 2;
+
+/** How many may wait for a turn; one more is told the server is busy. */
+export const HASH_QUEUE_MAX = 50;
+
+/**
+ * How long one may wait for a turn before it is told the server is busy:
+ * inside the 15 seconds the sign-in limits let a request wait, so the busy
+ * answer arrives first.
+ */
+export const HASH_WAIT_MS = 10_000;
+
+/** What a person is told when the server is too busy to check a password. */
+export const SERVER_BUSY_MESSAGE = 'The server is busy, try again in a moment.';
+
+/**
+ * No turn to hash or check a password came: too many waiting, or the wait ran
+ * out. Every route that hashes answers it with 503 (answeredBusy).
+ */
+export class ServerBusyError extends Error {
+  constructor() {
+    super(SERVER_BUSY_MESSAGE);
+    this.name = 'ServerBusyError';
+  }
+}
+
+let hashesRunning = 0;
+const hashWaiting: Array<() => void> = [];
+
+/** A turn to hash, once one is free; ServerBusyError past the queue or the wait. */
+function hashTurn(): Promise<void> {
+  if (hashesRunning < HASH_SLOTS) {
+    hashesRunning += 1;
+    return Promise.resolve();
+  }
+  if (hashWaiting.length >= HASH_QUEUE_MAX) return Promise.reject(new ServerBusyError());
+  return new Promise((resolve, reject) => {
+    const admit = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      const queued = hashWaiting.indexOf(admit);
+      if (queued !== -1) hashWaiting.splice(queued, 1);
+      reject(new ServerBusyError());
+    }, HASH_WAIT_MS);
+    hashWaiting.push(admit);
+  });
+}
+
+/** Hand the turn to the next waiting, or free it. */
+function endHashTurn(): void {
+  const next = hashWaiting.shift();
+  if (next) next();
+  else hashesRunning -= 1;
+}
+
+async function withHashTurn<T>(work: () => Promise<T>): Promise<T> {
+  await hashTurn();
+  try {
+    return await work();
+  } finally {
+    endHashTurn();
+  }
+}
+
+/**
  * Hash password using Argon2
  * CRITICAL: Passwords must be hashed immediately upon receipt
  */
 export async function hashPassword(password: string): Promise<string> {
-  return await argon2.hash(password, ARGON2_OPTIONS);
+  return withHashTurn(() => argon2.hash(password, ARGON2_OPTIONS));
 }
 
 /**
- * Verify password against hash
+ * Verify password against hash. A hash Argon2 cannot read is false; a busy
+ * server throws ServerBusyError, which must never count as a wrong password.
  */
 export async function verifyPassword(hash: string, password: string): Promise<boolean> {
-  try {
-    return await argon2.verify(hash, password);
-  } catch {
-    return false;
-  }
+  return withHashTurn(async () => {
+    try {
+      return await argon2.verify(hash, password);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
+ * Answer 503 with the busy message when `error` is ServerBusyError, and say
+ * whether it did. Every route that hashes or checks a password asks this
+ * first in its catch.
+ */
+export function answeredBusy(res: Response, error: unknown): boolean {
+  if (!(error instanceof ServerBusyError)) return false;
+  res.setHeader('Retry-After', '5');
+  res.status(503).json({ error: 'Service Unavailable', message: SERVER_BUSY_MESSAGE });
+  return true;
 }
 
 /** A registration checked and hashed, ready to be written. */
@@ -182,7 +271,13 @@ export async function registerUser(input: RegisterInput): Promise<User> {
  */
 let dummyHash: Promise<string> | null = null;
 function dummyPasswordHash(): Promise<string> {
-  if (dummyHash === null) dummyHash = hashPassword(crypto.randomBytes(32).toString('hex'));
+  if (dummyHash === null) {
+    // A hash refused for a busy server is made again next time.
+    dummyHash = hashPassword(crypto.randomBytes(32).toString('hex')).catch((error: unknown) => {
+      dummyHash = null;
+      throw error;
+    });
+  }
   return dummyHash;
 }
 
