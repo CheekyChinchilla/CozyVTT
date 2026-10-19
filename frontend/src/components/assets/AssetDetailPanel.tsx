@@ -25,7 +25,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import campaignService from '../../services/campaign.service';
 import Button from '@/components/ui/Button';
-import { apiErrorText } from '@/utils/errors';
+import { apiErrorMessage } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 
 interface AssetDetailPanelProps {
@@ -187,10 +187,8 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
       setMoveCampaignId('');
       onUpdate?.(updated);
     } catch (err) {
-      // TODO(ui): apiErrorText reads the reply's error field, the short status
-      // label, so a refused move shows only "Forbidden". Read
-      // apiErrorMessage(err) first, which carries the reason.
-      setMoveError(apiErrorText(err) ?? 'Failed to move asset. Please try again.');
+      // The reply's message says why; its error field is only the status label.
+      setMoveError(apiErrorMessage(err) ?? 'Failed to move asset. Please try again.');
     } finally {
       setMoving(false);
     }

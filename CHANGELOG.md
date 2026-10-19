@@ -75,6 +75,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A move the Asset Library refuses says why.** The detail panel showed only "Forbidden". It now shows the server's reason, such as "Only the asset owner or campaign DM can move this asset".
+
 - **A file whose name has accented or other non-ASCII letters keeps its name.** Uploading "café.png" stored and showed it as "cafÃ©.png" in the Asset Library, and a map imported from a Universal VTT file named "Höhle.uvtt" was called "HÃ¶hle". Names are now read as the browser sends them. Files uploaded before keep the names they were stored with, and still download under the right one; upload a file again to show its name correctly.
 
 - **The Upload Asset window takes Ogg and WAV sound files in Firefox, and Markdown documents in every browser.** It checked the type the browser reported for a file against a list of its own, and Firefox reports those sound files under other names, as browsers often report Markdown with none. It refused them with "Invalid file type" though the server takes them. The window now goes by the file's extension, using the server's own list, so it also refuses an M4A file at once, where the server refused it after the upload. The file picker offers only those files.

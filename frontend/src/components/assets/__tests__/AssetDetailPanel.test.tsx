@@ -8,6 +8,8 @@
 
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+
+const patchAssetScope = vi.hoisted(() => vi.fn());
 import AssetDetailPanel from '../AssetDetailPanel';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
@@ -24,6 +26,7 @@ vi.mock('../../../services/api', () => ({
   api: {
     getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
     getAssetDownloadUrl: (id: string) => `https://api.example.com/api/assets/${id}/download`,
+    patchAssetScope: (...args: unknown[]) => patchAssetScope(...args),
   },
 }));
 
@@ -50,5 +53,22 @@ describe('AssetDetailPanel', () => {
     } finally {
       open.mockRestore();
     }
+  });
+});
+
+// It showed the reply's short label, "Forbidden", which says nothing of why.
+describe('a move the server refuses', () => {
+  it('says why', async () => {
+    patchAssetScope.mockRejectedValue(Object.assign(new Error('Request failed with status code 403'), {
+      response: { status: 403, data: { error: 'Forbidden', message: 'Only the asset owner or campaign DM can move this asset' } },
+    }));
+    const art = { ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1' } as unknown as Asset;
+    render(<AssetDetailPanel asset={art} onClose={vi.fn()} onDelete={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Personal' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to Personal' }));
+
+    expect(await screen.findByText('Only the asset owner or campaign DM can move this asset')).toBeInTheDocument();
+    expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
   });
 });
