@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Call of Cthulhu major wound threshold rounds up.** A major wound is damage of at least half an investigator's maximum hit points in one attack, but the editor halved and rounded down, so at 13 hit points it named 6, which is under half. It now names 7; the threshold is saved the next time the investigator is saved.
+
 - **A screen reader names every box in the Pathfinder 2e character editor, and the boxes stop at the length a sheet stores.** Most boxes, every proficiency rank among them, were announced by their placeholder or by nothing; each is now named, such as "Proficiency in Athletics" or "Item bonus to Will saves". Only the character's name stopped at the length the server keeps, so a long paste anywhere else got the save refused; every text box now stops there.
 
 - **A Pathfinder 2e item's value keeps fractions of a gold piece.** The **Value** box took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. An item's quantity can also be 0, and a strike's range of 0 shows as 0 where it showed an empty box.

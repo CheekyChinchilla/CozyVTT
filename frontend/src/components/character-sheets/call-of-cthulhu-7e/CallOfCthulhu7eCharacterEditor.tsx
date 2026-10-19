@@ -69,6 +69,7 @@ import {
   cocMaxSanity,
   cocHalfAndFifth,
   cocDodgeBase,
+  cocMajorWoundThreshold,
 } from '@/utils/rules/callOfCthulhu7e';
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
@@ -273,7 +274,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       // HP
       const maxHP = cocHitPoints(con, siz);
-      const majorWoundThreshold = Math.floor(maxHP / 2);
+      const majorWoundThreshold = cocMajorWoundThreshold(maxHP);
 
       // Magic Points
       const maxMP = cocMagicPoints(pow);
@@ -841,7 +842,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             <div>
               <span className="text-blue-700 font-semibold">Major Wound:</span>{' '}
               <span className="text-blue-900">{formData.derivedStats?.hp?.majorWoundThreshold || 0} HP</span>
-              <div className="text-xs text-blue-600">HP Max / 2</div>
+              <div className="text-xs text-blue-600">Half HP Max, rounded up</div>
             </div>
           </div>
         </div>

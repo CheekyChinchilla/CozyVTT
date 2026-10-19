@@ -38,12 +38,13 @@ export function cocHalfAndFifth(regular: number): { half: number; fifth: number 
   return { half: Math.floor(regular / 2), fifth: Math.floor(regular / 5) };
 }
 
-/** Damage bonus and build, from STR plus SIZ (the rulebook's Table I). */
+/**
+ * Damage bonus and build, from STR plus SIZ (the rulebook's Table I). Past 524
+ * the table goes on: "Add an additional 1D6 to Damage Bonus and +1 to Build
+ * for each additional 80 points or fraction thereof". An investigator's STR
+ * and SIZ stop at 100 each, so only a creature's reach it.
+ */
 export function cocDamageBonusAndBuild(str: number, siz: number): { damageBonus: string; build: number } {
-  // TODO(rules): above 524 the table goes on, adding 1D6 and 1 build for each
-  // further 80 points; this stops at +5D6 and build 6. No investigator reaches
-  // it (each characteristic stops at 99), but a creature entered on the sheet
-  // could. Extend the steps past 524.
   const total = str + siz;
   if (total <= 64) return { damageBonus: '-2', build: -2 };
   if (total <= 84) return { damageBonus: '-1', build: -1 };
@@ -53,7 +54,18 @@ export function cocDamageBonusAndBuild(str: number, siz: number): { damageBonus:
   if (total <= 284) return { damageBonus: '+2d6', build: 3 };
   if (total <= 364) return { damageBonus: '+3d6', build: 4 };
   if (total <= 444) return { damageBonus: '+4d6', build: 5 };
-  return { damageBonus: '+5d6', build: 6 };
+  if (total <= 524) return { damageBonus: '+5d6', build: 6 };
+  const further = Math.ceil((total - 524) / 80);
+  return { damageBonus: `+${5 + further}d6`, build: 6 + further };
+}
+
+/**
+ * The damage that is a major wound: "equal to or greater than half of the
+ * character's maximum hit points in a single attack". Damage is a whole
+ * number, so half is rounded up, and the threshold is never below 1.
+ */
+export function cocMajorWoundThreshold(maxHitPoints: number): number {
+  return Math.max(1, Math.ceil(maxHitPoints / 2));
 }
 
 /**

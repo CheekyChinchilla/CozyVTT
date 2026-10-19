@@ -13,6 +13,7 @@ import {
   cocMoveRate,
   cocMaxSanity,
   cocHalfAndFifth,
+  cocMajorWoundThreshold,
 } from '../rules/callOfCthulhu7e';
 
 describe('hit points', () => {
@@ -42,6 +43,10 @@ describe('damage bonus and build', () => {
     [285, '+3d6', 4], [364, '+3d6', 4],
     [365, '+4d6', 5], [444, '+4d6', 5],
     [445, '+5d6', 6], [524, '+5d6', 6],
+    // "Add an additional 1D6 to Damage Bonus and +1 to Build for each
+    // additional 80 points or fraction thereof" past 524.
+    [525, '+6d6', 7], [604, '+6d6', 7],
+    [605, '+7d6', 8], [700, '+8d6', 9],
   ])('STR plus SIZ of %i gives %s and build %i', (total, damageBonus, build) => {
     // Split the total between the two; only the sum counts.
     const str = Math.floor(total / 2);
@@ -83,5 +88,20 @@ describe('half and fifth values', () => {
   it('are each characteristic halved and divided by five, rounded down', () => {
     expect(cocHalfAndFifth(65)).toEqual({ half: 32, fifth: 13 });
     expect(cocHalfAndFifth(0)).toEqual({ half: 0, fifth: 0 });
+  });
+});
+
+// Keeper Rulebook, "Major wounds": damage "equal to or greater than half of
+// the character's maximum hit points in a single attack". Damage is a whole
+// number, so at 13 hit points a 6 is under half and a 7 is a major wound.
+describe('major wound threshold', () => {
+  it('is half the maximum hit points, rounded up', () => {
+    expect(cocMajorWoundThreshold(13)).toBe(7);
+    expect(cocMajorWoundThreshold(12)).toBe(6);
+  });
+
+  it('is at least 1', () => {
+    expect(cocMajorWoundThreshold(1)).toBe(1);
+    expect(cocMajorWoundThreshold(0)).toBe(1);
   });
 });
