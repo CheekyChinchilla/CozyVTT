@@ -7,6 +7,7 @@
 import React from 'react';
 import { Swords, Plus, Trash2, Dices } from 'lucide-react';
 import Button from '@/components/ui/Button';
+import NumberField from '../../../ui/NumberField';
 import ListLimitNote, { listIsFull } from '../../ListLimitNote';
 import { LIMIT_NOTE_CLASS } from '../limitNoteClass';
 import type { CoC7eWeapon } from '@/types/game-systems';
@@ -159,13 +160,13 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                   {/* Skill Value */}
                   <td className="px-3 py-2 text-center">
                     {editable ? (
-                      <input
-                        type="number"
+                      <NumberField
                         value={weapon.skillValue}
-                        onChange={(e) => handleWeaponChange(index, 'skillValue', parseInt(e.target.value) || 0)}
+                        onChange={(v: number) => handleWeaponChange(index, 'skillValue', v)}
                         className="w-16 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         min={0}
-                        max={99}
+                        max={100}
+                        fallback={0}
                       />
                     ) : (
                       <span className="font-semibold text-sepia-900">{weapon.skillValue}%</span>
@@ -209,12 +210,12 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                   {/* Attacks */}
                   <td className="px-3 py-2 text-center">
                     {editable ? (
-                      <input
-                        type="number"
+                      <NumberField
                         value={weapon.attacks}
-                        onChange={(e) => handleWeaponChange(index, 'attacks', parseInt(e.target.value) || 1)}
+                        onChange={(v: number) => handleWeaponChange(index, 'attacks', v)}
                         className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         min={1}
+                        fallback={1}
                       />
                     ) : (
                       <span className="text-sepia-900">{weapon.attacks}</span>
@@ -226,7 +227,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     {editable ? (
                       <input
                         type="number"
-                        value={weapon.ammo || ''}
+                        value={weapon.ammo ?? ''}
                         onChange={(e) => handleWeaponChange(index, 'ammo', e.target.value ? parseInt(e.target.value) : null)}
                         className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="—"
@@ -242,11 +243,11 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     {editable ? (
                       <input
                         type="number"
-                        value={weapon.malfunction || ''}
+                        value={weapon.malfunction ?? ''}
                         onChange={(e) => handleWeaponChange(index, 'malfunction', e.target.value ? parseInt(e.target.value) : null)}
                         className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="—"
-                        min={1}
+                        min={0}
                         max={100}
                       />
                     ) : (

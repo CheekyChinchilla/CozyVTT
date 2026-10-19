@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { Brain, AlertTriangle, Skull } from 'lucide-react';
+import NumberField from '../../../ui/NumberField';
 
 interface SanityTrackerProps {
   /** Current sanity points */
@@ -93,13 +94,13 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
         <div className="bg-black/20 rounded-md p-2 border border-purple-700/30">
           <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Current</div>
           {editable ? (
-            <input
-              type="number"
+            <NumberField
               value={current}
-              onChange={(e) => onChange?.current(parseInt(e.target.value) || 0)}
+              onChange={(v: number) => onChange?.current(Math.min(v, maximum))}
               className="w-full text-center text-xl font-bold text-white bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
               min={0}
               max={maximum}
+              fallback={0}
             />
           ) : (
             <div className="text-xl font-bold text-white">{current}</div>
@@ -110,13 +111,13 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
         <div className="bg-black/20 rounded-md p-2 border border-purple-700/30">
           <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Start</div>
           {editable ? (
-            <input
-              type="number"
+            <NumberField
               value={starting}
-              onChange={(e) => onChange?.starting(parseInt(e.target.value) || 0)}
+              onChange={(v: number) => onChange?.starting(Math.min(v, 99))}
               className="w-full text-center text-xl font-bold text-purple-100 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
               min={0}
               max={99}
+              fallback={0}
             />
           ) : (
             <div className="text-xl font-bold text-purple-100">{starting}</div>

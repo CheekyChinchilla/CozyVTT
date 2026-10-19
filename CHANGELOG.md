@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Call of Cthulhu box can be cleared and retyped.** Clearing a characteristic, skill, Sanity or weapon skill box to type a new number set it to 0 first, so hit points and the half and fifth columns were worked out for 0 in between, and a Sanity left empty stayed at 0. The boxes now hold what you type, and take up to 100 where a sheet stores it. A weapon's ammunition or malfunction number of 0 shows as 0, where it showed empty.
+
 - **A Call of Cthulhu investigator stored without skills can be saved.** Such an investigator, from an import or a program, opened with no skills, which the server refuses, so it could never be saved. The editor now fills each skill in at the rulebook's base: Dodge at half DEX, the own language at EDU.
 
 - **A Call of Cthulhu investigator with POW 100 can be saved, and current Sanity stays within the maximum.** Starting Sanity is POW, but a sheet holds at most 99, so an investigator with POW 100 and no Sanity yet could not be saved; it now starts at 99. Raising Cthulhu Mythos lowers maximum Sanity, and current Sanity now comes down with it, as the rules say it never rises above the maximum. A maximum Sanity of 0 shows as 0, where it showed 99.

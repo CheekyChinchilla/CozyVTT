@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { Check, Dices } from 'lucide-react';
+import NumberField from '../../../ui/NumberField';
 import type {
   CoC7eSkill,
   CoC7eSkills,
@@ -204,19 +205,15 @@ const SkillRow: React.FC<{
       </div>
 
       {/* Current Value */}
-      {/* TODO(sheets): `parseInt(...) || 0` commits 0 the moment the box is
-         cleared, so selecting a value and typing a new one starts from 0, the
-         problem NumberField exists to solve. Use NumberField here with min at
-         the base value. */}
       <div className="w-14">
         {editable && name !== 'cthulhuMythos' ? (
-          <input
-            type="number"
+          <NumberField
             value={skill.currentValue}
-            onChange={(e) => onChange?.('currentValue', parseInt(e.target.value) || 0)}
+            onChange={(v: number) => onChange?.('currentValue', v)}
             className="w-full text-center text-sm font-semibold text-sepia-900 bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
-            min={skill.baseValue}
-            max={99}
+            min={0}
+            max={100}
+            fallback={skill.baseValue ?? 0}
           />
         ) : (
           <div className="text-center text-sm font-semibold text-sepia-900">
