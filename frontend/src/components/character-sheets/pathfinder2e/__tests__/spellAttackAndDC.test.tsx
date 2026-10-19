@@ -100,3 +100,22 @@ describe('opening a sheet whose DC followed the old rule', () => {
     expect(note()).toBeNull();
   });
 });
+
+describe('the note, on a sheet whose stored modifier is out of date', () => {
+  it('works the DC out from the score, as the editor does', () => {
+    // Intelligence 18 stored with modifier 3; the editor makes it +4, and the
+    // stored DC 21 is right for that.
+    render(
+      <Pathfinder2eCharacterEditor
+        character={pf2eCharacter({
+          level: 3,
+          attributes: { ...attributes, intelligence: { score: 18, modifier: 3 } },
+          spellcasting: { ...spellcasting, spellAttackBonus: { proficiencyRank: 'expert', itemBonus: 0, bonus: 11 }, spellDC: { proficiencyRank: 'expert', itemBonus: 0, dc: 21 } },
+        })}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/changed to follow the rules as it opened/)).toBeNull();
+  });
+});

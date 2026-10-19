@@ -201,7 +201,12 @@ function changedOnOpen(sheet: PF2eFormData): string[] {
     const dcRank = spellcasting.spellDC?.proficiencyRank;
     if (dcRank && dcRank !== rank) changes.push(`spell DC rank (${dcRank} to ${rank})`);
     const dc = spellcasting.spellDC?.dc;
-    const nowDC = pf2eSpellDC(sheet);
+    // The editor works each modifier out from its score before the DC, so
+    // the note does too.
+    const attributes = Object.fromEntries(
+      Object.entries(sheet.attributes ?? {}).map(([name, entry]) => [name, { ...entry, modifier: calculateModifier(entry?.score || 10) }])
+    );
+    const nowDC = pf2eSpellDC({ ...sheet, attributes });
     if (typeof dc === 'number' && dc !== nowDC) changes.push(`spell DC (${dc} to ${nowDC})`);
     const storedSlots = (spellcasting.slots ?? {}) as unknown as Record<string, { expended?: unknown; used?: unknown } | undefined>;
     const readSlots = readPf2eSpellSlots(spellcasting.slots) as unknown as Record<string, { expended: number }>;
