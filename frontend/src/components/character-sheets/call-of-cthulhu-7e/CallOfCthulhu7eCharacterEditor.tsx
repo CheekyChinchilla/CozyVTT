@@ -50,7 +50,7 @@ import { BackstorySection } from './components/BackstorySection';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { LIMIT_NOTE_CLASS } from './limitNoteClass';
-import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
+import { toStoredHexColor, HEX_COLOUR_HINT, headerInk } from '@/utils/themeColor';
 import { setCoC7eSkillField, withCoC7eSkillList } from './skillEdits';
 import { settleSkillBase } from './dodge';
 import {
@@ -534,19 +534,24 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
-    // TODO(ui): the editor's header text and boxes are always white, so on a
-    // pale custom colour such as white the name box cannot be read. Choose
-    // them with headerInk from utils/themeColor, as the read-only sheet does.
+    // Text and boxes light on a dark header and dark on a pale one, as the
+    // read-only sheet's.
+    const ink = headerInk(isCustomColor ? customColorHex : themeColor.hex);
+    const dark = ink.text === 'text-black';
+    const box = dark
+      ? 'bg-black/5 border-black/30 placeholder:text-black/50 focus:ring-black/40'
+      : 'bg-white/10 border-white/30 placeholder:text-white/50 focus:ring-white/60';
+    const refusedBox = dark ? 'border-2 border-black' : 'border-2 border-white';
     const headerClasses = isCustomColor
-      ? 'text-white p-6 rounded-t-lg relative border-b-4 border-white/20'
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} text-white p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
         {/* Color Picker Button */}
         <button
           onClick={() => setShowColorPicker(!showColorPicker)}
-          className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+          className={`absolute top-4 right-4 p-2 ${ink.button} rounded-lg transition-colors`}
           title="Change theme color"
         >
           <Palette className="w-5 h-5" />
@@ -638,7 +643,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         </button>
         <button
           onClick={onCancel}
-          className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+          className={`px-4 py-2 ${ink.button} ${ink.text} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
         >
           <X className="w-4 h-4" />
           <span>Cancel</span>
@@ -657,10 +662,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               <img
                 src={tokenImagePreview}
                 alt={formData.investigatorName || 'Investigator'}
-                className="w-24 h-24 rounded-full border-4 border-white/20 object-cover shadow-xl group-hover:opacity-75 transition-opacity"
+                className={`w-24 h-24 rounded-full border-4 ${ink.border} object-cover shadow-xl group-hover:opacity-75 transition-opacity`}
               />
             ) : (
-              <div className="w-24 h-24 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center shadow-xl group-hover:bg-black/60 transition-colors">
+              <div className={`w-24 h-24 rounded-full border-4 ${ink.border} bg-black/70 flex items-center justify-center shadow-xl group-hover:bg-black/60 transition-colors`}>
                 <Upload className="w-8 h-8 text-white/60" />
               </div>
             )}
@@ -673,12 +678,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             className="hidden"
           />
           {errors.tokenImage && (
-            <div className="absolute top-full mt-1 text-xs text-white/90 whitespace-nowrap">
+            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
               {errors.tokenImage}
             </div>
           )}
           {!character.campaignId && (
-            <div className="absolute top-full mt-1 text-xs text-white/90 whitespace-nowrap">
+            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
               Saves as personal token
             </div>
           )}
@@ -695,13 +700,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
             aria-label="Investigator name"
-            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+            className={`text-3xl font-bold border-2 ${box} rounded-sm px-3 py-1 w-full ${ink.text} focus:outline-hidden focus:ring-2`}
           />
 
           <div className="grid grid-cols-3 gap-3">
             {/* Read-only: the player name is whoever owns this investigator,
                 filled from their display name at creation. */}
-            <span className="text-sm px-2 py-1 text-white self-center">
+            <span className={`text-sm px-2 py-1 ${ink.text} self-center`}>
               {formData.playerName || '—'}
             </span>
             <input
@@ -711,7 +716,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Occupation"
               aria-label="Occupation"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className={`text-sm bg-white/10 ${errors.occupation ? 'border-2 border-white' : 'border border-white/30'} rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60`}
+              className={`text-sm ${box} ${errors.occupation ? refusedBox : 'border'} rounded-sm px-2 py-1 ${ink.text} focus:outline-hidden focus:ring-2`}
             />
             <input
               type="text"
@@ -720,7 +725,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Era (e.g., 1920s)"
               aria-label="Era"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className={`text-sm bg-white/10 ${errors.era ? 'border-2 border-white' : 'border border-white/30'} rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60`}
+              className={`text-sm ${box} ${errors.era ? refusedBox : 'border'} rounded-sm px-2 py-1 ${ink.text} focus:outline-hidden focus:ring-2`}
             />
           </div>
 
@@ -733,7 +738,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               aria-label="Age"
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+              className={`text-sm border ${box} rounded-sm px-2 py-1 ${ink.text} focus:outline-hidden focus:ring-2`}
               fallback={0}
             />
             <input
@@ -743,7 +748,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Sex"
               aria-label="Sex"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+              className={`text-sm border ${box} rounded-sm px-2 py-1 ${ink.text} focus:outline-hidden focus:ring-2`}
             />
             <input
               type="text"
@@ -752,7 +757,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Residence"
               aria-label="Residence"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+              className={`text-sm border ${box} rounded-sm px-2 py-1 col-span-2 ${ink.text} focus:outline-hidden focus:ring-2`}
             />
           </div>
 
@@ -763,7 +768,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             placeholder="Birthplace"
             aria-label="Birthplace"
             maxLength={SHEET_SHORT_TEXT_MAX}
-            className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+            className={`text-sm border ${box} rounded-sm px-2 py-1 w-full ${ink.text} focus:outline-hidden focus:ring-2`}
           />
         </div>
       </div>
