@@ -97,4 +97,17 @@ describe('Create & Publish as Template', () => {
     await waitFor(() => expect(screen.queryByText('Database unavailable')).toBeNull());
     expect(createCharacterTemplate).not.toHaveBeenCalled();
   });
+
+  it('publishes the sheet as the character was stored', async () => {
+    const stored = { sections: [{ id: 'sec-1', title: 'Notes', type: 'text', content: '' }], characterName: 'Aldra' };
+    createCharacter.mockImplementationOnce((body: { name: string }) =>
+      Promise.resolve({ message: 'ok', character: { id: 'char-1', userId: 'user-1', campaignId: null, gameSystem: null, name: body.name, data: stored } })
+    );
+    show();
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create & Publish as Template/ }));
+
+    await waitFor(() => expect(createCharacterTemplate).toHaveBeenCalled());
+    expect(createCharacterTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Aldra', gameSystem: null, data: stored }));
+  });
 });

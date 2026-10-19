@@ -217,17 +217,22 @@ export default function NewCharacterModal({
         data: templateData as unknown as import('@/types').CharacterData,
       });
 
-      // Optionally publish the same sheet as a shared template. Done after the
-      // character exists, and failing softly: the character is the thing the
-      // user asked for, so a template error must not lose it.
+      // Optionally publish the character's sheet as a shared template: the
+      // sheet as the server stored it, with the name and anything else it
+      // filled in, and not the starter sheet sent. Done after the character
+      // exists, and failing softly: the character is the thing the user asked
+      // for, so a template error must not lose it.
       if (publishTemplate) {
         try {
           await api.createCharacterTemplate({
             name: name.trim(),
-            gameSystem: gameSystem || null,
-            data: templateData,
+            gameSystem: response.character.gameSystem ?? null,
+            data: response.character.data,
           });
         } catch {
+          // TODO(ui): this message is set and the dialog then closes, so it
+          // is never seen until the dialog is next opened, where it greets a
+          // new character. Say it after closing, as a toast on the page.
           setError(
             'Character created, but publishing it as a template failed. You can retry with "Save as Template" in the editor.'
           );
