@@ -37,6 +37,7 @@ import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validato
 import { escapeLikePattern } from '../utils/likePattern';
 import { standingInvitation, isStanding } from '../utils/invitationState';
 import { CAMPAIGN_LIMITS } from '../validators/campaignLimits';
+import { downloadOnly } from '../middleware/downloadOnly';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -2144,7 +2145,7 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
  * Requires: Campaign DM role. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
  * (20 by default), and one archive operation at a time.
  */
-router.get('/:campaignId/export', campaignDM, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:campaignId/export', campaignDM, downloadOnly, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
   await whileHoldingArchiveSlot(res, async () => {
     const { campaignId } = req.params;
     const includeAudio = req.query.includeAudio === 'true';

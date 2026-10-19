@@ -5,6 +5,8 @@ import path from 'path';
 import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
+import { downloadOnly } from '../middleware/downloadOnly';
+import { oneCampaignArchiveAtATime } from '../middleware/campaignArchiveLimits';
 import { prisma } from '../config/database';
 import {
   canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
@@ -768,6 +770,10 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
 router.get(
   '/:id/export-uvtt',
   campaignDM,
+  downloadOnly,
+  // The picture is read whole and encoded in memory, so one at a time for
+  // each user, as campaign archives are.
+  oneCampaignArchiveAtATime,
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const { campaignId, id } = req.params;

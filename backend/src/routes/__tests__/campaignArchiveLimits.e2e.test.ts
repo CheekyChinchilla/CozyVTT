@@ -213,4 +213,21 @@ describe('one archive at a time', () => {
     }
     expect(after).toBe(200);
   }, 30_000);
+
+  it('counts a map export as an archive', async () => {
+    const { user, cookie } = await signedIn('map-export');
+    const campaignId = (await createTestCampaign(user.id, { name: 'Map export slot' })).id;
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+    const mapId = (await prisma.map.create({
+      data: { campaignId, name: 'Room', imageUrl: '', baseLayerUrl: '', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+    })).id;
+    const slow = startSlowUpload(cookie);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const refused = await send(cookie, 'GET', `/api/campaigns/${campaignId}/maps/${mapId}/export-uvtt`);
+      expect(refused.status).toBe(429);
+    } finally {
+      slow.destroy();
+    }
+  }, 30_000);
 });

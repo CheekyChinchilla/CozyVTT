@@ -132,8 +132,10 @@ info:
       `POST /api/campaigns/import` and `GET /api/campaigns/{campaignId}/export`):
       20 of each per hour per user, counted apart (configurable via
       `CAMPAIGN_ARCHIVE_RATE_LIMIT`), and one archive operation at a time per
-      user across all three. Past either, the route answers 429; a request
-      refused for overlapping another is not counted against the hour
+      user across all three and the Universal VTT map export
+      (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`). Past either,
+      the route answers 429; a request refused for overlapping another is not
+      counted against the hour
     - All the notes of a campaign you have left
       (`GET /api/campaigns/left/{campaignId}/notes`): 60 per hour per user,
       answering 429 `Too Many Requests` past that
@@ -9017,7 +9019,17 @@ paths:
                 type: string
                 format: binary
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller is not the campaign's DM, or the browser marked the
+            request as loading part of a page (`Sec-Fetch-Dest` present and
+            not `empty` or `document`): `An export is downloaded by the app
+            or opened directly, not loaded into a page`. The app's own fetch,
+            a direct visit and a script, which sends no `Sec-Fetch-Dest`, are
+            served.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             The campaign was deleted after the DM check passed and before the
@@ -11353,11 +11365,34 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller is not the campaign's DM, or the browser marked the
+            request as loading part of a page (`Sec-Fetch-Dest` present and
+            not `empty` or `document`): `An export is downloaded by the app
+            or opened directly, not loaded into a page`. The app's own fetch,
+            a direct visit and a script, which sends no `Sec-Fetch-Dest`, are
+            served.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          description: >-
+            The caller already has a campaign export, import or preview, or
+            another map export, running. The picture is read whole and encoded
+            in memory, so a map export takes the same one-at-a-time slot as a
+            campaign archive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   /api/admin/backups/restore:
     post:
