@@ -47,6 +47,7 @@ import type {
 } from '../../../types/game-systems';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
+import { readPf2eSpellSlots } from './spellcastingEntries';
 import { shouldUseWhiteText } from '@/utils/themeColor';
 
 interface Pathfinder2eCharacterViewProps {
@@ -817,7 +818,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <h4 className="font-semibold text-purple-800 mb-2">Spell Slots</h4>
           <div className="grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
-              const slot = spellcasting.slots?.[rank.toString() as keyof PF2eSpellSlots] || { total: 0, expended: 0 };
+              // Read as the editor reads them: an older sheet's count under
+              // `used`, and never more used than the total.
+              const slot = readPf2eSpellSlots(spellcasting.slots)[rank.toString() as keyof PF2eSpellSlots];
               if (slot.total === 0) return null;
 
               // Never below none, whatever a sheet from elsewhere stores.
@@ -883,8 +886,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-purple-800">Focus Spells</h4>
               <span className="text-sm font-medium text-purple-700">
-                {spellcasting.focusSpells.focusPoints?.current || 0} /{' '}
-                {spellcasting.focusSpells.focusPoints?.total || 0} Focus Points
+                {/* No more left than the pool holds, as the editor keeps it. */}
+                {Math.min(spellcasting.focusSpells.focusPoints?.current ?? 0, spellcasting.focusSpells.focusPoints?.total ?? 0)} /{' '}
+                {spellcasting.focusSpells.focusPoints?.total ?? 0} Focus Points
               </span>
             </div>
             <div className="flex flex-wrap gap-2">

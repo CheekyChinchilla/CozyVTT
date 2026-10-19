@@ -10,6 +10,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Pathfinder2eCharacterEditor } from '../Pathfinder2eCharacterEditor';
+import { Pathfinder2eCharacterView } from '../Pathfinder2eCharacterView';
 import type { CharacterData } from '../../../../types';
 import { PF2E_BLANK_SHEET, pf2eCharacter } from './pf2eFixture';
 
@@ -65,5 +66,18 @@ describe('the focus pool', () => {
     const save = open(1, 3, [spell('Lay on Hands')]);
     expect(screen.getByText(/changed to follow the rules as it opened/)).toHaveTextContent('focus points left (3 to 1)');
     expect(await save()).toEqual({ total: 1, current: 1 });
+  });
+});
+
+describe('the read-only sheet', () => {
+  it('shows no more focus points left than the pool holds', () => {
+    render(<Pathfinder2eCharacterView character={pf2eCharacter({ spellcasting: { ...spellcasting, focusSpells: { focusPoints: { total: 1, current: 3 }, spells: [spell('Lay on Hands')] } } })} />);
+    expect(screen.getByText(/Focus Points/).textContent).toContain('1 / 1');
+  });
+
+  it('reads a slot count stored under its old name', () => {
+    const slots = { ...(spellcasting.slots as Record<string, unknown>), '1': { total: 3, used: 1 } };
+    render(<Pathfinder2eCharacterView character={pf2eCharacter({ spellcasting: { ...spellcasting, slots } })} />);
+    expect(screen.queryByText(/NaN/)).toBeNull();
   });
 });
