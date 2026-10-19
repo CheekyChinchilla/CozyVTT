@@ -67,7 +67,13 @@ import {
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
 import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
-import { SHEET_LIST_MAX, SHEET_NAME_MAX, SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
+import {
+  DND5E_ATTACK_DAMAGE_ROLLS_MAX,
+  DND5E_CUSTOM_SKILLS_MAX,
+  SHEET_LIST_MAX,
+  SHEET_NAME_MAX,
+  SPELL_SLOTS_MAX,
+} from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
 import { COLOR_PRESETS } from './colorPresets';
 
@@ -1454,9 +1460,6 @@ min={1}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
         <div className="flex items-center justify-between mb-1">
           <h3 className="text-lg font-semibold text-stone-800">Your Own Skills</h3>
-          {/* TODO(sheets): the schema keeps at most 30 of these and this button
-              has no limit, so a 31st skill makes a sheet that cannot be saved.
-              Turn the button off at the limit, as the lists below do. */}
           <button
             type="button"
             onClick={() =>
@@ -1465,11 +1468,13 @@ min={1}
                 { name: '', ability: 'dexterity', proficient: true, expertise: false },
               ])
             }
-            className="px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors"
+            disabled={listIsFull(formData.customSkills, DND5E_CUSTOM_SKILLS_MAX)}
+            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Skill
           </button>
         </div>
+        <ListLimitNote full={listIsFull(formData.customSkills, DND5E_CUSTOM_SKILLS_MAX)} max={DND5E_CUSTOM_SKILLS_MAX} />
         <p className="text-xs text-stone-500 mb-3">
           Tool proficiencies, or anything your table made up. Pick the ability it uses
           and the bonus is worked out for you.
@@ -2109,9 +2114,6 @@ min={0}
                   <label className="block text-xs font-semibold text-stone-600">
                     Other Damage Rolls
                   </label>
-                  {/* TODO(sheets): the schema keeps at most 10 of these per
-                      attack and this button has no limit, so an 11th makes a
-                      sheet that cannot be saved. Turn it off at the limit. */}
                   <button
                     type="button"
                     onClick={() =>
@@ -2120,11 +2122,16 @@ min={0}
                         { label: '', damageRoll: '', damageType: '' },
                       ])
                     }
-                    className="px-2 py-0.5 text-xs font-medium text-red-700 hover:text-red-900"
+                    disabled={listIsFull(attack.additionalDamage, DND5E_ATTACK_DAMAGE_ROLLS_MAX)}
+                    className={`px-2 py-0.5 text-xs font-medium text-red-700 hover:text-red-900 ${ADD_BUTTON_OFF}`}
                   >
                     + Add Damage Roll
                   </button>
                 </div>
+                <ListLimitNote
+                  full={listIsFull(attack.additionalDamage, DND5E_ATTACK_DAMAGE_ROLLS_MAX)}
+                  max={DND5E_ATTACK_DAMAGE_ROLLS_MAX}
+                />
                 {(attack.additionalDamage || []).map((entry, dmgIndex) => (
                   <div key={dmgIndex} className="flex gap-2 mb-1">
                     <input

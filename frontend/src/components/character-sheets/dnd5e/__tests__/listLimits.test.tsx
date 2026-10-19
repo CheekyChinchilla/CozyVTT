@@ -10,6 +10,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { DnD5eCharacterEditor } from '../DnD5eCharacterEditor';
 import { dnd5eCharacter } from './dnd5eFixture';
+import { DND5E_ATTACK_DAMAGE_ROLLS_MAX, DND5E_CUSTOM_SKILLS_MAX } from '@/constants/sheetLimits';
 
 vi.mock('@/hooks/queries', () => ({
   useServerConfigQuery: () => ({ data: undefined }),
@@ -78,5 +79,30 @@ describe('the cantrips box', () => {
     expect(cantrips().value).toBe('Light, Mage Hand, Guidance');
     fireEvent.change(cantrips(), { target: { value: 'Light, Mage Hand, Guidance, Druidcraft' } });
     expect(cantrips().value).toBe('Light, Mage Hand, Guidance');
+  });
+});
+
+describe('the lists with a lower limit of their own', () => {
+  const custom = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `Tool ${i}`, ability: 'dexterity', proficient: true }));
+  const damage = (n: number) => Array.from({ length: n }, () => ({ label: 'Two hands', damageRoll: '1d8', damageType: 'slashing' }));
+  const fullAt = (max: number) => new RegExp(`This list is full: a sheet holds at most ${max} entries here`);
+
+  it('turns + Add Skill off at the custom skill limit', () => {
+    open(/Stats/, { customSkills: custom(DND5E_CUSTOM_SKILLS_MAX) });
+    expect(screen.getByRole('button', { name: '+ Add Skill' })).toBeDisabled();
+    expect(screen.getByText(fullAt(DND5E_CUSTOM_SKILLS_MAX))).toBeInTheDocument();
+  });
+
+  it('keeps + Add Skill on below it', () => {
+    open(/Stats/, { customSkills: custom(DND5E_CUSTOM_SKILLS_MAX - 1) });
+    expect(screen.getByRole('button', { name: '+ Add Skill' })).toBeEnabled();
+  });
+
+  it('turns + Add Damage Roll off at the limit for that attack alone', () => {
+    open(/Combat/, { attacks: [{ ...attack('Spear'), additionalDamage: damage(DND5E_ATTACK_DAMAGE_ROLLS_MAX) }, attack('Dagger')] });
+    const [spear, dagger] = screen.getAllByRole('button', { name: '+ Add Damage Roll' });
+    expect(spear).toBeDisabled();
+    expect(dagger).toBeEnabled();
+    expect(screen.getByText(fullAt(DND5E_ATTACK_DAMAGE_ROLLS_MAX))).toBeInTheDocument();
   });
 });

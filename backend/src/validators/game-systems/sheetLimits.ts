@@ -72,3 +72,16 @@ export const SHEET_ROW_TAGS_MAX = 50;
  */
 export const PF2E_ITEM_BONUS_MIN = -30;
 export const PF2E_ITEM_BONUS_MAX = 30;
+
+/**
+ * D&D 5e: skills of the player's own, such as tool proficiencies. A character
+ * proficient in every tool in the rules has about forty, and nobody records
+ * them all as skills.
+ */
+export const DND5E_CUSTOM_SKILLS_MAX = 30;
+
+/**
+ * D&D 5e: further damage lines on one attack, such as a versatile weapon's
+ * two-handed die or a spell's damage at a higher level.
+ */
+export const DND5E_ATTACK_DAMAGE_ROLLS_MAX = 10;

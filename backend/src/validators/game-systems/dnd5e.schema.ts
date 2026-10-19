@@ -12,7 +12,7 @@ import {
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
-import { SPELL_SLOTS_MAX } from './sheetLimits';
+import { DND5E_ATTACK_DAMAGE_ROLLS_MAX, DND5E_CUSTOM_SKILLS_MAX, SPELL_SLOTS_MAX } from './sheetLimits';
 import { sheetList } from './sheetLists';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
 
@@ -215,7 +215,7 @@ const attackSchema = z.object({
   // cannot be used as storage, the same reason token conditions are bounded.
   properties: z.array(z.string().max(60)).max(20).optional(),
   notes: longText.optional(),
-  additionalDamage: z.array(additionalDamageSchema).max(10).optional(),
+  additionalDamage: z.array(additionalDamageSchema).max(DND5E_ATTACK_DAMAGE_ROLLS_MAX).optional(),
 });
 
 /**
@@ -366,7 +366,7 @@ export const dnd5eCharacterDataSchema = z.object({
   inspiration: z.boolean().optional(),
   savingThrows: savingThrowsSchema.optional(),
   skills: skillsSchema.optional(),
-  customSkills: z.array(customSkillSchema).max(30).optional(),
+  customSkills: z.array(customSkillSchema).max(DND5E_CUSTOM_SKILLS_MAX).optional(),
   passivePerception: z.number().int().min(1).optional(),
   // Additions to passive Perception that are not the Perception skill itself:
   // the Observant feat's +5, and items that raise passive scores. Mirrors
