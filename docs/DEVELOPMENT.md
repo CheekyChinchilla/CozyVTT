@@ -614,6 +614,9 @@ Some of those deserve a note:
   box) differs between the two, when the campaign limits file
   (`backend/src/validators/campaignLimits.ts`, copied as
   `frontend/src/constants/campaignLimits.ts` for the campaign dialogs)
+  differs between the two, when the upload types file
+  (`backend/src/validators/uploadTypes.ts`, copied as
+  `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
   differs between the two,
   when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server

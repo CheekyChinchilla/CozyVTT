@@ -57,7 +57,6 @@ _Nothing at present._
 - `1.5.4` **In Chrome, the document reader shows a blocked page for a PDF.** Chrome's PDF viewer does not run in the reader's sandboxed frame; opening the file directly works (`DocumentReader.tsx`).
 - `1.5.4` **In Firefox, asset cards fade in twice as the library opens,** because their hover transition also covers their opacity (`AssetCard.tsx`).
 - `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
-- `1.5.4` **In Firefox, the Upload Asset dialog refuses Ogg and WAV audio files** with "Invalid file type". Firefox names them `application/ogg` and `audio/x-wav`, which the dialog's own list does not include; the server would take them. Upload them from another browser, or as MP3 (`AssetUploadModal.tsx`).
 
 ### Play and connection
 

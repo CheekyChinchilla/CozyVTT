@@ -75,6 +75,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The Upload Asset window takes Ogg and WAV sound files in Firefox, and Markdown documents in every browser.** It checked the type the browser reported for a file against a list of its own, and Firefox reports those sound files under other names, as browsers often report Markdown with none. It refused them with "Invalid file type" though the server takes them. The window now goes by the file's extension, using the server's own list, so it also refuses an M4A file at once, where the server refused it after the upload. The file picker offers only those files.
+
 - **Searching a library for `%` or `_` finds only names that hold one.** In the Asset Library, the creature library, the token templates and the character templates, a `%` in the search matched every name and an `_` any one letter. They are now matched as typed, as in the Invite Player search.
 
 - **A mistyped `ASSET_UPLOAD_RATE_LIMIT` no longer turns the upload limit off.** A value that was not a number, such as `30/min`, let every upload through. Such a value is now ignored, with a warning in the backend log, and the default of 30 uploads a minute per user applies, as for the other limits.

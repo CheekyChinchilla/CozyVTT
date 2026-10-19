@@ -64,6 +64,11 @@
  * campaign over them and the campaign dialogs stop each box at them. The file
  * is kept identical in both packages.
  *
+ * The files each kind of asset may be uploaded as. The server decides by a
+ * file's bytes; the Upload Asset dialog checks a file's extension against the
+ * same list, and refused Ogg, WAV and Markdown files the server takes while
+ * its own list differed. The file is kept identical in both packages.
+ *
  * The campaign archive format version. The import window reads an archive's
  * manifest in the browser and shows it only for the version the server
  * imports; for any other it asks the server, sending the archive twice.
@@ -412,6 +417,12 @@ describe('the limits on a token\'s conditions', () => {
 describe('the limits on a campaign\'s name and description', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/campaignLimits.ts')).toBe(read('backend/src/validators/campaignLimits.ts'));
+  });
+});
+
+describe('the files each kind of asset may be uploaded as', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));
   });
 });
 

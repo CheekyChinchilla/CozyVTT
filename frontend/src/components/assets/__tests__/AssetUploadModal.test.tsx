@@ -174,3 +174,44 @@ describe('the name, description and tags', () => {
     expect(((await screen.findByPlaceholderText('Enter asset name...')) as HTMLInputElement).value).toHaveLength(200);
   });
 });
+
+// The dialog kept a list of its own of the types browsers report, which had
+// drifted from what the server takes: Firefox reports an Ogg file as
+// application/ogg and a WAV as audio/x-wav, a browser often reports Markdown
+// with no type at all, and M4A passed here to be refused by the server. The
+// dialog now checks the file's extension against the server's own list.
+describe('the files the dialog takes', () => {
+  beforeEach(() => { campaigns = []; });
+
+  function choose(type: AssetType, name: string, browserType: string) {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} defaultType={type} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], name, { type: browserType })] } });
+  }
+
+  it.each([
+    [AssetType.AUDIO, 'rain.ogg', 'application/ogg'],
+    [AssetType.AUDIO, 'thunder.wav', 'audio/x-wav'],
+    [AssetType.AUDIO, 'Tavern.MP3', 'audio/mpeg'],
+    [AssetType.DOCUMENT, 'notes.md', ''],
+    [AssetType.MAP, 'cave.jpeg', 'image/jpeg'],
+  ])('takes %s file %s, reported as "%s"', async (type, name, browserType) => {
+    choose(type, name, browserType);
+    expect(await screen.findByText(name)).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid file type/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [AssetType.AUDIO, 'song.m4a', 'audio/mp4', '.mp3, .ogg, .wav'],
+    [AssetType.MAP, 'animation.gif', 'image/gif', '.png, .jpg, .jpeg, .webp'],
+    [AssetType.DOCUMENT, 'page.html', 'text/html', '.pdf, .txt, .md'],
+  ])('refuses %s file %s, which the server would refuse', async (type, name, browserType, listed) => {
+    choose(type, name, browserType);
+    expect(await screen.findByText(`Invalid file type. Allowed types: ${listed}`)).toBeInTheDocument();
+  });
+
+  it('offers only those files in the file picker', () => {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} defaultType={AssetType.AUDIO} />);
+    expect(document.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('.mp3,.ogg,.wav');
+  });
+});
