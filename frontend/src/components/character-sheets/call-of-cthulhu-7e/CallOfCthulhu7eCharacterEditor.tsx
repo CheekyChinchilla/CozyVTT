@@ -86,6 +86,9 @@ interface CallOfCthulhu7eCharacterEditorProps {
 
 type TabId = 'overview' | 'skills' | 'combat' | 'possessions' | 'backstory';
 
+/** The required names Save checks, whose old messages a new check replaces. */
+const REQUIRED_NAMES_CHECKED = { occupation: true, era: true };
+
 interface Tab {
   id: TabId;
   label: string;
@@ -430,6 +433,22 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       setShowColorPicker(true);
       return;
     }
+    // Names the server requires: say which are missing, and open the tab of the first.
+    const blank = (value: string | undefined) => (value ?? '').trim() === '';
+    const missing: Record<string, string> = {};
+    if (blank(formData.occupation)) missing.occupation = 'Occupation is required';
+    if (blank(formData.era)) missing.era = 'Era is required';
+    (formData.combat?.weapons ?? []).forEach((weapon, i) => {
+      if (blank(weapon.name)) missing[`combat.weapons.${i}.name`] = 'Name this weapon, or remove it';
+    });
+    setErrors((prev) => {
+      const kept = Object.fromEntries(Object.entries(prev).filter(([key]) => !(key in REQUIRED_NAMES_CHECKED) && !key.startsWith('combat.weapons.')));
+      return { ...kept, ...missing };
+    });
+    if (Object.keys(missing).length > 0) {
+      if (Object.keys(missing).some((key) => key.startsWith('combat.'))) setActiveTab('combat');
+      return;
+    }
     setIsSaving(true);
     try {
       // Include color customization in saved data
@@ -684,7 +703,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Occupation"
               aria-label="Occupation"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+              className={`text-sm bg-white/10 ${errors.occupation ? 'border-2 border-white' : 'border border-white/30'} rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60`}
             />
             <input
               type="text"
@@ -693,7 +712,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Era (e.g., 1920s)"
               aria-label="Era"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
+              className={`text-sm bg-white/10 ${errors.era ? 'border-2 border-white' : 'border border-white/30'} rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60`}
             />
           </div>
 
@@ -1313,6 +1332,14 @@ value={formData.wealth?.cash}
   );
 
   // Main render
+  const refusals = [
+    ...new Set(
+      Object.entries(errors)
+        .filter(([key, message]) => message && (key in REQUIRED_NAMES_CHECKED || key.startsWith('combat.weapons.')))
+        .map(([, message]) => message)
+    ),
+  ];
+
   return (
     <div
       className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg"
@@ -1322,6 +1349,16 @@ value={formData.wealth?.cash}
     >
       {renderHeader()}
       {renderTabs()}
+      {refusals.length > 0 && (
+        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+          <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
+          <ul className="list-disc pl-5">
+            {refusals.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
