@@ -22,6 +22,16 @@ const FORMAT_VERSION = 1;
 /** A manifest is a few hundred bytes; anything far larger is not one to read here. */
 const MANIFEST_READ_LIMIT = 1024 * 1024;
 
+/**
+ * The most compressed manifest read here. DEFLATE can unpack about a
+ * thousand times its size, so this, fed to the decompressor in slices, keeps
+ * what a hostile archive can make this tab unpack small.
+ */
+const COMPRESSED_READ_LIMIT = 64 * 1024;
+
+/** How much compressed input the decompressor is handed at a time. */
+const INPUT_SLICE = 16 * 1024;
+
 /** The list of files a ZIP keeps at its end, read here up to this size. */
 const DIRECTORY_READ_LIMIT = 4 * 1024 * 1024;
 
@@ -94,18 +104,27 @@ function findManifest(directory: DataView): ManifestEntry | null {
   return null;
 }
 
-/** A stream of one chunk. */
-function streamOf(bytes: BufferSource): ReadableStream<BufferSource> {
-  return new ReadableStream({
-    start(controller) {
-      controller.enqueue(bytes);
-      controller.close();
+/**
+ * `bytes` as a stream of slices, each handed over only when the reader asks:
+ * a decompressor unpacks a whole chunk before anyone can stop it, so it is
+ * never given more than a slice at once.
+ */
+function streamOf(bytes: Uint8Array<ArrayBuffer>): ReadableStream<BufferSource> {
+  let at = 0;
+  return new ReadableStream<BufferSource>({
+    pull(controller) {
+      if (at >= bytes.byteLength) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(bytes.subarray(at, at + INPUT_SLICE));
+      at += INPUT_SLICE;
     },
   });
 }
 
 /** Unpack a DEFLATE stream, giving up past `limit` bytes. */
-async function inflate(packed: BufferSource, limit: number): Promise<Uint8Array | null> {
+async function inflate(packed: Uint8Array<ArrayBuffer>, limit: number): Promise<Uint8Array | null> {
   const reader = streamOf(packed).pipeThrough(new DecompressionStream('deflate-raw')).getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
@@ -129,7 +148,7 @@ async function inflate(packed: BufferSource, limit: number): Promise<Uint8Array 
 }
 
 async function manifestBytes(file: Blob, entry: ManifestEntry): Promise<Uint8Array | null> {
-  if (entry.size > MANIFEST_READ_LIMIT || entry.compressedSize > MANIFEST_READ_LIMIT) return null;
+  if (entry.size > MANIFEST_READ_LIMIT || entry.compressedSize > COMPRESSED_READ_LIMIT) return null;
   const header = await bytesOf(file, entry.headerOffset, entry.headerOffset + 30);
   if (header.byteLength < 30 || header.getUint32(0, true) !== LOCAL_HEADER) return null;
   const start = entry.headerOffset + 30 + header.getUint16(26, true) + header.getUint16(28, true);

@@ -89,4 +89,34 @@ describe('readArchiveManifest', () => {
     new DataView(bytes.buffer).setUint32(bytes.byteLength - 22 + 16, 0xffffffff, true);
     expect(await readArchiveManifest(new Blob([bytes as BlobPart]))).toBeNull();
   });
+
+  // Text that does not compress, so its compressed size is about its length.
+  const noise = (length: number) => {
+    const letters = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let x = 2463534242;
+    let out = '';
+    for (let i = 0; i < length; i += 1) {
+      x ^= x << 13;
+      x ^= x >>> 17;
+      x ^= x << 5;
+      x >>>= 0;
+      out += letters[x % letters.length];
+    }
+    return out;
+  };
+
+  // A manifest is a few hundred bytes. Handed to the decompressor whole, a
+  // compressed one near the old 1 MB cap could unpack to far more than the
+  // 1 MB the reader stops at before it could stop.
+  it('leaves a manifest over 64 KB compressed to the server', async () => {
+    const file = await archive([{ name: 'manifest.json', data: JSON.stringify({ ...manifest, exportedFrom: noise(100_000) }) }]);
+    expect(await readArchiveManifest(file)).toBeNull();
+  });
+
+  it('reads a compressed manifest larger than one slice of its input', async () => {
+    const long = { ...manifest, exportedFrom: noise(40_000) };
+    const file = await archive([{ name: 'manifest.json', data: JSON.stringify(long) }]);
+    expect(await readArchiveManifest(file)).toEqual(long);
+  });
 });
+
