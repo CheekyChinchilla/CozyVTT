@@ -1169,15 +1169,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       <div className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
         <div className="absolute top-4 right-16 flex items-center space-x-2">
-          <Button
-            variant="primary"
+          {/* Fixed colours: the header is the player's colour, not the theme's. */}
+          <button
+            type="button"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="flex items-center space-x-2 shadow-lg"
+            className="px-4 py-2 bg-white text-black hover:bg-white/90 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
             <span>{isSaving ? 'Saving...' : 'Save'}</span>
-          </Button>
+          </button>
           <button
             onClick={onCancel}
             className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"

@@ -18,6 +18,7 @@ import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
 import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
 import { COLOR_PRESETS as COC_PRESETS } from '../call-of-cthulhu-7e/colorPresets';
 import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
+import { CallOfCthulhu7eCharacterEditor } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { COC_BLANK_SHEET, cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
@@ -75,5 +76,20 @@ describe('the Call of Cthulhu sheet', () => {
     const mark = ticked('Dark Forest');
     expect(mark).toHaveStyle({ backgroundColor: '#14532d' });
     expect(mark.querySelector('svg')).toHaveClass('text-white');
+  });
+});
+
+// The header is the player's colour, not the theme's, so its Save button is
+// drawn in fixed colours: in the theme's accent it could match the header.
+describe('the header Save button', () => {
+  it.each([
+    ['D&D 5e', () => render(<DnD5eCharacterEditor character={dnd5eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+    ['Pathfinder 2e', () => render(<Pathfinder2eCharacterEditor character={pf2eCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+    ['Call of Cthulhu', () => render(<CallOfCthulhu7eCharacterEditor character={cocCharacter()} onSave={noop} onCancel={vi.fn()} />)],
+  ])('on %s does not take the theme accent', (_name, show) => {
+    show();
+    const save = screen.getByRole('button', { name: /^Save$/ });
+    expect(save).not.toHaveClass('btn-primary');
+    expect(save).toHaveClass('bg-white', 'text-black');
   });
 });

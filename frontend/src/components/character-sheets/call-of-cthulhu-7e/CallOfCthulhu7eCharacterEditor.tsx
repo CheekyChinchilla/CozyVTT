@@ -70,7 +70,6 @@ import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { COLOR_PRESETS } from './colorPresets';
-import Button from '@/components/ui/Button';
 
 interface CallOfCthulhu7eCharacterEditorProps {
   onDirtyChange?: (dirty: boolean) => void;
@@ -602,15 +601,16 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
         {/* Action Buttons */}
         <div className="absolute top-4 right-16 flex items-center space-x-2">
-        <Button
-          variant="primary"
+        {/* Fixed colours: the header is the player's colour, not the theme's. */}
+        <button
+          type="button"
           onClick={handleSave}
           disabled={isSaving}
-          className="flex items-center space-x-2 shadow-lg"
+          className="px-4 py-2 bg-white text-black hover:bg-white/90 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Save className="w-4 h-4" />
           <span>{isSaving ? 'Saving...' : 'Save'}</span>
-        </Button>
+        </button>
         <button
           onClick={onCancel}
           className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
@@ -668,7 +668,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
             aria-label="Investigator name"
-            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
           />
 
           <div className="grid grid-cols-3 gap-3">
@@ -684,7 +684,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Occupation"
               aria-label="Occupation"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
             <input
               type="text"
@@ -693,7 +693,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Era (e.g., 1920s)"
               aria-label="Era"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
           </div>
 
@@ -706,7 +706,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               aria-label="Age"
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
               fallback={0}
             />
             <input
@@ -716,7 +716,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Sex"
               aria-label="Sex"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
             <input
               type="text"
@@ -725,7 +725,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Residence"
               aria-label="Residence"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
           </div>
 
@@ -736,7 +736,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             placeholder="Birthplace"
             aria-label="Birthplace"
             maxLength={SHEET_SHORT_TEXT_MAX}
-            className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-brand"
+            className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
           />
         </div>
       </div>
