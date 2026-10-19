@@ -434,8 +434,9 @@ export default function NewCharacterModal({
                 <div className="rounded-lg p-4 bg-moss-green/10 border border-moss-green/30">
                   <p className="text-sm text-ink">
                     <strong className="text-brand-ink">Note:</strong> After
-                    creation, you'll be redirected to the character editor where
-                    you can customize all details and save when ready.
+                    creation, the character appears in your list. Choose Edit
+                    Character from its card&apos;s menu to fill in the rest of
+                    its sheet.
                   </p>
                 </div>
 

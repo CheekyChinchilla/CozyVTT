@@ -48,6 +48,14 @@ describe('the character name', () => {
   });
 });
 
+describe('the note under the form', () => {
+  it('says what happens after Create, which opens no editor', () => {
+    show();
+    expect(screen.queryByText(/redirected/)).toBeNull();
+    expect(screen.getByText(/appears in your list/)).toHaveTextContent(/Choose Edit Character from its card's menu/);
+  });
+});
+
 describe('Create & Publish as Template', () => {
   it('publishes nothing on a later Create Character after a failed create', async () => {
     createCharacter.mockRejectedValueOnce({ response: { status: 500, data: { message: 'Database unavailable' } } });
