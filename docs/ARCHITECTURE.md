@@ -328,15 +328,21 @@ read bare channels as a color and paint nothing.
 | **Ink variants** | `brand-ink`, `accent-ink`, `spirit-ink`, `danger-ink`, `success-ink`, `warning-ink`, `info-ink` | **Text** in that color |
 | States | `danger`, `success`, `warning`, `info`, `spirit` | Status fills, borders, tints |
 
-**Two rules keep themes readable:**
+**Three rules keep themes readable:**
 
 1. **Use `-ink` when the color is text.** `accent` is a fill — as text it measured as low as 1.84:1.
    The `-ink` variants are derived per theme by `deriveReadableTokens`
    ([themes.ts](../frontend/src/themes.ts)) via `ensureReadable`
    ([utils/color.ts](../frontend/src/utils/color.ts)), which walks the color's lightness until it
-   clears WCAG AA against that theme's surfaces. Authored values that already pass are left alone.
+   clears WCAG AA against that theme's surfaces, and against its own tint (a chip or alert at 15%).
+   `ink-secondary` and `ink-muted` are derived the same way against a 10% wash of the ink, which
+   inset panels and hovered rows use. Authored values that already pass are left alone.
    Custom themes get the same treatment, so a user-picked palette cannot produce unreadable text.
-2. **Never use a raw Tailwind palette color on a themed surface.** `bg-red-50` stays pale pink on a
+   The first-paint defaults in index.css's `:root` are the default theme's derived values, and
+   `themeVariables.test.ts` holds them to it.
+2. **Tell the browser a dark theme is dark.** `applyThemeColors` sets `color-scheme` from the
+   paper's lightness, so native text boxes, checkboxes and dropdown lists follow the theme.
+3. **Never use a raw Tailwind palette color on a themed surface.** `bg-red-50` stays pale pink on a
    dark theme. Use the state tokens, or the `.alert-*` / `.badge-*` classes in
    [index.css](../frontend/src/index.css).
 

@@ -93,6 +93,53 @@ describe('preset theme contrast', () => {
   });
 });
 
+/** `fill` laid over `background` at `alpha`, as `bg-danger/15` draws it. */
+function over(fill: string, background: string, alpha: number): string {
+  const f = fill.split(/\s+/).map(Number);
+  const b = background.split(/\s+/).map(Number);
+  return f.map((v, i) => Math.round(v * alpha + b[i] * (1 - alpha))).join(' ');
+}
+
+// Text sits on tints too: a chip or panel is its colour at 10 to 15% with the
+// -ink text on it (the alert and badge classes, and the sheets), and an inset
+// panel or a hovered row is a wash of the ink at 5 to 10%. Text derived only
+// against plain paper fell to about 3.5:1 there in the dark themes.
+describe('text on tints', () => {
+  const STATES = [
+    ['danger-ink', (c: ThemeColors) => c.danger],
+    ['spirit-ink', (c: ThemeColors) => c.spirit],
+    ['accent-ink', (c: ThemeColors) => c.accent],
+    ['brand-ink', (c: ThemeColors) => c.brand],
+    ['success-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-success']],
+    ['warning-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-warning']],
+    ['info-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-info']],
+  ] as const;
+
+  describe.each(PRESET_THEMES.map((t) => [t.name, t] as const))('%s', (_name, theme) => {
+    const derived = deriveReadableTokens(theme.colors);
+
+    it.each(STATES.flatMap(([token, fill]) => BACKGROUNDS.map((bg) => [token, bg, fill] as const)))(
+      '%s on its 15%% tint over %s meets AA',
+      (token, bg, fill) => {
+        const back = over(fill(theme.colors, derived), theme.colors[bg], 0.15);
+        const ratio = contrastRatioChannels(derived[`--rgb-${token}`], back);
+        expect(ratio, `${theme.name}: ${token} on ${back} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    );
+
+    it.each([
+      ['ink-muted', derived['--rgb-ink-muted']],
+      ['ink-secondary', derived['--rgb-ink-secondary'] ?? theme.colors.inkSecondary],
+    ] as const)('%s on a 10%% ink wash over paper and surface meets AA', (token, fg) => {
+      for (const bg of ['paper', 'bgSurface'] as const) {
+        const back = over(theme.colors.ink, theme.colors[bg], 0.1);
+        const ratio = contrastRatioChannels(fg, back);
+        expect(ratio, `${theme.name}: ${token} on ${back} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_TEXT);
+      }
+    });
+  });
+});
+
 describe('derived tokens never weaken an authored color', () => {
   it.each(PRESET_THEMES.map((t) => [t.name, t] as const))('%s', (_name, theme) => {
     const derived = deriveReadableTokens(theme.colors);
