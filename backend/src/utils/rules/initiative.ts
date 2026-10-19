@@ -27,6 +27,7 @@
  */
 
 import { abilityModifier, formatModifier } from './dnd5e';
+import { pf2ePerceptionTotal, pf2eSkillTotal } from './pathfinder2e';
 
 // ---------------------------------------------------------------------------
 // Result type
@@ -204,7 +205,8 @@ export function dnd5eBackfilledInitiativeBonus(data: unknown): number | null {
  * records that choice in `initiative.usedStat`, so the bonus is simply whichever
  * stat is named. Nothing here is a separate number to be kept in step; that was
  * the previous bug, where a `bonus` field was displayed but never calculated and
- * so read +0 for every character ever made.
+ * so read +0 for every character ever made. The stat's total is worked out from
+ * its parts, as the sheet shows it, not read from what was last stored.
  */
 export function pf2eInitiativeBonus(data: unknown): number {
   const d = rec(data);
@@ -214,14 +216,14 @@ export function pf2eInitiativeBonus(data: unknown): number {
     ? String(rec(d.initiative)!.usedStat)
     : 'perception';
 
-  if (usedStat === 'perception') return num(rec(d.perception)?.bonus);
+  if (usedStat === 'perception') return pf2ePerceptionTotal(d);
 
   const skill = rec(rec(d.skills)?.[usedStat]);
-  if (skill) return num(skill.bonus);
+  if (skill) return pf2eSkillTotal(d, skill);
 
   // A lore skill, or a name the sheet no longer offers — fall back to
   // Perception, which is the system default, rather than silently rolling flat.
-  return num(rec(d.perception)?.bonus);
+  return pf2ePerceptionTotal(d);
 }
 
 // ---------------------------------------------------------------------------

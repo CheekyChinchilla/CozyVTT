@@ -38,18 +38,19 @@ const pf2eBase = {
 };
 
 describe('Pathfinder 2e', () => {
-  // A skill stores its total modifier as `bonus`. The extractor used to read
-  // `total`, which is not a field, so every skill came out at +0.
-  it('offers a skill at the bonus the sheet stores, not +0', () => {
+  // The extractor used to read `total`, which is not a field, so every skill
+  // came out at +0. It now works the total out from the skill's parts, as the
+  // sheet shows it, so a stored total that is out of date is not rolled.
+  it('offers a skill at the total its parts give, not +0', () => {
     const data = {
       ...pf2eBase,
       skills: {
         athletics: {
           attribute: 'strength',
           proficiencyRank: 'expert',
-          armorPenalty: 0,
-          itemBonus: 0,
-          bonus: 11,
+          armorPenalty: -1,
+          itemBonus: 1,
+          bonus: 0,
         },
       },
     } as unknown as CharacterData;
@@ -57,9 +58,10 @@ describe('Pathfinder 2e', () => {
     const { skills } = getCharacterRolls('PATHFINDER_2E', data);
     const athletics = skills.find((s) => s.label.startsWith('Athletics'));
 
+    // Strength +4, level 5 expert +9, item +1, check penalty -1.
     expect(athletics).toBeDefined();
-    expect(athletics!.expression).toBe('1d20+11');
-    expect(athletics!.label).toBe('Athletics +11');
+    expect(athletics!.expression).toBe('1d20+13');
+    expect(athletics!.label).toBe('Athletics +13');
   });
 
   // Lore skills are stored at the top level of the sheet, which is where the

@@ -34,11 +34,17 @@ const dnd5e = (dexScore: number, initiativeBonus?: number, extra: object = {}) =
   ...extra,
 });
 
+// A level 1 character trained in Perception and Stealth (+3 each), with the
+// Wisdom and Dexterity that make up the totals asked for. The totals are
+// worked out from these parts; the stored `bonus` is left at 0 to show it is
+// not read.
 const pf2e = (usedStat: string, perceptionBonus: number, stealthBonus: number) => ({
+  level: 1,
+  attributes: { wisdom: { modifier: perceptionBonus - 3 }, dexterity: { modifier: stealthBonus - 3 } },
   initiative: { usedStat, bonus: 0 },
-  perception: { proficiencyRank: 'trained', itemBonus: 0, bonus: perceptionBonus, senses: [] },
+  perception: { proficiencyRank: 'trained', itemBonus: 0, bonus: 0, senses: [] },
   skills: {
-    stealth: { attribute: 'dexterity', proficiencyRank: 'trained', armorPenalty: 0, itemBonus: 0, bonus: stealthBonus },
+    stealth: { attribute: 'dexterity', proficiencyRank: 'trained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
   },
 });
 
@@ -185,7 +191,7 @@ describe('Pathfinder 2e initiative', () => {
   });
 
   it('defaults to Perception when no choice is recorded', () => {
-    const noChoice = { perception: { bonus: 6 }, skills: {} };
+    const noChoice = { level: 1, attributes: { wisdom: { modifier: 3 } }, perception: { proficiencyRank: 'trained' }, skills: {} };
     expect(pf2eInitiativeBonus(noChoice)).toBe(6);
   });
 });

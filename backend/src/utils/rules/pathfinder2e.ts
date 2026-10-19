@@ -1,8 +1,8 @@
 /**
  * rules/pathfinder2e.ts
  * Pathfinder 2e derived numbers: proficiency bonus, Armor Class, Class DC,
- * skill totals, spell attack and spell DC, the attribute a sheet names, and
- * Bulk.
+ * saving throw, Perception and skill totals, spell attack and spell DC, the
+ * attribute a sheet names, and Bulk.
  *
  * ---------------------------------------------------------------------------
  * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
@@ -142,6 +142,36 @@ export function pf2eSkillTotal(data: unknown, skill: unknown): number {
   const matched = pf2eAttributeName(entry.attribute);
   const attrMod = matched ? num(rec(rec(sheet?.attributes)?.[matched])?.modifier) : 0;
   return attrMod + pf2eProficiencyBonus(sheet?.level, entry.proficiencyRank) + num(entry.itemBonus) + pf2eCheckPenalty(entry.armorPenalty);
+}
+
+/** The attribute each saving throw uses. */
+export const PF2E_SAVE_ATTRIBUTES = {
+  fortitude: 'constitution',
+  reflex: 'dexterity',
+  will: 'wisdom',
+} as const satisfies Record<string, Pf2eAttributeName>;
+
+/** An attribute's modifier off the sheet, 0 when it is not recorded. */
+function attributeModifier(sheet: Record<string, unknown> | undefined, name: Pf2eAttributeName): number {
+  return num(rec(rec(sheet?.attributes)?.[name])?.modifier);
+}
+
+/**
+ * A saving throw: its attribute's modifier (Constitution for Fortitude,
+ * Dexterity for Reflex, Wisdom for Will), the proficiency bonus for its rank
+ * and its item bonus (Core Rulebook, "Saving Throws").
+ */
+export function pf2eSaveTotal(data: unknown, save: keyof typeof PF2E_SAVE_ATTRIBUTES): number {
+  const sheet = rec(data);
+  const entry = rec(rec(sheet?.savingThrows)?.[save]);
+  return attributeModifier(sheet, PF2E_SAVE_ATTRIBUTES[save]) + pf2eProficiencyBonus(sheet?.level, entry?.proficiencyRank) + num(entry?.itemBonus);
+}
+
+/** Perception: Wisdom, the proficiency bonus for its rank, and its item bonus. */
+export function pf2ePerceptionTotal(data: unknown): number {
+  const sheet = rec(data);
+  const entry = rec(sheet?.perception);
+  return attributeModifier(sheet, 'wisdom') + pf2eProficiencyBonus(sheet?.level, entry?.proficiencyRank) + num(entry?.itemBonus);
 }
 
 /** The spellcasting proficiency rank, which spell attack rolls and spell DCs share. */

@@ -149,8 +149,11 @@ question, and getting it wrong invents numbers the designers never intended.
 
   **Player characters are different.** A PF2e character sheet records the parts
   — proficiency rank, item bonus, Dex cap, key attribute — so Armor Class, Class
-  DC, initiative, spell attack and spell DC *are* derivable (one spellcasting
-  rank for both, each its own item bonus), and `rules/pathfinder2e.ts` derives them,
+  DC, saving throws, Perception, skills (a check penalty always a penalty),
+  initiative, spell attack and spell DC *are* derivable (one spellcasting rank
+  for both, each its own item bonus), and `rules/pathfinder2e.ts` derives them
+  for the editor, the read-only sheet, the roll menu and the server's
+  initiative roll alike,
   with the Bulk an inventory carries (ten light items to 1 Bulk, the rest
   rounded down) and its limits.
   The distinction is where the number comes from: a creature's is printed by

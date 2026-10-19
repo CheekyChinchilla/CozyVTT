@@ -832,10 +832,14 @@ describe('initiative', () => {
     });
 
     it('uses a Pathfinder 2e character\'s Perception, or the skill they switch to', async () => {
+      // Level 1, trained: Perception 3 + Wisdom 6 is +9; Stealth 3 + Dexterity
+      // 1 is +4. Worked out from these parts, the stored totals left at 0.
       await linkCharacter('PATHFINDER_2E', {
+        level: 1,
+        attributes: { wisdom: { score: 22, modifier: 6 }, dexterity: { score: 12, modifier: 1 } },
         initiative: { usedStat: 'stealth', bonus: 0 },
-        perception: { bonus: 9 },
-        skills: { stealth: { bonus: 4 } },
+        perception: { proficiencyRank: 'trained', bonus: 0 },
+        skills: { stealth: { attribute: 'dexterity', proficiencyRank: 'trained', bonus: 0 } },
       });
       const dm = await server.connectAndAuth(dmCookie, campaignId);
 

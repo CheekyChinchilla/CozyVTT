@@ -28,8 +28,6 @@ import type {
   PF2eCharacterData,
   PF2eSkills,
   PF2eSpellcasting,
-  PF2eAttributes,
-  PF2eSavingThrows,
   PF2ePerception,
   PF2eArmorClass,
   PF2eInitiative,
@@ -48,11 +46,12 @@ import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import {
   pf2eArmorClass,
   pf2eClassDC,
-  pf2eProficiencyBonus,
   pf2eSpellAttack,
   pf2eSpellDC,
   pf2eSkillTotal,
   pf2eCheckPenalty,
+  pf2eSaveTotal,
+  pf2ePerceptionTotal,
   pf2eTotalBulk,
   pf2eBulkLimits,
   formatPf2eBulk,
@@ -451,13 +450,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     if (!formData.attributes || !formData.savingThrows || !formData.level) return;
     const updatedSavingThrows = { ...formData.savingThrows };
-    const saveAttributes: Record<keyof PF2eSavingThrows, keyof PF2eAttributes> = { fortitude: 'constitution', reflex: 'dexterity', will: 'wisdom' };
     let hasChanges = false;
-    (Object.entries(saveAttributes) as [keyof PF2eSavingThrows, keyof PF2eAttributes][]).forEach(([save, attribute]) => {
-      const abilityMod = formData.attributes[attribute]?.modifier || 0;
-      const profBonus = pf2eProficiencyBonus(formData.level, updatedSavingThrows[save]?.proficiencyRank || 'untrained');
-      const itemBonus = updatedSavingThrows[save]?.itemBonus || 0;
-      const newBonus = abilityMod + profBonus + itemBonus;
+    (['fortitude', 'reflex', 'will'] as const).forEach((save) => {
+      const newBonus = pf2eSaveTotal(formData, save);
       if (updatedSavingThrows[save]?.bonus !== newBonus) {
         updatedSavingThrows[save] = { ...updatedSavingThrows[save], bonus: newBonus };
         hasChanges = true;
@@ -471,10 +466,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // Auto-calculate perception
   useEffect(() => {
     if (!formData.attributes || !formData.perception || !formData.level) return;
-    const wisdomMod = formData.attributes.wisdom?.modifier || 0;
-    const profBonus = pf2eProficiencyBonus(formData.level, formData.perception!.proficiencyRank || 'untrained');
-    const itemBonus = formData.perception.itemBonus || 0;
-    setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus: wisdomMod + profBonus + itemBonus } as PF2ePerception }));
+    const bonus = pf2ePerceptionTotal(formData);
+    setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus } as PF2ePerception }));
   }, [formData.level, formData.attributes?.wisdom?.modifier, formData.perception?.proficiencyRank, formData.perception?.itemBonus]);
 
   // Auto-calculate skills

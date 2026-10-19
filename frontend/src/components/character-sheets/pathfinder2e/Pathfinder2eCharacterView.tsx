@@ -30,7 +30,15 @@ import BulkTracker from './components/BulkTracker';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
 import { readFeatureEntries } from '../../../utils/featureEntries';
 import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
-import { pf2eArmorClass, pf2eClassDC, pf2eSpellAttack, pf2eSpellDC } from '../../../utils/rules/pathfinder2e';
+import {
+  pf2eArmorClass,
+  pf2eClassDC,
+  pf2ePerceptionTotal,
+  pf2eSaveTotal,
+  pf2eSkillTotal,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+} from '../../../utils/rules/pathfinder2e';
 import type { Character } from '../../../types';
 import type {
   PF2eCharacterData,
@@ -269,7 +277,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             bonus: 0,
             itemBonus: 0,
           };
-          const expr = saveData.bonus >= 0 ? `1d20+${saveData.bonus}` : `1d20${saveData.bonus}`;
+          // Worked out from its parts, as the editor saves it.
+          const saveBonus = pf2eSaveTotal(data, save);
+          const expr = saveBonus >= 0 ? `1d20+${saveBonus}` : `1d20${saveBonus}`;
           const purpose = `${save.charAt(0).toUpperCase() + save.slice(1)} Save`;
           return (
             <div
@@ -285,7 +295,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                 {onRoll && <Dices className="w-3.5 h-3.5 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
               </div>
               <span className="text-2xl font-bold text-blue-700">
-                {formatModifier(saveData.bonus)}
+                {formatModifier(saveBonus)}
               </span>
             </div>
           );
@@ -309,7 +319,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           Perception
         </h3>
         {(() => {
-          const expr = perception.bonus >= 0 ? `1d20+${perception.bonus}` : `1d20${perception.bonus}`;
+          const perceptionBonus = pf2ePerceptionTotal(data);
+          const expr = perceptionBonus >= 0 ? `1d20+${perceptionBonus}` : `1d20${perceptionBonus}`;
           return (
             <div
               className={`bg-white border border-stone-200 rounded-lg p-4 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
@@ -332,7 +343,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                 </div>
               </div>
               <span className="text-3xl font-bold text-blue-700">
-                {formatModifier(perception.bonus)}
+                {formatModifier(perceptionBonus)}
               </span>
             </div>
           );
@@ -507,7 +518,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               .replace(/([A-Z])/g, ' $1')
               .replace(/^./, (str) => str.toUpperCase())
               .trim();
-            const expr = skillData.bonus >= 0 ? `1d20+${skillData.bonus}` : `1d20${skillData.bonus}`;
+            const skillBonus = pf2eSkillTotal(data, skillData);
+            const expr = skillBonus >= 0 ? `1d20+${skillBonus}` : `1d20${skillBonus}`;
             const purpose = `${displayName} Check`;
 
             return (
@@ -527,7 +539,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                   {onRoll && <Dices className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
                 </div>
                 <span className="text-lg font-bold text-blue-700">
-                  {formatModifier(skillData.bonus)}
+                  {formatModifier(skillBonus)}
                 </span>
               </div>
             );
@@ -540,7 +552,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <h4 className="text-md font-semibold text-stone-700 mb-2">Lore Skills</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {loreSkills.map((lore, index) => {
-                const expr = lore.bonus >= 0 ? `1d20+${lore.bonus}` : `1d20${lore.bonus}`;
+                const loreBonus = pf2eSkillTotal(data, lore);
+                const expr = loreBonus >= 0 ? `1d20+${loreBonus}` : `1d20${loreBonus}`;
                 const purpose = `${lore.name} Lore Check`;
                 return (
                   <div
@@ -556,7 +569,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                       {onRoll && <Dices className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
                     </div>
                     <span className="text-lg font-bold text-blue-700">
-                      {formatModifier(lore.bonus)}
+                      {formatModifier(loreBonus)}
                     </span>
                   </div>
                 );

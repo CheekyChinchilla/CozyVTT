@@ -16,6 +16,8 @@ import {
   pf2eSpellDC,
   pf2eSkillTotal,
   pf2eCheckPenalty,
+  pf2eSaveTotal,
+  pf2ePerceptionTotal,
 } from '../pathfinder2e';
 
 describe('pf2eItemBulk', () => {
@@ -132,5 +134,39 @@ describe('pf2eSkillTotal', () => {
     expect(pf2eCheckPenalty(2)).toBe(-2);
     expect(pf2eCheckPenalty(-3)).toBe(-3);
     expect(pf2eCheckPenalty(undefined)).toBe(0);
+  });
+});
+
+/**
+ * Saving throws and Perception: "your Constitution modifier (Fortitude),
+ * Dexterity modifier (Reflex) or Wisdom modifier (Will) + proficiency bonus +
+ * other bonuses + penalties", and Perception the same with Wisdom (Core
+ * Rulebook, "Saving Throws" and "Perception").
+ */
+describe('pf2eSaveTotal and pf2ePerceptionTotal', () => {
+  const sheet = {
+    level: 2,
+    attributes: { constitution: { modifier: 3 }, dexterity: { modifier: 1 }, wisdom: { modifier: 2 } },
+    savingThrows: {
+      fortitude: { proficiencyRank: 'expert', itemBonus: 0 },
+      reflex: { proficiencyRank: 'trained', itemBonus: 1 },
+      will: { proficiencyRank: 'untrained', itemBonus: 0 },
+    },
+    perception: { proficiencyRank: 'trained', itemBonus: 1 },
+  };
+
+  it('adds each save\'s attribute, rank and item bonus', () => {
+    expect(pf2eSaveTotal(sheet, 'fortitude')).toBe(3 + 6);
+    expect(pf2eSaveTotal(sheet, 'reflex')).toBe(1 + 4 + 1);
+    expect(pf2eSaveTotal(sheet, 'will')).toBe(2);
+  });
+
+  it('adds Wisdom, the rank and the item bonus to Perception', () => {
+    expect(pf2ePerceptionTotal(sheet)).toBe(2 + 4 + 1);
+  });
+
+  it('is the attribute alone for a sheet that records no rank', () => {
+    expect(pf2eSaveTotal({ attributes: { wisdom: { modifier: 1 } } }, 'will')).toBe(1);
+    expect(pf2ePerceptionTotal({})).toBe(0);
   });
 });
