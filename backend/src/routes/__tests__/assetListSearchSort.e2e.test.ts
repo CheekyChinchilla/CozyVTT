@@ -96,12 +96,12 @@ describe('a tag many assets on the instance share', () => {
   beforeAll(async () => {
     strangerId = (await createTestUser({ displayName: 'Bulk Tagger' })).id;
     const bulkTag = `${tag}bulk`;
-    await prisma.asset.createMany({
-      data: Array.from({ length: 20_000 }, (_, i) => ({
-        type: 'TOKEN' as const, scope: 'USER' as const, uploadedById: strangerId, filename: 'b.png', originalName: 'b.png',
-        mimeType: 'image/png', fileSize: 1, filePath: '/nonexistent/b.png', name: `Bulk ${i}`, tags: [bulkTag],
-      })),
-    });
+    // Just past the 10,000 the old search gathered, in one statement: built
+    // as objects, twice as many slowed the suites running beside this one.
+    await prisma.$executeRaw`
+      INSERT INTO "Asset" (id, type, scope, "uploadedById", filename, "originalName", "mimeType", "fileSize", "filePath", name, tags)
+      SELECT gen_random_uuid()::text, 'TOKEN', 'USER', ${strangerId}, 'b.png', 'b.png', 'image/png', 1, '/nonexistent/b.png', 'Bulk ' || n, ARRAY[${bulkTag}]
+      FROM generate_series(1, 10050) AS n`;
     await prisma.asset.create({
       data: {
         type: 'TOKEN', scope: 'USER', uploadedById: userId, filename: 'm.png', originalName: 'm.png', mimeType: 'image/png',
