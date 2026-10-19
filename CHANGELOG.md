@@ -114,6 +114,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A feature listed twice is kept twice.** Two identical entries, such as two Ability Score Improvements written the same way, were shown as one on a D&D 5e sheet when they came from a template, and folded into one when an older sheet's special abilities were moved to its class features. A feature with no description no longer stops the list from loading.
 
+- **Save as Template works for a character with a picture.** Publishing failed with a message about global assets whenever the character had a picture, because a character's picture is its player's own upload and a template's has to be one everyone can load. The template is now published without the picture, and a message says it was left out; a picture that is already a global asset is kept.
+
 - **A character saved as a template leaves the player's name and the Keeper's Notes behind.** Every user can read a template, but **Save as Template** kept the sheet's player name and a Call of Cthulhu investigator's Keeper's Notes, so anyone could read notes meant for the Keeper alone. A template is now saved without either, whoever saves it; a character made from it gets its own player's name, as before.
 
 - **Two people editing one character template no longer undo each other.** When two people had the same template open, the later save put back the older version over everything the earlier one saved. A save over a newer version is now refused: for the sheet, **Edit Template** carries your changes onto the newest version and shows them before saving, as the character editor does, and for the name and description it says when someone else changed them.

@@ -310,7 +310,7 @@ Open **Character Templates** from the dashboard. Every template on the instance 
 **Publishing one.** There are four ways:
 
 - **New Template** on the templates page, which starts from a blank sheet for the system you pick
-- **Save as Template** in the character editor, which publishes the sheet you're looking at
+- **Save as Template** in the character editor, which publishes the sheet you're looking at. The character's picture goes with it only if it is a global asset; a picture you uploaded yourself is left out, and a message says so (see the note on template images below)
 - while creating a character, if you want to keep the character and share it at the same time
 - **Import** on the templates page, which publishes a character JSON file as a template
 

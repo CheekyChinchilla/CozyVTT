@@ -13,10 +13,7 @@ import { FileText } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/contexts/ToastContext';
 import type { Character, CharacterData, CharacterTemplate } from '@/types';
-
-/** Said when a sheet save from here came with a token picture, which a template cannot use. */
-export const TEMPLATE_PICTURE_NOT_USED =
-  "Template sheet saved, without the token picture you chose: a template's picture has to be a global asset, so that everyone who copies the template can see it.";
+import { TEMPLATE_PICTURE_NOT_USED } from '@/utils/templatePicture';
 import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
