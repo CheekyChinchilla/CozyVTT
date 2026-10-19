@@ -73,3 +73,12 @@ describe('the notes on Luck and wealth', () => {
     expect(screen.getByText('A trust fund')).toBeInTheDocument();
   });
 });
+
+describe('a contact with no name', () => {
+  it('is shown on the read-only sheet as unnamed', () => {
+    render(<CallOfCthulhu7eCharacterView character={cocCharacter({ contacts: [{ name: '', role: 'Librarian' }] })} />);
+    const tabs = screen.getAllByRole('button', { name: /^Possessions$/ });
+    fireEvent.click(tabs[tabs.length - 1]);
+    expect(screen.getByText('Unnamed contact')).toBeInTheDocument();
+  });
+});

@@ -459,7 +459,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
               <div key={index} className="bg-blue-50 border border-blue-300 rounded-md p-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <div className="font-semibold text-blue-900">{contact.name}</div>
+                    <div className="font-semibold text-blue-900">{contact.name || 'Unnamed contact'}</div>
                     <div className="text-sm text-blue-700">{contact.role}</div>
                   </div>
                 </div>

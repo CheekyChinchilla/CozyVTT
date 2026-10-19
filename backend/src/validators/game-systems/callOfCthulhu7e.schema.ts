@@ -304,12 +304,13 @@ const backstorySchema = z.object({
 });
 
 /**
- * Contact
- * Role and notes optional for quick contact addition
+ * Contact. Role and notes are optional, and the name and role may be empty:
+ * the editor adds a contact with no role, and clearing a box writes an empty
+ * string.
  */
 const contactSchema = z.object({
-  name: shortText.min(1),
-  role: shortText.min(1).optional(),
+  name: shortText,
+  role: shortText.optional(),
   notes: longText.optional(),
 });
 

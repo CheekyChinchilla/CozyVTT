@@ -208,7 +208,8 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
 });
 
 // The Call of Cthulhu editor's name boxes can be cleared to retype, and a
-// save then must not be refused for the empty name: the sheet shows "Other".
+// save then must not be refused for the empty name: the sheet shows "Other"
+// for a skill.
 describe('a Call of Cthulhu name box left empty', () => {
   it('is kept', () => {
     const sheet = blank(GameSystem.CALL_OF_CTHULHU_7E);
@@ -222,6 +223,8 @@ describe('a Call of Cthulhu name box left empty', () => {
         languageOther: [{ language: '', ...skill }],
         science: [{ specialization: '', ...skill }],
       },
+      // A contact as the editor adds one, and one whose name was cleared.
+      contacts: [{ name: 'New contact', role: '', notes: '' }, { name: '', role: '', notes: '' }],
     });
   });
 });
