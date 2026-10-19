@@ -25,7 +25,7 @@ export const SectionEditor: React.FC<SectionEditorProps> = ({
   };
 
   return (
-    <div className="glass-panel overflow-hidden group">
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg overflow-hidden group">
       {/* Header with drag handle and delete */}
       <div className="flex items-center gap-3 p-3 border-b border-moss-green/20 bg-moss-green/5">
         <div className="shrink-0 cursor-grab active:cursor-grabbing">
@@ -43,7 +43,7 @@ export const SectionEditor: React.FC<SectionEditorProps> = ({
 
         <button
           onClick={onRemove}
-          className="shrink-0 p-2 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+          className="shrink-0 p-2 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
           title="Remove section"
         >
           <Trash2 className="w-4 h-4" />

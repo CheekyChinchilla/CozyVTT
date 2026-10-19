@@ -30,7 +30,7 @@ export function listFullMessage(max: number): string {
 export default function ListLimitNote({
   full,
   max = SHEET_LIST_MAX,
-  className = 'mt-1 text-xs italic text-stone-600',
+  className = 'mt-1 text-xs italic text-ink-secondary',
 }: {
   full: boolean;
   max?: number;

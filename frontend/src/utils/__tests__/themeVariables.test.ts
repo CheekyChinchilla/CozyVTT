@@ -12,7 +12,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import indexCss from '../../index.css?raw';
-import { PRESET_THEMES, applyThemeColors } from '../../themes';
+import { PRESET_THEMES, applyThemeColors, deriveReadableTokens } from '../../themes';
 
 /** The text of the first block opened by `opener`, braces matched. */
 function block(css: string, opener: string): string {
@@ -61,5 +61,13 @@ describe('the theme variables', () => {
   it('leave no @theme key reading itself', () => {
     const selfReading = [...theme.matchAll(/(--[\w-]+):[^;]*var\(\1\)/g)].map((m) => m[1]);
     expect(selfReading).toEqual([]);
+  });
+});
+
+// The first-paint defaults are a copy of what the default theme derives;
+// held to it, so the page does not change colour when the theme is applied.
+describe('the first-paint defaults', () => {
+  it.each(Object.entries(deriveReadableTokens(PRESET_THEMES[0].colors)))('%s is the default theme\'s derived value', (name, value) => {
+    expect(rootDefaults).toContain(`${name}: ${value};`);
   });
 });

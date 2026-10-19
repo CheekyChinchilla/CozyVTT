@@ -20,7 +20,7 @@ export const TextDisplay: React.FC<TextDisplayProps> = ({ section }) => {
 
   return (
     <div className="p-4">
-      <div className="bg-parchment/20 border border-moss-green/10 rounded-lg p-4">
+      <div className="bg-ink/5 border border-moss-green/10 rounded-lg p-4">
         <pre className="whitespace-pre-wrap font-sans text-warm-gray leading-relaxed">
           {section.value}
         </pre>

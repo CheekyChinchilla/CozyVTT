@@ -18,6 +18,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import { apiErrorMessage } from '@/utils/errors';
 import type { CharacterData } from '@/types';
+import Button from '@/components/ui/Button';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
@@ -195,7 +196,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   return (
-    <div className="glass-panel p-6">
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
       {/* Header with Save/Cancel */}
       <div className="flex items-center justify-between pb-4 border-b border-moss-green/20 mb-6">
         <div className="flex items-center gap-4">
@@ -228,12 +229,12 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
               </div>
             </label>
             {tokenError && (
-              <div className="absolute top-full mt-1 text-xs text-red-500 whitespace-nowrap">
+              <div className="absolute top-full mt-1 text-xs text-danger-ink whitespace-nowrap">
                 {tokenError}
               </div>
             )}
             {!character.campaignId && (
-              <div className="absolute top-full mt-1 text-xs text-amber-600 whitespace-nowrap">
+              <div className="absolute top-full mt-1 text-xs text-warning-ink whitespace-nowrap">
                 Saves as personal token
               </div>
             )}
@@ -249,14 +250,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 bg-moss-green text-white rounded-lg hover:bg-moss-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save className="w-4 h-4" />
+          <Button onClick={handleSave} disabled={isSaving} icon={Save}>
             {isSaving ? 'Saving...' : 'Save'}
-          </button>
+          </Button>
           <button
             onClick={onCancel}
             className="flex items-center gap-2 px-4 py-2 bg-stone-gray/10 text-stone-gray rounded-lg hover:bg-stone-gray/20 transition-colors"

@@ -133,7 +133,7 @@ describe('Dodge in the read-only sheet', () => {
 
     render(<CallOfCthulhu7eCharacterView character={character} />);
 
-    const box = screen.getAllByText('Dodge').find((el) => el.closest('.bg-blue-50'))!.closest('.bg-blue-50')!;
+    const box = screen.getAllByText('Dodge').find((el) => el.closest('.bg-info\\/10'))!.closest('.bg-info\\/10')!;
     expect(box.textContent).toContain('45%');
   });
 });

@@ -37,9 +37,10 @@ import type {
 import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
+import Button from '@/components/ui/Button';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
-import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
+import ListLimitNote, { listIsFull } from '../ListLimitNote';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import {
   pf2eArmorClass,
@@ -838,7 +839,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       aria-label={label}
       value={currentRank}
       onChange={(e) => updateField(path, e.target.value as ProficiencyRank)}
-      className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+      className="px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
     >
       {PROFICIENCY_RANKS.map((rank) => (
         <option key={rank} value={rank}>
@@ -850,24 +851,28 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
 
   const renderHeader = () => {
     const headerStyle = isCustomColor ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` } : {};
-    const headerTextColor = isCustomColor ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-stone-900') : (shouldUseWhiteText(selectedColor.hex) ? 'text-white' : 'text-stone-900');
+    const headerTextColor = isCustomColor ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black') : (shouldUseWhiteText(selectedColor.hex) ? 'text-white' : 'text-black');
+    const headerHintColor = headerTextColor === 'text-white' ? 'text-white/90' : 'text-black/80';
     const headerClasses = isCustomColor ? `${headerTextColor} p-6 rounded-t-lg relative` : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
         <div className="absolute top-4 right-16 flex items-center space-x-2">
+          {/* Fixed colours: the header is the player's colour, not the theme's. */}
           <button
+            type="button"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50"
+            className="px-4 py-2 bg-white text-black hover:bg-white/90 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save className="w-4 h-4" />
             <span>{isSaving ? 'Saving...' : 'Save'}</span>
           </button>
           <button
+            type="button"
             onClick={onCancel}
-            className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+            className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
           >
             <X className="w-4 h-4" />
             <span>Cancel</span>
@@ -879,24 +884,24 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         </button>
 
         {showColorPicker && (
-          <div className="absolute top-16 right-4 bg-white text-stone-800 rounded-lg shadow-xl p-4 z-10 border-2 border-stone-200 max-w-md">
+          <div className="absolute top-16 right-4 bg-paper text-ink rounded-lg shadow-xl p-4 z-10 border-2 border-ink/10 max-w-md">
             <h4 className="font-semibold mb-3">Theme Color</h4>
             <div className="grid grid-cols-3 gap-2 mb-4">
               {COLOR_PRESETS.map((color) => (
-                <button key={color.name} onClick={() => handlePresetColorSelect(color)} className={`px-2 py-2 rounded-lg text-sm font-medium transition-all ${!isCustomColor && selectedColor.name === color.name ? 'ring-2 ring-stone-400 bg-stone-100' : 'hover:bg-stone-50'}`}>
+                <button key={color.name} onClick={() => handlePresetColorSelect(color)} className={`px-2 py-2 rounded-lg text-sm font-medium transition-all ${!isCustomColor && selectedColor.name === color.name ? 'ring-2 ring-brand bg-ink/10' : 'hover:bg-ink/5'}`}>
                   <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
                   <div className="text-xs">{color.name}</div>
                 </button>
               ))}
             </div>
-            <div className="border-t pt-4 space-y-3">
-              <h5 className="text-sm font-semibold text-stone-700">Custom Color</h5>
+            <div className="border-t border-ink/10 pt-4 space-y-3">
+              <h5 className="text-sm font-semibold text-ink-secondary">Custom Color</h5>
               <div className="flex items-center space-x-2">
-                <input type="color" value={customColorHex || '#1d4ed8'} onChange={(e) => handleCustomColorChange(e.target.value)} className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300" title="Pick a custom color" />
+                <input type="color" value={customColorHex || '#1d4ed8'} onChange={(e) => handleCustomColorChange(e.target.value)} className="w-12 h-12 rounded-sm cursor-pointer border-2 border-ink/20" title="Pick a custom color" />
                 <div className="flex-1">
-                  <input type="text" value={customColorHex} onChange={(e) => { const hex = e.target.value; if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) handleCustomColorChange(hex); }} placeholder="#1d4ed8" aria-label="Custom colour hex code" className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                  <div className="text-xs text-stone-500 mt-1">Enter hex code</div>
-                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
+                  <input type="text" value={customColorHex} onChange={(e) => { const hex = e.target.value; if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) handleCustomColorChange(hex); }} placeholder="#1d4ed8" aria-label="Custom colour hex code" className="w-full px-3 py-2 border border-ink/20 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                  <div className="text-xs text-ink-muted mt-1">Enter hex code</div>
+                  {errors.themeColor && <div className="text-xs text-danger-ink mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
             </div>
@@ -918,7 +923,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                 {tokenImagePreview ? (
                   <img src={tokenImagePreview} alt={formData.characterName || 'Character'} className="w-40 h-40 rounded-full border-4 border-white/20 object-cover" />
                 ) : (
-                  <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-stone-800 flex items-center justify-center">
+                  <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-black/40 flex items-center justify-center">
                     <User className="w-20 h-20 text-white/40" />
                   </div>
                 )}
@@ -926,16 +931,16 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                   <Upload className="w-12 h-12 text-white" />
                 </div>
               </label>
-              {errors.tokenImage && <div className="absolute top-full mt-1 text-xs text-red-200 whitespace-nowrap">{errors.tokenImage}</div>}
+              {errors.tokenImage && <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>{errors.tokenImage}</div>}
               {!character.campaignId && (
-                <div className="absolute top-full mt-1 text-xs text-amber-200 whitespace-nowrap">
+                <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
                   Saves as personal token
                 </div>
               )}
             </div>
 
             <div className="space-y-2 min-w-0">
-              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} aria-label="Character name" placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded-sm px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} aria-label="Character name" placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-white' : 'border-white/20'} rounded-sm px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
               <div className="flex items-center flex-wrap gap-2 opacity-90">
                 {/* Read-only: the player name is whoever owns the character,
                     filled from their display name at creation. */}
@@ -945,7 +950,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                 <div className="flex items-center space-x-2">
                   <label htmlFor="pf2e-level" className="text-xs">Level</label>
                   <NumberField
-id="pf2e-level" min={1} max={20} value={formData.level} onChange={(v: number) => updateField('level', v)} className={`w-16 bg-white/10 border ${errors.level ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} fallback={1} />
+id="pf2e-level" min={1} max={20} value={formData.level} onChange={(v: number) => updateField('level', v)} className={`w-16 bg-white/10 ${errors.level ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} fallback={1} />
                 </div>
                 <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} aria-label="Class" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Class" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
                 <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} aria-label="Ancestry" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Ancestry" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
@@ -974,12 +979,13 @@ id="pf2e-hero-points" min={0} max={3} value={formData.heroPoints} onChange={(v: 
   };
 
   const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-stone-200 bg-stone-50 px-4">
+    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
         return (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center space-x-2 px-4 py-3 font-medium transition-colors ${isActive ? `text-${selectedColor.accent} border-b-2 border-${selectedColor.accent} -mb-0.5 bg-white` : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'}`}>
+          // The underline in the header colour; the label in the theme's text.
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center space-x-2 px-4 py-3 font-medium transition-colors ${isActive ? 'text-ink border-b-2 -mb-0.5 bg-paper' : 'text-ink-secondary hover:text-ink hover:bg-ink/10'}`} style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : selectedColor.hex } : undefined}>
             <Icon className="w-4 h-4" />
             <span>{tab.label}</span>
           </button>
@@ -991,19 +997,19 @@ id="pf2e-hero-points" min={0} max={3} value={formData.heroPoints} onChange={(v: 
   const renderStatsTab = () => (
     <div className="space-y-6">
       {/* Attributes */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-4">Ability Scores</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-4">Ability Scores</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const abilityData = formData.attributes?.[ability] || { score: 10, modifier: 0 };
             return (
               <div key={ability} className="flex flex-col items-center">
-                <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">{ability.slice(0, 3)}</div>
-                <div className="w-16 h-16 rounded-full bg-linear-to-br/srgb from-blue-600 to-blue-800 flex items-center justify-center shadow-lg border-2 border-blue-900">
-                  <span className="text-2xl font-bold text-white">{formatModifier(abilityData.modifier)}</span>
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">{ability.slice(0, 3)}</div>
+                <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center shadow-lg border-2 border-accent-hover">
+                  <span className="text-2xl font-bold text-accent-text">{formatModifier(abilityData.modifier)}</span>
                 </div>
                 <NumberField
-aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`} min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(`attributes.${ability}.score`, v)} className="w-16 px-2 py-1 text-center font-semibold border-2 border-stone-300 rounded-sm mt-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={10} />
+aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`} min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(`attributes.${ability}.score`, v)} className="w-16 px-2 py-1 text-center font-semibold border-2 border-ink/20 rounded-sm mt-2 focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={10} />
               </div>
             );
           })}
@@ -1011,23 +1017,23 @@ aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`} min={
       </div>
 
       {/* Saving Throws */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Saving Throws</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Saving Throws</h3>
         <div className="space-y-3">
           {(['fortitude', 'reflex', 'will'] as const).map((save) => {
             const saveData = formData.savingThrows?.[save] || { proficiencyRank: 'untrained', bonus: 0, itemBonus: 0 };
             return (
-              <div key={save} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-3">
+              <div key={save} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-3">
                 <div className="flex items-center space-x-3">
-                  <span className="font-semibold text-stone-800 capitalize w-24">{save}</span>
+                  <span className="font-semibold text-ink capitalize w-24">{save}</span>
                   {renderProficiencySelector(`savingThrows.${save}.proficiencyRank`, saveData.proficiencyRank as ProficiencyRank, `Proficiency in ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`)}
                   <div className="flex items-center space-x-2">
-                    <label className="text-xs text-stone-600">Item:</label>
+                    <label className="text-xs text-ink-secondary">Item:</label>
                     <NumberField
-aria-label={`Item bonus to ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label={`Item bonus to ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
                   </div>
                 </div>
-                <span className="text-2xl font-bold text-blue-700">{formatModifier(saveData.bonus)}</span>
+                <span className="text-2xl font-bold text-accent-ink">{formatModifier(saveData.bonus)}</span>
               </div>
             );
           })}
@@ -1035,42 +1041,42 @@ aria-label={`Item bonus to ${save.charAt(0).toUpperCase()}${save.slice(1)} saves
       </div>
 
       {/* Perception */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Perception</h3>
-        <div className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-3 mb-3">
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Perception</h3>
+        <div className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-3 mb-3">
           <div className="flex items-center space-x-3">
             {renderProficiencySelector('perception.proficiencyRank', formData.perception?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Perception')}
             <div className="flex items-center space-x-2">
-              <label className="text-xs text-stone-600">Item:</label>
+              <label className="text-xs text-ink-secondary">Item:</label>
               <NumberField
-aria-label="Item bonus to Perception" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.itemBonus} onChange={(v: number) => updateField('perception.itemBonus', v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Item bonus to Perception" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.itemBonus} onChange={(v: number) => updateField('perception.itemBonus', v)} className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
             </div>
           </div>
-          <span className="text-2xl font-bold text-blue-700">{formatModifier(formData.perception?.bonus || 0)}</span>
+          <span className="text-2xl font-bold text-accent-ink">{formatModifier(formData.perception?.bonus || 0)}</span>
         </div>
         <div>
-          <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
-          <ListField max={SHEET_LIST_MAX} aria-label="Senses" value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <label className="text-sm font-semibold text-ink-secondary mb-2 block">Senses (comma-separated)</label>
+          <ListField max={SHEET_LIST_MAX} aria-label="Senses" value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand" />
         </div>
       </div>
 
       {/* Skills */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Skills</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {(Object.keys(formData.skills ?? {}) as (keyof PF2eSkills)[]).map((skillName) => {
             const skillData = formData.skills![skillName];
             const displayName = skillLabel(skillName);
             return (
-              <div key={skillName} className="bg-white border border-stone-200 rounded-lg p-2">
+              <div key={skillName} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-semibold text-stone-800">{displayName}</span>
-                  <span className="text-lg font-bold text-blue-700">{formatModifier(skillData.bonus)}</span>
+                  <span className="text-sm font-semibold text-ink">{displayName}</span>
+                  <span className="text-lg font-bold text-accent-ink">{formatModifier(skillData.bonus)}</span>
                 </div>
                 <div className="flex items-center space-x-2">
                   {renderProficiencySelector(`skills.${skillName}.proficiencyRank`, skillData.proficiencyRank as ProficiencyRank, `Proficiency in ${displayName}`)}
                   <NumberField
-aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
                   {/* A penalty, so 0 or below, as armor prints it (-1 to -3). */}
                   <NumberField
                     aria-label={`Check penalty for ${displayName}`}
@@ -1080,7 +1086,7 @@ aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_
                     value={skillData.armorPenalty}
                     onChange={(v: number) => updateField(`skills.${skillName}.armorPenalty`, pf2eCheckPenalty(v))}
                     placeholder="Penalty"
-                    className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     fallback={0}
                   />
                 </div>
@@ -1091,34 +1097,34 @@ aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_
       </div>
 
       {/* Lore Skills */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-stone-800">Lore Skills</h3>
-          <button onClick={() => { const newLore = [...(formData.loreSkills || []), { name: 'New Lore', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }]; updateField('loreSkills', newLore); }} disabled={listIsFull(formData.loreSkills)} className={`px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+          <h3 className="text-lg font-bold text-ink">Lore Skills</h3>
+          <Button variant="primary" size="sm" onClick={() => { const newLore = [...(formData.loreSkills || []), { name: 'New Lore', attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }]; updateField('loreSkills', newLore); }} disabled={listIsFull(formData.loreSkills)} className="flex items-center space-x-1">
             <Plus className="w-4 h-4" />
             <span>Add Lore</span>
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.loreSkills)} />
         <div className="space-y-2">
           {(formData.loreSkills || []).map((lore, index) => (
-            <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
+            <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" aria-label={`Name of lore skill ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold">
+                <input type="text" aria-label={`Name of lore skill ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10 font-bold">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
               <div className="flex items-center space-x-2">
                 {renderProficiencySelector(`loreSkills.${index}.proficiencyRank`, lore.proficiencyRank as ProficiencyRank, `Proficiency in lore skill ${index + 1}`)}
                 <NumberField
-aria-label={`Item bonus to lore skill ${index + 1}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
-                <span className="text-lg font-bold text-blue-700">{formatModifier(lore.bonus)}</span>
+aria-label={`Item bonus to lore skill ${index + 1}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
+                <span className="text-lg font-bold text-accent-ink">{formatModifier(lore.bonus)}</span>
               </div>
             </div>
           ))}
           {(!formData.loreSkills || formData.loreSkills.length === 0) && (
-            <div className="text-sm text-stone-500 italic text-center py-4">No lore skills added yet</div>
+            <div className="text-sm text-ink-muted italic text-center py-4">No lore skills added yet</div>
           )}
         </div>
       </div>
@@ -1129,171 +1135,171 @@ aria-label={`Item bonus to lore skill ${index + 1}`} min={PF2E_ITEM_BONUS_MIN} m
     <div className="space-y-6">
       {/* AC, Class DC, Initiative, Speed */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Armor Class</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Armor Class</h3>
           <div className="space-y-2">
             {renderProficiencySelector('armorClass.proficiencyRank', formData.armorClass?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in armor')}
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-stone-700 w-24">DEX Cap:</label>
-              <input type="number" aria-label="DEX Cap" min="-1" value={formData.armorClass?.capDex === null ? '' : formData.armorClass?.capDex} onChange={(e) => updateField('armorClass.capDex', e.target.value === '' ? null : parseInt(e.target.value))} placeholder="null" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <label className="text-sm text-ink-secondary w-24">DEX Cap:</label>
+              <input type="number" aria-label="DEX Cap" min="-1" value={formData.armorClass?.capDex === null ? '' : formData.armorClass?.capDex} onChange={(e) => updateField('armorClass.capDex', e.target.value === '' ? null : parseInt(e.target.value))} placeholder="null" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-stone-700 w-24">Item Bonus:</label>
+              <label className="text-sm text-ink-secondary w-24">Item Bonus:</label>
               <NumberField
-aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
             </div>
-            <div className="text-center pt-2 border-t border-stone-300">
-              <div className="text-xs text-stone-600 mb-1">Total AC</div>
-              <div className="text-4xl font-bold text-blue-800">{formData.armorClass?.total || 10}</div>
+            <div className="text-center pt-2 border-t border-ink/20">
+              <div className="text-xs text-ink-secondary mb-1">Total AC</div>
+              <div className="text-4xl font-bold text-info-ink">{formData.armorClass?.total || 10}</div>
             </div>
           </div>
         </div>
 
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Class DC</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Class DC</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-stone-700 w-32">Key Attribute:</label>
-              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <label className="text-sm text-ink-secondary w-32">Key Attribute:</label>
+              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
               </select>
             </div>
             {renderProficiencySelector('classDC.proficiencyRank', formData.classDC?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Class DC')}
-            <div className="text-center pt-2 border-t border-stone-300">
-              <div className="text-xs text-stone-600 mb-1">Total DC</div>
-              <div className="text-4xl font-bold text-purple-800">{formData.classDC?.total || 10}</div>
+            <div className="text-center pt-2 border-t border-ink/20">
+              <div className="text-xs text-ink-secondary mb-1">Total DC</div>
+              <div className="text-4xl font-bold text-spirit-ink">{formData.classDC?.total || 10}</div>
             </div>
           </div>
         </div>
 
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Initiative</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Initiative</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-stone-700 w-24">Uses:</label>
-              <select aria-label="Initiative uses" value={formData.initiative?.usedStat || 'perception'} onChange={(e) => updateField('initiative.usedStat', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <label className="text-sm text-ink-secondary w-24">Uses:</label>
+              <select aria-label="Initiative uses" value={formData.initiative?.usedStat || 'perception'} onChange={(e) => updateField('initiative.usedStat', e.target.value)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 <option value="perception">Perception</option>
                 <option value="stealth">Stealth</option>
               </select>
             </div>
-            <div className="text-center pt-2 border-t border-stone-300">
-              <div className="text-xs text-stone-600 mb-1">Initiative Bonus</div>
-              <div className="text-4xl font-bold text-amber-800">{formatModifier(formData.initiative?.bonus || 0)}</div>
+            <div className="text-center pt-2 border-t border-ink/20">
+              <div className="text-xs text-ink-secondary mb-1">Initiative Bonus</div>
+              <div className="text-4xl font-bold text-warning-ink">{formatModifier(formData.initiative?.bonus || 0)}</div>
             </div>
           </div>
         </div>
 
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Speed</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Speed</h3>
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
-              <label className="text-sm text-stone-700 w-24">Land (ft):</label>
+              <label className="text-sm text-ink-secondary w-24">Land (ft):</label>
               <NumberField
-min={0} aria-label="Land speed (ft)" value={formData.speed?.land} onChange={(v: number) => updateField('speed.land', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={30} />
+min={0} aria-label="Land speed (ft)" value={formData.speed?.land} onChange={(v: number) => updateField('speed.land', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={30} />
             </div>
             <div>
-              <label className="text-sm text-stone-700 mb-1 block">Other (comma-separated):</label>
-              <ListField max={SHEET_LIST_MAX} aria-label="Other speeds" value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <label className="text-sm text-ink-secondary mb-1 block">Other (comma-separated):</label>
+              <ListField max={SHEET_LIST_MAX} aria-label="Other speeds" value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
           </div>
         </div>
       </div>
 
       {/* HP, Death/Dying */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Hit Points</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Hit Points</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-3">
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Ancestry HP</label>
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Ancestry HP</label>
             <NumberField
-min={0} aria-label="Ancestry HP" value={formData.hp?.ancestryHp} onChange={(v: number) => updateField('hp.ancestryHp', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={6} />
+min={0} aria-label="Ancestry HP" value={formData.hp?.ancestryHp} onChange={(v: number) => updateField('hp.ancestryHp', v)} className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={6} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Class HP/Level</label>
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Class HP/Level</label>
             <NumberField
-min={0} aria-label="Class HP per level" value={formData.hp?.classHpPerLevel} onChange={(v: number) => updateField('hp.classHpPerLevel', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={6} />
+min={0} aria-label="Class HP per level" value={formData.hp?.classHpPerLevel} onChange={(v: number) => updateField('hp.classHpPerLevel', v)} className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={6} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Maximum</label>
-            <div className="text-2xl font-bold text-red-800 text-center py-1">{formData.hp?.maximum || 0}</div>
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Maximum</label>
+            <div className="text-2xl font-bold text-danger-ink text-center py-1">{formData.hp?.maximum || 0}</div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Current</label>
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Current</label>
             <NumberField
-min={0} aria-label="Current HP" value={formData.hp?.current} onChange={(v: number) => updateField('hp.current', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center text-red-700 font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} aria-label="Current HP" value={formData.hp?.current} onChange={(v: number) => updateField('hp.current', v)} className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center text-danger-ink font-bold focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Temporary</label>
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Temporary</label>
             <NumberField
-min={0} aria-label="Temporary HP" value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.temporary', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center text-blue-700 font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} aria-label="Temporary HP" value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.temporary', v)} className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center text-info-ink font-bold focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Resistances (comma-sep)</label>
-            <ListField max={SHEET_LIST_MAX} aria-label="Resistances" value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Resistances (comma-sep)</label>
+            <ListField max={SHEET_LIST_MAX} aria-label="Resistances" value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-ink/20 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-brand" />
           </div>
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Immunities (comma-sep)</label>
-            <ListField max={SHEET_LIST_MAX} aria-label="Immunities" value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Immunities (comma-sep)</label>
+            <ListField max={SHEET_LIST_MAX} aria-label="Immunities" value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-ink/20 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-brand" />
           </div>
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Weaknesses (comma-sep)</label>
-            <ListField max={SHEET_LIST_MAX} aria-label="Weaknesses" value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Weaknesses (comma-sep)</label>
+            <ListField max={SHEET_LIST_MAX} aria-label="Weaknesses" value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-ink/20 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-brand" />
           </div>
         </div>
       </div>
 
       {/* Death & Dying */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Death & Dying</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Death & Dying</h3>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="text-sm font-semibold text-red-700 mb-1 block">Dying (0-4)</label>
+            <label className="text-sm font-semibold text-danger-ink mb-1 block">Dying (0-4)</label>
             <NumberField
-min={0} max={4} aria-label="Dying" value={formData.deathAndDying?.dying} onChange={(v: number) => updateField('deathAndDying.dying', Math.min(v, 4))} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-red-700 focus:outline-hidden focus:ring-2 focus:ring-red-500" fallback={0} />
+min={0} max={4} aria-label="Dying" value={formData.deathAndDying?.dying} onChange={(v: number) => updateField('deathAndDying.dying', Math.min(v, 4))} className="w-full px-3 py-2 border border-ink/20 rounded-sm text-center text-xl font-bold text-danger-ink focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-amber-700 mb-1 block">Wounded (0+)</label>
+            <label className="text-sm font-semibold text-warning-ink mb-1 block">Wounded (0+)</label>
             <NumberField
-min={0} aria-label="Wounded" value={formData.deathAndDying?.wounded} onChange={(v: number) => updateField('deathAndDying.wounded', v)} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-amber-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500" fallback={0} />
+min={0} aria-label="Wounded" value={formData.deathAndDying?.wounded} onChange={(v: number) => updateField('deathAndDying.wounded', v)} className="w-full px-3 py-2 border border-ink/20 rounded-sm text-center text-xl font-bold text-warning-ink focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
           </div>
           <div>
-            <label className="text-sm font-semibold text-purple-700 mb-1 block">Doomed (0+)</label>
+            <label className="text-sm font-semibold text-spirit-ink mb-1 block">Doomed (0+)</label>
             <NumberField
-min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v: number) => updateField('deathAndDying.doomed', v)} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-purple-700 focus:outline-hidden focus:ring-2 focus:ring-purple-500" fallback={0} />
+min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v: number) => updateField('deathAndDying.doomed', v)} className="w-full px-3 py-2 border border-ink/20 rounded-sm text-center text-xl font-bold text-spirit-ink focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
           </div>
         </div>
       </div>
 
       {/* Conditions */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Conditions (comma-separated)</h3>
-        <ListField max={SHEET_LIST_MAX} aria-label="Conditions" value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Conditions (comma-separated)</h3>
+        <ListField max={SHEET_LIST_MAX} aria-label="Conditions" value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
       </div>
 
       {/* Proficiencies */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Weapon Proficiencies</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Weapon Proficiencies</h3>
           <div className="space-y-2">
             {(['simple', 'martial', 'advanced', 'unarmed'] as const).map((weapon) => (
               <div key={weapon} className="flex items-center justify-between">
-                <span className="text-sm font-medium text-stone-800 capitalize">{weapon}</span>
+                <span className="text-sm font-medium text-ink capitalize">{weapon}</span>
                 {renderProficiencySelector(`proficiencies.weapons.${weapon}`, formData.proficiencies?.weapons?.[weapon] as ProficiencyRank || 'untrained', `Proficiency with ${weapon} weapons`)}
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Armor Proficiencies</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Armor Proficiencies</h3>
           <div className="space-y-2">
             {(['unarmored', 'light', 'medium', 'heavy'] as const).map((armor) => (
               <div key={armor} className="flex items-center justify-between">
-                <span className="text-sm font-medium text-stone-800 capitalize">{armor}</span>
+                <span className="text-sm font-medium text-ink capitalize">{armor}</span>
                 {renderProficiencySelector(`proficiencies.armor.${armor}`, formData.proficiencies?.armor?.[armor] as ProficiencyRank || 'untrained', `Proficiency in ${armor} armor`)}
               </div>
             ))}
@@ -1302,26 +1308,26 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
       </div>
 
       {/* Strikes */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-stone-800">Strikes & Attacks</h3>
-          <button onClick={() => { const newStrikes = [...(formData.strikes || []), { name: 'New Attack', type: 'melee', attackBonus: 0, damageRoll: '1d6', damageType: 'bludgeoning', attributeModifier: 'strength', proficiencyRank: 'trained', itemBonus: 0, traits: [], range: null, notes: '' }]; updateField('strikes', newStrikes); }} disabled={listIsFull(formData.strikes)} className={`px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+          <h3 className="text-lg font-bold text-ink">Strikes & Attacks</h3>
+          <Button variant="primary" size="sm" onClick={() => { const newStrikes = [...(formData.strikes || []), { name: 'New Attack', type: 'melee', attackBonus: 0, damageRoll: '1d6', damageType: 'bludgeoning', attributeModifier: 'strength', proficiencyRank: 'trained', itemBonus: 0, traits: [], range: null, notes: '' }]; updateField('strikes', newStrikes); }} disabled={listIsFull(formData.strikes)} className="flex items-center space-x-1">
             <Plus className="w-4 h-4" />
             <span>Add Strike</span>
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.strikes)} />
         <div className="space-y-3">
           {(formData.strikes || []).map((strike, index) => (
-            <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
+            <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" aria-label={`Name of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <input type="text" aria-label={`Name of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <select aria-label={`Type of strike ${index + 1}`} value={strike.type} onChange={(e) => updateField(`strikes.${index}.type`, e.target.value)} className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+                <select aria-label={`Type of strike ${index + 1}`} value={strike.type} onChange={(e) => updateField(`strikes.${index}.type`, e.target.value)} className="px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                   <option value="melee">Melee</option>
                   <option value="ranged">Ranged</option>
                 </select>
@@ -1332,23 +1338,23 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
                      value={strike.attackBonus}
                     onChange={(v: number) => updateField(`strikes.${index}.attackBonus`, v)}
                     placeholder="Attack Bonus"
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     fallback={0}
                   />
                   {/* The bonus stays as typed; this says what the rank gives
                       with the strike's attribute and item bonus, to check it. */}
-                  <p className="mt-0.5 text-xs text-stone-500">Rank, attribute and item give {formatModifier(strikeFromRank(strike))}</p>
+                  <p className="mt-0.5 text-xs text-ink-muted">Rank, attribute and item give {formatModifier(strikeFromRank(strike))}</p>
                 </div>
-                <input type="text" aria-label={`Damage roll of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.damageRoll} onChange={(e) => updateField(`strikes.${index}.damageRoll`, e.target.value)} placeholder="1d6" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <input type="text" aria-label={`Damage type of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <input type="number" min="0" aria-label={`Range of strike ${index + 1}`} value={strike.range ?? ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="text" aria-label={`Damage roll of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.damageRoll} onChange={(e) => updateField(`strikes.${index}.damageRoll`, e.target.value)} placeholder="1d6" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <input type="text" aria-label={`Damage type of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <input type="number" min="0" aria-label={`Range of strike ${index + 1}`} value={strike.range ?? ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
               </div>
-              <ListField max={SHEET_ROW_TAGS_MAX} aria-label={`Traits of strike ${index + 1}`} value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-              <input type="text" aria-label={`Notes for strike ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <ListField max={SHEET_ROW_TAGS_MAX} aria-label={`Traits of strike ${index + 1}`} value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+              <input type="text" aria-label={`Notes for strike ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
           ))}
           {(!formData.strikes || formData.strikes.length === 0) && (
-            <div className="text-sm text-stone-500 italic text-center py-4">No strikes added yet</div>
+            <div className="text-sm text-ink-muted italic text-center py-4">No strikes added yet</div>
           )}
         </div>
       </div>
@@ -1359,11 +1365,11 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
     const focusPool = formData.spellcasting?.focusSpells?.focusPoints?.total ?? 0;
     if (!formData.spellcasting) {
       return (
-        <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-6 text-center">
-          <p className="text-amber-800 mb-4">No spellcasting configured</p>
-          <button onClick={() => updateField('spellcasting', newPf2eSpellcasting())} className="px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800">
+        <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-6 text-center">
+          <p className="text-warning-ink mb-4">No spellcasting configured</p>
+          <Button variant="primary" onClick={() => updateField('spellcasting', newPf2eSpellcasting())}>
             Enable Spellcasting
-          </button>
+          </Button>
         </div>
       );
     }
@@ -1371,27 +1377,27 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
     return (
       <div className="space-y-6">
         {/* Spellcasting Config */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Spellcasting Configuration</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Spellcasting Configuration</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <label className="text-sm font-semibold text-stone-700 mb-1 block">Tradition</label>
-              <select aria-label="Tradition" value={formData.spellcasting!.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <label className="text-sm font-semibold text-ink-secondary mb-1 block">Tradition</label>
+              <select aria-label="Tradition" value={formData.spellcasting!.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 {['arcane', 'divine', 'primal', 'occult'].map((t) => (
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
               </select>
             </div>
             <div>
-              <label className="text-sm font-semibold text-stone-700 mb-1 block">Type</label>
-              <select aria-label="Type" value={formData.spellcasting!.type} onChange={(e) => updateField('spellcasting.type', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <label className="text-sm font-semibold text-ink-secondary mb-1 block">Type</label>
+              <select aria-label="Type" value={formData.spellcasting!.type} onChange={(e) => updateField('spellcasting.type', e.target.value)} className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 <option value="prepared">Prepared</option>
                 <option value="spontaneous">Spontaneous</option>
               </select>
             </div>
             <div>
-              <label className="text-sm font-semibold text-stone-700 mb-1 block">Key Attribute</label>
-              <select aria-label="Spellcasting Key Attribute" value={formData.spellcasting!.keyAttribute} onChange={(e) => updateField('spellcasting.keyAttribute', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <label className="text-sm font-semibold text-ink-secondary mb-1 block">Key Attribute</label>
+              <select aria-label="Spellcasting Key Attribute" value={formData.spellcasting!.keyAttribute} onChange={(e) => updateField('spellcasting.keyAttribute', e.target.value)} className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                 {['intelligence', 'wisdom', 'charisma'].map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
@@ -1400,12 +1406,12 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
             {/* One rank for spell attack rolls and spell DCs, as a class
                 gives it (Core Rulebook, "Spellcasting"). */}
             <div>
-              <label htmlFor="pf2e-spellcasting-rank" className="text-sm font-semibold text-stone-700 mb-1 block">Spellcasting proficiency</label>
+              <label htmlFor="pf2e-spellcasting-rank" className="text-sm font-semibold text-ink-secondary mb-1 block">Spellcasting proficiency</label>
               <select
                 id="pf2e-spellcasting-rank"
                 value={formData.spellcasting!.spellAttackBonus?.proficiencyRank || 'untrained'}
                 onChange={(e) => updateField('spellcasting.spellAttackBonus.proficiencyRank', e.target.value as ProficiencyRank)}
-                className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
               >
                 {PROFICIENCY_RANKS.map((rank) => (
                   <option key={rank} value={rank}>{rank.charAt(0).toUpperCase() + rank.slice(1)}</option>
@@ -1417,76 +1423,76 @@ min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v:
 
         {/* Spell Attack & DC */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-            <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Attack</h3>
+          <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+            <h3 className="text-lg font-bold text-ink mb-3">Spell Attack</h3>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <label className="text-sm text-stone-700">Item Bonus:</label>
+                <label className="text-sm text-ink-secondary">Item Bonus:</label>
                 <NumberField
-aria-label="Spell attack item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Spell attack item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
               </div>
-              <div className="text-center pt-2 border-t border-stone-300">
-                <div className="text-xs text-stone-600 mb-1">Total Attack</div>
-                <div className="text-4xl font-bold text-purple-800">{formatModifier(formData.spellcasting!.spellAttackBonus?.bonus || 0)}</div>
+              <div className="text-center pt-2 border-t border-ink/20">
+                <div className="text-xs text-ink-secondary mb-1">Total Attack</div>
+                <div className="text-4xl font-bold text-spirit-ink">{formatModifier(formData.spellcasting!.spellAttackBonus?.bonus || 0)}</div>
               </div>
             </div>
           </div>
 
-          <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-            <h3 className="text-lg font-bold text-stone-800 mb-3">Spell DC</h3>
+          <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+            <h3 className="text-lg font-bold text-ink mb-3">Spell DC</h3>
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
-                <label className="text-sm text-stone-700">Item Bonus:</label>
+                <label className="text-sm text-ink-secondary">Item Bonus:</label>
                 <NumberField
-aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
               </div>
-              <div className="text-center pt-2 border-t border-stone-300">
-                <div className="text-xs text-stone-600 mb-1">Total DC</div>
-                <div className="text-4xl font-bold text-purple-800">{formData.spellcasting!.spellDC?.dc || 10}</div>
+              <div className="text-center pt-2 border-t border-ink/20">
+                <div className="text-xs text-ink-secondary mb-1">Total DC</div>
+                <div className="text-4xl font-bold text-spirit-ink">{formData.spellcasting!.spellDC?.dc || 10}</div>
               </div>
             </div>
           </div>
         </div>
 
         {/* Cantrips */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Cantrips</h3>
-            <button onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} disabled={listIsFull(formData.spellcasting!.cantrips)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+            <h3 className="text-lg font-bold text-ink">Cantrips</h3>
+            <Button variant="primary" size="sm" onClick={() => { const newCantrips = [...(formData.spellcasting!.cantrips || []), newPf2eCantrip()]; updateField('spellcasting.cantrips', newCantrips); }} disabled={listIsFull(formData.spellcasting!.cantrips)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Cantrip</span>
-            </button>
+            </Button>
           </div>
           <ListLimitNote full={listIsFull(formData.spellcasting!.cantrips)} />
           <div className="space-y-2">
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
-              <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" aria-label={`Name of cantrip ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+              <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
+                <input type="text" aria-label={`Name of cantrip ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
             {(!formData.spellcasting!.cantrips || formData.spellcasting!.cantrips.length === 0) && (
-              <div className="text-sm text-stone-500 italic text-center py-4">No cantrips added yet</div>
+              <div className="text-sm text-ink-muted italic text-center py-4">No cantrips added yet</div>
             )}
           </div>
         </div>
 
         {/* Spell Slots */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Slots (Rank 1-10)</h3>
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-bold text-ink mb-3">Spell Slots (Rank 1-10)</h3>
           <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
               const slots = formData.spellcasting!.slots?.[String(rank) as keyof PF2eSpellSlots] ?? { total: 0, expended: 0 };
               return (
-                <div key={rank} className="bg-white border border-stone-200 rounded-lg p-2">
-                  <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
+                <div key={rank} className="bg-paper border border-ink/10 rounded-lg p-2">
+                  <div className="text-xs font-semibold text-center text-ink-secondary mb-1">Rank {rank}</div>
                   <div className="flex flex-col space-y-1">
                     <NumberField
-aria-label={`Rank ${rank} slots`} min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}`, { total: v, expended: Math.min(slots.expended, Math.max(0, v)) })} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
+aria-label={`Rank ${rank} slots`} min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}`, { total: v, expended: Math.min(slots.expended, Math.max(0, v)) })} placeholder="Total" className="w-full px-1 py-0.5 border border-ink/20 rounded-sm text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-brand" fallback={0} />
                     <NumberField
-aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded-sm text-xs text-center text-purple-700 focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
+aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-spirit/30 rounded-sm text-xs text-center text-spirit-ink focus:outline-hidden focus:ring-1 focus:ring-brand" fallback={0} />
                   </div>
                 </div>
               );
@@ -1495,26 +1501,26 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
         </div>
 
         {/* Spells Known/Prepared */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
-            <button onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} disabled={listIsFull(formData.spellcasting!.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+            <h3 className="text-lg font-bold text-ink">Spells {formData.spellcasting!.type === 'prepared' ? 'Prepared' : 'Known'}</h3>
+            <Button variant="primary" size="sm" onClick={() => { const newSpells = [...(formData.spellcasting!.spells || []), newPf2eSpell(formData.spellcasting!.type === 'prepared')]; updateField('spellcasting.spells', newSpells); }} disabled={listIsFull(formData.spellcasting!.spells)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Spell</span>
-            </button>
+            </Button>
           </div>
           <ListLimitNote full={listIsFull(formData.spellcasting!.spells)} />
           <div className="space-y-2">
             {(formData.spellcasting!.spells || []).map((spell, index) => (
-              <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
+              <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <input type="text" aria-label={`Name of spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <input type="text" aria-label={`Name of spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                  <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <select aria-label={`Rank of spell ${index + 1}`} value={spell.rank} onChange={(e) => updateField(`spellcasting.spells.${index}.rank`, parseInt(e.target.value))} className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500">
+                  <select aria-label={`Rank of spell ${index + 1}`} value={spell.rank} onChange={(e) => updateField(`spellcasting.spells.${index}.rank`, parseInt(e.target.value))} className="px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
                       <option key={r} value={r}>Rank {r}</option>
                     ))}
@@ -1529,32 +1535,32 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
               </div>
             ))}
             {(!formData.spellcasting!.spells || formData.spellcasting!.spells.length === 0) && (
-              <div className="text-sm text-stone-500 italic text-center py-4">No spells added yet</div>
+              <div className="text-sm text-ink-muted italic text-center py-4">No spells added yet</div>
             )}
           </div>
         </div>
 
         {/* Focus Spells */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Focus Spells</h3>
+            <h3 className="text-lg font-bold text-ink">Focus Spells</h3>
             <div className="flex items-center space-x-3">
               {/* Points left, out of the pool. The pool is 1 with the first
                   focus spell and at most 3 (Core Rulebook, "Focus Spells");
                   feats that add a spell typically add a point, which the
                   player sets here. */}
               <div className="flex items-center space-x-2">
-                <span className="text-sm font-semibold text-stone-700">Focus Points:</span>
+                <span className="text-sm font-semibold text-ink-secondary">Focus Points:</span>
                 <NumberField
                   aria-label="Focus points left"
                   min={0}
                   max={focusPool}
                   value={formData.spellcasting!.focusSpells?.focusPoints?.current}
                   onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, focusPool))}
-                  className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  className="w-12 px-2 py-1 border border-ink/20 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={0}
                 />
-                <span className="text-sm text-stone-600">/</span>
+                <span className="text-sm text-ink-secondary">/</span>
                 <NumberField
                   aria-label="Focus point total"
                   min={0}
@@ -1567,87 +1573,87 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
                       current: Math.min(formData.spellcasting!.focusSpells?.focusPoints?.current ?? 0, total),
                     });
                   }}
-                  className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  className="w-12 px-2 py-1 border border-ink/20 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={0}
                 />
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); if (focusPool === 0) updateField('spellcasting.focusSpells.focusPoints.total', 1); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+              <Button variant="primary" size="sm" onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); if (focusPool === 0) updateField('spellcasting.focusSpells.focusPoints.total', 1); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className="flex items-center space-x-1">
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
-              </button>
+              </Button>
             </div>
           </div>
           <ListLimitNote full={listIsFull(formData.spellcasting!.focusSpells?.spells)} />
           <div className="space-y-2">
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
-              <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" aria-label={`Name of focus spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+              <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
+                <input type="text" aria-label={`Name of focus spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
             {(!formData.spellcasting!.focusSpells?.spells || formData.spellcasting!.focusSpells.spells.length === 0) && (
-              <div className="text-sm text-stone-500 italic text-center py-4">No focus spells added yet</div>
+              <div className="text-sm text-ink-muted italic text-center py-4">No focus spells added yet</div>
             )}
           </div>
         </div>
 
         {/* Innate Spells */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Innate Spells</h3>
-            <button onClick={() => { const newInnateSpells = [...(formData.spellcasting!.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting!.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} disabled={listIsFull(formData.spellcasting!.innateSpells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+            <h3 className="text-lg font-bold text-ink">Innate Spells</h3>
+            <Button variant="primary" size="sm" onClick={() => { const newInnateSpells = [...(formData.spellcasting!.innateSpells || []), { name: 'New Innate Spell', tradition: formData.spellcasting!.tradition, frequency: 'at will' }]; updateField('spellcasting.innateSpells', newInnateSpells); }} disabled={listIsFull(formData.spellcasting!.innateSpells)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Innate Spell</span>
-            </button>
+            </Button>
           </div>
           <ListLimitNote full={listIsFull(formData.spellcasting!.innateSpells)} />
           <div className="space-y-2">
             {(formData.spellcasting!.innateSpells || []).map((spell, index) => (
-              <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
+              <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <input type="text" aria-label={`Name of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <input type="text" aria-label={`Name of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                  <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <input type="text" aria-label={`Frequency of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.frequency} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.frequency`, e.target.value)} placeholder="Frequency (e.g., at will, 1/day)" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <textarea maxLength={SHEET_LONG_TEXT_MAX} value={spell.notes || ''} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.notes`, e.target.value)} placeholder="Notes (e.g., where it comes from)" aria-label={`Notes for innate spell ${index + 1}`} rows={2} className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <input type="text" aria-label={`Frequency of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.frequency} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.frequency`, e.target.value)} placeholder="Frequency (e.g., at will, 1/day)" className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <textarea maxLength={SHEET_LONG_TEXT_MAX} value={spell.notes || ''} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.notes`, e.target.value)} placeholder="Notes (e.g., where it comes from)" aria-label={`Notes for innate spell ${index + 1}`} rows={2} className="w-full px-2 py-1 mt-2 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
               </div>
             ))}
             {(!formData.spellcasting!.innateSpells || formData.spellcasting!.innateSpells.length === 0) && (
-              <div className="text-sm text-stone-500 italic text-center py-4">No innate spells added yet</div>
+              <div className="text-sm text-ink-muted italic text-center py-4">No innate spells added yet</div>
             )}
           </div>
         </div>
 
         {/* Rituals */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Rituals</h3>
-            <button onClick={() => { const newRituals = [...(formData.spellcasting!.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} disabled={listIsFull(formData.spellcasting!.rituals)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+            <h3 className="text-lg font-bold text-ink">Rituals</h3>
+            <Button variant="primary" size="sm" onClick={() => { const newRituals = [...(formData.spellcasting!.rituals || []), { name: 'New Ritual', rank: 1 }]; updateField('spellcasting.rituals', newRituals); }} disabled={listIsFull(formData.spellcasting!.rituals)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Ritual</span>
-            </button>
+            </Button>
           </div>
           <ListLimitNote full={listIsFull(formData.spellcasting!.rituals)} />
           <div className="space-y-2">
             {(formData.spellcasting!.rituals || []).map((ritual, index) => (
-              <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" aria-label={`Name of ritual ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <select aria-label={`Rank of ritual ${index + 1}`} value={ritual.rank} onChange={(e) => updateField(`spellcasting.rituals.${index}.rank`, parseInt(e.target.value))} className="ml-2 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500">
+              <div key={index} className="flex items-center justify-between bg-paper border border-ink/10 rounded-lg p-2">
+                <input type="text" aria-label={`Name of ritual ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <select aria-label={`Rank of ritual ${index + 1}`} value={ritual.rank} onChange={(e) => updateField(`spellcasting.rituals.${index}.rank`, parseInt(e.target.value))} className="ml-2 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
                     <option key={r} value={r}>Rank {r}</option>
                   ))}
                 </select>
-                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <button onClick={() => { const newRituals = formData.spellcasting!.rituals!.filter((_, i) => i !== index); updateField('spellcasting.rituals', newRituals); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
             ))}
             {(!formData.spellcasting!.rituals || formData.spellcasting!.rituals.length === 0) && (
-              <div className="text-sm text-stone-500 italic text-center py-4">No rituals added yet</div>
+              <div className="text-sm text-ink-muted italic text-center py-4">No rituals added yet</div>
             )}
           </div>
         </div>
@@ -1658,23 +1664,23 @@ aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slo
   const renderInventoryTab = () => (
     <div className="space-y-6">
       {/* Currency */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Currency</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Currency</h3>
         <div className="grid grid-cols-4 gap-4">
           {([{ key: 'pp', label: 'Platinum' }, { key: 'gp', label: 'Gold' }, { key: 'sp', label: 'Silver' }, { key: 'cp', label: 'Copper' }] as const).map((currency) => (
             <div key={currency.key}>
-              <label className="text-sm font-semibold text-stone-700 mb-1 block">{currency.label}</label>
+              <label className="text-sm font-semibold text-ink-secondary mb-1 block">{currency.label}</label>
               <NumberField
-min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} onChange={(v: number) => updateField(`currency.${currency.key}`, v)} className="w-full px-2 py-2 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} onChange={(v: number) => updateField(`currency.${currency.key}`, v)} className="w-full px-2 py-2 border border-ink/20 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
             </div>
           ))}
         </div>
       </div>
 
       {/* Bulk Summary */}
-      <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-blue-800 mb-2">Bulk Summary</h3>
-        <div className="text-sm text-blue-700">
+      <div className="bg-info/10 border-2 border-info/30 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-info-ink mb-2">Bulk Summary</h3>
+        <div className="text-sm text-info-ink">
           <span className="font-semibold">{formatPf2eBulk(pf2eTotalBulk(formData.inventory, formData.currency))}</span> / Encumbered above:{' '}
           {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).encumbered} / Max:{' '}
           {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).maximum}
@@ -1682,31 +1688,31 @@ min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} on
       </div>
 
       {/* Inventory Items */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-bold text-stone-800">Inventory Items</h3>
-          <button onClick={() => { const newInventory = [...(formData.inventory || []), { name: 'New Item', quantity: 1, bulk: 'L', equippable: false, equipped: false, requiresAttunement: false, attuned: false, invested: false, value: 0, notes: '' }]; updateField('inventory', newInventory); }} disabled={listIsFull(formData.inventory)} className={`px-3 py-1 text-sm font-medium text-white bg-blue-700 hover:bg-blue-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+          <h3 className="text-lg font-bold text-ink">Inventory Items</h3>
+          <Button variant="primary" size="sm" onClick={() => { const newInventory = [...(formData.inventory || []), { name: 'New Item', quantity: 1, bulk: 'L', equippable: false, equipped: false, requiresAttunement: false, attuned: false, invested: false, value: 0, notes: '' }]; updateField('inventory', newInventory); }} disabled={listIsFull(formData.inventory)} className="flex items-center space-x-1">
             <Plus className="w-4 h-4" />
             <span>Add Item</span>
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.inventory)} />
         <div className="space-y-3">
           {(formData.inventory || []).map((item, index) => (
-            <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
+            <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" aria-label={`Name of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                <input type="text" aria-label={`Name of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
+                <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <NumberField
-min={0} aria-label={`Quantity of item ${index + 1}`} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
-                <input type="text" aria-label={`Bulk of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.bulk} onChange={(e) => updateField(`inventory.${index}.bulk`, e.target.value)} placeholder="Bulk" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+min={0} aria-label={`Quantity of item ${index + 1}`} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={1} />
+                <input type="text" aria-label={`Bulk of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.bulk} onChange={(e) => updateField(`inventory.${index}.bulk`, e.target.value)} placeholder="Bulk" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" />
                 {/* Prices run to silver and copper: 5 sp is 0.5 gp. */}
                 <NumberField
-min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} value={item.value} onChange={(v: number) => updateField(`inventory.${index}.value`, v)} placeholder="Value" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} value={item.value} onChange={(v: number) => updateField(`inventory.${index}.value`, v)} placeholder="Value" className="px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={0} />
                 <div className="flex items-center space-x-1 text-xs">
                   <label className="flex items-center">
                     <input type="checkbox" checked={item.equipped || false} onChange={(e) => updateField(`inventory.${index}.equipped`, e.target.checked)} className="mr-1" />
@@ -1718,11 +1724,11 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
                   </label>
                 </div>
               </div>
-              <input type="text" aria-label={`Notes for item ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={item.notes || ''} onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <input type="text" aria-label={`Notes for item ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={item.notes || ''} onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
           ))}
           {(!formData.inventory || formData.inventory.length === 0) && (
-            <div className="text-sm text-stone-500 italic text-center py-4">No items in inventory</div>
+            <div className="text-sm text-ink-muted italic text-center py-4">No items in inventory</div>
           )}
         </div>
       </div>
@@ -1730,26 +1736,24 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
   );
 
   const renderFeatsTab = () => {
-    // Written out in full: Tailwind generates only the classes it finds in
-    // the source, so a class put together at run time has no style.
-    const featCategories: { key: keyof PF2eFeats; word: string; label: string; button: string }[] = [
-      { key: 'ancestryAndHeritage', word: 'ancestry and heritage', label: 'Ancestry & Heritage Feats', button: 'bg-green-700 hover:bg-green-800' },
-      { key: 'class', word: 'class', label: 'Class Feats', button: 'bg-blue-700 hover:bg-blue-800' },
-      { key: 'skill', word: 'skill', label: 'Skill Feats', button: 'bg-amber-700 hover:bg-amber-800' },
-      { key: 'general', word: 'general', label: 'General Feats', button: 'bg-purple-700 hover:bg-purple-800' },
-      { key: 'bonus', word: 'bonus', label: 'Bonus Feats', button: 'bg-rose-700 hover:bg-rose-800' },
+    const featCategories: { key: keyof PF2eFeats; word: string; label: string }[] = [
+      { key: 'ancestryAndHeritage', word: 'ancestry and heritage', label: 'Ancestry & Heritage Feats' },
+      { key: 'class', word: 'class', label: 'Class Feats' },
+      { key: 'skill', word: 'skill', label: 'Skill Feats' },
+      { key: 'general', word: 'general', label: 'General Feats' },
+      { key: 'bonus', word: 'bonus', label: 'Bonus Feats' },
     ];
 
     return (
       <div className="space-y-6">
         {/* Class Features */}
-        <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-bold text-stone-800">Class Features</h3>
-            <button onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} disabled={listIsFull(classFeatureRows)} className={`px-3 py-1 text-sm font-medium text-white bg-indigo-700 hover:bg-indigo-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+            <h3 className="text-lg font-bold text-ink">Class Features</h3>
+            <Button variant="primary" size="sm" onClick={() => updateField('classFeatures', [...classFeatureRows, { name: '', description: '' }])} disabled={listIsFull(classFeatureRows)} className="flex items-center space-x-1">
               <Plus className="w-4 h-4" />
               <span>Add Feature</span>
-            </button>
+            </Button>
           </div>
           <ListLimitNote full={listIsFull(classFeatureRows)} />
           <div className="space-y-2">
@@ -1757,7 +1761,7 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
                 names — every sheet saved before descriptions existed — opens
                 the same as one that has them. */}
             {classFeatureRows.map((feature, index) => (
-              <div key={index} className="bg-white border border-stone-200 rounded-lg p-2 space-y-2">
+              <div key={index} className="bg-paper border border-ink/10 rounded-lg p-2 space-y-2">
                 <div className="flex items-center justify-between">
                   <input
                     type="text"
@@ -1766,9 +1770,9 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
                     maxLength={SHEET_SHORT_TEXT_MAX}
                      placeholder="Class Feature Name"
                     aria-label={`Class feature ${index + 1} name`}
-                    className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    className="flex-1 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
-                  <button onClick={() => updateField('classFeatures', classFeatureRows.filter((_, i) => i !== index))} aria-label={`Remove ${feature.name || 'class feature'}`} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                  <button onClick={() => updateField('classFeatures', classFeatureRows.filter((_, i) => i !== index))} aria-label={`Remove ${feature.name || 'class feature'}`} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -1779,46 +1783,46 @@ min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} va
                    placeholder="Description (optional)"
                   aria-label={`Class feature ${index + 1} description`}
                   rows={2}
-                  className="w-full px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
               </div>
             ))}
             {classFeatureRows.length === 0 && (
-              <div className="text-sm text-stone-500 italic text-center py-4">No class features added yet</div>
+              <div className="text-sm text-ink-muted italic text-center py-4">No class features added yet</div>
             )}
           </div>
         </div>
 
         {/* Feats by Category */}
-        {featCategories.map(({ key, word, label, button }) => (
-          <div key={key} className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
+        {featCategories.map(({ key, word, label }) => (
+          <div key={key} className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-bold text-stone-800">{label}</h3>
-              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className={`px-3 py-1 text-sm font-medium text-white ${button} rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+              <h3 className="text-lg font-bold text-ink">{label}</h3>
+              <Button variant="primary" size="sm" onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className="flex items-center space-x-1">
                 <Plus className="w-4 h-4" />
                 <span>Add Feat</span>
-              </button>
+              </Button>
             </div>
             <ListLimitNote full={listIsFull(formData.feats?.[key])} />
             <div className="space-y-3">
               {(formData.feats?.[key] || []).map((feat, index) => (
-                <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
+                <div key={index} className="bg-paper border border-ink/10 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <input type="text" aria-label={`Name of ${word} feat ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" aria-label={`Name of ${word} feat ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand" />
                     <div className="flex items-center space-x-2 ml-2">
-                      <label className="text-xs text-stone-600">Level:</label>
+                      <label className="text-xs text-ink-secondary">Level:</label>
                       <NumberField
-aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
+aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-ink/20 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand" fallback={1} />
                     </div>
-                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
+                    <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="ml-2 px-2 py-1 rounded-sm text-danger-ink hover:bg-danger/10">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  <textarea aria-label={`Description of ${word} feat ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                  <textarea aria-label={`Description of ${word} feat ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
                 </div>
               ))}
               {(!formData.feats?.[key] || formData.feats![key].length === 0) && (
-                <div className="text-sm text-stone-500 italic text-center py-4">No {label.toLowerCase()} added yet</div>
+                <div className="text-sm text-ink-muted italic text-center py-4">No {label.toLowerCase()} added yet</div>
               )}
             </div>
           </div>
@@ -1830,65 +1834,65 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
   const renderBioTab = () => (
     <div className="space-y-6">
       {/* Appearance */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Appearance</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Appearance</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs font-semibold text-stone-600 mb-1 block">Age</label>
-            <input type="text" aria-label="Age" maxLength={SHEET_SHORT_TEXT_MAX} value={formData.appearance?.age || ''} onChange={(e) => updateField('appearance.age', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <label className="text-xs font-semibold text-ink-secondary mb-1 block">Age</label>
+            <input type="text" aria-label="Age" maxLength={SHEET_SHORT_TEXT_MAX} value={formData.appearance?.age || ''} onChange={(e) => updateField('appearance.age', e.target.value)} className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
           </div>
           {(['height', 'weight', 'eyes', 'skin', 'hair'] as const).map((field) => (
             <div key={field}>
-              <label className="text-xs font-semibold text-stone-600 mb-1 block capitalize">{field}</label>
-              <input type="text" aria-label={field.charAt(0).toUpperCase() + field.slice(1)} maxLength={SHEET_SHORT_TEXT_MAX} value={formData.appearance?.[field] || ''} onChange={(e) => updateField(`appearance.${field}`, e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <label className="text-xs font-semibold text-ink-secondary mb-1 block capitalize">{field}</label>
+              <input type="text" aria-label={field.charAt(0).toUpperCase() + field.slice(1)} maxLength={SHEET_SHORT_TEXT_MAX} value={formData.appearance?.[field] || ''} onChange={(e) => updateField(`appearance.${field}`, e.target.value)} className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
           ))}
         </div>
       </div>
 
       {/* Personality */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Personality</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Personality</h3>
         <div className="space-y-3">
           {(['traits', 'ideals', 'bonds', 'flaws'] as const).map((field) => (
             <div key={field}>
-              <label className="text-sm font-semibold text-stone-700 mb-1 block capitalize">{field}</label>
-              <textarea aria-label={field.charAt(0).toUpperCase() + field.slice(1)} maxLength={SHEET_LONG_TEXT_MAX} value={formData.personality?.[field] || ''} onChange={(e) => updateField(`personality.${field}`, e.target.value)} rows={2} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <label className="text-sm font-semibold text-ink-secondary mb-1 block capitalize">{field}</label>
+              <textarea aria-label={field.charAt(0).toUpperCase() + field.slice(1)} maxLength={SHEET_LONG_TEXT_MAX} value={formData.personality?.[field] || ''} onChange={(e) => updateField(`personality.${field}`, e.target.value)} rows={2} className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand" />
             </div>
           ))}
         </div>
       </div>
 
       {/* Languages */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Languages (comma-separated)</h3>
-        <ListField max={SHEET_LIST_MAX} aria-label="Languages" value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Languages (comma-separated)</h3>
+        <ListField max={SHEET_LIST_MAX} aria-label="Languages" value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
       </div>
 
       {/* Backstory */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Backstory</h3>
-        <textarea aria-label="Backstory" maxLength={SHEET_LONG_TEXT_MAX} value={formData.backstory || ''} onChange={(e) => updateField('backstory', e.target.value)} rows={6} placeholder="Tell your character's story..." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Backstory</h3>
+        <textarea aria-label="Backstory" maxLength={SHEET_LONG_TEXT_MAX} value={formData.backstory || ''} onChange={(e) => updateField('backstory', e.target.value)} rows={6} placeholder="Tell your character's story..." className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand" />
       </div>
 
       {/* Allies & Organizations */}
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Allies & Organizations</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Allies & Organizations</h3>
         <div className="space-y-2">
-          <input type="text" aria-label="Organization" maxLength={SHEET_LONG_TEXT_MAX} value={formData.alliesAndOrganizations?.name || ''} onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)} placeholder="Organization Name" className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-          <textarea aria-label="Organization description" maxLength={SHEET_LONG_TEXT_MAX} value={formData.alliesAndOrganizations?.description || ''} onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)} rows={3} placeholder="Description" className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <input type="text" aria-label="Organization" maxLength={SHEET_LONG_TEXT_MAX} value={formData.alliesAndOrganizations?.name || ''} onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)} placeholder="Organization Name" className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
+          <textarea aria-label="Organization description" maxLength={SHEET_LONG_TEXT_MAX} value={formData.alliesAndOrganizations?.description || ''} onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)} rows={3} placeholder="Description" className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand" />
         </div>
       </div>
 
       {/* Notes & Treasure */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-md font-bold text-stone-800 mb-2">Notes</h3>
-          <textarea aria-label="Notes" maxLength={SHEET_LONG_TEXT_MAX} value={formData.notes || ''} onChange={(e) => updateField('notes', e.target.value)} rows={4} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-md font-bold text-ink mb-2">Notes</h3>
+          <textarea aria-label="Notes" maxLength={SHEET_LONG_TEXT_MAX} value={formData.notes || ''} onChange={(e) => updateField('notes', e.target.value)} rows={4} className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand" />
         </div>
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-md font-bold text-stone-800 mb-2">Treasure</h3>
-          <textarea aria-label="Treasure" maxLength={SHEET_LONG_TEXT_MAX} value={formData.treasure || ''} onChange={(e) => updateField('treasure', e.target.value)} rows={4} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-md font-bold text-ink mb-2">Treasure</h3>
+          <textarea aria-label="Treasure" maxLength={SHEET_LONG_TEXT_MAX} value={formData.treasure || ''} onChange={(e) => updateField('treasure', e.target.value)} rows={4} className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand" />
         </div>
       </div>
     </div>
@@ -1896,7 +1900,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
 
   return (
     <div
-      className="bg-white border-2 border-stone-200 rounded-lg overflow-hidden shadow-lg"
+      className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg"
       onInputCapture={noteInteraction}
       onChangeCapture={noteInteraction}
       onPointerDownCapture={noteInteraction}
@@ -1904,7 +1908,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
       {renderHeader()}
       {renderTabs()}
       {openingChanges.length > 0 && (
-        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg">
+        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving
           keeps the new values.
         </p>
@@ -1918,7 +1922,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
         {activeTab === 'bio' && renderBioTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 pb-4 text-sm text-red-600">{errors.submit}</div>
+        <div className="px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
       )}
     </div>
   );

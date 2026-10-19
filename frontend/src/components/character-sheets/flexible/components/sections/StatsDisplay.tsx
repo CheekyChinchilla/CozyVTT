@@ -25,7 +25,7 @@ export const StatsDisplay: React.FC<StatsDisplayProps> = ({ section }) => {
         {section.fields.map((field) => (
           <div
             key={field.id}
-            className="bg-parchment/30 border border-moss-green/20 rounded-lg p-3"
+            className="bg-ink/5 border border-moss-green/20 rounded-lg p-3"
           >
             <div className="text-sm text-stone-gray mb-1">{field.name}</div>
             <div className="flex items-baseline gap-2">

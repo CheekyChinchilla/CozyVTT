@@ -46,92 +46,93 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
   // Calculate percentage for progress bar
   const percentage = maximum > 0 ? Math.round((current / maximum) * 100) : 0;
 
-  // Determine danger level and color
+  // Determine danger level and color. The fills are tints, as the numbers sit
+  // on them; Shaken and Fragile share the warning colour, Fragile at the
+  // stronger tint and with the warning icon.
   const getDangerLevel = () => {
     const ratio = current / maximum;
-    if (ratio > 0.75) return { level: 'Stable', color: 'bg-green-600', text: 'text-green-600' };
-    if (ratio > 0.5) return { level: 'Shaken', color: 'bg-yellow-500', text: 'text-yellow-600' };
-    if (ratio > 0.25) return { level: 'Fragile', color: 'bg-orange-500', text: 'text-orange-600' };
-    return { level: 'Breaking', color: 'bg-red-600', text: 'text-red-600' };
+    if (ratio > 0.75) return { level: 'Stable', color: 'bg-success/50', text: 'text-success-ink' };
+    if (ratio > 0.5) return { level: 'Shaken', color: 'bg-warning/35', text: 'text-warning-ink' };
+    if (ratio > 0.25) return { level: 'Fragile', color: 'bg-warning/70', text: 'text-warning-ink' };
+    return { level: 'Breaking', color: 'bg-danger/50', text: 'text-danger-ink' };
   };
 
   const dangerLevel = getDangerLevel();
 
   return (
-    <div className="bg-linear-to-br/srgb from-purple-900/20 to-indigo-900/20 border-2 border-purple-800/50 rounded-lg p-4 space-y-3">
+    <div className="bg-spirit/10 border-2 border-spirit/30 rounded-lg p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <Brain className="w-5 h-5 text-purple-300" />
-          <h3 className="text-lg font-bold text-purple-100">Sanity Points</h3>
+          <Brain className="w-5 h-5 text-spirit-ink" />
+          <h3 className="text-lg font-bold text-spirit-ink">Sanity Points</h3>
         </div>
-        <div className={`flex items-center space-x-1 ${dangerLevel.text}`}>
-          {dangerLevel.level === 'Breaking' && <Skull className="w-4 h-4" />}
-          {dangerLevel.level === 'Fragile' && <AlertTriangle className="w-4 h-4" />}
-          <span className="text-sm font-semibold">{dangerLevel.level}</span>
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-bold text-ink">
+            {current} / {maximum}
+          </span>
+          <div className={`flex items-center space-x-1 ${dangerLevel.text}`}>
+            {dangerLevel.level === 'Breaking' && <Skull className="w-4 h-4" />}
+            {dangerLevel.level === 'Fragile' && <AlertTriangle className="w-4 h-4" />}
+            <span className="text-sm font-semibold">{dangerLevel.level}</span>
+          </div>
         </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="relative w-full h-8 bg-black/30 rounded-full overflow-hidden border border-purple-700/50">
-        {/* Fill */}
+      {/* The number is above the bar: no one text colour reads on both the
+          fill and the track in every theme. */}
+      <div className="relative w-full h-4 bg-ink/10 rounded-full overflow-hidden border border-spirit/30">
         <div
           className={`absolute inset-y-0 left-0 ${dangerLevel.color} transition-all duration-300 ease-out`}
           style={{ width: `${percentage}%` }}
         />
-
-        {/* Percentage Text */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-bold text-white drop-shadow-lg">
-            {current} / {maximum}
-          </span>
-        </div>
       </div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-3">
         {/* Current */}
-        <div className="bg-black/20 rounded-md p-2 border border-purple-700/30">
-          <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Current</div>
+        <div className="bg-paper rounded-md p-2 border border-spirit/30">
+          <div className="text-xs text-spirit-ink uppercase tracking-wide mb-1">Current</div>
           {editable ? (
             <NumberField
               aria-label="Current Sanity"
               value={current}
               onChange={(v: number) => onChange?.current(Math.min(v, maximum))}
-              className="w-full text-center text-xl font-bold text-white bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
+              className="w-full text-center text-xl font-bold text-ink bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-brand rounded-sm"
               min={0}
               max={maximum}
               fallback={0}
             />
           ) : (
-            <div className="text-xl font-bold text-white">{current}</div>
+            <div className="text-xl font-bold text-ink">{current}</div>
           )}
         </div>
 
         {/* Starting */}
-        <div className="bg-black/20 rounded-md p-2 border border-purple-700/30">
-          <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Start</div>
+        <div className="bg-paper rounded-md p-2 border border-spirit/30">
+          <div className="text-xs text-spirit-ink uppercase tracking-wide mb-1">Start</div>
           {editable ? (
             <NumberField
               aria-label="Starting Sanity"
               value={starting}
               onChange={(v: number) => onChange?.starting(Math.min(v, 99))}
-              className="w-full text-center text-xl font-bold text-purple-100 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
+              className="w-full text-center text-xl font-bold text-ink bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-brand rounded-sm"
               min={0}
               max={99}
               fallback={0}
             />
           ) : (
-            <div className="text-xl font-bold text-purple-100">{starting}</div>
+            <div className="text-xl font-bold text-ink">{starting}</div>
           )}
         </div>
 
         {/* Maximum */}
-        <div className="bg-black/20 rounded-md p-2 border border-purple-700/30">
-          <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Max</div>
-          <div className="text-xl font-bold text-purple-100">{maximum}</div>
+        <div className="bg-paper rounded-md p-2 border border-spirit/30">
+          <div className="text-xs text-spirit-ink uppercase tracking-wide mb-1">Max</div>
+          <div className="text-xl font-bold text-ink">{maximum}</div>
           {cthulhuMythos > 0 && (
-            <div className="text-[10px] text-purple-400 mt-0.5">
+            <div className="text-[10px] text-ink-muted mt-0.5">
               (99 - {cthulhuMythos} Mythos)
             </div>
           )}
@@ -140,8 +141,8 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
 
       {/* Warning for low sanity */}
       {current <= maximum * 0.25 && (
-        <div className="bg-red-900/30 border border-red-700 rounded-md p-2">
-          <div className="flex items-center space-x-2 text-red-200 text-xs">
+        <div className="bg-danger/10 border border-danger/30 rounded-md p-2">
+          <div className="flex items-center space-x-2 text-danger-ink text-xs">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span>
               Warning: Your investigator is approaching total madness. Losing more SAN may result in indefinite insanity.

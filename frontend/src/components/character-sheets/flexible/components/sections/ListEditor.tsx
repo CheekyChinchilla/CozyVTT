@@ -48,7 +48,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
         <Reorder.Group axis="y" values={section.items} onReorder={reorderItems} className="space-y-2">
           {section.items.map((item) => (
             <Reorder.Item key={item.id} value={item}>
-              <div className="flex items-center gap-2 p-2 bg-parchment/30 border border-moss-green/20 rounded-lg group hover:bg-parchment/50 transition-colors">
+              <div className="flex items-center gap-2 p-2 bg-ink/5 border border-moss-green/20 rounded-lg group hover:bg-ink/10 transition-colors">
                 <div className="shrink-0 cursor-grab active:cursor-grabbing">
                   <GripVertical className="w-5 h-5 text-stone-gray" />
                 </div>
@@ -77,7 +77,7 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
 
                 <button
                   onClick={() => removeItem(item.id)}
-                  className="shrink-0 p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                  className="shrink-0 p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
                   title="Remove item"
                 >
                   <Trash2 className="w-4 h-4" />

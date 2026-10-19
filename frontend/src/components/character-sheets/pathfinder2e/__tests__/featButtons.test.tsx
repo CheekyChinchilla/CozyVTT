@@ -4,12 +4,13 @@
  * The buttons' classes were put together while the page ran
  * (`bg-${color}-700`), and Tailwind only generates a class it finds written
  * out in the source, so the Ancestry & Heritage, Skill and Bonus buttons came
- * out with no background at all: white text on white. The classes are written
- * out now.
+ * out with no background at all: white text on white. They are the shared
+ * Button now, whose class is written out in its own source.
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import source from '../Pathfinder2eCharacterEditor.tsx?raw';
+import buttonSource from '@/components/ui/Button.tsx?raw';
 import { Pathfinder2eCharacterEditor } from '../Pathfinder2eCharacterEditor';
 import { pf2eCharacter } from './pf2eFixture';
 
@@ -28,9 +29,9 @@ describe('the Add Feat buttons', () => {
     const buttons = screen.getAllByRole('button', { name: 'Add Feat' });
     expect(buttons).toHaveLength(5);
     for (const button of buttons) {
-      const background = button.className.split(/\s+/).find((c) => /^bg-[a-z]+-700$/.test(c));
+      const background = button.className.split(/\s+/).find((c) => c === 'btn-primary');
       expect(background).toBeDefined();
-      expect(source).toContain(background!);
+      expect(buttonSource).toContain(background!);
     }
   });
 });

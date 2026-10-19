@@ -135,8 +135,11 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
+    // TODO(sheets): a preset always gets white text here, but the editor picks
+    // by shouldUseWhiteText(selectedColor.hex), so Golden (#d97706) reads black
+    // in the editor and white here. Both should use shouldUseWhiteText.
     const headerTextColor = isCustomColor
-      ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-stone-900')
+      ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black')
       : 'text-white';
 
     const headerClasses = isCustomColor
@@ -221,8 +224,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render ability scores in a grid
   const renderAttributes = () => (
-    <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center">
+    <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-ink mb-4 flex items-center">
         <User className="w-5 h-5 mr-2" />
         Ability Scores
       </h3>
@@ -234,27 +237,27 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           return (
             <div
               key={ability}
-              className={`flex flex-col items-center rounded-lg p-1 transition-colors group ${onRoll ? 'cursor-pointer hover:bg-stone-100 select-none' : ''}`}
+              className={`flex flex-col items-center rounded-lg p-1 transition-colors group ${onRoll ? 'cursor-pointer hover:bg-ink/10 select-none' : ''}`}
               onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
               onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
               title={onRoll ? `Left-click: roll ${ability} check  |  Right-click: Fortune / Misfortune` : undefined}
             >
-              <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">
+              <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                 {ability.slice(0, 3)}
               </div>
-              <div className="relative w-16 h-16 rounded-full bg-linear-to-br/srgb from-blue-600 to-blue-800 flex items-center justify-center shadow-lg border-2 border-blue-900">
-                <span className="text-2xl font-bold text-white">
+              <div className="relative w-16 h-16 rounded-full bg-accent flex items-center justify-center shadow-lg border-2 border-accent-hover">
+                <span className="text-2xl font-bold text-accent-text">
                   {formatModifier(abilityData.modifier)}
                 </span>
                 {onRoll && (
                   <div className="absolute -bottom-1 -right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    <div className="w-4 h-4 rounded-full bg-blue-700 flex items-center justify-center shadow-sm">
-                      <Dices className="w-2.5 h-2.5 text-white" />
+                    <div className="w-4 h-4 rounded-full bg-accent flex items-center justify-center shadow-sm">
+                      <Dices className="w-2.5 h-2.5 text-accent-text" />
                     </div>
                   </div>
                 )}
               </div>
-              <div className="text-sm font-semibold text-stone-700 mt-2">
+              <div className="text-sm font-semibold text-ink-secondary mt-2">
                 {abilityData.score}
               </div>
             </div>
@@ -266,8 +269,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render saving throws with proficiency ranks
   const renderSavingThrows = () => (
-    <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-stone-800 mb-3 flex items-center">
+    <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-ink mb-3 flex items-center">
         <Shield className="w-5 h-5 mr-2" />
         Saving Throws
       </h3>
@@ -285,17 +288,17 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           return (
             <div
               key={save}
-              className={`bg-white border border-stone-200 rounded-lg p-3 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
+              className={`bg-paper border border-ink/10 rounded-lg p-3 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
               onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
               onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
               title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
             >
               <div className="flex items-center space-x-2">
                 <ProficiencyIndicator rank={saveData.proficiencyRank as ProficiencyRank} />
-                <span className="font-semibold text-stone-800 capitalize">{save}</span>
-                {onRoll && <Dices className="w-3.5 h-3.5 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                <span className="font-semibold text-ink capitalize">{save}</span>
+                {onRoll && <Dices className="w-3.5 h-3.5 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
               </div>
-              <span className="text-2xl font-bold text-blue-700">
+              <span className="text-2xl font-bold text-accent-ink">
                 {formatModifier(saveBonus)}
               </span>
             </div>
@@ -314,8 +317,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     };
 
     return (
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3 flex items-center">
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3 flex items-center">
           <Eye className="w-5 h-5 mr-2" />
           Perception
         </h3>
@@ -324,7 +327,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           const expr = perceptionBonus >= 0 ? `1d20+${perceptionBonus}` : `1d20${perceptionBonus}`;
           return (
             <div
-              className={`bg-white border border-stone-200 rounded-lg p-4 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
+              className={`bg-paper border border-ink/10 rounded-lg p-4 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
               onClick={onRoll ? () => handleRoll(expr, 'Perception') : undefined}
               onContextMenu={onRoll ? (e) => showRollPopup(e, expr, 'Perception') : undefined}
               title={onRoll ? `Left-click: roll Perception  |  Right-click: Fortune / Misfortune` : undefined}
@@ -332,18 +335,18 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <div className="flex items-center space-x-3">
                 <ProficiencyIndicator rank={perception.proficiencyRank as ProficiencyRank} size="lg" />
                 <div>
-                  <div className="flex items-center gap-1 text-xs text-stone-600 uppercase tracking-wide">
+                  <div className="flex items-center gap-1 text-xs text-ink-secondary uppercase tracking-wide">
                     Perception
-                    {onRoll && <Dices className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
                   </div>
                   {perception.senses && perception.senses.length > 0 && (
-                    <div className="text-xs text-stone-500 mt-1">
+                    <div className="text-xs text-ink-muted mt-1">
                       {perception.senses.join(', ')}
                     </div>
                   )}
                 </div>
               </div>
-              <span className="text-3xl font-bold text-blue-700">
+              <span className="text-3xl font-bold text-accent-ink">
                 {formatModifier(perceptionBonus)}
               </span>
             </div>
@@ -357,8 +360,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
   const renderCombatStats = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
       {/* Armor Class */}
-      <div className="bg-linear-to-br/srgb from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
-        <h3 className="text-sm font-bold text-blue-800 mb-2 flex items-center">
+      <div className="bg-info/10 border-2 border-info/30 rounded-lg p-4">
+        <h3 className="text-sm font-bold text-info-ink mb-2 flex items-center">
           <Shield className="w-4 h-4 mr-2" />
           Armor Class
         </h3>
@@ -366,22 +369,22 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <ProficiencyIndicator
             rank={data.armorClass?.proficiencyRank as ProficiencyRank || 'untrained'}
           />
-          <span className="text-4xl font-bold text-blue-800">
+          <span className="text-4xl font-bold text-info-ink">
             {/* Derived, like initiative below: the stored total was printed
                 as-is, and the built-in Fighter's was one too high. */}
             {pf2eArmorClass(data)}
           </span>
         </div>
         {data.armorClass?.capDex !== null && data.armorClass?.capDex !== undefined && (
-          <div className="text-xs text-blue-700 mt-2">
+          <div className="text-xs text-info-ink mt-2">
             DEX Cap: {formatModifier(data.armorClass.capDex)}
           </div>
         )}
       </div>
 
       {/* Class DC */}
-      <div className="bg-linear-to-br/srgb from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
-        <h3 className="text-sm font-bold text-purple-800 mb-2 flex items-center">
+      <div className="bg-spirit/10 border-2 border-spirit/30 rounded-lg p-4">
+        <h3 className="text-sm font-bold text-spirit-ink mb-2 flex items-center">
           <Target className="w-4 h-4 mr-2" />
           Class DC
         </h3>
@@ -389,28 +392,28 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <ProficiencyIndicator
             rank={data.classDC?.proficiencyRank as ProficiencyRank || 'untrained'}
           />
-          <span className="text-4xl font-bold text-purple-800">
+          <span className="text-4xl font-bold text-spirit-ink">
             {pf2eClassDC(data)}
           </span>
         </div>
         {data.classDC?.keyAttribute && (
-          <div className="text-xs text-purple-700 mt-2 capitalize">
+          <div className="text-xs text-spirit-ink mt-2 capitalize">
             Key: {data.classDC.keyAttribute}
           </div>
         )}
       </div>
 
       {/* Initiative */}
-      <div className="bg-linear-to-br/srgb from-amber-50 to-amber-100 border-2 border-amber-300 rounded-lg p-4">
-        <h3 className="text-sm font-bold text-amber-800 mb-2 flex items-center">
+      <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4">
+        <h3 className="text-sm font-bold text-warning-ink mb-2 flex items-center">
           <Zap className="w-4 h-4 mr-2" />
           Initiative
         </h3>
         <div className="flex items-center justify-between">
-          <span className="text-xs text-amber-700 capitalize">
+          <span className="text-xs text-warning-ink capitalize">
             {data.initiative?.usedStat || 'perception'}
           </span>
-          <span className="text-4xl font-bold text-amber-800">
+          <span className="text-4xl font-bold text-warning-ink">
             {/* Derived rather than read from the stored `initiative.bonus`,
                 which nothing kept in step: a character with Perception +6 read
                 +0 here. The editor recalculates it on open, so only sheets
@@ -422,13 +425,13 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       </div>
 
       {/* Speed */}
-      <div className="bg-linear-to-br/srgb from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
-        <h3 className="text-sm font-bold text-green-800 mb-2">Speed</h3>
-        <div className="text-3xl font-bold text-green-800">
+      <div className="bg-success/10 border-2 border-success/30 rounded-lg p-4">
+        <h3 className="text-sm font-bold text-success-ink mb-2">Speed</h3>
+        <div className="text-3xl font-bold text-success-ink">
           {data.speed?.land ?? 30} ft.
         </div>
         {data.speed?.other && data.speed.other.length > 0 && (
-          <div className="text-xs text-green-700 mt-2">
+          <div className="text-xs text-success-ink mt-2">
             {data.speed.other.join(', ')}
           </div>
         )}
@@ -438,23 +441,23 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render HP and conditions
   const renderHitPoints = () => (
-    <div className="bg-linear-to-r/srgb from-red-50 to-red-100 border-2 border-red-300 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-red-800 mb-3 flex items-center">
+    <div className="bg-danger/10 border-2 border-danger/30 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-danger-ink mb-3 flex items-center">
         <Heart className="w-5 h-5 mr-2" />
         Hit Points
       </h3>
       <div className="grid grid-cols-3 gap-4 mb-3">
         <div>
-          <div className="text-xs font-semibold text-red-700 mb-1">Maximum</div>
-          <div className="text-3xl font-bold text-red-800">{data.hp?.maximum || 0}</div>
+          <div className="text-xs font-semibold text-danger-ink mb-1">Maximum</div>
+          <div className="text-3xl font-bold text-danger-ink">{data.hp?.maximum || 0}</div>
         </div>
         <div>
-          <div className="text-xs font-semibold text-red-700 mb-1">Current</div>
-          <div className="text-3xl font-bold text-red-700">{data.hp?.current || 0}</div>
+          <div className="text-xs font-semibold text-danger-ink mb-1">Current</div>
+          <div className="text-3xl font-bold text-danger-ink">{data.hp?.current || 0}</div>
         </div>
         <div>
-          <div className="text-xs font-semibold text-red-700 mb-1">Temporary</div>
-          <div className="text-3xl font-bold text-blue-700">{data.hp?.temporary || 0}</div>
+          <div className="text-xs font-semibold text-danger-ink mb-1">Temporary</div>
+          <div className="text-3xl font-bold text-info-ink">{data.hp?.temporary || 0}</div>
         </div>
       </div>
 
@@ -462,19 +465,19 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       <div className="grid grid-cols-3 gap-2 text-xs">
         {data.hp?.resistances && data.hp.resistances.length > 0 && (
           <div>
-            <span className="font-semibold text-green-700">Resistances:</span>{' '}
+            <span className="font-semibold text-success-ink">Resistances:</span>{' '}
             {data.hp.resistances.join(', ')}
           </div>
         )}
         {data.hp?.immunities && data.hp.immunities.length > 0 && (
           <div>
-            <span className="font-semibold text-blue-700">Immunities:</span>{' '}
+            <span className="font-semibold text-info-ink">Immunities:</span>{' '}
             {data.hp.immunities.join(', ')}
           </div>
         )}
         {data.hp?.weaknesses && data.hp.weaknesses.length > 0 && (
           <div>
-            <span className="font-semibold text-red-700">Weaknesses:</span>{' '}
+            <span className="font-semibold text-danger-ink">Weaknesses:</span>{' '}
             {data.hp.weaknesses.join(', ')}
           </div>
         )}
@@ -484,20 +487,20 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {((data.deathAndDying?.dying ?? 0) > 0 ||
         (data.deathAndDying?.wounded ?? 0) > 0 ||
         (data.deathAndDying?.doomed ?? 0) > 0) && (
-        <div className="mt-3 pt-3 border-t border-red-300">
+        <div className="mt-3 pt-3 border-t border-danger/30">
           <div className="flex items-center space-x-4 text-sm">
             <div className="flex items-center space-x-1">
-              <Skull className="w-4 h-4 text-red-700" />
-              <span className="font-semibold text-red-700">Dying:</span>
-              <span className="text-red-800">{data.deathAndDying?.dying || 0}</span>
+              <Skull className="w-4 h-4 text-danger-ink" />
+              <span className="font-semibold text-danger-ink">Dying:</span>
+              <span className="text-danger-ink">{data.deathAndDying?.dying || 0}</span>
             </div>
             <div>
-              <span className="font-semibold text-amber-700">Wounded:</span>
-              <span className="text-amber-800"> {data.deathAndDying?.wounded || 0}</span>
+              <span className="font-semibold text-warning-ink">Wounded:</span>
+              <span className="text-warning-ink"> {data.deathAndDying?.wounded || 0}</span>
             </div>
             <div>
-              <span className="font-semibold text-purple-700">Doomed:</span>
-              <span className="text-purple-800"> {data.deathAndDying?.doomed || 0}</span>
+              <span className="font-semibold text-spirit-ink">Doomed:</span>
+              <span className="text-spirit-ink"> {data.deathAndDying?.doomed || 0}</span>
             </div>
           </div>
         </div>
@@ -511,8 +514,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     const loreSkills = data.loreSkills || [];
 
     return (
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Skills</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Skills</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {(Object.entries(skills) as [string, PF2eSkill][]).map(([skillName, skillData]) => {
             const displayName = skillName
@@ -526,20 +529,20 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             return (
               <div
                 key={skillName}
-                className={`bg-white border border-stone-200 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
+                className={`bg-paper border border-ink/10 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
                 onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
                 onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                 title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
               >
                 <div className="flex items-center space-x-2">
                   <ProficiencyIndicator rank={skillData.proficiencyRank as ProficiencyRank} size="sm" />
-                  <span className="text-sm font-medium text-stone-800">{displayName}</span>
-                  <span className="text-xs text-stone-500">
+                  <span className="text-sm font-medium text-ink">{displayName}</span>
+                  <span className="text-xs text-ink-muted">
                     ({skillData.attribute?.slice(0, 3).toUpperCase()})
                   </span>
-                  {onRoll && <Dices className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                  {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
                 </div>
-                <span className="text-lg font-bold text-blue-700">
+                <span className="text-lg font-bold text-accent-ink">
                   {formatModifier(skillBonus)}
                 </span>
               </div>
@@ -550,7 +553,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {/* Lore Skills */}
         {loreSkills.length > 0 && (
           <div className="mt-4">
-            <h4 className="text-md font-semibold text-stone-700 mb-2">Lore Skills</h4>
+            <h4 className="text-md font-semibold text-ink-secondary mb-2">Lore Skills</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {loreSkills.map((lore, index) => {
                 const loreBonus = pf2eSkillTotal(data, lore);
@@ -559,17 +562,17 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                 return (
                   <div
                     key={index}
-                    className={`bg-amber-50 border border-amber-200 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 select-none' : ''}`}
+                    className={`bg-warning/10 border border-warning/30 rounded-sm p-2 flex items-center justify-between group ${onRoll ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : ''}`}
                     onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
                     onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                     title={onRoll ? `Left-click: roll  |  Right-click: Fortune / Misfortune` : undefined}
                   >
                     <div className="flex items-center space-x-2">
                       <ProficiencyIndicator rank={lore.proficiencyRank as ProficiencyRank} size="sm" />
-                      <span className="text-sm font-medium text-stone-800">{lore.name}</span>
-                      {onRoll && <Dices className="w-3 h-3 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                      <span className="text-sm font-medium text-ink">{lore.name}</span>
+                      {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
                     </div>
-                    <span className="text-lg font-bold text-blue-700">
+                    <span className="text-lg font-bold text-accent-ink">
                       {formatModifier(loreBonus)}
                     </span>
                   </div>
@@ -584,8 +587,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render strikes/attacks
   const renderStrikes = () => (
-    <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-stone-800 mb-3">Strikes & Attacks</h3>
+    <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-ink mb-3">Strikes & Attacks</h3>
       <StrikesList
         strikes={data.strikes || []}
         onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
@@ -596,18 +599,18 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render inventory and bulk
   const renderInventory = () => (
-    <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center">
+    <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-ink mb-4 flex items-center">
         <Package className="w-5 h-5 mr-2" />
         Inventory & Equipment
       </h3>
 
       {/* Currency */}
-      <div className="bg-white border border-stone-200 rounded-lg p-3 mb-4">
+      <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
-            <Coins className="w-5 h-5 text-amber-600" />
-            <span className="font-semibold text-stone-800">Currency</span>
+            <Coins className="w-5 h-5 text-ink-secondary" />
+            <span className="font-semibold text-ink">Currency</span>
           </div>
           <div className="flex items-center space-x-4 text-sm">
             <span><strong>{data.currency?.pp || 0}</strong> pp</span>
@@ -622,9 +625,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
       {/* Treasure — recorded on the sheet but never shown here before. */}
       {data.treasure && (
-        <div className="bg-white border border-stone-200 rounded-lg p-3 mt-4">
-          <h4 className="text-sm font-semibold text-stone-700 mb-1">Treasure</h4>
-          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.treasure}</p>
+        <div className="bg-paper border border-ink/10 rounded-lg p-3 mt-4">
+          <h4 className="text-sm font-semibold text-ink-secondary mb-1">Treasure</h4>
+          <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.treasure}</p>
         </div>
       )}
     </div>
@@ -642,20 +645,20 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     if (!weapons.length && !armor.length && !conditions.length) return null;
 
     return (
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center">
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-4 flex items-center">
           <Shield className="w-5 h-5 mr-2" />
           Proficiencies &amp; Conditions
         </h3>
 
         {conditions.length > 0 && (
           <div className="mb-4">
-            <h4 className="text-sm font-semibold text-stone-700 mb-2">Conditions</h4>
+            <h4 className="text-sm font-semibold text-ink-secondary mb-2">Conditions</h4>
             <div className="flex flex-wrap gap-2">
               {conditions.map((condition, index) => (
                 <span
                   key={index}
-                  className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-medium"
+                  className="px-3 py-1 bg-danger/15 border border-danger/30 text-danger-ink rounded-full text-sm font-medium"
                 >
                   {condition}
                 </span>
@@ -667,11 +670,11 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {weapons.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-stone-700 mb-2">Weapons</h4>
+              <h4 className="text-sm font-semibold text-ink-secondary mb-2">Weapons</h4>
               <div className="space-y-1">
                 {weapons.map(([kind, rank]) => (
                   <div key={kind} className="flex items-center justify-between text-sm">
-                    <span className="capitalize text-stone-700">{kind}</span>
+                    <span className="capitalize text-ink-secondary">{kind}</span>
                     <ProficiencyIndicator rank={rank as ProficiencyRank} />
                   </div>
                 ))}
@@ -680,11 +683,11 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           )}
           {armor.length > 0 && (
             <div>
-              <h4 className="text-sm font-semibold text-stone-700 mb-2">Armor</h4>
+              <h4 className="text-sm font-semibold text-ink-secondary mb-2">Armor</h4>
               <div className="space-y-1">
                 {armor.map(([kind, rank]) => (
                   <div key={kind} className="flex items-center justify-between text-sm">
-                    <span className="capitalize text-stone-700">{kind}</span>
+                    <span className="capitalize text-ink-secondary">{kind}</span>
                     <ProficiencyIndicator rank={rank as ProficiencyRank} />
                   </div>
                 ))}
@@ -698,8 +701,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render feats organized by category
   const renderFeats = () => (
-    <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center">
+    <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-ink mb-4 flex items-center">
         <BookOpen className="w-5 h-5 mr-2" />
         Feats
       </h3>
@@ -715,17 +718,17 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     if (features.length === 0) return null;
 
     return (
-      <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-stone-800 mb-3">Class Features</h3>
+      <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-ink mb-3">Class Features</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           {features.map((feature, index) => (
             <div
               key={index}
-              className="bg-blue-50 border border-blue-200 rounded-lg p-2 text-sm text-blue-800"
+              className="bg-info/10 border border-info/30 rounded-lg p-2 text-sm text-info-ink"
             >
               <span className="font-medium">{feature.name}</span>
               {feature.description && (
-                <p className="mt-1 text-xs text-blue-900/80 whitespace-pre-wrap">
+                <p className="mt-1 text-xs text-ink-secondary whitespace-pre-wrap">
                   {feature.description}
                 </p>
               )}
@@ -743,52 +746,52 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     const spellcasting = data.spellcasting;
 
     return (
-      <div className="bg-linear-to-br/srgb from-purple-50 to-purple-100 border-2 border-purple-300 rounded-lg p-4">
-        <h3 className="text-lg font-bold text-purple-800 mb-4 flex items-center">
+      <div className="bg-spirit/10 border-2 border-spirit/30 rounded-lg p-4">
+        <h3 className="text-lg font-bold text-spirit-ink mb-4 flex items-center">
           <Sparkles className="w-5 h-5 mr-2" />
           Spellcasting
         </h3>
 
         {/* Spellcasting Info */}
         <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="bg-white border border-purple-200 rounded-lg p-3">
-            <div className="text-xs font-semibold text-purple-600 mb-1">Tradition</div>
-            <div className="font-bold text-purple-800 capitalize">{spellcasting.tradition}</div>
+          <div className="bg-paper border border-spirit/30 rounded-lg p-3">
+            <div className="text-xs font-semibold text-spirit-ink mb-1">Tradition</div>
+            <div className="font-bold text-spirit-ink capitalize">{spellcasting.tradition}</div>
           </div>
-          <div className="bg-white border border-purple-200 rounded-lg p-3">
-            <div className="text-xs font-semibold text-purple-600 mb-1">Type</div>
-            <div className="font-bold text-purple-800 capitalize">{spellcasting.type}</div>
+          <div className="bg-paper border border-spirit/30 rounded-lg p-3">
+            <div className="text-xs font-semibold text-spirit-ink mb-1">Type</div>
+            <div className="font-bold text-spirit-ink capitalize">{spellcasting.type}</div>
           </div>
-          <div className="bg-white border border-purple-200 rounded-lg p-3">
-            <div className="text-xs font-semibold text-purple-600 mb-1">Key Attribute</div>
-            <div className="font-bold text-purple-800 capitalize">{spellcasting.keyAttribute}</div>
+          <div className="bg-paper border border-spirit/30 rounded-lg p-3">
+            <div className="text-xs font-semibold text-spirit-ink mb-1">Key Attribute</div>
+            <div className="font-bold text-spirit-ink capitalize">{spellcasting.keyAttribute}</div>
           </div>
         </div>
 
         {/* Spell Attack & DC */}
         <div className="grid grid-cols-2 gap-4 mb-4">
-          <div className="bg-white border border-purple-200 rounded-lg p-3 flex items-center justify-between">
+          <div className="bg-paper border border-spirit/30 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <ProficiencyIndicator
                 rank={spellcasting.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained'}
                 size="sm"
               />
-              <span className="text-sm font-semibold text-purple-800">Spell Attack</span>
+              <span className="text-sm font-semibold text-spirit-ink">Spell Attack</span>
             </div>
-            <span className="text-2xl font-bold text-purple-700">
+            <span className="text-2xl font-bold text-spirit-ink">
               {formatModifier(pf2eSpellAttack(data))}
             </span>
           </div>
-          <div className="bg-white border border-purple-200 rounded-lg p-3 flex items-center justify-between">
+          <div className="bg-paper border border-spirit/30 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center space-x-2">
               {/* The spellcasting rank, which the DC shares with the attack. */}
               <ProficiencyIndicator
                 rank={spellcasting.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained'}
                 size="sm"
               />
-              <span className="text-sm font-semibold text-purple-800">Spell DC</span>
+              <span className="text-sm font-semibold text-spirit-ink">Spell DC</span>
             </div>
-            <span className="text-2xl font-bold text-purple-700">
+            <span className="text-2xl font-bold text-spirit-ink">
               {pf2eSpellDC(data)}
             </span>
           </div>
@@ -797,14 +800,14 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {/* Cantrips */}
         {spellcasting.cantrips && spellcasting.cantrips.length > 0 && (
           <div className="mb-4">
-            <h4 className="font-semibold text-purple-800 mb-2">
+            <h4 className="font-semibold text-spirit-ink mb-2">
               Cantrips ({formatSpellRank(spellcasting.cantrips[0]?.rank || 0)})
             </h4>
             <div className="flex flex-wrap gap-2">
               {spellcasting.cantrips.map((cantrip, index) => (
                 <span
                   key={index}
-                  className="px-3 py-1 bg-purple-200 text-purple-800 rounded-full text-sm font-medium"
+                  className="px-3 py-1 bg-spirit/15 text-spirit-ink rounded-full text-sm font-medium"
                 >
                   {cantrip.name}
                 </span>
@@ -815,7 +818,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
         {/* Spell Slots */}
         <div className="mb-4">
-          <h4 className="font-semibold text-purple-800 mb-2">Spell Slots</h4>
+          <h4 className="font-semibold text-spirit-ink mb-2">Spell Slots</h4>
           <div className="grid grid-cols-5 gap-2">
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
               // Read as the editor reads them: an older sheet's count under
@@ -827,15 +830,15 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               const remaining = Math.max(0, slot.total - slot.expended);
 
               return (
-                <div key={rank} className="bg-white border border-purple-200 rounded-lg p-2">
-                  <div className="text-xs font-semibold text-purple-600 text-center mb-1">
+                <div key={rank} className="bg-paper border border-spirit/30 rounded-lg p-2">
+                  <div className="text-xs font-semibold text-spirit-ink text-center mb-1">
                     {formatSpellRank(rank)}
                   </div>
                   <div className="text-center">
-                    <span className={`text-lg font-bold ${remaining > 0 ? 'text-purple-700' : 'text-stone-500'}`}>
+                    <span className={`text-lg font-bold ${remaining > 0 ? 'text-spirit-ink' : 'text-ink-muted'}`}>
                       {remaining}
                     </span>
-                    <span className="text-xs text-stone-500"> / {slot.total}</span>
+                    <span className="text-xs text-ink-muted"> / {slot.total}</span>
                   </div>
                 </div>
               );
@@ -846,14 +849,14 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {/* Spells by Rank */}
         {spellcasting.spells && spellcasting.spells.length > 0 && (
           <div className="mb-4">
-            <h4 className="font-semibold text-purple-800 mb-2">Spells</h4>
+            <h4 className="font-semibold text-spirit-ink mb-2">Spells</h4>
             {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((rank) => {
               const rankSpells = (spellcasting.spells ?? []).filter((s) => s.rank === rank);
               if (rankSpells.length === 0) return null;
 
               return (
                 <div key={rank} className="mb-3">
-                  <div className="text-sm font-semibold text-purple-700 mb-1">
+                  <div className="text-sm font-semibold text-spirit-ink mb-1">
                     {formatSpellRank(rank)}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -862,8 +865,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                         key={index}
                         className={`px-2 py-1 rounded text-sm ${
                           spell.prepared
-                            ? 'bg-purple-200 text-purple-800 font-medium'
-                            : 'bg-stone-100 text-stone-600'
+                            ? 'bg-spirit/15 text-spirit-ink font-medium'
+                            : 'bg-ink/10 text-ink-secondary'
                         }`}
                       >
                         {spell.name}
@@ -884,8 +887,8 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           spellcasting.focusSpells.spells.length > 0 && (
           <div className="mb-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-semibold text-purple-800">Focus Spells</h4>
-              <span className="text-sm font-medium text-purple-700">
+              <h4 className="font-semibold text-spirit-ink">Focus Spells</h4>
+              <span className="text-sm font-medium text-spirit-ink">
                 {/* No more left than the pool holds, as the editor keeps it. */}
                 {Math.min(spellcasting.focusSpells.focusPoints?.current ?? 0, spellcasting.focusSpells.focusPoints?.total ?? 0)} /{' '}
                 {spellcasting.focusSpells.focusPoints?.total ?? 0} Focus Points
@@ -895,7 +898,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               {spellcasting.focusSpells.spells.map((spell, index) => (
                 <span
                   key={index}
-                  className="px-3 py-1 bg-blue-200 text-blue-800 rounded-full text-sm font-medium"
+                  className="px-3 py-1 bg-info/15 text-info-ink rounded-full text-sm font-medium"
                 >
                   {spell.name}
                 </span>
@@ -908,16 +911,16 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             it is cast at — the schema accepts both, so read both. */}
         {spellcasting.rituals && spellcasting.rituals.length > 0 && (
           <div>
-            <h4 className="font-semibold text-purple-800 mb-2">Rituals</h4>
+            <h4 className="font-semibold text-spirit-ink mb-2">Rituals</h4>
             <div className="space-y-2">
               {spellcasting.rituals.map((ritual, index) => (
-                <div key={index} className="bg-white border border-purple-200 rounded-sm p-2 text-sm">
+                <div key={index} className="bg-paper border border-spirit/30 rounded-sm p-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-purple-800">
+                    <span className="font-medium text-spirit-ink">
                       {typeof ritual === 'string' ? ritual : ritual.name}
                     </span>
                     {typeof ritual !== 'string' && (
-                      <span className="text-xs text-purple-600">Rank {ritual.rank}</span>
+                      <span className="text-xs text-spirit-ink">Rank {ritual.rank}</span>
                     )}
                   </div>
                 </div>
@@ -929,16 +932,16 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {/* Innate Spells */}
         {spellcasting.innateSpells && spellcasting.innateSpells.length > 0 && (
           <div>
-            <h4 className="font-semibold text-purple-800 mb-2">Innate Spells</h4>
+            <h4 className="font-semibold text-spirit-ink mb-2">Innate Spells</h4>
             <div className="space-y-2">
               {spellcasting.innateSpells.map((spell, index) => (
-                <div key={index} className="bg-white border border-purple-200 rounded-sm p-2 text-sm">
+                <div key={index} className="bg-paper border border-spirit/30 rounded-sm p-2 text-sm">
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-purple-800">{spell.name}</span>
-                    <span className="text-xs text-purple-600">{spell.frequency}</span>
+                    <span className="font-medium text-spirit-ink">{spell.name}</span>
+                    <span className="text-xs text-spirit-ink">{spell.frequency}</span>
                   </div>
                   {spell.notes && (
-                    <div className="text-xs text-stone-600 mt-1 whitespace-pre-wrap">{spell.notes}</div>
+                    <div className="text-xs text-ink-secondary mt-1 whitespace-pre-wrap">{spell.notes}</div>
                   )}
                 </div>
               ))}
@@ -951,34 +954,34 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
   // Render character background/bio
   const renderBio = () => (
-    <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
-      <h3 className="text-lg font-bold text-stone-800 mb-4">Character Background</h3>
+    <div className="bg-ink/5 border-2 border-ink/10 rounded-lg p-4">
+      <h3 className="text-lg font-bold text-ink mb-4">Character Background</h3>
 
       {/* Personality */}
       {data.personality && (
         <div className="space-y-3 mb-4">
           {data.personality.traits && (
             <div>
-              <h4 className="text-sm font-semibold text-stone-700 mb-1">Personality Traits</h4>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.traits}</p>
+              <h4 className="text-sm font-semibold text-ink-secondary mb-1">Personality Traits</h4>
+              <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.personality.traits}</p>
             </div>
           )}
           {data.personality.ideals && (
             <div>
-              <h4 className="text-sm font-semibold text-stone-700 mb-1">Ideals</h4>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.ideals}</p>
+              <h4 className="text-sm font-semibold text-ink-secondary mb-1">Ideals</h4>
+              <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.personality.ideals}</p>
             </div>
           )}
           {data.personality.bonds && (
             <div>
-              <h4 className="text-sm font-semibold text-stone-700 mb-1">Bonds</h4>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.bonds}</p>
+              <h4 className="text-sm font-semibold text-ink-secondary mb-1">Bonds</h4>
+              <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.personality.bonds}</p>
             </div>
           )}
           {data.personality.flaws && (
             <div>
-              <h4 className="text-sm font-semibold text-stone-700 mb-1">Flaws</h4>
-              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.flaws}</p>
+              <h4 className="text-sm font-semibold text-ink-secondary mb-1">Flaws</h4>
+              <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.personality.flaws}</p>
             </div>
           )}
         </div>
@@ -987,16 +990,16 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {/* Backstory */}
       {data.backstory && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-stone-700 mb-1">Backstory</h4>
-          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.backstory}</p>
+          <h4 className="text-sm font-semibold text-ink-secondary mb-1">Backstory</h4>
+          <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.backstory}</p>
         </div>
       )}
 
       {/* Appearance */}
       {data.appearance && (
-        <div className="bg-white border border-stone-200 rounded-lg p-3 mb-4">
-          <h4 className="text-sm font-semibold text-stone-700 mb-2">Appearance</h4>
-          <div className="grid grid-cols-3 gap-2 text-xs text-stone-600">
+        <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
+          <h4 className="text-sm font-semibold text-ink-secondary mb-2">Appearance</h4>
+          <div className="grid grid-cols-3 gap-2 text-xs text-ink-secondary">
             {data.appearance.age && <div><strong>Age:</strong> {data.appearance.age}</div>}
             {data.appearance.height && <div><strong>Height:</strong> {data.appearance.height}</div>}
             {data.appearance.weight && <div><strong>Weight:</strong> {data.appearance.weight}</div>}
@@ -1010,12 +1013,12 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {/* Languages */}
       {data.languages && data.languages.length > 0 && (
         <div className="mb-4">
-          <h4 className="text-sm font-semibold text-stone-700 mb-1">Languages</h4>
+          <h4 className="text-sm font-semibold text-ink-secondary mb-1">Languages</h4>
           <div className="flex flex-wrap gap-1">
             {data.languages.map((lang: string, index: number) => (
               <span
                 key={index}
-                className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full"
+                className="px-2 py-1 bg-accent/15 text-accent-ink text-xs rounded-full"
               >
                 {lang}
               </span>
@@ -1026,26 +1029,26 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
 
       {/* Allies & Organizations */}
       {data.alliesAndOrganizations && data.alliesAndOrganizations.name && (
-        <div className="bg-white border border-stone-200 rounded-lg p-3 mb-4">
-          <h4 className="text-sm font-semibold text-stone-700 mb-1">
+        <div className="bg-paper border border-ink/10 rounded-lg p-3 mb-4">
+          <h4 className="text-sm font-semibold text-ink-secondary mb-1">
             {data.alliesAndOrganizations.name}
           </h4>
-          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.alliesAndOrganizations.description}</p>
+          <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.alliesAndOrganizations.description}</p>
         </div>
       )}
 
       {/* Notes */}
       {data.notes && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-          <h4 className="text-sm font-semibold text-amber-800 mb-1">Notes</h4>
-          <p className="text-sm text-stone-700 whitespace-pre-wrap">{data.notes}</p>
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-3">
+          <h4 className="text-sm font-semibold text-warning-ink mb-1">Notes</h4>
+          <p className="text-sm text-ink-secondary whitespace-pre-wrap">{data.notes}</p>
         </div>
       )}
     </div>
   );
 
   return (
-    <div className="bg-white border-2 border-stone-200 rounded-lg overflow-hidden shadow-lg">
+    <div className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg">
       {renderHeader()}
 
       <div className="p-6 space-y-6">
@@ -1068,10 +1071,10 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {rollPopup && (
         <div
           ref={popupRef}
-          className="fixed z-50 bg-white border border-stone-200 rounded-lg shadow-xl overflow-hidden"
+          className="fixed z-50 bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
           style={{ left: rollPopup.anchorX, top: rollPopup.anchorY, minWidth: 180 }}
         >
-          <div className="px-3 py-2 bg-blue-700 text-white text-xs font-semibold truncate">
+          <div className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
             {rollPopup.purpose}
           </div>
           {[
@@ -1082,9 +1085,9 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <button
               key={label}
               onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-blue-50 transition-colors text-left"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-secondary hover:bg-accent/10 transition-colors text-left"
             >
-              <Dices className="w-3.5 h-3.5 text-blue-700 shrink-0" />
+              <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" />
               {label}
             </button>
           ))}

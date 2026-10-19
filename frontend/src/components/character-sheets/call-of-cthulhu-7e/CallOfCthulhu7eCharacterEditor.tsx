@@ -513,8 +513,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       : {};
 
     const headerClasses = isCustomColor
-      ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
-      : `bg-linear-to-r/srgb ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
+      ? 'text-white p-6 rounded-t-lg relative border-b-4 border-white/20'
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} text-white p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -529,7 +529,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
         {/* Color Picker Dropdown */}
         {showColorPicker && (
-          <div className="absolute top-16 right-4 bg-white text-stone-800 rounded-lg shadow-xl p-4 z-10 border-2 border-stone-200 max-w-md">
+          <div className="absolute top-16 right-4 bg-paper text-ink rounded-lg shadow-xl p-4 z-10 border-2 border-ink/10 max-w-md">
             <h4 className="font-semibold mb-3">Theme Color</h4>
 
             {/* Preset Colors */}
@@ -540,8 +540,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                   onClick={() => handlePresetColorSelect(color)}
                   className={`px-2 py-2 rounded-lg text-sm font-medium transition-all ${
                     !isCustomColor && themeColor.name === color.name
-                      ? 'ring-2 ring-stone-400 bg-stone-100'
-                      : 'hover:bg-stone-50'
+                      ? 'ring-2 ring-brand bg-ink/10'
+                      : 'hover:bg-ink/5'
                   }`}
                 >
                   <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
@@ -551,8 +551,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             </div>
 
             {/* Custom Color Section */}
-            <div className="border-t pt-4 space-y-3">
-              <h5 className="text-sm font-semibold text-stone-700">Custom Color</h5>
+            <div className="border-t border-ink/10 pt-4 space-y-3">
+              <h5 className="text-sm font-semibold text-ink-secondary">Custom Color</h5>
 
               <div className="flex items-center space-x-2">
                 {/* Native Color Picker */}
@@ -560,7 +560,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                   type="color"
                   value={customColorHex || '#14532d'}
                   onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300"
+                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-ink/20"
                   title="Pick a custom color"
                 />
 
@@ -578,16 +578,16 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
                     }}
                     placeholder="#14532d"
                     aria-label="Custom colour hex code"
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-ink/20 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
-                  <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #14532d)</div>
-                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
+                  <div className="text-xs text-ink-muted mt-1">Enter hex code (e.g., #14532d)</div>
+                  {errors.themeColor && <div className="text-xs text-danger-ink mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
 
               {/* Custom Color Preview */}
               {isCustomColor && customColorHex && /^#[0-9A-Fa-f]{6}$/.test(customColorHex) && (
-                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded-sm">
+                <div className="flex items-center space-x-2 p-2 bg-ink/5 rounded-sm">
                   <div
                     className="w-8 h-8 rounded-sm"
                     style={{ background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }}
@@ -601,17 +601,19 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
         {/* Action Buttons */}
         <div className="absolute top-4 right-16 flex items-center space-x-2">
+        {/* Fixed colours: the header is the player's colour, not the theme's. */}
         <button
+          type="button"
           onClick={handleSave}
           disabled={isSaving}
-          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50"
+          className="px-4 py-2 bg-white text-black hover:bg-white/90 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Save className="w-4 h-4" />
           <span>{isSaving ? 'Saving...' : 'Save'}</span>
         </button>
         <button
           onClick={onCancel}
-          className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+          className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
         >
           <X className="w-4 h-4" />
           <span>Cancel</span>
@@ -629,11 +631,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               <img
                 src={tokenImagePreview}
                 alt={formData.investigatorName || 'Investigator'}
-                className="w-24 h-24 rounded-full border-4 border-amber-600/50 object-cover shadow-xl group-hover:opacity-75 transition-opacity"
+                className="w-24 h-24 rounded-full border-4 border-white/20 object-cover shadow-xl group-hover:opacity-75 transition-opacity"
               />
             ) : (
-              <div className="w-24 h-24 rounded-full border-4 border-amber-600/50 bg-sepia-900 flex items-center justify-center shadow-xl group-hover:bg-sepia-800 transition-colors">
-                <Upload className="w-8 h-8 text-amber-400/60" />
+              <div className="w-24 h-24 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center shadow-xl group-hover:bg-black/60 transition-colors">
+                <Upload className="w-8 h-8 text-white/60" />
               </div>
             )}
           </label>
@@ -645,12 +647,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             className="hidden"
           />
           {errors.tokenImage && (
-            <div className="absolute top-full mt-1 text-xs text-red-200 whitespace-nowrap">
+            <div className="absolute top-full mt-1 text-xs text-white/90 whitespace-nowrap">
               {errors.tokenImage}
             </div>
           )}
           {!character.campaignId && (
-            <div className="absolute top-full mt-1 text-xs text-amber-200 whitespace-nowrap">
+            <div className="absolute top-full mt-1 text-xs text-white/90 whitespace-nowrap">
               Saves as personal token
             </div>
           )}
@@ -666,13 +668,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
             aria-label="Investigator name"
-            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+            className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
           />
 
           <div className="grid grid-cols-3 gap-3">
             {/* Read-only: the player name is whoever owns this investigator,
                 filled from their display name at creation. */}
-            <span className="text-sm px-2 py-1 text-parchment self-center">
+            <span className="text-sm px-2 py-1 text-white self-center">
               {formData.playerName || '—'}
             </span>
             <input
@@ -682,7 +684,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Occupation"
               aria-label="Occupation"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
             <input
               type="text"
@@ -691,7 +693,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Era (e.g., 1920s)"
               aria-label="Era"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
           </div>
 
@@ -704,7 +706,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
               aria-label="Age"
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
               fallback={0}
             />
             <input
@@ -714,7 +716,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Sex"
               aria-label="Sex"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
             <input
               type="text"
@@ -723,7 +725,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               placeholder="Residence"
               aria-label="Residence"
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+              className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
             />
           </div>
 
@@ -734,7 +736,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             placeholder="Birthplace"
             aria-label="Birthplace"
             maxLength={SHEET_SHORT_TEXT_MAX}
-            className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+            className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-white placeholder:text-white/50 focus:outline-hidden focus:ring-2 focus:ring-white/60"
           />
         </div>
       </div>
@@ -744,7 +746,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
   // Render tabs
   const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-sepia-400 bg-parchment-light/50 px-4">
+    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -756,10 +758,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               flex items-center space-x-2 px-4 py-3 font-medium transition-colors
               ${
                 isActive
-                  ? 'text-green-800 border-b-2 border-green-800 -mb-0.5 bg-parchment'
-                  : 'text-sepia-600 hover:text-sepia-900 hover:bg-parchment-light/70'
+                  ? 'text-ink border-b-2 -mb-0.5 bg-paper'
+                  : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
               }
             `}
+            // The underline in the header colour; the label in the theme's text.
+            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
           >
             <Icon className="w-4 h-4" />
             <span>{tab.label}</span>
@@ -774,7 +778,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     <div className="space-y-6">
       {/* Characteristics */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-4">Characteristics</h3>
+        <h3 className="text-lg font-bold text-ink mb-4">Characteristics</h3>
         <div className="grid grid-cols-4 md:grid-cols-8 gap-4">
           {orderedCharacteristics(formData.characteristics as unknown as Record<string, unknown>).map((charKey) => (
             <CharacteristicBlock
@@ -832,52 +836,52 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       {/* Derived Stats (showing auto-calculated values) */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-4">Derived Attributes (Auto-Calculated)</h3>
-        <div className="bg-blue-50 border border-blue-300 rounded-lg p-4 space-y-2 text-sm">
+        <h3 className="text-lg font-bold text-ink mb-4">Derived Attributes (Auto-Calculated)</h3>
+        <div className="bg-info/10 border border-info/30 rounded-lg p-4 space-y-2 text-sm">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <span className="text-blue-700 font-semibold">HP Max:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.hp?.maximum || 0}</span>
-              <div className="text-xs text-blue-600">(CON + SIZ) / 10</div>
+              <span className="text-info-ink font-semibold">HP Max:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.hp?.maximum || 0}</span>
+              <div className="text-xs text-ink-secondary">(CON + SIZ) / 10</div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">MP Max:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.magicPoints?.maximum || 0}</span>
-              <div className="text-xs text-blue-600">POW / 5</div>
+              <span className="text-info-ink font-semibold">MP Max:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.magicPoints?.maximum || 0}</span>
+              <div className="text-xs text-ink-secondary">POW / 5</div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">Dodge:</span>{' '}
-              <span className="text-blue-900">
+              <span className="text-info-ink font-semibold">Dodge:</span>{' '}
+              <span className="text-ink">
                 {formData.skills?.dodge?.currentValue ?? formData.derivedStats?.dodge?.value ?? 0}%
               </span>
-              <div className="text-xs text-blue-600">
+              <div className="text-xs text-ink-secondary">
                 Starts at half DEX ({cocDodgeBase(formData.characteristics?.DEX?.regular || 0)}); raise it on the Skills tab
               </div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">Move:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.moveRate || 8}</span>
-              <div className="text-xs text-blue-600">Based on STR/DEX/SIZ/Age</div>
+              <span className="text-info-ink font-semibold">Move:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.moveRate || 8}</span>
+              <div className="text-xs text-ink-secondary">Based on STR/DEX/SIZ/Age</div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">DB:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.damageBonus || '0'}</span>
-              <div className="text-xs text-blue-600">From STR + SIZ</div>
+              <span className="text-info-ink font-semibold">DB:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.damageBonus || '0'}</span>
+              <div className="text-xs text-ink-secondary">From STR + SIZ</div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">Build:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.build || 0}</span>
-              <div className="text-xs text-blue-600">From STR + SIZ</div>
+              <span className="text-info-ink font-semibold">Build:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.build || 0}</span>
+              <div className="text-xs text-ink-secondary">From STR + SIZ</div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">Max SAN:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.sanity?.maximum ?? 99}</span>
-              <div className="text-xs text-blue-600">99 - Cthulhu Mythos</div>
+              <span className="text-info-ink font-semibold">Max SAN:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.sanity?.maximum ?? 99}</span>
+              <div className="text-xs text-ink-secondary">99 - Cthulhu Mythos</div>
             </div>
             <div>
-              <span className="text-blue-700 font-semibold">Major Wound:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.hp?.majorWoundThreshold || 0} HP</span>
-              <div className="text-xs text-blue-600">Half HP Max, rounded up</div>
+              <span className="text-info-ink font-semibold">Major Wound:</span>{' '}
+              <span className="text-ink">{formData.derivedStats?.hp?.majorWoundThreshold || 0} HP</span>
+              <div className="text-xs text-ink-secondary">Half HP Max, rounded up</div>
             </div>
           </div>
         </div>
@@ -885,10 +889,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       {/* Current HP, MP, Luck (editable) */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-4">Current Status</h3>
+        <h3 className="text-lg font-bold text-ink mb-4">Current Status</h3>
         <div className="grid grid-cols-3 gap-4">
-          <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label htmlFor="coc-current-hp" className="text-xs text-sepia-600 uppercase block mb-1">Current HP</label>
+          <div className="bg-paper border border-ink/20 rounded-md p-3">
+            <label htmlFor="coc-current-hp" className="text-xs text-ink-secondary uppercase block mb-1">Current HP</label>
             <NumberField
 id="coc-current-hp"
 value={formData.derivedStats?.hp?.current}
@@ -901,12 +905,12 @@ value={formData.derivedStats?.hp?.current}
                   } as CoC7eDerivedStats,
                 });
               }}
-              className="w-full text-center text-2xl font-bold text-red-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-red-500 rounded-sm"
+              className="w-full text-center text-2xl font-bold text-danger-ink border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-brand rounded-sm"
             fallback={0}
             />
           </div>
-          <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label htmlFor="coc-current-mp" className="text-xs text-sepia-600 uppercase block mb-1">Current MP</label>
+          <div className="bg-paper border border-ink/20 rounded-md p-3">
+            <label htmlFor="coc-current-mp" className="text-xs text-ink-secondary uppercase block mb-1">Current MP</label>
             <NumberField
 id="coc-current-mp"
 value={formData.derivedStats?.magicPoints?.current}
@@ -922,12 +926,12 @@ value={formData.derivedStats?.magicPoints?.current}
                   } as CoC7eDerivedStats,
                 });
               }}
-              className="w-full text-center text-2xl font-bold text-purple-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
+              className="w-full text-center text-2xl font-bold text-spirit-ink border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-brand rounded-sm"
             fallback={0}
             />
           </div>
-          <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label htmlFor="coc-luck" className="text-xs text-sepia-600 uppercase block mb-1">Luck Score</label>
+          <div className="bg-paper border border-ink/20 rounded-md p-3">
+            <label htmlFor="coc-luck" className="text-xs text-ink-secondary uppercase block mb-1">Luck Score</label>
             <NumberField
 id="coc-luck"
 value={formData.derivedStats?.luck?.score}
@@ -940,7 +944,7 @@ value={formData.derivedStats?.luck?.score}
                   } as CoC7eDerivedStats,
                 });
               }}
-              className="w-full text-center text-2xl font-bold text-yellow-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-yellow-500 rounded-sm"
+              className="w-full text-center text-2xl font-bold text-warning-ink border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-brand rounded-sm"
             fallback={0}
             />
             <textarea
@@ -958,7 +962,7 @@ value={formData.derivedStats?.luck?.score}
               placeholder="Notes (e.g. Luck spent)"
               rows={2}
               maxLength={SHEET_LONG_TEXT_MAX}
-              className="mt-2 w-full px-2 py-1 text-xs border border-sepia-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
+              className="mt-2 w-full px-2 py-1 text-xs border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
@@ -971,10 +975,10 @@ value={formData.derivedStats?.luck?.score}
           be set, so an investigator could never actually be marked as hurt or
           mad through the app. */}
       <div className="mt-6">
-        <h3 className="text-lg font-bold text-sepia-900 mb-3">Current Conditions</h3>
-        <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+        <h3 className="text-lg font-bold text-ink mb-3">Current Conditions</h3>
+        <div className="bg-paper border border-ink/20 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
           {COC7E_CONDITIONS.map(({ key, label }) => (
-            <label key={key} className="flex items-center gap-2 text-sm text-sepia-900 cursor-pointer">
+            <label key={key} className="flex items-center gap-2 text-sm text-ink cursor-pointer">
               <input
                 type="checkbox"
                 checked={formData.conditions?.[key] ?? false}
@@ -984,7 +988,7 @@ value={formData.derivedStats?.luck?.score}
                     conditions: { ...formData.conditions, [key]: e.target.checked } as CoC7eConditions,
                   });
                 }}
-                className="rounded-sm border-sepia-400 text-red-700 focus:ring-red-500"
+                className="rounded-sm border-ink/20 accent-danger focus:ring-brand"
               />
               {label}
             </label>
@@ -999,7 +1003,7 @@ value={formData.derivedStats?.luck?.score}
     <div>
       <SkillsList
         skills={formData.skills || {}}
-        themeColor={themeColor}
+        tickColour={isCustomColor ? customColorHex : themeColor.hex}
         editable
         onChange={(skillName, field, value) => {
           setFormData({
@@ -1041,10 +1045,10 @@ value={formData.derivedStats?.luck?.score}
     <div className="space-y-6">
       {/* Wealth */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-4">Wealth</h3>
+        <h3 className="text-lg font-bold text-ink mb-4">Wealth</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="coc-spending-level" className="text-sm text-sepia-700 font-semibold block mb-1">Spending Level</label>
+            <label htmlFor="coc-spending-level" className="text-sm text-ink-secondary font-semibold block mb-1">Spending Level</label>
             <input
               id="coc-spending-level"
               maxLength={SHEET_SHORT_TEXT_MAX}
@@ -1057,11 +1061,11 @@ value={formData.derivedStats?.luck?.score}
                 })
               }
               placeholder="e.g., Average, Wealthy"
-              className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+              className="w-full bg-paper border border-ink/20 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="coc-cash" className="text-sm text-sepia-700 font-semibold block mb-1">Cash on Hand</label>
+            <label htmlFor="coc-cash" className="text-sm text-ink-secondary font-semibold block mb-1">Cash on Hand</label>
             <NumberField
 id="coc-cash"
 value={formData.wealth?.cash}
@@ -1070,13 +1074,13 @@ value={formData.wealth?.cash}
                   wealth: { ...formData.wealth, cash: v } as CoC7eWealth,
                 })
               }
-              className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+              className="w-full bg-paper border border-ink/20 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={0}
             />
           </div>
         </div>
         <div className="mt-3">
-          <label htmlFor="coc-assets" className="text-sm text-sepia-700 font-semibold block mb-1">Assets</label>
+          <label htmlFor="coc-assets" className="text-sm text-ink-secondary font-semibold block mb-1">Assets</label>
           <textarea
             id="coc-assets"
             maxLength={SHEET_LONG_TEXT_MAX}
@@ -1089,11 +1093,11 @@ value={formData.wealth?.cash}
             }
             placeholder="Describe assets, property, investments..."
             rows={2}
-            className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+            className="w-full bg-paper border border-ink/20 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
         <div className="mt-3">
-          <label htmlFor="coc-wealth-notes" className="text-sm text-sepia-700 font-semibold block mb-1">Wealth notes</label>
+          <label htmlFor="coc-wealth-notes" className="text-sm text-ink-secondary font-semibold block mb-1">Wealth notes</label>
           <textarea
             id="coc-wealth-notes"
             value={formData.wealth?.notes || ''}
@@ -1102,14 +1106,14 @@ value={formData.wealth?.cash}
             }
             rows={2}
             maxLength={SHEET_LONG_TEXT_MAX}
-            className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+            className="w-full bg-paper border border-ink/20 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
       </div>
 
       {/* Possessions — free-text field */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions & Equipment</h3>
+        <h3 className="text-lg font-bold text-ink mb-4">Possessions & Equipment</h3>
         <ListField
           multiline
           aria-label="Possessions"
@@ -1121,19 +1125,19 @@ value={formData.wealth?.cash}
           noteClassName={LIMIT_NOTE_CLASS}
           placeholder="List possessions, one per line. Format: Item Name - Notes"
           rows={8}
-          className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+          className="w-full bg-paper border border-ink/20 rounded-sm px-3 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-brand"
         />
       </div>
 
       {/* Contacts, which the read-only sheet lists on this tab. */}
       <div>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold text-sepia-900">Contacts</h3>
+          <h3 className="text-lg font-bold text-ink">Contacts</h3>
           <button
             type="button"
             onClick={() => setFormData((prev) => ({ ...prev, contacts: [...(prev.contacts ?? []), { name: 'New contact', role: '', notes: '' }] }))}
             disabled={listIsFull(formData.contacts)}
-            className={`inline-flex items-center gap-1 text-sm font-medium text-sepia-800 hover:text-sepia-950 ${ADD_BUTTON_OFF}`}
+            className={`inline-flex items-center gap-1 text-sm font-medium text-ink hover:text-ink ${ADD_BUTTON_OFF}`}
           >
             <Plus className="w-4 h-4" />
             Add Contact
@@ -1148,7 +1152,7 @@ value={formData.wealth?.cash}
                 contacts: (prev.contacts ?? []).map((c, i) => (i === index ? { ...c, [field]: value } : c)),
               }));
             return (
-              <div key={index} className="bg-white border border-sepia-400 rounded-md p-3 space-y-2">
+              <div key={index} className="bg-paper border border-ink/20 rounded-md p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
@@ -1157,7 +1161,7 @@ value={formData.wealth?.cash}
                     aria-label={`Name of contact ${index + 1}`}
                     placeholder="Name"
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="flex-1 px-2 py-1 border border-sepia-300 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                    className="flex-1 px-2 py-1 border border-ink/20 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <input
                     type="text"
@@ -1166,13 +1170,13 @@ value={formData.wealth?.cash}
                     aria-label={`Role of contact ${index + 1}`}
                     placeholder="Role"
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="w-40 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                    className="w-40 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <button
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, contacts: (prev.contacts ?? []).filter((_, i) => i !== index) }))}
                     aria-label={`Remove ${contact.name || `contact ${index + 1}`}`}
-                    className="p-1 text-red-700 hover:text-red-900"
+                    className="p-1 rounded-sm text-danger-ink hover:bg-danger/10"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -1184,12 +1188,12 @@ value={formData.wealth?.cash}
                   placeholder="Notes"
                   rows={2}
                   maxLength={SHEET_LONG_TEXT_MAX}
-                  className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                  className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
               </div>
             );
           })}
-          {(formData.contacts ?? []).length === 0 && <p className="text-sm text-sepia-600 italic">No contacts yet</p>}
+          {(formData.contacts ?? []).length === 0 && <p className="text-sm text-ink-secondary italic">No contacts yet</p>}
         </div>
       </div>
     </div>
@@ -1212,11 +1216,11 @@ value={formData.wealth?.cash}
       {/* Appearance. Shown on the sheet when reading it, but with no field to
           type into — so these could only ever be empty. */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-3">Appearance</h3>
-        <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
+        <h3 className="text-lg font-bold text-ink mb-3">Appearance</h3>
+        <div className="bg-paper border border-ink/20 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
           {COC_APPEARANCE_FIELDS.map(({ key, label }) => (
             <div key={key}>
-              <label htmlFor={`coc-appearance-${key}`} className="text-xs text-sepia-600 uppercase block mb-1">{label}</label>
+              <label htmlFor={`coc-appearance-${key}`} className="text-xs text-ink-secondary uppercase block mb-1">{label}</label>
               <input
                 id={`coc-appearance-${key}`}
                 maxLength={SHEET_SHORT_TEXT_MAX}
@@ -1228,7 +1232,7 @@ value={formData.wealth?.cash}
                     appearance: { ...formData.appearance, [key]: e.target.value } as CoC7eAppearance,
                   });
                 }}
-                className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
             </div>
           ))}
@@ -1238,10 +1242,10 @@ value={formData.wealth?.cash}
       {/* Cthulhu Mythos rating and the spells the investigator knows. Both are
           on the official sheet and neither had anywhere to live in the app. */}
       <div>
-        <h3 className="text-lg font-bold text-sepia-900 mb-3">Spells &amp; Mythos</h3>
-        <div className="bg-white border border-sepia-400 rounded-md p-3 space-y-3">
+        <h3 className="text-lg font-bold text-ink mb-3">Spells &amp; Mythos</h3>
+        <div className="bg-paper border border-ink/20 rounded-md p-3 space-y-3">
           <div>
-            <label htmlFor="coc-cthulhu-mythos" className="text-xs text-sepia-600 uppercase block mb-1">Cthulhu Mythos</label>
+            <label htmlFor="coc-cthulhu-mythos" className="text-xs text-ink-secondary uppercase block mb-1">Cthulhu Mythos</label>
             {/* The skill itself: maximum Sanity is 99 less it, so it stops at 99. */}
             <NumberField
               id="coc-cthulhu-mythos"
@@ -1256,11 +1260,11 @@ value={formData.wealth?.cash}
                   spellsAndMythos: { spells: prev.spellsAndMythos?.spells ?? [], cthulhuMythos: v },
                 }));
               }}
-              className="w-24 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+              className="w-24 px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Spells (one per line)</label>
+            <label className="text-xs text-ink-secondary uppercase block mb-1">Spells (one per line)</label>
             <ListField
               aria-label="Spells"
               multiline
@@ -1280,7 +1284,7 @@ value={formData.wealth?.cash}
               max={SHEET_LIST_MAX}
               noteClassName={LIMIT_NOTE_CLASS}
               placeholder={'Contact Nyarlathotep\nElder Sign'}
-              className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
@@ -1292,8 +1296,8 @@ value={formData.wealth?.cash}
           when the sheet arrived with the field. */}
       {keeperNotesShown && (
         <div>
-          <h3 className="text-lg font-bold text-sepia-900 mb-1">Keeper&apos;s Notes</h3>
-          <p className="text-sm text-sepia-700 mb-3">Only you, as the Keeper, can see or change these.</p>
+          <h3 className="text-lg font-bold text-ink mb-1">Keeper&apos;s Notes</h3>
+          <p className="text-sm text-ink-secondary mb-3">Only you, as the Keeper, can see or change these.</p>
           <textarea
             rows={4}
             value={formData.notes ?? ''}
@@ -1301,7 +1305,7 @@ value={formData.wealth?.cash}
             placeholder="Notes kept by the Keeper about this investigator"
             aria-label="Keeper's Notes"
             maxLength={SHEET_LONG_TEXT_MAX}
-            className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+            className="w-full bg-paper border border-ink/20 rounded-md p-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
       )}
@@ -1311,14 +1315,14 @@ value={formData.wealth?.cash}
   // Main render
   return (
     <div
-      className="glass-panel overflow-hidden"
+      className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg"
       onInputCapture={noteInteraction}
       onChangeCapture={noteInteraction}
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
       {renderTabs()}
-      <div className="p-6 bg-parchment max-h-[calc(100vh-200px)] overflow-y-auto">
+      <div className="p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}
@@ -1326,7 +1330,7 @@ value={formData.wealth?.cash}
         {activeTab === 'backstory' && renderBackstoryTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 py-3 text-sm text-red-700 bg-parchment">{errors.submit}</div>
+        <div className="px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
       )}
     </div>
   );

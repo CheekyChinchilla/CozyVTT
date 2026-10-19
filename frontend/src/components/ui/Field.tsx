@@ -47,7 +47,7 @@ export default function Field({ label, required, hint, error, className, childre
         {label}
         {required && (
           <>
-            <span className="text-danger" aria-hidden="true"> *</span>
+            <span className="text-danger-ink" aria-hidden="true"> *</span>
             <span className="sr-only">(required)</span>
           </>
         )}
@@ -59,7 +59,7 @@ export default function Field({ label, required, hint, error, className, childre
         invalid: !!error || undefined,
       })}
       {error && (
-        <p id={errorId} role="alert" className="mt-1 text-xs text-danger font-medium">
+        <p id={errorId} role="alert" className="mt-1 text-xs text-danger-ink font-medium">
           {error}
         </p>
       )}

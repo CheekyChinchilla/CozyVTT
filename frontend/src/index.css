@@ -54,7 +54,8 @@
   --color-spirit-red: rgb(var(--rgb-danger));
   --color-spirit-purple: rgb(var(--rgb-spirit));
 
-  /* Call of Cthulhu 7e's 1920s palette: static, it does not follow the theme. */
+  /* The Call of Cthulhu sheet's Deep Sepia header colour (colorPresets.ts): a
+     header is the player's choice and does not follow the theme. */
   --color-sepia-100: #f5ebd9;
   --color-sepia-200: #e8d5b7;
   --color-sepia-300: #d4b896;
@@ -150,6 +151,14 @@
   select,
   textarea {
     background-color: revert;
+  }
+
+  /* Ticks, radios and sliders in the theme's colour; text colour classes on
+     a checkbox draw nothing. */
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='range'] {
+    accent-color: rgb(var(--rgb-brand));
   }
 }
 
@@ -287,10 +296,10 @@
     --rgb-bg-surface-light: 251 247 238;
     --rgb-bg-surface-dark: 224 212 184;
 
-    /* Text */
+    /* Text (secondary and muted are the default theme's derived values) */
     --rgb-ink: 31 41 55;
-    --rgb-ink-secondary: 107 96 90;
-    --rgb-ink-muted: 107 114 128;
+    --rgb-ink-secondary: 101 91 85;
+    --rgb-ink-muted: 89 95 106;
 
     /* Utility */
     --rgb-paper: 254 254 254;
@@ -304,15 +313,15 @@
        these defaults match the Cozy Default palette so the app renders
        correctly during the first paint, before a theme is applied. */
     --rgb-brand-ink: 74 93 78;
-    --rgb-accent-ink: 138 90 43;
-    --rgb-spirit-ink: 106 71 178;
-    --rgb-danger-ink: 176 46 33;
+    --rgb-accent-ink: 137 91 43;
+    --rgb-spirit-ink: 111 64 207;
+    --rgb-danger-ink: 166 49 37;
     --rgb-success: 34 139 68;
-    --rgb-success-ink: 30 122 60;
+    --rgb-success-ink: 26 107 52;
     --rgb-warning: 191 129 20;
-    --rgb-warning-ink: 148 100 15;
+    --rgb-warning-ink: 131 89 14;
     --rgb-info: 37 99 190;
-    --rgb-info-ink: 37 99 190;
+    --rgb-info-ink: 34 90 173;
 
     /* The font defaults are in @theme above; applyFont (themes.ts) replaces them. */
   }

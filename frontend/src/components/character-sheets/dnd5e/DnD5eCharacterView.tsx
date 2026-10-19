@@ -187,7 +187,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
                 className="w-20 h-20 rounded-full border-4 border-white/20 object-cover"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full border-4 border-white/20 bg-stone-800 flex items-center justify-center">
+              <div className="w-20 h-20 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
                 <User className="w-10 h-10 text-white/40" />
               </div>
             )}
@@ -196,7 +196,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           {/* Character Info */}
           <div>
             <h2 className="text-3xl font-bold mb-1">{data.characterName || 'Unnamed Character'}</h2>
-            <div className="flex items-center space-x-4 text-red-100">
+            <div className="flex items-center space-x-4 text-white/90">
               <span>
                 Level {data.level} {data.race} {data.class}
               </span>
@@ -209,7 +209,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
         {data.experiencePoints !== undefined && (
           <div className="text-right">
-            <div className="text-xs text-red-200">Experience</div>
+            <div className="text-xs text-white/90">Experience</div>
             <div className="text-xl font-bold">{data.experiencePoints.toLocaleString()}</div>
           </div>
         )}
@@ -220,7 +220,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
   // Render tabs
   const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-stone-200 bg-stone-50 px-4">
+    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -231,10 +231,12 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
             className={`
               flex items-center space-x-2 px-4 py-3 font-medium transition-colors
               ${isActive
-                ? `text-${themeColor.accent} border-b-2 border-${themeColor.accent} -mb-0.5 bg-white`
-                : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'
+                ? 'text-ink border-b-2 -mb-0.5 bg-paper'
+                : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
               }
             `}
+            // The underline in the header colour; the label in the theme's text.
+            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
           >
             <Icon className="w-4 h-4" />
             <span>{tab.label}</span>
@@ -249,7 +251,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     <div className="space-y-6">
       {/* Ability Scores */}
       <div>
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Ability Scores</h3>
+        <h3 className="text-lg font-semibold text-ink mb-3">Ability Scores</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
           {data.stats && (() => {
             const statEntries: Array<[string, string, keyof typeof data.stats]> = [
@@ -286,8 +288,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {/* Saving Throws */}
       {data.savingThrows && (
         <div>
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Saving Throws</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-stone-50 border border-stone-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Saving Throws</h3>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2 bg-ink/5 border border-ink/10 rounded-lg p-4">
             {(Object.entries(data.savingThrows ?? {}) as [string, DnD5eSavingThrow][]).map(([key, save]) => {
               // Worked out from the scores plus the other bonus, as the dice
               // roll it, so a stored total that has gone stale is not shown.
@@ -297,16 +299,16 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               return (
                 <div
                   key={key}
-                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-red-50 select-none' : ''}`}
+                  className={`flex items-center justify-between py-1 px-2 rounded-sm group ${onRoll ? 'cursor-pointer hover:bg-accent/10 select-none' : ''}`}
                   onClick={onRoll ? () => handleRoll(expr, purpose) : undefined}
                   onContextMenu={onRoll ? (e) => showRollPopup(e, expr, purpose) : undefined}
                   title={onRoll ? `Left-click: roll  |  Right-click: Advantage / Disadvantage` : undefined}
                 >
                   <div className="flex items-center gap-1">
-                    {onRoll && <Dices className="w-3 h-3 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {onRoll && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
                     <span className="text-sm capitalize">{key}</span>
                   </div>
-                  <span className={`text-sm font-semibold ${save.proficient ? 'text-red-700' : 'text-stone-600'}`}>
+                  <span className={`text-sm font-semibold ${save.proficient ? 'text-accent-ink' : 'text-ink-secondary'}`}>
                     {formatModifier(bonus)}
                     {save.proficient && ' •'}
                   </span>
@@ -320,8 +322,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {/* Skills */}
       {data.skills && (
         <div>
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Skills</h3>
-          <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Skills</h3>
+          <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
             <SkillsList
               // Each total worked out as the dice roll it: from the scores,
               // plus the skill's other bonus.
@@ -357,16 +359,16 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Proficiency Bonus & Inspiration */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 text-center">
-          <div className="text-sm text-stone-600 mb-1">Proficiency Bonus</div>
-          <div className="text-2xl font-bold text-red-700">
+        <div className="bg-accent/10 border-2 border-accent/30 rounded-lg p-4 text-center">
+          <div className="text-sm text-ink-secondary mb-1">Proficiency Bonus</div>
+          <div className="text-2xl font-bold text-accent-ink">
             {formatModifier(data.proficiencyBonus)}
           </div>
         </div>
         {data.inspiration !== undefined && (
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 text-center">
-            <div className="text-sm text-stone-600 mb-1">Inspiration</div>
-            <div className="text-2xl font-bold text-yellow-700">
+          <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4 text-center">
+            <div className="text-sm text-ink-secondary mb-1">Inspiration</div>
+            <div className="text-2xl font-bold text-warning-ink">
               {data.inspiration ? 'Yes' : 'No'}
             </div>
           </div>
@@ -381,40 +383,40 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {/* Combat Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {data.armorClass !== undefined && (
-          <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4 text-center">
-            <Shield className="w-6 h-6 mx-auto mb-2 text-stone-600" />
-            <div className="text-xs text-stone-500 mb-1">Armor Class</div>
-            <div className="text-2xl font-bold text-stone-800">{data.armorClass}</div>
+          <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4 text-center">
+            <Shield className="w-6 h-6 mx-auto mb-2 text-ink-secondary" />
+            <div className="text-xs text-ink-muted mb-1">Armor Class</div>
+            <div className="text-2xl font-bold text-ink">{data.armorClass}</div>
           </div>
         )}
         {data.stats?.dexterity !== undefined && (
-          <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4 text-center">
-            <Zap className="w-6 h-6 mx-auto mb-2 text-yellow-600" />
-            <div className="text-xs text-stone-500 mb-1">Initiative</div>
+          <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4 text-center">
+            <Zap className="w-6 h-6 mx-auto mb-2 text-warning-ink" />
+            <div className="text-xs text-ink-muted mb-1">Initiative</div>
             {/* Derived from Dexterity and the sheet's other-bonus field rather
                 than read from the stored total, so this matches the editor and
                 matches what is actually rolled. */}
-            <div className="text-2xl font-bold text-stone-800">
+            <div className="text-2xl font-bold text-ink">
               {formatModifier(dnd5eInitiativeModifier(data))}
             </div>
           </div>
         )}
         {data.speed !== undefined && (
-          <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4 text-center">
-            <Footprints className="w-6 h-6 mx-auto mb-2 text-blue-600" />
-            <div className="text-xs text-stone-500 mb-1">Speed</div>
-            <div className="text-2xl font-bold text-stone-800">{data.speed} ft</div>
+          <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4 text-center">
+            <Footprints className="w-6 h-6 mx-auto mb-2 text-info-ink" />
+            <div className="text-xs text-ink-muted mb-1">Speed</div>
+            <div className="text-2xl font-bold text-ink">{data.speed} ft</div>
           </div>
         )}
         {data.hp && (
-          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4 text-center">
-            <Heart className="w-6 h-6 mx-auto mb-2 text-red-600" />
-            <div className="text-xs text-stone-500 mb-1">Hit Points</div>
-            <div className="text-2xl font-bold text-red-700">
+          <div className="bg-danger/10 border-2 border-danger/30 rounded-lg p-4 text-center">
+            <Heart className="w-6 h-6 mx-auto mb-2 text-danger-ink" />
+            <div className="text-xs text-ink-muted mb-1">Hit Points</div>
+            <div className="text-2xl font-bold text-danger-ink">
               {data.hp.current}/{data.hp.maximum}
             </div>
             {data.hp.temporary > 0 && (
-              <div className="text-xs text-blue-600 mt-1">+{data.hp.temporary} temp</div>
+              <div className="text-xs text-info-ink mt-1">+{data.hp.temporary} temp</div>
             )}
           </div>
         )}
@@ -422,8 +424,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Hit Dice */}
       {data.hitDice && data.hitDice.length > 0 && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Hit Dice</h3>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Hit Dice</h3>
           <div className="flex flex-wrap gap-3">
             {data.hitDice!.map((hd, idx) => {
               // `total` is the pool ("5d10"), so spending rolls one die plus
@@ -438,17 +440,17 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               return (
                 <div
                   key={idx}
-                  className={`px-4 py-2 bg-white border border-stone-300 rounded-lg group ${
-                    spendable ? 'cursor-pointer hover:bg-red-50 select-none' : ''
+                  className={`px-4 py-2 bg-paper border border-ink/20 rounded-lg group ${
+                    spendable ? 'cursor-pointer hover:bg-accent/10 select-none' : ''
                   }`}
                   onClick={spendable ? () => spendHitDie(expr, purpose, idx) : undefined}
                   title={spendable ? `Spend one hit die: roll ${expr}` : undefined}
                 >
-                  <div className="text-xs text-stone-500 capitalize">{hd.class}</div>
-                  <div className="font-semibold text-stone-800 flex items-center gap-1">
+                  <div className="text-xs text-ink-muted capitalize">{hd.class}</div>
+                  <div className="font-semibold text-ink flex items-center gap-1">
                     {hd.remaining}{max === null ? '' : `/${max}`}
-                    {die && <span className="ml-1 font-normal text-stone-500">{die}</span>}
-                    {spendable && <Dices className="w-3 h-3 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                    {die && <span className="ml-1 font-normal text-ink-muted">{die}</span>}
+                    {spendable && <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
                   </div>
                 </div>
               );
@@ -459,34 +461,34 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Death Saves */}
       {data.deathSaves && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Death Saves</h3>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Death Saves</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <div className="text-sm text-green-700 font-medium mb-2">Successes</div>
+              <div className="text-sm text-success-ink font-medium mb-2">Successes</div>
               <div className="flex space-x-2">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
                     className={`w-8 h-8 rounded-full border-2 ${
                       i <= data.deathSaves!.successes
-                        ? 'bg-green-500 border-green-600'
-                        : 'bg-white border-stone-300'
+                        ? 'bg-success border-success'
+                        : 'bg-paper border-ink/20'
                     }`}
                   />
                 ))}
               </div>
             </div>
             <div>
-              <div className="text-sm text-red-700 font-medium mb-2">Failures</div>
+              <div className="text-sm text-danger-ink font-medium mb-2">Failures</div>
               <div className="flex space-x-2">
                 {[1, 2, 3].map((i) => (
                   <div
                     key={i}
                     className={`w-8 h-8 rounded-full border-2 ${
                       i <= data.deathSaves!.failures
-                        ? 'bg-red-500 border-red-600'
-                        : 'bg-white border-stone-300'
+                        ? 'bg-danger border-danger'
+                        : 'bg-paper border-ink/20'
                     }`}
                   />
                 ))}
@@ -498,13 +500,13 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Conditions */}
       {data.conditions && data.conditions.length > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Conditions</h3>
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Conditions</h3>
           <div className="flex flex-wrap gap-2">
             {data.conditions.map((condition: string, idx: number) => (
               <span
                 key={idx}
-                className="px-3 py-1 bg-orange-100 text-orange-800 border border-orange-300 rounded-full capitalize"
+                className="px-3 py-1 bg-warning/15 text-warning-ink border border-warning/30 rounded-full capitalize"
               >
                 {condition}
               </span>
@@ -516,19 +518,19 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {/* Exhaustion. Six cumulative levels (Basic Rules, Appendix A), so the
           effects of every level below the current one apply too. */}
       {exhaustionLevel(data.exhaustionLevel) > 0 && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="bg-danger/10 border border-danger/30 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
-            <h3 className="text-lg font-semibold text-stone-800">Exhaustion</h3>
-            <span className="px-2 py-0.5 bg-red-700 text-white text-sm font-bold rounded-full">
+            <h3 className="text-lg font-semibold text-ink">Exhaustion</h3>
+            <span className="px-2 py-0.5 bg-danger/15 text-danger-ink border border-danger/30 text-sm font-bold rounded-full">
               Level {exhaustionLevel(data.exhaustionLevel)}
             </span>
           </div>
           <ul className="space-y-0.5">
             {exhaustionEffects(data.exhaustionLevel).map((effect, idx) => (
-              <li key={idx} className="flex items-start space-x-2 text-stone-700">
-                <span className="text-red-600">•</span>
+              <li key={idx} className="flex items-start space-x-2 text-ink-secondary">
+                <span className="text-danger-ink">•</span>
                 <span>
-                  <span className="text-stone-500 mr-1">{idx + 1}.</span>
+                  <span className="text-ink-muted mr-1">{idx + 1}.</span>
                   {effect}
                 </span>
               </li>
@@ -540,7 +542,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {/* Attacks */}
       {data.attacks && (
         <div>
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Attacks & Weapons</h3>
+          <h3 className="text-lg font-semibold text-ink mb-3">Attacks & Weapons</h3>
           <AttacksList
             attacks={data.attacks}
             onRoll={onRoll ? (expr, purpose) => handleRoll(expr, purpose) : undefined}
@@ -562,8 +564,8 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {hasSpellcasting(data) ? (
         <SpellcastingBlock spellcasting={data.spellcasting!} character={data} />
       ) : (
-        <div className="text-center py-12 text-stone-500">
-          <Sparkles className="w-12 h-12 mx-auto mb-3 text-stone-500" />
+        <div className="text-center py-12 text-ink-muted">
+          <Sparkles className="w-12 h-12 mx-auto mb-3 text-ink-muted" />
           <p>This character is not a spellcaster</p>
         </div>
       )}
@@ -591,9 +593,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       <div className="space-y-6">
         {/* Proficiencies & Training - Organized like D&D character sheet */}
         {hasProficiencies && (
-          <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-            <h3 className="text-lg font-semibold text-stone-800 mb-4 flex items-center">
-              <Shield className="w-5 h-5 mr-2 text-red-700" />
+          <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+            <h3 className="text-lg font-semibold text-ink mb-4 flex items-center">
+              <Shield className="w-5 h-5 mr-2 text-accent-ink" />
               Proficiencies & Training
             </h3>
 
@@ -601,10 +603,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               {/* Armor */}
               {proficiencies.armor.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold text-stone-700 mb-2 uppercase tracking-wide">
+                  <div className="text-sm font-semibold text-ink-secondary mb-2 uppercase tracking-wide">
                     Armor
                   </div>
-                  <div className="text-stone-800">
+                  <div className="text-ink">
                     {proficiencies.armor}
                   </div>
                 </div>
@@ -613,10 +615,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               {/* Weapons */}
               {proficiencies.weapons.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold text-stone-700 mb-2 uppercase tracking-wide">
+                  <div className="text-sm font-semibold text-ink-secondary mb-2 uppercase tracking-wide">
                     Weapons
                   </div>
-                  <div className="text-stone-800">
+                  <div className="text-ink">
                     {proficiencies.weapons}
                   </div>
                 </div>
@@ -625,10 +627,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               {/* Tools */}
               {proficiencies.tools.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold text-stone-700 mb-2 uppercase tracking-wide">
+                  <div className="text-sm font-semibold text-ink-secondary mb-2 uppercase tracking-wide">
                     Tools
                   </div>
-                  <div className="text-stone-800">
+                  <div className="text-ink">
                     {proficiencies.tools}
                   </div>
                 </div>
@@ -637,10 +639,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               {/* Languages */}
               {proficiencies.languages.length > 0 && (
                 <div>
-                  <div className="text-sm font-semibold text-stone-700 mb-2 uppercase tracking-wide">
+                  <div className="text-sm font-semibold text-ink-secondary mb-2 uppercase tracking-wide">
                     Languages
                   </div>
-                  <div className="text-stone-800">
+                  <div className="text-ink">
                     {proficiencies.languages}
                   </div>
                 </div>
@@ -655,18 +657,18 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           the same as a migrated one. Most entries are a bare name — a
           description only appears when there is one. */}
       {features.length > 0 && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Features &amp; Traits</h3>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Features &amp; Traits</h3>
           <ul className="space-y-2">
             {features.map((feature, idx) => (
               <li key={idx} className="flex items-start space-x-2">
-                <span className="text-red-600 mt-1">•</span>
-                <div className="text-stone-700">
+                <span className="text-accent-ink mt-1">•</span>
+                <div className="text-ink-secondary">
                   <span className={feature.description ? 'font-semibold' : undefined}>
                     {feature.name}
                   </span>
                   {feature.description && (
-                    <p className="text-sm text-stone-600 whitespace-pre-wrap mt-0.5">
+                    <p className="text-sm text-ink-secondary whitespace-pre-wrap mt-0.5">
                       {feature.description}
                     </p>
                   )}
@@ -679,9 +681,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Additional Features */}
       {data.additionalFeaturesAndTraits && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Additional Features</h3>
-          <p className="text-stone-700 whitespace-pre-wrap">{data.additionalFeaturesAndTraits}</p>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Additional Features</h3>
+          <p className="text-ink-secondary whitespace-pre-wrap">{data.additionalFeaturesAndTraits}</p>
         </div>
       )}
     </div>
@@ -693,32 +695,32 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     <div className="space-y-6">
       {/* Appearance */}
       {data.appearance && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Appearance</h3>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Appearance</h3>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
-              <div className="text-xs text-stone-500">Age</div>
-              <div className="text-stone-800">{data.appearance.age}</div>
+              <div className="text-xs text-ink-muted">Age</div>
+              <div className="text-ink">{data.appearance.age}</div>
             </div>
             <div>
-              <div className="text-xs text-stone-500">Height</div>
-              <div className="text-stone-800">{data.appearance.height}</div>
+              <div className="text-xs text-ink-muted">Height</div>
+              <div className="text-ink">{data.appearance.height}</div>
             </div>
             <div>
-              <div className="text-xs text-stone-500">Weight</div>
-              <div className="text-stone-800">{data.appearance.weight}</div>
+              <div className="text-xs text-ink-muted">Weight</div>
+              <div className="text-ink">{data.appearance.weight}</div>
             </div>
             <div>
-              <div className="text-xs text-stone-500">Eyes</div>
-              <div className="text-stone-800">{data.appearance.eyes}</div>
+              <div className="text-xs text-ink-muted">Eyes</div>
+              <div className="text-ink">{data.appearance.eyes}</div>
             </div>
             <div>
-              <div className="text-xs text-stone-500">Skin</div>
-              <div className="text-stone-800">{data.appearance.skin}</div>
+              <div className="text-xs text-ink-muted">Skin</div>
+              <div className="text-ink">{data.appearance.skin}</div>
             </div>
             <div>
-              <div className="text-xs text-stone-500">Hair</div>
-              <div className="text-stone-800">{data.appearance.hair}</div>
+              <div className="text-xs text-ink-muted">Hair</div>
+              <div className="text-ink">{data.appearance.hair}</div>
             </div>
           </div>
         </div>
@@ -726,31 +728,31 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Personality */}
       {data.personality && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Personality</h3>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Personality</h3>
           <div className="space-y-3">
             {data.personality.traits && (
               <div>
-                <div className="text-sm font-medium text-stone-600 mb-1">Traits</div>
-                <p className="text-stone-700">{data.personality.traits}</p>
+                <div className="text-sm font-medium text-ink-secondary mb-1">Traits</div>
+                <p className="text-ink-secondary">{data.personality.traits}</p>
               </div>
             )}
             {data.personality.ideals && (
               <div>
-                <div className="text-sm font-medium text-stone-600 mb-1">Ideals</div>
-                <p className="text-stone-700">{data.personality.ideals}</p>
+                <div className="text-sm font-medium text-ink-secondary mb-1">Ideals</div>
+                <p className="text-ink-secondary">{data.personality.ideals}</p>
               </div>
             )}
             {data.personality.bonds && (
               <div>
-                <div className="text-sm font-medium text-stone-600 mb-1">Bonds</div>
-                <p className="text-stone-700">{data.personality.bonds}</p>
+                <div className="text-sm font-medium text-ink-secondary mb-1">Bonds</div>
+                <p className="text-ink-secondary">{data.personality.bonds}</p>
               </div>
             )}
             {data.personality.flaws && (
               <div>
-                <div className="text-sm font-medium text-stone-600 mb-1">Flaws</div>
-                <p className="text-stone-700">{data.personality.flaws}</p>
+                <div className="text-sm font-medium text-ink-secondary mb-1">Flaws</div>
+                <p className="text-ink-secondary">{data.personality.flaws}</p>
               </div>
             )}
           </div>
@@ -759,28 +761,28 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
       {/* Backstory */}
       {data.backstory && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Backstory</h3>
-          <p className="text-stone-700 whitespace-pre-wrap">{data.backstory}</p>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Backstory</h3>
+          <p className="text-ink-secondary whitespace-pre-wrap">{data.backstory}</p>
         </div>
       )}
 
       {/* Allies & Organizations */}
       {data.alliesAndOrganizations && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Allies & Organizations</h3>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Allies & Organizations</h3>
           <div className="space-y-2">
-            <div className="font-medium text-stone-800">{data.alliesAndOrganizations.name}</div>
-            <p className="text-stone-700">{data.alliesAndOrganizations.description}</p>
+            <div className="font-medium text-ink">{data.alliesAndOrganizations.name}</div>
+            <p className="text-ink-secondary">{data.alliesAndOrganizations.description}</p>
           </div>
         </div>
       )}
 
       {/* Treasure */}
       {data.treasure && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Treasure</h3>
-          <p className="text-stone-700 whitespace-pre-wrap">{data.treasure}</p>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">Treasure</h3>
+          <p className="text-ink-secondary whitespace-pre-wrap">{data.treasure}</p>
         </div>
       )}
     </div>
@@ -807,7 +809,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg overflow-hidden">
+    <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
       {renderHeader()}
       {renderTabs()}
       <div className="p-6">{renderTabContent()}</div>
@@ -816,10 +818,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       {rollPopup && (
         <div
           ref={popupRef}
-          className="fixed z-50 bg-white border border-stone-200 rounded-lg shadow-xl overflow-hidden"
+          className="fixed z-50 bg-paper border border-ink/10 rounded-lg shadow-xl overflow-hidden"
           style={{ left: rollPopup.anchorX, top: rollPopup.anchorY, minWidth: 180 }}
         >
-          <div className="px-3 py-2 bg-red-700 text-white text-xs font-semibold truncate">
+          <div className="px-3 py-2 bg-accent text-accent-text text-xs font-semibold truncate">
             {rollPopup.purpose}
           </div>
           {[
@@ -830,9 +832,9 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
             <button
               key={label}
               onClick={() => handleRoll(expr, rollPopup.purpose + suffix)}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-red-50 transition-colors text-left"
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-ink-secondary hover:bg-accent/10 transition-colors text-left"
             >
-              <Dices className="w-3.5 h-3.5 text-red-700 shrink-0" />
+              <Dices className="w-3.5 h-3.5 text-accent-ink shrink-0" />
               {label}
             </button>
           ))}

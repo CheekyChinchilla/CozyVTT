@@ -15,7 +15,7 @@
  * Authored values that already pass are never modified.
  */
 
-import { ensureReadableChannels, ensureReadableOnAll, readableTextOn } from './utils/color';
+import { ensureReadableChannels, ensureReadableOnAll, parseRgb, readableTextOn, relativeLuminance } from './utils/color';
 
 export interface ThemeColors {
   brand: string;
@@ -546,28 +546,41 @@ export const STATE_HUES = {
  *     unchanged, so this only moves the themes whose muted text is genuinely
  *     too faint.
  */
+/** `fill` laid over `background` at `alpha`, as `bg-danger/15` draws it. */
+function over(fill: string, background: string, alpha: number): string {
+  const f = fill.split(/\s+/).map(Number);
+  const b = background.split(/\s+/).map(Number);
+  return f.map((v, i) => Math.round(v * alpha + b[i] * (1 - alpha))).join(' ');
+}
+
 export function deriveReadableTokens(colors: ThemeColors): Record<string, string> {
   const onPage = [colors.bgBase, colors.bgSurface];
   const onPaper = [colors.paper];
   const everywhere = [...onPage, ...onPaper];
+  // Coloured text also sits on its own colour's tint (a chip or panel at 10
+  // to 15%: the alert and badge classes), and plain text on a wash of the ink
+  // (an inset panel or a hovered row at 5 to 10%).
+  const andItsTint = (fill: string) => [...everywhere, ...everywhere.map((bg) => over(fill, bg, 0.15))];
+  const andInkWash = [...everywhere, over(colors.ink, colors.paper, 0.1), over(colors.ink, colors.bgSurface, 0.1)];
 
   return {
-    '--rgb-ink-muted': ensureReadableOnAll(colors.inkMuted, everywhere),
+    '--rgb-ink-secondary': ensureReadableOnAll(colors.inkSecondary, andInkWash),
+    '--rgb-ink-muted': ensureReadableOnAll(colors.inkMuted, andInkWash),
     // Label on an accent-filled button. Authored values that already contrast
     // are kept; the rest are nudged until the label is legible.
     '--rgb-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
     // brand is a fill in ~290 places (buttons, borders) AND text in ~470.
     // The fill keeps the authored color; text uses this readable shade of it.
-    '--rgb-brand-ink': ensureReadableOnAll(colors.brand, everywhere),
-    '--rgb-accent-ink': ensureReadableOnAll(colors.accent, everywhere),
-    '--rgb-spirit-ink': ensureReadableOnAll(colors.spirit, everywhere),
-    '--rgb-danger-ink': ensureReadableOnAll(colors.danger, everywhere),
+    '--rgb-brand-ink': ensureReadableOnAll(colors.brand, andItsTint(colors.brand)),
+    '--rgb-accent-ink': ensureReadableOnAll(colors.accent, andItsTint(colors.accent)),
+    '--rgb-spirit-ink': ensureReadableOnAll(colors.spirit, andItsTint(colors.spirit)),
+    '--rgb-danger-ink': ensureReadableOnAll(colors.danger, andItsTint(colors.danger)),
     '--rgb-success': STATE_HUES.success,
-    '--rgb-success-ink': ensureReadableOnAll(STATE_HUES.success, everywhere),
+    '--rgb-success-ink': ensureReadableOnAll(STATE_HUES.success, andItsTint(STATE_HUES.success)),
     '--rgb-warning': STATE_HUES.warning,
-    '--rgb-warning-ink': ensureReadableOnAll(STATE_HUES.warning, everywhere),
+    '--rgb-warning-ink': ensureReadableOnAll(STATE_HUES.warning, andItsTint(STATE_HUES.warning)),
     '--rgb-info': STATE_HUES.info,
-    '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, everywhere),
+    '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, andItsTint(STATE_HUES.info)),
   };
 }
 
@@ -595,6 +608,11 @@ export function applyThemeColors(colors: ThemeColors): void {
   for (const [name, value] of Object.entries(deriveReadableTokens(colors))) {
     root.style.setProperty(name, value);
   }
+
+  // The browser draws its own controls (text boxes, checkboxes, a dropdown's
+  // open list) for the scheme it is told; a dark paper is a dark theme,
+  // custom ones included.
+  root.style.colorScheme = relativeLuminance(parseRgb(colors.paper)) < 0.18 ? 'dark' : 'light';
 }
 
 /**

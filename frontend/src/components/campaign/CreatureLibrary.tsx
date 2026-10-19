@@ -539,7 +539,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
                   className="w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
                 >
                   <div className="flex items-center gap-2">
-                    <Star className="w-3.5 h-3.5 text-warning-ink fill-amber-500" />
+                    <Star className="w-3.5 h-3.5 text-warning-ink fill-warning" />
                     <span className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
                       Favorites
                     </span>
@@ -829,7 +829,7 @@ function CreatureRow({
         >
           <Star className={`w-3.5 h-3.5 transition-colors ${
             isFavorite
-              ? 'text-warning-ink fill-amber-500'
+              ? 'text-warning-ink fill-warning'
               : 'text-stone-gray/30 hover:text-warning-ink'
           }`} />
         </button>

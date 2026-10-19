@@ -221,7 +221,7 @@ export default function InvitationModal({
             <button
               onClick={handleDecline}
               disabled={processing}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <XCircle className="w-4 h-4" />
               Decline
