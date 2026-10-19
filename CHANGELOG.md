@@ -129,7 +129,7 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **Copy works for a new user's temporary password on a plain-HTTP instance.** In the Admin Panel, **Copy** beside a temporary password did nothing on an instance reached by `http://` on a home network, where the browser offers no clipboard access, and said nothing either. It now copies there too, and says so when it cannot, so you select the password and copy it yourself.
 
-- **A one-letter display name can be chosen on every page.** The server takes display names of 1 to 50 characters, and Invite Player finds one-letter names, but **Profile**, **Sign Up** and the setup wizard refused names under 2 characters, and **Sign Up** said "less than 50" though 50 is allowed.
+- **A one-letter display name can be chosen on every page.** The server takes display names of 1 to 50 characters, and Invite Player finds one-letter names, but **Profile**, **Sign Up** and the setup wizard refused names under 2 characters, and **Sign Up** said "less than 50" though 50 is allowed. A screen reader now names the **Display Name** box on **Profile**.
 
 - **Two refusals name their buttons as the app shows them.** Resending an invitation to someone who has already signed in said to use "Send reset link", and an administrator resetting their own password from the Admin Panel was told to use "Change password". They now say **Send Reset Link** and **Change Password**, the buttons' own names.
 

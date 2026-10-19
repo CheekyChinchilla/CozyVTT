@@ -397,7 +397,7 @@ describe('the display name limits', () => {
     (page) => {
       const source = read(page);
       expect(source).toContain("from '@/constants/accountLimits'");
-      expect(source).not.toMatch(/Display name must be (at least|less than|50)|maxLength=\{50\}/);
+      expect(source).not.toMatch(/Display name must be (at least|less than|50)|maxLength=\{50\}|\.length\}\/50</);
     }
   );
 });

@@ -737,10 +737,11 @@ export default function ProfilePage() {
             <div className="flex-1 space-y-4">
               {/* Display name */}
               <div>
-                <label className="block text-xs font-medium text-stone-gray mb-1">Display Name</label>
+                <label htmlFor="profile-display-name" className="block text-xs font-medium text-stone-gray mb-1">Display Name</label>
                 {editingProfile ? (
                   <>
                     <input
+                      id="profile-display-name"
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
@@ -748,7 +749,7 @@ export default function ProfilePage() {
                       className="input-cozy w-full"
                       autoFocus
                     />
-                    <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/50</p>
+                    <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/{DISPLAY_NAME_MAX_LENGTH}</p>
                   </>
                 ) : (
                   <p className="text-brand-ink font-medium">{user?.displayName}</p>
