@@ -654,10 +654,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // them out from the inventory with the same rules.
   useEffect(() => {
     if (!formData.inventory) return;
-    const current = pf2eTotalBulk(formData.inventory).bulk;
+    const current = pf2eTotalBulk(formData.inventory, formData.currency).bulk;
     const { encumbered, maximum } = pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0);
     setFormData((prev) => ({ ...prev, bulk: { current, encumbered, maximum } }));
-  }, [formData.inventory, formData.attributes?.strength?.modifier]);
+  }, [formData.inventory, formData.currency, formData.attributes?.strength?.modifier]);
 
   // Auto-calculate maximum HP
   useEffect(() => {
@@ -1698,7 +1698,7 @@ min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} on
       <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
         <h3 className="text-lg font-bold text-blue-800 mb-2">Bulk Summary</h3>
         <div className="text-sm text-blue-700">
-          <span className="font-semibold">{formatPf2eBulk(pf2eTotalBulk(formData.inventory))}</span> / Encumbered above:{' '}
+          <span className="font-semibold">{formatPf2eBulk(pf2eTotalBulk(formData.inventory, formData.currency))}</span> / Encumbered above:{' '}
           {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).encumbered} / Max:{' '}
           {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).maximum}
         </div>

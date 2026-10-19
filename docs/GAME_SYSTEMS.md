@@ -154,8 +154,8 @@ question, and getting it wrong invents numbers the designers never intended.
   for both, each its own item bonus), and `rules/pathfinder2e.ts` derives them
   for the editor, the read-only sheet, the roll menu and the server's
   initiative roll alike,
-  with the Bulk an inventory carries (ten light items to 1 Bulk, the rest
-  rounded down) and its limits.
+  with the Bulk an inventory and purse carry (ten light items or a thousand
+  coins to 1 Bulk, the rest rounded down) and its limits.
   The distinction is where the number comes from: a creature's is printed by
   Paizo, a character's is built from their own sheet.
 - **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and

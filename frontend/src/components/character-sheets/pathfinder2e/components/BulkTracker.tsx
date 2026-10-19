@@ -9,11 +9,13 @@
 import React from 'react';
 import { Package } from 'lucide-react';
 
-import type { PF2eInventoryItem as InventoryItem } from '@/types/game-systems';
+import type { PF2eInventoryItem as InventoryItem, PF2eCurrency } from '@/types/game-systems';
 import { formatPf2eBulk, pf2eBulkLimits, pf2eItemBulk, pf2eTotalBulk } from '@/utils/rules/pathfinder2e';
 
 interface BulkTrackerProps {
   inventory: InventoryItem[];
+  /** The character's coins, which weigh 1 Bulk a thousand. */
+  currency?: PF2eCurrency;
   /** The character's Strength modifier, which sets the limits. */
   strengthModifier: number;
 }
@@ -23,8 +25,8 @@ interface BulkTrackerProps {
  * Strength by the shared rules, so the sheet shows what is carried now rather
  * than what was last stored.
  */
-export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, strengthModifier }) => {
-  const carried = pf2eTotalBulk(inventory);
+export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, strengthModifier }) => {
+  const carried = pf2eTotalBulk(inventory, currency);
   const { encumbered, maximum, isEncumbered, isOverloaded } = pf2eBulkLimits(strengthModifier, carried.bulk);
 
   return (

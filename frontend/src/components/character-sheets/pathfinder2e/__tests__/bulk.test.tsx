@@ -70,3 +70,10 @@ describe('the editor', () => {
     expect((onSave.mock.calls[0][0] as unknown as { bulk: { current: number } }).bulk.current).toBe(2);
   });
 });
+
+describe('coins', () => {
+  it('weigh 1 Bulk a thousand on the sheet', () => {
+    render(<BulkTracker inventory={[item('Chest', { bulk: 1 })]} currency={{ cp: 0, sp: 0, gp: 5000, pp: 0 }} strengthModifier={0} />);
+    expect(screen.getByText('ENCUMBERED')).toBeInTheDocument();
+  });
+});

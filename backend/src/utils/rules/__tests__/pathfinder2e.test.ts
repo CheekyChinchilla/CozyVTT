@@ -178,3 +178,20 @@ describe('the spellcasting rank on a sheet with no spell attack', () => {
     expect(pf2eSpellAttack(sheet)).toBe(13);
   });
 });
+
+/**
+ * Core Rulebook, "Bulk of Coins": "A thousand coins of any denomination or
+ * combination of denominations count as 1 Bulk", fractions of 1,000 rounded
+ * down: "100 coins don't count as a light item, and 1,999 coins are 1 Bulk".
+ */
+describe('coins in pf2eTotalBulk', () => {
+  it('count 1 Bulk a thousand, of any mix, rounded down', () => {
+    expect(pf2eTotalBulk([], { cp: 500, sp: 400, gp: 99, pp: 0 })).toEqual({ bulk: 0, light: 0 });
+    expect(pf2eTotalBulk([], { cp: 0, sp: 0, gp: 1999, pp: 0 })).toEqual({ bulk: 1, light: 0 });
+    expect(pf2eTotalBulk([{ bulk: 2 }], { cp: 1000, sp: 1000, gp: 0, pp: 500 })).toEqual({ bulk: 4, light: 0 });
+  });
+
+  it('add nothing for no purse', () => {
+    expect(pf2eTotalBulk([{ bulk: 2 }])).toEqual({ bulk: 2, light: 0 });
+  });
+});

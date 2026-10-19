@@ -126,7 +126,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       if (stored === undefined) return;
       const strength = (data.attributes as { strength?: { modifier?: number } } | undefined)?.strength?.modifier ?? 0;
       const { encumbered, maximum } = pf2eBulkLimits(strength);
-      expect(stored).toEqual({ current: pf2eTotalBulk(data.inventory).bulk, encumbered, maximum });
+      expect(stored).toEqual({ current: pf2eTotalBulk(data.inventory, data.currency).bulk, encumbered, maximum });
     });
 
     // The editor looks attributes up by their full name and offers the

@@ -217,6 +217,9 @@ export function pf2eSpellDC(data: unknown): number {
 /** Light items that make 1 Bulk. */
 export const LIGHT_ITEMS_PER_BULK = 10;
 
+/** Coins, of any denomination, that make 1 Bulk. */
+export const COINS_PER_BULK = 1000;
+
 /** Bulk carried: whole Bulk, and light items left over that make less than 1. */
 export interface Pf2eBulk {
   bulk: number;
@@ -243,8 +246,10 @@ export function pf2eItemBulk(value: unknown): Pf2eBulk {
  * Core Rulebook, "Bulk": "Ten light items count as 1 Bulk, and you round down
  * fractions (so 9 light items count as 0 Bulk, and 11 light items count as 1
  * Bulk)". An item with no quantity is one item; a quantity of 0 is none.
+ * Coins count too: "A thousand coins of any denomination or combination of
+ * denominations count as 1 Bulk", fractions of 1,000 rounded down.
  */
-export function pf2eTotalBulk(inventory: unknown): Pf2eBulk {
+export function pf2eTotalBulk(inventory: unknown, currency?: unknown): Pf2eBulk {
   let bulk = 0;
   let light = 0;
   for (const entry of Array.isArray(inventory) ? inventory : []) {
@@ -255,7 +260,12 @@ export function pf2eTotalBulk(inventory: unknown): Pf2eBulk {
     bulk += each.bulk * quantity;
     light += each.light * quantity;
   }
-  return { bulk: bulk + Math.floor(light / LIGHT_ITEMS_PER_BULK), light: light % LIGHT_ITEMS_PER_BULK };
+  const purse = rec(currency);
+  const coins = purse ? ['cp', 'sp', 'gp', 'pp'].reduce((sum, coin) => sum + Math.max(0, num(purse[coin])), 0) : 0;
+  return {
+    bulk: bulk + Math.floor(light / LIGHT_ITEMS_PER_BULK) + Math.floor(coins / COINS_PER_BULK),
+    light: light % LIGHT_ITEMS_PER_BULK,
+  };
 }
 
 /**
