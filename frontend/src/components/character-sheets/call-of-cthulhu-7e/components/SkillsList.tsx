@@ -194,20 +194,38 @@ const SkillRow: React.FC<{
       onClick={isClickable ? () => onRoll!('1d100', purpose) : undefined}
       title={isClickable ? `Click to roll ${displayName} (target: ${skill.currentValue}%)` : undefined}
     >
-      {/* Improvement Checkbox */}
-      <div
-        className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
-          editable ? 'cursor-pointer hover:scale-110' : 'cursor-default'
-        } ${getCheckboxClasses()}`}
-        style={
-          skill.improvementChecked && themeColor
-            ? { backgroundColor: themeColor.hex, borderColor: themeColor.hex }
-            : undefined
-        }
-        onClick={() => editable && onChange?.('improvementChecked', !skill.improvementChecked)}
-      >
-        {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-3" />}
-      </div>
+      {/* Improvement Checkbox: a checkbox the keyboard reaches in the editor,
+          a mark on the read-only sheet. */}
+      {editable ? (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={skill.improvementChecked}
+          aria-label={`Improvement check for ${displayName}`}
+          onClick={() => onChange?.('improvementChecked', !skill.improvementChecked)}
+          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-sepia-500 ${getCheckboxClasses()}`}
+          style={
+            skill.improvementChecked && themeColor
+              ? { backgroundColor: themeColor.hex, borderColor: themeColor.hex }
+              : undefined
+          }
+        >
+          {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-3" />}
+        </button>
+      ) : (
+        <div
+          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-default ${getCheckboxClasses()}`}
+          style={
+            skill.improvementChecked && themeColor
+              ? { backgroundColor: themeColor.hex, borderColor: themeColor.hex }
+              : undefined
+          }
+          role="img"
+          aria-label={skill.improvementChecked ? 'Marked for improvement' : 'Not marked for improvement'}
+        >
+          {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-3" />}
+        </div>
+      )}
 
       {/* Skill Name */}
       <div className="flex-1 min-w-0 flex items-center gap-1">

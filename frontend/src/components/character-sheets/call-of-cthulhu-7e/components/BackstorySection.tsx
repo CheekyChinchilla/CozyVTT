@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { BookText, User, Heart, MapPin, Package, Sparkles, Activity, Ghost } from 'lucide-react';
+import { SHEET_LONG_TEXT_MAX } from '@/constants/sheetLimits';
 
 interface BackstoryData {
   description?: string;
@@ -148,7 +149,7 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
               {/* Field Label */}
               <div className="flex items-center space-x-2">
                 <Icon className="w-4 h-4 text-sepia-600" />
-                <label className="text-sm font-semibold text-sepia-900">
+                <label htmlFor={`coc-backstory-${field.key}`} className="text-sm font-semibold text-sepia-900">
                   {field.label}
                 </label>
               </div>
@@ -156,6 +157,8 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
               {/* Field Input/Display */}
               {editable ? (
                 <textarea
+                  id={`coc-backstory-${field.key}`}
+                  maxLength={SHEET_LONG_TEXT_MAX}
                   value={value}
                   onChange={(e) => onChange?.(field.key, e.target.value)}
                   placeholder={field.placeholder}

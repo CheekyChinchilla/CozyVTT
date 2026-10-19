@@ -66,6 +66,7 @@ export const CharacteristicBlock: React.FC<CharacteristicBlockProps> = ({
       <div className="w-16 h-16 rounded-md border-2 border-sepia-600 bg-parchment flex items-center justify-center">
         {editable ? (
           <NumberField
+            aria-label={label}
             value={regular}
             onChange={(v: number) => onChange?.(v)}
             className="w-full h-full text-center text-2xl font-bold text-sepia-900 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-sepia-500 rounded-sm"

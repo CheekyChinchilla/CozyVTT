@@ -663,6 +663,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             onChange={(e) => setFormData({ ...formData, investigatorName: e.target.value })}
             maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
+            aria-label="Investigator name"
             className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
           />
 
@@ -677,6 +678,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.occupation || ''}
               onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
               placeholder="Occupation"
+              aria-label="Occupation"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
             <input
@@ -684,6 +687,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.era || ''}
               onChange={(e) => setFormData({ ...formData, era: e.target.value })}
               placeholder="Era (e.g., 1920s)"
+              aria-label="Era"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -696,6 +701,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={(formData.age ?? 0) as number}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
+              aria-label="Age"
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               fallback={0}
             />
@@ -704,6 +710,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.sex || ''}
               onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
               placeholder="Sex"
+              aria-label="Sex"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
             <input
@@ -711,6 +719,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.residence || ''}
               onChange={(e) => setFormData({ ...formData, residence: e.target.value })}
               placeholder="Residence"
+              aria-label="Residence"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -720,6 +730,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             value={formData.birthplace || ''}
             onChange={(e) => setFormData({ ...formData, birthplace: e.target.value })}
             placeholder="Birthplace"
+            aria-label="Birthplace"
+            maxLength={SHEET_SHORT_TEXT_MAX}
             className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
           />
         </div>
@@ -874,8 +886,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Current Status</h3>
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Current HP</label>
+            <label htmlFor="coc-current-hp" className="text-xs text-sepia-600 uppercase block mb-1">Current HP</label>
             <NumberField
+id="coc-current-hp"
 value={formData.derivedStats?.hp?.current}
               onChange={(v: number) => {
                 setFormData({
@@ -891,8 +904,9 @@ value={formData.derivedStats?.hp?.current}
             />
           </div>
           <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Current MP</label>
+            <label htmlFor="coc-current-mp" className="text-xs text-sepia-600 uppercase block mb-1">Current MP</label>
             <NumberField
+id="coc-current-mp"
 value={formData.derivedStats?.magicPoints?.current}
               onChange={(v: number) => {
                 setFormData({
@@ -911,8 +925,9 @@ value={formData.derivedStats?.magicPoints?.current}
             />
           </div>
           <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Luck Score</label>
+            <label htmlFor="coc-luck" className="text-xs text-sepia-600 uppercase block mb-1">Luck Score</label>
             <NumberField
+id="coc-luck"
 value={formData.derivedStats?.luck?.score}
               onChange={(v: number) => {
                 setFormData({
@@ -1026,8 +1041,10 @@ value={formData.derivedStats?.luck?.score}
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Wealth</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm text-sepia-700 font-semibold block mb-1">Spending Level</label>
+            <label htmlFor="coc-spending-level" className="text-sm text-sepia-700 font-semibold block mb-1">Spending Level</label>
             <input
+              id="coc-spending-level"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.wealth?.spendingLevel || ''}
               onChange={(e) =>
@@ -1041,8 +1058,9 @@ value={formData.derivedStats?.luck?.score}
             />
           </div>
           <div>
-            <label className="text-sm text-sepia-700 font-semibold block mb-1">Cash on Hand</label>
+            <label htmlFor="coc-cash" className="text-sm text-sepia-700 font-semibold block mb-1">Cash on Hand</label>
             <NumberField
+id="coc-cash"
 value={formData.wealth?.cash}
               onChange={(v: number) => setFormData({
                   ...formData,
@@ -1055,8 +1073,10 @@ value={formData.wealth?.cash}
           </div>
         </div>
         <div className="mt-3">
-          <label className="text-sm text-sepia-700 font-semibold block mb-1">Assets</label>
+          <label htmlFor="coc-assets" className="text-sm text-sepia-700 font-semibold block mb-1">Assets</label>
           <textarea
+            id="coc-assets"
+            maxLength={SHEET_LONG_TEXT_MAX}
             value={formData.wealth?.assets || ''}
             onChange={(e) =>
               setFormData({
@@ -1089,6 +1109,7 @@ value={formData.wealth?.cash}
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions & Equipment</h3>
         <ListField
           multiline
+          aria-label="Possessions"
           value={Array.isArray(formData.possessions) ? formData.possessions : []}
           onChange={(possessions) => setFormData((prev) => ({ ...prev, possessions }))}
           parse={parsePossessions}
@@ -1192,8 +1213,10 @@ value={formData.wealth?.cash}
         <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
           {COC_APPEARANCE_FIELDS.map(({ key, label }) => (
             <div key={key}>
-              <label className="text-xs text-sepia-600 uppercase block mb-1">{label}</label>
+              <label htmlFor={`coc-appearance-${key}`} className="text-xs text-sepia-600 uppercase block mb-1">{label}</label>
               <input
+                id={`coc-appearance-${key}`}
+                maxLength={SHEET_SHORT_TEXT_MAX}
                 type="text"
                 value={formData.appearance?.[key] ?? ''}
                 onChange={(e) => {
@@ -1236,6 +1259,7 @@ value={formData.wealth?.cash}
           <div>
             <label className="text-xs text-sepia-600 uppercase block mb-1">Spells (one per line)</label>
             <ListField
+              aria-label="Spells"
               multiline
               rows={4}
               value={formData.spellsAndMythos?.spells ?? []}
@@ -1273,6 +1297,7 @@ value={formData.wealth?.cash}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             placeholder="Notes kept by the Keeper about this investigator"
             aria-label="Keeper's Notes"
+            maxLength={SHEET_LONG_TEXT_MAX}
             className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
           />
         </div>

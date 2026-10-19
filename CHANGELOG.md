@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A screen reader names every box in the Call of Cthulhu character editor, and a skill's improvement check works from the keyboard.** Almost every box was announced by its placeholder or by nothing, and the improvement checks beside the skills could only be clicked; they are now checkboxes you can reach with Tab and tick with Space. Every text box also stops at the length a sheet stores, where only the investigator's name did, so a long paste no longer gets the save refused.
+
 - **A Call of Cthulhu investigator's own language follows EDU.** Language (Own) starts equal to EDU, but changing EDU in the editor left it where it was. Its base now follows EDU, as Dodge's follows half DEX, and points put into it stay above the base.
 
 - **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.** The read-only sheet showed hit points, the major wound threshold, magic points, maximum Sanity, damage bonus, build, move rate and each characteristic's half and fifth as last stored, so an investigator not saved since being made from a template or imported could show numbers its own characteristics do not give. They are now worked out as the editor works them out.

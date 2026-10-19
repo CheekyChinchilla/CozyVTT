@@ -10,6 +10,7 @@ import Button from '@/components/ui/Button';
 import NumberField from '../../../ui/NumberField';
 import ListLimitNote, { listIsFull } from '../../ListLimitNote';
 import { LIMIT_NOTE_CLASS } from '../limitNoteClass';
+import { SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 import type { CoC7eWeapon } from '@/types/game-systems';
 import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
 
@@ -145,6 +146,8 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       <input
                         type="text"
                         value={weapon.name}
+                        aria-label={`Name of weapon ${index + 1}`}
+                        maxLength={SHEET_SHORT_TEXT_MAX}
                         onChange={(e) => handleWeaponChange(index, 'name', e.target.value)}
                         className="w-full bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                       />
@@ -162,6 +165,8 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       <input
                         type="text"
                         value={weapon.skill}
+                        aria-label={`Skill of weapon ${index + 1}`}
+                        maxLength={SHEET_SHORT_TEXT_MAX}
                         onChange={(e) => handleWeaponChange(index, 'skill', e.target.value)}
                         className="w-full bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                       />
@@ -175,6 +180,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     {editable ? (
                       <NumberField
                         value={weapon.skillValue}
+                        aria-label={`Skill value of weapon ${index + 1}`}
                         onChange={(v: number) => handleWeaponChange(index, 'skillValue', v)}
                         className="w-16 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         min={0}
@@ -196,6 +202,8 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       <input
                         type="text"
                         value={weapon.damage}
+                        aria-label={`Damage of weapon ${index + 1}`}
+                        maxLength={SHEET_SHORT_TEXT_MAX}
                         onChange={(e) => handleWeaponChange(index, 'damage', e.target.value)}
                         className="w-20 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="1d6"
@@ -211,6 +219,8 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       <input
                         type="text"
                         value={weapon.range}
+                        aria-label={`Range of weapon ${index + 1}`}
+                        maxLength={SHEET_SHORT_TEXT_MAX}
                         onChange={(e) => handleWeaponChange(index, 'range', e.target.value)}
                         className="w-20 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="Touch"
@@ -225,6 +235,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     {editable ? (
                       <NumberField
                         value={weapon.attacks}
+                        aria-label={`Attacks of weapon ${index + 1}`}
                         onChange={(v: number) => handleWeaponChange(index, 'attacks', v)}
                         className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         min={1}
@@ -241,6 +252,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       <input
                         type="number"
                         value={weapon.ammo ?? ''}
+                        aria-label={`Ammunition of weapon ${index + 1}`}
                         onChange={(e) => handleWeaponChange(index, 'ammo', e.target.value ? parseInt(e.target.value) : null)}
                         className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="—"
@@ -257,6 +269,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                       <input
                         type="number"
                         value={weapon.malfunction ?? ''}
+                        aria-label={`Malfunction of weapon ${index + 1}`}
                         onChange={(e) => handleWeaponChange(index, 'malfunction', e.target.value ? parseInt(e.target.value) : null)}
                         className="w-12 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
                         placeholder="—"

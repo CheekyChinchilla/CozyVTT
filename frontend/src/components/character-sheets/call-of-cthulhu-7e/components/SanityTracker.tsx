@@ -95,6 +95,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
           <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Current</div>
           {editable ? (
             <NumberField
+              aria-label="Current Sanity"
               value={current}
               onChange={(v: number) => onChange?.current(Math.min(v, maximum))}
               className="w-full text-center text-xl font-bold text-white bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
@@ -112,6 +113,7 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
           <div className="text-xs text-purple-300 uppercase tracking-wide mb-1">Start</div>
           {editable ? (
             <NumberField
+              aria-label="Starting Sanity"
               value={starting}
               onChange={(v: number) => onChange?.starting(Math.min(v, 99))}
               className="w-full text-center text-xl font-bold text-purple-100 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-purple-500 rounded-sm"
