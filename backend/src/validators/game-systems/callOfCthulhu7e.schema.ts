@@ -37,6 +37,11 @@ const characteristicsSchema = z.object({
 
 /**
  * Hit points
+ *
+ * TODO(rules): CON + SIZ under 10 works out to 0 hit points, which `min(1)`
+ * refuses along with the whole save. Rolled characteristics never get there
+ * (CON at least 15, SIZ at least 40), typed ones can. Allow 0 here, or hold
+ * the editor's maximum to 1, with a test.
  */
 const hitPointsSchema = z.object({
   maximum: z.number().int().min(1),
