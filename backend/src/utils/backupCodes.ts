@@ -10,7 +10,7 @@
  */
 
 import crypto from 'crypto';
-import { hashPassword, verifyPassword } from '../services/auth';
+import { hashPassword, firstMatchingHash } from '../services/auth';
 import { BACKUP_CODE_COUNT } from '../validators/accountLimits';
 
 /** Ambiguous glyphs (I, O, 0, 1) are excluded so a written-down code is legible. */
@@ -50,12 +50,10 @@ export async function hashBackupCodes(codes: string[]): Promise<string[]> {
  * Find which stored hash a plaintext code matches, or -1 for none. The caller
  * removes the matched hash so the code cannot be used twice. A stored hash left
  * from the old SHA-256 scheme is not Argon2 and simply never matches, which is
- * the forced regeneration: a user's old codes stop working on upgrade.
+ * the forced regeneration: a user's old codes stop working on upgrade. Every
+ * stored hash is checked in one turn of the server's hashing
+ * (firstMatchingHash), so a busy server cannot stop a check partway.
  */
 export async function verifyBackupCode(plainCode: string, hashedCodes: string[]): Promise<number> {
-  const normalized = normalizeBackupCode(plainCode);
-  for (let i = 0; i < hashedCodes.length; i++) {
-    if (await verifyPassword(hashedCodes[i], normalized)) return i;
-  }
-  return -1;
+  return firstMatchingHash(hashedCodes, normalizeBackupCode(plainCode));
 }

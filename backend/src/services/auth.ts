@@ -157,12 +157,30 @@ export async function hashPassword(password: string): Promise<string> {
  * server throws ServerBusyError, which must never count as a wrong password.
  */
 export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+  return withHashTurn(() => argon2Matches(hash, password));
+}
+
+async function argon2Matches(hash: string, password: string): Promise<boolean> {
+  try {
+    return await argon2.verify(hash, password);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Which of `hashes` the password matches, checked one after another in a
+ * single turn, or -1 for none. For the backup codes: with a turn for each
+ * hash, a server that became busy partway answered 503 with some of them
+ * checked and no wrong code counted, so guesses went uncounted under load.
+ * Busy before the first check throws ServerBusyError, with nothing checked.
+ */
+export async function firstMatchingHash(hashes: string[], password: string): Promise<number> {
   return withHashTurn(async () => {
-    try {
-      return await argon2.verify(hash, password);
-    } catch {
-      return false;
+    for (let i = 0; i < hashes.length; i++) {
+      if (await argon2Matches(hashes[i], password)) return i;
     }
+    return -1;
   });
 }
 

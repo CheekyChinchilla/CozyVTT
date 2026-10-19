@@ -25,7 +25,7 @@ jest.mock('argon2', () => ({
 
 import argon2 from 'argon2';
 import { hashPassword, verifyPassword, ServerBusyError, HASH_SLOTS, HASH_QUEUE_MAX, HASH_WAIT_MS } from '../auth';
-import { hashBackupCodes } from '../../utils/backupCodes';
+import { hashBackupCodes, verifyBackupCode } from '../../utils/backupCodes';
 
 /** Let every promise that can settle do so. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -126,4 +126,44 @@ it('hashes a set of backup codes one at a time, taking one place in the line', a
   await drain();
   await expect(codes).resolves.toHaveLength(10);
   await other;
+});
+
+// A backup code is checked against each stored hash in turn. Each check took
+// a turn of its own, so a server that became busy partway answered 503 with
+// some hashes checked and no wrong code counted: guesses at the codes went
+// uncounted under load. The check now keeps one turn for every hash.
+it('checks a backup code against every stored hash in one turn, so a full line cannot stop it partway', async () => {
+  const stored = Array.from({ length: 10 }, (_, i) => `$argon2id$code${i}`);
+  const check = verifyBackupCode('AAAA-BBBB', stored);
+  await settle();
+  const other = hashPassword('second turn');
+  const line = Array.from({ length: HASH_QUEUE_MAX }, () => hashPassword('waiting').catch(() => 'busy'));
+  await settle();
+  expect(started()).toBe(2);
+
+  // The first stored hash is the oldest call running; each next one starts
+  // as the last finishes, ahead of everything waiting.
+  pending.shift()?.(false);
+  await settle();
+  for (let i = 1; i < stored.length; i++) {
+    expect(jest.mocked(argon2.verify).mock.calls.length).toBe(i + 1);
+    expect(jest.mocked(argon2.hash).mock.calls.length).toBe(1);
+    pending.pop()?.(false);
+    await settle();
+  }
+  await expect(check).resolves.toBe(-1);
+
+  await drain();
+  await other;
+  expect(await Promise.all(line)).not.toContain('busy');
+});
+
+it('still finds the stored hash a backup code matches, in that one turn', async () => {
+  const check = verifyBackupCode('AAAA-BBBB', ['$argon2id$a', '$argon2id$b', '$argon2id$c']);
+  await settle();
+  pending.shift()?.(false);
+  await settle();
+  pending.shift()?.(true);
+  await expect(check).resolves.toBe(1);
+  expect(jest.mocked(argon2.verify).mock.calls.length).toBe(2);
 });
