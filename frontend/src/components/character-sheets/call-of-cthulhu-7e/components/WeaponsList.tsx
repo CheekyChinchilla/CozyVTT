@@ -13,6 +13,7 @@ import { LIMIT_NOTE_CLASS } from '../limitNoteClass';
 import { SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 import type { CoC7eWeapon } from '@/types/game-systems';
 import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
+import { isValidDiceExpression } from '@/utils/diceExpression';
 
 // The weapon shape lives in types/game-systems. This file used to keep its own
 // copy, which required `skill`, `damage` and the rest that the backend schema
@@ -132,6 +133,8 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                 // value stored with the weapon goes stale as the skill rises.
                 const skillValue = cocWeaponSkillValue(skills, weapon.skill ?? '', weapon.skillValue ?? 0);
                 const damageRoll = weapon.damage ? cocDamageWithBonus(weapon.damage, damageBonus) : '';
+                // Damage the dice cannot read is shown and not offered as a roll.
+                const rollsDamage = isClickable && damageRoll !== '' && isValidDiceExpression(damageRoll);
                 const skillPurpose = `${weapon.name} (${weapon.skill}) — target: ${skillValue}%`;
                 return (
                 <tr
@@ -194,9 +197,9 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
 
                   {/* Damage — click to roll damage separately */}
                   <td
-                    className={`px-3 py-2 text-center ${isClickable && weapon.damage ? 'cursor-pointer hover:text-red-700 font-semibold' : ''}`}
-                    onClick={isClickable && weapon.damage ? (e) => { e.stopPropagation(); onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
-                    title={isClickable && weapon.damage ? `Click to roll damage: ${damageRoll}` : undefined}
+                    className={`px-3 py-2 text-center ${rollsDamage ? 'cursor-pointer hover:text-red-700 font-semibold' : ''}`}
+                    onClick={rollsDamage ? (e) => { e.stopPropagation(); onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
+                    title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                   >
                     {editable ? (
                       <input
@@ -306,7 +309,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
         <div className="text-xs text-sepia-700 space-y-1">
           <div><strong>Skill:</strong> The skill used to attack with this weapon</div>
           <div><strong>Value:</strong> Your skill percentage (Regular / Half / Fifth)</div>
-          <div><strong>Damage:</strong> Dice expression for damage (e.g., "1d10" or "1d3+DB"); DB rolls your damage bonus. Firearms take no damage bonus</div>
+          <div><strong>Damage:</strong> Dice expression for damage (e.g., "1d10" or "1d3+DB"); DB rolls your damage bonus. Half DB, for thrown weapons and bows, is dropped when your bonus is 0 and otherwise left to roll yourself. Firearms take no damage bonus</div>
           <div><strong>Range:</strong> Effective range (Touch, 15 yards, 50 yards, etc.)</div>
           <div><strong>Atks:</strong> Number of attacks per round</div>
           <div><strong>Ammo:</strong> Current ammunition count (firearms only)</div>

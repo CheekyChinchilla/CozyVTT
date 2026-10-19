@@ -119,6 +119,12 @@ describe('cocDamageWithBonus', () => {
     ['1d8 + db', '+2d6', '1d8+2d6'],
     ['1d6+DB', '-1', '1d6-1'],
     ['1d10', '+1d4', '1d10'],
+    // Half the bonus, for a thrown weapon or a bow: none when there is none.
+    // The rules give no way to halve a bonus in dice, so the text is kept.
+    ['1d3+half DB', '0', '1d3'],
+    ['1d8 + ½DB', '0', '1d8'],
+    ['1d6+1/2 DB', '0', '1d6'],
+    ['1d3+half DB', '+1d4', '1d3+half DB'],
   ])('writes %s with a damage bonus of %s as %s', (damage, bonus, expected) => {
     expect(cocDamageWithBonus(damage, bonus)).toBe(expected);
   });

@@ -135,11 +135,17 @@ export function cocBlankSkills(dex: number, edu: number): Record<string, unknown
  * DB ("1d3+DB" for a punch), which the dice cannot read: a bonus of 0 drops
  * it, a negative one is subtracted, and a die is added. "Damage bonus is not
  * applied to firearms", so a gun's damage has no DB to replace.
+ *
+ * A thrown weapon or a bow adds half the bonus ("1D3+half DB"). Half of none
+ * is none and is dropped; the rules give no way to halve a bonus in dice, so
+ * any other half bonus is left as written.
  */
 export function cocDamageWithBonus(damage: string, damageBonus: string): string {
   const bonus = damageBonus.trim();
-  const written = bonus === '' || bonus === '0' ? '' : bonus.startsWith('-') || bonus.startsWith('+') ? bonus : `+${bonus}`;
-  return damage.replace(/\s*\+\s*DB\b/gi, written);
+  const none = bonus === '' || bonus === '0';
+  const written = none ? '' : bonus.startsWith('-') || bonus.startsWith('+') ? bonus : `+${bonus}`;
+  const full = damage.replace(/\s*\+\s*DB\b/gi, written);
+  return none ? full.replace(/\s*\+\s*(?:half|½|1\/2)\s*DB\b/gi, '') : full;
 }
 
 /**

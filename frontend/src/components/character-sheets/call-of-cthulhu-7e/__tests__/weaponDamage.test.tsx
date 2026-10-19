@@ -1,6 +1,7 @@
 /**
  * A Call of Cthulhu weapon on the read-only sheet rolls its damage with the
- * damage bonus, and shows the value of the skill it names.
+ * damage bonus, and shows the value of the skill it names. Damage the dice
+ * cannot read is shown and not offered as a roll.
  */
 import { it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -19,4 +20,19 @@ it('rolls DB as the damage bonus and reads the skill it names', () => {
   expect(screen.getByText('55%')).toBeInTheDocument();
   fireEvent.click(screen.getByText('1d3+DB'));
   expect(onRoll).toHaveBeenCalledWith('1d3+1d4', 'Fist Damage');
+});
+
+it('offers no roll for damage the dice cannot read', () => {
+  const onRoll = vi.fn();
+  render(
+    <WeaponsList
+      weapons={[{ name: 'Rock', skill: 'Throw', skillValue: 20, damage: '1d4+half DB', range: 'STR/5 ft', attacks: 1 }]}
+      damageBonus="+1d4"
+      onRoll={onRoll}
+    />
+  );
+  const damage = screen.getByText('1d4+half DB');
+  fireEvent.click(damage);
+  expect(onRoll).not.toHaveBeenCalledWith(expect.anything(), 'Rock Damage');
+  expect(damage.closest('td')).not.toHaveAttribute('title');
 });
