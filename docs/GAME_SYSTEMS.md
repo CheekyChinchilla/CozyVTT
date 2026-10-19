@@ -176,7 +176,7 @@ question, and getting it wrong invents numbers the designers never intended.
   half and fifth, damage bonus and build, move rate) and the skill bases
   (`COC_SKILL_BASES`, `cocBlankSkills`, from which both the blank template and
   the editor fill a sheet), mirrored in both projects like the other rules
-  modules; keeping the points above the base is
+  modules; keeping the points above the base is `settleSkillBase` in
   `components/character-sheets/call-of-cthulhu-7e/dodge.ts`.
 
 **Where a number is derived, give it a manual bonus alongside.** The 5e sheet
