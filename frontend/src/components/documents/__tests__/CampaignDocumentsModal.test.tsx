@@ -153,6 +153,17 @@ describe('CampaignDocumentsModal', () => {
   });
 
   describe('as the DM', () => {
+    // The share list fetched the newest 100 documents and no more.
+    it('offers a document from a later page of the library', async () => {
+      listAssets.mockImplementation(async (params: { page?: number }) => (params.page === 2
+        ? { assets: [mine('d7', 'Old Handout', 'old.md')], pagination: { page: 2, limit: 100, total: 101, totalPages: 2 } }
+        : { assets: [mine('d1', 'Core Rules', 'rules.pdf')], pagination: { page: 1, limit: 100, total: 101, totalPages: 2 } }));
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      await screen.findByText('Core Rules');
+      fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
+      expect(await screen.findByText('Old Handout')).toBeInTheDocument();
+    });
+
     it('offers only documents not already shared', async () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
       await screen.findByText('Core Rules');

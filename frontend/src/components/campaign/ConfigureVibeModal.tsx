@@ -18,6 +18,7 @@ import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import { settableAudioAssets } from '@/utils/audioAssets';
+import { listEveryAsset } from '@/services/assetPages';
 import { vibePeriodAudioAssetId } from '@/utils/vibeAudio';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
@@ -293,9 +294,9 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
   useEffect(() => {
     if (!campaign) return;
     let cancelled = false;
-    api.listAssets({ type: 'AUDIO' })
-      .then((r) => {
-        if (!cancelled) setAudioAssets(settableAudioAssets(r.assets || [], user?.id, campaign.id));
+    listEveryAsset({ type: 'AUDIO' })
+      .then((assets) => {
+        if (!cancelled) setAudioAssets(settableAudioAssets(assets, user?.id, campaign.id));
       })
       .catch(() => {
         if (!cancelled) setAudioListFailed(true);

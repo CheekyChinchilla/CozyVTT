@@ -24,6 +24,7 @@ import { useAssetDelete } from '@/hooks/useAssetDelete';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import { AssetType, AssetScope, PlatformRole, type Asset, type CampaignDocument } from '@/types';
+import { listEveryAsset } from '@/services/assetPages';
 
 interface CampaignDocumentsModalProps {
   isOpen: boolean;
@@ -59,8 +60,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
       const { documents } = await api.listCampaignDocuments(campaignId);
       setShared(documents);
       if (isDM) {
-        const { assets } = await api.listAssets({ type: AssetType.DOCUMENT, limit: 100 });
-        setMine(assets);
+        setMine(await listEveryAsset({ type: AssetType.DOCUMENT }));
       }
     } catch (err) {
       setError(apiErrorMessage(err) ?? 'Could not load the documents.');
