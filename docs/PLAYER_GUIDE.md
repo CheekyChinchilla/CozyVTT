@@ -389,6 +389,10 @@ Roll once, before the DM clicks **Start Combat**: a second roll is refused, and 
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
 
+### Levelling up (D&D 5e)
+
+Change **Level** at the top of the editor and **Proficiency Bonus** moves with it: +2 at levels 1 to 4, +3 at 5 to 8, +4 at 9 to 12, +5 at 13 to 16 and +6 at 17 to 20. Every save, skill and spell number worked out from it follows. If your table uses a different bonus, type it in the box and it stays as you set it; the sheet shows what your level gives under the box, with a button to switch back to it.
+
 ### Bonuses the sheet can't work out (D&D 5e)
 
 Every skill and saving throw is worked out for you from your ability scores, your proficiency bonus and the Prof and Exp boxes, so it keeps up as your character grows. Some things add to them that the sheet can't know about: a Bard's **Jack of All Trades**, a Paladin's **Aura of Protection**, a **Ring of Protection**, a feat. In **Edit**, under **Stats & Skills**, each skill and saving throw has a small box beside its total. Type the extra there, `1` for +1 or `-1` for a penalty, and the total, the sheet and the dice all include it.

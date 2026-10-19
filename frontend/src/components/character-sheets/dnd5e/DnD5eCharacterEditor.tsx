@@ -49,6 +49,7 @@ import {
   dnd5eCustomSkillBonus,
   dnd5eBackfilledSkillOtherBonus,
   dnd5eBackfilledSaveOtherBonus,
+  proficiencyBonusForLevel,
   DND5E_ABILITY_NAMES,
   MIN_BONUS_OVERRIDE,
   MAX_BONUS_OVERRIDE,
@@ -242,6 +243,14 @@ const SKILL_ABILITIES: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
   stealth: 'dexterity',
   survival: 'wisdom',
 };
+
+/**
+ * The proficiency bonus a character of `level` has (Basic Rules, Character
+ * Advancement), held to level 20 while a larger level is being typed.
+ */
+function levelProficiencyBonus(level: number | undefined): number {
+  return proficiencyBonusForLevel(Math.min(20, level ?? 1));
+}
 
 /**
  * One entry for each of `keys`: what the sheet stored, with a blank entry for
@@ -621,6 +630,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
    */
   const initiativeModifier = dnd5eInitiativeModifier(formData);
 
+  /** What the character's level gives, offered beside a bonus set otherwise. */
+  const levelBonus = levelProficiencyBonus(formData.level);
+
   // Spell save DC and attack bonus, derived the way the rules define them.
   // Both were hand-typed boxes, which is why the templates could ship DC 8 —
   // a number no character can legitimately have, since the lowest at level 1
@@ -937,6 +949,21 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     });
   };
 
+  /**
+   * Set the level, moving the proficiency bonus with it when the bonus was the
+   * old level's. A bonus set by hand to something else is the player's, and
+   * the box offers the level's beside it.
+   */
+  const changeLevel = (level: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      level,
+      ...(prev.proficiencyBonus === levelProficiencyBonus(prev.level)
+        ? { proficiencyBonus: levelProficiencyBonus(level) }
+        : {}),
+    }));
+  };
+
   const updateField = (path: string, value: unknown) => {
     setFormData((prev) => {
       const newData = { ...prev } as unknown as Record<string, unknown>;
@@ -1155,7 +1182,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   min={1}
                   max={20}
                   value={formData.level}
-                  onChange={(v: number) => updateField('level', v)}
+                  onChange={changeLevel}
                   className={`w-16 bg-white/10 border ${
                     errors.level ? 'border-red-300' : 'border-white/20'
                   } rounded px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
@@ -1266,6 +1293,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           fallback={2}
           />
+          {formData.proficiencyBonus !== levelBonus && (
+            <p className="mt-1 text-xs text-stone-600">
+              Level {formData.level} gives {formatModifier(levelBonus)}.{' '}
+              <button
+                type="button"
+                onClick={() => updateField('proficiencyBonus', levelBonus)}
+                className="font-semibold text-red-700 hover:text-red-900 underline"
+              >
+                Use {formatModifier(levelBonus)}
+              </button>
+            </p>
+          )}
         </div>
         <div className="flex items-center space-x-2 pt-6">
           <input

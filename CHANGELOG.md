@@ -89,6 +89,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A D&D 5e character's Proficiency Bonus follows their level.** Raising **Level** left **Proficiency Bonus** where it was, so every save, skill and spell number worked out from it stayed a level behind. It now moves with **Level** when it was the old level's bonus. A bonus set by hand to something else is kept, and the sheet shows what the level gives under it, with a button to use that. See [Levelling up (D&D 5e)](docs/PLAYER_GUIDE.md#levelling-up-dd-5e).
+
 - **A screen reader names every box in the D&D 5e character editor.** Most boxes, among them **Proficiency Bonus**, **Armor Class**, the hit points, an attack's bonus and damage, an item's quantity and weight, the coins and the whole **Biography** tab, were announced by their placeholder or by nothing. Each is now named by the label beside it.
 
 - **A D&D 5e sheet stops adding skills and damage rolls where it can still be saved.** A sheet keeps at most 30 skills under **Your Own Skills** and 10 **Other Damage Rolls** on one attack, but **+ Add Skill** and **+ Add Damage Roll** went on adding, and the sheet could not be saved. At the limit each button is now greyed out, with a note saying the list is full.
