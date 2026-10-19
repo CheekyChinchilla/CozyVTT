@@ -125,6 +125,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
 
+- **A DM opening a player's sheet sees the player's name.** The sheet's header said **Player: Unknown Player** to everyone but the character's owner and an admin, and so did the note that you are viewing the character as DM. Both now name the player.
+
 - **A sheet opened from the Characters page no longer offers rolls it cannot make.** Away from a campaign's table the stats on your own D&D 5e, Pathfinder 2e and Call of Cthulhu sheets looked clickable, and D&D hit dice looked spendable, but there is no table there to roll at. They are now shown as plain text there, and roll as before from a sheet opened at the table.
 
 - **Coloured messages and labels are readable on their own backgrounds.** Error, warning, success and information boxes, badges and chips draw their text on a light wash of their colour, and the text was worked out only against the plain page, so it fell to about 3.5 to 1 in some themes; muted and secondary text did the same on shaded panels. Each theme now works these colours out against those backgrounds too, so they clear the usual readability bar everywhere.

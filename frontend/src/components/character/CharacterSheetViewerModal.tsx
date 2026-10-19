@@ -67,31 +67,14 @@ export default function CharacterSheetViewerModal({
   const socket = ws?.socket;
   const tableRoll = useTableRoll(socket);
   const [character, setCharacter] = useState(initialCharacter);
-  const [ownerName, setOwnerName] = useState<string>('');
   const [showEditor, setShowEditor] = useState(false);
 
-  // Fetch character owner's name
-  // TODO(sheets): GET /api/users/:id answers 403 for anyone but the user and
-  // an admin, so a DM viewing a player's sheet sees "Unknown Player" and the
-  // console logs the refusal. Take the name from the campaign roster, which
-  // already holds every member's display name.
-  useEffect(() => {
-    const fetchOwnerName = async () => {
-      try {
-        const response = await api.getUser(character.userId);
-        setOwnerName(response.user.displayName);
-      } catch (error) {
-        console.error('Error fetching character owner:', error);
-        setOwnerName('Unknown Player');
-      }
-    };
-
-    if (character.userId !== user?.id) {
-      fetchOwnerName();
-    } else {
-      setOwnerName('You');
-    }
-  }, [character.userId, user?.id]);
+  // The owner's name comes with the character: GET /api/characters/:id names
+  // its owner to anyone who may read it. Asking GET /api/users/:id instead was
+  // refused for anyone but the owner and an admin.
+  const ownerName = character.userId === user?.id
+    ? 'You'
+    : character.user?.displayName ?? 'Unknown Player';
 
   // Listen for character updates via WebSocket
   useEffect(() => {
@@ -104,7 +87,9 @@ export default function CharacterSheetViewerModal({
       if (!data.character) return;
       if (data.characterId === character.id) {
         console.log('Character updated - refreshing viewer');
-        setCharacter(data.character);
+        // A live update carries no owner; keep the one already loaded.
+        const updated = data.character;
+        setCharacter((previous) => ({ ...updated, user: updated.user ?? previous.user }));
       }
     };
 

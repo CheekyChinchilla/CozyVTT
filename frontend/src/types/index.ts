@@ -764,6 +764,11 @@ export interface Character {
   tokenImageUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The owner, as GET /api/characters/:id gives it to anyone who may read the
+   * character. Absent from every other response, live updates included.
+   */
+  user?: { id: string; displayName: string; avatarUrl: string | null };
 }
 
 /**
