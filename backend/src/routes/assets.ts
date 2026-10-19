@@ -470,10 +470,6 @@ router.post(
       // What the bytes are (validateFileType), never what the browser said:
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
-      // TODO(upload): multer reads the file name's UTF-8 bytes as latin1, so a
-      // name with non-ASCII characters is stored garbled and shown so in the
-      // library (downloads read it back through downloadNameOf); decode it as
-      // UTF-8 before storing, and the names already stored with it.
       const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)

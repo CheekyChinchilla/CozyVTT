@@ -1,12 +1,13 @@
 /**
  * The name an asset downloads under — End-to-End Tests
  *
- * multer reads an upload's file name as latin1, so a name with accented
- * letters is stored as its UTF-8 bytes read one at a time: "café.png" as
- * "cafÃ©.png" (the TODO(upload) in routes/assets.ts). Express 4 sent that
- * stored name as those same bytes, which browsers read as UTF-8, so the file
- * downloaded as "café.png". Express 5 writes the name out properly, which
- * shows the garbling, so the download route reads such a name back as UTF-8.
+ * Before 1.5.4 multer read an upload's file name as latin1, so a name with
+ * accented letters was stored as its UTF-8 bytes read one at a time:
+ * "café.png" as "cafÃ©.png". Express 4 sent that stored name as those same
+ * bytes, which browsers read as UTF-8, so the file downloaded as "café.png".
+ * Express 5 writes the name out properly, which shows the garbling, so the
+ * download route reads such a name back as UTF-8. Names uploaded since are
+ * stored in their real letters (uploadNameCharset.e2e.test.ts).
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -89,6 +90,15 @@ describe('the name an asset downloads under', () => {
     const res = await agent.get(`/api/assets/${id}/download`);
 
     expect(res.headers['content-disposition']).toBe('attachment; filename=cellar.png');
+  });
+
+  it('reads back a name stored garbled before 1.5.4', async () => {
+    const id = await upload('plain.png');
+    await prisma.asset.update({ where: { id }, data: { originalName: Buffer.from('café.png', 'utf8').toString('latin1') } });
+
+    const res = await agent.get(`/api/assets/${id}/download`);
+
+    expect(res.headers['content-disposition']).toBe(`attachment; filename="caf?.png"; filename*=UTF-8''caf%C3%A9.png`);
   });
 
   it('does not read a name stored in its real letters a second time', async () => {

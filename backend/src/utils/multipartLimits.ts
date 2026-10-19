@@ -30,3 +30,10 @@ export const MULTIPART_FIELD_LIMITS = {
    */
   fieldSize: 16 * 1024,
 } as const;
+
+/**
+ * How every upload route reads a file's name. Browsers send it in UTF-8, and
+ * multer reads it as latin1 unless told otherwise, which stored "café.png"
+ * as "cafÃ©.png". Spread into each multer instance, beside the limits.
+ */
+export const MULTIPART_NAME_CHARSET = { defParamCharset: 'utf8' } as const;

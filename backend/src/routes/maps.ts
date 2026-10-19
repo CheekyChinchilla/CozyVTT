@@ -31,7 +31,7 @@ import {
   deleteFile,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
-import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { MULTIPART_FIELD_LIMITS, MULTIPART_NAME_CHARSET } from '../utils/multipartLimits';
 import { oneAtATime } from '../utils/oneAtATime';
 import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../utils/serialQueue';
 import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
@@ -93,6 +93,7 @@ async function sweepStaleUvttUploads(): Promise<void> {
  * there for its turn; on disk it costs nothing until it is read.
  */
 const uvttUpload = multer({
+  ...MULTIPART_NAME_CHARSET,
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
       ensureDirectory(UVTT_TEMP_DIR)
