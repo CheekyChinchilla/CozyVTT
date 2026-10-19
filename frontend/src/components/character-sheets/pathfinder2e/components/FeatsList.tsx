@@ -93,13 +93,12 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
               <span className="text-xs text-stone-500">({categoryFeats.length})</span>
             </div>
 
-            {/* Feats List */}
-            {/* TODO(sheets): a feat with no level (the schema allows it) compares as
-                NaN here, which leaves its place to chance, and sort() reorders the
-                character's own list in place. Right: sort a copy, a missing level as 0. */}
+            {/* Feats by level, sorted as a copy so the character's own list
+                is left as it was; a feat with no level (the schema allows it)
+                comes first. */}
             <div className="space-y-2">
-              {categoryFeats
-                .sort((a, b) => a.level! - b.level!)
+              {[...categoryFeats]
+                .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
                 .map((feat, index) => (
                   <div
                     key={`${feat.name}-${index}`}
@@ -109,9 +108,11 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
                           <span className="font-semibold text-stone-800">{feat.name}</span>
-                          <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-xs rounded-full font-medium">
-                            Level {feat.level}
-                          </span>
+                          {feat.level != null && (
+                            <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-xs rounded-full font-medium">
+                              Level {feat.level}
+                            </span>
+                          )}
                         </div>
                         {/* The editor's box writes `description`; the
                             built-in templates wrote `notes`. Either may be

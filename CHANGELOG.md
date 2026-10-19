@@ -93,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e feat with no level is listed first on the sheet.** Such a feat, from an import or a program, landed anywhere in its list and read "Level undefined". It now comes first, with no level shown.
+
 - **A Pathfinder 2e feat from a built-in template opens with its text in the editor.** The templates stored a feat's text where the editor had no box, so a Fighter's Power Attack opened with an empty description and its text could be neither changed nor removed. The editor now puts that text in the description as it opens, after any description already there.
 
 - **A Pathfinder 2e character stored with spellcasting but no spell attack or spell DC can be saved.** Such a character, from an import or a program, saved those two without a rank or item bonus, and every save was refused. The editor now fills them in as it opens.
