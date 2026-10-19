@@ -485,7 +485,9 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   document: a campaign's own asset is its uploader's while still a member, the
   campaign's DM's and an admin's; a global one an admin's, or its uploader's
   while they keep `globalAssetManager`; a personal one its uploader's and an
-  admin's. A campaign asset with no campaign recorded is an admin's alone.
+  admin's. An admin moving someone else's personal asset into a campaign or to
+  `GLOBAL` writes an activity log line naming the asset and its owner. A
+  campaign asset with no campaign recorded is an admin's alone.
   A move to `USER` is its uploader's (or an admin's) alone besides: the asset
   would land in the uploader's personal library, so a DM moving a player's
   upload there would take it out of the campaign and out of their own reach.

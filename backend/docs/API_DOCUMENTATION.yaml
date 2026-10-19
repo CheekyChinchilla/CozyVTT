@@ -5966,6 +5966,9 @@ paths:
         Move an asset between the three scopes (`GLOBAL`, `USER`, `CAMPAIGN`).
         A platform admin may make any move; the rules below are for everyone
         else, and combine when a move touches more than one of their cases.
+        An admin moving another user's `USER` asset to `CAMPAIGN` or `GLOBAL`
+        writes a line to the activity log naming the asset, its owner and
+        where it went.
 
         **Permission matrix (non-admin):**
         | Case | Requirement |

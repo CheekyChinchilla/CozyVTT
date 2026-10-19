@@ -108,6 +108,7 @@ The **Activity** tab of the Admin Panel, headed **Platform Activity** and reload
 - resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
 - changes the instance's settings or default theme (only the settings whose value changed are listed, and saving without changing anything writes no line);
 - makes, deletes or restores a backup, or deletes leftover files;
+- moves someone else's personal file into a campaign or to **Global** (the line names the file, its owner and where it went);
 - sends a test email from the **Settings** tab.
 
 The instance writes lines of its own too, such as an account locked after too many wrong passwords. Each line of **Recent Admin Actions** shows:

@@ -49,6 +49,7 @@ import {
   MAX_ORIGINAL_NAME_LENGTH,
 } from '../validators/assets';
 import { escapeLikePattern } from '../utils/likePattern';
+import { writeAdminLog } from '../services/systemLog';
 
 const router = Router();
 
@@ -1381,6 +1382,9 @@ router.get('/avatars/:userId', authenticated, async (req: AuthenticatedRequest, 
  *     CAMPAIGN: its uploader while still a member, or the campaign's DM
  *   Moving to or from GLOBAL → also a global asset manager
  *   Moving to CAMPAIGN → also whoever may upload that type there
+ *
+ * An admin moving someone else's personal file out of their library puts it in
+ * front of a table or everyone, so that move is written to the Activity log.
  */
 router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -1433,6 +1437,7 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
 
     // Validate CAMPAIGN target — resolve campaignId and verify campaign exists
     let resolvedCampaignId: string | null = null;
+    let campaignName: string | null = null;
     if (scope === 'CAMPAIGN') {
       if (!campaignId) {
         return res.status(400).json({
@@ -1443,12 +1448,13 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       // A campaign the caller is not in answers as one that is not there.
       const campaign = await prisma.campaign.findUnique({
         where: { id: campaignId },
-        select: { id: true, memberships: { where: { userId }, select: { userId: true } } },
+        select: { id: true, name: true, memberships: { where: { userId }, select: { userId: true } } },
       });
       if (!campaign || (!isAdmin && campaign.memberships.length === 0)) {
         return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
       }
       resolvedCampaignId = campaignId;
+      campaignName = campaign.name;
     }
 
     // Non-admin permission checks (GLOBAL already handled above)
@@ -1489,6 +1495,19 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       },
       select: ASSET_PUBLIC_SELECT,
     });
+
+    // Only an admin can move another user's personal file: anyone else is
+    // refused above by mayChangeAsset.
+    if (asset.scope === 'USER' && scope !== 'USER' && asset.uploadedById && asset.uploadedById !== userId) {
+      const owner = await prisma.user.findUnique({ where: { id: asset.uploadedById }, select: { email: true } });
+      const where = scope === 'CAMPAIGN' ? `into the campaign "${campaignName}"` : 'to Global';
+      await writeAdminLog(
+        userId,
+        `Moved the personal file "${asset.name}" of ${owner?.email ?? 'a deleted account'} ${where}`,
+        'INFO',
+        { targetUserId: asset.uploadedById, assetId: asset.id, scope, campaignId: resolvedCampaignId }
+      );
+    }
 
     // As the list says of each asset, so the Asset Library can keep offering
     // Delete and Move by the server's rule once the asset is somewhere new.

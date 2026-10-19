@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* A Call of Cthulhu sheet's `derivedStats.hp.maximum` and `derivedStats.hp.majorWoundThreshold` may be 0, which CON plus SIZ under 10 gives; they were refused below 1.
   - *Documents.* `POST /api/campaigns/:campaignId/documents` from a platform admin answers 403 `Only the person who uploaded a document can share it with a campaign` for a document that is not global and not theirs, as it does for anyone else (it answered 201). The message no longer says `, or an admin,`.
 
+- **A server admin moving someone's personal file into a campaign is written to the activity log.** An admin can move any user's personal file into any campaign, or to **Global**, which puts it in front of that table or of everyone, and nothing recorded it. The move now writes a line to **Recent Admin Actions** on the Admin Panel's **Activity** tab, naming the file, its owner's email address and where it went.
+
 - **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
 - **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.** **Character Name**, **Race**, **Class** and the other header boxes showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
