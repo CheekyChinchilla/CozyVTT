@@ -275,7 +275,7 @@ If a change cannot be saved, for example while the connection is down, a message
 
 1. Right-click the token on the map and choose **Edit Token**
 2. Click the token avatar (top-left of the editor) — a hover overlay with an image icon appears
-3. The **Image Picker** opens, showing every token image you have access to — platform-wide assets, your own uploads, and assets from campaigns you're a member of
+3. The **Image Picker** opens, showing the token images you have access to: platform-wide assets, your own uploads, and assets from campaigns you're a member of, newest first. Type in its search box to find one by part of its name or a whole tag, or press **Load more** under the pictures for older ones
 4. Select an image, or click **Upload** to upload a fresh asset
 5. Click **None** to remove the image and revert to a colored-letter placeholder
 

@@ -63,8 +63,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
   const tokens = useTokenListIgnoringMovement();
 
   // ── Asset picker state ──
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  // The picker grid fetches and searches the pictures itself; these are what
+  // was typed into its search box, and pictures uploaded here, shown first.
+  const [pictureSearch, setPictureSearch] = useState('');
+  const [uploadedPictures, setUploadedPictures] = useState<Asset[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -106,22 +108,10 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
   const [error, setError] = useState<string | null>(null);
 
-  // ── Load TOKEN assets for this campaign on open ──
+  // Cleared each time the manager opens, as it was when it fetched itself.
   useEffect(() => {
-    if (!isOpen || !campaign) return;
-    setIsLoadingAssets(true);
-    setError(null);
-
-    api
-      .listAssets({
-        type: AssetType.TOKEN,
-        limit: 100,
-        usable: true,
-      })
-      .then((res) => setAssets(res.assets))
-      .catch(() => setError('Failed to load token assets'))
-      .finally(() => setIsLoadingAssets(false));
-  }, [isOpen, campaign?.id]);
+    if (isOpen) setError(null);
+  }, [isOpen]);
 
   // ── Derived values ──
   // Only a player can be given a token; the server refuses a spectator.
@@ -174,7 +164,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
     try {
       const { asset } = await api.uploadAsset(formData);
-      setAssets((prev) => [asset, ...prev]);
+      setUploadedPictures((prev) => [asset, ...prev]);
       setSelectedAsset(asset);
       setTokenName((prev) => prev || asset.name || baseName);
     } catch (err) {
@@ -499,45 +489,40 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   {uploadError && (
                     <p className="text-[11px] text-danger-ink mb-1.5">{uploadError}</p>
                   )}
-                  {isLoadingAssets ? (
-                    <div className="flex items-center gap-2 text-stone-gray text-sm py-4">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Loading assets…
-                    </div>
-                  ) : assets.length === 0 ? (
-                    <div className="glass-panel p-3">
-                      <p className="text-sm text-stone-gray/70 italic">
-                        No TOKEN assets found.
-                      </p>
-                      <p className="text-xs text-stone-gray/50 mt-1">
-                        Click <strong>Upload</strong> above to add an image, or use the Asset Library.
-                      </p>
-                    </div>
-                  ) : (
-                    <AssetGrid
-                      type={AssetType.TOKEN}
-                      assets={assets}
-                      selectedId={selectedAsset?.id ?? null}
-                      onSelect={(asset) => (asset ? handleSelectAsset(asset) : setSelectedAsset(null))}
-                      columns={4}
-                      maxHeightClass="max-h-44"
-                      leadingItem={
-                        <button
-                          type="button"
-                          onClick={() => setSelectedAsset(null)}
-                          title="Use colored-letter placeholder"
-                          className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
-                            !selectedAsset
-                              ? 'border-moss-green ring-2 ring-moss-green/30 bg-ink-muted/25'
-                              : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
-                          }`}
-                        >
-                          <span className="text-lg font-bold text-ink-secondary">?</span>
-                          <span className="absolute bottom-0.5 text-[8px] text-ink-muted">None</span>
-                        </button>
-                      }
-                    />
-                  )}
+                  <input
+                    type="search"
+                    value={pictureSearch}
+                    onChange={(e) => setPictureSearch(e.target.value)}
+                    aria-label="Search token pictures"
+                    placeholder="Search by name or tag"
+                    className="input-cozy w-full text-sm mb-1.5"
+                  />
+                  <AssetGrid
+                    type={AssetType.TOKEN}
+                    search={pictureSearch}
+                    prepend={uploadedPictures}
+                    onLoadError={() => setError('Failed to load token assets')}
+                    emptyMessage="No token pictures yet. Upload one above, or add some in the Asset Library."
+                    selectedId={selectedAsset?.id ?? null}
+                    onSelect={(asset) => (asset ? handleSelectAsset(asset) : setSelectedAsset(null))}
+                    columns={4}
+                    maxHeightClass="max-h-44"
+                    leadingItem={
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAsset(null)}
+                        title="Use colored-letter placeholder"
+                        className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
+                          !selectedAsset
+                            ? 'border-moss-green ring-2 ring-moss-green/30 bg-ink-muted/25'
+                            : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
+                        }`}
+                      >
+                        <span className="text-lg font-bold text-ink-secondary">?</span>
+                        <span className="absolute bottom-0.5 text-[8px] text-ink-muted">None</span>
+                      </button>
+                    }
+                  />
                 </div>
 
                 {/* Token Name */}

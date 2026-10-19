@@ -5,7 +5,8 @@
  * making a custom copy of an SRD creature for it each wrote their failure to
  * the browser's console alone: the picker stayed empty, the upload button
  * came back, and nothing said why. Each now says so, with the server's
- * reason when there is one.
+ * reason when there is one. A picture list that fails to load is covered
+ * in NpcQuickEditorPictureSearch.test.tsx, as the picker grid loads it.
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
@@ -60,13 +61,6 @@ beforeEach(() => {
   Object.values(api).forEach((fn) => fn.mockReset());
   api.listAssets.mockResolvedValue({ assets: [], pagination: {} });
   useGameStore.getState().clearGameState();
-});
-
-it('says when the token pictures could not be loaded', async () => {
-  api.listAssets.mockRejectedValue(refusal(429, 'Too many requests, please slow down'));
-  open();
-  fireEvent.click(screen.getByTitle('Add a token image'));
-  await waitFor(() => expect(showToast).toHaveBeenCalledWith('Too many requests, please slow down', 'error'));
 });
 
 it('says why an uploaded picture was refused', async () => {

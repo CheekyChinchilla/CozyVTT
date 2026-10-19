@@ -55,17 +55,19 @@ export default function AssetPicker({
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  // Cached from AssetGrid so the selected-asset preview can name it without
-  // a second fetch, and so a fresh upload appears without a refetch.
+  // What AssetGrid has fetched, so the selected-asset preview can name it
+  // without a second fetch; and what was uploaded here, which the grid shows
+  // first without a refetch.
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [uploaded, setUploaded] = useState<Asset[]>([]);
 
   const handleUploadSuccess = (asset: Asset) => {
-    setAssets((prev) => [asset, ...prev]);
+    setUploaded((prev) => [asset, ...prev]);
     onSelect(asset);
     setExpanded(false);
   };
 
-  const selectedAsset = selectedAssetId ? assets.find((a) => a.id === selectedAssetId) : null;
+  const selectedAsset = selectedAssetId ? [...uploaded, ...assets].find((a) => a.id === selectedAssetId) : null;
   const dir = assetDirectory(type);
 
   return (
@@ -166,6 +168,7 @@ export default function AssetPicker({
                   if (asset) setExpanded(false);
                 }}
                 search={search}
+                prepend={uploaded}
                 columns={columns}
                 showNames
                 emptyMessage={emptyMessage}

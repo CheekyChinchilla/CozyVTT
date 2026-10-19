@@ -87,6 +87,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The picture pickers can find every picture you may use.** The pickers in **Create Map**, **Edit Map**, the creature editor, the Token Manager and **Edit Token** showed only the newest 50 or 100 pictures, and their search looked only among those, so an older map or token picture could not be chosen. Each now searches your whole library, by part of a name or a whole tag, and **Load more** shows older pictures. The Token Manager and **Edit Token** gain a search box.
+
 - **The Asset Library's search and sort cover the whole library.** They worked only on the page of 24 assets on screen, so an asset on another page could not be found, and **Sort by Name** sorted those 24. The search now finds any asset by part of its name or by a whole tag, and the sort orders the whole library. The tag chips are still the tags on the page on screen, and now say so.
 
 - **An MP1 or MP2 sound file is refused when it is uploaded or imported.** Such a file, sometimes named .mp3, was taken and then never played, since browsers do not play it. An upload now refuses it with "Invalid file type", as other files are, and a campaign import leaves it out and says why; convert it to MP3, Ogg or WAV.

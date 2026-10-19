@@ -86,11 +86,18 @@ describe('AssetGrid', () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it('filters by search text', async () => {
+  // The search ran in the browser over the one page fetched, so an asset
+  // past it could not be found. The server searches the whole library.
+  it('asks the server for the search', async () => {
+    mockListAssets.mockImplementation(async (params: { search?: string }) => ({
+      assets: params.search === 'ogr' ? [OGRE] : [GOBLIN, OGRE],
+      pagination: { page: 1, limit: 50, total: 2, totalPages: 1 },
+    }));
     render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} search="ogr" />);
 
     expect(await screen.findByAltText('Ogre')).toBeInTheDocument();
     expect(screen.queryByAltText('Goblin')).not.toBeInTheDocument();
+    expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ search: 'ogr', page: 1 }));
   });
 
   it('shows the empty message when the library has nothing', async () => {
@@ -102,6 +109,7 @@ describe('AssetGrid', () => {
   });
 
   it('distinguishes an empty library from an empty search result', async () => {
+    mockListAssets.mockResolvedValue({ assets: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
     render(
       <AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} search="zzz" emptyMessage="No tokens yet." />
     );
@@ -169,5 +177,30 @@ describe('AssetGrid', () => {
     expect(screen.getByText('Goblin')).toBeInTheDocument();
     expect(screen.getByAltText('Ogre')).toBeInTheDocument();
   });
-});
 
+  // It showed the newest 50 and no more, so an older asset could not be
+  // picked at all.
+  it('offers Load more while the server has more, and adds the next page', async () => {
+    mockListAssets.mockImplementation(async (params: { page?: number }) =>
+      params.page === 2
+        ? { assets: [OGRE], pagination: { page: 2, limit: 1, total: 2, totalPages: 2 } }
+        : { assets: [GOBLIN], pagination: { page: 1, limit: 1, total: 2, totalPages: 2 } }
+    );
+    render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} limit={1} />);
+    expect(await screen.findByAltText('Goblin')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    expect(await screen.findByAltText('Ogre')).toBeInTheDocument();
+    expect(screen.getByAltText('Goblin')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('shows first the assets the parent adds, such as one just uploaded', async () => {
+    const fresh = makeAsset('c3', 'Fresh upload');
+    render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} prepend={[fresh]} />);
+    await screen.findByAltText('Goblin');
+    const shown = screen.getAllByRole('img').map((img) => img.getAttribute('alt'));
+    expect(shown).toEqual(['Fresh upload', 'Goblin', 'Ogre']);
+  });
+});
