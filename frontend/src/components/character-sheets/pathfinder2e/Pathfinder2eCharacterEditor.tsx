@@ -153,6 +153,17 @@ function withFeatTextInDescription<T extends { description?: string; notes?: str
 }
 
 /**
+ * The focus spells with no more points left than the pool holds. The editor
+ * held the points to 3 rather than to the pool, so a sheet may have stored more.
+ */
+function withPointsInPool(focus: PF2eSpellcasting['focusSpells'] | undefined): NonNullable<PF2eSpellcasting['focusSpells']> {
+  const stored = focus ?? { focusPoints: { total: 0, current: 0 }, spells: [] };
+  const total = stored.focusPoints?.total ?? 0;
+  const current = Math.min(stored.focusPoints?.current ?? 0, total);
+  return { ...stored, focusPoints: { total, current } };
+}
+
+/**
  * What opening this sheet changes to follow the rules, each as "what (stored
  * to now)": the editor works these out afresh, and the next save stores them.
  * Worked out once, from the sheet as stored.
@@ -167,6 +178,11 @@ function changedOnOpen(sheet: PF2eFormData): string[] {
     const dc = spellcasting.spellDC?.dc;
     const nowDC = pf2eSpellDC(sheet);
     if (typeof dc === 'number' && dc !== nowDC) changes.push(`spell DC (${dc} to ${nowDC})`);
+    const points = spellcasting.focusSpells?.focusPoints;
+    const inPool = withPointsInPool(spellcasting.focusSpells).focusPoints.current;
+    if (points && typeof points.current === 'number' && points.current !== inPool) {
+      changes.push(`focus points left (${points.current} to ${inPool})`);
+    }
   }
   return changes;
 }
@@ -263,7 +279,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
-      focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
+      focusSpells: withPointsInPool(data.spellcasting.focusSpells),
       innateSpells: data.spellcasting.innateSpells || [],
       rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
         typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
@@ -1302,6 +1318,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
   );
 
   const renderSpellsTab = () => {
+    const focusPool = formData.spellcasting?.focusSpells?.focusPoints?.total ?? 0;
     if (!formData.spellcasting) {
       return (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-6 text-center">
@@ -1484,13 +1501,39 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Focus Spells</h3>
             <div className="flex items-center space-x-3">
+              {/* Points left, out of the pool. The pool is 1 with the first
+                  focus spell and at most 3 (Core Rulebook, "Focus Spells");
+                  feats that add a spell typically add a point, which the
+                  player sets here. */}
               <div className="flex items-center space-x-2">
-                <label className="text-sm font-semibold text-stone-700">Focus Points:</label>
+                <span className="text-sm font-semibold text-stone-700">Focus Points:</span>
                 <NumberField
-min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500" fallback={0} />
-                <span className="text-sm text-stone-600">/ 3</span>
+                  aria-label="Focus points left"
+                  min={0}
+                  max={focusPool}
+                  value={formData.spellcasting!.focusSpells?.focusPoints?.current}
+                  onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, focusPool))}
+                  className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  fallback={0}
+                />
+                <span className="text-sm text-stone-600">/</span>
+                <NumberField
+                  aria-label="Focus point total"
+                  min={0}
+                  max={3}
+                  value={focusPool}
+                  onChange={(v: number) => {
+                    const total = Math.max(0, Math.min(v, 3));
+                    updateField('spellcasting.focusSpells.focusPoints', {
+                      total,
+                      current: Math.min(formData.spellcasting!.focusSpells?.focusPoints?.current ?? 0, total),
+                    });
+                  }}
+                  className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  fallback={0}
+                />
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); if (focusPool === 0) updateField('spellcasting.focusSpells.focusPoints.total', 1); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
               </button>

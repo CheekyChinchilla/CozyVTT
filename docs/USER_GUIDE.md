@@ -366,7 +366,7 @@ The action-economy tactician's dream:
 
 - Attributes (STR, DEX, CON, INT, WIS, CHA) with ancestry, class, and item bonuses
 - Skills with trained/expert/master/legendary proficiencies
-- Class features, feats, and focus points
+- Class features, feats, and focus points: the pool holds 1 point with your first focus spell, up to 3 as you set it, and the points left stay within it
 - Spells and spell slots, with the spell attack and spell DC worked out from one **Spellcasting proficiency** and each its own item bonus
 - Inventory with bulk tracking: ten light items make 1 Bulk, and you are encumbered only above 5 + Strength
 - Ancestry, background, and heritage
