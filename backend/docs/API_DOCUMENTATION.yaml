@@ -956,7 +956,10 @@ paths:
         `mustChangePassword`, forgets the wrong passwords counted against the
         account by the per-account sign-in limit, and ends every login session
         and live WebSocket connection of the account; the request itself does
-        not sign anyone in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        not sign anyone in. An invitation link (one that lasts longer than
+        the hour of a reset link) setting the password of an administrator
+        account nobody has signed in to starts its 7 days to set up two-factor
+        authentication from now, written to the activity log. Rate limited: 5 wrong answers per 15 minutes per address, shared
         with the other credential endpoints, where a link that does not exist,
         has been used or has expired is a wrong answer and a password too weak
         to take is not.

@@ -19,7 +19,7 @@ import { failureLimiter } from '../middleware/failureLimiter';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, mfaAccountLimiter } from '../middleware/authLimiters';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
-import { adminMfaDeadline } from '../services/adminMfaPolicy';
+import { adminMfaDeadline, restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import {
   parseBody,
   LoginBodySchema,
@@ -544,26 +544,26 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     // are voided in the same step, since the password they would set is
     // settled now. Yields the account's email, or false when the link had
     // been claimed.
-    const accountEmail = await prisma.$transaction(async (tx) => {
+    const account = await prisma.$transaction(async (tx) => {
       const claim = await tx.passwordResetToken.updateMany({
         where: { id: resetToken.id, used: false, expiresAt: { gt: new Date() } },
         data: { used: true },
       });
       if (claim.count === 0) return false;
 
-      const { email } = await tx.user.update({
+      const updated = await tx.user.update({
         where: { id: resetToken.userId },
         data: {
           passwordHash,
           mustChangePassword: false,
         },
-        select: { email: true },
+        select: { email: true, platformRole: true, mfaEnabled: true, lastLoginAt: true },
       });
       await voidOutstandingResetLinks(resetToken.userId, tx);
-      return email;
+      return updated;
     });
 
-    if (accountEmail === false) {
+    if (account === false) {
       return res.status(400).json({
         error: 'Invalid Token',
         message: 'This password reset link is invalid or has expired',
@@ -572,7 +572,22 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
 
     // The wrong passwords counted against the account were guesses at the
     // old one; a locked account opens with its new password.
-    accountLoginLimiter.forget(accountLoginKey(accountEmail));
+    accountLoginLimiter.forget(accountLoginKey(account.email));
+
+    // An invited administrator's 7 days to set up two-factor authentication
+    // counted from the invitation, which also lasts 7 days, so accepting late
+    // left almost none. They start again when an invitation link (one that
+    // lasts longer than a reset link) sets the password of an account nobody
+    // has signed in to, so nobody who has used the account gains a day.
+    const wasInvitation = resetToken.expiresAt.getTime() - resetToken.createdAt.getTime() > RESET_LINK_TTL_MS;
+    if (wasInvitation && account.platformRole === 'ADMIN' && !account.mfaEnabled && account.lastLoginAt === null) {
+      await restartAdminMfaGrace({
+        targetUserId: resetToken.userId,
+        byUserId: resetToken.userId,
+        level: 'INFO',
+        message: `${account.email} accepted an invitation to be an administrator; 7 days to set up two-factor authentication start now`,
+      });
+    }
 
     // A reset by link is how someone recovers an account they cannot or will
     // not sign in to, so every sign-in opened with the old password ends,

@@ -19,6 +19,7 @@ import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { ADMIN_MFA_POLICY_MESSAGE, resetAdminMfaPolicyCache } from '../../services/adminMfaPolicy';
+import { hashResetToken } from '../../services/passwordResetTokens';
 
 const app = createTestApp();
 const created: string[] = [];
@@ -113,5 +114,74 @@ describe('an account made subject to the rule afresh has 7 days from then', () =
     expect(logged).toHaveLength(1);
     expect(logged[0].userId).toBe(actor.user.id);
     expect(logged[0].level).toBe('WARNING');
+  });
+});
+
+/**
+ * An invitation lasts 7 days and so did the invitee's grace, both from the
+ * invitation, so an administrator who accepted on day 6 had one day left to
+ * set up two-factor authentication. The 7 days now start when an invitation
+ * link first sets the password of an account nobody has signed in to.
+ */
+describe('an invited administrator', () => {
+  const INVITE_MS = 7 * DAY;
+
+  /** An administrator invited `ageDays` ago, and the link the invitation emailed. */
+  async function invited(ageDays: number, opts: { signedInBefore?: boolean; linkLastsMs?: number } = {}) {
+    const user = await createTestUser({ displayName: 'Invitee', role: 'ADMIN' });
+    created.push(user.id);
+    const invitedAt = new Date(Date.now() - ageDays * DAY);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { createdAt: invitedAt, lastLoginAt: opts.signedInBefore ? new Date(Date.now() - DAY) : null },
+    });
+    const token = `invite-${user.id}`;
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        token: hashResetToken(token),
+        createdAt: invitedAt,
+        expiresAt: new Date(invitedAt.getTime() + (opts.linkLastsMs ?? INVITE_MS)),
+      },
+    });
+    return { user, token };
+  }
+
+  /** Set the password with the link, sign in, and read the deadline in days from now. */
+  async function acceptAndReadDeadline(email: string, token: string): Promise<number> {
+    const newPassword = 'Invitee-Str0ng-Passw0rd!';
+    expect((await request(app).post('/api/auth/reset-password').send({ token, newPassword })).status).toBe(200);
+    const login = await request(app).post('/api/auth/login').send({ email, password: newPassword });
+    expect(login.status).toBe(200);
+    return daysAway(login.body.user.adminMfaDeadline);
+  }
+
+  it('has 7 days from setting the password, however late in the invitation', async () => {
+    await policyStartedLongAgo();
+    const { user, token } = await invited(6.5);
+    const days = await acceptAndReadDeadline(user.email, token);
+    expect(days).toBeGreaterThan(6.9);
+    expect(days).toBeLessThanOrEqual(7);
+  });
+
+  it('gains nothing from a link once the account has been signed in to', async () => {
+    await policyStartedLongAgo();
+    const { user, token } = await invited(6.5, { signedInBefore: true });
+    const days = await acceptAndReadDeadline(user.email, token);
+    expect(days).toBeGreaterThan(0.4);
+    expect(days).toBeLessThan(0.6);
+  });
+
+  it('gains nothing from a reset link, which is not an invitation', async () => {
+    await policyStartedLongAgo();
+    const { user, token } = await invited(6.5, { linkLastsMs: 7 * DAY });
+    // A reset link lasts an hour and was issued just now.
+    await prisma.passwordResetToken.updateMany({
+      where: { userId: user.id },
+      data: { createdAt: new Date(Date.now() - 60_000), expiresAt: new Date(Date.now() + 59 * 60_000) },
+    });
+    const days = await acceptAndReadDeadline(user.email, token);
+    expect(days).toBeGreaterThan(0.4);
+    expect(days).toBeLessThan(0.6);
   });
 });
