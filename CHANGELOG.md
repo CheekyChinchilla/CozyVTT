@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Every Call of Cthulhu skill rolls from the sheet, named once.** The Firearms, Other Language and Science rows did nothing when clicked, where every other skill rolled, and the last two printed their language or specialisation twice, such as "Science (Physics) (Physics)".
+
 - **A Call of Cthulhu box can be cleared and retyped.** Clearing a characteristic, skill, Sanity or weapon skill box to type a new number set it to 0 first, so hit points and the half and fifth columns were worked out for 0 in between, and a Sanity left empty stayed at 0. The boxes now hold what you type, and take up to 100 where a sheet stores it. A weapon's ammunition or malfunction number of 0 shows as 0, where it showed empty.
 
 - **A Call of Cthulhu investigator stored without skills can be saved.** Such an investigator, from an import or a program, opened with no skills, which the server refuses, so it could never be saved. The editor now fills each skill in at the rulebook's base: Dodge at half DEX, the own language at EDU.

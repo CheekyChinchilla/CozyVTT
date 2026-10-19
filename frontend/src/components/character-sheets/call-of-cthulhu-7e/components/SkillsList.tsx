@@ -187,14 +187,12 @@ const SkillRow: React.FC<{
       <div className="flex-1 min-w-0 flex items-center gap-1">
         <span className="text-sm text-sepia-900 truncate">{displayName}</span>
         {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />}
-        {/* TODO(ui): the Other Language and Science rows already carry the
-           language or specialization in displayName, so these print it a
-           second time, as in "Science (Physics) (Physics)". Show it here
-           only when displayName does not. */}
-        {skill.specialization && (
+        {/* Beside the name only where the name does not already carry it,
+            as "Science (Physics)" and "Language (Latin)" do. */}
+        {skill.specialization && !displayName.includes(`(${skill.specialization})`) && (
           <span className="text-xs text-sepia-600 ml-1">({skill.specialization})</span>
         )}
-        {skill.language && (
+        {skill.language && !displayName.includes(`(${skill.language})`) && (
           <span className="text-xs text-sepia-600 ml-1">({skill.language})</span>
         )}
       </div>
@@ -281,10 +279,6 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                 );
               }
 
-              // TODO(sheets): the Firearms, Other Language and Science rows
-              // below get no onRoll, so they do not roll from the sheet as
-              // every other skill does. Pass onRoll to them as the Brawl row
-              // above does.
               if (skillName === 'firearms' && skill) {
                 // Firearms specializations
                 return (
@@ -296,6 +290,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                         skill={(skill as CoC7eFirearmsSkills).handgun}
                         editable={editable}
                         themeColor={themeColor}
+                        onRoll={onRoll}
                         onChange={(field, value) => handleSkillChange('firearms.handgun', field, value)}
                       />
                     )}
@@ -306,6 +301,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                         skill={(skill as CoC7eFirearmsSkills).rifle}
                         editable={editable}
                         themeColor={themeColor}
+                        onRoll={onRoll}
                         onChange={(field, value) => handleSkillChange('firearms.rifle', field, value)}
                       />
                     )}
@@ -316,6 +312,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                         skill={(skill as CoC7eFirearmsSkills).shotgun}
                         editable={editable}
                         themeColor={themeColor}
+                        onRoll={onRoll}
                         onChange={(field, value) => handleSkillChange('firearms.shotgun', field, value)}
                       />
                     )}
@@ -335,6 +332,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                         skill={lang}
                         editable={editable}
                         themeColor={themeColor}
+                        onRoll={onRoll}
                         onChange={(field, value) => handleSkillChange(`languageOther.${idx}`, field, value)}
                       />
                     ))}
@@ -354,6 +352,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                         skill={sci}
                         editable={editable}
                         themeColor={themeColor}
+                        onRoll={onRoll}
                         onChange={(field, value) => handleSkillChange(`science.${idx}`, field, value)}
                       />
                     ))}
