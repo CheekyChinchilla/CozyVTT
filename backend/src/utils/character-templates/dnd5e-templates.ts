@@ -37,10 +37,12 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
       wisdom: { score: 10, modifier: 0 },
       charisma: { score: 10, modifier: 0 },
     },
+    // A Fighter: Strength and Constitution saves, a d10 hit die, and 10 + CON
+    // hit points at 1st level (Basic Rules, Fighter).
     savingThrows: {
-      strength: { proficient: false, bonus: 0 },
+      strength: { proficient: true, bonus: 2 },
       dexterity: { proficient: false, bonus: 0 },
-      constitution: { proficient: false, bonus: 0 },
+      constitution: { proficient: true, bonus: 2 },
       intelligence: { proficient: false, bonus: 0 },
       wisdom: { proficient: false, bonus: 0 },
       charisma: { proficient: false, bonus: 0 },
@@ -70,15 +72,15 @@ export const dnd5eBlankTemplate: CharacterTemplate = {
     initiative: 0,
     speed: 30,
     hp: {
-      maximum: 8,
-      current: 8,
+      maximum: 10,
+      current: 10,
       temporary: 0,
     },
     conditions: [],
     hitDice: [
       {
         class: 'Fighter',
-        die: 'd8',
+        die: 'd10',
         maximum: 1,
         remaining: 1,
       },

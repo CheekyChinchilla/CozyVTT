@@ -89,6 +89,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The blank D&D 5e character is a Fighter by the rules.** It started with a d8 hit die, 8 hit points and no saving throw proficiencies. It now starts with a d10 hit die, 10 hit points and proficiency in Strength and Constitution saves, as the rules give a 1st level Fighter with Constitution 10. Characters already made are not changed.
+
 - **Naming a D&D 5e spellcasting ability raises the spell save DC and spell attack.** On a sheet saved with **Spellcasting Ability** empty, typing it in afterwards left the DC at 8 plus proficiency and the attack at proficiency, with minus the ability modifier recorded as **Other bonus**. The ability now counts. A sheet already saved this way shows that negative **Other bonus** on its Spells tab; set it back to 0.
 
 - **A D&D 5e character stored without its saving throws can be saved from the editor.** Such a character, from an import or a program, opened with no saving throws, and ticking one stored that one alone, so every save was refused. The editor now fills in all six, and all eighteen skills, as it opens.
