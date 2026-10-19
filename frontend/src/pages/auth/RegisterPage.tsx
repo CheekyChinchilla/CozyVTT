@@ -14,6 +14,7 @@ import {
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
 export default function RegisterPage() {
   const { register, authenticated } = useAuth();
@@ -57,14 +58,10 @@ export default function RegisterPage() {
     } = {};
 
     // Validate display name
-    if (!displayName) {
+    if (displayName.trim().length < DISPLAY_NAME_MIN_LENGTH) {
       errors.displayName = 'Display name is required';
-    } else if (displayName.length < 2) {
-      // TODO(accounts): the server accepts names of 1 to 50 characters
-      // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
-      errors.displayName = 'Display name must be at least 2 characters';
-    } else if (displayName.length > 50) {
-      errors.displayName = 'Display name must be less than 50 characters';
+    } else if (displayName.trim().length > DISPLAY_NAME_MAX_LENGTH) {
+      errors.displayName = `Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer`;
     }
 
     // Validate email
@@ -201,7 +198,7 @@ export default function RegisterPage() {
               }`}
               placeholder="Your name"
               disabled={loading}
-              maxLength={50}
+              maxLength={DISPLAY_NAME_MAX_LENGTH}
               aria-required="true"
               aria-invalid={!!fieldErrors.displayName}
               aria-describedby={fieldErrors.displayName ? 'displayName-error' : undefined}

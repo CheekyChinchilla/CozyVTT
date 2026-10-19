@@ -108,6 +108,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A one-letter display name can be chosen on every page.** The server takes display names of 1 to 50 characters, and Invite Player finds one-letter names, but **Profile**, **Sign Up** and the setup wizard refused names under 2 characters, and **Sign Up** said "less than 50" though 50 is allowed.
+
 - **A Call of Cthulhu investigator with CON and SIZ under 10 can be saved.** Their hit points work out to 0, which the server refused along with the whole save. Rolled characteristics never get that low; typed ones can.
 
 - **The Pathfinder 2e and Call of Cthulhu editors say which name is missing.** Clearing a Pathfinder 2e ancestry, heritage or class, or the name of a strike, lore, spell, ritual, item or feat, or a Call of Cthulhu occupation, era or weapon name, made Save fail with no reason given. Save now lists what to fill in and opens the tab it is on, as the D&D 5e editor does.
