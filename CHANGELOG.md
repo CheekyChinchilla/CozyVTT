@@ -93,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e check penalty lowers the skill however it is typed.** The penalty box subtracted what was typed, so a penalty entered as armor prints it, such as -2, raised the skill by 2. The box is now labelled **Check penalty** and takes 0 or below. A skill whose penalty was typed as a negative number goes down by twice that penalty, to what the rules give; one stored as a positive number opens as negative, and a note above the sheet says so.
+
 - **The Pathfinder 2e focus pool holds what your character has.** **Add Focus Spell** set the pool to 3 points whatever the spells, and the points left could not be held below a smaller pool. The pool now has its own box, from 0 to 3; the first focus spell makes it 1 point, as the rules give, and the points left stay within it. A character stored with more points left than its pool opens with them brought down, and a note above the sheet says so.
 
 - **A Pathfinder 2e feat with no level is listed first on the sheet.** Such a feat, from an import or a program, landed anywhere in its list and read "Level undefined". It now comes first, with no level shown.

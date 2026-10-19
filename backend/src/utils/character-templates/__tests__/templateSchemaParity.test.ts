@@ -20,7 +20,7 @@ import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
-import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus, pf2eTotalBulk, pf2eBulkLimits } from '../../rules/pathfinder2e';
+import { pf2eArmorClass, pf2eClassDC, pf2eSkillTotal, pf2eTotalBulk, pf2eBulkLimits } from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
@@ -124,12 +124,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
 
     it(`${template.name} stores the skill and lore totals its own components give`, () => {
       type Skill = { attribute: string; proficiencyRank: string; itemBonus?: number; armorPenalty?: number; bonus: number };
-      const attributes = data.attributes as Record<string, { modifier: number } | undefined>;
-      const total = (skill: Skill) =>
-        (attributes[skill.attribute]?.modifier ?? 0) +
-        pf2eProficiencyBonus(data.level, skill.proficiencyRank) +
-        (skill.itemBonus ?? 0) -
-        (skill.armorPenalty ?? 0);
+      const total = (skill: Skill) => pf2eSkillTotal(data, skill);
       const skills = [
         ...Object.values(data.skills as Record<string, Skill>),
         ...((data.loreSkills ?? []) as Skill[]),

@@ -1,7 +1,8 @@
 /**
  * rules/pathfinder2e.ts
  * Pathfinder 2e derived numbers: proficiency bonus, Armor Class, Class DC,
- * spell attack and spell DC, the attribute a sheet names, and Bulk.
+ * skill totals, spell attack and spell DC, the attribute a sheet names, and
+ * Bulk.
  *
  * ---------------------------------------------------------------------------
  * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
@@ -117,6 +118,30 @@ export function pf2eClassDC(data: unknown): number {
   const attrMod = matched ? num(rec(attributes[matched])?.modifier) : 0;
 
   return 10 + attrMod + pf2eProficiencyBonus(sheet?.level, dc.proficiencyRank);
+}
+
+/**
+ * A check penalty as the penalty it is. "A bonus is always positive, and a
+ * penalty is always negative" (Core Rulebook, "Bonuses and Penalties"), and
+ * armor prints its check penalty as -1 to -3; a sheet may hold it either way.
+ */
+export function pf2eCheckPenalty(value: unknown): number {
+  return 0 - Math.abs(num(value));
+}
+
+/**
+ * A skill's total: its attribute's modifier, the proficiency bonus for its
+ * rank, its item bonus, and its check penalty. `skill` is one entry of a
+ * sheet's skills or lore skills; the attribute is read in any of the
+ * spellings a sheet uses.
+ */
+export function pf2eSkillTotal(data: unknown, skill: unknown): number {
+  const sheet = rec(data);
+  const entry = rec(skill);
+  if (!entry) return 0;
+  const matched = pf2eAttributeName(entry.attribute);
+  const attrMod = matched ? num(rec(rec(sheet?.attributes)?.[matched])?.modifier) : 0;
+  return attrMod + pf2eProficiencyBonus(sheet?.level, entry.proficiencyRank) + num(entry.itemBonus) + pf2eCheckPenalty(entry.armorPenalty);
 }
 
 /** The spellcasting proficiency rank, which spell attack rolls and spell DCs share. */

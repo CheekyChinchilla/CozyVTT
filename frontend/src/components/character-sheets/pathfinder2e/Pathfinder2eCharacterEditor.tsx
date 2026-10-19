@@ -51,6 +51,8 @@ import {
   pf2eProficiencyBonus,
   pf2eSpellAttack,
   pf2eSpellDC,
+  pf2eSkillTotal,
+  pf2eCheckPenalty,
   pf2eTotalBulk,
   pf2eBulkLimits,
   formatPf2eBulk,
@@ -152,6 +154,20 @@ function withFeatTextInDescription<T extends { description?: string; notes?: str
   });
 }
 
+/** A skill's name as the sheet shows it: "sleightOfHand" as "Sleight Of Hand". */
+const skillLabel = (key: string): string =>
+  key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()).trim();
+
+/**
+ * The skills with each check penalty stored as the negative number it is. The
+ * box used to subtract what was typed, so a sheet may hold a penalty of 2.
+ */
+function withCheckPenaltiesNegative(skills: PF2eSkills): PF2eSkills {
+  return Object.fromEntries(
+    Object.entries(skills).map(([key, skill]) => [key, skill ? { ...skill, armorPenalty: pf2eCheckPenalty(skill.armorPenalty) } : skill])
+  ) as unknown as PF2eSkills;
+}
+
 /**
  * The focus spells with no more points left than the pool holds. The editor
  * held the points to 3 rather than to the pool, so a sheet may have stored more.
@@ -170,6 +186,12 @@ function withPointsInPool(focus: PF2eSpellcasting['focusSpells'] | undefined): N
  */
 function changedOnOpen(sheet: PF2eFormData): string[] {
   const changes: string[] = [];
+  for (const [key, skill] of Object.entries(sheet.skills ?? {})) {
+    const penalty = (skill as { armorPenalty?: unknown } | undefined)?.armorPenalty;
+    if (typeof penalty === 'number' && penalty > 0) {
+      changes.push(`${skillLabel(key)} check penalty (${penalty} to ${pf2eCheckPenalty(penalty)})`);
+    }
+  }
   const spellcasting = sheet.spellcasting;
   if (spellcasting) {
     const rank = spellcasting.spellAttackBonus?.proficiencyRank ?? 'untrained';
@@ -222,7 +244,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     perception: data.perception || { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0, senses: [] },
     // Attributes and spellcasting are read in the editor's spelling, so a sheet
     // a template wrote with "str" or "Arcane" keeps its numbers.
-    skills: data.skills ? withFullSkillAttributes(data.skills) : {
+    skills: data.skills ? withCheckPenaltiesNegative(withFullSkillAttributes(data.skills)) : {
       acrobatics: { attribute: 'dexterity', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       arcana: { attribute: 'intelligence', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       athletics: { attribute: 'strength', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
@@ -462,12 +484,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
-      const attribute = updatedSkills[skill].attribute;
-      const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
-      const profBonus = pf2eProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
-      const itemBonus = updatedSkills[skill].itemBonus || 0;
-      const armorPenalty = updatedSkills[skill].armorPenalty || 0;
-      const newBonus = abilityMod + profBonus + itemBonus - armorPenalty;
+      const newBonus = pf2eSkillTotal(formData, updatedSkills[skill]);
       if (updatedSkills[skill].bonus !== newBonus) {
         updatedSkills[skill] = { ...updatedSkills[skill], bonus: newBonus };
         hasChanges = true;
@@ -539,10 +556,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.attributes || !formData.loreSkills || !formData.level) return;
     let hasChanges = false;
     const updatedLoreSkills = formData.loreSkills.map((lore) => {
-      const abilityMod = formData.attributes[lore.attribute as keyof PF2eAttributes]?.modifier || 0;
-      const profBonus = pf2eProficiencyBonus(formData.level, lore.proficiencyRank || 'untrained');
-      const itemBonus = lore.itemBonus || 0;
-      const newBonus = abilityMod + profBonus + itemBonus;
+      const newBonus = pf2eSkillTotal(formData, lore);
       if (lore.bonus !== newBonus) {
         hasChanges = true;
       }
@@ -1043,7 +1057,7 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {(Object.keys(formData.skills ?? {}) as (keyof PF2eSkills)[]).map((skillName) => {
             const skillData = formData.skills![skillName];
-            const displayName = skillName.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()).trim();
+            const displayName = skillLabel(skillName);
             return (
               <div key={skillName} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-1">
@@ -1054,8 +1068,18 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.
                   {renderProficiencySelector(`skills.${skillName}.proficiencyRank`, skillData.proficiencyRank as ProficiencyRank)}
                   <NumberField
 min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+                  {/* A penalty, so 0 or below, as armor prints it (-1 to -3). */}
                   <NumberField
-value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${skillName}.armorPenalty`, v)} placeholder="Penalty" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+                    aria-label={`Check penalty for ${displayName}`}
+                    title="Check penalty"
+                    min={PF2E_ITEM_BONUS_MIN}
+                    max={0}
+                    value={skillData.armorPenalty}
+                    onChange={(v: number) => updateField(`skills.${skillName}.armorPenalty`, pf2eCheckPenalty(v))}
+                    placeholder="Penalty"
+                    className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    fallback={0}
+                  />
                 </div>
               </div>
             );

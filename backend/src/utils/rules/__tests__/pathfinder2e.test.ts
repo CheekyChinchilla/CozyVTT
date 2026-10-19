@@ -7,7 +7,16 @@
  * your Strength modifier."
  */
 import { describe, it, expect } from '@jest/globals';
-import { pf2eItemBulk, pf2eTotalBulk, pf2eBulkLimits, formatPf2eBulk, pf2eSpellAttack, pf2eSpellDC } from '../pathfinder2e';
+import {
+  pf2eItemBulk,
+  pf2eTotalBulk,
+  pf2eBulkLimits,
+  formatPf2eBulk,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+  pf2eSkillTotal,
+  pf2eCheckPenalty,
+} from '../pathfinder2e';
 
 describe('pf2eItemBulk', () => {
   it.each([
@@ -98,5 +107,30 @@ describe('pf2eSpellAttack and pf2eSpellDC', () => {
   it('are the bare base with no spellcasting', () => {
     expect(pf2eSpellAttack({ level: 1 })).toBe(0);
     expect(pf2eSpellDC({ level: 1 })).toBe(10);
+  });
+});
+
+/**
+ * Core Rulebook p. 444: "a bonus is always positive, and a penalty is always
+ * negative"; armor prints its check penalty as -1, -2 or -3. A stored check
+ * penalty is a penalty whatever its sign.
+ */
+describe('pf2eSkillTotal', () => {
+  const sheet = { level: 1, attributes: { strength: { score: 16, modifier: 3 } } };
+  const athletics = (armorPenalty: number) => ({ attribute: 'str', proficiencyRank: 'trained', itemBonus: 1, armorPenalty });
+
+  it('adds the attribute, the proficiency bonus and the item bonus', () => {
+    expect(pf2eSkillTotal(sheet, athletics(0))).toBe(3 + 3 + 1);
+  });
+
+  it('takes the check penalty off whichever sign it was stored with', () => {
+    expect(pf2eSkillTotal(sheet, athletics(-2))).toBe(5);
+    expect(pf2eSkillTotal(sheet, athletics(2))).toBe(5);
+  });
+
+  it('reads a check penalty as never more than 0', () => {
+    expect(pf2eCheckPenalty(2)).toBe(-2);
+    expect(pf2eCheckPenalty(-3)).toBe(-3);
+    expect(pf2eCheckPenalty(undefined)).toBe(0);
   });
 });
