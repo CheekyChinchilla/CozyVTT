@@ -215,6 +215,44 @@ function withoutOrphanLanguages(sheet: DnD5eFormData): DnD5eFormData {
   return settled;
 }
 
+/** The ability each of the eighteen skills uses. */
+const SKILL_ABILITIES: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
+  acrobatics: 'dexterity',
+  animalHandling: 'wisdom',
+  arcana: 'intelligence',
+  athletics: 'strength',
+  deception: 'charisma',
+  history: 'intelligence',
+  insight: 'wisdom',
+  intimidation: 'charisma',
+  investigation: 'intelligence',
+  medicine: 'wisdom',
+  nature: 'intelligence',
+  perception: 'wisdom',
+  performance: 'charisma',
+  persuasion: 'charisma',
+  religion: 'intelligence',
+  sleightOfHand: 'dexterity',
+  stealth: 'dexterity',
+  survival: 'wisdom',
+};
+
+/**
+ * One entry for each of `keys`: what the sheet stored, with a blank entry for
+ * any it left out. The server takes the six saving throws and the eighteen
+ * skills all together or not at all, so a sheet stored with some or none of
+ * them would have its next save refused.
+ */
+function withEveryEntry<T>(stored: unknown, keys: readonly string[], blank: () => Record<string, unknown>): T {
+  const source = typeof stored === 'object' && stored !== null ? (stored as Record<string, unknown>) : {};
+  return Object.fromEntries(
+    keys.map((key) => {
+      const entry = source[key];
+      return [key, { ...blank(), ...(typeof entry === 'object' && entry !== null ? entry : {}) }];
+    })
+  ) as T;
+}
+
 /**
  * DnD5eCharacterEditor - Editable D&D 5e character sheet
  */
@@ -254,20 +292,21 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         ? { passivePerceptionBonus: bonusWithinRange(own.passivePerceptionBonus) }
         : {}),
       // Ensure nested objects exist.
-      //
-      // TODO(typing): `{}` has none of the keys DnD5eSavingThrows and DnD5eSkills
-      // require, and the effects below read `.proficient` off each entry, so a
-      // sheet stored without either block reads undefined where a value is
-      // expected. The casts keep that behaviour exactly as it was.
       stats: own.stats || {},
-      // A stored total that differs from what the scores give keeps the
-      // difference as its other bonus, so the total survives the effects below.
+      // Every saving throw and skill, so the effects below and the next save
+      // have all of them. A stored total that differs from what the scores
+      // give keeps the difference as its other bonus, so the total survives
+      // the effects below.
       savingThrows: withRecordedOtherBonuses(
-        (own.savingThrows || {}) as DnD5eSavingThrows,
+        withEveryEntry<DnD5eSavingThrows>(own.savingThrows, DND5E_ABILITY_NAMES, () => ({ proficient: false, bonus: 0 })),
         (ability) => dnd5eBackfilledSaveOtherBonus(own, ability)
       ),
       skills: withRecordedOtherBonuses(
-        (own.skills || {}) as DnD5eSkills,
+        withEveryEntry<DnD5eSkills>(own.skills, Object.keys(SKILL_ABILITIES), () => ({
+          proficient: false,
+          expertise: false,
+          bonus: 0,
+        })),
         (skill) => dnd5eBackfilledSkillOtherBonus(own, skill)
       ),
       hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
@@ -486,47 +525,6 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.savingThrows?.charisma?.otherBonus,
   ]);
 
-  // Skill-to-ability mapping
-  const skillAbilities: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
-    acrobatics: 'dexterity',
-    animalHandling: 'wisdom',
-    arcana: 'intelligence',
-    athletics: 'strength',
-    deception: 'charisma',
-    history: 'intelligence',
-    insight: 'wisdom',
-    intimidation: 'charisma',
-    investigation: 'intelligence',
-    medicine: 'wisdom',
-    nature: 'intelligence',
-    perception: 'wisdom',
-    performance: 'charisma',
-    persuasion: 'charisma',
-    religion: 'intelligence',
-    sleightOfHand: 'dexterity',
-    stealth: 'dexterity',
-    survival: 'wisdom',
-  };
-
-  // Initialize skills if they don't exist
-  useEffect(() => {
-    if (formData.skills) {
-      const updatedSkills = { ...formData.skills };
-      let needsUpdate = false;
-
-      (Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).forEach((skill) => {
-        if (!updatedSkills[skill]) {
-          updatedSkills[skill] = { proficient: false, expertise: false, bonus: 0 };
-          needsUpdate = true;
-        }
-      });
-
-      if (needsUpdate) {
-        setFormData((prev) => ({ ...prev, skills: updatedSkills }));
-      }
-    }
-  }, []); // Run once on mount
-
   // Auto-calculate skill bonuses when ability scores, proficiency, or expertise change
   useEffect(() => {
     setFormData((prev) => {
@@ -535,7 +533,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       let hasChanges = false;
 
       (Object.keys(updatedSkills) as (keyof DnD5eSkills)[]).forEach(skill => {
-        const ability = skillAbilities[skill];
+        const ability = SKILL_ABILITIES[skill];
         const abilityMod = prev.stats[ability]?.modifier || 0;
         const proficient = updatedSkills[skill].proficient;
         const expertise = updatedSkills[skill].expertise;
@@ -595,7 +593,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.charisma?.modifier,
     // Explicitly depend on each skill's proficient and expertise flags, and
     // its other bonus
-    ...(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).flatMap(skill => [
+    ...(Object.keys(SKILL_ABILITIES) as (keyof DnD5eSkills)[]).flatMap(skill => [
       formData.skills?.[skill]?.proficient,
       formData.skills?.[skill]?.expertise,
       formData.skills?.[skill]?.otherBonus,
@@ -1400,13 +1398,13 @@ min={1}
           one for anything else that adds to it, such as Jack of All Trades or a magic item.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
-          {(Object.keys(skillAbilities) as (keyof DnD5eSkills)[]).map((skill) => {
+          {(Object.keys(SKILL_ABILITIES) as (keyof DnD5eSkills)[]).map((skill) => {
             const skillData = formData.skills?.[skill] || { proficient: false, expertise: false, bonus: 0 };
             const skillLabel = skill
               .replace(/([A-Z])/g, ' $1')
               .replace(/^./, (str) => str.toUpperCase())
               .trim();
-            const ability = skillAbilities[skill];
+            const ability = SKILL_ABILITIES[skill];
             const abilityAbbr = ability.slice(0, 3).toUpperCase();
 
             return (

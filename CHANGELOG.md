@@ -89,6 +89,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A D&D 5e character stored without its saving throws can be saved from the editor.** Such a character, from an import or a program, opened with no saving throws, and ticking one stored that one alone, so every save was refused. The editor now fills in all six, and all eighteen skills, as it opens.
+
 - **A document saved twice at the same moment records the size of the text it keeps.** Two saves close together, from two tabs say, could leave the document holding one text and its listed size belonging to the other.
 
 - **Every sound file and document you may use is offered.** The Atmosphere panel and the time of day editor chose from the newest 50 sound files of all your campaigns, so a track of this campaign's past those was not offered, and a campaign's **Share existing** list showed only your newest 100 documents. They now offer all of them.
