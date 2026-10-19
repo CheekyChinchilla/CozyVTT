@@ -103,6 +103,19 @@ describe('the rows', () => {
   });
 });
 
+describe('rows of the same name', () => {
+  it('number their controls, so each can be told apart', () => {
+    open();
+    add('Language');
+    add('Language');
+    for (const row of [1, 2]) {
+      expect(screen.getByLabelText(`Value of Language (Other language), row ${row}`)).toBeInTheDocument();
+      expect(screen.getByRole('checkbox', { name: `Improvement check for Language (Other language), row ${row}` })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: `Remove Language (Other language), row ${row}` })).toBeInTheDocument();
+    }
+  });
+});
+
 describe('the read-only sheet', () => {
   it('shows a Fighting specialisation by its name', () => {
     render(

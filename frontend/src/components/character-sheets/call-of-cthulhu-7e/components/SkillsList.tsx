@@ -171,7 +171,9 @@ const SkillRow: React.FC<{
   detailBox?: RowTextBox;
   /** Edit mode: the row can be removed. */
   onRemove?: () => void;
-}> = ({ name, displayName, skill, editable, themeColor, onChange, onRoll, nameBox, detailBox, onRemove }) => {
+  /** What the row's controls are named after, where it differs from its name. */
+  controlName?: string;
+}> = ({ name, displayName, skill, editable, themeColor, onChange, onRoll, nameBox, detailBox, onRemove, controlName = displayName }) => {
   if (!skill) return null;
 
   // Determine checkbox styling based on theme color
@@ -201,7 +203,7 @@ const SkillRow: React.FC<{
           type="button"
           role="checkbox"
           aria-checked={skill.improvementChecked}
-          aria-label={`Improvement check for ${displayName}`}
+          aria-label={`Improvement check for ${controlName}`}
           onClick={() => onChange?.('improvementChecked', !skill.improvementChecked)}
           className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-sepia-500 ${getCheckboxClasses()}`}
           style={
@@ -276,7 +278,7 @@ const SkillRow: React.FC<{
       <div className="w-14">
         {editable && name !== 'cthulhuMythos' ? (
           <NumberField
-            aria-label={`Value of ${displayName}`}
+            aria-label={`Value of ${controlName}`}
             value={skill.currentValue}
             onChange={(v: number) => onChange?.('currentValue', v)}
             className="w-full text-center text-sm font-semibold text-sepia-900 bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
@@ -302,7 +304,7 @@ const SkillRow: React.FC<{
         <button
           type="button"
           onClick={onRemove}
-          aria-label={`Remove ${displayName}`}
+          aria-label={`Remove ${controlName}`}
           title="Remove"
           className="p-0.5 text-red-700 hover:text-red-900 shrink-0"
         >
@@ -380,11 +382,15 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
     boxLabel: (index: number) => string
   ) => {
     const entries = readCoC7eSkillList(skills, list);
+    const names = entries.map(rowName);
     return entries.map((entry, index) => (
       <SkillRow
         key={`${list}-${index}`}
         name={`${list}.${index}`}
-        displayName={rowName(entry, index)}
+        displayName={names[index]}
+        // Rows of the same name, two languages not yet named, are told apart
+        // by their place in the list.
+        controlName={names.indexOf(names[index]) === names.lastIndexOf(names[index]) ? names[index] : `${names[index]}, row ${index + 1}`}
         skill={entry as unknown as Skill}
         editable={editable}
         themeColor={themeColor}
