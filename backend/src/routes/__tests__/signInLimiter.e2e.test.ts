@@ -12,9 +12,9 @@
  * shows every visitor as one address, was locked out by signing in.
  *
  * Now the limit is checked before the password is, and only a wrong password,
- * a wrong code or a bad reset link adds to it. Wrong answers sent together
- * are still held to five: the sixth waits for the first five to be checked,
- * and is refused if they all failed.
+ * a wrong code or a bad reset link adds to it. One address may have only two
+ * sign-ins being checked at once (middleware/hashingPerAddress), so a third
+ * at once is told to try again in a moment, and that counts for nothing.
  *
  * The real limiter runs here (this file does not mock it), so each case uses
  * an address of its own through a trusted proxy hop, as app.ts sets up.
@@ -72,13 +72,26 @@ afterAll(async () => {
 });
 
 describe('correct sign-ins from one address', () => {
-  it.each([8, 20])('all succeed when %i arrive at once', async (count) => {
+  it('all succeed when 20 arrive two at a time', async () => {
     const address = freshAddress();
-    const accounts = await users(count);
+    const accounts = await users(20);
 
-    const answers = await Promise.all(accounts.map((u) => signIn(address, u.email, TEST_PASSWORD)));
+    const answers: request.Response[] = [];
+    for (let i = 0; i < accounts.length; i += 2) {
+      answers.push(...(await Promise.all(accounts.slice(i, i + 2).map((u) => signIn(address, u.email, TEST_PASSWORD)))));
+    }
 
     expect(answers.map((res) => res.status)).toEqual(accounts.map(() => 200));
+  });
+
+  it('eight at once are let through two at a time or told to try again', async () => {
+    const address = freshAddress();
+    const accounts = await users(8);
+
+    const statuses = (await Promise.all(accounts.map((u) => signIn(address, u.email, TEST_PASSWORD)))).map((res) => res.status);
+
+    expect(statuses.filter((s) => s === 200).length).toBeGreaterThanOrEqual(2);
+    expect(statuses.filter((s) => s !== 200 && s !== 429)).toEqual([]);
   });
 
   it('leave the address its whole allowance for wrong passwords', async () => {
@@ -125,15 +138,18 @@ describe('wrong passwords from one address', () => {
     expect((await signIn(address, account.email, TEST_PASSWORD)).status).toBe(429);
   });
 
-  it('sent together are checked five at most', async () => {
+  it('sent together are checked two at a time, and still lock the address after five', async () => {
     const address = freshAddress();
     const [account] = await users(1);
 
     const answers = await Promise.all(Array.from({ length: 20 }, () => signIn(address, account.email, 'wrong-password')));
     const statuses = answers.map((res) => res.status);
+    const checked = statuses.filter((s) => s === 401).length;
 
-    expect(statuses.filter((s) => s === 401)).toHaveLength(5);
-    expect(statuses.filter((s) => s === 429)).toHaveLength(15);
+    expect(checked).toBeGreaterThanOrEqual(2);
+    expect(checked).toBeLessThanOrEqual(5);
+    expect(statuses.filter((s) => s === 429)).toHaveLength(20 - checked);
+    for (let i = checked; i < 5; i += 1) expect((await signIn(address, account.email, 'wrong-password')).status).toBe(401);
     expect((await signIn(address, account.email, TEST_PASSWORD)).status).toBe(429);
   });
 

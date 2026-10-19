@@ -101,7 +101,10 @@ beforeAll(async () => {
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
   });
-  [dm, player, spectator] = await Promise.all([login(dmUser.email), login(playerUser.email), login(spectatorUser.email)]);
+  // One at a time: one address may have only two sign-ins checked at once.
+  dm = await login(dmUser.email);
+  player = await login(playerUser.email);
+  spectator = await login(spectatorUser.email);
 });
 
 afterAll(async () => {

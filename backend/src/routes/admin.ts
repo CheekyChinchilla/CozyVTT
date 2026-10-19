@@ -30,6 +30,7 @@ import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail 
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeAdminLog } from '../services/systemLog';
 import { clearSignInLock } from '../middleware/authLimiters';
+import { hashingPerAddress } from '../middleware/hashingPerAddress';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
@@ -355,7 +356,7 @@ router.put('/settings', async (req, res) => {
 // POST /api/admin/users
 // Creates a new user account with a temporary password.
 // ============================================
-router.post('/users', async (req, res) => {
+router.post('/users', hashingPerAddress, async (req, res) => {
   try {
     const { platformRole } = req.body;
     const fields = newAccountFields(req.body.email, req.body.displayName);
@@ -432,7 +433,7 @@ router.post('/users', async (req, res) => {
 // so there is nothing to hand over manually.
 // ============================================
 
-router.post('/users/invite', async (req, res) => {
+router.post('/users/invite', hashingPerAddress, async (req, res) => {
   try {
     if (!isSmtpConfigured()) {
       return res.status(503).json({

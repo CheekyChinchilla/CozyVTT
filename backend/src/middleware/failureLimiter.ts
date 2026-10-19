@@ -102,20 +102,23 @@ interface AddressState {
   waiting: Array<() => void>;
 }
 
+/**
+ * The address a request is counted under: as Express reads it with the app's
+ * `trust proxy` setting, which is what express-rate-limit keyed on. One IPv6
+ * visitor usually holds a whole /56 network and can send each guess from a
+ * new address in it, so the network is counted, as express-rate-limit counts
+ * it.
+ */
+export function addressKey(req: Request): string {
+  const address = req.ip ?? req.socket.remoteAddress;
+  return address ? ipKeyGenerator(address) : 'unknown';
+}
+
 export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
   const { windowMs, max, message, onLimit } = options;
   const waitMs = options.waitMs ?? FAILURE_LIMITER_WAIT_MS;
   const addresses = new Map<string, AddressState>();
-
-  // The address as Express reads it with the app's `trust proxy` setting,
-  // which is what express-rate-limit keyed on. One IPv6 visitor usually holds
-  // a whole /56 network and can send each guess from a new address in it, so
-  // the network is counted, as express-rate-limit counts it.
-  const byAddress = (req: Request): string => {
-    const address = req.ip ?? req.socket.remoteAddress;
-    return address ? ipKeyGenerator(address) : 'unknown';
-  };
-  const keyOf = options.key ?? byAddress;
+  const keyOf = options.key ?? addressKey;
 
   const stateOf = (key: string): AddressState => {
     let state = addresses.get(key);

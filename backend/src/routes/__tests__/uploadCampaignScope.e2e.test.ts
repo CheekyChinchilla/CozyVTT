@@ -86,7 +86,10 @@ beforeAll(async () => {
     ],
   });
 
-  [dm, player, outsider] = await Promise.all([login(d.email), login(p.email), login(o.email)]);
+  // One at a time: one address may have only two sign-ins checked at once.
+  dm = await login(d.email);
+  player = await login(p.email);
+  outsider = await login(o.email);
 });
 
 afterAll(async () => {

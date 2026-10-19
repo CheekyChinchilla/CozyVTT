@@ -17,6 +17,7 @@ import { getSystemSettings, getAppearanceSettings } from '../services/systemSett
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
 import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, mfaAccountLimiter } from '../middleware/authLimiters';
+import { hashingPerAddress, hashingPerAddressWhen } from '../middleware/hashingPerAddress';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { adminMfaDeadline, restartAdminMfaGrace } from '../services/adminMfaPolicy';
@@ -99,10 +100,11 @@ const router = Router();
  * Only a wrong answer counts, recorded by the route where it finds one: a
  * wrong password, a wrong code, a reset link that is not valid. A correct
  * answer never moves you towards a lockout, and nor does a refusal. Correct
- * sign-ins arriving together from one address (a household, a club, every
- * visitor behind a proxy that hides their addresses) are all let through;
- * see middleware/failureLimiter for how wrong ones sent together are still
- * held to five.
+ * sign-ins from one address (a household, a club, every visitor behind a
+ * proxy that hides their addresses) never lock it, though only two may be
+ * checked at once (middleware/hashingPerAddress); see
+ * middleware/failureLimiter for how wrong ones sent together are still held
+ * to five.
  *
  * Exported for the tests, which mount it on a bare app.
  */
@@ -178,11 +180,23 @@ export const mfaLoginLimiter = failureLimiter({
 });
 
 /**
+ * Whether a code step sends a backup code, which is checked against its
+ * Argon2 hashes; a six-digit code is checked without hashing. A token that
+ * is not empty is used first, as the route does.
+ */
+function sendsBackupCode(req: Request): boolean {
+  const body: unknown = req.body;
+  if (typeof body !== 'object' || body === null) return false;
+  const { token, backupCode } = body as Record<string, unknown>;
+  return !(typeof token === 'string' && token !== '') && typeof backupCode === 'string' && backupCode !== '';
+}
+
+/**
  * POST /api/auth/register
  * Register a new user account
  * First user automatically becomes ADMIN
  */
-router.post('/register', accountCreationLimiter, async (req: Request, res: Response) => {
+router.post('/register', hashingPerAddress, accountCreationLimiter, async (req: Request, res: Response) => {
   const body = parseBody(RegisterBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { email, password, displayName } = body.data;
@@ -266,7 +280,7 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
  * POST /api/auth/login
  * Authenticate user and create session
  */
-router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Request, res: Response) => {
+router.post('/login', hashingPerAddress, credentialLimiter, accountLoginLimiter, async (req: Request, res: Response) => {
   const body = parseBody(LoginBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { email, password, rememberMe } = body.data;
@@ -509,7 +523,7 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
  * POST /api/auth/reset-password
  * Reset password using a valid token
  */
-router.post('/reset-password', credentialLimiter, async (req: Request, res: Response) => {
+router.post('/reset-password', hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(ResetPasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { token, newPassword } = body.data;
@@ -614,7 +628,7 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
  * against passwordCheckLimiter, shared with DELETE /account and an email
  * change: 10 per 15 minutes for the account.
  */
-router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+router.post('/change-password', requireAuth, hashingPerAddress, passwordCheckLimiter, async (req: Request, res: Response) => {
   const body = parseBody(ChangePasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { currentPassword, newPassword } = body.data;
@@ -696,7 +710,7 @@ router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: R
  * Self-service account deletion. Requires password confirmation; a wrong
  * password counts against passwordCheckLimiter.
  */
-router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+router.delete('/account', requireAuth, hashingPerAddress, passwordCheckLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;
@@ -763,7 +777,7 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
  * decides who can sign in from then on, so a session alone is not enough, as
  * with turning MFA off.
  */
-router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/setup', requireAuth, hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;
@@ -818,7 +832,7 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
  * Verify TOTP token to complete MFA setup. Generates and returns backup codes (shown once).
  * Requires: Authentication + mfaSecret stored on user
  */
-router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify', requireAuth, hashingPerAddress, mfaSetupLimiter, async (req: Request, res: Response) => {
   const body = parseBody(MfaVerifyBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { token } = body.data;
@@ -887,7 +901,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
  * Verify TOTP or backup code during login MFA flow.
  * Requires: mfaPending session state (set by /login when user has MFA enabled)
  */
-router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify-login', hashingPerAddressWhen(sendsBackupCode), mfaLoginLimiter, mfaAccountLimiter, async (req: Request, res: Response) => {
   try {
     if (!req.session.mfaPending || !req.session.mfaPendingUserId) {
       return res.status(401).json({
@@ -1037,7 +1051,7 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
  * Admins cannot disable MFA
  * Requires: Authentication
  */
-router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/disable', requireAuth, hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(MfaDisableBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password, token } = body.data;
@@ -1107,7 +1121,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
  * Regenerate backup codes. Requires current password.
  * Requires: Authentication + MFA enabled
  */
-router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/backup-codes', requireAuth, hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;

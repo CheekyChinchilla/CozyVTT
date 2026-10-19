@@ -9,6 +9,7 @@ import { regenerateSession } from '../utils/session';
 import { systemConfigFromSetupBody } from '../utils/setupConfig';
 import { parseBody, RegisterBodySchema } from '../validators/auth';
 import logger from '../utils/logger';
+import { hashingPerAddress } from '../middleware/hashingPerAddress';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.get('/status', async (_req: Request, res: Response) => {
  * way to become the instance's administrator, and a fresh instance is often
  * reachable from the internet before its owner opens the wizard.
  */
-router.post('/init', async (req: Request, res: Response) => {
+router.post('/init', hashingPerAddress, async (req: Request, res: Response) => {
   const raw: unknown = req.body;
   const given = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).setupToken : undefined;
   if (!setupTokenMatches(given)) {

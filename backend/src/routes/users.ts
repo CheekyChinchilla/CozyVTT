@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, signInLockedUntil } from '../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, signInLockedUntil, asksForPassword } from '../middleware/authLimiters';
+import { hashingPerAddress, hashingPerAddressWhen } from '../middleware/hashingPerAddress';
 import { prisma } from '../config/database';
 import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
@@ -105,7 +106,7 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
  */
-router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request<{ id: string }>, res: Response) => {
+router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), passwordCheckLimiter, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -607,7 +608,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request<{ id: strin
  * Requires: Admin role
  * Returns: Temporary password (one-time display)
  */
-router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/reset-password', requireAuth, requireAdmin, hashingPerAddress, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
 

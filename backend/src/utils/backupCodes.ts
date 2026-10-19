@@ -33,9 +33,17 @@ export function normalizeBackupCode(code: string): string {
   return code.replace(/[-\s]/g, '').toUpperCase();
 }
 
-/** Hash codes for storage. Normalised first, so verification can be lenient. */
-export function hashBackupCodes(codes: string[]): Promise<string[]> {
-  return Promise.all(codes.map((code) => hashPassword(normalizeBackupCode(code))));
+/**
+ * Hash codes for storage. Normalised first, so verification can be lenient.
+ * One after another, so a request takes one place at a time in the server's
+ * line of hashes (services/auth.ts): ten at once took ten, and two such
+ * requests from one address held a third of the line. Only two hashes run at
+ * once anyway, so this costs little time.
+ */
+export async function hashBackupCodes(codes: string[]): Promise<string[]> {
+  const hashed: string[] = [];
+  for (const code of codes) hashed.push(await hashPassword(normalizeBackupCode(code)));
+  return hashed;
 }
 
 /**

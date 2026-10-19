@@ -551,6 +551,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
         '503':
           $ref: '#/components/responses/ServerBusy'
 
@@ -1098,8 +1100,10 @@ paths:
             passwords, please try again later`, with `Retry-After`), or the
             request waited 15 seconds behind other password checks for the
             account (`Other attempts are still being checked. Please try again
-            in a moment.`, with `Retry-After: 5`; not counted). Nothing was
-            changed.
+            in a moment.`, with `Retry-After: 5`; not counted), or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). Nothing
+            was changed.
           content:
             application/json:
               schema:
@@ -1619,8 +1623,10 @@ paths:
             later`, with `Retry-After`), or the request waited 15 seconds
             behind other password checks for the account that were still
             running (`Other attempts are still being checked. Please try again
-            in a moment.`, with `Retry-After: 5`; not counted). The general
-            API limit answers 429 too. Nothing was changed.
+            in a moment.`, with `Retry-After: 5`; not counted), or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). The
+            general API limit answers 429 too. Nothing was changed.
           content:
             application/json:
               schema:
@@ -1952,8 +1958,10 @@ paths:
             (`Too many wrong passwords, please try again later`, with
             `Retry-After`), or the request waited 15 seconds behind other
             password checks for the account (`Other attempts are still being
-            checked. Please try again in a moment.`, with `Retry-After: 5`).
-            Nothing was changed.
+            checked. Please try again in a moment.`, with `Retry-After: 5`),
+            or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). Nothing was changed.
           content:
             application/json:
               schema:
@@ -2116,6 +2124,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
         '503':
           $ref: '#/components/responses/ServerBusy'
 
@@ -10270,6 +10280,8 @@ paths:
           description: >-
             `Email is already in use`, including when another request created an
             account with the address after the check (this answered 500 before 1.5.2).
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
         '503':
           $ref: '#/components/responses/ServerBusy'
 
@@ -10354,6 +10366,8 @@ paths:
             account with the address after the check.
         '502':
           description: The invitation email could not be delivered; no account was created
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
         '503':
           description: >-
             SMTP is not configured on this instance, or the server is too busy
@@ -13622,7 +13636,10 @@ components:
         with JSON `{ error, message }`, where `message` says what was limited
         and when to try again. The sign-in, password, two-factor and
         registration limiters send `error: "Rate Limited"`; the others send
-        `Too Many Requests`.
+        `Too Many Requests`. A route that hashes or checks a password also
+        answers 429 `Too many password checks from your address at once.
+        Please try again in a moment.` with `Retry-After: 2` while the
+        address already has two such requests running (HashingAtOnce).
       headers:
         Retry-After:
           schema: { type: integer }
@@ -13644,11 +13661,30 @@ components:
             error: Too Many Requests
             message: Upload rate limit reached. Please slow down and try again in a minute.
 
+    HashingAtOnce:
+      description: >-
+        Too Many Requests - The address already has two requests running that
+        hash or check a password, on any of the routes that do. Counted
+        against nothing; try again once one has been answered.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before trying again (2)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Rate Limited
+            message: Too many password checks from your address at once. Please try again in a moment.
+
     ServerBusy:
       description: >-
         Service Unavailable - Too many password hashes or checks are running
         or waiting (2 run at once, 50 may wait, each for at most 10
         seconds). Never counted as a wrong password by the sign-in limits.
+        One address may have two such requests running at once, and a third
+        is answered 429 (HashingAtOnce).
       headers:
         Retry-After:
           schema: { type: integer }

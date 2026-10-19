@@ -86,7 +86,10 @@ beforeAll(async () => {
       { userId: playerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  [dm, player, stranger] = await Promise.all([login(d.email), login(p.email), login(s.email)]);
+  // One at a time: one address may have only two sign-ins checked at once.
+  dm = await login(d.email);
+  player = await login(p.email);
+  stranger = await login(s.email);
   trackId = await personalTrack('rain');
 });
 

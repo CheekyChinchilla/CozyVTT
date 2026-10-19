@@ -128,9 +128,13 @@ export const passwordCheckLimiter = failureLimiter({
   message: 'Too many wrong passwords, please try again later',
   key: (req: Request) => {
     if (!req.session?.userId) return null;
-    const body: unknown = req.body;
-    const asks = typeof body === 'object' && body !== null
-      && ['password', 'currentPassword'].some((field) => typeof (body as Record<string, unknown>)[field] === 'string');
-    return asks ? `password-check:${req.session.userId}` : null;
+    return asksForPassword(req) ? `password-check:${req.session.userId}` : null;
   },
 });
+
+/** Whether the body confirms a password (`password` or `currentPassword`), which the route then checks. */
+export function asksForPassword(req: Request): boolean {
+  const body: unknown = req.body;
+  return typeof body === 'object' && body !== null
+    && ['password', 'currentPassword'].some((field) => typeof (body as Record<string, unknown>)[field] === 'string');
+}

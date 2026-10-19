@@ -51,7 +51,10 @@ beforeAll(async () => {
       { userId: stayerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  [dm, stayer, leaver] = await Promise.all([login(dmUser.email), login(stayerUser.email), login(leaverUser.email)]);
+  // One at a time: one address may have only two sign-ins checked at once.
+  dm = await login(dmUser.email);
+  stayer = await login(stayerUser.email);
+  leaver = await login(leaverUser.email);
   server = await createWsTestServer();
 });
 

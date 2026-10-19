@@ -95,7 +95,10 @@ describe('campaign documents', () => {
       ],
     });
 
-    [owner, player, stranger] = await Promise.all([login(emails.owner), login(emails.player), login(emails.stranger)]);
+    // One at a time: one address may have only two sign-ins checked at once.
+    owner = await login(emails.owner);
+    player = await login(emails.player);
+    stranger = await login(emails.stranger);
 
     pdfId = await uploadAs(owner, 'rules.pdf', PDF, 'application/pdf');
     mdId = await uploadAs(owner, 'sneaky.md', MARKDOWN_THAT_IS_HTML, 'text/markdown');

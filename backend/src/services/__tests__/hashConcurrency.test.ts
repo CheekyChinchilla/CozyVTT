@@ -25,6 +25,7 @@ jest.mock('argon2', () => ({
 
 import argon2 from 'argon2';
 import { hashPassword, verifyPassword, ServerBusyError, HASH_SLOTS, HASH_QUEUE_MAX, HASH_WAIT_MS } from '../auth';
+import { hashBackupCodes } from '../../utils/backupCodes';
 
 /** Let every promise that can settle do so. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -112,4 +113,17 @@ it('still reports a hash that does not match as false', async () => {
   await settle();
   pending.shift()?.(false);
   await expect(check).resolves.toBe(false);
+});
+
+it('hashes a set of backup codes one at a time, taking one place in the line', async () => {
+  const codes = hashBackupCodes(Array.from({ length: 10 }, (_, i) => `CODE-000${i}`));
+  await settle();
+  expect(started()).toBe(1);
+  // Another caller still gets the second turn at once.
+  const other = hashPassword('b');
+  await settle();
+  expect(started()).toBe(2);
+  await drain();
+  await expect(codes).resolves.toHaveLength(10);
+  await other;
 });
