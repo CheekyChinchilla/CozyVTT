@@ -665,7 +665,7 @@ Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may e
 
 ### `POST /api/campaigns/import/preview`
 
-Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
+Upload a `.cozyvtt` archive and return its manifest preview without creating anything. The app's import window reads the manifest in the browser and uses this route only for an archive it cannot read there. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
 
 **Request:** `multipart/form-data` with field `file` containing the archive, at most 500 MB; a larger one answers `413`. The bundled nginx gives this route and the import 512 MB, apart from `NGINX_MAX_BODY_SIZE`, and five minutes to answer.
 
@@ -763,7 +763,7 @@ For a character with a game system, `name` is written into the sheet's `characte
 
 ### `GET /api/characters/:id`
 
-Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `403`. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
+Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `404`, as for an id that names nothing. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
 
 ---
 

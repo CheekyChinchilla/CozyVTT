@@ -1,4 +1,3 @@
-import { isSafeVibeFilter } from './styleAllowlists';
 
 /**
  * Vibe Tracker Presets & Validation
@@ -88,86 +87,6 @@ export function preserveAtmosphereAudio(incoming: unknown, stored?: unknown): un
   return next;
 }
 
-// TODO(cleanup): PUT /campaigns/:id/vibe validates with this function and PUT
-// /campaigns/:id with VibeSettingsSchema in validators/campaigns.ts, and the
-// two disagree: a period name may be 50 characters here and 100 there, and only
-// this one requires enabled, at least one period and unique names. Validate
-// both routes with one schema.
-/**
- * Validate a vibe settings object structure.
- * Returns null if valid, or an error message string if invalid.
- */
-export function validateVibeSettings(settings: unknown): string | null {
-  if (!settings || typeof settings !== 'object') {
-    return 'vibeSettings must be an object';
-  }
-
-  const s = settings as Record<string, unknown>;
-
-  if (typeof s.enabled !== 'boolean') {
-    return 'vibeSettings.enabled must be a boolean';
-  }
-
-  if (!Array.isArray(s.periods)) {
-    return 'vibeSettings.periods must be an array';
-  }
-
-  if (s.periods.length === 0) {
-    return 'vibeSettings.periods must have at least one period';
-  }
-
-  if (s.periods.length > 20) {
-    return 'vibeSettings.periods cannot exceed 20 periods';
-  }
-
-  for (let i = 0; i < s.periods.length; i++) {
-    const period = s.periods[i] as Record<string, unknown>;
-
-    if (!period || typeof period !== 'object') {
-      return `vibeSettings.periods[${i}] must be an object`;
-    }
-
-    if (typeof period.name !== 'string' || period.name.trim().length === 0) {
-      return `vibeSettings.periods[${i}].name must be a non-empty string`;
-    }
-
-    if (period.name.length > 50) {
-      return `vibeSettings.periods[${i}].name cannot exceed 50 characters`;
-    }
-
-    if (typeof period.hue !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(period.hue)) {
-      return `vibeSettings.periods[${i}].hue must be a valid hex color (e.g. #FF9966)`;
-    }
-
-    if (typeof period.filter !== 'string') {
-      return `vibeSettings.periods[${i}].filter must be a string`;
-    }
-
-    if (period.filter.length > 200) {
-      return `vibeSettings.periods[${i}].filter cannot exceed 200 characters`;
-    }
-
-    // Only the functions the atmosphere editor produces. A filter is CSS, and
-    // url() in it would have every visitor fetch whatever the DM named.
-    if (!isSafeVibeFilter(period.filter)) {
-      return `vibeSettings.periods[${i}].filter may only use brightness(), saturate(), contrast() and hue-rotate()`;
-    }
-
-    if (period.audio !== null && typeof period.audio !== 'string') {
-      return `vibeSettings.periods[${i}].audio must be a string or null`;
-    }
-  }
-
-  // Check for duplicate period names
-  const names = (s.periods as VibePeriod[]).map((p) => p.name.toLowerCase());
-  const uniqueNames = new Set(names);
-  if (uniqueNames.size !== names.length) {
-    return 'vibeSettings.periods must have unique period names';
-  }
-
-  return null;
-}
-
 /**
  * Normalize vibe settings from any format (old or new) to the current VibeSettings format.
  *
@@ -232,6 +151,9 @@ export function normalizeVibeSettings(raw: unknown): VibeSettings {
  * Find a period by name in vibe settings.
  * Returns the period or null if not found.
  */
-export function findVibePeriod(settings: VibeSettings, periodName: string): VibePeriod | null {
+export function findVibePeriod<P extends Pick<VibePeriod, 'name'> = VibePeriod>(
+  settings: { periods: readonly P[] },
+  periodName: string
+): P | null {
   return settings.periods.find((p) => p.name.toLowerCase() === periodName.toLowerCase()) || null;
 }

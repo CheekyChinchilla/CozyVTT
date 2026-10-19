@@ -116,9 +116,11 @@ src/
 │   ├── invitationEmailLimiter.ts  How many invitation emails a DM may have the instance send
 │   ├── leftNotesDownloadLimiter.ts  How often a user may download all the notes of a campaign they have left
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
-│   │                  and exporting campaign archives, one archive at a time
-│   │                  (the other HTTP limiters are declared beside their routes,
-│   │                  and the general /api limiter in app.ts)
+│   │                  and exporting campaign archives, one archive at a time, which the
+│   │                  Universal VTT map export shares (the other HTTP limiters are
+│   │                  declared beside their routes, and the general /api limiter in app.ts)
+│   ├── downloadOnly.ts    Refuses an export the browser is loading as part of a page
+│   │                  (Sec-Fetch-Dest), so a page cannot have the server build archives
 │   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
 │   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
@@ -880,17 +882,19 @@ start, and when the backup list is read with no restore running.
 
 1. **Multer** writes the upload to `maps/global/` under a new UUID name, up to the largest per-type limit: the asset's type and scope are fields of the same multipart body, so they are not known yet
 2. **Request check**: the type, the scope, the caller's right to place the asset there (`canPlaceAssetAtScope`) and its name, description and tags; a refused upload's file is deleted
-3. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and the detected type is the MIME type the `Asset` row records.
+3. **Content check** (`file-type` library, `middleware/fileValidation.ts`): the file's own bytes decide its type, and that type must be one the asset's kind allows (a map picture is PNG, JPEG or WebP, whatever the browser declared or the name says). Only a file `file-type` cannot identify falls through to a per-format check, and that check is positive rather than by extension: an audio upload named `.mp3` must start with an ID3 tag or an MPEG frame sync, and a document named `.txt` or `.md` must decode as UTF-8 with no NUL or control bytes. Anything else it cannot identify is refused, so an executable renamed `.md` fails here. The stored file's extension is changed to match the detected type, and must be one the asset's kind allows too: MPEG layer 1 and 2 audio is `audio/mpeg` like an MP3, but would be stored as `.mp1` or `.mp2`, which the audio route does not serve, so it is refused. The detected type is the MIME type the `Asset` row records.
 4. **Size limit check**: the asset type's own limit, configurable per asset type via environment variables
 5. The file is moved to the folder its type and scope call for (`relocateUpload` in `utils/fileUtils.ts`; a move that fails leaves it where it is)
-6. **Sharp** makes a thumbnail beside it in the picture's own format (for maps and tokens), through `openPicture` (see [Decoding pictures](#decoding-pictures))
+6. **Sharp** makes a thumbnail beside it in the picture's own format (for maps and tokens), through `openPicture` (see [Decoding pictures](#decoding-pictures)). `GET /api/assets/maps|tokens/:id/thumbnail` serves it to the Asset Library's cards, the pickers and the Map Manager, by the full picture's read rule, and sends the full picture for an asset that has none
 7. The `Asset` row is created in the database; if that fails, the file and its thumbnail are removed
 
 Editing a text or Markdown document never writes over the file. The new text
 goes to a temporary file in the same folder, which is flushed to disk and then
 renamed over the original (`writeFileAtomically` in
 `backend/src/utils/fileUtils.ts`), so a crash leaves the old text or the new.
-A save that finds the row deleted once it has written removes its file.
+A save that finds the row deleted once it has written removes its file. A
+document's saves take turns in the backend process (a turn queue keyed by the
+asset), so its file and its recorded size always come from the same save.
 
 ### Leftover files
 

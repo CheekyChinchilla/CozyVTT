@@ -14,7 +14,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { Asset, AssetType, AssetScope } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { assetScopeLabel } from '@/utils/assetUrl';
@@ -32,16 +31,13 @@ interface AssetCardProps {
  * Displays a single asset with thumbnail and actions
  */
 function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
-  const { user } = useAuth();
   const [showActions, setShowActions] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Check if current user can delete this asset
-  // TODO(assets): the server also lets the DM of a campaign asset's campaign
-  // delete it; offer Delete to that DM, as AssetDetailPanel should.
-  const canDelete =
-    user?.id === asset.uploadedById || user?.platformRole === 'ADMIN';
+  // What the asset list says the server will allow: the uploader, the DM of
+  // a campaign asset's campaign, or an admin, by the delete route's own rule.
+  const canDelete = asset.canChange === true;
 
   // Format file size
   const formatFileSize = (bytes: number): string => {
@@ -56,16 +52,20 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
    * document fell through to an <img> with no source and rendered as a broken
    * picture.
    */
+  const [pictureFailed, setPictureFailed] = useState(false);
+  // A picture that fails to load is shown as its type's icon, as audio and
+  // documents are. Kept in state: the fallback used to change React's own
+  // nodes, which React does not expect.
   const showsPicture =
-    asset.type === AssetType.MAP || asset.type === AssetType.TOKEN || asset.type === AssetType.AVATAR;
+    !pictureFailed && (asset.type === AssetType.MAP || asset.type === AssetType.TOKEN || asset.type === AssetType.AVATAR);
 
   // Get asset thumbnail URL
   const getThumbnailUrl = (): string => {
     if (asset.type === AssetType.MAP) {
-      return api.getAssetUrl(asset.id, 'maps');
+      return api.getAssetThumbnailUrl(asset.id, 'maps');
     }
     if (asset.type === AssetType.TOKEN) {
-      return api.getAssetUrl(asset.id, 'tokens');
+      return api.getAssetThumbnailUrl(asset.id, 'tokens');
     }
     // An avatar is served by its owner's id; a deleted account's has none.
     if (asset.type === AssetType.AVATAR) {
@@ -137,7 +137,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-all"
+        className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-shadow"
       >
         <div className="flex items-center gap-4">
           {/* Thumbnail */}
@@ -150,11 +150,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 alt={asset.name}
                 loading="lazy"
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null; // prevent recursive error
-                  target.style.display = 'none';
-                }}
+                onError={() => setPictureFailed(true)}
               />
             )}
           </div>
@@ -235,18 +231,15 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   // Grid view
   return (
     <>
-    {/* TODO(ui): `transition-all` here and on the list card above also
-        transitions opacity, so in Firefox each card fades in twice: when
-        framer-motion's fade ends it writes the final opacity on the element,
-        and the 150ms CSS transition replays it from 0. The cards should
-        transition only what hover changes (`transition-shadow`). */}
+    {/* Only the shadow is transitioned, as hover changes only that: a CSS
+        transition on opacity replayed framer-motion's fade in Firefox. */}
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -4 }}
-      className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all relative group"
+      className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow relative group"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
@@ -262,14 +255,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             alt={asset.name}
             loading="lazy"
             className="w-full h-full object-cover transition-transform group-hover:scale-110"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const iconDiv = document.createElement('div');
-              iconDiv.className = 'flex items-center justify-center w-full h-full';
-              iconDiv.innerHTML = '<div></div>';
-              target.parentElement?.appendChild(iconDiv);
-            }}
+            onError={() => setPictureFailed(true)}
           />
         )}
 

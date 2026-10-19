@@ -4,7 +4,8 @@
  * The update compared the sent `gameSystem` with the character's before
  * checking who was asking, so a stranger holding the id got 400 for a wrong
  * guess and 403 for a right one, and could learn which system it uses. The
- * permission check now comes first; the owner still gets the 400.
+ * permission check now comes first, and answers a stranger as for a
+ * character that is not there; the owner still gets the 400.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -45,11 +46,11 @@ afterAll(async () => {
 });
 
 it.each(['DND_5E', 'PATHFINDER_2E'])(
-  'answers a stranger 403 whichever system they name (%s)',
+  'answers a stranger 404 whichever system they name (%s)',
   async (gameSystem) => {
     const res = await stranger.put(`/api/characters/${characterId}`).send({ gameSystem });
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
   },
 );
 

@@ -42,10 +42,12 @@ const linkCampaignDocument = api.linkCampaignDocument as ReturnType<typeof vi.fn
 const unlinkCampaignDocument = api.unlinkCampaignDocument as ReturnType<typeof vi.fn>;
 const deleteAsset = api.deleteAsset as ReturnType<typeof vi.fn>;
 
-const shared = (id: string, name: string, originalName: string): CampaignDocument => ({
+/** Stored under its uploaded name's extension, as an ordinary upload is, unless `filename` says otherwise. */
+const shared = (id: string, name: string, originalName: string, filename = `${id}${originalName.slice(originalName.lastIndexOf('.'))}`): CampaignDocument => ({
   id,
   name,
   description: null,
+  filename,
   originalName,
   mimeType: 'application/pdf',
   fileSize: 1024,
@@ -73,7 +75,7 @@ const mine = (id: string, name: string, originalName: string): Asset =>
     uploadedById: 'dm',
     mimeType: 'application/pdf',
     fileSize: 1024,
-    filename: '',
+    filename: `${id}${originalName.slice(originalName.lastIndexOf('.'))}`,
     description: null,
     tags: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -95,6 +97,14 @@ describe('CampaignDocumentsModal', () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
       expect(await screen.findByText('Core Rules')).toBeInTheDocument();
       expect(screen.getByText(/shared by The DM/)).toBeInTheDocument();
+    });
+
+    // The server serves a document by its stored name, which the upload sets
+    // from what the bytes are; the name it was uploaded under can say otherwise.
+    it('labels a document as what it is stored as', async () => {
+      listCampaignDocuments.mockResolvedValue({ documents: [shared('d9', 'Handout', 'handout.txt', 'd9.pdf')] });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      expect(await screen.findByText(/^PDF · shared by The DM/)).toBeInTheDocument();
     });
 
     it('offers no way to share or unshare', async () => {
@@ -143,6 +153,17 @@ describe('CampaignDocumentsModal', () => {
   });
 
   describe('as the DM', () => {
+    // The share list fetched the newest 100 documents and no more.
+    it('offers a document from a later page of the library', async () => {
+      listAssets.mockImplementation(async (params: { page?: number }) => (params.page === 2
+        ? { assets: [mine('d7', 'Old Handout', 'old.md')], pagination: { page: 2, limit: 100, total: 101, totalPages: 2 } }
+        : { assets: [mine('d1', 'Core Rules', 'rules.pdf')], pagination: { page: 1, limit: 100, total: 101, totalPages: 2 } }));
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      await screen.findByText('Core Rules');
+      fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
+      expect(await screen.findByText('Old Handout')).toBeInTheDocument();
+    });
+
     it('offers only documents not already shared', async () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
       await screen.findByText('Core Rules');

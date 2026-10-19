@@ -69,4 +69,13 @@ describe('InvitationModal', () => {
     expect(await screen.findByText('Your characters could not be loaded: Too many requests, please slow down')).toBeTruthy();
     expect(screen.queryByText('No compatible characters available')).toBeNull();
   });
+
+  // It named the campaign's owner, who no longer runs a game handed over.
+  it('names the member who runs the campaign as its DM', async () => {
+    const handedOver = invitationTo(GameSystem.DND_5E);
+    handedOver.campaign = { ...handedOver.campaign!, owner: { displayName: 'Olwen the Owner' }, dm: { displayName: 'Dara the DM' } };
+    render(<InvitationModal invitation={handedOver} onClose={vi.fn()} onAccept={vi.fn()} onDecline={vi.fn()} />);
+    expect(await screen.findByText('Dara the DM')).toBeTruthy();
+    expect(screen.queryByText('Olwen the Owner')).toBeNull();
+  });
 });

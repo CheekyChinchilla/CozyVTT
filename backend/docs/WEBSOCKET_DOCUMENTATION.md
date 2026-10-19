@@ -59,7 +59,8 @@ Three things people expect on the socket are not there:
   `PUT /api/campaigns/{campaignId}/resume` and `PUT .../sessions/{sessionId}/end`). The
   socket only carries the `session.*` announcements the server broadcasts when
   one of them happens.
-- **Saving the vibe periods** is a REST call (`PUT /api/campaigns/{campaignId}/vibe`);
+- **Saving the vibe periods** is a REST call (`PUT /api/campaigns/{campaignId}/vibe`,
+  or `vibeSettings` in `PUT /api/campaigns/{campaignId}`, which saves them the same way);
   switching period is `vibe.update`. The save sends every connected member
   `vibe.settings.updated` with `campaignId`, the stored `vibeSettings`,
   `currentVibe`, `updatedBy` and `timestamp`. `currentVibe` is the period in

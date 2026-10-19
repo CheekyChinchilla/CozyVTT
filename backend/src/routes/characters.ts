@@ -2,7 +2,8 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { ownerStillIn } from '../utils/characterCampaign';
+import { ownerStillIn, mayReadCharacter } from '../utils/characterCampaign';
+import { holdCharacter, addToMemberCharacters, removeFromMemberCharacters, removeFromEveryMemberCharacters } from '../utils/memberCharacters';
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
@@ -32,6 +33,25 @@ import { getCharacterTemplate } from '../utils/character-templates';
 import { FLEXIBLE_TEMPLATES } from '../utils/character-templates/flexible-templates';
 
 const router = Router();
+
+/**
+ * Tell a campaign's open pages that one of its characters came, went or was
+ * deleted; they refetch the roster. Never throws: the change is saved.
+ */
+function announceCharacter(
+  campaignId: string,
+  action: 'character.assigned' | 'character.unassigned' | 'character.deleted',
+  characterId: string,
+  userId: string,
+): void {
+  try {
+    // campaignId as every roster.updated carries it: a page follows the event
+    // only for its own campaign.
+    broadcastToCampaign(campaignId, 'roster.updated', { action, characterId, userId, campaignId });
+  } catch (error) {
+    logger.error('Failed to broadcast roster update', { err: error });
+  }
+}
 
 /** What a refused Flexible sheet answers, beside the list of its problems. */
 const FLEXIBLE_SHEET_REFUSED = 'Character data does not match the Flexible sheet layout';
@@ -119,7 +139,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // a player may move a token. Writing only the column left a character that
     // was in the campaign but invisible in it, and whose own owner could not
     // move its token. POST /:id/assign has always written both; this mirrors it.
-    let membershipToJoin: { characterIds: string[] } | null = null;
+    let membershipToJoin: { userId: string } | null = null;
 
     if (campaignId) {
       const campaign = await prisma.campaign.findUnique({
@@ -136,13 +156,14 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
 
       membershipToJoin = await prisma.campaignMembership.findUnique({
         where: { userId_campaignId: { userId, campaignId } },
-        select: { characterIds: true },
+        select: { userId: true },
       });
 
+      // A campaign the caller is not in answers as one that is not there.
       if (!membershipToJoin) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You must be a member of the campaign to create a character in it',
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Campaign not found',
         });
       }
 
@@ -253,15 +274,13 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         },
       });
 
-      if (campaignId && membershipToJoin && !membershipToJoin.characterIds.includes(created.id)) {
-        await tx.campaignMembership.update({
-          where: { userId_campaignId: { userId, campaignId } },
-          data: { characterIds: [...membershipToJoin.characterIds, created.id] },
-        });
-      }
+      if (campaignId && membershipToJoin) await addToMemberCharacters(tx, userId, campaignId, created.id);
 
       return created;
     });
+
+    // The campaign's open pages bring the new character into their roster.
+    if (campaignId) announceCharacter(campaignId, 'character.assigned', character.id, userId);
 
     return res.status(201).json({
       message: 'Character created successfully',
@@ -433,10 +452,10 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       return res.status(200).json({ character: characterForReader(character, keeper) });
     }
 
-    // Not authorized
-    return res.status(403).json({
-      error: 'Forbidden',
-      message: 'You do not have permission to view this character',
+    // Anyone else is answered as if it were not there.
+    return res.status(404).json({
+      error: 'Not Found',
+      message: 'Character not found',
     });
   } catch (error) {
     logger.error('Error fetching character', { err: error });
@@ -470,6 +489,13 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
     });
 
     if (!character) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(character, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',
@@ -550,6 +576,13 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     });
 
     if (!character) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(character, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',
@@ -908,6 +941,13 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       });
     }
 
+    if (!(await mayReadCharacter(character, userId))) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
     // Only owner can delete
     if (character.userId !== userId) {
       return res.status(403).json({
@@ -916,9 +956,15 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       });
     }
 
-    await prisma.character.delete({
-      where: { id },
+    // Off every member's list as it goes, so no list names a character that
+    // is not there, and the campaign's open pages take it off their roster.
+    const deletedFrom = await prisma.$transaction(async (tx) => {
+      const held = await holdCharacter(tx, id);
+      await removeFromEveryMemberCharacters(tx, id);
+      await tx.character.delete({ where: { id } });
+      return held?.campaignId ?? null;
     });
+    if (deletedFrom) announceCharacter(deletedFrom, 'character.deleted', id, userId);
 
     return res.status(200).json({
       message: 'Character deleted successfully',
@@ -964,6 +1010,13 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
       });
     }
 
+    if (!(await mayReadCharacter(character, userId))) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
     const unassigning = !campaignId || campaignId === '';
 
     // The owner assigns and unassigns their character. The DM of the
@@ -991,63 +1044,29 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
 
     // Handle unassignment (campaignId is null, empty string, or undefined)
     if (unassigning) {
-      // Remove from previous campaign's membership characterIds if assigned:
-      // the owner's membership, whoever asked.
-      if (character.campaignId) {
-        const previousMembership = await prisma.campaignMembership.findUnique({
-          where: {
-            userId_campaignId: {
-              userId: ownerId,
-              campaignId: character.campaignId,
+      // Out of the campaign the character is in as it stands under its lock,
+      // and off the owner's list there, whoever asked.
+      const { updatedCharacter, leftCampaignId } = await prisma.$transaction(async (tx) => {
+        const held = await holdCharacter(tx, id);
+        const leftCampaignId = held?.campaignId ?? null;
+        if (leftCampaignId) await removeFromMemberCharacters(tx, ownerId, leftCampaignId, id);
+        const updatedCharacter = await tx.character.update({
+          where: { id },
+          data: { campaignId: null },
+          include: {
+            campaign: {
+              select: {
+                id: true,
+                name: true,
+                gameSystem: true,
+              },
             },
           },
         });
-
-        if (previousMembership) {
-          await prisma.campaignMembership.update({
-            where: {
-              userId_campaignId: {
-                userId: ownerId,
-                campaignId: character.campaignId,
-              },
-            },
-            data: {
-              characterIds: previousMembership.characterIds.filter((cId) => cId !== id),
-            },
-          });
-        }
-      }
-
-      const updatedCharacter = await prisma.character.update({
-        where: { id },
-        data: { campaignId: null },
-        include: {
-          campaign: {
-            select: {
-              id: true,
-              name: true,
-              gameSystem: true,
-            },
-          },
-        },
+        return { updatedCharacter, leftCampaignId };
       });
 
-      // Broadcast roster.updated WebSocket event
-      if (character.campaignId) {
-        try {
-          broadcastToCampaign(character.campaignId, 'roster.updated', {
-            action: 'character.unassigned',
-            characterId: id,
-            userId: ownerId,
-            // As every roster.updated does: the campaign page follows the
-            // event only for its own campaign.
-            campaignId: character.campaignId,
-          });
-        } catch (error) {
-          logger.error('Failed to broadcast roster update', { err: error });
-          // Don't fail the request if broadcast fails
-        }
-      }
+      if (leftCampaignId) announceCharacter(leftCampaignId, 'character.unassigned', id, ownerId);
 
       return res.status(200).json({
         message: 'Character unassigned from campaign successfully',
@@ -1082,10 +1101,11 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
       },
     });
 
+    // A campaign the caller is not in answers as one that is not there.
     if (!membership) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You must be a member of the campaign to assign a character to it',
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Campaign not found',
       });
     }
 
@@ -1104,53 +1124,19 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
       });
     }
 
-    // Remove from previous campaign's membership if changing campaigns
-    if (character.campaignId && character.campaignId !== campaignId) {
-      const previousMembership = await prisma.campaignMembership.findUnique({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId: character.campaignId,
-          },
-        },
-      });
-
-      if (previousMembership) {
-        await prisma.campaignMembership.update({
-          where: {
-            userId_campaignId: {
-              userId,
-              campaignId: character.campaignId,
-            },
-          },
-          data: {
-            characterIds: previousMembership.characterIds.filter((cId) => cId !== id),
-          },
-        });
-      }
-    }
-
-    // Add to new campaign's membership characterIds
-    if (!membership.characterIds.includes(id)) {
-      await prisma.campaignMembership.update({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId,
-          },
-        },
-        data: {
-          characterIds: [...membership.characterIds, id],
-        },
-      });
-    }
-
-    // Assign character to campaign. Coming from another campaign, or from
-    // none, it leaves the Keeper's Notes behind: they are the last Keeper's,
-    // and the owner may be this campaign's DM.
-    const updatedCharacter = await prisma.$transaction(async (tx) => {
-      if (character.campaignId !== campaignId) await clearKeeperNotes(tx, id);
-      return tx.character.update({
+    // Moved under the character's lock, from the campaign it is in as it
+    // stands then: off the owner's list there, onto the new one's. Read
+    // before the lock, a move made meanwhile left it listed in both. Coming
+    // from another campaign, or from none, it leaves the Keeper's Notes
+    // behind: they are the last Keeper's, and the owner may be this
+    // campaign's DM.
+    const { updatedCharacter, fromCampaignId } = await prisma.$transaction(async (tx) => {
+      const held = await holdCharacter(tx, id);
+      const fromCampaignId = held?.campaignId ?? null;
+      if (fromCampaignId && fromCampaignId !== campaignId) await removeFromMemberCharacters(tx, userId, fromCampaignId, id);
+      await addToMemberCharacters(tx, userId, campaignId, id);
+      if (fromCampaignId !== campaignId) await clearKeeperNotes(tx, id);
+      const updatedCharacter = await tx.character.update({
         where: { id },
         data: { campaignId },
         include: {
@@ -1163,20 +1149,12 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
           },
         },
       });
+      return { updatedCharacter, fromCampaignId };
     });
 
-    // Broadcast roster.updated WebSocket event
-    try {
-      broadcastToCampaign(campaignId, 'roster.updated', {
-        action: 'character.assigned',
-        characterId: id,
-        userId,
-        campaignId,
-      });
-    } catch (error) {
-      logger.error('Failed to broadcast roster update', { err: error });
-      // Don't fail the request if broadcast fails
-    }
+    // Both campaigns' open pages follow: the one it left, and the one it joined.
+    if (fromCampaignId && fromCampaignId !== campaignId) announceCharacter(fromCampaignId, 'character.unassigned', id, userId);
+    announceCharacter(campaignId, 'character.assigned', id, userId);
 
     return res.status(200).json({
       message: 'Character assigned to campaign successfully',
@@ -1208,6 +1186,13 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
     });
 
     if (!originalCharacter) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(originalCharacter, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',

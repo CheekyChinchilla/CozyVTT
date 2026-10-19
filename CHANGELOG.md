@@ -25,6 +25,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **See and withdraw the invitations you have sent.** **Campaign Settings → Members** now lists the players you have invited who have not answered, under **Invited**, with an **×** to withdraw each one. An invitation sent from the app now runs out after 14 days; until now it never did.
+
 - **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
 
 - **Jump to newest in the chat and the Dice panel.** While you are scrolled up, neither list pulls you down when something new arrives, and nothing said that anything had. A **Jump to newest** button now appears at the bottom of the list and takes you down to it.
@@ -52,10 +54,106 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* `character.hp.update` refuses a `delta` that is not a whole number from -100000 to 100000 (`delta must be a whole number of hit points from -100000 to 100000`), and for D&D 5e and Pathfinder 2e takes a negative one from `hp.temporary` first. It and `character.hitdice.spend` act on a character only when it names the socket's campaign and its owner is still a member, as the REST routes decide; they read the members' lists of character ids before.
   - *Campaigns.* `PUT /api/campaigns/:campaignId` takes a `status` of `PREPARATION`, `COMPLETED` or `ARCHIVED` only, answering 400 `Invalid status. Must be one of: PREPARATION, COMPLETED, ARCHIVED; starting, pausing and ending a session set the others`, and none while a session is running or paused (400 `End the session before changing the campaign status`, storing nothing from the request).
   - *Character data.* `GET /api/characters/templates/null/basic` answers with new section and field ids each time. They were the same for every request until the server restarted, so every Flexible character made from the Basic sheet shared them.
+  - *Invitations.* `GET /api/invitations` gives each invitation's campaign a `dm` (`{ displayName }`, or null): the member who holds the DM seat. `owner` is still sent.
+  - *Invitations.* An invitation past its `expiresAt` no longer counts as pending: `GET /api/invitations` leaves it out, `GET /api/campaigns/:campaignId/invitable-users` offers its user again, and `POST /api/campaigns/:campaignId/invite` invites them again (it answered 400 `User already has a pending invitation to this campaign`).
+  - *Invitations.* New, DM only: `GET /api/campaigns/:campaignId/invitations` lists the invitations that still stand, and `DELETE /api/campaigns/:campaignId/invitations/:invitationId` withdraws one (404 `Invitation not found` for another campaign's, an answered one or an unknown id). The web app now sends `expiresInDays: 14` with each invitation; the route's own default is still no expiry.
+  - *Campaign archives.* An imported asset's `name` is cut to 200 characters and its `originalName` to 255 (extension kept), as an upload's are; the archive may still give names up to 500.
+  - *Campaign archives.* The import's count limits are raised: a manifest may give up to 1,000 maps and 1,000 assets (it was 50 and 500), and up to 2,000 creatures and 2,000 token templates are imported (it was 200 and 500), each list held to 10 MB; those past 2,000 are left out and listed in `skipped` as one entry. `GET /api/campaigns/:campaignId/export` answers 422 `Export Too Large` for a campaign whose archive would hold more than 1,000 files, more than 2,000 custom creatures or token templates, or a data file over 10 MB, as well as one over the size limit.
+  - *Vibe and audio.* `PUT /api/campaigns/:campaignId` with `vibeSettings` now checks and saves them as `PUT .../vibe` does: at least one period, names of 1 to 50 characters unique ignoring case (it took 0 periods and names up to 100, repeated), each track checked (400 naming the period), the current period kept or cleared, and `vibe.settings.updated` sent. `PUT .../vibe` now takes a period with no `audio` (read as none) and no `enabled`, and its refusals lead each problem with its field (`vibeSettings.periods.0.name: A period needs a name`; it sent messages such as `vibeSettings.periods[0].name must be a non-empty string`).
+  - *Vibe and audio.* A vibe save (`PUT .../vibe`, or `vibeSettings` in `PUT /api/campaigns/:campaignId`) ignores an `atmosphereEffect` it is sent and keeps the stored one, as it already did `atmosphereAudio`.
+  - *Character data.* `DELETE /api/characters/:id` now sends the campaign the character was in `roster.updated` (`action` `character.deleted`), and takes it off every membership's `characterIds`; `POST /api/characters` with a `campaignId` sends `character.assigned`; `POST /api/characters/:id/assign` from another campaign also sends `character.unassigned` to that one. Changes to `characterIds` no longer lose each other when they overlap.
+  - *Maps.* `PUT /api/campaigns/:campaignId/maps/:id/set-current` answers 404 `Map not found` for a map deleted while the request was on its way (it answered 500), and `DELETE .../maps/:id` answers 400 for a map made current meanwhile (it deleted it and cleared the current map).
+  - *Creatures.* Two `POST /api/campaigns/:campaignId/creatures/:creatureId/favorite` close together each answer 200 with the state they left; the second could answer 500.
+  - *Campaign archives.* `GET /api/campaigns/:campaignId/export` and `GET /api/campaigns/:campaignId/maps/:id/export-uvtt` answer 403 to a request the browser marks as loading part of a page (`Sec-Fetch-Dest` present and not `empty` or `document`). The map export now takes the same one-at-a-time slot as a campaign archive, answering 429 while another is running.
+  - *Records by id.* A record the caller may not read now answers 404 with the same message as an id that names nothing, where it answered 403: `GET`, `PUT` and `DELETE /api/campaigns/:campaignId/token-templates/:id` and its `copy-to` (`Token template not found`); `PUT` and `DELETE /api/campaigns/:campaignId/creatures/:creatureId` for another campaign's creature; `GET`, `PUT`, `DELETE /api/characters/:id`, `/validate`, `/copy` and `/assign` (`Character not found`); `GET /api/assets/:id`, `DELETE /api/assets/:id`, `/download`, `GET /api/assets/maps/:id` and `/tokens/:id`, and `PATCH /api/assets/:id/scope`; `POST /api/invitations/:id/accept` and `/decline` (`Invitation not found`). A campaign named in a body that the caller is not a member of answers 404 `Campaign not found` on `POST /api/characters`, `POST /api/characters/:id/assign` and `PATCH /api/assets/:id/scope`, as does `PUT /api/campaigns/:campaignId/dm` for a caller who is not a member, its owner or an admin. 403 stays for a record the caller may read but not change, such as an SRD creature.
+  - *Lists.* `GET /api/assets` and `GET /api/campaigns/:campaignId/creatures` answer 400 `Validation Error` for any parameter sent more than once (`Send search once, as text`), where a repeated text parameter answered 500.
+  - *Lists.* `search` on `GET /api/assets`, `GET /api/campaigns/:campaignId/creatures`, `GET /api/campaigns/:campaignId/token-templates` and `GET /api/character-templates` matches `%` and `_` literally; they were wildcards.
+  - *Documents.* A 304 from `GET /api/assets/documents/:id` carries the document's `Content-Security-Policy: default-src 'none'; sandbox` and `X-Content-Type-Options: nosniff`, as the 200 does.
+  - *Assets.* `GET /api/assets/:id` decides with the same read rule as the file routes, so a member of a campaign that uses an asset may read its details; a campaign asset whose campaign is gone is no longer shown to anyone signed in. `campaign` and `campaignId` are `null` for a reader who is not a member of the asset's campaign.
+  - *Assets.* The reply to `PATCH /api/assets/:id/scope` gives the asset's `canChange`, as the asset list does.
+  - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` answers 403 `Only the asset's uploader can move it to their personal library` to anyone but the uploader or an admin.
+  - *Documents.* `GET /api/campaigns/:campaignId/documents` gives each document's stored `filename`, whose extension decides what it is served as.
+  - *Token templates.* `imageUrl` on create, update, `from-token` and `copy-to` is normalised as on creatures: a bare asset id is stored as `/api/assets/tokens/<id>`, and an address that is not an asset's (one on another site, say) answers 403 `You do not have access to that image`, where it was stored as sent.
+  - *Assets.* New `GET /api/assets/maps/:id/thumbnail` and `GET /api/assets/tokens/:id/thumbnail` serve a picture's 512-pixel thumbnail by the full picture's read rule, or the full picture where there is none.
+  - *Assets.* `GET /api/assets` takes `sort` (`date`, `name` or `size`), and `search` also matches an asset that has it as a whole tag, whatever its case.
+  - *Maps.* Every map route answers another campaign's map, and a player's request for a map the DM is preparing, with 404 `Map not found`, as for an unknown id; it said `Map not found in this campaign`.
+  - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` on an asset whose uploader's account was deleted answers 400, admins included.
+
+- **The Asset Library, the pickers and the Map Manager load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
+
+- **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader: Chrome and Edge showed a page saying the content was blocked, and Safari a blank space. The reader now says so in place of the frame, with **Open this PDF in a new tab**. Firefox on a computer still shows the PDF inside the reader. Showing PDFs inside CozyVTT in every browser is planned.
+
+- **Only an asset's uploader can move it to their Personal library.** A campaign's DM could move a player's upload in the campaign's library to **Personal**, which put it in the player's own library, out of the campaign and out of the DM's reach. The DM can still delete such an asset and make the other moves they could. A server admin can still move any asset.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A document saved twice at the same moment records the size of the text it keeps.** Two saves close together, from two tabs say, could leave the document holding one text and its listed size belonging to the other.
+
+- **Every sound file and document you may use is offered.** The Atmosphere panel and the time of day editor chose from the newest 50 sound files of all your campaigns, so a track of this campaign's past those was not offered, and a campaign's **Share existing** list showed only your newest 100 documents. They now offer all of them.
+
+- **The picture pickers can find every picture you may use.** The pickers in **Create Map**, **Edit Map**, the creature editor, the Token Manager and **Edit Token** showed only the newest 50 or 100 pictures, and their search looked only among those, so an older map or token picture could not be chosen. Each now searches your whole library, by part of a name or a whole tag, and **Load more** shows older pictures. The Token Manager and **Edit Token** gain a search box.
+
+- **The Asset Library's search and sort cover the whole library.** They worked only on the page of 24 assets on screen, so an asset on another page could not be found, and **Sort by Name** sorted those 24. The search now finds any asset by part of its name or by a whole tag, and the sort orders the whole library. The tag chips are still the tags on the page on screen, and now say so.
+
+- **An MP1 or MP2 sound file is refused when it is uploaded or imported.** Such a file, sometimes named .mp3, was taken and then never played, since browsers do not play it. An upload now refuses it with "Invalid file type", as other files are, and a campaign import leaves it out and says why; convert it to MP3, Ogg or WAV.
+
+- **A PDF uploaded under another name opens as a PDF.** A real PDF uploaded as, say, "handout.txt" is stored and served as a PDF, but the Documents page and a campaign's documents labelled it Text, showed its contents as unreadable text and offered **Edit**. They now go by what the file is.
+
+- **A document you stop editing after a refused save shows its text again.** After a save was refused and you pressed **Cancel**, the reader showed the reason the save was refused where the document should be, until it was closed and opened again.
+
+- **The Upload Asset window's progress bar shows how much of the file has been sent.** It was a timer that counted to 90% and waited there however slow the connection, and after a refused upload it went on running, so the next upload's bar jumped about.
+
+- **A picture that fails to load no longer breaks the asset pickers.** In a picker such as the one in **Edit Map**, choosing another picture after the chosen one had failed to load could blank the window. The Asset Library's cards now show the asset's type icon where a picture fails, where they showed nothing, and its detail panel says "Preview not available" as before.
+
+- **The Asset Library's detail panel slides away when you close it,** as it slides in when it opens. It vanished at once. Its close button is also named for screen readers now.
+
+- **In Firefox, the Asset Library's cards fade in once as it opens.** Each card faded in, vanished and faded in again.
+
+- **An asset you move in the Asset Library takes its new place at once.** It stayed listed where it had been, under its old library, until the page was loaded again.
+
+- **The Asset Library offers Campaign as a place to move an asset only when one of your campaigns can take it.** A player was offered **Campaign** for their own map, with no campaign to choose, since only a campaign's DM can put a map in its library.
+
+- **The Asset Library offers Delete and Move to whoever may use them.** It offered both only to an asset's uploader or a server admin. A campaign's DM, whom the server lets delete and move the assets in their campaign's library, was not offered them, and an uploader who had left the campaign, or no longer had Global Assets, was offered them and then refused. The library now offers them by the server's own rule.
+
+- **A move the Asset Library refuses says why.** The detail panel showed only "Forbidden". It now shows the server's reason, such as "Only the asset owner or campaign DM can move this asset".
+
+- **A file whose name has accented or other non-ASCII letters keeps its name.** Uploading "café.png" stored and showed it as "cafÃ©.png" in the Asset Library, and a map imported from a Universal VTT file named "Höhle.uvtt" was called "HÃ¶hle". Names are now read as the browser sends them. Files uploaded before keep the names they were stored with, and still download under the right one; upload a file again to show its name correctly.
+
+- **The Upload Asset window takes Ogg and WAV sound files in Firefox, and Markdown documents in every browser.** It checked the type the browser reported for a file against a list of its own, and Firefox reports those sound files under other names, as browsers often report Markdown with none. It refused them with "Invalid file type" though the server takes them. The window now goes by the file's extension, using the server's own list, so it also refuses an M4A file at once, where the server refused it after the upload. The file picker offers only those files.
+
+- **Searching a library for `%` or `_` finds only names that hold one.** In the Asset Library, the creature library, the token templates and the character templates, a `%` in the search matched every name and an `_` any one letter. They are now matched as typed, as in the Invite Player search.
+
+- **A mistyped `ASSET_UPLOAD_RATE_LIMIT` no longer turns the upload limit off.** A value that was not a number, such as `30/min`, let every upload through. Such a value is now ignored, with a warning in the backend log, and the default of 30 uploads a minute per user applies, as for the other limits.
+
+- **A campaign archive is uploaded once when you import it.** The import window sent the whole archive (up to 500 MB) to the server to show what it holds, then sent it again to import it. It now reads that from the archive in your browser, and asks the server only about an archive it cannot read itself, so the server can say what is wrong with it.
+
+- **A map you switch to cannot be deleted at the same moment.** Deleting a map while switching to it, from two tabs say, could delete it anyway and leave the campaign with no map on screen; switching to a map being deleted failed with a server error. The delete is now refused for the map that became current, and the switch says the map is gone.
+
+- **The Campaign Roster keeps up with characters deleted, created into the campaign, or moved to another one.** A deleted character stayed listed until the page was reloaded, one created straight into the campaign did not appear, and one moved to another campaign stayed in the old one's roster. Characters brought or taken out at the same moment could also go missing from the roster, and a character moved twice at once could show in two campaigns.
+
+- **Saving the vibe periods keeps the weather, and the ambient track, as they are.** Weather you had set since opening the page went back to what it was when you saved the periods, and a track or periods changed at the same moment as another save could be put back.
+
+- **A campaign's name and description can be as long as the server allows,** 200 and 5,000 characters, in **New Campaign** and **Campaign Settings**. The settings stopped at 100 and 1,000, and **New Campaign** refused a name over 100 characters, or of one letter, and had no limit on the description.
+
+- **A campaign that exports can be imported again, however large.** An import refused any archive with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files, though nothing stopped a campaign from holding more, so a large campaign's export could never be imported. Those numbers are raised: an archive may hold up to 1,000 files (one for each map and each picture or sound file), 2,000 custom creatures and 2,000 token templates, and 10 MB of creatures, of token templates or of one map's data, and **Export Campaign** now says when a campaign is over those, before saving anything. Creatures or templates past 2,000 in an archive are left out and listed.
+
+- **A campaign import keeps picture and sound names within an upload's limits.** A name in the archive could be up to 500 characters and was stored as it was, longer than an uploaded file's name may be and too long for most computers to save the file under. It is now cut to 200 characters for its name, and to 255 for its file name, keeping the extension.
+
+- **An invitation that has run out no longer stands in the way.** It stayed pending for good: the player was still shown it (and refused when accepting), and you could neither find them in **Invite Player** nor invite them again.
+
+- **A new invitation appears on the dashboard without pressing Refresh:** when you come back to the tab, or within a minute while it is open.
+
+- **Pop-up messages leave one at a time, each after its own few seconds.** A message arriving while others were up made them all wait for it, so messages that came one after another left together; in the Asset Library a message stayed up as long as the page kept changing.
+
+- **An invitation names the campaign's DM.** The dashboard and the invitation named the campaign's owner as its DM, which is wrong once the owner has handed the game over.
+
+- **Campaign Settings shows Danger Zone only to those who may delete the campaign:** its owner and administrators. A DM the game was handed to was offered **Delete Campaign**, which the server refused.
+
+- **Emptying a campaign's description in Campaign Settings clears it.** The old description stayed, while the panel said the settings were saved.
+
+- **Open Campaign after an import opens the campaign.** It went to an address that is no page, so the app sent you to the dashboard instead.
 
 - **Changing a creature's ability scores or Challenge Rating moves its saves and skills, and saves them.** The Creature Library's form showed the new bonuses and saved the old ones, so a Goblin given Dexterity 16 kept rolling Stealth +6; in a token's stat block, typing a score froze the creature's bonuses at the first digit typed. Both now follow the creature's proficiencies, an SRD creature's included.
 
@@ -212,6 +310,14 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **A map you may not see is answered as if it were not there.** Asking for a map of another campaign, or as a player for a map the DM is still preparing, answered differently from asking for one that does not exist, so a member could tell such a map existed. Both now get the same answer.
+
+- **A picture whose campaign was deleted no longer has its details shown to everyone.** Asking for the details of a campaign's picture or sound file after its campaign was gone showed them to anyone signed in. They are now the uploader's and the server admin's, as the file itself is.
+
+- **A text document opened from the browser's cache keeps its sandbox.** A document opened directly is served with a policy that stops it running anything as a page. When the browser asked whether its copy was still current, the answer carried the app's own policy instead, which then replaced the document's. Both answers now carry the document's.
+
+- **Asking for something you may not see is answered as if it were not there.** Asking for another campaign's token template or creature, someone else's character, a picture or file you may not open, or someone else's invitation answered differently from asking for one that does not exist, so a signed-in user holding an id could tell that it was real. Both now get the same answer. Who may see or change what is unchanged.
 
 - **With fog of war on, a player can open or close only a door beside a square revealed to them.** A door wholly under fog could still be toggled, and the answer, or being told it was locked, told the player a door was there where their screen showed nothing. The DM can still open any door.
 

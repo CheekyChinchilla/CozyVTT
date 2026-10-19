@@ -18,8 +18,10 @@ import {
 import { TOKEN_TYPES } from '../validators/tokens';
 import { issueMessages } from '../validators/issueMessages';
 import { jsonOrNull } from '../utils/prisma-json';
+import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
 import logger from '../utils/logger';
+import { escapeLikePattern } from '../utils/likePattern';
 
 const router = Router({ mergeParams: true });
 
@@ -41,8 +43,8 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
     const where: Prisma.TokenTemplateWhereInput = { campaignId };
 
     if (search && typeof search === 'string') {
-      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
-      where.name = { contains: search, mode: 'insensitive' };
+      // Matched as typed: a % or _ in it is not a wildcard.
+      where.name = { contains: escapeLikePattern(search), mode: 'insensitive' };
     }
     if (type && typeof type === 'string' && (TOKEN_TYPES as readonly string[]).includes(type)) {
       where.type = type;
@@ -73,13 +75,11 @@ router.get('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
   try {
     const { campaignId, id } = req.params;
 
-    const template = await prisma.tokenTemplate.findUnique({ where: { id } });
-
+    // Another campaign's template answers as one that is not there, so the
+    // answer cannot confirm an id exists.
+    const template = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!template) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (template.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     return res.json(template);
@@ -108,15 +108,18 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     }
 
     const data = parsed.data;
+    // An asset's address, as the creature and character routes make it, so an
+    // outside address is refused here and a bare id stored in full.
+    const imageUrl = data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
     // A picture the DM may read: a template's picture counts as the campaign using it.
-    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, undefined, campaignId))) {
+    if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
     const template = await prisma.tokenTemplate.create({
       data: {
         id: randomUUID(),
         name: data.name,
-        imageUrl: data.imageUrl ?? null,
+        imageUrl,
         type: data.type,
         disposition: data.disposition ?? null,
         displayMode: data.displayMode,
@@ -147,12 +150,9 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
   try {
     const { campaignId, id } = req.params;
 
-    const existing = await prisma.tokenTemplate.findUnique({ where: { id } });
+    const existing = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!existing) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (existing.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     const parsed = UpdateTokenTemplateSchema.safeParse(req.body);
@@ -164,15 +164,17 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     }
 
     const data = parsed.data;
+    // As on create; empty or null clears the picture.
+    const nextImageUrl = data.imageUrl === undefined ? undefined : data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
     // A new picture the DM may read; the one already stored may stay.
-    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
+    if (nextImageUrl !== undefined && !(await canReferenceAsset(nextImageUrl, req.session.userId!, existing.imageUrl, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
     const updated = await prisma.tokenTemplate.update({
       where: { id },
       data: {
         ...(data.name !== undefined && { name: data.name }),
-        ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
+        ...(nextImageUrl !== undefined && { imageUrl: nextImageUrl }),
         ...(data.type !== undefined && { type: data.type }),
         ...(data.disposition !== undefined && { disposition: data.disposition }),
         ...(data.displayMode !== undefined && { displayMode: data.displayMode }),
@@ -201,12 +203,9 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
   try {
     const { campaignId, id } = req.params;
 
-    const existing = await prisma.tokenTemplate.findUnique({ where: { id } });
+    const existing = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!existing) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (existing.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     await prisma.tokenTemplate.delete({ where: { id } });
@@ -236,15 +235,18 @@ router.post('/from-token', campaignDM, async (req: AuthenticatedRequest, res: Re
     }
 
     const data = parsed.data;
+    // An asset's address, as the creature and character routes make it, so an
+    // outside address is refused here and a bare id stored in full.
+    const imageUrl = data.imageUrl ? normalizeAssetUrl(data.imageUrl, 'tokens') : null;
     // A picture the DM may read: a template's picture counts as the campaign using it.
-    if (!(await canReferenceAsset(data.imageUrl, req.session.userId!, undefined, campaignId))) {
+    if (!(await canReferenceAsset(imageUrl, req.session.userId!, undefined, campaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
     const template = await prisma.tokenTemplate.create({
       data: {
         id: randomUUID(),
         name: data.name,
-        imageUrl: data.imageUrl ?? null,
+        imageUrl,
         type: data.type,
         disposition: data.disposition ?? null,
         displayMode: data.displayMode,
@@ -303,17 +305,16 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
     }
 
     // Fetch source template
-    const source = await prisma.tokenTemplate.findUnique({ where: { id } });
+    const source = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!source) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (source.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     // The copy stores the picture in the target campaign, which may not use
     // it yet: checked there, as any other new reference is.
-    if (!(await canReferenceAsset(source.imageUrl, userId, undefined, targetCampaignId))) {
+    // A copy is a chance to store an older template's bare id in full.
+    const imageUrl = normalizeAssetUrl(source.imageUrl, 'tokens');
+    if (!(await canReferenceAsset(imageUrl, userId, undefined, targetCampaignId))) {
       return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to that image' });
     }
 
@@ -322,7 +323,7 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
       data: {
         id: randomUUID(),
         name: source.name,
-        imageUrl: source.imageUrl,
+        imageUrl,
         type: source.type,
         disposition: source.disposition,
         displayMode: source.displayMode,

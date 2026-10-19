@@ -99,6 +99,7 @@ const TESTED: Record<string, string> = {
   'POST /api/campaigns/:campaignId/creatures/:creatureId/favorite': 'routes/__tests__/creatures.e2e.test.ts',
   'GET /api/campaigns/:campaignId/token-templates': 'routes/__tests__/tokenTemplates.e2e.test.ts',
   'GET /api/campaigns/:campaignId/token-templates/:id': 'routes/__tests__/tokenTemplates.e2e.test.ts',
+  'DELETE /api/campaigns/:campaignId/token-templates/:id': 'routes/__tests__/unreadableRecords.e2e.test.ts',
   'POST /api/campaigns/:campaignId/token-templates': 'routes/__tests__/tokenTemplates.e2e.test.ts',
   'POST /api/campaigns/:campaignId/token-templates/:id/copy-to/:targetCampaignId': 'routes/__tests__/assetReferenceChecks.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/token-templates/:id': 'routes/__tests__/statBlockRefusals.e2e.test.ts',
@@ -150,9 +151,15 @@ const TESTED: Record<string, string> = {
   'GET /api/assets/documents/:id': 'routes/__tests__/atmosphereTrackWrite.e2e.test.ts',
   'GET /api/assets/maps/:id': 'routes/__tests__/assetScopeAndReferences.e2e.test.ts',
   'GET /api/assets/tokens/:id': 'routes/__tests__/assetReferenceChecks.e2e.test.ts',
+  'GET /api/assets/maps/:id/thumbnail': 'routes/__tests__/assetThumbnails.e2e.test.ts',
+  'GET /api/assets/tokens/:id/thumbnail': 'routes/__tests__/assetThumbnails.e2e.test.ts',
   'GET /api/assets/audio/:id': 'routes/__tests__/atmosphereAudioAccess.e2e.test.ts',
   'PATCH /api/assets/:id/scope': 'routes/__tests__/assetScopeAndReferences.e2e.test.ts',
   'POST /api/invitations/:id/accept': 'routes/__tests__/invitationAccept.e2e.test.ts',
+  'POST /api/invitations/:id/decline': 'routes/__tests__/unreadableRecords.e2e.test.ts',
+  'GET /api/invitations': 'routes/__tests__/invitationList.e2e.test.ts',
+  'GET /api/campaigns/:campaignId/invitations': 'routes/__tests__/invitationWithdraw.e2e.test.ts',
+  'DELETE /api/campaigns/:campaignId/invitations/:invitationId': 'routes/__tests__/invitationWithdraw.e2e.test.ts',
   'GET /api/users': 'routes/__tests__/userRoutes.e2e.test.ts',
   'GET /api/users/:id': 'routes/__tests__/userRoutes.e2e.test.ts',
   'GET /api/users/:id/preferences': 'routes/__tests__/userRoutes.e2e.test.ts',
@@ -185,9 +192,6 @@ const TESTED: Record<string, string> = {
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
 const UNTESTED: string[] = [
   'GET /api/auth/registration-status',
-  'DELETE /api/campaigns/:campaignId/token-templates/:id',
-  'GET /api/invitations',
-  'POST /api/invitations/:id/decline',
 ];
 
 const mounted = mountedRoutes(createTestApp()).map(routeKey);

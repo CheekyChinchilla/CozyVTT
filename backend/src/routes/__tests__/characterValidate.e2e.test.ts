@@ -76,7 +76,7 @@ it('answers isValid false and names the field for a sheet it does not', async ()
 
 it('will not validate another user\'s character', async () => {
   const id = await createCharacter();
-  expect((await other.get(`/api/characters/${id}/validate`)).status).toBe(403);
+  expect((await other.get(`/api/characters/${id}/validate`)).status).toBe(404);
 });
 
 it('says so when the character has no game system', async () => {

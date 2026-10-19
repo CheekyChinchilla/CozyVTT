@@ -22,7 +22,7 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-shapes-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-import { importCampaign, jsonNestsDeeperThan } from '../campaignImporter';
+import { importCampaign, jsonNestsDeeperThan, jsonListCut } from '../campaignImporter';
 import { NpcStatBlockSchema } from '../../validators/statBlock';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, type FixtureEntry } from '../../__tests__/helpers/zipFixtures';
@@ -196,5 +196,49 @@ describe('jsonNestsDeeperThan', () => {
     expect(jsonNestsDeeperThan('{"a":[{"b":[1]}]}', 3)).toBe(true);
     expect(jsonNestsDeeperThan(JSON.stringify({ note: '[[[[[[{{{{{{' }), 1)).toBe(false);
     expect(jsonNestsDeeperThan(JSON.stringify({ note: 'a \\" quote [[[[' }), 1)).toBe(false);
+  });
+});
+
+// The counts were lifted to what the 10 MB list allows, and a list of 65,000
+// minimal creatures stopped the server. An archive carries up to 2,000 of
+// each; the rest are left out and listed, as they were at the old caps.
+describe('a list longer than an archive may carry', () => {
+  it('imports the first 2,000 creatures and lists the rest as left out', async () => {
+    const creatures = Array.from({ length: 2050 }, (_, i) => creature({ name: `Bandit ${i}` }));
+    const result = await importCampaign(await archive({ creatures }), userId);
+    expect(result.creatureCount).toBe(2000);
+    expect(result.skipped).toEqual([
+      { kind: 'creature', name: '50 creatures', reason: 'An archive can carry 2,000 creatures. These were the last in its list.' },
+    ]);
+    const stored = await prisma.creatureTemplate.findMany({ where: { campaignId: result.campaignId }, select: { name: true } });
+    expect(stored).toHaveLength(2000);
+    expect(stored.some((c) => c.name === 'Bandit 1999')).toBe(true);
+    expect(stored.some((c) => c.name === 'Bandit 2000')).toBe(false);
+  });
+
+  it('imports the first 2,000 token templates and lists the rest as left out', async () => {
+    const templates = Array.from({ length: 2001 }, (_, i) => template({ name: `Guard ${i}` }));
+    const result = await importCampaign(await archive({ templates }), userId);
+    expect(result.tokenTemplateCount).toBe(2000);
+    expect(result.skipped).toEqual([
+      { kind: 'tokenTemplate', name: '1 token template', reason: 'An archive can carry 2,000 token templates. These were the last in its list.' },
+    ]);
+  });
+});
+
+describe('jsonListCut', () => {
+  it('counts a list\'s items and finds where the last one kept ends', () => {
+    const text = ' [ {"a":[1,2]}, "x,]", 3 , {"b":"}"} ] ';
+    expect(jsonListCut(text, 2)).toEqual({ items: 4, cutAt: text.indexOf(', 3') });
+    expect(JSON.parse(`${text.slice(0, jsonListCut(text, 2)!.cutAt!)}]`)).toEqual([{ a: [1, 2] }, 'x,]']);
+  });
+
+  it('cuts nothing from a list at or under the limit', () => {
+    expect(jsonListCut('[1,2]', 2)).toEqual({ items: 2, cutAt: null });
+    expect(jsonListCut('[]', 2)).toEqual({ items: 0, cutAt: null });
+  });
+
+  it('is null for text that is not a list', () => {
+    expect(jsonListCut('{"a":1}', 2)).toBeNull();
   });
 });

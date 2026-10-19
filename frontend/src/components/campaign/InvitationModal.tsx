@@ -132,11 +132,11 @@ export default function InvitationModal({
                   {getSystemName(invitation.campaign?.gameSystem || null)}
                 </span>
               </div>
-              {invitation.campaign?.owner && (
+              {invitation.campaign?.dm && (
                 <div>
                   <span className="text-warm-gray">DM:</span>{' '}
                   <span className="font-medium text-stone-gray">
-                    {invitation.campaign.owner.displayName}
+                    {invitation.campaign.dm.displayName}
                   </span>
                 </div>
               )}

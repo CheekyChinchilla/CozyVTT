@@ -5,6 +5,8 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
+import { positiveIntegerFromEnv } from '../config/env';
+import { createTurnQueue } from '../utils/turnQueue';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import {
@@ -36,7 +38,7 @@ import { pipeline } from 'stream';
 import { generateThumbnail } from '../utils/thumbnails';
 import logger from '../utils/logger';
 import { errorCode } from '../utils/errors';
-import { readEnumQuery } from '../utils/queryEnum';
+import { readEnumQuery, readStringQueries } from '../utils/queryEnum';
 import { parseByteRange } from '../utils/byteRange';
 import { AssetType as AssetTypes, AssetScope as AssetScopes } from '@prisma/client';
 import {
@@ -46,6 +48,7 @@ import {
   MAX_ASSET_NAME_LENGTH,
   MAX_ORIGINAL_NAME_LENGTH,
 } from '../validators/assets';
+import { escapeLikePattern } from '../utils/likePattern';
 
 const router = Router();
 
@@ -60,9 +63,9 @@ const router = Router();
 // this ceiling instead of keeping a second one that could drift.
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  // TODO(assets): a value that is not a number gives NaN and turns this limit
-  // off; read it with positiveIntegerFromEnv as app.ts reads the general limit.
-  max: parseInt(process.env.ASSET_UPLOAD_RATE_LIMIT || '30'),
+  // A value that is not a whole number above zero is ignored with a warning,
+  // so a mistyped setting cannot turn the limit off.
+  max: positiveIntegerFromEnv('ASSET_UPLOAD_RATE_LIMIT', 30),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
@@ -177,10 +180,11 @@ function handleAssetCaching(
 router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.session.userId!;
-    // TODO(assets): a parameter sent twice (`?search=a&search=b`) arrives as an
-    // array, and the casts below hand it to Prisma, which throws, so the list
-    // answers 500. Refuse a repeated parameter with 400, as invitable-users does.
-    const { campaignId, page, limit, search, uploadedBy, usable } = req.query;
+    const text = readStringQueries(req.query, ['campaignId', 'page', 'limit', 'search', 'uploadedBy', 'usable'] as const);
+    if (!text.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: text.message });
+    }
+    const { campaignId, page, limit, search, uploadedBy, usable } = text.values;
 
     const typeFilter = readEnumQuery(req.query.type, 'type', Object.values(AssetTypes));
     if (!typeFilter.ok) {
@@ -190,12 +194,22 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     if (!scopeFilter.ok) {
       return res.status(400).json({ error: 'Validation Error', message: scopeFilter.message });
     }
+    const sortFilter = readEnumQuery(req.query.sort, 'sort', ['date', 'name', 'size'] as const);
+    if (!sortFilter.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: sortFilter.message });
+    }
     const type = typeFilter.value;
     const scope = scopeFilter.value;
+    // Newest first unless asked, as the library always listed; ties by id so
+    // the pages do not overlap.
+    const orderBy: Prisma.AssetOrderByWithRelationInput[] =
+      sortFilter.value === 'name' ? [{ name: 'asc' }, { id: 'asc' }]
+      : sortFilter.value === 'size' ? [{ fileSize: 'desc' }, { id: 'asc' }]
+      : [{ createdAt: 'desc' }, { id: 'asc' }];
 
     // Pagination parameters, clamped to page 1 or later and 1 to 100 per page
-    const pageNum = Math.max(1, parseInt(page as string) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit as string) || 50));
+    const pageNum = Math.max(1, parseInt(page ?? '') || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit ?? '') || 50));
     const skip = (pageNum - 1) * limitNum;
 
     // Build filter conditions
@@ -216,10 +230,21 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       where.scope = scope;
     }
 
-    // Name search
+    // Search: a name in part, matched as typed (a % or _ in it is not a
+    // wildcard), or a tag whole, whatever its case. Tags are kept as typed and
+    // Prisma matches an array's items by exact case, so the spellings of the
+    // tag in use are looked up first (Dragon, dragon), a handful at most, and
+    // matched as they are; the visibility rules below then apply as to any
+    // filter. In AND, as those rules use OR and id.
     if (search) {
-      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
-      where.name = { contains: search as string, mode: 'insensitive' };
+      const spellings = await prisma.$queryRaw<Array<{ tag: string }>>`
+        SELECT DISTINCT tag FROM "Asset", unnest(tags) AS tag WHERE lower(tag) = lower(${search})`;
+      where.AND = [{
+        OR: [
+          { name: { contains: escapeLikePattern(search), mode: 'insensitive' } },
+          ...(spellings.length > 0 ? [{ tags: { hasSome: spellings.map((row) => row.tag) } }] : []),
+        ],
+      }];
     }
 
     // Campaign filter
@@ -228,7 +253,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     // Admin-only: filter by uploader. `none` lists the assets whose uploader's
     // account was deleted, which with no campaign are readable by admins alone.
     if (uploadedBy && isAdmin) {
-      where.uploadedById = uploadedBy === 'none' ? null : (uploadedBy as string);
+      where.uploadedById = uploadedBy === 'none' ? null : uploadedBy;
     }
 
     if (campaignId) {
@@ -238,7 +263,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
           where: {
             userId_campaignId: {
               userId,
-              campaignId: campaignId as string,
+              campaignId,
             },
           },
         });
@@ -251,9 +276,9 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
         }
       }
 
-      where.campaignId = campaignId as string;
+      where.campaignId = campaignId;
       if (!isAdmin) {
-        const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId as string]);
+        const hidden = await spiritLayerAssetIdsHiddenFrom(userId, [campaignId]);
         if (hidden.length > 0) where.id = { notIn: hidden };
       }
     } else if (!isAdmin || usable === 'true') {
@@ -285,9 +310,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const rows = await prisma.asset.findMany({
       where,
       select: ASSET_PUBLIC_SELECT,
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy,
       skip,
       take: limitNum,
     });
@@ -467,10 +490,6 @@ router.post(
       // What the bytes are (validateFileType), never what the browser said:
       // the export writes this into its archive, and it decides the thumbnail.
       const mimeType = req.detectedMimeType ?? 'application/octet-stream';
-      // TODO(upload): multer reads the file name's UTF-8 bytes as latin1, so a
-      // name with non-ASCII characters is stored garbled and shown so in the
-      // library (downloads read it back through downloadNameOf); decode it as
-      // UTF-8 before storing, and the names already stored with it.
       const originalName = shortenFileName(file.originalname, MAX_ORIGINAL_NAME_LENGTH);
 
       // Generate thumbnail for images (MAP and TOKEN types)
@@ -552,51 +571,25 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       select: ASSET_PUBLIC_SELECT,
     });
 
-    if (!asset) {
+    // The rule the file routes use, so whoever may load the picture may read
+    // its details. One the caller may not read is answered as if it were not
+    // there.
+    if (!asset || !(await canReadAssetFile(asset, req))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Asset not found',
       });
     }
 
-    const isAdmin = req.session.platformRole === 'ADMIN';
-
-    // USER-scoped assets: only owner or admin can access
-    if (asset.scope === 'USER' && asset.uploadedById !== userId && !isAdmin) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this asset',
+    // Which campaign an asset is in is for its members. A reader whose
+    // campaign uses the asset, or who was shared a document, is told neither
+    // its name nor its id.
+    if (asset.campaign && req.session.platformRole !== 'ADMIN') {
+      const member = await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId: asset.campaign.id } },
+        select: { userId: true },
       });
-    }
-
-    // TODO(assets): a CAMPAIGN asset whose campaign is gone passes this check, so
-    // anyone signed in reads its details; decide with canReadAsset, as the file
-    // routes do.
-    // CAMPAIGN-scoped assets: only campaign members can access
-    if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isAdmin) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId: asset.campaignId,
-          },
-        },
-      });
-
-      if (!membership) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You do not have access to this asset',
-        });
-      }
-      // A map's spirit layer is shown to a player only once they have crossed
-      // over; the library entry follows the map.
-      if (membership.role !== 'DM' && (await spiritLayerAssetIdsHiddenFrom(userId, [asset.campaignId])).includes(asset.id)) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You do not have access to this asset',
-        });
-      }
+      if (!member) return res.json({ asset: { ...asset, campaign: null, campaignId: null } });
     }
 
     return res.json({ asset });
@@ -653,6 +646,10 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
     // Scope-based permission matrix, shared with the scope move and the
     // document editor (mayChangeAsset).
     if (!(await mayChangeAsset(asset, userId, isAdmin))) {
+      // One the caller may not even read is answered as if it were not there.
+      if (!(await canReadAssetFile(asset, req))) {
+        return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
+      }
       return res.status(403).json({ error: 'Forbidden', message: DELETE_REFUSALS[asset.scope] });
     }
 
@@ -742,7 +739,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     // uses it or because a document was shared, so a member who could read a
     // file inline was refused when downloading the same bytes.
     if (!(await canReadAssetFile(asset, req))) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
+      return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -852,6 +849,9 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
  * A PDF cannot be edited here; it is a file, not text. The size recorded on
  * the row is updated so the library keeps telling the truth about it.
  */
+/** Each document's saves, in turn: see the route below. */
+const documentSaveTurns = createTurnQueue();
+
 router.put('/documents/:id/content', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const parsed = UpdateDocumentContentSchema.safeParse(req.body);
@@ -884,10 +884,15 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
 
     const documentPath = normalizePath(asset.filePath);
     const bytes = Buffer.from(parsed.data.content, 'utf8');
-    await writeFileAtomically(documentPath, bytes);
 
+    // One save of a document at a time, its file and its recorded size
+    // together. Two at once each replaced the whole file, but their size
+    // updates could land the other way round and record the size of the text
+    // that lost.
+    const done = await documentSaveTurns.turnFor(asset.id);
     let updated: Prisma.AssetGetPayload<{ select: typeof ASSET_PUBLIC_SELECT }>;
     try {
+      await writeFileAtomically(documentPath, bytes);
       updated = await prisma.asset.update({
         where: { id: asset.id },
         data: { fileSize: bytes.length },
@@ -903,6 +908,8 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
         return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
       }
       throw error;
+    } finally {
+      done();
     }
 
     return res.status(200).json({ asset: updated });
@@ -1035,6 +1042,14 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
     }
 
+    // On every answer, a 304 included: a browser replaces the headers it
+    // stored with the document with a 304's, so a 304 carrying the app's own
+    // policy would unsandbox a document opened directly.
+    res.set({
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'X-Content-Type-Options': 'nosniff',
+    });
+
     if (ext === '.pdf') {
       // A PDF cannot change under its id; the edit route refuses it and a
       // replacement is a new asset. The year-long immutable cache is right.
@@ -1047,9 +1062,6 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       const etag = `"${asset.id}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
       res.set('Cache-Control', 'private, no-cache');
       res.set('ETag', etag);
-      // TODO(assets): this 304 goes out before the document's sandbox CSP is set,
-      // so it carries the app-wide policy and the browser keeps that one; set the
-      // document's headers first.
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
@@ -1060,8 +1072,6 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': 'inline',
-        'Content-Security-Policy': "default-src 'none'; sandbox",
-        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error) {
@@ -1093,9 +1103,9 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // Check access permissions
+    // One the caller may not read is answered as if it were not there.
     if (!(await canReadAssetFile(asset, req))) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
+      return res.status(404).json({ error: 'Not Found', message: 'Map asset not found' });
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -1139,9 +1149,9 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
       });
     }
 
-    // Check access permissions
+    // One the caller may not read is answered as if it were not there.
     if (!(await canReadAssetFile(asset, req))) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
+      return res.status(404).json({ error: 'Not Found', message: 'Token asset not found' });
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -1164,6 +1174,43 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
     });
   }
 });
+
+/**
+ * GET /api/assets/maps/:id/thumbnail and /api/assets/tokens/:id/thumbnail
+ * Serve the picture's thumbnail (at most 512 pixels), made at upload, for the
+ * Asset Library's cards and the pickers, which drew them from the full
+ * picture. Read as the full picture is read. An asset with no thumbnail (one
+ * imported, or uploaded before they were made) is sent its full picture.
+ * Requires: Authentication + access to asset
+ */
+function serveThumbnail(type: 'MAP' | 'TOKEN', notFound: string, label: string) {
+  return async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const asset = await prisma.asset.findUnique({ where: { id: req.params.id, type } });
+      // One the caller may not read is answered as if it were not there.
+      if (!asset || !(await canReadAssetFile(asset, req))) {
+        return res.status(404).json({ error: 'Not Found', message: notFound });
+      }
+      const thumbnail = asset.thumbnailPath ? normalizePath(asset.thumbnailPath) : null;
+      if (thumbnail && fs.existsSync(thumbnail)) {
+        if (handleAssetCaching(req, res, `${asset.id}-thumbnail`)) return;
+        return sendImageAsset(res, thumbnail);
+      }
+      const full = normalizePath(asset.filePath);
+      if (!fs.existsSync(full)) {
+        return res.status(404).json({ error: 'Not Found', message: 'Asset file not found on server' });
+      }
+      if (handleAssetCaching(req, res, asset.id)) return;
+      return sendImageAsset(res, full);
+    } catch (error) {
+      logger.error(`Error serving ${label} thumbnail`, { err: error });
+      return res.status(500).json({ error: 'Internal Server Error', message: `Failed to serve ${label} thumbnail` });
+    }
+  };
+}
+
+router.get('/maps/:id/thumbnail', authenticated, serveThumbnail('MAP', 'Map asset not found', 'map'));
+router.get('/tokens/:id/thumbnail', authenticated, serveThumbnail('TOKEN', 'Token asset not found', 'token'));
 
 /**
  * GET /api/assets/audio/:id
@@ -1348,12 +1395,23 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     const { scope, campaignId } = parsed.data;
     const userId = req.session.userId!;
 
+    // One the caller may not read is answered as if it were not there.
     const asset = await prisma.asset.findUnique({ where: { id } });
-    if (!asset) {
+    if (!asset || !(await canReadAssetFile(asset, req))) {
       return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
     }
 
     const isAdmin = req.session.platformRole === 'ADMIN';
+
+    // Personal is the uploader's own library. An asset whose uploader's
+    // account was deleted has none: moved there it would be nobody's, readable
+    // by admins alone, and every map using it would break for its table.
+    if (scope === 'USER' && !asset.uploadedById) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'This asset has no uploader, so it has no personal library to go to',
+      });
+    }
 
     // Check globalAssetManager only when GLOBAL scope is involved
     let isGlobalAssetManager = false;
@@ -1382,8 +1440,12 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
           message: 'campaignId is required when scope is CAMPAIGN',
         });
       }
-      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
-      if (!campaign) {
+      // A campaign the caller is not in answers as one that is not there.
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { id: true, memberships: { where: { userId }, select: { userId: true } } },
+      });
+      if (!campaign || (!isAdmin && campaign.memberships.length === 0)) {
         return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
       }
       resolvedCampaignId = campaignId;
@@ -1396,6 +1458,16 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       // would take it from every DM, which deleting it forbids.
       if (!(await mayChangeAsset(asset, userId, false))) {
         return res.status(403).json({ error: 'Forbidden', message: MOVE_REFUSALS[asset.scope] });
+      }
+
+      // A personal asset is its uploader's, so only they move one there. A
+      // campaign's DM moving a player's upload to Personal would put it in
+      // the player's library, out of the campaign and out of the DM's reach.
+      if (scope === 'USER' && asset.uploadedById !== userId) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Only the asset\'s uploader can move it to their personal library',
+        });
       }
 
       // Moving TO CAMPAIGN: the same question the upload route asks, so a
@@ -1418,7 +1490,10 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       select: ASSET_PUBLIC_SELECT,
     });
 
-    return res.json({ message: 'Asset scope updated successfully', asset: updated });
+    // As the list says of each asset, so the Asset Library can keep offering
+    // Delete and Move by the server's rule once the asset is somewhere new.
+    const canChange = await mayChangeAsset(updated, userId, isAdmin);
+    return res.json({ message: 'Asset scope updated successfully', asset: { ...updated, canChange } });
   } catch (error) {
     logger.error('Error updating asset scope', { err: error });
     return res.status(500).json({

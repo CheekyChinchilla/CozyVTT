@@ -151,3 +151,18 @@ describe('an imported asset', () => {
     expect(stored?.mimeType).toBe(mime);
   });
 });
+
+// The archive may give a name of up to 500 characters, and the import stored
+// it as it was: a name past the 200 an upload allows, and an original name
+// past the 255 a download name can be on most file systems. It is cut as an
+// upload's is, keeping the extension.
+describe('an imported asset with a very long name', () => {
+  it('is stored with its names cut to an upload\'s limits', async () => {
+    const long = `${'A very long map name '.repeat(20)}.png`;
+    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/png', originalName: long, bytes: BYTES.png });
+    expect(stored.originalName.length).toBeLessThanOrEqual(255);
+    expect(stored.originalName).toMatch(/\.png$/);
+    expect(stored.name.length).toBeLessThanOrEqual(200);
+    expect(stored.name.startsWith('A very long map name')).toBe(true);
+  });
+});

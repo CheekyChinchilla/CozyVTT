@@ -22,6 +22,12 @@ import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '@/constants
 /** How long typing has to pause before a search goes out. */
 const SEARCH_DELAY_MS = 300;
 
+/**
+ * How long an invitation from the app stands before it runs out. The DM can
+ * withdraw one sooner from Campaign Settings → Members.
+ */
+const INVITATION_EXPIRY_DAYS = 14;
+
 interface InvitePlayerModalProps {
   campaignId: string;
   onClose: () => void;
@@ -100,7 +106,8 @@ export default function InvitePlayerModal({
       const { emailSent } = await api.inviteUserToCampaign(
         campaignId,
         selectedUserId,
-        sendEmail && emailAvailable
+        sendEmail && emailAvailable,
+        INVITATION_EXPIRY_DAYS
       );
       // Say what actually happened. Asking for an email and not getting one is
       // worth knowing about, and the server is the only thing that can tell us.

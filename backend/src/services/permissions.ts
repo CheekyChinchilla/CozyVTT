@@ -2,8 +2,9 @@ import { CampaignRole, PlatformRole, AssetType, AssetScope } from '@prisma/clien
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
-import { getSpiritVisibility } from '../utils/spirit-layer';
+import { getSpiritVisibility, getSpiritVisibilityAcrossCampaigns } from '../utils/spirit-layer';
 import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
+import { escapeLikePattern } from '../utils/likePattern';
 
 /**
  * Permission Verification Helpers
@@ -436,24 +437,16 @@ export async function canPlaceAssetAtScope(
  */
 export async function spiritLayerAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
   if (campaignIds.length === 0) return [];
-  const memberships = await prisma.campaignMembership.findMany({
-    where: { userId, campaignId: { in: campaignIds } },
-    select: { campaignId: true, role: true },
+  // In a fixed number of queries however many campaigns: worked out one
+  // campaign at a time, a player in many made the asset list run hundreds.
+  const sees = await getSpiritVisibilityAcrossCampaigns(userId, campaignIds);
+  const hiddenIn = [...sees].filter(([, visible]) => !visible).map(([campaignId]) => campaignId);
+  if (hiddenIn.length === 0) return [];
+  const maps = await prisma.map.findMany({
+    where: { campaignId: { in: hiddenIn }, spiritLayerUrl: { not: null } },
+    select: { spiritLayerUrl: true },
   });
-  const hidden: string[] = [];
-  for (const m of memberships) {
-    if (m.role === 'DM') continue;
-    if (await getSpiritVisibility(m.campaignId, userId)) continue;
-    const maps = await prisma.map.findMany({
-      where: { campaignId: m.campaignId, spiritLayerUrl: { not: null } },
-      select: { spiritLayerUrl: true },
-    });
-    for (const map of maps) {
-      const id = extractAssetId(map.spiritLayerUrl);
-      if (id) hidden.push(id);
-    }
-  }
-  return hidden;
+  return maps.map((map) => extractAssetId(map.spiritLayerUrl)).filter((id): id is string => id !== null);
 }
 
 /** Whether `assetId` is a spirit-layer image of a map in `campaignId` that `userId` may not see there. */
@@ -609,14 +602,18 @@ export async function assetUsedInUserCampaign(
   });
   if (ambience) return true;
 
-  // Tokens live as JSON on the map, so they cannot be matched by column. Only
-  // the art URL is read, and only once everything cheaper has missed.
-  const maps = await prisma.map.findMany({
-    where: readableMaps,
-    select: { tokens: true },
-  });
-  return maps.some((map) =>
-    readTokens(map.tokens).some((token) => names(token?.imageUrl))
+  // Tokens live as JSON on the map, so they cannot be matched by column, and
+  // this runs only once everything cheaper has missed. The database narrows
+  // to the readable maps whose tokens mention the id at all, as the column
+  // searches above do; only those maps' tokens are read, and each token's art
+  // address is checked as above. Loading every readable map's tokens made
+  // each request for an asset the campaign does not use read all of them.
+  const mentioning = await prisma.$queryRaw<Array<{ tokens: unknown }>>`
+    SELECT tokens FROM "Map"
+    WHERE ("campaignId" = ANY(${dmCampaignIds}::text[]) OR id = ANY(${currentMapIds}::text[]))
+      AND tokens::text LIKE ${`%${escapeLikePattern(assetId)}%`}`;
+  return mentioning.some((map) =>
+    readTokens(map.tokens as Prisma.JsonValue).some((token) => names(token?.imageUrl))
   );
 }
 

@@ -24,6 +24,7 @@ import { useAssetDelete } from '@/hooks/useAssetDelete';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
 import { AssetType, AssetScope, PlatformRole, type Asset, type CampaignDocument } from '@/types';
+import { listEveryAsset } from '@/services/assetPages';
 
 interface CampaignDocumentsModalProps {
   isOpen: boolean;
@@ -59,8 +60,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
       const { documents } = await api.listCampaignDocuments(campaignId);
       setShared(documents);
       if (isDM) {
-        const { assets } = await api.listAssets({ type: AssetType.DOCUMENT, limit: 100 });
-        setMine(assets);
+        setMine(await listEveryAsset({ type: AssetType.DOCUMENT }));
       }
     } catch (err) {
       setError(apiErrorMessage(err) ?? 'Could not load the documents.');
@@ -178,7 +178,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       {doc.name}
                     </button>
                     <p className="text-[11px] text-ink-secondary truncate">
-                      {FORMAT_LABEL[documentFormat(doc.originalName)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
+                      {FORMAT_LABEL[documentFormat(doc.filename)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
                     </p>
                   </div>
                   <Button
@@ -282,7 +282,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       >
                         <span className="flex-1 min-w-0 truncate text-sm text-ink">{asset.name}</span>
                         <span className="text-[11px] text-ink-secondary shrink-0">
-                          {FORMAT_LABEL[documentFormat(asset.originalName)]}
+                          {FORMAT_LABEL[documentFormat(asset.filename)]}
                         </span>
                         <Button
                           type="button"
@@ -307,7 +307,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         onClose={() => setReading(null)}
         documentId={reading?.id ?? null}
         name={reading?.name ?? ''}
-        originalName={reading?.originalName ?? ''}
+        filename={reading?.filename ?? ''}
         layer="overlay"
         // Edit rights follow the rule for deleting, which turns on facts this
         // page does not have, so the list says, per document, whether the

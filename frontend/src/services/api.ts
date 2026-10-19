@@ -47,6 +47,7 @@ import type {
   PersonalNote,
   PersonalNoteSummary,
   CampaignInvitation,
+  CampaignInvitationSummary,
   ApiError,
   SystemStats,
   AdminHealth,
@@ -566,9 +567,22 @@ class ApiClient {
   async inviteUserToCampaign(
     campaignId: string,
     userId: string,
-    sendEmail = false
+    sendEmail = false,
+    expiresInDays?: number
   ): Promise<{ message: string; emailSent: boolean }> {
-    const response = await this.client.post(`/api/campaigns/${campaignId}/invite`, { userId, sendEmail });
+    const response = await this.client.post(`/api/campaigns/${campaignId}/invite`, { userId, sendEmail, expiresInDays });
+    return response.data;
+  }
+
+  /** The campaign's invitations that still stand (DM only). */
+  async listCampaignInvitations(campaignId: string): Promise<{ invitations: CampaignInvitationSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/invitations`);
+    return response.data;
+  }
+
+  /** Withdraw a pending invitation (DM only); the player no longer has it. */
+  async withdrawCampaignInvitation(campaignId: string, invitationId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/campaigns/${campaignId}/invitations/${invitationId}`);
     return response.data;
   }
 
@@ -901,6 +915,8 @@ class ApiClient {
     uploadedBy?: string;
     /** Only what the caller may put on a map or token; see GET /api/assets. */
     usable?: boolean;
+    /** Newest first when left out. */
+    sort?: 'name' | 'size';
   }): Promise<AssetListResponse> {
     const response = await this.client.get<AssetListResponse>('/api/assets', { params });
     return response.data;
@@ -910,11 +926,20 @@ class ApiClient {
    * Upload a picture, sound, PDF or other file (up to 50 MB for a map picture
    * or PDF). Serves map pictures, PDFs, token art, avatars and sheet portraits.
    */
-  async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
+  /**
+   * `onProgress` is told the share of the request sent so far, 0 to 100, as
+   * the browser reports it.
+   */
+  async uploadAsset(formData: FormData, onProgress?: (percent: number) => void): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: onProgress
+        ? (event) => {
+            if (event.total) onProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        : undefined,
       // No limit of the page's own: the shared 30 seconds count the upload
       // itself, so a 50 MB file on a connection slower than about 14 Mbit/s
       // was cut off with "Failed to upload asset" before it had arrived.
@@ -952,6 +977,14 @@ class ApiClient {
 
   getAssetUrl(id: string, type: import('@/utils/assetUrl').AssetDirectory): string {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
+  }
+
+  /**
+   * A map or token picture's thumbnail, at most 512 pixels, for cards and
+   * pickers; the full picture for one that has none.
+   */
+  getAssetThumbnailUrl(id: string, type: 'maps' | 'tokens'): string {
+    return `${API_BASE_URL}/api/assets/${type}/${id}/thumbnail`;
   }
 
   /** The address that downloads an asset under its original file name. */

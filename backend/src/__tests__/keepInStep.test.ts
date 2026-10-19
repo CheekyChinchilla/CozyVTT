@@ -60,6 +60,19 @@
  * the token editor's condition box stops at them. The file is kept identical in
  * both packages.
  *
+ * The limits on a campaign's name and description. The server refuses a
+ * campaign over them and the campaign dialogs stop each box at them. The file
+ * is kept identical in both packages.
+ *
+ * The files each kind of asset may be uploaded as. The server decides by a
+ * file's bytes; the Upload Asset dialog checks a file's extension against the
+ * same list, and refused Ogg, WAV and Markdown files the server takes while
+ * its own list differed. The file is kept identical in both packages.
+ *
+ * The campaign archive format version. The import window reads an archive's
+ * manifest in the browser and shows it only for the version the server
+ * imports; for any other it asks the server, sending the archive twice.
+ *
  * The session secret examples. A production server refuses the example values
  * for SESSION_SECRET, so a self-hoster who copies a block as written is told
  * to generate one; the guide's example was once changed without the list of
@@ -135,6 +148,7 @@ import { THEME_IDS, FONT_IDS } from '../validators/appearance';
 import { sheetTypeMismatches } from './helpers/sheetTypeParity';
 import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
+import { IMPORT_LIMITS } from '../validators/campaignImport';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -397,6 +411,25 @@ describe('the creature and stat block limits', () => {
 describe('the limits on a token\'s conditions', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/tokenLimits.ts')).toBe(read('backend/src/validators/tokenLimits.ts'));
+  });
+});
+
+describe('the limits on a campaign\'s name and description', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/campaignLimits.ts')).toBe(read('backend/src/validators/campaignLimits.ts'));
+  });
+});
+
+describe('the files each kind of asset may be uploaded as', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));
+  });
+});
+
+describe('the campaign archive format version', () => {
+  it('is the one the import window reads in the browser', () => {
+    const reader = read('frontend/src/utils/archiveManifest.ts').match(/^const FORMAT_VERSION = (\d+);$/m);
+    expect(Number(reader?.[1])).toBe(IMPORT_LIMITS.FORMAT_VERSION);
   });
 });
 

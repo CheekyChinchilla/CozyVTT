@@ -21,6 +21,7 @@ vi.mock('@/services/api', () => ({
   api: {
     listAssets: vi.fn(),
     getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
+    getAssetThumbnailUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}/thumbnail`,
   },
 }));
 
@@ -55,17 +56,18 @@ describe('AssetGrid', () => {
     expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ type: AssetType.TOKEN, usable: true }));
   });
 
-  it('builds thumbnail URLs from the type-specific serving route', async () => {
+  // The thumbnail made at upload, where the full picture was drawn into a
+  // 100-pixel square.
+  it('shows each thumbnail from the type-specific thumbnail route', async () => {
     render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} />);
     const img = await screen.findByAltText('Goblin');
-    // Not /api/assets/a1/file — that route does not exist on the server.
-    expect(img).toHaveAttribute('src', '/api/assets/tokens/a1');
+    expect(img).toHaveAttribute('src', '/api/assets/tokens/a1/thumbnail');
   });
 
   it('uses the maps route for map assets', async () => {
     render(<AssetGrid type={AssetType.MAP} selectedId={null} onSelect={vi.fn()} />);
     const img = await screen.findByAltText('Goblin');
-    expect(img).toHaveAttribute('src', '/api/assets/maps/a1');
+    expect(img).toHaveAttribute('src', '/api/assets/maps/a1/thumbnail');
   });
 
   it('reports the clicked asset', async () => {
@@ -84,11 +86,18 @@ describe('AssetGrid', () => {
     expect(onSelect).toHaveBeenCalledWith(null);
   });
 
-  it('filters by search text', async () => {
+  // The search ran in the browser over the one page fetched, so an asset
+  // past it could not be found. The server searches the whole library.
+  it('asks the server for the search', async () => {
+    mockListAssets.mockImplementation(async (params: { search?: string }) => ({
+      assets: params.search === 'ogr' ? [OGRE] : [GOBLIN, OGRE],
+      pagination: { page: 1, limit: 50, total: 2, totalPages: 1 },
+    }));
     render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} search="ogr" />);
 
     expect(await screen.findByAltText('Ogre')).toBeInTheDocument();
     expect(screen.queryByAltText('Goblin')).not.toBeInTheDocument();
+    expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ search: 'ogr', page: 1 }));
   });
 
   it('shows the empty message when the library has nothing', async () => {
@@ -100,6 +109,7 @@ describe('AssetGrid', () => {
   });
 
   it('distinguishes an empty library from an empty search result', async () => {
+    mockListAssets.mockResolvedValue({ assets: [], pagination: { page: 1, limit: 50, total: 0, totalPages: 0 } });
     render(
       <AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} search="zzz" emptyMessage="No tokens yet." />
     );
@@ -154,4 +164,63 @@ describe('AssetGrid', () => {
     expect(container.querySelectorAll('img[src="x"]')).toHaveLength(0);
     expect((window as unknown as { __pwned?: number }).__pwned).toBeUndefined();
   });
+
+  // The fallback used to replace the button's children itself, React's
+  // selection overlay among them. When the selection then moved, React went to
+  // remove an overlay that was no longer there and threw, blanking the picker.
+  it('keeps working when a selected thumbnail fails and the selection then moves', async () => {
+    const { rerender } = render(<AssetGrid type={AssetType.TOKEN} selectedId="a1" onSelect={vi.fn()} />);
+    fireEvent.error(await screen.findByAltText('Goblin'));
+    expect(await screen.findByText('Goblin')).toBeInTheDocument();
+
+    expect(() => rerender(<AssetGrid type={AssetType.TOKEN} selectedId="b2" onSelect={vi.fn()} />)).not.toThrow();
+    expect(screen.getByText('Goblin')).toBeInTheDocument();
+    expect(screen.getByAltText('Ogre')).toBeInTheDocument();
+  });
+
+  // It showed the newest 50 and no more, so an older asset could not be
+  // picked at all.
+  it('offers Load more while the server has more, and adds the next page', async () => {
+    mockListAssets.mockImplementation(async (params: { page?: number }) =>
+      params.page === 2
+        ? { assets: [OGRE], pagination: { page: 2, limit: 1, total: 2, totalPages: 2 } }
+        : { assets: [GOBLIN], pagination: { page: 1, limit: 1, total: 2, totalPages: 2 } }
+    );
+    render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} limit={1} />);
+    expect(await screen.findByAltText('Goblin')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+
+    expect(await screen.findByAltText('Ogre')).toBeInTheDocument();
+    expect(screen.getByAltText('Goblin')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+  });
+
+  it('shows first the assets the parent adds, such as one just uploaded', async () => {
+    const fresh = makeAsset('c3', 'Fresh upload');
+    render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} prepend={[fresh]} />);
+    await screen.findByAltText('Goblin');
+    const shown = screen.getAllByRole('img').map((img) => img.getAttribute('alt'));
+    expect(shown).toEqual(['Fresh upload', 'Goblin', 'Ogre']);
+  });
+
+  // Pressed while a new search's first page was on its way, Load more added a
+  // page of the new search to the old one's results.
+  it('offers no Load more while a new search is loading', async () => {
+    let answerNew!: (value: unknown) => void;
+    mockListAssets.mockImplementation((params: { search?: string }) => (params.search === 'ogr'
+      ? new Promise((resolve) => { answerNew = resolve; })
+      : Promise.resolve({ assets: [GOBLIN], pagination: { page: 1, limit: 1, total: 2, totalPages: 2 } })));
+    const { rerender } = render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} limit={1} />);
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBeEnabled();
+
+    rerender(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} limit={1} search="ogr" />);
+    await waitFor(() => expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ search: 'ogr' })));
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+
+    answerNew({ assets: [OGRE], pagination: { page: 1, limit: 1, total: 1, totalPages: 1 } });
+    expect(await screen.findByAltText('Ogre')).toBeInTheDocument();
+    expect(screen.queryByAltText('Goblin')).not.toBeInTheDocument();
+  });
 });
+

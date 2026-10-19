@@ -114,10 +114,18 @@ export function storeCharacterInList(client: QueryClient, stored: Character): vo
   void client.invalidateQueries({ queryKey: queryKeys.characters });
 }
 
+/**
+ * The player's invitations. The dashboard has no live connection to hear one
+ * arrive, so this list alone is fetched again whenever the page regains focus
+ * and every minute while it is in view; the app's other queries stay still.
+ */
 export function usePendingInvitationsQuery() {
   return useQuery({
     queryKey: queryKeys.pendingInvitations,
     queryFn: () => api.getPendingInvitations(),
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchInterval: 60_000,
   });
 }
 
@@ -126,6 +134,10 @@ export interface AssetListParams {
   limit: number;
   type?: AssetType;
   scope?: AssetScope;
+  /** A name in part or a tag whole, searched by the server across every page. */
+  search?: string;
+  /** Newest first when left out. */
+  sort?: 'name' | 'size';
 }
 
 export function useAssetsQuery(params: AssetListParams) {

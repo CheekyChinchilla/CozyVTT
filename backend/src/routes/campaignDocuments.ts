@@ -29,6 +29,9 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
       id: true,
       name: true,
       description: true,
+      // How the document is shown: the server serves it by this name's
+      // extension, set from what the file's bytes are.
+      filename: true,
       originalName: true,
       mimeType: true,
       fileSize: true,

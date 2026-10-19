@@ -46,8 +46,8 @@ Once inside the campaign, click the **Campaign Settings** button (gear icon in t
 
 - **General** — the **Campaign Name** and **Description**, saved with **Save Changes**, and **Export Campaign** (see [Exporting a Campaign](#exporting-a-campaign))
 - **Chat** — **Enable message cooldown**, off by default, makes everyone in the chat, you included, wait between messages, for the **Cooldown duration** you set (1 to 300 seconds). While someone waits, a line under their chat box counts down, such as "Wait 5s before sending another message"
-- **Members** — everyone in the campaign, with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
-- **Danger Zone** — **Delete Campaign**, for the campaign's owner, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
+- **Members** — everyone in the campaign, the players you have invited who have not answered yet (under **Invited**, each with the date it runs out and an **×** to withdraw it), with **Invite Player**, the crown that hands the DM seat on (see [Handing the game to someone else](#handing-the-game-to-someone-else)) and the remove button (see [Removing a Player](#removing-a-player))
+- **Danger Zone** — **Delete Campaign**, shown only to the campaign's owner (whether or not they are still its DM) and to administrators, once the campaign's name is typed to confirm. It deletes the maps, tokens, chat history and session records; characters stay with their owners, and each uploaded file moves to the personal library of whoever uploaded it
 
 *Screenshot pending — Campaign settings panel.*
 
@@ -58,7 +58,7 @@ To invite a player to your campaign:
 1. Click **Invite Player** in the left sidebar, or on the **Members** tab of **Campaign Settings**
 2. Type at least 2 letters of their display name in **Search by display name**, then pick them from the people who match. The search finds anyone on your instance whose name contains what you typed, and who isn't already a member, already invited, or waiting for an administrator to approve their account. If their whole name is one letter, type that letter: a single letter finds only people whose name is exactly that letter. It shows at most 20 people; if there are more, it says so, and typing more of the name narrows them down. They must have an account first
 3. Optionally tick **Also email them an invitation**
-4. The player sees the invitation under **Pending Invitations** on their dashboard
+4. The player sees the invitation under **Pending Invitations** on their dashboard. It runs out after 14 days if they have not answered; after that, or once you withdraw it from **Campaign Settings → Members → Invited**, you can invite them again
 
 *Screenshot pending — Invite player flow.*
 
@@ -192,6 +192,7 @@ Plan your map order loosely in advance (forest → cave entrance → dungeon int
 - **Label your maps** — Use descriptive names like "Session 3 - Goblin Cave" rather than "map_final_v3.png"
 - **Prepare ahead** — Load all maps you might need before the session starts so there's no fumbling during play. Players cannot see a map until you switch to it: its walls, lights and tokens stay yours alone while you prepare it, and so does art uploaded as **Personal**. **Upload New** in the Create Map window puts the map image, and the spirit layer image, in your **Personal** library unless you choose **Campaign**, so a map you prepare stays a surprise (see [Adding Maps to Your Campaign](#adding-maps-to-your-campaign) for what each choice means when you leave). Art in the campaign's library is not hidden: anyone in the campaign can browse **Campaign** assets, so a map picture you upload as **Campaign** from the Asset Library can be seen there before you switch to the map, as can a token image uploaded from inside the campaign. A map made with **Import UVTT** always puts its picture in the campaign's library, so move that picture to **Personal** straight after importing (see [Importing a Universal VTT file](#importing-a-universal-vtt-file))
 - **Keep backups** — Export important maps so you can recover them if needed
+- **Your campaign's library** — In the Asset Library you can delete or move any asset in your campaign's library, the ones your players uploaded included. Only the player who uploaded one can move it to **Personal**, since that is their own library and would take it out of the campaign
 - **Deleting art a map uses** — Delete in the Asset Library asks first. If a map, a token, a character, a template, a creature, the campaign's ambient sound or the sound of one of its times of day still uses the file, a second window lists them (you see names for the campaigns you run, your own characters and shared character templates; anything else is only counted) and removes it only if you choose **Delete anyway**. A map whose picture you delete this way shows "Failed to load map image" until you choose another in **Edit Map**, and a deleted file cannot be brought back
 
 ---
@@ -274,7 +275,7 @@ If a change cannot be saved, for example while the connection is down, a message
 
 1. Right-click the token on the map and choose **Edit Token**
 2. Click the token avatar (top-left of the editor) — a hover overlay with an image icon appears
-3. The **Image Picker** opens, showing every token image you have access to — platform-wide assets, your own uploads, and assets from campaigns you're a member of
+3. The **Image Picker** opens, showing the token images you have access to: platform-wide assets, your own uploads, and assets from campaigns you're a member of, newest first. Type in its search box to find one by part of its name or a whole tag, or press **Load more** under the pictures for older ones
 4. Select an image, or click **Upload** to upload a fresh asset
 5. Click **None** to remove the image and revert to a colored-letter placeholder
 
@@ -592,21 +593,22 @@ A large campaign takes as long to export as your connection needs; nothing gives
 
 1. From the **Dashboard**, click the **Import** button (next to Create Campaign)
 2. Drop a `.cozyvtt` archive on the window, or click the drop area (or press Enter on it) to choose one
-3. Review the preview: map count, creature count, token templates, asset count, and total size
+3. Review the preview: map count, creature count, token templates, asset count, and total size. The window reads these from the archive on your computer, so nothing is uploaded until you import
 4. Optionally rename the campaign and toggle whether to import tokens
 5. Click **Import Campaign**
 6. Once complete, click **Open Campaign** to jump in
 
 While **Importing campaign...** is showing, the window cannot be closed: Escape, a click outside it and the X do nothing, so you always see how the import ended. The window can be closed again once it says the import is complete or has failed.
 
-An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can preview 20 archives and import 20 campaigns an hour, one at a time. If the import window says the archive is larger than the server accepts, the web proxy in front of the server has a lower size limit than CozyVTT's; whoever runs the server can raise it as the deployment guide describes.
+An archive can be up to **500 MB**. Anyone with an account can import one, players included, and becomes the new campaign's DM. Each person can import 20 campaigns an hour, one at a time. If the import window says the archive is larger than the server accepts, the web proxy in front of the server has a lower size limit than CozyVTT's; whoever runs the server can raise it as the deployment guide describes.
 
 The imported campaign is created fresh with new IDs — it does not interfere with any existing campaigns. You become the DM automatically.
 
 **What comes back as it was, what is shortened, and what is left out.** Everything in the archive is held to what CozyVTT itself can store, so whatever arrives can be opened, edited and saved again. When the import finishes, its window lists anything it had to change under **Changed to fit**, and anything it could not bring in under **Left out**, each with the reason. The map count it shows is the maps it made.
 
 - **Kept as it was:** everything a campaign made in CozyVTT holds, up to the limits the app itself has: maps up to 500 by 500 squares with any grid size from 10 to 500, up to 1,000 tokens, 5,000 walls and doors and 200 lights on each map, and their fog. The Map Library lists the maps in the order the original did, and the campaign opens on the oldest.
-- **Refused as a whole:** an archive with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files. Nothing is imported. Exporting does not stop at these numbers, so a campaign that has more exports normally but cannot be imported again. Delete maps, creatures, templates or pictures the campaign no longer uses, export again and import that.
+- **Refused as a whole:** an archive of more than 1,000 files (one for each map and each picture or sound file), or with more than 10 MB of creatures, of token templates or of one map's data. Nothing is imported. Exporting checks the same limits and says when a campaign is over them, so a campaign that exports can be imported again.
+- **Creatures and token templates past 2,000:** an archive carries up to 2,000 of each. Any after the first 2,000 are left out and listed under **Left out** as one line. Exporting a campaign with more than 2,000 custom creatures or token templates says so instead of saving an archive.
 - **Shortened:** a map name over 200 characters, a token name over 200 characters, token notes over 5,000 characters, and text or lists in a stat block longer than the creature editor allows (an action's description over 5,000 characters, say, or more than 50 actions). Older versions of CozyVTT stored some of these at any length, and an imported creature that kept them could not be placed on a map or saved.
 - **Game system:** a campaign or creature whose game system this server does not know, from a hand-edited archive for example, is imported with none.
 - **Moved:** a token that is not on a whole square, or that hangs off the edge of its map, is put on the nearest whole square inside it.

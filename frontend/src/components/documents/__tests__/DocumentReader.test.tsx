@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
-import DocumentReader, { documentFormat } from '../DocumentReader';
+import DocumentReader, { documentFormat, pdfShowsInFrame } from '../DocumentReader';
 
 vi.mock('@/services/api', () => {
   const client = {
@@ -35,12 +35,53 @@ function mockFetch(body: string, status = 200) {
   ) as typeof fetch;
 }
 
+const FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0';
+const CHROME = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+const FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0';
+
+/** Run as this browser: which way a PDF is shown depends on it. */
+function browserIs(userAgent: string) {
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  browserIs(FIREFOX);
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
+
+describe('pdfShowsInFrame', () => {
+  // Firefox's own viewer runs in the reader's sandboxed frame. Chrome's and
+  // Edge's are blocked there, Safari's shows a blank frame, and phones do not
+  // show a PDF inside a page at all.
+  it('is true for Firefox on a computer only', () => {
+    expect(pdfShowsInFrame(FIREFOX)).toBe(true);
+    expect(pdfShowsInFrame(CHROME)).toBe(false);
+    expect(pdfShowsInFrame(SAFARI)).toBe(false);
+    expect(pdfShowsInFrame(FIREFOX_ANDROID)).toBe(false);
+  });
+});
+
+describe('a PDF in a browser that will not show it in the frame', () => {
+  it.each([['Chrome', CHROME], ['Safari', SAFARI], ['Firefox on Android', FIREFOX_ANDROID]])(
+    'is offered as a button to open it in a new tab, in %s',
+    (_name, userAgent) => {
+      browserIs(userAgent);
+      const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />);
+
+      // No frame: Chrome would show its blocked page in it, Safari nothing.
+      expect(document.querySelector('iframe')).toBeNull();
+      expect(screen.getByText('This browser does not show a PDF inside CozyVTT.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Open this PDF in a new tab' }));
+      expect(open).toHaveBeenCalledWith('/api/assets/documents/doc-1', '_blank', 'noopener,noreferrer');
+    },
+  );
 });
 
 describe('documentFormat', () => {
@@ -59,7 +100,7 @@ describe('documentFormat', () => {
 describe('DocumentReader', () => {
   it('shows a PDF in an iframe pointing at the document route', () => {
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />
     );
     const frame = screen.getByTitle('Rules');
     expect(frame.tagName).toBe('IFRAME');
@@ -71,7 +112,7 @@ describe('DocumentReader', () => {
     // the SameSite=Lax session cookie. A sandbox directive on the PDF response
     // does not do this, so the attribute is the only thing standing here.
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />
     );
     const sandbox = screen.getByTitle('Rules').getAttribute('sandbox') ?? '';
     expect(sandbox.split(/\s+/)).toContain('allow-scripts');
@@ -81,7 +122,7 @@ describe('DocumentReader', () => {
   it('does not fetch a PDF itself', () => {
     mockFetch('should not be called');
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />
     );
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
@@ -89,7 +130,7 @@ describe('DocumentReader', () => {
   it('renders Markdown', async () => {
     mockFetch('# House Rules\n\nRoll a d20 for *everything*.');
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-2" name="House Rules" originalName="rules.md" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-2" name="House Rules" filename="rules.md" />
     );
     expect(await screen.findByRole('heading', { name: 'House Rules', level: 1 })).toBeInTheDocument();
     expect(screen.getByText('everything')).toBeInTheDocument();
@@ -98,7 +139,7 @@ describe('DocumentReader', () => {
   it('shows HTML inside Markdown as text, never as elements', async () => {
     mockFetch('Read this:\n\n<script>window.__pwned = true</script>\n\n<img src=x onerror="window.__pwned=true">');
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-3" name="Sneaky" originalName="sneaky.md" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-3" name="Sneaky" filename="sneaky.md" />
     );
     const shown = await screen.findByText(/Read this/);
 
@@ -116,7 +157,7 @@ describe('DocumentReader', () => {
   it('shows plain text preformatted', async () => {
     mockFetch('line one\n  indented line two');
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-4" name="Notes" originalName="notes.txt" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-4" name="Notes" filename="notes.txt" />
     );
     const shown = await screen.findByText(/line one/);
     expect(shown.tagName).toBe('PRE');
@@ -126,7 +167,7 @@ describe('DocumentReader', () => {
   it('says so when the document is not available to the reader', async () => {
     mockFetch('', 404);
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-5" name="Private" originalName="private.md" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-5" name="Private" filename="private.md" />
     );
     expect(await screen.findByRole('alert')).toHaveTextContent(/not available to you/i);
   });
@@ -134,7 +175,7 @@ describe('DocumentReader', () => {
   it('offers the same URL for opening in a new tab', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />
     );
     screen.getByRole('button', { name: 'Open in a new tab' }).click();
     expect(open).toHaveBeenCalledWith('/api/assets/documents/doc-1', '_blank', 'noopener,noreferrer');
@@ -147,7 +188,7 @@ describe('DocumentReader', () => {
     // player found for themselves.
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" originalName="rules.pdf" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />
     );
     const hint = screen.getByRole('button', { name: 'Open this PDF in a new tab' });
     hint.click();
@@ -160,7 +201,7 @@ describe('DocumentReader', () => {
   it('does not offer it for a document it renders itself', async () => {
     mockFetch('plain words');
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-2" name="Notes" originalName="notes.txt" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-2" name="Notes" filename="notes.txt" />
     );
     await waitFor(() => expect(screen.getByText('plain words')).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: 'Open this PDF in a new tab' })).toBeNull();
@@ -171,7 +212,7 @@ describe('DocumentReader', () => {
     // served the pre-edit text from its cache on the next open.
     mockFetch('current text');
     render(
-      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-6" name="Notes" originalName="notes.txt" />
+      <DocumentReader isOpen onClose={vi.fn()} documentId="doc-6" name="Notes" filename="notes.txt" />
     );
     await screen.findByText('current text');
     expect(globalThis.fetch).toHaveBeenCalledWith(
@@ -183,7 +224,7 @@ describe('DocumentReader', () => {
   it('fetches nothing while closed', async () => {
     mockFetch('unused');
     render(
-      <DocumentReader isOpen={false} onClose={vi.fn()} documentId="doc-2" name="X" originalName="x.md" />
+      <DocumentReader isOpen={false} onClose={vi.fn()} documentId="doc-2" name="X" filename="x.md" />
     );
     await waitFor(() => expect(globalThis.fetch).not.toHaveBeenCalled());
   });
@@ -192,19 +233,19 @@ describe('DocumentReader', () => {
     it('offers Edit only when allowed, and never for a PDF', async () => {
       mockFetch('text');
       const { unmount } = render(
-        <DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.md" canEdit />
+        <DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.md" canEdit />
       );
       await screen.findByText('text');
       expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument();
       unmount();
 
-      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="P" originalName="p.pdf" canEdit />);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="P" filename="p.pdf" canEdit />);
       expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
     });
 
     it('does not offer Edit without the right', async () => {
       mockFetch('text');
-      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.md" />);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.md" />);
       await screen.findByText('text');
       expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument();
     });
@@ -214,7 +255,7 @@ describe('DocumentReader', () => {
       updateDocumentContent.mockResolvedValue({ asset: { id: 'd', fileSize: 5 } });
       const onSaved = vi.fn();
       render(
-        <DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.md" canEdit onSaved={onSaved} />
+        <DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.md" canEdit onSaved={onSaved} />
       );
       await screen.findByRole('heading', { name: 'Old' });
       fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
@@ -235,7 +276,7 @@ describe('DocumentReader', () => {
         isAxiosError: true,
         response: { data: { error: 'Validation Error', message: 'The text contains characters that do not belong in a document.' } },
       });
-      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.txt" canEdit />);
       await screen.findByText('fine');
       fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
       fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'attempt' } });
@@ -245,9 +286,31 @@ describe('DocumentReader', () => {
       expect(screen.getByLabelText('Edit N')).toHaveValue('attempt');
     });
 
+    // One error state served the load and the save, so after a refused save
+    // and Cancel the reader showed the save's error where the document was.
+    it('shows the document again when a refused edit is given up', async () => {
+      mockFetch('the saved text');
+      updateDocumentContent.mockRejectedValue({
+        isAxiosError: true,
+        response: { data: { error: 'Validation Error', message: 'Text must be at most 1 MB.' } },
+      });
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.txt" canEdit />);
+      await screen.findByText('the saved text');
+      fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+      fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'far too long' } });
+      fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+      await screen.findByRole('alert');
+
+      fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+      fireEvent.click(within(await screen.findByRole('dialog', { name: 'Discard your changes?' })).getByRole('button', { name: 'Discard changes' }));
+
+      expect(await screen.findByText('the saved text')).toBeInTheDocument();
+      expect(screen.queryByText('Text must be at most 1 MB.')).not.toBeInTheDocument();
+    });
+
     it('cancel returns to reading at once when nothing was changed', async () => {
       mockFetch('original');
-      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.txt" canEdit />);
       await screen.findByText('original');
       fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
       fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
@@ -257,7 +320,7 @@ describe('DocumentReader', () => {
 
     it('cancel asks before throwing away changes, then returns to reading', async () => {
       mockFetch('original');
-      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" filename="n.txt" canEdit />);
       await screen.findByText('original');
       fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
       fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'changed' } });
@@ -276,7 +339,7 @@ describe('DocumentReader', () => {
 
       async function editAndChange(onClose: () => void) {
         mockFetch('original');
-        render(<DocumentReader isOpen onClose={onClose} documentId="d" name="N" originalName="n.txt" canEdit />);
+        render(<DocumentReader isOpen onClose={onClose} documentId="d" name="N" filename="n.txt" canEdit />);
         await screen.findByText('original');
         fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
         fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'changed' } });
@@ -309,7 +372,7 @@ describe('DocumentReader', () => {
       it('closes at once when the text was not changed, or while only reading', async () => {
         const onClose = vi.fn();
         mockFetch('original');
-        render(<DocumentReader isOpen onClose={onClose} documentId="d" name="N" originalName="n.txt" canEdit />);
+        render(<DocumentReader isOpen onClose={onClose} documentId="d" name="N" filename="n.txt" canEdit />);
         await screen.findByText('original');
         escape();
         expect(onClose).toHaveBeenCalledTimes(1);

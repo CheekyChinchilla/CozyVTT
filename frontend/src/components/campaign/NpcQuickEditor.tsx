@@ -38,6 +38,7 @@ import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
 import { assetNameFrom } from '@/utils/assetName';
+import { extractAssetId } from '@/utils/assetUrl';
 
 /** How long typing in the stat block pauses before it is saved. */
 const STAT_BLOCK_SAVE_DELAY_MS = 750;
@@ -160,8 +161,10 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
   // ── Token image editing state ──
   const [showImagePicker, setShowImagePicker] = useState(false);
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isLoadingAssets, setIsLoadingAssets] = useState(false);
+  // The picker grid fetches and searches the pictures itself; these are what
+  // was typed into its search box, and pictures uploaded here, shown first.
+  const [pictureSearch, setPictureSearch] = useState('');
+  const [uploadedPictures, setUploadedPictures] = useState<Asset[]>([]);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSavingToCreature, setIsSavingToCreature] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<string | null>(null);
@@ -308,23 +311,13 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   }, [saveUpdate, dropPendingStatBlock]);
 
   // ── Token image ──
-  const loadAssets = useCallback(async () => {
-    if (assets.length > 0) return; // already loaded
-    setIsLoadingAssets(true);
-    try {
-      const res = await api.listAssets({ type: AssetType.TOKEN, limit: 100, usable: true });
-      setAssets(res.assets);
-    } catch (err) {
-      showToast(apiErrorMessage(err) || 'Could not load your token pictures', 'error');
-    } finally {
-      setIsLoadingAssets(false);
-    }
-  }, [assets.length, showToast]);
-
   const handleOpenImagePicker = useCallback(() => {
     setShowImagePicker(true);
-    loadAssets();
-  }, [loadAssets]);
+  }, []);
+
+  const handlePictureLoadError = useCallback((err: unknown) => {
+    showToast(apiErrorMessage(err) || 'Could not load your token pictures', 'error');
+  }, [showToast]);
 
   const handleSelectImage = useCallback(async (assetId: string) => {
     await saveUpdate({ imageUrl: assetId });
@@ -352,7 +345,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
     try {
       const { asset } = await api.uploadAsset(formData);
-      setAssets((prev) => [asset, ...prev]);
+      setUploadedPictures((prev) => [asset, ...prev]);
       await saveUpdate({ imageUrl: asset.id });
       setShowImagePicker(false);
     } catch (err) {
@@ -665,39 +658,41 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                   </div>
                 </div>
 
-                {isLoadingAssets ? (
-                  <div className="flex items-center gap-2 text-stone-gray text-xs py-3">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Loading assets...
-                  </div>
-                ) : (
-                  <AssetGrid
-                    type={AssetType.TOKEN}
-                    assets={assets}
-                    // imageUrl may hold a bare id or a full /api/assets path,
-                    // so match on containment rather than equality.
-                    selectedId={assets.find((a) => current.imageUrl?.includes(a.id))?.id ?? null}
-                    onSelect={(asset) => (asset ? handleSelectImage(asset.id) : handleClearImage())}
-                    columns={5}
-                    gapClass="gap-1.5"
-                    maxHeightClass="max-h-40"
-                    leadingItem={
-                      <button
-                        type="button"
-                        onClick={handleClearImage}
-                        title="Use colored-letter placeholder"
-                        className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
-                          !current.imageUrl
-                            ? 'border-moss-green ring-1 ring-moss-green/30 bg-ink-muted/25'
-                            : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
-                        }`}
-                      >
-                        <span className="text-sm font-bold text-ink-secondary">?</span>
-                        <span className="absolute bottom-0 text-[7px] text-ink-muted">None</span>
-                      </button>
-                    }
-                  />
-                )}
+                <input
+                  type="search"
+                  value={pictureSearch}
+                  onChange={(e) => setPictureSearch(e.target.value)}
+                  aria-label="Search token pictures"
+                  placeholder="Search by name or tag"
+                  className="input-cozy w-full text-xs mb-2"
+                />
+                <AssetGrid
+                  type={AssetType.TOKEN}
+                  search={pictureSearch}
+                  prepend={uploadedPictures}
+                  onLoadError={handlePictureLoadError}
+                  // imageUrl may hold a bare id or a full /api/assets path.
+                  selectedId={extractAssetId(current.imageUrl)}
+                  onSelect={(asset) => (asset ? handleSelectImage(asset.id) : handleClearImage())}
+                  columns={5}
+                  gapClass="gap-1.5"
+                  maxHeightClass="max-h-40"
+                  leadingItem={
+                    <button
+                      type="button"
+                      onClick={handleClearImage}
+                      title="Use colored-letter placeholder"
+                      className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
+                        !current.imageUrl
+                          ? 'border-moss-green ring-1 ring-moss-green/30 bg-ink-muted/25'
+                          : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
+                      }`}
+                    >
+                      <span className="text-sm font-bold text-ink-secondary">?</span>
+                      <span className="absolute bottom-0 text-[7px] text-ink-muted">None</span>
+                    </button>
+                  }
+                />
 
                 {/* Save to creature template option */}
                 {current.creatureTemplateId && current.imageUrl && (

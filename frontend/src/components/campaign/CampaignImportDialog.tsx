@@ -21,6 +21,7 @@ import type { CampaignImportPreview, CampaignImportResult, CampaignImportSkipped
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import { apiErrorMessage, apiErrorStatus, errorMessage as thrownMessage } from '@/utils/errors';
+import { readArchiveManifest } from '@/utils/archiveManifest';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -96,9 +97,14 @@ export default function CampaignImportDialog({
     setErrorMessage('');
 
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      const previewData = await api.previewCampaignImport(formData);
+      // Read here, the archive is sent once, to be imported. The server is
+      // asked only about one this cannot read, and says what is wrong with it.
+      let previewData = await readArchiveManifest(selectedFile);
+      if (!previewData) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        previewData = await api.previewCampaignImport(formData);
+      }
       setPreview(previewData);
       setCampaignName(previewData.campaignName);
       setStep('preview');
@@ -329,7 +335,7 @@ export default function CampaignImportDialog({
               <Button
                 onClick={() => {
                 handleClose();
-                navigate(`/campaign/${result.campaignId}`);
+                navigate(`/campaigns/${result.campaignId}`);
                 }}
                 className="flex-1"
               >

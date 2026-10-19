@@ -4,7 +4,7 @@
 // General info, member management, danger zone
 // ============================================
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -29,9 +29,11 @@ import api from '@/services/api';
 import campaignService from '@/services/campaign.service';
 import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
-import type { CampaignMembership } from '@/types';
+import type { CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { isCampaignOwner } from '@/utils/campaignRoles';
+import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 interface CampaignSettingsModalProps {
   isOpen: boolean;
@@ -63,6 +65,7 @@ export default function CampaignSettingsModal({
   const isDmViewer = userRole === 'DM';
   const { showToast } = useToast();
   const { user } = useAuth();
+  const mayDelete = isCampaignOwner(campaign, user?.id) || user?.platformRole === 'ADMIN';
   const navigate = useNavigate();
 
   // ── Tab ─────────────────────────────────────
@@ -84,6 +87,9 @@ export default function CampaignSettingsModal({
   const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  // The invitations that still stand, for the DM to see and withdraw.
+  const [invitations, setInvitations] = useState<CampaignInvitationSummary[]>([]);
+  const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
 
   // ── Export ────────────────────────────────────
   const [exporting, setExporting] = useState(false);
@@ -109,9 +115,35 @@ export default function CampaignSettingsModal({
     }
   }, [isOpen, campaign?.id]);
 
+  const loadInvitations = useCallback(async () => {
+    if (!campaign?.id) return;
+    try {
+      setInvitations((await api.listCampaignInvitations(campaign.id)).invitations);
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Could not load the pending invitations', 'error');
+    }
+  }, [campaign?.id, showToast]);
+
+  useEffect(() => {
+    if (isOpen && isDmViewer && activeTab === 'members') void loadInvitations();
+  }, [isOpen, isDmViewer, activeTab, loadInvitations]);
+
   if (!campaign) return null;
 
   const memberships: CampaignMembership[] = campaign.memberships ?? [];
+
+  const handleWithdrawInvitation = async (invitation: CampaignInvitationSummary) => {
+    setWithdrawingId(invitation.id);
+    try {
+      await api.withdrawCampaignInvitation(campaign.id, invitation.id);
+      setInvitations((prev) => prev.filter((i) => i.id !== invitation.id));
+      showToast(`Withdrew the invitation to ${invitation.user.displayName}`, 'success');
+    } catch (err) {
+      showToast(apiErrorMessage(err) ?? 'Failed to withdraw the invitation', 'error');
+    } finally {
+      setWithdrawingId(null);
+    }
+  };
 
   // ── Handlers ─────────────────────────────────
 
@@ -125,11 +157,8 @@ export default function CampaignSettingsModal({
     try {
       await campaignService.updateCampaign(campaign.id, {
         name: trimmedName,
-        // TODO(ui): an emptied box sends undefined, which leaves the field out
-        // of the request, so the server keeps the old description while this
-        // panel says the settings were saved. Send null for an empty box; the
-        // server accepts it and clears the description.
-        description: description.trim() || undefined,
+        // An emptied box clears the description; leaving it out kept the old one.
+        description: description.trim() || null,
       });
       await refreshCampaign();
       showToast('Campaign settings saved', 'success');
@@ -276,21 +305,18 @@ export default function CampaignSettingsModal({
                 {/* ── Tabs ── */}
                 <div className="flex gap-1 mt-4">
                   {(
-                    /* TODO(ui): a DM who is neither the owner nor an admin,
-                       such as one the game was handed to, still gets the
-                       Danger Zone tab, and the server refuses its Delete
-                       Campaign. Offer the tab only to the owner or an admin. */
-                    (isDmViewer
-                      ? [
-                          { id: 'general', label: 'General' },
-                          { id: 'chat', label: 'Chat' },
-                          { id: 'members', label: 'Members' },
-                          { id: 'danger', label: 'Danger Zone' },
-                        ]
-                      : [
-                          { id: 'members', label: 'Members' },
-                          { id: 'danger', label: 'Danger Zone' },
-                        ]) as { id: SettingsTab; label: string }[]
+                    [
+                      ...(isDmViewer
+                        ? [
+                            { id: 'general', label: 'General' },
+                            { id: 'chat', label: 'Chat' },
+                          ]
+                        : []),
+                      { id: 'members', label: 'Members' },
+                      // Only Delete Campaign is here, which the server leaves
+                      // to the owner or an administrator, whatever their role.
+                      ...(mayDelete ? [{ id: 'danger', label: 'Danger Zone' }] : []),
+                    ] as { id: SettingsTab; label: string }[]
                   ).map((tab) => (
                     <button
                       key={tab.id}
@@ -322,16 +348,12 @@ export default function CampaignSettingsModal({
                       >
                         Campaign Name <span className="text-danger-ink">*</span>
                       </label>
-                      {/* TODO(ui): these boxes stop at 100 and 1000 characters,
-                         while the server accepts a name of 200 and a
-                         description of 5000. Use the server's limits,
-                         declared in one place. */}
                       <input
                         id="cs-name"
                         type="text"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        maxLength={100}
+                        maxLength={CAMPAIGN_LIMITS.maxNameLength}
                         className="input-cozy w-full"
                         placeholder="My Campaign"
                       />
@@ -349,12 +371,12 @@ export default function CampaignSettingsModal({
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         rows={4}
-                        maxLength={1000}
+                        maxLength={CAMPAIGN_LIMITS.maxDescriptionLength}
                         className="input-cozy w-full resize-none"
                         placeholder="Describe your campaign…"
                       />
                       <p className="mt-1 text-xs text-warm-gray text-right">
-                        {description.length}/1000
+                        {description.length}/{CAMPAIGN_LIMITS.maxDescriptionLength}
                       </p>
                     </div>
 
@@ -637,6 +659,38 @@ export default function CampaignSettingsModal({
                         );
                       })}
                     </div>
+
+                    {/* Invitations that still stand: who has been asked, until when */}
+                    {isDmViewer && invitations.length > 0 && (
+                      <div className="space-y-2">
+                        <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">Invited</h3>
+                        {invitations.map((invitation) => (
+                          <div
+                            key={invitation.id}
+                            className="flex items-center justify-between p-3 rounded-lg bg-parchment/30 border border-dashed border-moss-green/20"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-ink-black truncate">{invitation.user.displayName}</p>
+                              <p className="text-xs text-stone-gray">
+                                {invitation.expiresAt
+                                  ? `Invited, until ${new Date(invitation.expiresAt).toLocaleDateString()}`
+                                  : 'Invited'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleWithdrawInvitation(invitation)}
+                              disabled={withdrawingId === invitation.id}
+                              className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                              aria-label={`Withdraw the invitation to ${invitation.user.displayName}`}
+                              title="Withdraw the invitation"
+                            >
+                              {withdrawingId === invitation.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -749,8 +803,9 @@ export default function CampaignSettingsModal({
           campaignId={campaign.id}
           onClose={() => setShowInviteModal(false)}
           // The invite dialog says it was sent. Nothing on the campaign
-          // changes until it is accepted, which the roster hears about.
-          onSuccess={() => setShowInviteModal(false)}
+          // changes until it is accepted, which the roster hears about; the
+          // new invitation joins the Invited list.
+          onSuccess={() => { setShowInviteModal(false); void loadInvitations(); }}
         />
       )}
     </>

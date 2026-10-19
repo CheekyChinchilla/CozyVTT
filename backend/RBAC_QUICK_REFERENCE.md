@@ -54,11 +54,20 @@ and that every listed route refuses members of other campaigns (403) and
 callers who are not signed in (401). A campaign route with neither guard must
 decide in its handler and be named in that file.
 
+The guards answer 403 to anyone not in the campaign whether or not it exists,
+so they confirm nothing. A route that loads a record by its own id (a token
+template, a creature, a character, an asset, an invitation) answers a record
+the caller may not read with the same 404 and message as an id that names
+nothing, and keeps 403 for one they may read but not change;
+`src/routes/__tests__/unreadableRecords.e2e.test.ts` holds each of them to
+that.
+
 #### Characters in a campaign
 Any member may read a character assigned to the campaign, and the DM may edit
-it, only while its owner is still a member (`ownerStillIn` in
-`routes/characters.ts`). Removing a member takes their characters out of the
-campaign in the same transaction; a character left naming a campaign by a
+it, only while its owner is still a member (`mayReadCharacter` and
+`ownerStillIn` in `utils/characterCampaign.ts`); anyone else is answered 404.
+Removing a member takes their characters out of the campaign in the same
+transaction; a character left naming a campaign by a
 removal from before that is its owner's alone, and its saves are not sent to
 that campaign. The socket's hit point and hit dice events ask the same
 (`characterInCampaign` in `utils/characterCampaign.ts`).
@@ -248,8 +257,8 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
 | Code | Meaning | When to Use |
 |------|---------|-------------|
 | 401 | Unauthorized | User not logged in |
-| 403 | Forbidden | User logged in but lacks permission |
-| 404 | Not Found | Resource doesn't exist |
+| 403 | Forbidden | User logged in but lacks permission, for a record they may read |
+| 404 | Not Found | Resource doesn't exist, or the caller may not read it (see below) |
 | 400 | Bad Request | Invalid input data |
 | 409 | Conflict | The request conflicts with what is stored now: the last admin, a DM seat that stops an account deletion, an asset still in use, a character changed since it was loaded, an email address already taken, a backup, restore or SRD import already running, a fog operation while fog is off |
 | 429 | Too Many Requests | A rate limit: the general `/api` limiter or a route's own |
@@ -281,12 +290,14 @@ router.post('/api/campaigns/:campaignId/maps', campaignDM, handler);
 ```
 
 ### Pattern 5: Complex Permission Check
-When the rule depends on the record, load it first and take the campaign from the record, never from the request:
+When the rule depends on the record, load it first and take the campaign from the record, never from the request. A record the caller may not read at all is answered exactly as one that does not exist, so no reply confirms that an id is real; `403` is for a record they may read but not change:
 ```typescript
 router.put('/api/characters/:id', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.session.userId!;
   const character = await prisma.character.findUnique({ where: { id: req.params.id } });
-  if (!character) return res.status(404).json({ error: 'Not Found', message: 'Character not found' });
+  if (!character || !(await mayReadCharacter(character, userId))) {
+    return res.status(404).json({ error: 'Not Found', message: 'Character not found' });
+  }
 
   // The caller's role in the character's own campaign
   const membership = character.campaignId
@@ -473,6 +484,9 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   campaign's DM's and an admin's; a global one an admin's, or its uploader's
   while they keep `globalAssetManager`; a personal one its uploader's and an
   admin's. A campaign asset with no campaign recorded is an admin's alone.
+  A move to `USER` is its uploader's (or an admin's) alone besides: the asset
+  would land in the uploader's personal library, so a DM moving a player's
+  upload there would take it out of the campaign and out of their own reach.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
   and sharing is limited to the DM's own documents and global ones, unless the
   DM is a platform admin, who may share any document. A DM may read a document
@@ -647,6 +661,16 @@ req.campaignMembership = {
   campaignId: string
 }
 ```
+
+## Invitations
+
+The campaign's DM invites (`POST /api/campaigns/:campaignId/invite`), lists
+the invitations that still stand (`GET .../invitations`) and withdraws one
+(`DELETE .../invitations/:invitationId`), all behind `campaignDM`. Only the
+invited user accepts or declines. An invitation past its `expiresAt` counts
+as none everywhere (`standingInvitation` in `utils/invitationState.ts`).
+Withdrawing an invitation of another campaign answers 404, as an unknown one
+does.
 
 ---
 

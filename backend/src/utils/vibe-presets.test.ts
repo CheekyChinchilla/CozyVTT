@@ -7,7 +7,14 @@
  * through this helper instead.
  */
 
-import { preserveAtmosphereAudio, validateVibeSettings, DEFAULT_VIBE_SETTINGS } from './vibe-presets';
+import { preserveAtmosphereAudio, DEFAULT_VIBE_SETTINGS } from './vibe-presets';
+import { VibeSettingsSchema } from '../validators/campaigns';
+
+/** null when the vibe settings save, else the reasons. */
+const refusalOf = (settings: unknown) => {
+  const parsed = VibeSettingsSchema.safeParse(settings);
+  return parsed.success ? null : parsed.error.issues.map((i) => i.message).join('; ');
+};
 
 const settings = (extra: Record<string, unknown> = {}) => ({
   enabled: true,
@@ -20,7 +27,7 @@ const audioOf = (value: unknown): unknown =>
 
 describe('DEFAULT_VIBE_SETTINGS', () => {
   it('passes the check every writer applies, so a new or imported campaign starts valid', () => {
-    expect(validateVibeSettings(DEFAULT_VIBE_SETTINGS)).toBeNull();
+    expect(refusalOf(DEFAULT_VIBE_SETTINGS)).toBeNull();
   });
 });
 
@@ -69,7 +76,7 @@ describe('preserveAtmosphereAudio', () => {
   });
 });
 
-describe('validateVibeSettings filter allowlist', () => {
+describe('the vibe filter allowlist', () => {
   const withFilter = (filter: string) => ({
     enabled: true,
     periods: [{ name: 'Day', hue: '#FF9966', filter, audio: null }],
@@ -84,7 +91,7 @@ describe('validateVibeSettings filter allowlist', () => {
     'hue-rotate(-15deg)',
     'brightness(1.05)',
   ])('accepts the filter %j, as the presets and the editor produce it', (filter) => {
-    expect(validateVibeSettings(withFilter(filter))).toBeNull();
+    expect(refusalOf(withFilter(filter))).toBeNull();
   });
 
   it.each([
@@ -94,6 +101,6 @@ describe('validateVibeSettings filter allowlist', () => {
     'brightness(1);background:url(x)',
     'expression(alert(1))',
   ])('refuses the filter %j', (filter) => {
-    expect(validateVibeSettings(withFilter(filter))).toMatch(/filter/);
+    expect(refusalOf(withFilter(filter))).toMatch(/filter/);
   });
 });

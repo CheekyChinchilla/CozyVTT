@@ -27,6 +27,7 @@ import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils
 import { toJson } from '../utils/prisma-json';
 import { holdOwnerCreates } from '../utils/ownerLimit';
 import logger from '../utils/logger';
+import { escapeLikePattern } from '../utils/likePattern';
 
 const router = Router();
 
@@ -193,8 +194,8 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const where: Record<string, unknown> = {};
 
     if (search && typeof search === 'string') {
-      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
-      where.name = { contains: search, mode: 'insensitive' };
+      // Matched as typed: a % or _ in it is not a wildcard.
+      where.name = { contains: escapeLikePattern(search), mode: 'insensitive' };
     }
     if (gameSystem !== undefined) {
       where.gameSystem = gameSystem === 'flexible' ? null : gameSystem;

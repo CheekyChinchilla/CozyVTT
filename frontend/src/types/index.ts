@@ -597,7 +597,20 @@ export interface CampaignInvitation {
     owner?: {
       displayName: string;
     };
+    /** The member who runs the game, which is not the owner once it is handed over. */
+    dm?: {
+      displayName: string;
+    } | null;
   };
+}
+
+/** An invitation as the campaign's DM lists them. */
+export interface CampaignInvitationSummary {
+  id: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string | null;
+  user: { displayName: string };
 }
 
 // ============================================
@@ -639,6 +652,8 @@ export interface CampaignDocument {
   id: string;
   name: string;
   description: string | null;
+  /** The stored file's name, whose extension the document is served by. */
+  filename: string;
   originalName: string;
   /** As declared at upload. Not what the file is served as. */
   mimeType: string;
@@ -1131,7 +1146,8 @@ export interface CreateCampaignRequest {
 export interface UpdateCampaignRequest {
   name?: string;
   gameSystem?: GameSystem | null;
-  description?: string;
+  /** null clears it. */
+  description?: string | null;
   status?: CampaignStatus;
   vibeSettings?: VibeSettings;
   spiritLayerEnabled?: boolean;

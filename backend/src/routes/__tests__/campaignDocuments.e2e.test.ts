@@ -224,6 +224,9 @@ describe('campaign documents', () => {
       const res = await player.get(`/api/campaigns/${campaignA}/documents`);
       expect(res.body.documents.map((d: { id: string }) => d.id)).toEqual([pdfId]);
       expect(res.body.documents[0].uploadedBy.displayName).toBe('Doc Owner');
+      // The stored name, which the reader goes by: the server serves by it.
+      expect(res.body.documents[0].filename).toBe((await prisma.asset.findUniqueOrThrow({ where: { id: pdfId } })).filename);
+      expect(res.body.documents[0].filename).toMatch(/\.pdf$/);
     });
 
     it('someone in a different campaign still cannot', async () => {
@@ -276,6 +279,20 @@ describe('campaign documents', () => {
       expect(res.headers['content-disposition']).toMatch(/^inline/);
     });
 
+    // A browser keeps the headers it stored with the document and replaces
+    // them with a 304's, so a 304 carrying the app's own policy unsandboxed a
+    // text document opened directly.
+    it.each([['a text document', () => txtId], ['a PDF', () => pdfId]])(
+      'sandboxes %s when it answers 304 too',
+      async (_label, id) => {
+        const first = await serve(owner, id());
+        const again = await owner.get(`/api/assets/documents/${id()}`).set('If-None-Match', first.headers.etag);
+        expect(again.status).toBe(304);
+        expect(again.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+        expect(again.headers['x-content-type-options']).toBe('nosniff');
+      },
+    );
+
     it('ignores the stored mimeType entirely', async () => {
       // Tamper with the row the way a compromised upload path might.
       await prisma.asset.update({ where: { id: txtId }, data: { mimeType: 'text/html' } });
@@ -318,12 +335,12 @@ describe('campaign documents', () => {
     });
 
     it('a member cannot download one that is not shared', async () => {
-      expect((await download(player, txtId)).status).toBe(403);
+      expect((await download(player, txtId)).status).toBe(404);
     });
 
     it('a stranger cannot download a shared document', async () => {
       await link(owner, campaignA, pdfId);
-      expect((await download(stranger, pdfId)).status).toBe(403);
+      expect((await download(stranger, pdfId)).status).toBe(404);
     });
   });
 

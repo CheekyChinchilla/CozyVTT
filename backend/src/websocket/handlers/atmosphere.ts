@@ -4,10 +4,8 @@
 
 import { Server } from 'socket.io';
 import { AuthenticatedSocket } from '../auth';
-import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
-import { readJsonObject, toJson } from '../../utils/prisma-json';
-import { setCampaignAmbientAudio } from '../../services/atmosphereAudio';
+import { setCampaignAmbientAudio, setCampaignAtmosphereEffect } from '../../services/atmosphereAudio';
 import { withinCeiling } from '../shared';
 
 export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSocket): void {
@@ -30,17 +28,7 @@ export function registerAtmosphereHandlers(io: Server, socket: AuthenticatedSock
         ? data.effect
         : null;
 
-      // Fetch existing vibeSettings so we preserve all other keys
-      const campaign = await prisma.campaign.findUnique({
-        where: { id: socket.campaignId },
-        select: { vibeSettings: true },
-      });
-      const existing = readJsonObject(campaign?.vibeSettings) ?? {};
-
-      await prisma.campaign.update({
-        where: { id: socket.campaignId },
-        data: { vibeSettings: toJson({ ...existing, atmosphereEffect: effect }) },
-      });
+      await setCampaignAtmosphereEffect(socket.campaignId, effect);
 
       io.to(socket.campaignId).emit('atmosphere.effect.updated', {
         effect,

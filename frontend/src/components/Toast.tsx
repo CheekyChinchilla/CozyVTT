@@ -4,7 +4,7 @@
 // Auto-dismisses after timeout
 // ============================================
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
@@ -25,16 +25,24 @@ export default function Toast({
   onClose,
   show,
 }: ToastProps) {
+  // The latest close function, so the timer runs from when the toast shows
+  // and not from the last time its page drew: a page that hands over a new
+  // function each draw kept restarting it.
+  const closeLatest = useRef(onClose);
+  useEffect(() => {
+    closeLatest.current = onClose;
+  });
+
   useEffect(() => {
     if (show && duration > 0) {
       const timer = setTimeout(() => {
-        onClose();
+        closeLatest.current();
       }, duration);
 
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [show, duration, onClose]);
+  }, [show, duration]);
 
   const getIcon = () => {
     switch (type) {

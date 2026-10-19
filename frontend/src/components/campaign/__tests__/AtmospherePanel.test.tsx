@@ -85,6 +85,18 @@ describe('AtmospherePanel audio list', () => {
     expect(screen.getByText('This Table')).toBeInTheDocument();
   });
 
+  // The panel fetched one page, the newest 50 tracks of every campaign the DM
+  // is in, then kept this campaign's, so a track past them was not offered.
+  it('offers a track from a later page of the library', async () => {
+    const others = Array.from({ length: 50 }, (_, i) => track(`o${i}`, `Other ${i}`, AssetScope.CAMPAIGN, { campaignId: 'c2' }));
+    listAssets.mockImplementation(async (params: { page?: number }) => (params.page === 2
+      ? { assets: [track('a3', 'This Table', AssetScope.CAMPAIGN, { campaignId: 'c1' })], pagination: { page: 2, limit: 100, total: 51, totalPages: 2 } }
+      : { assets: others, pagination: { page: 1, limit: 100, total: 51, totalPages: 2 } }));
+    render(<AtmospherePanel isOpen onClose={vi.fn()} />);
+
+    expect(await screen.findByText('This Table')).toBeInTheDocument();
+  });
+
   it('does not offer a track scoped to another campaign, which the server refuses', async () => {
     listAssets.mockResolvedValue({
       assets: [

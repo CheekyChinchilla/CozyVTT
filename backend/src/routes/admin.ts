@@ -44,7 +44,7 @@ import {
   removeLeftoverRestoreUploads,
 } from '../services/restoreState';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
-import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { MULTIPART_FIELD_LIMITS, MULTIPART_NAME_CHARSET } from '../utils/multipartLimits';
 import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import { forgetSetupComplete } from '../middleware/setup';
@@ -85,6 +85,7 @@ const restoreStorage = multer.diskStorage({
   },
 });
 const restoreUpload = multer({
+  ...MULTIPART_NAME_CHARSET,
   storage: restoreStorage,
   limits: { fileSize: 4 * 1024 * 1024 * 1024, ...MULTIPART_FIELD_LIMITS }, // 4 GB max
   fileFilter: (_req, file, cb) => {

@@ -419,7 +419,7 @@ The Asset Library is where all your campaign media lives — maps, token images,
 
 A PNG that is animated is refused for now, for every kind of picture.
 
-An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again. For now, Firefox's upload dialog refuses Ogg and WAV files with "Invalid file type"; upload them from another browser, or as MP3. A later release fixes this.
+An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again.
 
 Rulebooks and handouts are not here. They have their own **Documents** section, described below, so a PDF never sits among your map thumbnails.
 
@@ -439,11 +439,11 @@ Click **Upload Asset** to add a new asset. You'll choose:
 
 ### Finding Assets
 
-Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size. Click a tag chip to filter to just assets with that tag. The library shows 24 assets at a time; once there are more, **Previous** and **Next** under the grid move between pages. For now the search, the tag filter and the sort apply to the page on screen only, so an asset on another page does not show up until you move to that page; a later release makes them cover the whole library.
+Use the **search bar** to find assets across your whole library, by part of a name or by a whole tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size; the sort covers the whole library too. The library shows 24 assets at a time; once there are more, **Previous** and **Next** under the grid move between pages. The tag chips under the toolbar are the tags on the page on screen: click one to show only the assets on that page with that tag.
 
 ### Viewing and Managing Assets
 
-Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. If you uploaded the asset, the panel also lets you move it to another library with **Move to…** (an avatar always stays in your personal library) and delete it.
+Click any asset card to open its **detail panel** on the right, with its preview, description, tags and details. Tags cannot be changed after the upload. The panel also lets you move it to another library with **Move to…** and delete it, where you may: an asset you uploaded (one in a campaign's library while you are still in that campaign), any asset in the library of a campaign you run as its DM, and any asset at all for a server admin. Only the person who uploaded an asset can move it to **Personal**, which is their own library. An avatar always stays in your personal library.
 
 **Deleting an asset asks first, and warns you if it is still in use.** The first question names the asset. If a map, a token, a character, a character template, a creature, a token template, a campaign's ambient sound or the sound of one of a campaign's times of day still uses it, nothing is deleted yet: a second window lists where it is used, and the file is removed only if you choose **Delete anyway**. A deleted file cannot be brought back, and everything in that list is left without its picture or sound. You see names for the campaigns you run, your own characters and shared character templates; anything else is only counted ("2 maps you cannot see"), so the list never reveals other people's campaigns. Documents work the same way from the Documents page. An administrator deleting a file from the **Assets** tab of the Admin Panel is asked the same two questions, and sees everything in the list by name, whoever's campaign it is in.
 
@@ -496,7 +496,7 @@ A DM can share their own documents, and Global ones, with their campaign from in
 
 ### Reading
 
-Click a document's name or its **Read** button to open it in a full-screen reader over whatever page you are on. **Open in a new tab** does what it says, for reading on a second screen while play continues. A PDF is shown by your browser's own PDF viewer. Some browsers will not display a PDF inside another page: Safari leaves the space blank, and Chrome and Edge show a page saying the content is blocked. If that happens, use **Open this PDF in a new tab** above the document, or **Open in a new tab** at the bottom of the reader.
+Click a document's name or its **Read** button to open it in a full-screen reader over whatever page you are on. **Open in a new tab** does what it says, for reading on a second screen while play continues. A PDF is shown by your browser's own PDF viewer. Firefox on a computer shows it inside the reader. Chrome, Edge, Safari and phone browsers will not show a PDF inside another page, so there the reader says so and offers **Open this PDF in a new tab** in its place. If a PDF does not appear in Firefox, use **Open this PDF in a new tab** above it, or **Open in a new tab** at the bottom of the reader.
 
 ### Editing
 

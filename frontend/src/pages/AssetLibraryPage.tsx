@@ -63,11 +63,15 @@ export default function AssetLibraryPage() {
     : folderScope === 'user' ? AssetScope.USER
     : folderScope === 'campaign' ? AssetScope.CAMPAIGN
     : undefined;
+  // Search and sort are the server's, so they cover every page.
+  const search = debouncedSearch.trim();
   const assetParams: AssetListParams = {
     page: currentPage,
     limit: 24,
     ...(selectedType !== 'all' ? { type: selectedType } : {}),
     ...(scopeParam ? { scope: scopeParam } : {}),
+    ...(search ? { search } : {}),
+    ...(sortBy !== 'date' ? { sort: sortBy } : {}),
   };
   const assetsQuery = useAssetsQuery(assetParams);
 
@@ -82,11 +86,11 @@ export default function AssetLibraryPage() {
     }
   }, [assetsQuery.isError]);
 
-  // Reset page and tags when scope/type changes
+  // Back to the first page, with no tags chosen, when what is asked for changes
   useEffect(() => {
     setCurrentPage(1);
     setSelectedTags([]);
-  }, [folderScope, selectedType]);
+  }, [folderScope, selectedType, search, sortBy]);
 
   // All unique tags from the current result set
   const availableTags = useMemo(() => {
@@ -95,41 +99,12 @@ export default function AssetLibraryPage() {
     return Array.from(tagSet).sort();
   }, [assets]);
 
-  // TODO(assets): search filters only the current page of results; send it
-  // to the server so it covers every page.
-  // Filter and sort assets (client-side: search + tags)
-  const filteredAssets = useMemo(() => {
-    let filtered = [...assets];
-
-    if (debouncedSearch) {
-      const query = debouncedSearch.toLowerCase();
-      filtered = filtered.filter(
-        (asset) =>
-          asset.name.toLowerCase().includes(query) ||
-          asset.tags.some((tag) => tag.toLowerCase().includes(query))
-      );
-    }
-
-    if (selectedTags.length > 0) {
-      filtered = filtered.filter((asset) =>
-        selectedTags.every((t) => asset.tags.includes(t))
-      );
-    }
-
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'name':
-          return a.name.localeCompare(b.name);
-        case 'size':
-          return b.fileSize - a.fileSize;
-        case 'date':
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      }
-    });
-
-    return filtered;
-  }, [assets, debouncedSearch, selectedTags, sortBy]);
+  // The tag chips filter the page on screen, as they say; the server has
+  // already searched and sorted it.
+  const filteredAssets = useMemo(
+    () => (selectedTags.length === 0 ? assets : assets.filter((asset) => selectedTags.every((t) => asset.tags.includes(t)))),
+    [assets, selectedTags]
+  );
 
   // Uploads/deletes change page counts, so invalidate every cached asset
   // page rather than splicing one page's array locally.
@@ -137,6 +112,13 @@ export default function AssetLibraryPage() {
     queryClient.invalidateQueries({ queryKey: ['assets'] });
     setIsUploadModalOpen(false);
     setToast({ message: 'Asset uploaded successfully!', type: 'success' });
+  };
+
+  // A move changes which scope filter and campaign list the asset is in, so
+  // the library is fetched again, as after an upload or a delete.
+  const handleAssetMoved = (moved: Asset) => {
+    queryClient.invalidateQueries({ queryKey: ['assets'] });
+    setSelectedAsset(moved);
   };
 
   // The card and the detail panel each ask "delete this?" first. If the server
@@ -214,8 +196,9 @@ export default function AssetLibraryPage() {
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-gray/40" />
               <input
-                type="text"
-                placeholder="Search assets by name or tags..."
+                type="search"
+                aria-label="Search assets"
+                placeholder="Search by name or tag..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-9 py-2 bg-paper-white border border-moss-green/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-moss-green text-stone-gray placeholder-stone-gray/50"
@@ -315,7 +298,8 @@ export default function AssetLibraryPage() {
             {/* Tag chips */}
             {availableTags.length > 0 && (
               <div className="flex items-center gap-2 flex-wrap">
-                <Tag className="w-4 h-4 text-stone-gray/40 shrink-0" />
+                <Tag className="w-4 h-4 text-stone-gray/40 shrink-0" aria-hidden="true" />
+                <span className="text-xs text-stone-gray/60">Tags on this page:</span>
                 {availableTags.map((tag) => (
                   <button
                     key={tag}
@@ -437,16 +421,18 @@ export default function AssetLibraryPage() {
         onSuccess={handleUploadSuccess}
       />
 
-      {/* Detail Panel */}
-      {/* TODO(ui): mounted outside AnimatePresence, so the panel has no exit
-          animation; wrap it so it slides out as it slides in. */}
-      {selectedAsset && (
-        <AssetDetailPanel
-          asset={selectedAsset}
-          onClose={() => setSelectedAsset(null)}
-          onDelete={handleDeleteAsset}
-        />
-      )}
+      {/* Detail Panel, inside AnimatePresence so it slides out as it slides in */}
+      <AnimatePresence>
+        {selectedAsset && (
+          <AssetDetailPanel
+            key="asset-detail"
+            asset={selectedAsset}
+            onClose={() => setSelectedAsset(null)}
+            onDelete={handleDeleteAsset}
+            onUpdate={handleAssetMoved}
+          />
+        )}
+      </AnimatePresence>
 
       {assetDelete.inUseDialog}
 

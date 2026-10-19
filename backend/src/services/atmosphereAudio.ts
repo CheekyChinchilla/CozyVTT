@@ -13,8 +13,9 @@
 import { Server } from 'socket.io';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
-import { readJsonObject, toJson } from '../utils/prisma-json';
+import { readJsonObject } from '../utils/prisma-json';
 import { canReadAsset } from './permissions';
+import { setVibeSettingsLiveKey } from './vibeSettingsColumn';
 
 export interface SetAmbientAudioResult {
   ok: boolean;
@@ -63,22 +64,8 @@ export async function setCampaignAmbientAudio(
     : 0.5;
   const loop = opts.loop !== false; // default true
 
-  // Persist atmosphere audio state alongside existing vibeSettings keys
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-    select: { vibeSettings: true },
-  });
-  const existing = readJsonObject(campaign?.vibeSettings) ?? {};
-
-  await prisma.campaign.update({
-    where: { id: campaignId },
-    data: {
-      vibeSettings: toJson({
-        ...existing,
-        atmosphereAudio: assetId ? { assetId, volume, loop } : null,
-      }),
-    },
-  });
+  // Its own part of the vibe settings, in one statement (vibeSettingsColumn).
+  await setVibeSettingsLiveKey(campaignId, 'atmosphereAudio', assetId ? { assetId, volume, loop } : null);
 
   io.to(campaignId).emit('atmosphere.audio.updated', {
     assetId,
@@ -109,4 +96,9 @@ export async function lastAmbientVolume(campaignId: string): Promise<number> {
     if (typeof volume === 'number') return Math.min(1, Math.max(0, volume));
   }
   return 0.5;
+}
+
+/** Store the campaign's weather effect (null for none), leaving the rest of its vibe settings alone. */
+export async function setCampaignAtmosphereEffect(campaignId: string, effect: string | null): Promise<void> {
+  await setVibeSettingsLiveKey(campaignId, 'atmosphereEffect', effect);
 }

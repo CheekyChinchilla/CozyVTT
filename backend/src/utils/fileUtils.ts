@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import logger from './logger';
 import { errorCode } from './errors';
+import { UPLOAD_CONTENT_TYPES, UPLOAD_EXTENSIONS } from '../validators/uploadTypes';
 
 /**
  * Asset types, as the database declares them.
@@ -121,16 +122,10 @@ export const UPLOAD_LIMITS: Readonly<Record<ConfigurableAssetType, number>> = Ob
 export const MAX_UPLOAD_BYTES: number = Math.max(...Object.values(UPLOAD_LIMITS));
 
 /**
- * Allowed MIME types for each asset type
+ * The content types each asset type is stored as, from the list the upload
+ * dialog shares (validators/uploadTypes.ts).
  */
-export const ALLOWED_MIME_TYPES = {
-  MAP: ['image/png', 'image/jpeg', 'image/webp'],
-  TOKEN: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-  AUDIO: ['audio/mpeg', 'audio/ogg', 'audio/wav'],
-  AVATAR: ['image/png', 'image/jpeg', 'image/webp'],
-  DOCUMENT: ['application/pdf', 'text/plain', 'text/markdown'],
-  OTHER: [],
-} as const satisfies Record<AssetType, readonly string[]>;
+export const ALLOWED_MIME_TYPES = UPLOAD_CONTENT_TYPES satisfies Record<AssetType, readonly string[]>;
 
 /**
  * The type a file is stored and served as, from what file-type found in its
@@ -145,16 +140,9 @@ export function storedFileType(detected: { mime: string; ext: string }): { mime:
 }
 
 /**
- * Allowed file extensions for each asset type
+ * Allowed file extensions for each asset type, from the same shared list.
  */
-export const ALLOWED_EXTENSIONS = {
-  MAP: ['.png', '.jpg', '.jpeg', '.webp'],
-  TOKEN: ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
-  AUDIO: ['.mp3', '.ogg', '.wav'],
-  AVATAR: ['.png', '.jpg', '.jpeg', '.webp'],
-  DOCUMENT: ['.pdf', '.txt', '.md'],
-  OTHER: [],
-} as const satisfies Record<AssetType, readonly string[]>;
+export const ALLOWED_EXTENSIONS = UPLOAD_EXTENSIONS satisfies Record<AssetType, readonly string[]>;
 
 /**
  * Generate a unique filename with UUID and preserve extension
@@ -340,6 +328,18 @@ export function isAllowedMimeType(assetType: AssetType, mimeType: string): boole
 export function isAllowedExtension(assetType: AssetType, extension: string): boolean {
   const ext = extension.startsWith('.') ? extension.toLowerCase() : `.${extension.toLowerCase()}`;
   return (ALLOWED_EXTENSIONS[assetType] as readonly string[]).includes(ext);
+}
+
+/**
+ * Whether a file whose bytes were identified as `detected` (after
+ * storedFileType) may be stored as this asset type: its type must be allowed,
+ * and so must the extension it is stored under. The type alone is not
+ * enough: MPEG layer 1 and 2 audio is audio/mpeg like an MP3, but would be
+ * stored as .mp1 or .mp2, which the audio route does not serve and no browser
+ * plays. The upload and the campaign import both decide by this.
+ */
+export function isAcceptedContent(assetType: AssetType, detected: { mime: string; ext: string }): boolean {
+  return isAllowedMimeType(assetType, detected.mime) && isAllowedExtension(assetType, detected.ext);
 }
 
 /**

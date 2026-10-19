@@ -12,6 +12,13 @@ import { apiErrorMessage } from '@/utils/errors';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 import { ASSET_LIMITS } from '@/constants/assetLimits';
 import { assetNameFrom } from '@/utils/assetName';
+import { UPLOAD_EXTENSIONS } from '@/constants/uploadTypes';
+
+/** A file name's extension, lower case and with its dot, or '' for none. */
+function extensionOf(fileName: string): string {
+  const dot = fileName.lastIndexOf('.');
+  return dot > 0 ? fileName.slice(dot).toLowerCase() : '';
+}
 
 interface AssetUploadModalProps {
   isOpen: boolean;
@@ -160,27 +167,14 @@ export default function AssetUploadModal({
     // Server-configured limit (MAX_<TYPE>_SIZE_MB), with a local fallback
     const maxSize = getUploadLimit(serverConfig, type);
 
-    const allowedTypes: Record<AssetType, string[]> = {
-      [AssetType.MAP]: ['image/jpeg', 'image/png', 'image/webp'],
-      [AssetType.TOKEN]: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
-      // TODO(assets): audio/mp4 (M4A) passes here but the server refuses it
-      // (ALLOWED_MIME_TYPES in backend/src/utils/fileUtils.ts); use the server's list.
-      [AssetType.AUDIO]: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'],
-      [AssetType.AVATAR]: ['image/jpeg', 'image/png', 'image/webp'],
-      [AssetType.DOCUMENT]: ['application/pdf', 'text/plain', 'text/markdown'],
-      [AssetType.OTHER]: [],
-    };
-
     if (file.size > maxSize) {
       return `File size exceeds maximum of ${formatUploadLimit(maxSize)}`;
     }
 
-    const allowed = allowedTypes[type];
-    // TODO(assets): Firefox reports a Vorbis .ogg as application/ogg and a .wav
-    // as audio/x-wav, so this refuses both there while the server, which reads
-    // the file's content, would take them. Check the extension too, or leave
-    // the type to the server.
-    if (allowed.length > 0 && !allowed.includes(file.type)) {
+    // The server's own list, by extension: the type a browser reports for a
+    // file differs between browsers, and the server reads the file itself.
+    const allowed: readonly string[] = UPLOAD_EXTENSIONS[type];
+    if (allowed.length > 0 && !allowed.includes(extensionOf(file.name))) {
       return `Invalid file type. Allowed types: ${allowed.join(', ')}`;
     }
 
@@ -277,13 +271,9 @@ export default function AssetUploadModal({
       }
       formData.append('file', selectedFile);
 
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 10, 90));
-      }, 200);
-
-      const response = await api.uploadAsset(formData);
-
-      clearInterval(progressInterval);
+      // How much has been sent, held under 100 until the server has answered:
+      // it still checks and stores the file once the last byte arrives.
+      const response = await api.uploadAsset(formData, (percent) => setUploadProgress(Math.min(percent, 99)));
       setUploadProgress(100);
 
       setTimeout(() => {
@@ -532,15 +522,7 @@ export default function AssetUploadModal({
                   onChange={handleFileInputChange}
                   disabled={uploading}
                   className="hidden"
-                  accept={
-                    assetType === AssetType.MAP || assetType === AssetType.TOKEN || assetType === AssetType.AVATAR
-                      ? 'image/*'
-                      : assetType === AssetType.AUDIO
-                      ? 'audio/*'
-                      : assetType === AssetType.DOCUMENT
-                      ? '.pdf,.txt,.md,application/pdf,text/plain,text/markdown'
-                      : '*'
-                  }
+                  accept={UPLOAD_EXTENSIONS[assetType].length > 0 ? UPLOAD_EXTENSIONS[assetType].join(',') : undefined}
                 />
 
                 {selectedFile ? (

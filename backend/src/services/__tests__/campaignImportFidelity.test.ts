@@ -315,6 +315,29 @@ describe('a map name over 200 characters', () => {
   });
 });
 
+// The upload refuses it (audioUploadLayers.e2e.test.ts): it is audio/mpeg to
+// file-type, like an MP3, but would be stored as .mp2, which the audio route
+// does not serve.
+describe('MPEG layer 2 audio in an archive', () => {
+  it('is left out with the reason, as an upload refuses it', async () => {
+    const frame = () => Buffer.from([0xff, 0xfd, 0x90, 0x04, ...new Array(414).fill(0)]);
+    const result = await importCampaign(
+      await archive([], {
+        '99999999-9999-4999-8999-999999999999': {
+          info: { originalName: 'fanfare.mp3', mimeType: 'audio/mpeg', type: 'AUDIO', fileSize: 1254 },
+          entry: { name: 'assets/99999999-9999-4999-8999-999999999999.mp3', data: Buffer.concat([frame(), frame(), frame()]) },
+        },
+      }),
+      userId
+    );
+
+    expect(result.skipped).toEqual([
+      { kind: 'asset', name: 'fanfare.mp3', reason: 'Its content is not a format a sound file can be (.mp3, .ogg, .wav).' },
+    ]);
+    expect(await prisma.asset.count({ where: { campaignId: result.campaignId } })).toBe(0);
+  });
+});
+
 describe('an asset the import leaves out', () => {
   it('is listed with the reason, and what used it arrives without it', async () => {
     const result = await importCampaign(

@@ -54,10 +54,10 @@ Either way you end up with a password only you know. Pick something you'll actua
 Your DM invites you by typing part of your display name into a search and picking your account from the people who match. Two people can have the same display name, and your profile picture is how your DM tells you apart. Here's what happens next:
 
 1. **Log in** to CozyVTT
-2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards
-3. Each invitation shows the campaign name and, after **DM:**, the campaign's owner (usually the DM)
+2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards. An invitation sent while the dashboard is open shows up when you come back to the tab, or within a minute
+3. Each invitation shows the campaign name and, after **DM:**, who runs the campaign
 4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
-5. Or click **Decline** if it's not for you
+5. Or click **Decline** if it's not for you. An invitation runs out after 14 days, and the DM can withdraw it before you answer; either way it leaves your dashboard
 
 *Screenshot pending — Pending invitations section.*
 
@@ -160,7 +160,7 @@ The top bar shows:
 
 ### Rulebooks and Handouts
 
-Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Some browsers will not show a PDF inside the reader and leave a blank space or a notice that the page is blocked; use the arrow, or the **Open this PDF in a new tab** link above the document.
+Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Only Firefox on a computer shows a PDF inside the reader. In Chrome, Edge, Safari and on a phone the reader offers **Open this PDF in a new tab** instead, as the arrow does.
 
 You can read everything on that list and nothing that is not on it. Sharing is the DM's to do, so if a rulebook you expected is missing, ask them. If your DM edits a shared document, you see the new text the next time you open it.
 

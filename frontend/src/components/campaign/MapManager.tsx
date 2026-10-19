@@ -200,7 +200,7 @@ function MapCard({
       <div className="relative h-36 bg-moss-green/10 overflow-hidden">
         {thumbnailId ? (
           <img
-            src={api.getAssetUrl(thumbnailId, 'maps')}
+            src={api.getAssetThumbnailUrl(thumbnailId, 'maps')}
             alt={map.name}
             className="w-full h-full object-cover"
             onError={(e) => {
