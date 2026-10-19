@@ -72,12 +72,15 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* `GET /api/assets/:id` decides with the same read rule as the file routes, so a member of a campaign that uses an asset may read its details; a campaign asset whose campaign is gone is no longer shown to anyone signed in. `campaign` is `null` for a reader who is not a member of the asset's campaign.
   - *Assets.* The reply to `PATCH /api/assets/:id/scope` gives the asset's `canChange`, as the asset list does.
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` answers 403 `Only the asset's uploader can move it to their personal library` to anyone but the uploader or an admin.
+  - *Documents.* `GET /api/campaigns/:campaignId/documents` gives each document's stored `filename`, whose extension decides what it is served as.
 
 - **Only an asset's uploader can move it to their Personal library.** A campaign's DM could move a player's upload in the campaign's library to **Personal**, which put it in the player's own library, out of the campaign and out of the DM's reach. The DM can still delete such an asset and make the other moves they could. A server admin can still move any asset.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A PDF uploaded under another name opens as a PDF.** A real PDF uploaded as, say, "handout.txt" is stored and served as a PDF, but the Documents page and a campaign's documents labelled it Text, showed its contents as unreadable text and offered **Edit**. They now go by what the file is.
 
 - **A document you stop editing after a refused save shows its text again.** After a save was refused and you pressed **Cancel**, the reader showed the reason the save was refused where the document should be, until it was closed and opened again.
 

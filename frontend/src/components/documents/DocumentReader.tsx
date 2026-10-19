@@ -32,12 +32,13 @@ import '@/styles/note-markdown.css';
 export type DocumentFormat = 'pdf' | 'markdown' | 'text';
 
 /**
- * The format from the original filename's extension. This mirrors the server,
- * which decides the served content type the same way and never from the
- * declared MIME type.
+ * The format from the stored file's name (an asset's `filename`). The server
+ * serves a document by that name's extension, which the upload sets from what
+ * the file's bytes are, so a real PDF uploaded as "handout.txt" is stored and
+ * served as a PDF. The name it was uploaded under says nothing reliable.
  */
-export function documentFormat(originalName: string): DocumentFormat {
-  const lower = originalName.toLowerCase();
+export function documentFormat(filename: string): DocumentFormat {
+  const lower = filename.toLowerCase();
   if (lower.endsWith('.pdf')) return 'pdf';
   if (lower.endsWith('.md')) return 'markdown';
   return 'text';
@@ -56,7 +57,8 @@ interface DocumentReaderProps {
   /** The asset id. */
   documentId: string | null;
   name: string;
-  originalName: string;
+  /** The stored file's name, which decides how it is shown (documentFormat). */
+  filename: string;
   /** 'overlay' when opened from inside another modal, so it stacks above it. */
   layer?: 'base' | 'overlay';
   /**
@@ -74,7 +76,7 @@ export default function DocumentReader({
   onClose,
   documentId,
   name,
-  originalName,
+  filename,
   layer = 'base',
   canEdit = false,
   onSaved,
@@ -94,7 +96,7 @@ export default function DocumentReader({
   // closing the reader, or only leaving edit mode.
   const [confirmingDiscard, setConfirmingDiscard] = useState<'close' | 'cancel' | null>(null);
 
-  const format = documentFormat(originalName);
+  const format = documentFormat(filename);
   const url = documentId ? api.getDocumentUrl(documentId) : '';
 
   // Text formats are fetched and rendered here. A PDF is left to the iframe.

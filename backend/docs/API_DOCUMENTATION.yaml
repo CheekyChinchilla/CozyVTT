@@ -12058,9 +12058,17 @@ components:
         description:
           type: string
           nullable: true
+        filename:
+          type: string
+          example: 0f3c9a1e-2b7d-4c55-9e1a-7d2f6b8c4a10.pdf
+          description: >-
+            The stored file's name. Its extension, which the upload sets from
+            what the file's bytes are, decides what the document is served as
+            (`.pdf`, `.txt` or `.md`), so it is the one to go by.
         originalName:
           type: string
           example: players-handbook.pdf
+          description: The name it was uploaded or written under, which may not match what it is.
         mimeType:
           type: string
           description: >-

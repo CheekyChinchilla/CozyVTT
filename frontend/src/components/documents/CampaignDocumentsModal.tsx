@@ -178,7 +178,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       {doc.name}
                     </button>
                     <p className="text-[11px] text-ink-secondary truncate">
-                      {FORMAT_LABEL[documentFormat(doc.originalName)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
+                      {FORMAT_LABEL[documentFormat(doc.filename)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
                     </p>
                   </div>
                   <Button
@@ -282,7 +282,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       >
                         <span className="flex-1 min-w-0 truncate text-sm text-ink">{asset.name}</span>
                         <span className="text-[11px] text-ink-secondary shrink-0">
-                          {FORMAT_LABEL[documentFormat(asset.originalName)]}
+                          {FORMAT_LABEL[documentFormat(asset.filename)]}
                         </span>
                         <Button
                           type="button"
@@ -307,7 +307,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         onClose={() => setReading(null)}
         documentId={reading?.id ?? null}
         name={reading?.name ?? ''}
-        originalName={reading?.originalName ?? ''}
+        filename={reading?.filename ?? ''}
         layer="overlay"
         // Edit rights follow the rule for deleting, which turns on facts this
         // page does not have, so the list says, per document, whether the

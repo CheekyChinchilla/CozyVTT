@@ -652,6 +652,8 @@ export interface CampaignDocument {
   id: string;
   name: string;
   description: string | null;
+  /** The stored file's name, whose extension the document is served by. */
+  filename: string;
   originalName: string;
   /** As declared at upload. Not what the file is served as. */
   mimeType: string;

@@ -151,7 +151,7 @@ export default function DocumentsPage() {
         ) : (
           <ul className="space-y-2">
             {documents.map((doc) => {
-              const format = documentFormat(doc.originalName);
+              const format = documentFormat(doc.filename);
               return (
                 <li
                   key={doc.id}
@@ -251,7 +251,7 @@ export default function DocumentsPage() {
         onClose={() => setReading(null)}
         documentId={reading?.id ?? null}
         name={reading?.name ?? ''}
-        originalName={reading?.originalName ?? ''}
+        filename={reading?.filename ?? ''}
         canEdit={reading !== null && canChange(reading)}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['assets'] })}
       />

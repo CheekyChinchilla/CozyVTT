@@ -224,6 +224,9 @@ describe('campaign documents', () => {
       const res = await player.get(`/api/campaigns/${campaignA}/documents`);
       expect(res.body.documents.map((d: { id: string }) => d.id)).toEqual([pdfId]);
       expect(res.body.documents[0].uploadedBy.displayName).toBe('Doc Owner');
+      // The stored name, which the reader goes by: the server serves by it.
+      expect(res.body.documents[0].filename).toBe((await prisma.asset.findUniqueOrThrow({ where: { id: pdfId } })).filename);
+      expect(res.body.documents[0].filename).toMatch(/\.pdf$/);
     });
 
     it('someone in a different campaign still cannot', async () => {
