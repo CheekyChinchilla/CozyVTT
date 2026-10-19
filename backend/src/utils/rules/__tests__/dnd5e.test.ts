@@ -1,8 +1,8 @@
-import {
-  carryingCapacity, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 import path from 'path';
 import {
   ABILITY_KEYS,
+  carryingCapacity,
   DND5E_SKILLS,
   abilityModifier,
   decomposeBonus,
