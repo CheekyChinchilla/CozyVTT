@@ -178,6 +178,10 @@ export default function NewCharacterModal({
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+    // Read once and cleared for every way this submit ends, so a create that
+    // fails or is stopped here does not publish on the next plain Create.
+    const publishTemplate = alsoPublishTemplate.current;
+    alsoPublishTemplate.current = false;
 
     // Validation
     if (name.trim().length < 2) {
@@ -214,7 +218,7 @@ export default function NewCharacterModal({
       // Optionally publish the same sheet as a shared template. Done after the
       // character exists, and failing softly: the character is the thing the
       // user asked for, so a template error must not lose it.
-      if (alsoPublishTemplate.current) {
+      if (publishTemplate) {
         try {
           await api.createCharacterTemplate({
             name: name.trim(),
@@ -226,7 +230,6 @@ export default function NewCharacterModal({
             'Character created, but publishing it as a template failed. You can retry with "Save as Template" in the editor.'
           );
         }
-        alsoPublishTemplate.current = false;
       }
 
       // Reset form

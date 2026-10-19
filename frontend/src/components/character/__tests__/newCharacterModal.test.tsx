@@ -47,3 +47,18 @@ describe('the character name', () => {
     expect(screen.getByLabelText(/Character Name/)).toHaveAttribute('maxLength', String(SHEET_NAME_MAX));
   });
 });
+
+describe('Create & Publish as Template', () => {
+  it('publishes nothing on a later Create Character after a failed create', async () => {
+    createCharacter.mockRejectedValueOnce({ response: { status: 500, data: { message: 'Database unavailable' } } });
+    show();
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create & Publish as Template/ }));
+    expect(await screen.findByText('Database unavailable')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Create Character/ }));
+    await waitFor(() => expect(createCharacter).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Database unavailable')).toBeNull());
+    expect(createCharacterTemplate).not.toHaveBeenCalled();
+  });
+});
