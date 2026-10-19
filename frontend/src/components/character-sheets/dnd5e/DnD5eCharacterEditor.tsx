@@ -311,21 +311,29 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       ),
       hp: own.hp || { maximum: 0, current: 0, temporary: 0 },
       deathSaves: own.deathSaves || { successes: 0, failures: 0 },
+      // The spell save DC and attack bonus are worked out from here on, each
+      // with an other bonus. A sheet saved before that existed has its typed
+      // totals read into one (see the effect below), here, once: read later, a
+      // total this editor had worked out was taken as typed.
       spellcasting: own.spellcasting
         ? {
             ...own.spellcasting,
             slots: withAllSlotLevels(own.spellcasting.slots),
-            ...(own.spellcasting.spellSaveDCOtherBonus != null
-              ? { spellSaveDCOtherBonus: bonusWithinRange(own.spellcasting.spellSaveDCOtherBonus) }
-              : {}),
-            ...(own.spellcasting.spellAttackOtherBonus != null
-              ? { spellAttackOtherBonus: bonusWithinRange(own.spellcasting.spellAttackOtherBonus) }
-              : {}),
+            spellSaveDCOtherBonus:
+              own.spellcasting.spellSaveDCOtherBonus != null
+                ? withinBonusRange(own.spellcasting.spellSaveDCOtherBonus)
+                : withinBonusRange(dnd5eBackfilledSpellSaveDCBonus(own) ?? 0),
+            spellAttackOtherBonus:
+              own.spellcasting.spellAttackOtherBonus != null
+                ? withinBonusRange(own.spellcasting.spellAttackOtherBonus)
+                : withinBonusRange(dnd5eBackfilledSpellAttackBonus(own) ?? 0),
           }
         : {
             ability: '',
             spellSaveDC: 0,
             spellAttackBonus: 0,
+            spellSaveDCOtherBonus: 0,
+            spellAttackOtherBonus: 0,
             cantrips: [],
             slots: withAllSlotLevels(undefined),
             spells: [],
@@ -666,54 +674,23 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   ]);
 
   /**
-   * Keep the stored spell save DC and attack bonus in step with the formulas,
-   * and read an older hand-typed value back into its parts.
+   * Keep the stored spell save DC and attack bonus in step with the formulas.
    *
-   * The same arrangement as initiative above, for the same reason: both used to
-   * be typed by hand, so a caster with a Rod of the Pact Keeper had a DC one
-   * higher than the formula gives. Deriving without converting would take that
-   * point away silently. The conversion runs once, only where the adjustment
-   * field is absent.
+   * Both used to be typed by hand, so a caster with a Rod of the Pact Keeper
+   * had a DC one higher than the formula gives. The form's initial state read
+   * that point into the other bonus, so deriving does not take it away.
    */
   useEffect(() => {
     if (!formData.spellcasting) return;
 
-    // TODO(sheets): while no spellcasting ability is named, this effect keeps
-    // the stored DC at 8 + proficiency and the attack at proficiency. Naming
-    // the ability afterwards makes the backfill read that stored total as
-    // hand-typed, so it records minus the ability's modifier as the other bonus
-    // and the DC and attack do not move. The conversion should apply only to a
-    // total the sheet was loaded with, never to one this effect wrote.
-    const dcRead = dnd5eBackfilledSpellSaveDCBonus(formData);
-    const attackRead = dnd5eBackfilledSpellAttackBonus(formData);
-    const dcBackfill = dcRead === null ? null : withinBonusRange(dcRead);
-    const attackBackfill = attackRead === null ? null : withinBonusRange(attackRead);
-
-    const withBonuses = {
-      ...formData,
-      spellcasting: {
-        ...formData.spellcasting,
-        ...(dcBackfill !== null ? { spellSaveDCOtherBonus: dcBackfill } : {}),
-        ...(attackBackfill !== null ? { spellAttackOtherBonus: attackBackfill } : {}),
-      },
-    };
-
-    const dcTotal = dnd5eSpellSaveDC(withBonuses);
-    const attackTotal = dnd5eSpellAttackBonus(withBonuses);
-
-    const needsChange =
-      dcBackfill !== null ||
-      attackBackfill !== null ||
-      formData.spellcasting.spellSaveDC !== dcTotal ||
-      formData.spellcasting.spellAttackBonus !== attackTotal;
-    if (!needsChange) return;
+    const dcTotal = dnd5eSpellSaveDC(formData);
+    const attackTotal = dnd5eSpellAttackBonus(formData);
+    if (formData.spellcasting.spellSaveDC === dcTotal && formData.spellcasting.spellAttackBonus === attackTotal) return;
 
     setFormData((prev) => ({
       ...prev,
       spellcasting: {
         ...prev.spellcasting,
-        ...(dcBackfill !== null ? { spellSaveDCOtherBonus: dcBackfill } : {}),
-        ...(attackBackfill !== null ? { spellAttackOtherBonus: attackBackfill } : {}),
         spellSaveDC: dcTotal,
         spellAttackBonus: attackTotal,
       } as DnD5eSpellcasting,

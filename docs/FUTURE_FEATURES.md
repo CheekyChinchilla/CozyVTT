@@ -28,7 +28,6 @@ _Nothing at present._
 
 ### Character sheets
 
-- `1.5.4` **D&D 5e: naming the spellcasting ability after raising that score leaves the spell save DC and attack unchanged.** The backfill in `DnD5eCharacterEditor.tsx` reads the DC the editor itself wrote as a hand-typed value and records minus the ability modifier as the other bonus.
 - `1.5.4` **D&D 5e and Call of Cthulhu read-only headers always use light text,** so a pale custom colour such as white makes the name unreadable (`DnD5eCharacterView.tsx`, `CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.4` **The Call of Cthulhu read-only view's palette button changes nothing that lasts.** The colour picked there is never saved (`CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.4` **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
