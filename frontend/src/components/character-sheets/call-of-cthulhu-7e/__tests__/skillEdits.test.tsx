@@ -28,8 +28,7 @@ function sheetWithGroupedSkills(): Record<string, unknown> {
 
 /** The value box on the row headed `label`. */
 function valueBox(label: string): HTMLInputElement {
-  const row = screen.getByText(label).closest('.group') as HTMLElement;
-  return row.querySelector('input[type="number"]') as HTMLInputElement;
+  return screen.getByLabelText(`Value of ${label}`) as HTMLInputElement;
 }
 
 describe('grouped skills', () => {

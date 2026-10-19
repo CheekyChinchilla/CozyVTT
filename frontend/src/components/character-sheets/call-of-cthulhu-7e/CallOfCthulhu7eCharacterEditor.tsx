@@ -59,7 +59,7 @@ import NumberField from '../../ui/NumberField';
 import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { LIMIT_NOTE_CLASS } from './limitNoteClass';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
-import { setCoC7eSkillField } from './skillEdits';
+import { setCoC7eSkillField, withCoC7eSkillList } from './skillEdits';
 import { settleDodge } from './dodge';
 import {
   cocHitPoints,
@@ -975,6 +975,12 @@ value={formData.derivedStats?.luck?.score}
             // `fighting.brawl`; this writes it there.
             skills: setCoC7eSkillField(formData.skills ?? {}, skillName, field, value) as CoC7eSkills,
           });
+        }}
+        onListChange={(list, entries) => {
+          setFormData((prev) => ({
+            ...prev,
+            skills: withCoC7eSkillList(prev.skills ?? {}, list, entries) as CoC7eSkills,
+          }));
         }}
       />
     </div>

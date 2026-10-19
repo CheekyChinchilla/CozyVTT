@@ -380,7 +380,7 @@ For when the vibes turn from cozy to eldritch:
 - Characteristics (STR, CON, SIZ, DEX, APP, INT, POW, EDU), plus a separate Luck Score
 - Derived stats: HP, Sanity, Magic Points, Movement Rate
 - Dodge, which starts at half DEX and is raised with skill points and improvements on the Skills tab, like any other skill
-- Skills with base values and advancement tracking
+- Skills with base values and advancement tracking. On the **Skills** tab of **Edit**, each specialised list has an add control: Fighting and Firearms specialisations and sciences offer the rulebook's choices at their base values (Sword 20%, Bow 15%, Physics 1%) or **Other** to name your own, and **Add Language** and **Add Skill** add a row to name. Each added row has a name box and a remove button, and Art/Craft, Pilot, Survival and your own language each take a specialisation
 - Weapons and attacks
 - Backstory, personal description, and ideals
 - Possessions and important people
