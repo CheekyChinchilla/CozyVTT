@@ -2580,12 +2580,22 @@ min={0}
                   <input
                     type="checkbox"
                     checked={item.requiresAttunement || false}
-                    onChange={(e) => updateField(`inventory.${index}.requiresAttunement`, e.target.checked)}
+                    onChange={(e) =>
+                      // An item that needs no attunement is not attuned, and
+                      // would otherwise go on taking one of the three slots.
+                      updateField(`inventory.${index}`, {
+                        ...item,
+                        requiresAttunement: e.target.checked,
+                        ...(e.target.checked ? {} : { attuned: false }),
+                      })
+                    }
                     className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
                   />
                   <span className="text-stone-700">Requires Attunement</span>
                 </label>
-                {item.requiresAttunement && (
+                {/* Also on an item stored attuned without requiring it, so
+                    that can be cleared. */}
+                {(item.requiresAttunement || item.attuned) && (
                   <label className="flex items-center space-x-1 cursor-pointer">
                     <input
                       type="checkbox"
