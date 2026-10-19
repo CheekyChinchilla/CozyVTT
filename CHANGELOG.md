@@ -83,6 +83,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **An MP1 or MP2 sound file is refused when it is uploaded.** Such a file, sometimes named .mp3, was taken by the upload and then never played, since browsers do not play it. It is now refused with "Invalid file type", as other files are; convert it to MP3, Ogg or WAV.
+
 - **A PDF uploaded under another name opens as a PDF.** A real PDF uploaded as, say, "handout.txt" is stored and served as a PDF, but the Documents page and a campaign's documents labelled it Text, showed its contents as unreadable text and offered **Edit**. They now go by what the file is.
 
 - **A document you stop editing after a refused save shows its text again.** After a save was refused and you pressed **Cancel**, the reader showed the reason the save was refused where the document should be, until it was closed and opened again.

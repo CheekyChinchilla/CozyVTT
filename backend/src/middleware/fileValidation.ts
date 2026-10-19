@@ -136,8 +136,13 @@ export async function validateFileType(
       }
     }
 
-    // Validate MIME type against allowed types for this asset
-    if (!isAllowedMimeType(assetType, fileType.mime)) {
+    // Validate MIME type against allowed types for this asset. The type alone
+    // is not enough: MPEG layer 1 and 2 audio is audio/mpeg too, but would be
+    // stored as .mp1 or .mp2, which the audio route does not serve and no
+    // browser plays. The file is stored under the extension its content is
+    // named by, so that must be one the asset type allows as well.
+    const storedExtension = `.${fileType.ext}`;
+    if (!isAllowedMimeType(assetType, fileType.mime) || !(ALLOWED_EXTENSIONS[assetType] as readonly string[]).includes(storedExtension)) {
       // Delete the file
       await deleteFile(filePath);
 
