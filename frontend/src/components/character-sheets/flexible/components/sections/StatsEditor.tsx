@@ -59,7 +59,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
           >
             <button
               onClick={() => removeField(field.id)}
-              className="absolute top-2 right-2 p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+              className="absolute top-2 right-2 p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
               title="Remove stat"
             >
               <Trash2 className="w-4 h-4" />

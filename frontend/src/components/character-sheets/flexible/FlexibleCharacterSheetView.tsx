@@ -13,6 +13,7 @@ import { StatsDisplay } from './components/sections/StatsDisplay';
 import { ListDisplay } from './components/sections/ListDisplay';
 import { TextDisplay } from './components/sections/TextDisplay';
 import { TableDisplay } from './components/sections/TableDisplay';
+import Button from '@/components/ui/Button';
 
 interface FlexibleCharacterSheetViewProps {
   character: Character;
@@ -87,13 +88,9 @@ export const FlexibleCharacterSheetView: React.FC<FlexibleCharacterSheetViewProp
           </div>
         </div>
         {onEdit && (
-          <button
-            onClick={onEdit}
-            className="flex items-center gap-2 px-4 py-2 bg-moss-green text-white rounded-lg hover:bg-moss-green/90 transition-colors"
-          >
-            <Edit className="w-4 h-4" />
+          <Button onClick={onEdit} icon={Edit}>
             Edit
-          </button>
+          </Button>
         )}
       </div>
 
@@ -104,12 +101,9 @@ export const FlexibleCharacterSheetView: React.FC<FlexibleCharacterSheetViewProp
             This character sheet has no sections yet.
           </p>
           {onEdit && (
-            <button
-              onClick={onEdit}
-              className="px-4 py-2 bg-moss-green text-white rounded-lg hover:bg-moss-green/90 transition-colors"
-            >
+            <Button onClick={onEdit}>
               Add Sections
-            </button>
+            </Button>
           )}
         </div>
       ) : (

@@ -93,7 +93,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                   {section.columns.length > 1 && (
                     <button
                       onClick={() => removeColumn(column.id)}
-                      className="p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                      className="p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
                       title="Remove column"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -136,7 +136,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
               <td className="px-2 py-2">
                 <button
                   onClick={() => removeRow(row.id)}
-                  className="p-1 rounded-sm bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                  className="p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
                   title="Remove row"
                 >
                   <Trash2 className="w-3 h-3" />
