@@ -86,3 +86,39 @@ describe('sort', () => {
     expect(res.body.message).toBe('sort must be one of: date, name, size');
   });
 });
+
+// The tag search found up to 10,000 tagged assets across the whole instance,
+// in no order, before the caller's visibility was applied, so on a large
+// instance the caller's own match could be left out.
+describe('a tag many assets on the instance share', () => {
+  let strangerId: string;
+
+  beforeAll(async () => {
+    strangerId = (await createTestUser({ displayName: 'Bulk Tagger' })).id;
+    const bulkTag = `${tag}bulk`;
+    await prisma.asset.createMany({
+      data: Array.from({ length: 20_000 }, (_, i) => ({
+        type: 'TOKEN' as const, scope: 'USER' as const, uploadedById: strangerId, filename: 'b.png', originalName: 'b.png',
+        mimeType: 'image/png', fileSize: 1, filePath: '/nonexistent/b.png', name: `Bulk ${i}`, tags: [bulkTag],
+      })),
+    });
+    await prisma.asset.create({
+      data: {
+        type: 'TOKEN', scope: 'USER', uploadedById: userId, filename: 'm.png', originalName: 'm.png', mimeType: 'image/png',
+        fileSize: 1, filePath: '/nonexistent/m.png', name: 'Mine among many', tags: [bulkTag.toUpperCase()],
+      },
+    });
+  }, 60_000);
+
+  afterAll(async () => {
+    await prisma.asset.deleteMany({ where: { uploadedById: strangerId } });
+    await cleanupUsers([strangerId]);
+  });
+
+  it('still finds the caller\'s own asset with it', async () => {
+    const res = await agent.get('/api/assets').query({ search: `${tag}bulk` });
+    expect(res.status).toBe(200);
+    expect((res.body.assets as Array<{ name: string }>).map((a) => a.name)).toEqual(['Mine among many']);
+  });
+});
+

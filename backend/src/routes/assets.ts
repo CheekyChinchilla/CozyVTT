@@ -232,14 +232,19 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
 
     // Search: a name in part, matched as typed (a % or _ in it is not a
     // wildcard), or a tag whole, whatever its case. Tags are kept as typed and
-    // Prisma matches an array's items by exact case, so the tag match is a
-    // query of its own. In AND, as the visibility rules below use OR and id.
+    // Prisma matches an array's items by exact case, so the spellings of the
+    // tag in use are looked up first (Dragon, dragon), a handful at most, and
+    // matched as they are; the visibility rules below then apply as to any
+    // filter. In AND, as those rules use OR and id.
     if (search) {
-      const tagged = await prisma.$queryRaw<Array<{ id: string }>>`
-        SELECT id FROM "Asset"
-        WHERE EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE lower(tag) = lower(${search}))
-        LIMIT 10000`;
-      where.AND = [{ OR: [{ name: { contains: escapeLikePattern(search), mode: 'insensitive' } }, { id: { in: tagged.map((row) => row.id) } }] }];
+      const spellings = await prisma.$queryRaw<Array<{ tag: string }>>`
+        SELECT DISTINCT tag FROM "Asset", unnest(tags) AS tag WHERE lower(tag) = lower(${search})`;
+      where.AND = [{
+        OR: [
+          { name: { contains: escapeLikePattern(search), mode: 'insensitive' } },
+          ...(spellings.length > 0 ? [{ tags: { hasSome: spellings.map((row) => row.tag) } }] : []),
+        ],
+      }];
     }
 
     // Campaign filter
