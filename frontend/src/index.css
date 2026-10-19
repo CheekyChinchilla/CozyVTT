@@ -151,6 +151,14 @@
   textarea {
     background-color: revert;
   }
+
+  /* Ticks, radios and sliders in the theme's colour; text colour classes on
+     a checkbox draw nothing. */
+  input[type='checkbox'],
+  input[type='radio'],
+  input[type='range'] {
+    accent-color: rgb(var(--rgb-brand));
+  }
 }
 
 @utility glass-panel {

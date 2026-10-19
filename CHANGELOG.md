@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Text boxes, checkboxes and dropdown lists are dark in a dark theme.** In Obsidian Night, Shadow Realm, Deep Dungeon, Midnight Court and a dark custom theme the browser still drew its own controls light, with the theme's light text inside them. Checkboxes, radio buttons and sliders now take the theme's colour in every theme.
+
 - **The header colour you pick is drawn everywhere a sheet uses it.** On D&D 5e and Pathfinder 2e sheets the open tab was meant to be underlined and labelled in the header colour, and for most colours neither was drawn; it is now underlined in the colour you picked, a custom one included, with its label in the theme's text colour so it reads on a dark theme. Call of Cthulhu headers gain the middle of their gradient, and three colours their amber bottom border.
 
 - **Error messages are readable in the dark themes.** The error under a box, the "You've been signed out" notice, the warning icon in confirmations and the errors in the campaign, character and invitation dialogs were drawn in the danger fill colour, about 3.3 to 1 against the page in Obsidian Night, Shadow Realm, Deep Dungeon and Midnight Court; they now use the readable shade each theme works out. The open panel's button on the table toolbar does the same with the accent colour, which was faint in the light themes.

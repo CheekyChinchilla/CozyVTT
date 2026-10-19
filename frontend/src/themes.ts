@@ -15,7 +15,7 @@
  * Authored values that already pass are never modified.
  */
 
-import { ensureReadableChannels, ensureReadableOnAll, readableTextOn } from './utils/color';
+import { ensureReadableChannels, ensureReadableOnAll, parseRgb, readableTextOn, relativeLuminance } from './utils/color';
 
 export interface ThemeColors {
   brand: string;
@@ -595,6 +595,11 @@ export function applyThemeColors(colors: ThemeColors): void {
   for (const [name, value] of Object.entries(deriveReadableTokens(colors))) {
     root.style.setProperty(name, value);
   }
+
+  // The browser draws its own controls (text boxes, checkboxes, a dropdown's
+  // open list) for the scheme it is told; a dark paper is a dark theme,
+  // custom ones included.
+  root.style.colorScheme = relativeLuminance(parseRgb(colors.paper)) < 0.18 ? 'dark' : 'light';
 }
 
 /**
