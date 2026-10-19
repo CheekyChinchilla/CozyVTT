@@ -284,6 +284,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   // Set when the last change to the cantrips box was turned away for adding one entry too many.
   const [cantripsTurnedAway, setCantripsTurnedAway] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Rows made by an add button and not edited since. Any edit replaces a row
+  // with a copy, so a row still here has not been typed in, and one with no
+  // name is left out of the save: the server refuses an attack, item or spell
+  // with none, and pressing an add button by mistake made a sheet that could
+  // not be saved.
+  const untouchedRows = useRef(new WeakSet<object>());
+  const newRow = <T extends object>(row: T): T => {
+    untouchedRows.current.add(row);
+    return row;
+  };
   const { data: serverConfig } = useServerConfigQuery();
 
   // Type assertion for D&D 5e character data
@@ -850,6 +860,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       updatedData.featuresAndTraits = collectSheetFeatures(updatedData);
       delete (updatedData as Record<string, unknown>).features;
 
+      // Rows added and never typed in, which the server would refuse.
+      const filledIn = <T extends object>(rows: T[] | undefined, named: (row: T) => string | undefined) =>
+        rows?.filter((row) => !untouchedRows.current.has(row) || (named(row) ?? '').trim() !== '');
+      updatedData.attacks = filledIn(updatedData.attacks, (row) => row.name);
+      updatedData.inventory = filledIn(updatedData.inventory, (row) => row.name);
+      updatedData.hitDice = filledIn(updatedData.hitDice, (row) => row.class);
+
       // Cantrips, parsed into a new spellcasting block. Written into the one
       // the form holds, the array showed up in the form while the save was in
       // flight, so the sheet still counted as changed once it had gone through.
@@ -858,6 +875,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       if (updatedData.spellcasting) {
         updatedData.spellcasting = {
           ...updatedData.spellcasting,
+          spells: filledIn(updatedData.spellcasting.spells, (row) => row.name),
           cantrips: parseCommaSeparated(updatedData.spellcasting.cantrips),
           slots: withAllSlotLevels(updatedData.spellcasting.slots),
         };
@@ -1794,7 +1812,7 @@ min={1}
             onClick={() => {
               const newHitDice = [
                 ...(formData.hitDice || []),
-                { class: '', die: 'd6', maximum: 1, remaining: 1 },
+                newRow({ class: formData.class || '', die: 'd6', maximum: 1, remaining: 1 }),
               ];
               updateField('hitDice', newHitDice);
             }}
@@ -1806,11 +1824,11 @@ min={1}
         </div>
         <ListLimitNote full={listIsFull(formData.hitDice)} />
         <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center mb-1">
-          <label className="text-xs font-semibold text-stone-600">Class</label>
-          <label className="text-xs font-semibold text-stone-600 text-center">Die</label>
-          <label className="text-xs font-semibold text-stone-600 text-center">Left</label>
+          <span aria-hidden="true" className="text-xs font-semibold text-stone-600">Class</span>
+          <span aria-hidden="true" className="text-xs font-semibold text-stone-600 text-center">Die</span>
+          <span aria-hidden="true" className="text-xs font-semibold text-stone-600 text-center">Left</span>
           <span aria-hidden="true" />
-          <label className="text-xs font-semibold text-stone-600 text-center">Max</label>
+          <span aria-hidden="true" className="text-xs font-semibold text-stone-600 text-center">Max</span>
           <span aria-hidden="true" />
         </div>
         <div className="space-y-2">
@@ -1821,7 +1839,7 @@ min={1}
                 value={die.class || ''}
                 onChange={(e) => updateField(`hitDice.${index}.class`, e.target.value)}
                 placeholder="Fighter"
-                aria-label="Class"
+                aria-label={`Class of hit dice ${index + 1}`}
                 className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
               <input
@@ -2005,7 +2023,7 @@ min={1}
             onClick={() => {
               const newAttacks = [
                 ...(formData.attacks || []),
-                { name: '', attackBonus: 0, damageRoll: '', damageType: '', range: 0, properties: [], notes: '' },
+                newRow({ name: '', attackBonus: 0, damageRoll: '', damageType: '', range: 0, properties: [], notes: '' }),
               ];
               updateField('attacks', newAttacks);
             }}
@@ -2442,7 +2460,7 @@ min={1}
             onClick={() => {
               const newSpells = [
                 ...(formData.spellcasting?.spells || []),
-                { level: 1, name: '', prepared: false, ritual: false, concentration: false },
+                newRow({ level: 1, name: '', prepared: false, ritual: false, concentration: false }),
               ];
               updateField('spellcasting.spells', newSpells);
             }}
@@ -2559,7 +2577,7 @@ min={1}
             onClick={() => {
               const newInventory = [
                 ...(formData.inventory || []),
-                {
+                newRow({
                   name: '',
                   quantity: 1,
                   weight: 0,
@@ -2569,7 +2587,7 @@ min={1}
                   requiresAttunement: false,
                   attuned: false,
                   value: 0,
-                },
+                }),
               ];
               updateField('inventory', newInventory);
             }}

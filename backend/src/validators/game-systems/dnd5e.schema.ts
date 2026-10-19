@@ -157,11 +157,9 @@ const hitPointsSchema = z.object({
  * Hit dice
  */
 const hitDiceSchema = z.object({
-  // TODO(sheets): the editor's "+ Add" buttons create hit-dice rows with an
-  // empty class, and attack, inventory and spell rows with an empty name, and
-  // this minimum and the three below refuse the whole save until each is filled
-  // in. Have the buttons seed a name, or let a new row save with the field
-  // empty.
+  // Required, as an attack's, an item's and a spell's name are. The editor
+  // starts a new hit die with the character's class, and leaves out of the
+  // save an attack, item or spell row added and never typed in.
   class: shortText.min(1),
   // The older field, packing count and die into one string ("5d10"). Optional
   // now that `die` and `maximum` carry those separately; still accepted so
