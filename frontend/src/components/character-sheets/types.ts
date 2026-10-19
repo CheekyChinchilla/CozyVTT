@@ -53,4 +53,11 @@ export interface CharacterSheetProps {
    * version the edit started from.
    */
   onEditStart?: () => void;
+
+  /**
+   * Whether the editor offers a token picture to upload; true unless said
+   * otherwise. A template's sheet passes false: an upload is the user's own
+   * picture, and a template's has to be a global one.
+   */
+  allowTokenPicture?: boolean;
 }

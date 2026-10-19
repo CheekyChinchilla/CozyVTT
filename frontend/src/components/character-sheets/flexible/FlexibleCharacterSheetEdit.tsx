@@ -24,6 +24,8 @@ interface FlexibleCharacterSheetEditProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Whether to offer a token picture to upload; see CharacterSheetProps. */
+  allowTokenPicture?: boolean;
   /** Told whenever the sheet gains or loses unsaved changes. */
   onDirtyChange?: (dirty: boolean) => void;
   /**
@@ -40,6 +42,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   onCancel,
   onDirtyChange,
   onDone,
+  allowTokenPicture = true,
 }) => {
   const initialData = initializeFlexibleData(character.data);
   const [sections, setSections] = useState<FlexibleSection[]>(initialData.sections || []);
@@ -201,6 +204,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       <div className="flex items-center justify-between pb-4 border-b border-moss-green/20 mb-6">
         <div className="flex items-center gap-4">
           {/* Token Image Upload */}
+          {allowTokenPicture && (
           <div className="relative group">
             <input
               type="file"
@@ -239,6 +243,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
               </div>
             )}
           </div>
+          )}
 
           <div>
             <h2 className="text-2xl font-bold text-brand-ink">

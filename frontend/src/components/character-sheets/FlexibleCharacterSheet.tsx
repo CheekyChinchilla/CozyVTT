@@ -9,7 +9,7 @@ import { FlexibleCharacterSheetView } from './flexible/FlexibleCharacterSheetVie
 import { FlexibleCharacterSheetEdit } from './flexible/FlexibleCharacterSheetEdit';
 
 export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave, onDirtyChange, onEditStart } = props;
+  const { mode, character, onSave, onDirtyChange, onEditStart, allowTokenPicture } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   // Each time the editor opens, its form is made from the character passed now.
@@ -37,6 +37,7 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
         onDone={() => setCurrentMode('view')}
+        allowTokenPicture={allowTokenPicture}
       />
     );
   }

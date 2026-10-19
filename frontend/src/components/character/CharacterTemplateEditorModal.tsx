@@ -181,10 +181,9 @@ export default function CharacterTemplateEditorModal({
       setLoadedAt(saved.updatedAt);
       openedSheetRef.current = saved.data as CharacterData;
     }
-    // TODO(ui): the sheet's token picker uploads the picture as the user's own
-    // asset, and a template's picture must be a global one, so the server
-    // refuses it; sending it would fail every save until the editor was
-    // cancelled. The picker should be hidden here, or offer global assets.
+    // The sheet here has no token picker: it uploads the picture as the user's
+    // own asset, and a template's picture must be a global one. Should a
+    // picture come anyway, it is not sent, and the toast says so.
     if (tokenImageUrl !== undefined) {
       showToast(TEMPLATE_PICTURE_NOT_USED, 'warning');
     } else {
@@ -243,6 +242,7 @@ export default function CharacterTemplateEditorModal({
             onSave={handleSheetSave}
             onCancel={requestClose}
             onDirtyChange={setSheetDirty}
+            allowTokenPicture={false}
           />
         </div>
       </div>

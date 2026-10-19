@@ -119,6 +119,8 @@ interface Pathfinder2eCharacterEditorProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Whether to offer a token picture to upload; see CharacterSheetProps. */
+  allowTokenPicture?: boolean;
 }
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'feats' | 'bio';
@@ -245,6 +247,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   onCancel,
   onDirtyChange,
   onDone,
+  allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
@@ -962,6 +965,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
               the reserved padding on a narrow window and back under the
               buttons. */}
           <div className="flex items-start space-x-4 min-w-0">
+            {allowTokenPicture && (
             <div className="shrink-0 relative group">
               <input type="file" id="token-upload" accept="image/*" onChange={handleTokenImageChange} className="hidden" />
               <label htmlFor="token-upload" className="cursor-pointer block relative">
@@ -983,6 +987,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                 </div>
               )}
             </div>
+            )}
 
             <div className="space-y-2 min-w-0">
               <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} aria-label="Character name" placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-white' : 'border-white/20'} rounded-sm px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />

@@ -82,6 +82,8 @@ interface CallOfCthulhu7eCharacterEditorProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Whether to offer a token picture to upload; see CharacterSheetProps. */
+  allowTokenPicture?: boolean;
 }
 
 type TabId = 'overview' | 'skills' | 'combat' | 'possessions' | 'backstory';
@@ -147,6 +149,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   onCancel,
   onDirtyChange,
   onDone,
+  allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const [isSaving, setIsSaving] = useState(false);
@@ -647,6 +650,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
           pr-48 that was here. */}
       <div className="flex items-start space-x-4 pr-64">
         {/* Token Image */}
+        {allowTokenPicture && (
         <div className="shrink-0 relative">
           <label htmlFor="token-upload" className="cursor-pointer group">
             {tokenImagePreview ? (
@@ -679,6 +683,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             </div>
           )}
         </div>
+        )}
 
         {/* Character Info — min-w-0 alongside flex-1 so the column can shrink
             below its content width and stay inside the reserved padding. */}

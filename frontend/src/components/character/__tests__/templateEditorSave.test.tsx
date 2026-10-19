@@ -4,8 +4,7 @@
  * The template editor caught every failed sheet save itself, so the sheet took
  * the save as done, went back to its read-only view and lost every edit, with
  * only an error toast to show for it. Closing the dialog, or pressing Save
- * Details, which closed it too, dropped unsaved sheet edits without asking. A
- * token picture chosen in the sheet was uploaded and then silently ignored.
+ * Details, which closed it too, dropped unsaved sheet edits without asking.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -160,25 +159,6 @@ describe('Edit Template', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
 
     await waitFor(() => expect(onClose).toHaveBeenCalled());
-  });
-
-  it('says a token picture chosen in the sheet was not used, since a template needs a global one', async () => {
-    updateCharacterTemplate.mockResolvedValue(template('DND_5E'));
-    uploadAsset.mockResolvedValue({ asset: { id: 'asset-1' } });
-    const { container } = render(
-      <CharacterTemplateEditorModal template={template('DND_5E')} onClose={vi.fn()} onSaved={vi.fn()} />
-    );
-
-    await screen.findByPlaceholderText('Character Name');
-    const picker = container.ownerDocument.querySelector('input[type="file"]') as HTMLInputElement;
-    fireEvent.change(picker, { target: { files: [new File(['x'], 'token.png', { type: 'image/png' })] } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-
-    await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalled());
-    expect(updateCharacterTemplate.mock.calls[0][1]).not.toHaveProperty('tokenImageUrl');
-    await waitFor(() =>
-      expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/picture.*global/i), expect.any(String))
-    );
   });
 
   it('sends the version it opened with each save', async () => {
