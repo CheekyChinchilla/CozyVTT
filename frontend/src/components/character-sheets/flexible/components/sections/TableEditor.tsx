@@ -6,7 +6,8 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { TableSection } from '../../../../../types/flexible-character-sheet';
 import { generateId } from '../../utils/section-helpers';
-import { SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import { FLEXIBLE_MAX_COLUMNS, FLEXIBLE_MAX_ROWS, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../../../ListLimitNote';
 
 interface TableEditorProps {
   section: TableSection;
@@ -14,11 +15,12 @@ interface TableEditorProps {
 }
 
 export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) => {
-  // TODO(sheets): the server keeps at most 50 columns in a table (FLEXIBLE_MAX_COLUMNS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
+  // The server keeps at most FLEXIBLE_MAX_COLUMNS columns and
+  // FLEXIBLE_MAX_ROWS rows in a table, so each add button turns off there.
+  const columnsFull = listIsFull(section.columns, FLEXIBLE_MAX_COLUMNS);
+  const rowsFull = listIsFull(section.rows, FLEXIBLE_MAX_ROWS);
   const addColumn = () => {
+    if (columnsFull) return;
     const newColumn = {
       id: generateId(),
       name: 'New Column',
@@ -50,11 +52,8 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
     });
   };
 
-  // TODO(sheets): the server keeps at most 1000 rows in a table (FLEXIBLE_MAX_ROWS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
   const addRow = () => {
+    if (rowsFull) return;
     const newRow = {
       id: generateId(),
       cells: section.columns.reduce((acc, col) => ({ ...acc, [col.id]: '' }), {}),
@@ -105,7 +104,8 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
             <th className="px-2 py-2 w-12">
               <button
                 onClick={addColumn}
-                className="p-1 rounded-sm bg-moss-green/10 text-brand-ink hover:bg-moss-green/20"
+                disabled={columnsFull}
+                className={`p-1 rounded-sm bg-moss-green/10 text-brand-ink hover:bg-moss-green/20 ${ADD_BUTTON_OFF}`}
                 title="Add column"
               >
                 <Plus className="w-4 h-4" />
@@ -146,14 +146,17 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
           ))}
         </tbody>
       </table>
+      <ListLimitNote full={columnsFull} max={FLEXIBLE_MAX_COLUMNS} />
 
       <button
         onClick={addRow}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        disabled={rowsFull}
+        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
       >
         <Plus className="w-4 h-4" />
         Add Row
       </button>
+      <ListLimitNote full={rowsFull} max={FLEXIBLE_MAX_ROWS} />
     </div>
   );
 };

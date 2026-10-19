@@ -6,7 +6,8 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { StatsSection } from '../../../../../types/flexible-character-sheet';
 import { calculateModifier, formatModifier, generateId } from '../../utils/section-helpers';
-import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { FLEXIBLE_MAX_FIELDS, SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../../../ListLimitNote';
 
 interface StatsEditorProps {
   section: StatsSection;
@@ -14,11 +15,11 @@ interface StatsEditorProps {
 }
 
 export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) => {
-  // TODO(sheets): the server keeps at most 200 stats in a section (FLEXIBLE_MAX_FIELDS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
+  // The server keeps at most FLEXIBLE_MAX_FIELDS stats in a section, so Add
+  // Stat turns off there.
+  const statsFull = listIsFull(section.fields, FLEXIBLE_MAX_FIELDS);
   const addField = () => {
+    if (statsFull) return;
     const newField = {
       id: generateId(),
       name: 'New Stat',
@@ -95,11 +96,13 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
 
       <button
         onClick={addField}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        disabled={statsFull}
+        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
       >
         <Plus className="w-4 h-4" />
         Add Stat
       </button>
+      <ListLimitNote full={statsFull} max={FLEXIBLE_MAX_FIELDS} />
     </div>
   );
 };

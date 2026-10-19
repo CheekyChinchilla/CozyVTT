@@ -7,7 +7,8 @@ import { Plus, Trash2, GripVertical, CheckSquare, Square } from 'lucide-react';
 import { Reorder } from 'framer-motion';
 import type { ListSection } from '../../../../../types/flexible-character-sheet';
 import { generateId } from '../../utils/section-helpers';
-import { SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import { FLEXIBLE_MAX_ROWS, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../../../ListLimitNote';
 
 interface ListEditorProps {
   section: ListSection;
@@ -15,11 +16,11 @@ interface ListEditorProps {
 }
 
 export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => {
-  // TODO(sheets): the server keeps at most 1000 entries in a list section (FLEXIBLE_MAX_ROWS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
+  // The server keeps at most FLEXIBLE_MAX_ROWS entries in a list section, so
+  // Add Item turns off there.
+  const itemsFull = listIsFull(section.items, FLEXIBLE_MAX_ROWS);
   const addItem = () => {
+    if (itemsFull) return;
     const newItem = {
       id: generateId(),
       text: '',
@@ -94,11 +95,13 @@ export const ListEditor: React.FC<ListEditorProps> = ({ section, onUpdate }) => 
 
       <button
         onClick={addItem}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        disabled={itemsFull}
+        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
       >
         <Plus className="w-4 h-4" />
         Add Item
       </button>
+      <ListLimitNote full={itemsFull} max={FLEXIBLE_MAX_ROWS} />
     </div>
   );
 };
