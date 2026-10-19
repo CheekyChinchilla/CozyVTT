@@ -1086,16 +1086,24 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   };
 
   /**
+   * Whether the bonus follows Level, settled as the Level box is entered. The
+   * box reports each keystroke, so a level of 10 or more passes through level
+   * 1, whose +2 a bonus set by hand may equal.
+   */
+  const levelBonusFollows = useRef<boolean | null>(null);
+
+  /**
    * Set the level, moving the proficiency bonus with it when the bonus was the
    * old level's. A bonus set by hand to something else is the player's, and
    * the box offers the level's beside it.
    */
   const changeLevel = (level: number) => {
     clearErrorsAt('level');
+    const follows = levelBonusFollows.current;
     setFormData((prev) => ({
       ...prev,
       level,
-      ...(prev.proficiencyBonus === levelProficiencyBonus(prev.level)
+      ...((follows ?? prev.proficiencyBonus === levelProficiencyBonus(prev.level))
         ? { proficiencyBonus: levelProficiencyBonus(level) }
         : {}),
     }));
@@ -1330,6 +1338,15 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <div className={`flex items-center flex-wrap gap-2 opacity-80`}>
               <div className="flex items-center space-x-2">
                 <label htmlFor="dnd5e-level" className="text-xs">Level</label>
+                <span
+                  className="contents"
+                  onFocus={() => {
+                    levelBonusFollows.current = formData.proficiencyBonus === levelProficiencyBonus(formData.level);
+                  }}
+                  onBlur={() => {
+                    levelBonusFollows.current = null;
+                  }}
+                >
                 <NumberField
                   id="dnd5e-level"
                   min={1}
@@ -1341,6 +1358,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   } rounded px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
                 fallback={1}
                 />
+                </span>
               </div>
               <input
                 type="text"

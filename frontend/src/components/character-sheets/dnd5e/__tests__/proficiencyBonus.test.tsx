@@ -103,3 +103,29 @@ describe('a bonus set by hand', () => {
     expect((await save()).proficiencyBonus).toBe(3);
   });
 });
+
+// A level of 10 or more is typed through level 1, where +2 is the level's
+// bonus, so comparing against the keystroke before took a bonus set by hand
+// to +2 for one that follows. Whether it follows is settled as the box is
+// entered.
+describe('typing a two-digit level', () => {
+  const type = (...values: string[]) => {
+    fireEvent.focus(level());
+    for (const value of values) fireEvent.change(level(), { target: { value } });
+    fireEvent.blur(level());
+  };
+
+  it('keeps a bonus set by hand to +2', async () => {
+    const save = open(7, 2);
+    type('1', '12');
+
+    expect((await save()).proficiencyBonus).toBe(2);
+  });
+
+  it('moves a bonus that follows to the level finally typed', async () => {
+    const save = open(4, 2);
+    type('5', '', '9');
+
+    expect((await save()).proficiencyBonus).toBe(4);
+  });
+});
