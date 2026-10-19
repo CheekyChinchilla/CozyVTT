@@ -166,6 +166,9 @@ const SHEET_NAME_FIELD: Record<GameSystem, string> = {
   [GameSystem.CALL_OF_CTHULHU_7E]: 'investigatorName',
 };
 
+/** The sheet field holding the owner's display name, the same in every system. */
+const PLAYER_NAME_FIELD = 'playerName';
+
 /**
  * The name written on a sheet, whichever field that system keeps it in.
  *
@@ -226,8 +229,20 @@ export function applyIdentityToSheet(
   // template, and the field is not editable on the sheet, so anything left
   // behind could not be corrected afterwards.
   if (playerDisplayName) {
-    sheet.playerName = playerDisplayName;
+    sheet[PLAYER_NAME_FIELD] = playerDisplayName;
   }
 
   return sheet;
+}
+
+/**
+ * The sheet without its player's name, for a template: the name is whoever
+ * owned the character it was saved from, and a character made from the
+ * template is given its own owner's. Any other sheet is returned as it is.
+ */
+export function sheetWithoutPlayerName<T>(gameSystem: GameSystem | null | undefined, data: T): T {
+  if (!gameSystem || typeof data !== 'object' || data === null || Array.isArray(data)) return data;
+  if (!(PLAYER_NAME_FIELD in data)) return data;
+  const { [PLAYER_NAME_FIELD]: _dropped, ...rest } = data as Record<string, unknown>;
+  return rest as T;
 }

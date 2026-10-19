@@ -894,6 +894,8 @@ into a character or editing it.
   sheet reads them first, as they are for a character. A flexible template's
   `data` must be an object laid out as a Flexible sheet, as a Flexible
   character's must; anything else answers `400` with `validationErrors`.
+- A template is stored without the sheet's `playerName`, and a Call of
+  Cthulhu one without its `notes` (Keeper's Notes), here and on `PUT`.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.

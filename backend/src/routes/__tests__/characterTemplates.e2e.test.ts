@@ -208,6 +208,55 @@ describe('Character template routes', () => {
     });
   });
 
+  describe('what a template never carries', () => {
+    // Every system's sheet with a player's name, and Call of Cthulhu's with
+    // the Keeper's Notes, as Save as Template sends a character's.
+    const sheets = [AppGameSystem.DND_5E, AppGameSystem.PATHFINDER_2E, AppGameSystem.CALL_OF_CTHULHU_7E].map(
+      (gameSystem) => ({
+        gameSystem,
+        data: {
+          ...(getBlankCharacterTemplate(gameSystem) as Record<string, unknown>),
+          playerName: 'Their Player',
+          ...(gameSystem === AppGameSystem.CALL_OF_CTHULHU_7E && { notes: 'The Keeper alone knows this' }),
+        },
+      })
+    );
+
+    it('leaves out the player name and the Keeper\'s Notes when a template is published', async () => {
+      for (const { gameSystem, data } of sheets) {
+        const res = await createTemplate(otherAgent, { gameSystem, data });
+        expect(res.status).toBe(201);
+        expect(res.body.data).not.toHaveProperty('playerName');
+        expect(res.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: res.body.id } });
+        expect(stored.data).not.toHaveProperty('playerName');
+        expect(stored.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+      }
+    });
+
+    it('leaves them out when a template is saved, by its author or a template editor', async () => {
+      for (const [i, { gameSystem, data }] of sheets.entries()) {
+        const created = await createTemplate(authorAgent, { gameSystem, data: { ...data, playerName: undefined, notes: undefined } });
+        expect(created.status).toBe(201);
+        const agent = i % 2 === 0 ? authorAgent : editorAgent;
+        const res = await agent.put(`/api/character-templates/${created.body.id}`).send({ data });
+        expect(res.status).toBe(200);
+        const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
+        expect(stored.data).not.toHaveProperty('playerName');
+        expect(stored.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+      }
+    });
+
+    it('keeps a Pathfinder 2e sheet\'s own notes, which are not the Keeper\'s', async () => {
+      const res = await createTemplate(authorAgent, {
+        gameSystem: GameSystem.PATHFINDER_2E,
+        data: { ...(getBlankCharacterTemplate(AppGameSystem.PATHFINDER_2E) as Record<string, unknown>), notes: 'Keep the shield polished' },
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.data.notes).toBe('Keep the shield polished');
+    });
+  });
+
   // A template is visible to everyone, so its image has to be too. A personal
   // asset would 403 for every reader but its owner.
   describe('the global-image rule', () => {

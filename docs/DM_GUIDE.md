@@ -680,7 +680,7 @@ a player and you cannot remove them. Hand the seat back if you want to step away
 
 An investigator's sheet has a **Keeper's Notes** box, on the **Backstory** tab of the sheet's editor, for you alone. Open it with **Edit Character Sheet** from the roster's right-click menu; the box says "Only you, as the Keeper, can see or change these." Only the DM of the campaign the investigator is in sees or changes the notes. The investigator's player and the rest of the table are never sent them, and a save by anyone else leaves them as they are.
 
-The notes stay with your campaign. If the investigator is moved into another campaign, brought into one when its owner accepts an invitation, or copied, the notes are left behind, and an investigator in no campaign shows them to nobody. Notes written before version 1.5.2, including any a player typed into the box, are shown to the Keeper only.
+The notes stay with your campaign. If the investigator is moved into another campaign, brought into one when its owner accepts an invitation, or copied, the notes are left behind, and an investigator in no campaign shows them to nobody. **Save as Template** leaves them behind too, since everyone on the instance can read a template, even when you are the one saving it. Notes written before version 1.5.2, including any a player typed into the box, are shown to the Keeper only.
 
 ### Character Assignment
 

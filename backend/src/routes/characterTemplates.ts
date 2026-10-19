@@ -17,7 +17,13 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
 import { readEnumQuery } from '../utils/queryEnum';
-import { validateCharacterData, validateFlexibleSheet, sheetIssues } from '../validators/game-systems';
+import {
+  validateCharacterData,
+  validateFlexibleSheet,
+  sheetIssues,
+  sheetWithoutPlayerName,
+} from '../validators/game-systems';
+import { sheetWithoutKeeperNotes } from '../utils/keeperNotes';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import {
   CreateCharacterTemplateSchema,
@@ -143,6 +149,10 @@ async function resolveTemplateImage(
  * characters, so a sheet still carrying that version's fields has them moved
  * where the sheet reads them first, as a character's are. Validation would
  * otherwise drop their content.
+ *
+ * Every user can read a template, so it never keeps the Keeper's Notes, which
+ * are the Keeper's alone, or the player's name, which is the character
+ * owner's: whoever saves one, a template editor included, both are left out.
  */
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
@@ -159,7 +169,9 @@ function validateSheet(
   }
 
   const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, data || {}));
-  if (result.success) return { ok: true, data: result.data };
+  if (result.success) {
+    return { ok: true, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, result.data)) };
+  }
 
   return {
     ok: false,

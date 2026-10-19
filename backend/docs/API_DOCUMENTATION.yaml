@@ -10844,7 +10844,9 @@ paths:
         system schema`, with `validationErrors`, otherwise; an omitted `data`
         is checked as `{}` and so fails), and is stored as the schema's parsed
         output, so a key the schema does not declare is dropped, as it is
-        for a character. Sheet
+        for a character. A typed sheet is stored without `playerName`, and a
+        `CALL_OF_CTHULHU_7E` one without its top-level `notes` (Keeper's
+        Notes), whoever sends it. Sheet
         fields from before version 1.3.0 are moved to their current names
         first, as they are for a character. Without
         a `gameSystem`, `data` must be an object
@@ -10982,8 +10984,9 @@ paths:
         whole sheet; it is checked against the template's game system (after
         moving sheet fields from before version 1.3.0 to their current names),
         or against `FlexibleCharacterData` if it has none, and stored as
-        parsed; a refused sheet answers 400 with `validationErrors` and the
-        message the create route gives.
+        parsed, without `playerName` or a `CALL_OF_CTHULHU_7E` sheet's
+        top-level `notes`, as on create; a refused sheet answers 400 with
+        `validationErrors` and the message the create route gives.
         `tokenImageUrl` follows the
         rule on create, and null or an empty string removes the image. Send
         `updatedAt` exactly as the template was loaded with, as a UTC ISO
