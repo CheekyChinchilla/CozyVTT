@@ -345,3 +345,24 @@ describe('Pathfinder 2e lore names', () => {
     expect(warfare.label).toBe('Warfare lore +7');
   });
 });
+
+// The Call of Cthulhu roll menu skipped the Fighting and Firearms
+// specialisations a player adds, and any Firearms skill at 0.
+describe('Call of Cthulhu specialisations in the roll menu', () => {
+  const skill = (value: number, extra: Record<string, unknown> = {}) => ({ baseValue: value, currentValue: value, improvementChecked: false, ...extra });
+  const data = {
+    skills: {
+      fighting: { brawl: skill(25), custom: [skill(40, { specialization: 'Sword' })] },
+      firearms: { handgun: skill(20), rifle: skill(25), shotgun: skill(0), custom: [skill(30, { specialization: 'Bow' })] },
+    },
+  } as unknown as CharacterData;
+
+  it('offers each one by its name', () => {
+    const labels = getCharacterRolls('CALL_OF_CTHULHU_7E', data).skills.map((s) => s.label);
+    expect(labels).toEqual(expect.arrayContaining([
+      'Fighting (Sword) — target: 40%',
+      'Firearms (Bow) — target: 30%',
+      'Firearms (Shotgun) — target: 0%',
+    ]));
+  });
+});

@@ -31,8 +31,6 @@ import type {
 interface CoC7eSkillLike {
   currentValue?: number;
   name?: string;
-  /** `fighting` holds a group rather than a leaf; the extractor checks for it. */
-  brawl?: { currentValue?: number };
 }
 /**
  * characterRolls.ts
@@ -509,29 +507,26 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
     for (const [key, skill] of Object.entries(data.skills as unknown as Record<string, CoC7eSkillLike>)) {
       if (key === 'customSkills') continue;
 
-      // Handle specializations (fighting, firearms, languageOther, science)
-      if (key === 'fighting' && skill?.brawl) {
-        const val = skill.brawl.currentValue;
-        if (typeof val === 'number') {
+      // Fighting and Firearms: the rows printed on the sheet, then the
+      // specialisations the player added, each by its name.
+      if ((key === 'fighting' || key === 'firearms') && skill && typeof skill === 'object' && !('currentValue' in skill)) {
+        const group = skill as Record<string, unknown>;
+        const label = key === 'fighting' ? 'Fighting' : 'Firearms';
+        const printed = key === 'fighting' ? ['brawl'] : ['handgun', 'rifle', 'shotgun'];
+        const rows: [string, unknown][] = [
+          ...printed.map((sub): [string, unknown] => [sub.charAt(0).toUpperCase() + sub.slice(1), group[sub]]),
+          ...(Array.isArray(group.custom) ? group.custom : []).map((entry): [string, unknown] => [
+            String((entry as { specialization?: string }).specialization || 'Other'),
+            entry,
+          ]),
+        ];
+        for (const [name, entry] of rows) {
+          const val = (entry as CoC7eSkillLike | undefined)?.currentValue;
+          if (typeof val !== 'number') continue;
           skills.push({
-            label:             `Fighting (Brawl) — target: ${val}%`,
+            label:             `${label} (${name}) — target: ${val}%`,
             expression:        '1d100',
-            purpose:           `Fighting (Brawl) — target: ${val}%`,
-            supportsAdvantage: false,
-          });
-        }
-        continue;
-      }
-
-      if (key === 'firearms' && typeof skill === 'object' && !('currentValue' in skill)) {
-        for (const [sub, subSkill] of Object.entries(skill as Record<string, CoC7eSkillLike>)) {
-          if (!subSkill?.currentValue) continue;
-          const val = subSkill.currentValue as number;
-          const subName = sub.charAt(0).toUpperCase() + sub.slice(1);
-          skills.push({
-            label:             `Firearms (${subName}) — target: ${val}%`,
-            expression:        '1d100',
-            purpose:           `Firearms (${subName}) — target: ${val}%`,
+            purpose:           `${label} (${name}) — target: ${val}%`,
             supportsAdvantage: false,
           });
         }
@@ -540,7 +535,7 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
 
       if (key === 'languageOther' && Array.isArray(skill)) {
         for (const lang of skill) {
-          if (!lang?.currentValue) continue;
+          if (typeof lang?.currentValue !== 'number') continue;
           const name = lang.language ? `Language (${lang.language})` : 'Language (Other)';
           skills.push({
             label:             `${name} — target: ${lang.currentValue}%`,
@@ -554,7 +549,7 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
 
       if (key === 'science' && Array.isArray(skill)) {
         for (const sci of skill) {
-          if (!sci?.currentValue) continue;
+          if (typeof sci?.currentValue !== 'number') continue;
           const name = sci.specialization ? `Science (${sci.specialization})` : 'Science';
           skills.push({
             label:             `${name} — target: ${sci.currentValue}%`,
