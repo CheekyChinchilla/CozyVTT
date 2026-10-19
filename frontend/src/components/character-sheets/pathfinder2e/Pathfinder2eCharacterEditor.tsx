@@ -56,6 +56,7 @@ import {
   pf2eTotalBulk,
   pf2eBulkLimits,
   formatPf2eBulk,
+  pf2eMaxHitPoints,
 } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
@@ -657,17 +658,15 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     setFormData((prev) => ({ ...prev, bulk: { current, encumbered, maximum } }));
   }, [formData.inventory, formData.currency, formData.attributes?.strength?.modifier]);
 
-  // Auto-calculate maximum HP
+  // Maximum HP from the shared rules. A sheet made from the old blank template
+  // stores neither ancestry nor class hit points and keeps its maximum until
+  // one is filled in.
   useEffect(() => {
     if (!formData.level || !formData.hp) return;
-    // TODO(sheets): a 0 typed for either becomes 6 here. The blank template
-    // stores both as 0 with a maximum of 10, so reading 0 as 0 would give it a
-    // maximum of 0, which the schema refuses; give the template its real
-    // numbers first, then read these with ?? instead.
-    const ancestryHp = formData.hp.ancestryHp || 6;
-    const classHpPerLevel = formData.hp.classHpPerLevel || 6;
-    const conMod = formData.attributes?.constitution?.modifier || 0;
-    const maximum = ancestryHp + (classHpPerLevel * formData.level) + (conMod * formData.level);
+    const { ancestryHp, classHpPerLevel } = formData.hp;
+    if (!ancestryHp && !classHpPerLevel) return;
+    const conMod = formData.attributes?.constitution?.modifier ?? 0;
+    const maximum = pf2eMaxHitPoints(ancestryHp ?? 0, classHpPerLevel ?? 0, formData.level, conMod);
     setFormData((prev) => ({ ...prev, hp: { ...prev.hp, maximum } as PF2eHitPoints }));
   }, [formData.level, formData.hp?.ancestryHp, formData.hp?.classHpPerLevel, formData.attributes?.constitution?.modifier]);
 

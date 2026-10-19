@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.** The editor read a 0 typed in **Ancestry HP** or **Class HP/Level** as 6, so the maximum came out 6 higher than the boxes said. A character made from the older blank sheet, which stores neither, keeps its maximum until one is filled in.
+
 - **A feature listed twice is kept twice.** Two identical entries, such as two Ability Score Improvements written the same way, were shown as one on a D&D 5e sheet when they came from a template, and folded into one when an older sheet's special abilities were moved to its class features. A feature with no description no longer stops the list from loading.
 
 - **Coloured messages and labels are readable on their own backgrounds.** Error, warning, success and information boxes, badges and chips draw their text on a light wash of their colour, and the text was worked out only against the plain page, so it fell to about 3.5 to 1 in some themes; muted and secondary text did the same on shaded panels. Each theme now works these colours out against those backgrounds too, so they clear the usual readability bar everywhere.
