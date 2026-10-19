@@ -167,9 +167,14 @@ export function cocWeaponSkillValue(skills: unknown, skillName: string, stored: 
   const wanted = inner ? inner[2].trim() : name;
   for (const group of ['fighting', 'firearms']) {
     const members = (all[group] && typeof all[group] === 'object' ? all[group] : {}) as Record<string, unknown>;
-    const printed = wanted === 'rifle/shotgun' ? 'rifle' : wanted;
-    const direct = valueOf(members[printed]);
-    if (direct !== null && printed !== 'custom') return direct;
+    // The rulebook's Rifle/Shotgun is one skill, kept on the sheet as two
+    // rows: the higher is the investigator's.
+    if (group === 'firearms' && wanted === 'rifle/shotgun') {
+      const either = [valueOf(members.rifle), valueOf(members.shotgun)].filter((value): value is number => value !== null);
+      if (either.length > 0) return Math.max(...either);
+    }
+    const direct = valueOf(members[wanted]);
+    if (direct !== null && wanted !== 'custom') return direct;
     const custom = Array.isArray(members.custom) ? members.custom : [];
     const match = custom.find((entry) => String((entry as { specialization?: unknown }).specialization ?? '').trim().toLowerCase() === wanted);
     if (match !== undefined && valueOf(match) !== null) return valueOf(match) as number;

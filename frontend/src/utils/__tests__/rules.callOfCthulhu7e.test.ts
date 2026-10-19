@@ -147,6 +147,13 @@ describe('cocWeaponSkillValue', () => {
     expect(cocWeaponSkillValue(skills, name, 20)).toBe(value);
   });
 
+  // The rulebook's Rifle/Shotgun is one skill, which the sheet keeps as two.
+  it('reads Rifle/Shotgun as the higher of the two', () => {
+    const shotgunHigher = { ...skills, firearms: { ...skills.firearms, shotgun: skill(55) } };
+    expect(cocWeaponSkillValue(shotgunHigher, 'Rifle/Shotgun', 20)).toBe(55);
+    expect(cocWeaponSkillValue(shotgunHigher, 'Firearms (Rifle/Shotgun)', 20)).toBe(55);
+  });
+
   it('keeps the stored value for a skill the sheet does not have', () => {
     expect(cocWeaponSkillValue(skills, 'Whip', 20)).toBe(20);
     expect(cocWeaponSkillValue(skills, '', 20)).toBe(20);
