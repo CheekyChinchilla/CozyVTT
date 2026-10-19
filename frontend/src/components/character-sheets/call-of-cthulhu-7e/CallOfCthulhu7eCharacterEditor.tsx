@@ -344,13 +344,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               improvementChecked: prev.derivedStats?.dodge?.improvementChecked || false,
             },
             sanity: {
-              // TODO(rules): POW may be 100 but the schema caps Sanity at 99, so
-              // an investigator with POW 100 and no Sanity yet gets 100 for both
-              // of these and the sheet cannot be saved. Cap the starting value at
-              // 99 and the current value at maxSanity.
-              starting: prev.derivedStats?.sanity?.starting ?? pow,
+              // Sanity begins at POW, and a sheet holds at most 99; current
+              // Sanity "can never increase above" the maximum, 99 less
+              // Cthulhu Mythos, so it comes down with it.
+              starting: prev.derivedStats?.sanity?.starting ?? Math.min(pow, 99),
               maximum: maxSanity,
-              current: prev.derivedStats?.sanity?.current ?? pow,
+              current: Math.min(prev.derivedStats?.sanity?.current ?? Math.min(pow, 99), maxSanity),
               formula: 'Starts equal to POW; max is 99 minus Cthulhu Mythos skill',
             },
             luck: prev.derivedStats?.luck || { score: 50, notes: '' },
@@ -789,7 +788,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       <SanityTracker
         current={formData.derivedStats?.sanity?.current || 0}
         starting={formData.derivedStats?.sanity?.starting || 0}
-        maximum={formData.derivedStats?.sanity?.maximum || 99}
+        maximum={formData.derivedStats?.sanity?.maximum ?? 99}
         cthulhuMythos={formData.skills?.cthulhuMythos?.currentValue || 0}
         editable
         onChange={{
@@ -855,7 +854,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             </div>
             <div>
               <span className="text-blue-700 font-semibold">Max SAN:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.sanity?.maximum || 99}</span>
+              <span className="text-blue-900">{formData.derivedStats?.sanity?.maximum ?? 99}</span>
               <div className="text-xs text-blue-600">99 - Cthulhu Mythos</div>
             </div>
             <div>
