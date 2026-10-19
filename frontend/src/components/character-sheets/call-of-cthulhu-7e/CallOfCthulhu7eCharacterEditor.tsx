@@ -16,6 +16,7 @@ import {
   X,
   Upload,
   Palette,
+  Plus,
 } from 'lucide-react';
 import { Character } from '../../../types';
 import type { CharacterData } from '../../../types';
@@ -73,7 +74,8 @@ import {
   cocBlankSkills,
 } from '@/utils/rules/callOfCthulhu7e';
 import { parsePossessions, formatPossessions } from './possessions';
-import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { SHEET_LIST_MAX, SHEET_LONG_TEXT_MAX, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { assetNameFrom } from '@/utils/assetName';
 import { COLOR_PRESETS } from './colorPresets';
 
@@ -927,6 +929,23 @@ value={formData.derivedStats?.luck?.score}
               className="w-full text-center text-2xl font-bold text-yellow-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-yellow-500 rounded-sm"
             fallback={0}
             />
+            <textarea
+              value={formData.derivedStats?.luck?.notes ?? ''}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  derivedStats: {
+                    ...prev.derivedStats,
+                    luck: { score: prev.derivedStats?.luck?.score ?? 50, ...prev.derivedStats?.luck, notes: e.target.value },
+                  } as CoC7eDerivedStats,
+                }))
+              }
+              aria-label="Luck notes"
+              placeholder="Notes (e.g. Luck spent)"
+              rows={2}
+              maxLength={SHEET_LONG_TEXT_MAX}
+              className="mt-2 w-full px-2 py-1 text-xs border border-sepia-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
+            />
           </div>
         </div>
       </div>
@@ -1053,6 +1072,19 @@ value={formData.wealth?.cash}
             className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
           />
         </div>
+        <div className="mt-3">
+          <label htmlFor="coc-wealth-notes" className="text-sm text-sepia-700 font-semibold block mb-1">Wealth notes</label>
+          <textarea
+            id="coc-wealth-notes"
+            value={formData.wealth?.notes || ''}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, wealth: { ...prev.wealth, notes: e.target.value } as CoC7eWealth }))
+            }
+            rows={2}
+            maxLength={SHEET_LONG_TEXT_MAX}
+            className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+          />
+        </div>
       </div>
 
       {/* Possessions — free-text field */}
@@ -1070,6 +1102,74 @@ value={formData.wealth?.cash}
           rows={8}
           className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
         />
+      </div>
+
+      {/* Contacts, which the read-only sheet lists on this tab. */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-sepia-900">Contacts</h3>
+          <button
+            type="button"
+            onClick={() => setFormData((prev) => ({ ...prev, contacts: [...(prev.contacts ?? []), { name: 'New contact', role: '', notes: '' }] }))}
+            disabled={listIsFull(formData.contacts)}
+            className={`inline-flex items-center gap-1 text-sm font-medium text-sepia-800 hover:text-sepia-950 ${ADD_BUTTON_OFF}`}
+          >
+            <Plus className="w-4 h-4" />
+            Add Contact
+          </button>
+        </div>
+        <ListLimitNote full={listIsFull(formData.contacts)} className={LIMIT_NOTE_CLASS} />
+        <div className="space-y-2">
+          {(formData.contacts ?? []).map((contact, index) => {
+            const setContact = (field: 'name' | 'role' | 'notes', value: string) =>
+              setFormData((prev) => ({
+                ...prev,
+                contacts: (prev.contacts ?? []).map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+              }));
+            return (
+              <div key={index} className="bg-white border border-sepia-400 rounded-md p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={contact.name}
+                    onChange={(e) => setContact('name', e.target.value)}
+                    aria-label={`Name of contact ${index + 1}`}
+                    placeholder="Name"
+                    maxLength={SHEET_SHORT_TEXT_MAX}
+                    className="flex-1 px-2 py-1 border border-sepia-300 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                  />
+                  <input
+                    type="text"
+                    value={contact.role ?? ''}
+                    onChange={(e) => setContact('role', e.target.value)}
+                    aria-label={`Role of contact ${index + 1}`}
+                    placeholder="Role"
+                    maxLength={SHEET_SHORT_TEXT_MAX}
+                    className="w-40 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, contacts: (prev.contacts ?? []).filter((_, i) => i !== index) }))}
+                    aria-label={`Remove ${contact.name || `contact ${index + 1}`}`}
+                    className="p-1 text-red-700 hover:text-red-900"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={contact.notes ?? ''}
+                  onChange={(e) => setContact('notes', e.target.value)}
+                  aria-label={`Notes on contact ${index + 1}`}
+                  placeholder="Notes"
+                  rows={2}
+                  maxLength={SHEET_LONG_TEXT_MAX}
+                  className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                />
+              </div>
+            );
+          })}
+          {(formData.contacts ?? []).length === 0 && <p className="text-sm text-sepia-600 italic">No contacts yet</p>}
+        </div>
       </div>
     </div>
   );

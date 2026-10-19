@@ -291,6 +291,9 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
               <div className="text-xs text-yellow-600 text-center mt-1">
                 Spend to adjust rolls (1:1)
               </div>
+              {data.derivedStats.luck.notes && (
+                <p className="text-xs text-yellow-800 mt-2 whitespace-pre-wrap">{data.derivedStats.luck.notes}</p>
+              )}
             </div>
           )}
 
@@ -410,6 +413,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
             <div className="bg-white/50 rounded-sm p-3 mt-3">
               <div className="text-xs text-amber-700 font-semibold mb-1">Assets</div>
               <p className="text-sm text-amber-900">{data.wealth.assets}</p>
+            </div>
+          )}
+          {data.wealth.notes && (
+            <div className="bg-white/50 rounded-sm p-3 mt-3">
+              <div className="text-xs text-amber-700 font-semibold mb-1">Notes</div>
+              <p className="text-sm text-amber-900 whitespace-pre-wrap">{data.wealth.notes}</p>
             </div>
           )}
         </div>

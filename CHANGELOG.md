@@ -25,6 +25,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **A Call of Cthulhu investigator's contacts, and notes on Luck and wealth, can be edited.** The read-only sheet listed contacts that the editor had no way to add, change or remove; **Edit** now has a **Contacts** list on the **Possessions** tab, with **Add Contact**, a name, role and notes for each, and a remove button. A note under **Luck Score** and **Wealth notes** under **Assets** are new, and the read-only sheet shows both.
+
 - **Specialised skills can be added to a Call of Cthulhu investigator.** The **Skills** tab of **Edit** showed only the specialised skills a sheet already had, with no way to add, name or remove one. Fighting and Firearms specialisations and sciences can now be added from the rulebook's list at their base values, or as **Other** to be named; **Add Language** and **Add Skill** add another language or a skill of your own. Each added row has a name box and a remove button, and Art/Craft, Pilot, Survival and the investigator's own language each take a specialisation.
 
 - **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.** The **Inventory** tab lists each item's **Value** beside its weight and gives the carrying capacity the rules work out from Strength: 15 pounds a point, and twice that to push, drag or lift, for a Small or Medium character. The header names the player, as the Pathfinder 2e sheet does. All three were recorded in the editor and shown nowhere else.
