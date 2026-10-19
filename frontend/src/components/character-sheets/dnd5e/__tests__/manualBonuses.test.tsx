@@ -30,7 +30,9 @@ describe('manual bonuses in the D&D 5e editor', () => {
     const range = (box: HTMLElement) => [box.getAttribute('min'), box.getAttribute('max')];
     const expected = [String(MIN_BONUS_OVERRIDE), String(MAX_BONUS_OVERRIDE)];
 
-    expect(range(screen.getByLabelText('Other bonus to passive Perception'))).toEqual(expected);
+    // Higher where -30 would take passive Perception below the 1 the server
+    // stores: 10 + Perception 0 leaves -9.
+    expect(range(screen.getByLabelText('Other bonus to passive Perception'))).toEqual(['-9', String(MAX_BONUS_OVERRIDE)]);
     fireEvent.click(screen.getByRole('button', { name: /Combat/ }));
     expect(range(screen.getByLabelText('Initiative — other bonus'))).toEqual(expected);
     fireEvent.click(screen.getByRole('button', { name: /Spells/ }));

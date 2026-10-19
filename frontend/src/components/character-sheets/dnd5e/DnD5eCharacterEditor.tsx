@@ -112,7 +112,7 @@ type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'features' | 'bio';
  * every tab.
  */
 function tabOfError(key: string): TabId | null {
-  if (key.startsWith('stats.')) return 'stats';
+  if (key.startsWith('stats.') || key === 'passivePerceptionBonus') return 'stats';
   if (key === 'armorClass' || /^(hp|attacks|hitDice)\./.test(key)) return 'combat';
   if (key.startsWith('spellcasting.')) return 'spells';
   if (key.startsWith('inventory.')) return 'inventory';
@@ -282,6 +282,9 @@ function withoutOrphanLanguages(sheet: DnD5eFormData): DnD5eFormData {
   delete (settled as Record<string, unknown>).languages;
   return settled;
 }
+
+/** The most one proficiency box holds, as the schema stores it. */
+const PROFICIENCY_BOX_MAX = 2000;
 
 /** The ability each of the eighteen skills uses. */
 const SKILL_ABILITIES: Record<keyof DnD5eSkills, keyof DnD5eStats> = {
@@ -719,8 +722,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const exhaustion = exhaustionLevel(formData.exhaustionLevel);
   const spellAbilityModifier = spellcastingAbilityModifier(formData);
   const spellSaveDC = dnd5eSpellSaveDC(formData);
-  // The server stores a DC of at least 1, so the other bonus stops where the
-  // rest of the DC would leave it at 1.
+  // The server stores a DC, and a passive Perception, of at least 1, so each
+  // other bonus stops where the rest would leave it at 1.
+  const passiveOtherBonusMin = Math.max(MIN_BONUS_OVERRIDE, 1 - passiveScore(formData.skills?.perception?.bonus ?? 0));
   const dcOtherBonusMin = Math.max(
     MIN_BONUS_OVERRIDE,
     1 - (spellSaveDC - (formData.spellcasting?.spellSaveDCOtherBonus ?? 0))
@@ -884,6 +888,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     (formData.spellcasting?.spells ?? []).forEach((row, i) => {
       if (kept(row) && blank(row.name)) newErrors[`spellcasting.spells.${i}.name`] = 'Name this spell, or remove it';
     });
+    if (passiveScore((formData.skills?.perception?.bonus ?? 0) + (formData.passivePerceptionBonus ?? 0)) < 1) {
+      newErrors.passivePerceptionBonus = 'Passive Perception must be at least 1. Raise its Other bonus.';
+    }
     if (formData.spellcasting && spellSaveDC < 1) {
       newErrors['spellcasting.spellSaveDCOtherBonus'] = 'The spell save DC must be at least 1. Raise its Other bonus.';
     }
@@ -1436,6 +1443,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           <label htmlFor="dnd5e-alignment" className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
           <input
             id="dnd5e-alignment"
+            maxLength={SHEET_SHORT_TEXT_MAX}
             type="text"
             value={formData.alignment || ''}
             onChange={(e) => updateField('alignment', e.target.value)}
@@ -1447,6 +1455,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           <label htmlFor="dnd5e-background" className="block text-sm font-semibold text-stone-700 mb-1">Background</label>
           <input
             id="dnd5e-background"
+            maxLength={SHEET_SHORT_TEXT_MAX}
             type="text"
             value={formData.background || ''}
             onChange={(e) => updateField('background', e.target.value)}
@@ -1827,13 +1836,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <NumberField
               id="passive-perception-other-bonus"
               aria-label="Other bonus to passive Perception"
-              min={MIN_BONUS_OVERRIDE}
+              min={passiveOtherBonusMin}
               max={MAX_BONUS_OVERRIDE}
               value={formData.passivePerceptionBonus ?? 0}
               onChange={(v: number) => updateField('passivePerceptionBonus', v)}
               className="w-20 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
               fallback={0}
             />
+            {fieldError('passivePerceptionBonus')}
           </div>
         </div>
         <p className="mt-2 text-xs text-stone-500">
@@ -2247,6 +2257,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   <label htmlFor={`attack-${index}-damage`} className="block text-xs font-semibold text-stone-600 mb-1">Damage Roll</label>
                   <input
                     id={`attack-${index}-damage`}
+                    maxLength={SHEET_SHORT_TEXT_MAX}
                     type="text"
                     value={attack.damageRoll || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageRoll`, e.target.value)}
@@ -2258,6 +2269,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   <label htmlFor={`attack-${index}-damage-type`} className="block text-xs font-semibold text-stone-600 mb-1">Damage Type</label>
                   <input
                     id={`attack-${index}-damage-type`}
+                    maxLength={SHEET_SHORT_TEXT_MAX}
                     type="text"
                     value={attack.damageType || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageType`, e.target.value)}
@@ -2493,6 +2505,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             onChange={(e) => updateField('spellcasting.class', e.target.value)}
             placeholder="e.g., Wizard — leave blank if you don't cast"
             aria-label="Spellcasting Class"
+            maxLength={SHEET_SHORT_TEXT_MAX}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
           <p className="mt-1 text-xs text-stone-600">
@@ -2508,6 +2521,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             onChange={(e) => updateField('spellcasting.ability', e.target.value)}
             placeholder="e.g., Intelligence"
             aria-label="Spellcasting Ability"
+            maxLength={SHEET_SHORT_TEXT_MAX}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
           />
         </div>
@@ -2940,6 +2954,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-armor" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Armor</label>
               <textarea
                 id="dnd5e-proficiencies-armor"
+                maxLength={PROFICIENCY_BOX_MAX}
                 value={profs.armor}
                 onChange={(e) => updateField('proficiencies.armor', e.target.value)}
                 placeholder="Light Armor, Medium Armor, Shields"
@@ -2953,6 +2968,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-weapons" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Weapons</label>
               <textarea
                 id="dnd5e-proficiencies-weapons"
+                maxLength={PROFICIENCY_BOX_MAX}
                 value={profs.weapons}
                 onChange={(e) => updateField('proficiencies.weapons', e.target.value)}
                 placeholder="Simple Weapons, Martial Weapons, or specific weapons (Daggers, Longswords, Shortbows)"
@@ -2966,6 +2982,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-tools" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Tools</label>
               <textarea
                 id="dnd5e-proficiencies-tools"
+                maxLength={PROFICIENCY_BOX_MAX}
                 value={profs.tools}
                 onChange={(e) => updateField('proficiencies.tools', e.target.value)}
                 placeholder="Thieves' Tools, Smith's Tools, Calligrapher's Supplies, Musical Instruments, Vehicles (Land/Water)"
@@ -2979,6 +2996,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               <label htmlFor="dnd5e-proficiencies-languages" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Languages</label>
               <textarea
                 id="dnd5e-proficiencies-languages"
+                maxLength={PROFICIENCY_BOX_MAX}
                 value={profs.languages}
                 onChange={(e) => updateField('proficiencies.languages', e.target.value)}
                 placeholder="Common, Elvish, Dwarvish, Draconic"
@@ -3094,6 +3112,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <label htmlFor="dnd5e-appearance-age" className="block text-xs font-semibold text-stone-600 mb-1">Age</label>
             <input
               id="dnd5e-appearance-age"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.age || ''}
               onChange={(e) => updateField('appearance.age', e.target.value)}
@@ -3104,6 +3123,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <label htmlFor="dnd5e-appearance-height" className="block text-xs font-semibold text-stone-600 mb-1">Height</label>
             <input
               id="dnd5e-appearance-height"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.height || ''}
               onChange={(e) => updateField('appearance.height', e.target.value)}
@@ -3115,6 +3135,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <label htmlFor="dnd5e-appearance-weight" className="block text-xs font-semibold text-stone-600 mb-1">Weight</label>
             <input
               id="dnd5e-appearance-weight"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.weight || ''}
               onChange={(e) => updateField('appearance.weight', e.target.value)}
@@ -3126,6 +3147,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <label htmlFor="dnd5e-appearance-eyes" className="block text-xs font-semibold text-stone-600 mb-1">Eyes</label>
             <input
               id="dnd5e-appearance-eyes"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.eyes || ''}
               onChange={(e) => updateField('appearance.eyes', e.target.value)}
@@ -3136,6 +3158,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <label htmlFor="dnd5e-appearance-skin" className="block text-xs font-semibold text-stone-600 mb-1">Skin</label>
             <input
               id="dnd5e-appearance-skin"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.skin || ''}
               onChange={(e) => updateField('appearance.skin', e.target.value)}
@@ -3146,6 +3169,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             <label htmlFor="dnd5e-appearance-hair" className="block text-xs font-semibold text-stone-600 mb-1">Hair</label>
             <input
               id="dnd5e-appearance-hair"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.hair || ''}
               onChange={(e) => updateField('appearance.hair', e.target.value)}

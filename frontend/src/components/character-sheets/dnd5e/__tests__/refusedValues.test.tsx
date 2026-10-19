@@ -76,6 +76,42 @@ describe('the boxes', () => {
   });
 });
 
+describe('the boxes the server limits in length', () => {
+  it.each([
+    [/Stats/, ['Alignment', 'Background']],
+    [/Combat/, ['Damage Roll', 'Damage Type']],
+    [/Spells/, ['Spellcasting Class', 'Spellcasting Ability']],
+    [/Biography/, ['Age', 'Height', 'Weight', 'Eyes', 'Skin', 'Hair']],
+  ])('stop at the one-line limit on %s', (name, labels) => {
+    open({ attacks: [spear] });
+    tab(name);
+    for (const label of labels) expect(screen.getByLabelText(label)).toHaveAttribute('maxLength', String(SHEET_SHORT_TEXT_MAX));
+  });
+
+  it('stop each proficiency box at 2,000 characters', () => {
+    open();
+    tab(/Features/);
+    for (const label of ['Armor', 'Weapons', 'Tools', 'Languages']) expect(screen.getByLabelText(label)).toHaveAttribute('maxLength', '2000');
+  });
+});
+
+describe('passive Perception', () => {
+  it('keeps its other bonus from taking it below 1', () => {
+    // 10 + Perception +0 leaves -9 as the lowest.
+    open();
+    expect(screen.getByLabelText('Other bonus to passive Perception')).toHaveAttribute('min', '-9');
+  });
+
+  it('is named on Save when Perception takes it below 1', () => {
+    const onSave = open();
+    fireEvent.change(screen.getByLabelText('Other bonus to Perception'), { target: { value: '-20' } });
+    pressSave();
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Passive Perception must be at least 1. Raise its Other bonus.');
+    expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
 describe('saving', () => {
   it('names a blank Race and Class, and saves nothing', () => {
     const onSave = open({ race: '', class: ' ' });
