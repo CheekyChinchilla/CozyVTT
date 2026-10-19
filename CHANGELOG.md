@@ -108,6 +108,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The two-factor setup page says when the server is not answering.** Opened while CozyVTT was restarting, it showed a spinner until the server came back; it now shows **Can't reach the server** with **Try Again**, as the other pages do.
+
 - **Copy works for a new user's temporary password on a plain-HTTP instance.** In the Admin Panel, **Copy** beside a temporary password did nothing on an instance reached by `http://` on a home network, where the browser offers no clipboard access, and said nothing either. It now copies there too, and says so when it cannot, so you select the password and copy it yourself.
 
 - **A one-letter display name can be chosen on every page.** The server takes display names of 1 to 50 characters, and Invite Player finds one-letter names, but **Profile**, **Sign Up** and the setup wizard refused names under 2 characters, and **Sign Up** said "less than 50" though 50 is allowed.
