@@ -14,6 +14,8 @@ import {
   cocMaxSanity,
   cocHalfAndFifth,
   cocMajorWoundThreshold,
+  cocDamageWithBonus,
+  cocWeaponSkillValue,
 } from '../rules/callOfCthulhu7e';
 
 describe('hit points', () => {
@@ -103,5 +105,44 @@ describe('major wound threshold', () => {
   it('is at least 1', () => {
     expect(cocMajorWoundThreshold(1)).toBe(1);
     expect(cocMajorWoundThreshold(0)).toBe(1);
+  });
+});
+
+// A weapon's damage is written with the damage bonus as DB ("1d3+DB" for a
+// punch), which the dice cannot read; the sheet's damage bonus goes in its
+// place. "Damage bonus is not applied to firearms", so a gun's damage carries
+// no DB to replace.
+describe('cocDamageWithBonus', () => {
+  it.each([
+    ['1d3+DB', '0', '1d3'],
+    ['1d3+DB', '+1d4', '1d3+1d4'],
+    ['1d8 + db', '+2d6', '1d8+2d6'],
+    ['1d6+DB', '-1', '1d6-1'],
+    ['1d10', '+1d4', '1d10'],
+  ])('writes %s with a damage bonus of %s as %s', (damage, bonus, expected) => {
+    expect(cocDamageWithBonus(damage, bonus)).toBe(expected);
+  });
+});
+
+// A weapon stores a copy of its skill's value, which went stale as the skill
+// rose; the skill it names is read where there is one.
+describe('cocWeaponSkillValue', () => {
+  const skill = (value: number, extra: Record<string, unknown> = {}) => ({ currentValue: value, ...extra });
+  const skills = {
+    fighting: { brawl: skill(50), custom: [skill(45, { specialization: 'Sword' })] },
+    firearms: { handgun: skill(60), rifle: skill(35), shotgun: skill(30), custom: [] },
+    throw: skill(40),
+  };
+
+  it.each([
+    ['Brawl', 50], ['Fighting (Brawl)', 50], ['Sword', 45], ['fighting (sword)', 45],
+    ['Handgun', 60], ['Firearms (Rifle)', 35], ['Rifle/Shotgun', 35], ['Throw', 40],
+  ])('reads %s', (name, value) => {
+    expect(cocWeaponSkillValue(skills, name, 20)).toBe(value);
+  });
+
+  it('keeps the stored value for a skill the sheet does not have', () => {
+    expect(cocWeaponSkillValue(skills, 'Whip', 20)).toBe(20);
+    expect(cocWeaponSkillValue(skills, '', 20)).toBe(20);
   });
 });

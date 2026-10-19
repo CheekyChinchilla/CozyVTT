@@ -379,7 +379,14 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   // Render Combat tab
   const renderCombatTab = () => (
     <div>
-      {data.combat?.weapons && <WeaponsList weapons={data.combat.weapons} onRoll={onRoll} />}
+      {data.combat?.weapons && (
+        <WeaponsList
+          weapons={data.combat.weapons}
+          onRoll={onRoll}
+          damageBonus={data.derivedStats?.damageBonus ?? '0'}
+          skills={data.skills}
+        />
+      )}
     </div>
   );
 

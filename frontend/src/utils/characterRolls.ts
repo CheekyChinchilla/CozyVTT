@@ -6,6 +6,7 @@ import { isValidDiceExpression } from './diceExpression';
 export { isValidDiceExpression };
 import { readCustomSkills, dnd5eCustomSkillBonus, dnd5eSkillBonus, dnd5eSaveBonus } from '@/utils/rules/dnd5e';
 import { pf2ePerceptionTotal, pf2eSaveTotal, pf2eSkillTotal } from '@/utils/rules/pathfinder2e';
+import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
 import type {
   DnD5eCharacterData,
   DnD5eStats,
@@ -594,20 +595,22 @@ function extractCocRolls(data: CoC7eCharacterData): CharacterRolls {
   if (Array.isArray(data.combat?.weapons)) {
     for (const w of data.combat.weapons) {
       if (!w.name) continue;
-      // Skill check to hit
+      // Skill check to hit, at the value of the skill the weapon names.
       if (typeof w.skillValue === 'number') {
+        const target = cocWeaponSkillValue(data.skills, w.skill ?? '', w.skillValue);
         combat.push({
-          label:             `${w.name} (${w.skill || 'Skill'}, target: ${w.skillValue}%)`,
+          label:             `${w.name} (${w.skill || 'Skill'}, target: ${target}%)`,
           expression:        '1d100',
-          purpose:           `${w.name} Attack — ${w.skill || 'Skill'} target: ${w.skillValue}%`,
+          purpose:           `${w.name} Attack — ${w.skill || 'Skill'} target: ${target}%`,
           supportsAdvantage: false,
         });
       }
-      // Damage roll
-      if (w.damage && isValidDiceExpression(w.damage)) {
+      // Damage roll, with the damage bonus where it says DB.
+      const damage = w.damage ? cocDamageWithBonus(w.damage, data.derivedStats?.damageBonus ?? '0') : '';
+      if (damage && isValidDiceExpression(damage)) {
         combat.push({
-          label:             `${w.name} Damage (${w.damage})`,
-          expression:        w.damage,
+          label:             `${w.name} Damage (${damage})`,
+          expression:        damage,
           purpose:           `${w.name} Damage`,
           supportsAdvantage: false,
         });

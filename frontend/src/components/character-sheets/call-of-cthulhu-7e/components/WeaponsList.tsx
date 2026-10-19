@@ -11,6 +11,7 @@ import NumberField from '../../../ui/NumberField';
 import ListLimitNote, { listIsFull } from '../../ListLimitNote';
 import { LIMIT_NOTE_CLASS } from '../limitNoteClass';
 import type { CoC7eWeapon } from '@/types/game-systems';
+import { cocDamageWithBonus, cocWeaponSkillValue } from '@/utils/rules/callOfCthulhu7e';
 
 // The weapon shape lives in types/game-systems. This file used to keep its own
 // copy, which required `skill`, `damage` and the rest that the backend schema
@@ -29,6 +30,12 @@ interface WeaponsListProps {
 
   /** Click to roll. Omit outside campaign context. */
   onRoll?: (expression: string, purpose: string) => void;
+
+  /** The investigator's damage bonus, rolled where a weapon's damage says DB. */
+  damageBonus?: string;
+
+  /** The investigator's skills, read for the value of the skill a weapon names. */
+  skills?: unknown;
 }
 
 /**
@@ -39,6 +46,8 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
   editable = false,
   onChange,
   onRoll,
+  damageBonus = '0',
+  skills,
 }) => {
   const handleWeaponChange = <K extends keyof Weapon>(index: number, field: K, value: Weapon[K]) => {
     if (!onChange) return;
@@ -118,13 +127,17 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
             <tbody>
               {weapons.map((weapon, index) => {
                 const isClickable = !!onRoll && !editable;
-                const skillPurpose = `${weapon.name} (${weapon.skill}) — target: ${weapon.skillValue}%`;
+                // The skill the weapon names, where the sheet has it; the
+                // value stored with the weapon goes stale as the skill rises.
+                const skillValue = cocWeaponSkillValue(skills, weapon.skill ?? '', weapon.skillValue ?? 0);
+                const damageRoll = weapon.damage ? cocDamageWithBonus(weapon.damage, damageBonus) : '';
+                const skillPurpose = `${weapon.name} (${weapon.skill}) — target: ${skillValue}%`;
                 return (
                 <tr
                   key={index}
                   className={`border-b border-sepia-300 group ${isClickable ? 'cursor-pointer hover:bg-sepia-100/50 select-none' : 'hover:bg-parchment-light/30'}`}
                   onClick={isClickable ? () => onRoll!('1d100', skillPurpose) : undefined}
-                  title={isClickable ? `Click to roll ${weapon.skill} (target: ${weapon.skillValue}%)` : undefined}
+                  title={isClickable ? `Click to roll ${weapon.skill} (target: ${skillValue}%)` : undefined}
                 >
                   {/* Name */}
                   <td className="px-3 py-2">
@@ -169,15 +182,15 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                         fallback={0}
                       />
                     ) : (
-                      <span className="font-semibold text-sepia-900">{weapon.skillValue}%</span>
+                      <span className="font-semibold text-sepia-900">{skillValue}%</span>
                     )}
                   </td>
 
                   {/* Damage — click to roll damage separately */}
                   <td
                     className={`px-3 py-2 text-center ${isClickable && weapon.damage ? 'cursor-pointer hover:text-red-700 font-semibold' : ''}`}
-                    onClick={isClickable && weapon.damage ? (e) => { e.stopPropagation(); onRoll!(weapon.damage!, `${weapon.name} Damage`); } : undefined}
-                    title={isClickable && weapon.damage ? `Click to roll damage: ${weapon.damage}` : undefined}
+                    onClick={isClickable && weapon.damage ? (e) => { e.stopPropagation(); onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
+                    title={isClickable && weapon.damage ? `Click to roll damage: ${damageRoll}` : undefined}
                   >
                     {editable ? (
                       <input
@@ -280,7 +293,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
         <div className="text-xs text-sepia-700 space-y-1">
           <div><strong>Skill:</strong> The skill used to attack with this weapon</div>
           <div><strong>Value:</strong> Your skill percentage (Regular / Half / Fifth)</div>
-          <div><strong>Damage:</strong> Dice expression for damage (e.g., "1d10" or "1d3+DB")</div>
+          <div><strong>Damage:</strong> Dice expression for damage (e.g., "1d10" or "1d3+DB"); DB rolls your damage bonus. Firearms take no damage bonus</div>
           <div><strong>Range:</strong> Effective range (Touch, 15 yards, 50 yards, etc.)</div>
           <div><strong>Atks:</strong> Number of attacks per round</div>
           <div><strong>Ammo:</strong> Current ammunition count (firearms only)</div>

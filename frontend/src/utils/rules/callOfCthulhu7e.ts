@@ -129,3 +129,46 @@ export function cocBlankSkills(dex: number, edu: number): Record<string, unknown
   skills.customSkills = [];
   return skills;
 }
+
+/**
+ * A weapon's damage with the damage bonus written in. The sheet writes it as
+ * DB ("1d3+DB" for a punch), which the dice cannot read: a bonus of 0 drops
+ * it, a negative one is subtracted, and a die is added. "Damage bonus is not
+ * applied to firearms", so a gun's damage has no DB to replace.
+ */
+export function cocDamageWithBonus(damage: string, damageBonus: string): string {
+  const bonus = damageBonus.trim();
+  const written = bonus === '' || bonus === '0' ? '' : bonus.startsWith('-') || bonus.startsWith('+') ? bonus : `+${bonus}`;
+  return damage.replace(/\s*\+\s*DB\b/gi, written);
+}
+
+/**
+ * The value of the skill a weapon names, from the sheet's skills: "Brawl" or
+ * "Fighting (Brawl)", "Handgun" or "Firearms (Handgun)", a specialisation the
+ * player added ("Sword"), or any other skill by its key ("Throw"). The weapon
+ * keeps a copy of the value, which goes stale as the skill rises; that copy
+ * is used only where the sheet has no such skill.
+ */
+export function cocWeaponSkillValue(skills: unknown, skillName: string, stored: number): number {
+  const all = (skills && typeof skills === 'object' ? skills : {}) as Record<string, unknown>;
+  const valueOf = (entry: unknown): number | null => {
+    const value = (entry as { currentValue?: unknown } | undefined)?.currentValue;
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  };
+  const name = skillName.trim().toLowerCase();
+  if (!name) return stored;
+  const inner = /^(fighting|firearms)\s*\((.+)\)$/.exec(name);
+  const wanted = inner ? inner[2].trim() : name;
+  for (const group of ['fighting', 'firearms']) {
+    const members = (all[group] && typeof all[group] === 'object' ? all[group] : {}) as Record<string, unknown>;
+    const printed = wanted === 'rifle/shotgun' ? 'rifle' : wanted;
+    const direct = valueOf(members[printed]);
+    if (direct !== null && printed !== 'custom') return direct;
+    const custom = Array.isArray(members.custom) ? members.custom : [];
+    const match = custom.find((entry) => String((entry as { specialization?: unknown }).specialization ?? '').trim().toLowerCase() === wanted);
+    if (match !== undefined && valueOf(match) !== null) return valueOf(match) as number;
+  }
+  const key = Object.keys(all).find((candidate) => candidate.toLowerCase() === wanted.replace(/\s+/g, ''));
+  const plain = key ? valueOf(all[key]) : null;
+  return plain ?? stored;
+}

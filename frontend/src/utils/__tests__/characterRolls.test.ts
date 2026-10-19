@@ -366,3 +366,28 @@ describe('Call of Cthulhu specialisations in the roll menu', () => {
     ]));
   });
 });
+
+// A Call of Cthulhu weapon's damage written with DB was left out of the menu,
+// which cannot roll text, and its skill was the value stored with the weapon.
+describe('Call of Cthulhu weapons in the roll menu', () => {
+  const data = {
+    derivedStats: { damageBonus: '+1d4' },
+    skills: { firearms: { handgun: { baseValue: 20, currentValue: 60, improvementChecked: false }, rifle: { currentValue: 25 }, shotgun: { currentValue: 25 }, custom: [] } },
+    combat: {
+      weapons: [
+        { name: 'Fist', skill: 'Brawl', skillValue: 25, damage: '1d3+DB' },
+        { name: '.38 Revolver', skill: 'Handgun', skillValue: 20, damage: '1d10' },
+      ],
+    },
+  } as unknown as CharacterData;
+
+  it('rolls the damage bonus in place of DB', () => {
+    const fist = getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat.find((c) => c.label.startsWith('Fist Damage'));
+    expect(fist?.expression).toBe('1d3+1d4');
+  });
+
+  it('takes the skill value from the skill the weapon names', () => {
+    const labels = getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat.map((c) => c.label);
+    expect(labels).toContain('.38 Revolver (Handgun, target: 60%)');
+  });
+});
