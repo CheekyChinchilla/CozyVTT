@@ -57,6 +57,9 @@ export const accountLoginLimiter = failureLimiter({
   max: 10,
   message: 'Too many failed sign-ins for this account, please try again later',
   key: signInEmailKey,
+  // It runs after the per-address limiter, whose allowance is the smaller
+  // and the one the headers describe.
+  headers: false,
   onLimit: (req, key) => {
     const email = key.slice('account:'.length);
     void writeSystemLog({

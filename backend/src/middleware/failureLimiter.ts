@@ -66,6 +66,12 @@ export interface FailureLimiterOptions {
   onLimit?: (req: Request, key: string) => void;
   /** How long a request may wait for a check ahead of it to finish; 15 seconds unless set. */
   waitMs?: number;
+  /**
+   * Whether this limiter sends the `RateLimit-*` headers; true unless set.
+   * A second limiter on the same route sets false, or its headers replace
+   * the first one's and tell a client the wrong allowance.
+   */
+  headers?: boolean;
 }
 
 /**
@@ -132,6 +138,7 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
 
   /** The standard rate-limit headers, as the limiter this replaced sent them. */
   const setHeaders = (res: Response, state: AddressState, now: number): void => {
+    if (options.headers === false) return;
     const resetSeconds = state.failures.length > 0 ? Math.ceil((state.failures[0] + windowMs - now) / 1000) : 0;
     res.setHeader('RateLimit-Policy', `${max};w=${Math.round(windowMs / 1000)}`);
     res.setHeader('RateLimit-Limit', String(max));

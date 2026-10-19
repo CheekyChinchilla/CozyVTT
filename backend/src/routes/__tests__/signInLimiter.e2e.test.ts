@@ -107,6 +107,24 @@ describe('wrong passwords from one address', () => {
     expect((await signIn(freshAddress(), account.email, TEST_PASSWORD)).status).toBe(200);
   });
 
+  // The per-account limiter (10 an hour) ran second and wrote its own
+  // headers over these, so the fifth wrong password said 5 remained while
+  // the next sign-in was refused.
+  it('say in the headers how many the address has left, down to none after five', async () => {
+    const address = freshAddress();
+    const [account] = await users(1);
+
+    const remaining: string[] = [];
+    for (let i = 0; i < 5; i += 1) {
+      const res = await signIn(address, account.email, 'wrong-password');
+      expect(res.status).toBe(401);
+      expect(res.headers['ratelimit-limit']).toBe('5');
+      remaining.push(res.headers['ratelimit-remaining']);
+    }
+    expect(remaining).toEqual(['4', '3', '2', '1', '0']);
+    expect((await signIn(address, account.email, TEST_PASSWORD)).status).toBe(429);
+  });
+
   it('sent together are checked five at most', async () => {
     const address = freshAddress();
     const [account] = await users(1);
