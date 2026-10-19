@@ -91,6 +91,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* `GET /api/characters/:id/validate` checks a Flexible character (no game system) against the Flexible sheet layout and answers 200 with `isValid` and, when false, `errors`, as for a typed one; it answered 400 `no_game_system`.
   - *Character templates.* `PUT /api/character-templates/:id` takes an optional `updatedAt`, the template's as loaded; when it differs from the stored one the save answers 409 `Conflict` with `code` `TEMPLATE_CHANGED` and writes nothing, as `PUT /api/characters/:id` does. `updatedAt` alone answers 400 `At least one field must be provided`.
   - *Character templates.* `POST /api/character-templates` and `PUT /api/character-templates/:id` store a typed sheet without `playerName`, and a Call of Cthulhu one without its top-level `notes` (Keeper's Notes), whoever sends it; the reply has neither.
+  - *Character data.* A Call of Cthulhu sheet's `derivedStats.hp.maximum` and `derivedStats.hp.majorWoundThreshold` may be 0, which CON plus SIZ under 10 gives; they were refused below 1.
 
 - **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
@@ -105,6 +106,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A Call of Cthulhu investigator with CON and SIZ under 10 can be saved.** Their hit points work out to 0, which the server refused along with the whole save. Rolled characteristics never get that low; typed ones can.
 
 - **The Pathfinder 2e and Call of Cthulhu editors say which name is missing.** Clearing a Pathfinder 2e ancestry, heritage or class, or the name of a strike, lore, spell, ritual, item or feat, or a Call of Cthulhu occupation, era or weapon name, made Save fail with no reason given. Save now lists what to fill in and opens the tab it is on, as the D&D 5e editor does.
 
