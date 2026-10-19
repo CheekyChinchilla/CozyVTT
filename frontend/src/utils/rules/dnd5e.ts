@@ -768,3 +768,20 @@ function backfilledOther(entry: Record<string, unknown> | undefined, derived: nu
   if (stored === null || stored === derived) return null;
   return stored - derived;
 }
+
+/** Pounds a character can carry for each point of Strength. */
+export const CARRY_PER_STRENGTH = 15;
+
+/**
+ * What a character can carry, and push, drag or lift, in pounds.
+ *
+ * Basic Rules, "Lifting and Carrying": carrying capacity is the Strength score
+ * multiplied by 15, and a character can push, drag or lift up to twice that.
+ * The rules double both for each size above Medium and halve them for Tiny;
+ * the sheet records no size, so these are a Small or Medium character's.
+ */
+export function carryingCapacity(strengthScore: number): { carry: number; pushDragLift: number } {
+  const score = Number.isFinite(strengthScore) ? Math.max(0, strengthScore) : 0;
+  const carry = score * CARRY_PER_STRENGTH;
+  return { carry, pushDragLift: carry * 2 };
+}

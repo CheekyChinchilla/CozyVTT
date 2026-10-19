@@ -203,6 +203,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               {data.alignment && <span>• {data.alignment}</span>}
               {data.background && <span>• {data.background}</span>}
             </div>
+            {data.playerName && <div className="mt-1 text-sm opacity-80">Player: {data.playerName}</div>}
           </div>
         </div>
 
@@ -572,7 +573,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   // Render Inventory tab
   const renderInventoryTab = () => (
     <div>
-      <InventoryList inventory={data.inventory} currency={data.currency} />
+      <InventoryList inventory={data.inventory} currency={data.currency} strengthScore={data.stats?.strength?.score} />
     </div>
   );
 

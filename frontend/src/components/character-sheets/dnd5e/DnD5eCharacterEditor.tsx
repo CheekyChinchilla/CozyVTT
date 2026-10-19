@@ -2745,7 +2745,6 @@ min={1}
                   quantity: 1,
                   weight: 0,
                   notes: '',
-                  equippable: false,
                   equipped: false,
                   requiresAttunement: false,
                   attuned: false,

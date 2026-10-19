@@ -641,6 +641,12 @@ character's ability scores and level instead of going stale the way a stored
 `passivePerception` did. The `otherBonus` field is the escape hatch for what the
 rules cannot derive, matching initiative and passive Perception. Storing a total
 here would have reintroduced exactly the drift those two were fixed for.
+A number nobody adjusts need not be stored at all: the 5e view works carrying
+capacity out from Strength (`carryingCapacity`: the score times 15, and twice
+that to push, drag or lift) each time it draws. The proficiency bonus stays a
+stored box, since a table may use another, and the editor moves it with
+**Level** when it was the old level's bonus, offering the level's beside one
+set otherwise.
 
 **They must also agree on what a stored value *means*.** Agreeing a field exists
 is not enough if each end interprets it differently. The 5e sheet's four

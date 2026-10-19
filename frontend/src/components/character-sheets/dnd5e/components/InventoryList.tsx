@@ -9,10 +9,13 @@ import React from 'react';
 import { Package, Coins, Star } from 'lucide-react';
 
 import type { DnD5eInventoryItem as InventoryItem, DnD5eCurrency as Currency } from '@/types/game-systems';
+import { carryingCapacity } from '@/utils/rules/dnd5e';
 
 interface InventoryListProps {
   inventory?: InventoryItem[];
   currency?: Currency;
+  /** The character's Strength score, which sets what they can carry. */
+  strengthScore?: number;
 }
 
 /**
@@ -89,6 +92,10 @@ const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
           <div className="text-xs text-stone-500">Wt</div>
           <div>{item.weight != null ? `${item.weight} lb` : '—'}</div>
         </div>
+        <div className="text-right">
+          <div className="text-xs text-stone-500">Value</div>
+          <div>{item.value != null ? `${item.value} gp` : '—'}</div>
+        </div>
       </div>
     </div>
   );
@@ -97,7 +104,7 @@ const InventoryItemRow: React.FC<{ item: InventoryItem }> = ({ item }) => {
 /**
  * InventoryList - Displays inventory and currency
  */
-export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currency }) => {
+export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currency, strengthScore }) => {
   // The schema lets an item go without either: one with no weight weighs
   // nothing, and one with no quantity is one item.
   const totalWeight = inventory?.reduce((sum, item) => sum + (item.weight ?? 0) * (item.quantity ?? 1), 0) ?? 0;
@@ -154,6 +161,12 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currenc
               Total Weight: <span className="font-semibold">{totalWeight.toFixed(1)} lb</span>
             </span>
           </div>
+          {strengthScore != null && (
+            <div className="mt-1 text-right text-xs text-stone-600">
+              Carrying capacity: {carryingCapacity(strengthScore).carry} lb (push, drag or lift{' '}
+              {carryingCapacity(strengthScore).pushDragLift} lb)
+            </div>
+          )}
         </div>
         <div className="divide-y divide-stone-100">
           {inventory && inventory.length > 0 ? (

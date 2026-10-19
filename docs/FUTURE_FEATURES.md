@@ -272,12 +272,6 @@ _Nothing at present._
   to 500 entries, like every other list on the sheet. Either build it with the
   rest of Pulp, or drop the field.
 
-- **A D&D 5e sheet shows its Player Name only in the editor.** The server fills
-  `playerName` from the owner's display name when the character is made, and
-  the editor shows it without letting it be changed. The read-only view
-  (`DnD5eCharacterView.tsx`) does not show it, while the Pathfinder 2e and
-  Call of Cthulhu views do.
-
 - **Pathfinder Class DC assumes Intelligence.** When a sheet has no `classDC`
   stored, the editor fills one in with Intelligence as its key attribute, but
   the key attribute depends on the class: Strength for a fighter, Charisma for

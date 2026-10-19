@@ -25,6 +25,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.** The **Inventory** tab lists each item's **Value** beside its weight and gives the carrying capacity the rules work out from Strength: 15 pounds a point, and twice that to push, drag or lift, for a Small or Medium character. The header names the player, as the Pathfinder 2e sheet does. All three were recorded in the editor and shown nowhere else.
+
 - **See and withdraw the invitations you have sent.** **Campaign Settings → Members** now lists the players you have invited who have not answered, under **Invited**, with an **×** to withdraw each one. An invitation sent from the app now runs out after 14 days; until now it never did.
 
 - **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
