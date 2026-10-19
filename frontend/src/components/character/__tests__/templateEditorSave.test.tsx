@@ -8,7 +8,7 @@
  * token picture chosen in the sheet was uploaded and then silently ignored.
  */
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import CharacterTemplateEditorModal from '../CharacterTemplateEditorModal';
@@ -72,7 +72,19 @@ beforeEach(() => {
   showToast.mockReset();
   updateCharacterTemplate.mockReset();
   uploadAsset.mockReset();
+  getCharacterTemplate.mockReset();
 });
+
+const stale = {
+  response: { status: 409, data: { error: 'Conflict', code: 'TEMPLATE_CHANGED', message: 'This template was changed after you loaded it.' } },
+};
+
+/** The template as someone else saved it meanwhile. */
+function latestTemplate(overrides: Record<string, unknown> = {}, details: Partial<CharacterTemplate> = {}): CharacterTemplate {
+  const latest = template('PATHFINDER_2E');
+  Object.assign(latest.data as Record<string, unknown>, overrides);
+  return { ...latest, ...details, updatedAt: '2026-01-01T00:00:05.000Z' };
+}
 
 describe('Edit Template', () => {
   it('keeps the sheet editor and its edits when the save is refused', async () => {
@@ -167,5 +179,84 @@ describe('Edit Template', () => {
     await waitFor(() =>
       expect(showToast).toHaveBeenCalledWith(expect.stringMatching(/picture.*global/i), expect.any(String))
     );
+  });
+
+  it('sends the version it opened with each save', async () => {
+    updateCharacterTemplate.mockResolvedValue({ ...template('PATHFINDER_2E'), updatedAt: '2026-01-01T00:00:01.000Z' });
+    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(1));
+    expect(updateCharacterTemplate.mock.calls[0][1]).toMatchObject({ updatedAt: '2026-01-01T00:00:00.000Z' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
+    await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(2));
+    expect(updateCharacterTemplate.mock.calls[1][1]).toMatchObject({ updatedAt: '2026-01-01T00:00:01.000Z' });
+  });
+
+  it('carries sheet edits onto a version someone else saved meanwhile, and saves them when told to', async () => {
+    updateCharacterTemplate.mockRejectedValueOnce(stale);
+    getCharacterTemplate.mockResolvedValue(latestTemplate({ age: '40' }));
+    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    fireEvent.change(await screen.findByPlaceholderText('Deity'), { target: { value: 'Torag' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'This template has changed' });
+    expect(within(dialog).getByText(/Torag/)).toBeInTheDocument();
+    expect(updateCharacterTemplate).toHaveBeenCalledTimes(1);
+    expect(showToast).not.toHaveBeenCalledWith(expect.anything(), 'error');
+
+    updateCharacterTemplate.mockResolvedValueOnce(latestTemplate({ age: '40', deity: 'Torag' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save my changes' }));
+
+    await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(2));
+    const second = updateCharacterTemplate.mock.calls[1][1] as { updatedAt: string; data: Record<string, unknown> };
+    expect(second.updatedAt).toBe('2026-01-01T00:00:05.000Z');
+    expect(second.data).toMatchObject({ deity: 'Torag', age: '40' });
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Template sheet saved', 'success'));
+  });
+
+  it('saves the details over a version whose name and description nobody changed', async () => {
+    updateCharacterTemplate.mockRejectedValueOnce(stale);
+    getCharacterTemplate.mockResolvedValue(latestTemplate({ age: '40' }));
+    updateCharacterTemplate.mockResolvedValueOnce(latestTemplate({ age: '40' }, { name: 'Veteran Fighter' }));
+    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await screen.findByPlaceholderText('Deity');
+    fireEvent.change(screen.getByLabelText(/Template name/), { target: { value: 'Veteran Fighter' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
+
+    await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(2));
+    expect(updateCharacterTemplate.mock.calls[1][1]).toEqual({
+      name: 'Veteran Fighter',
+      description: null,
+      updatedAt: '2026-01-01T00:00:05.000Z',
+    });
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Template updated', 'success'));
+  });
+
+  it('says so when someone else renamed the template meanwhile, and saves on the next press', async () => {
+    updateCharacterTemplate.mockRejectedValueOnce(stale);
+    getCharacterTemplate.mockResolvedValue(latestTemplate({}, { name: 'Champion' }));
+    render(<CharacterTemplateEditorModal template={template('PATHFINDER_2E')} onClose={vi.fn()} onSaved={vi.fn()} />);
+
+    await screen.findByPlaceholderText('Deity');
+    fireEvent.change(screen.getByLabelText(/Template name/), { target: { value: 'Veteran Fighter' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
+
+    expect(await screen.findByText(/now named "Champion"/)).toBeInTheDocument();
+    expect(updateCharacterTemplate).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText(/Template name/)).toHaveValue('Veteran Fighter');
+
+    // Still refused from the version it opened with, it now goes ahead over
+    // the newest one, whose name the user has been shown.
+    updateCharacterTemplate.mockRejectedValueOnce(stale);
+    updateCharacterTemplate.mockResolvedValueOnce(latestTemplate({}, { name: 'Veteran Fighter' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save Details' }));
+    await waitFor(() => expect(updateCharacterTemplate).toHaveBeenCalledTimes(3));
+    expect(updateCharacterTemplate.mock.calls[2][1]).toMatchObject({ name: 'Veteran Fighter', updatedAt: '2026-01-01T00:00:05.000Z' });
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith('Template updated', 'success'));
   });
 });

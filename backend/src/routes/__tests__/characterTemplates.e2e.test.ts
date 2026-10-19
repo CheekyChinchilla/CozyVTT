@@ -453,6 +453,70 @@ describe('Character template routes', () => {
     });
   });
 
+  describe('a save made from an older version', () => {
+    const CHANGED = {
+      error: 'Conflict',
+      code: 'TEMPLATE_CHANGED',
+      message: 'This template was changed after you loaded it. Load it again and make your change on the new version.',
+    };
+
+    it('is refused with 409 once someone else has saved, and changes nothing', async () => {
+      const created = await createTemplate(authorAgent);
+      const loadedAt = created.body.updatedAt as string;
+
+      const first = await editorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Saved First', updatedAt: loadedAt });
+      expect(first.status).toBe(200);
+      expect(first.body.updatedAt).not.toBe(loadedAt);
+
+      const late = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Saved Late', data: { ...dnd5eSheet, characterName: 'Late Hero' }, updatedAt: loadedAt });
+      expect(late.status).toBe(409);
+      expect(late.body).toEqual(CHANGED);
+
+      const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(stored.name).toBe('Saved First');
+      expect(stored.data).toMatchObject({ characterName: 'Template Hero' });
+
+      const fresh = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Saved Late', updatedAt: first.body.updatedAt });
+      expect(fresh.status).toBe(200);
+    });
+
+    it('lets only one of two saves made from the same version through', async () => {
+      const created = await createTemplate(authorAgent);
+      const loadedAt = created.body.updatedAt as string;
+
+      const answers = await Promise.all(
+        ['One', 'Two'].map((name) =>
+          authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name, updatedAt: loadedAt })
+        )
+      );
+      expect(answers.map((a) => a.status).sort()).toEqual([200, 409]);
+    });
+
+    it('goes ahead without updatedAt, and refuses one that is not a timestamp or comes alone', async () => {
+      const created = await createTemplate(authorAgent);
+      await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Moved On' }).expect(200);
+      expect((await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Again' })).status).toBe(200);
+
+      const notATime = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Again', updatedAt: 'yesterday' });
+      expect(notATime.status).toBe(400);
+      expect(notATime.body.message).toBe('updatedAt must be the ISO timestamp the template was loaded with');
+
+      const alone = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ updatedAt: created.body.updatedAt });
+      expect(alone.status).toBe(400);
+      expect(alone.body.message).toBe('At least one field must be provided');
+    });
+  });
+
   describe('when the author is deleted', () => {
     it('leaves the template standing with no author', async () => {
       const doomed = await createTestUser({

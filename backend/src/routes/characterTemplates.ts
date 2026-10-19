@@ -361,17 +361,34 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       imageUrl = image.url;
     }
 
-    const updated = await prisma.characterTemplate.update({
-      where: { id: req.params.id },
-      data: {
-        ...(data.name !== undefined && { name: data.name }),
-        ...(data.description !== undefined && { description: data.description ?? null }),
-        ...(sheetData !== undefined && { data: toJson(sheetData) }),
-        ...(imageUrl !== undefined && { tokenImageUrl: imageUrl }),
-      },
-      include: { createdBy: { select: AUTHOR_SELECT } },
-    });
+    const changes = {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description ?? null }),
+      ...(sheetData !== undefined && { data: toJson(sheetData) }),
+      ...(imageUrl !== undefined && { tokenImageUrl: imageUrl }),
+    };
+    const include = { createdBy: { select: AUTHOR_SELECT } } as const;
 
+    if (data.updatedAt !== undefined) {
+      // Saved only if the template is still the version the caller loaded,
+      // checked in the write itself so that of two saves made from one
+      // version only the first goes through. Without it, the later of two
+      // people editing a template put back everything the earlier one saved.
+      const { count } = await prisma.characterTemplate.updateMany({
+        where: { id: req.params.id, updatedAt: new Date(data.updatedAt) },
+        data: changes,
+      });
+      if (count === 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          code: 'TEMPLATE_CHANGED',
+          message: 'This template was changed after you loaded it. Load it again and make your change on the new version.',
+        });
+      }
+      return res.json(await prisma.characterTemplate.findUniqueOrThrow({ where: { id: req.params.id }, include }));
+    }
+
+    const updated = await prisma.characterTemplate.update({ where: { id: req.params.id }, data: changes, include });
     return res.json(updated);
   } catch (error) {
     logger.error('Error updating character template', { err: error });

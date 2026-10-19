@@ -10985,7 +10985,14 @@ paths:
         parsed; a refused sheet answers 400 with `validationErrors` and the
         message the create route gives.
         `tokenImageUrl` follows the
-        rule on create, and null or an empty string removes the image.
+        rule on create, and null or an empty string removes the image. Send
+        `updatedAt` exactly as the template was loaded with, as a UTC ISO
+        timestamp ending in `Z`, to have the save refused with 409 if the
+        template has changed since; of two saves sent with the same
+        `updatedAt`, only one goes through. Without it the save is made
+        whatever changed in between. `updatedAt` alone does not count as a
+        field to change. A 200 response carries the new `updatedAt` for the
+        next save.
       operationId: updateCharacterTemplate
       security:
         - cookieAuth: []
@@ -11017,6 +11024,11 @@ paths:
                   type: string
                   nullable: true
                   maxLength: 500
+                updatedAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    The template's `updatedAt` as the caller loaded it, as a UTC ISO timestamp ending in `Z`. Optional. When sent and the template has changed since, the save is refused with 409 and nothing is written. A value that is not such a timestamp answers 400 `updatedAt must be the ISO timestamp the template was loaded with`.
       responses:
         '200':
           description: Template updated
@@ -11053,6 +11065,22 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The template changed after the `updatedAt` sent. Nothing was saved; load the template again and reapply the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  code:
+                    type: string
+                    example: TEMPLATE_CHANGED
+                  message:
+                    type: string
+                    example: This template was changed after you loaded it. Load it again and make your change on the new version.
     delete:
       tags: [Character Templates]
       summary: Delete a shared character sheet
@@ -13155,7 +13183,8 @@ components:
           description: >
             Machine-readable code, sent only where a client has to act on it:
             PASSWORD_CHANGE_REQUIRED, MFA_ENROLMENT_REQUIRED, SIGN_IN_EXPIRED,
-            CHARACTER_CHANGED, ASSET_IN_USE, UVTT_IMPORT_NEEDS_CONFIRMATION.
+            CHARACTER_CHANGED, TEMPLATE_CHANGED, ASSET_IN_USE,
+            UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.

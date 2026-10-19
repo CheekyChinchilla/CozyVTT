@@ -1180,6 +1180,8 @@ class ApiClient {
       description?: string | null;
       tokenImageUrl?: string | null;
       data?: unknown;
+      /** The version this save was made from; the server answers 409 if the template has changed since. */
+      updatedAt?: string;
     }
   ): Promise<CharacterTemplate> {
     const response = await this.client.put(`/api/character-templates/${id}`, data);

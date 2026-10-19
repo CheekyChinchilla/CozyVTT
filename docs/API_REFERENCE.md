@@ -907,6 +907,14 @@ Accepts `name`, `description`, `tokenImageUrl`, `data`. An empty body returns
 `400`. `gameSystem` is fixed at creation, as it is for a character — the sheet
 data is only meaningful against the system it was built for.
 
+Send `updatedAt` exactly as `GET /api/character-templates/:id` gave it, and the
+save is refused with **409 Conflict** (`code` `TEMPLATE_CHANGED`) if the
+template has changed since, by someone else's save or your own from another
+window. Nothing is written; load the template again and make the change on the
+new version. Of two saves sent with the same `updatedAt`, only one goes
+through. Leave `updatedAt` out and the save is made whatever changed in
+between. A successful save returns the template with its new `updatedAt`.
+
 ### `DELETE /api/character-templates/:id`
 
 ### Creating a character from a template

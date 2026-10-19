@@ -89,6 +89,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* A Call of Cthulhu entry under `skills.fighting` or `skills.firearms` takes an optional `specialization`, the name of a specialisation the player adds (Sword, Bow); it was dropped before. The name of an entry under `skills.languageOther` or `skills.science`, `skills.languageOwn.language`, and a `contacts` entry's `name` and `role` may now be empty.
   - *Character data.* `POST /api/characters` with a `campaignId` and a `gameSystem` that is not the campaign's answers 400 `Game System Mismatch` with the message `POST /api/characters/:id/assign` gives, and creates nothing; it created the character in the campaign.
   - *Character data.* `GET /api/characters/:id/validate` checks a Flexible character (no game system) against the Flexible sheet layout and answers 200 with `isValid` and, when false, `errors`, as for a typed one; it answered 400 `no_game_system`.
+  - *Character templates.* `PUT /api/character-templates/:id` takes an optional `updatedAt`, the template's as loaded; when it differs from the stored one the save answers 409 `Conflict` with `code` `TEMPLATE_CHANGED` and writes nothing, as `PUT /api/characters/:id` does. `updatedAt` alone answers 400 `At least one field must be provided`.
 
 - **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
@@ -111,6 +112,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.** The editor read a 0 typed in **Ancestry HP** or **Class HP/Level** as 6, so the maximum came out 6 higher than the boxes said. A character made from the older blank sheet, which stores neither, keeps its maximum until one is filled in.
 
 - **A feature listed twice is kept twice.** Two identical entries, such as two Ability Score Improvements written the same way, were shown as one on a D&D 5e sheet when they came from a template, and folded into one when an older sheet's special abilities were moved to its class features. A feature with no description no longer stops the list from loading.
+
+- **Two people editing one character template no longer undo each other.** When two people had the same template open, the later save put back the older version over everything the earlier one saved. A save over a newer version is now refused: for the sheet, **Edit Template** carries your changes onto the newest version and shows them before saving, as the character editor does, and for the name and description it says when someone else changed them.
 
 - **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
 
