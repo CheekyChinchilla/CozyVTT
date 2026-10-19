@@ -247,6 +247,23 @@ describe('Character template routes', () => {
       }
     });
 
+    // A template published before these were left out still holds them; it
+    // is served without them, to everyone, and a details-only save does too.
+    it('leaves them out when a template stored with them is read', async () => {
+      for (const { gameSystem, data } of sheets) {
+        const created = await createTemplate(authorAgent, { gameSystem, data });
+        await prisma.characterTemplate.update({ where: { id: created.body.id }, data: { data: data as never } });
+        const read = await otherAgent.get(`/api/character-templates/${created.body.id}`);
+        expect(read.status).toBe(200);
+        expect(read.body.data).not.toHaveProperty('playerName');
+        expect(read.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        const renamed = await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Renamed' });
+        expect(renamed.status).toBe(200);
+        expect(renamed.body.data).not.toHaveProperty('playerName');
+        expect(renamed.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+      }
+    });
+
     it('keeps a Pathfinder 2e sheet\'s own notes, which are not the Keeper\'s', async () => {
       const res = await createTemplate(authorAgent, {
         gameSystem: GameSystem.PATHFINDER_2E,

@@ -154,6 +154,15 @@ async function resolveTemplateImage(
  * are the Keeper's alone, or the player's name, which is the character
  * owner's: whoever saves one, a template editor included, both are left out.
  */
+/**
+ * A template as it is sent: without the player's name and the Keeper's Notes,
+ * which one published before they were left out may still hold.
+ */
+function servedTemplate<T extends { gameSystem: GameSystem | null; data: unknown }>(template: T): T {
+  const { gameSystem } = template;
+  return { ...template, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, template.data)) };
+}
+
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
   data: unknown
@@ -251,7 +260,7 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       return res.status(404).json({ error: 'Not Found', message: 'Character template not found' });
     }
 
-    return res.json(template);
+    return res.json(servedTemplate(template));
   } catch (error) {
     logger.error('Error getting character template', { err: error });
     return res
@@ -397,11 +406,11 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
           message: 'This template was changed after you loaded it. Load it again and make your change on the new version.',
         });
       }
-      return res.json(await prisma.characterTemplate.findUniqueOrThrow({ where: { id: req.params.id }, include }));
+      return res.json(servedTemplate(await prisma.characterTemplate.findUniqueOrThrow({ where: { id: req.params.id }, include })));
     }
 
     const updated = await prisma.characterTemplate.update({ where: { id: req.params.id }, data: changes, include });
-    return res.json(updated);
+    return res.json(servedTemplate(updated));
   } catch (error) {
     logger.error('Error updating character template', { err: error });
     return res
