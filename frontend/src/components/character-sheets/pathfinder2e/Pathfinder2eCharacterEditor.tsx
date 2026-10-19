@@ -1597,12 +1597,14 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
   );
 
   const renderFeatsTab = () => {
-    const featCategories: { key: keyof PF2eFeats; label: string; color: string }[] = [
-      { key: 'ancestryAndHeritage', label: 'Ancestry & Heritage Feats', color: 'green' },
-      { key: 'class', label: 'Class Feats', color: 'blue' },
-      { key: 'skill', label: 'Skill Feats', color: 'amber' },
-      { key: 'general', label: 'General Feats', color: 'purple' },
-      { key: 'bonus', label: 'Bonus Feats', color: 'rose' },
+    // Written out in full: Tailwind generates only the classes it finds in
+    // the source, so a class put together at run time has no style.
+    const featCategories: { key: keyof PF2eFeats; label: string; button: string }[] = [
+      { key: 'ancestryAndHeritage', label: 'Ancestry & Heritage Feats', button: 'bg-green-700 hover:bg-green-800' },
+      { key: 'class', label: 'Class Feats', button: 'bg-blue-700 hover:bg-blue-800' },
+      { key: 'skill', label: 'Skill Feats', button: 'bg-amber-700 hover:bg-amber-800' },
+      { key: 'general', label: 'General Feats', button: 'bg-purple-700 hover:bg-purple-800' },
+      { key: 'bonus', label: 'Bonus Feats', button: 'bg-rose-700 hover:bg-rose-800' },
     ];
 
     return (
@@ -1653,11 +1655,11 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
         </div>
 
         {/* Feats by Category */}
-        {featCategories.map(({ key, label, color }) => (
+        {featCategories.map(({ key, label, button }) => (
           <div key={key} className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-stone-800">{label}</h3>
-              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className={`px-3 py-1 text-sm font-medium text-white bg-${color}-700 hover:bg-${color}-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className={`px-3 py-1 text-sm font-medium text-white ${button} rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
                 <Plus className="w-4 h-4" />
                 <span>Add Feat</span>
               </button>
