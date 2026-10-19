@@ -139,6 +139,13 @@ export default function AssetLibraryPage() {
     setToast({ message: 'Asset uploaded successfully!', type: 'success' });
   };
 
+  // A move changes which scope filter and campaign list the asset is in, so
+  // the library is fetched again, as after an upload or a delete.
+  const handleAssetMoved = (moved: Asset) => {
+    queryClient.invalidateQueries({ queryKey: ['assets'] });
+    setSelectedAsset(moved);
+  };
+
   // The card and the detail panel each ask "delete this?" first. If the server
   // then says something still uses the asset, this shows where and asks again.
   const assetDelete = useAssetDelete({
@@ -445,6 +452,7 @@ export default function AssetLibraryPage() {
           asset={selectedAsset}
           onClose={() => setSelectedAsset(null)}
           onDelete={handleDeleteAsset}
+          onUpdate={handleAssetMoved}
         />
       )}
 

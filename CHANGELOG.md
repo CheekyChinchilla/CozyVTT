@@ -79,6 +79,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **An asset you move in the Asset Library takes its new place at once.** It stayed listed where it had been, under its old library, until the page was loaded again.
+
 - **The Asset Library offers Campaign as a place to move an asset only when one of your campaigns can take it.** A player was offered **Campaign** for their own map, with no campaign to choose, since only a campaign's DM can put a map in its library.
 
 - **The Asset Library offers Delete and Move to whoever may use them.** It offered both only to an asset's uploader or a server admin. A campaign's DM, whom the server lets delete and move the assets in their campaign's library, was not offered them, and an uploader who had left the campaign, or no longer had Global Assets, was offered them and then refused. The library now offers them by the server's own rule.
