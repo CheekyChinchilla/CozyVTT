@@ -19,6 +19,13 @@ export interface AuthenticatedSocket extends Socket {
   role?: string;
   /** The login session this socket was opened under, so ending that sign-in can end the socket. */
   sessionId?: string;
+  /**
+   * When that sign-in was made, as the session said at the handshake, so the
+   * sweep (signInSweep.ts) can end the socket at the sign-in limit without
+   * reading the store. Undefined for a sign-in from before the field existed,
+   * until the sweep finds it stamped in the store.
+   */
+  signedInAt?: number;
   /** The `authenticate` in progress, so the next one on this socket waits for it (events.ts). */
   authenticating?: Promise<void>;
   /**
@@ -50,39 +57,51 @@ async function mustSetUpMfaFirst(user: Parameters<typeof pastAdminMfaDeadline>[0
   return true;
 }
 
+/** Where a socket's sign-in stands: still live, past the sign-in limit, or ended some other way. */
+export type SocketSignIn = 'live' | 'aged-out' | 'ended';
+
 /**
  * Whether the sign-in this socket was opened under still exists in the session
  * store and is still this user's. The handshake checks the session once; a
  * sign-in that ends later (signing out, expiry, a password change elsewhere)
- * leaves the socket open, and `authenticate` asks this before letting it join
- * a campaign. Read through the socket's own session store, the one the
- * handshake used, so a store error counts as ended.
+ * leaves the socket open, so `authenticate` asks this before letting it join
+ * a campaign, and the sweep (signInSweep.ts) asks it every few minutes. Read
+ * through the socket's own session store, the one the handshake used, so a
+ * store error counts as ended. A sign-in time found in the store is cached on
+ * the socket, which is how one from before the field existed gets its limit.
  *
  * The two-factor deadline passes with time, so a socket opened within an
  * administrator's 7 days is stopped here once they are over. A database
  * error while the deadline is checked lets the socket through, as the REST
  * gate lets the request through.
  */
-export async function socketSessionIsLive(socket: AuthenticatedSocket): Promise<boolean> {
+export async function socketSignIn(socket: AuthenticatedSocket, now = Date.now()): Promise<SocketSignIn> {
   const { sessionStore } = socket.request as { sessionStore?: Store };
   const sessionId = socket.sessionId;
   const userId = socket.userId;
-  if (!sessionStore || !sessionId || !userId) return false;
+  if (!sessionStore || !sessionId || !userId) return 'ended';
   const stored = await new Promise<Partial<SessionData> | null>((resolve) => {
     sessionStore.get(sessionId, (err, found) => resolve(err ? null : (found ?? null)));
   });
-  if (!sessionIsSignedIn(stored) || sessionHasAgedOut(stored) || stored.userId !== userId) return false;
+  if (!sessionIsSignedIn(stored) || stored.userId !== userId) return 'ended';
+  if (typeof stored.signedInAt === 'number') socket.signedInAt = stored.signedInAt;
+  if (sessionHasAgedOut(stored, now)) return 'aged-out';
 
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: { id: true, platformRole: true, mfaEnabled: true, createdAt: true },
     });
-    return !(user && (await mustSetUpMfaFirst(user)));
+    return user && (await mustSetUpMfaFirst(user)) ? 'ended' : 'live';
   } catch (error) {
     logger.error('Error checking the administrator two-factor policy', { err: error });
-    return true;
+    return 'live';
   }
+}
+
+/** Whether the socket's sign-in is still live (socketSignIn). */
+export async function socketSessionIsLive(socket: AuthenticatedSocket): Promise<boolean> {
+  return (await socketSignIn(socket)) === 'live';
 }
 
 /**
@@ -129,6 +148,7 @@ export async function authenticateSocket(socket: AuthenticatedSocket): Promise<b
 
     socket.userId = user.id;
     socket.sessionId = sessionID;
+    socket.signedInAt = session.signedInAt;
     return true;
   } catch (error) {
     logger.error('WebSocket authentication error', { err: error });

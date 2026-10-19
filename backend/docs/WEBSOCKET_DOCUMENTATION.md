@@ -199,7 +199,11 @@ account's two-factor deadline, so a sign-in that ends later (signing out,
 expiry, a password change elsewhere) cannot join a campaign, nor can an
 administrator whose 7 days ran out while the connection was open. A database
 error while the deadline is checked lets the connection through, as the HTTP
-API lets the request through.
+API lets the request through. An open connection is also checked on a timer:
+every minute it is ended once its sign-in is past the 30 days, and every five
+minutes once its sign-in has left the session store, or its administrator
+has run out of days, each with `campaign.access.revoked` (reason `signed-out`)
+and then a disconnect.
 
 While an administrator restores a backup, from the moment the database starts
 being replaced until the restore ends, every open connection is sent
@@ -339,7 +343,7 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `campaign.access.revoked`
 **Direction:** Server → Client
-**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that expires, reaches its 30 days, or is removed to keep the account at 20 sign-ins sends nothing: the connection stays open until its next `authenticate` is refused
+**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that reaches its 30 days is told so within a minute ("Your sign-in has reached its 30-day limit. Sign in again.", or at once when a request of that sign-in is refused for it); one that expires, or is removed to keep the account at 20 sign-ins, within five minutes ("Your sign-in has ended. Sign in again."). Either way the server then closes the connection
 **Payload:**
 ```typescript
 {

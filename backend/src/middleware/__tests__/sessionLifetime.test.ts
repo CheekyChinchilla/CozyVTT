@@ -14,6 +14,9 @@ import type { NextFunction, Request, Response } from 'express';
 import type { SessionData } from 'express-session';
 import { requireAuth } from '../auth';
 import { rememberMeMaxAge } from '../../config/sessionDurations';
+import { endLiveSockets } from '../../websocket/utils';
+
+jest.mock('../../websocket/utils', () => ({ endLiveSockets: jest.fn().mockResolvedValue(0) }));
 
 interface Answer {
   status?: number;
@@ -41,7 +44,7 @@ function run(guard: (req: Request, res: Response, next: NextFunction) => unknown
       return this;
     },
   } as unknown as Response;
-  guard({ session: live } as unknown as Request, res, () => {
+  guard({ session: live, sessionID: 'sid-1' } as unknown as Request, res, () => {
     answer.nexted = true;
   });
   return { ...answer, session: live };
@@ -71,6 +74,20 @@ it('marks that refusal with a code the pages can tell apart', () => {
     code: 'SIGN_IN_EXPIRED',
     message: 'Your sign-in has reached its 30-day limit. Sign in again.',
   });
+});
+
+// The socket of a tab left open would otherwise stay connected until the
+// sweep reaches it; the refusal ends that sign-in's connections at once.
+it('ends the live connections of the sign-in it refuses, and only those', () => {
+  jest.mocked(endLiveSockets).mockClear();
+  run(requireAuth, { userId: 'u1', signedInAt: Date.now() - rememberMeMaxAge - 60_000 });
+  expect(endLiveSockets).toHaveBeenCalledWith('u1', 'Your sign-in has reached its 30-day limit. Sign in again.', { onlySessionId: 'sid-1' });
+});
+
+it('ends no connection for a sign-in within the window', () => {
+  jest.mocked(endLiveSockets).mockClear();
+  run(requireAuth, { userId: 'u1', signedInAt: Date.now() - DAY });
+  expect(endLiveSockets).not.toHaveBeenCalled();
 });
 
 it('stamps a sign-in from before the field existed when it is next seen, and lets it through', () => {

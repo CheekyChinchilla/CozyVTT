@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { PlatformRole } from '@prisma/client';
 import { sessionIsSignedIn, notSignedInMessage, sessionHasAgedOut, agedOutMessage } from '../services/signedIn';
+import { endLiveSockets } from '../websocket/utils';
 
 /**
  * The three guards share one idea of "signed in" (services/signedIn): a user
@@ -25,6 +26,8 @@ export function withinSignInLimitOr401(req: Request, res: Response): boolean {
   if (req.session.signedInAt === undefined) {
     req.session.signedInAt = Date.now();
   } else if (sessionHasAgedOut(req.session)) {
+    // Its live connections end with it, before the sweep would reach them.
+    if (req.session.userId) void endLiveSockets(req.session.userId, agedOutMessage(), { onlySessionId: req.sessionID });
     // The code lets the pages carry the sentence to the sign-in page.
     req.session.destroy(() => {
       res.status(401).json({ error: 'Unauthorized', code: SIGN_IN_EXPIRED, message: agedOutMessage() });

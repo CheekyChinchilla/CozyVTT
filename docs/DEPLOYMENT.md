@@ -1128,7 +1128,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | Setting | Default | What it does | Docker |
 |---|---|---|---|
 | `SESSION_MAX_AGE` | `3600000` (1 hour) | How long a sign-in lasts without a request, in milliseconds | Yes |
-| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds | Yes |
+| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds. A game tab left open is disconnected within a minute of that limit | Yes |
 | `RATE_LIMIT_MAX_REQUESTS` | `300` | Requests per minute to `/api` from one address | Yes |
 | `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
