@@ -15,7 +15,8 @@ import { endSignedOutSocket } from './utils';
  * this ends each socket whose sign-in is past the limit, from the time it
  * cached at the handshake; every fifth minute it also reads each socket's
  * session from the store and ends those that are gone. Each is told why, as
- * the routes that end a sign-in tell theirs (endLiveSockets).
+ * the routes that end a sign-in tell theirs (endLiveSockets). A session the
+ * store cannot read is left connected, and the sweep logs that once.
  */
 
 /** How often the sockets are swept. */
@@ -36,6 +37,12 @@ export const SIGN_IN_ENDED_MESSAGE = 'Your sign-in has ended. Sign in again.';
 export async function sweepLiveSockets(io: Server, options: { checkStore: boolean; now?: number }): Promise<number> {
   const now = options.now ?? Date.now();
   let ended = 0;
+  let unreadable = 0;
+  let storeError: unknown;
+  const noteStoreError = (error: unknown) => {
+    unreadable += 1;
+    storeError ??= error;
+  };
   for (const socket of [...io.of('/').sockets.values()] as AuthenticatedSocket[]) {
     if (!socket.userId || !socket.connected) continue;
     try {
@@ -45,13 +52,19 @@ export async function sweepLiveSockets(io: Server, options: { checkStore: boolea
         continue;
       }
       if (!options.checkStore) continue;
-      const signIn = await socketSignIn(socket, now);
-      if (signIn === 'live' || !socket.connected) continue;
+      const signIn = await socketSignIn(socket, now, noteStoreError);
+      if (signIn === 'live' || signIn === 'unreadable' || !socket.connected) continue;
       endSignedOutSocket(socket, signIn === 'aged-out' ? agedOutMessage() : SIGN_IN_ENDED_MESSAGE);
       ended += 1;
     } catch (error) {
       logger.error('Could not check a live connection against its sign-in', { err: error, socketId: socket.id });
     }
+  }
+  if (unreadable > 0) {
+    logger.error('The session store could not be read in the live connection sweep; those connections were left open', {
+      err: storeError,
+      connections: unreadable,
+    });
   }
   return ended;
 }

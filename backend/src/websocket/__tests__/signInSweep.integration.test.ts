@@ -22,6 +22,7 @@ import { createWsTestServer, expectNoEvent, waitForEvent, type WsTestServer } fr
 import { rememberMeMaxAge } from '../../config/sessionDurations';
 import { agedOutMessage } from '../../services/signedIn';
 import { sweepLiveSockets, startSignInSweep, SIGN_IN_ENDED_MESSAGE } from '../signInSweep';
+import logger from '../../utils/logger';
 
 jest.setTimeout(30000);
 
@@ -95,6 +96,32 @@ describe('a sweep', () => {
     await sweepLiveSockets(server.io, { checkStore: true });
     await expect(stays).resolves.toBeUndefined();
     live.client.disconnect();
+  });
+
+  // A store that could not be read answered as a session that had ended, so
+  // a moment's trouble with the session database signed every player out in
+  // the middle of a game. The sweep now leaves them, and logs it once.
+  it('leaves every connection when the store cannot be read, logging it once for the sweep', async () => {
+    const first = await signedIn(1);
+    const second = await signedIn(1);
+    const sockets = [...server.io.of('/').sockets.values()];
+    const store = (sockets[0].request as unknown as { sessionStore: import('express-session').Store }).sessionStore;
+    const failing = jest.spyOn(store, 'get').mockImplementation((_sid, callback) => callback(new Error('session database unreachable')));
+    const errors = jest.spyOn(logger, 'error');
+    const stay = [expectNoEvent(first.client, 'disconnect', 700), expectNoEvent(second.client, 'disconnect', 700)];
+
+    try {
+      expect(await sweepLiveSockets(server.io, { checkStore: true })).toBe(0);
+      await expect(Promise.all(stay)).resolves.toEqual([undefined, undefined]);
+      expect(failing).toHaveBeenCalled();
+      const storeLines = errors.mock.calls.filter(([message]) => typeof message === 'string' && /session store/i.test(message));
+      expect(storeLines).toHaveLength(1);
+    } finally {
+      failing.mockRestore();
+      errors.mockRestore();
+    }
+    first.client.disconnect();
+    second.client.disconnect();
   });
 
   it('takes the limit from the store for a sign-in made before the field existed, once it is stamped there', async () => {

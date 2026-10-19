@@ -57,8 +57,11 @@ async function mustSetUpMfaFirst(user: Parameters<typeof pastAdminMfaDeadline>[0
   return true;
 }
 
-/** Where a socket's sign-in stands: still live, past the sign-in limit, or ended some other way. */
-export type SocketSignIn = 'live' | 'aged-out' | 'ended';
+/**
+ * Where a socket's sign-in stands: still live, past the sign-in limit, ended
+ * some other way, or not known because the session store could not be read.
+ */
+export type SocketSignIn = 'live' | 'aged-out' | 'ended' | 'unreadable';
 
 /**
  * Whether the sign-in this socket was opened under still exists in the session
@@ -66,23 +69,35 @@ export type SocketSignIn = 'live' | 'aged-out' | 'ended';
  * sign-in that ends later (signing out, expiry, a password change elsewhere)
  * leaves the socket open, so `authenticate` asks this before letting it join
  * a campaign, and the sweep (signInSweep.ts) asks it every few minutes. Read
- * through the socket's own session store, the one the handshake used, so a
- * store error counts as ended. A sign-in time found in the store is cached on
- * the socket, which is how one from before the field existed gets its limit.
+ * through the socket's own session store, the one the handshake used. A store
+ * error is 'unreadable', handed to `onStoreError`: joining a campaign takes it
+ * as ended, and the sweep leaves the socket alone, since a moment's trouble
+ * with the store would otherwise sign every player out mid-game. A sign-in
+ * time found in the store is cached on the socket, which is how one from
+ * before the field existed gets its limit.
  *
  * The two-factor deadline passes with time, so a socket opened within an
  * administrator's 7 days is stopped here once they are over. A database
  * error while the deadline is checked lets the socket through, as the REST
  * gate lets the request through.
  */
-export async function socketSignIn(socket: AuthenticatedSocket, now = Date.now()): Promise<SocketSignIn> {
+export async function socketSignIn(
+  socket: AuthenticatedSocket,
+  now = Date.now(),
+  onStoreError?: (error: unknown) => void
+): Promise<SocketSignIn> {
   const { sessionStore } = socket.request as { sessionStore?: Store };
   const sessionId = socket.sessionId;
   const userId = socket.userId;
   if (!sessionStore || !sessionId || !userId) return 'ended';
-  const stored = await new Promise<Partial<SessionData> | null>((resolve) => {
-    sessionStore.get(sessionId, (err, found) => resolve(err ? null : (found ?? null)));
+  const read = await new Promise<{ ok: true; stored: Partial<SessionData> | null } | { ok: false; error: unknown }>((resolve) => {
+    sessionStore.get(sessionId, (err: unknown, found) => resolve(err ? { ok: false, error: err } : { ok: true, stored: found ?? null }));
   });
+  if (!read.ok) {
+    onStoreError?.(read.error);
+    return 'unreadable';
+  }
+  const { stored } = read;
   if (!sessionIsSignedIn(stored) || stored.userId !== userId) return 'ended';
   if (typeof stored.signedInAt === 'number') socket.signedInAt = stored.signedInAt;
   if (sessionHasAgedOut(stored, now)) return 'aged-out';
