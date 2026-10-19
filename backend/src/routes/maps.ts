@@ -6,7 +6,7 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
 import { downloadOnly } from '../middleware/downloadOnly';
-import { oneCampaignArchiveAtATime } from '../middleware/campaignArchiveLimits';
+import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middleware/campaignArchiveLimits';
 import { prisma } from '../config/database';
 import {
   canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
@@ -776,83 +776,87 @@ router.get(
   // each user, as campaign archives are.
   oneCampaignArchiveAtATime,
   async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { campaignId, id } = req.params;
-
-      const map = await prisma.map.findFirst({
-        where: { id, campaignId },
-        select: {
-          id: true,
-          name: true,
-          imageUrl: true,
-          width: true,
-          height: true,
-          gridSize: true,
-          wallSegments: true,
-          lights: true,
-        },
-      });
-      if (!map) {
-        return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
-      }
-      if (!map.imageUrl) {
-        return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
-      }
-
-      // Resolve asset file path. The file goes into the download, so the
-      // caller must be able to read it, and the address is read the way the
-      // reference check reads it: a map could otherwise name another user's
-      // private file and hand it over here.
-      const assetId = extractAssetId(map.imageUrl);
-      const asset = assetId
-        ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
-        : null;
-      if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
-        return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
-      }
-
-      const imagePath = path.resolve(asset.filePath.replace(/\\/g, '/'));
-      let imageBuffer: Buffer;
+    // Under the slot until the work is done, even if the caller hangs up,
+    // as the campaign export is: the slot is let go on close otherwise.
+    await whileHoldingArchiveSlot(res, async () => {
       try {
-        imageBuffer = await fs.readFile(imagePath);
-      } catch {
-        return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image file not found on disk' });
-      }
+        const { campaignId, id } = req.params;
 
-      // Get image dimensions for pixels_per_grid calculation. A map stored
-      // before its picture had to be a map picture can name any file, so the
-      // bytes are identified first, and only a picture is read.
-      let imageWidthPx: number | undefined;
-      try {
-        imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+        const map = await prisma.map.findFirst({
+          where: { id, campaignId },
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            width: true,
+            height: true,
+            gridSize: true,
+            wallSegments: true,
+            lights: true,
+          },
+        });
+        if (!map) {
+          return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
+        }
+        if (!map.imageUrl) {
+          return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
+        }
+
+        // Resolve asset file path. The file goes into the download, so the
+        // caller must be able to read it, and the address is read the way the
+        // reference check reads it: a map could otherwise name another user's
+        // private file and hand it over here.
+        const assetId = extractAssetId(map.imageUrl);
+        const asset = assetId
+          ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
+          : null;
+        if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+          return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
+        }
+
+        const imagePath = path.resolve(asset.filePath.replace(/\\/g, '/'));
+        let imageBuffer: Buffer;
+        try {
+          imageBuffer = await fs.readFile(imagePath);
+        } catch {
+          return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image file not found on disk' });
+        }
+
+        // Get image dimensions for pixels_per_grid calculation. A map stored
+        // before its picture had to be a map picture can name any file, so the
+        // bytes are identified first, and only a picture is read.
+        let imageWidthPx: number | undefined;
+        try {
+          imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+        } catch (error) {
+          if (!(error instanceof NotAPictureError)) throw error;
+          return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });
+        }
+
+        const wallSegments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
+        const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
+
+        const uvttBuffer = buildUVTT({
+          mapWidth: map.width,
+          mapHeight: map.height,
+          gridSizePx: map.gridSize,
+          wallSegments,
+          lights,
+          imageBuffer,
+          imageWidthPx,
+        });
+
+        // Sanitize filename for Content-Disposition
+        const safeName = map.name.replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'map';
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeName}.uvtt"`);
+        res.setHeader('Content-Length', uvttBuffer.length);
+        return res.send(uvttBuffer);
       } catch (error) {
-        if (!(error instanceof NotAPictureError)) throw error;
-        return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });
+        logger.error('Error exporting UVTT file:', error);
+        return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to export UVTT file' });
       }
-
-      const wallSegments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-      const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-
-      const uvttBuffer = buildUVTT({
-        mapWidth: map.width,
-        mapHeight: map.height,
-        gridSizePx: map.gridSize,
-        wallSegments,
-        lights,
-        imageBuffer,
-        imageWidthPx,
-      });
-
-      // Sanitize filename for Content-Disposition
-      const safeName = map.name.replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'map';
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.uvtt"`);
-      res.setHeader('Content-Length', uvttBuffer.length);
-      return res.send(uvttBuffer);
-    } catch (error) {
-      logger.error('Error exporting UVTT file:', error);
-      return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to export UVTT file' });
-    }
+    });
   }
 );
 
