@@ -116,8 +116,8 @@ export function readFeatureEntriesForEditing(value: unknown): FeatureEntry[] {
  * a feat taken twice, a Fighting Style from two classes. Folding those together
  * by name dropped every row after the first, with its description.
  *
- * An entry from a later list is folded into one already present only when that
- * loses nothing: the same name, matched case-insensitively after trimming, and
+ * An entry from a later list is folded into one of the first list only when
+ * that loses nothing: the same name, matched case-insensitively after trimming, and
  * either the same description, no description of its own, or a description
  * that fills one left empty. Otherwise it is added after them. So a player who
  * typed "second wind" does not end up with it twice once the template's copy
@@ -125,29 +125,32 @@ export function readFeatureEntriesForEditing(value: unknown): FeatureEntry[] {
  * other text under the same name is kept beside the player's. A description is
  * never overwritten and a name the player chose is never changed.
  *
+ * Within a later list repeats are kept, as in the first: the same feature
+ * listed twice there is two entries, and only the first list is folded into.
+ *
  * Order follows the arguments, so callers put what the player already sees
  * first and everything being restored after it.
  */
 export function mergeFeatureEntries(...lists: FeatureEntry[][]): FeatureEntry[] {
   const [first = [], ...later] = lists;
   const merged: FeatureEntry[] = [...first];
+  // The first list's entries, as filled in so far: what a later entry may fold into.
+  const foldable = () => merged.slice(0, first.length);
   const sameName = (a: FeatureEntry, b: FeatureEntry) =>
     a.name.trim().toLowerCase() === b.name.trim().toLowerCase();
-  // TODO(sheets): the schema lets an entry have no description, and .trim() on
-  // a missing one throws, so merging a list holding such an entry fails.
-  // Right: treat a missing description as empty text.
-  const text = (entry: FeatureEntry) => entry.description!.trim();
+  // The schema lets an entry have no description: it reads as empty.
+  const text = (entry: FeatureEntry) => (entry.description ?? '').trim();
   const sameText = (a: FeatureEntry, b: FeatureEntry) => text(a) === text(b);
 
   for (const list of later) {
     for (const entry of list) {
       // Already here in full, or adds no text to an entry of that name.
-      if (merged.some((kept) => sameName(kept, entry) && (sameText(kept, entry) || !text(entry)))) {
+      if (foldable().some((kept) => sameName(kept, entry) && (sameText(kept, entry) || !text(entry)))) {
         continue;
       }
 
       // Fills the empty description of an entry of that name.
-      const blank = merged.findIndex((kept) => sameName(kept, entry) && !text(kept));
+      const blank = foldable().findIndex((kept) => sameName(kept, entry) && !text(kept));
       if (blank !== -1) {
         merged[blank] = { ...merged[blank], description: entry.description };
         continue;

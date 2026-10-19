@@ -195,6 +195,22 @@ describe('readFeatureEntries', () => {
 });
 
 describe('mergeFeatureEntries', () => {
+  // A later list adds what it has, repeats included: the same feature listed
+  // twice there is two entries (two Ability Score Improvements). Only the
+  // first list, what the player already sees, is folded into, so a sheet whose
+  // features all come from the later list lost the repeat.
+  it('keeps a feature repeated within a later list', () => {
+    const asi = { name: 'Ability Score Improvement', description: '+2 STR' };
+    expect(mergeFeatureEntries([], [asi, asi])).toEqual([asi, asi]);
+  });
+
+  it('merges an entry with no description', () => {
+    const bare = { name: 'Darkvision' } as { name: string; description: string };
+    expect(mergeFeatureEntries([bare], [{ name: 'Darkvision', description: '60 ft.' }])).toEqual([
+      { name: 'Darkvision', description: '60 ft.' },
+    ]);
+  });
+
   it('keeps the order given, player list first', () => {
     const player = readFeatureEntries(['Aspiring Shadow Warrior']);
     const template = readFeatureEntries([
