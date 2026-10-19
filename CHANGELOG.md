@@ -83,7 +83,7 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
-- **An MP1 or MP2 sound file is refused when it is uploaded.** Such a file, sometimes named .mp3, was taken by the upload and then never played, since browsers do not play it. It is now refused with "Invalid file type", as other files are; convert it to MP3, Ogg or WAV.
+- **An MP1 or MP2 sound file is refused when it is uploaded or imported.** Such a file, sometimes named .mp3, was taken and then never played, since browsers do not play it. An upload now refuses it with "Invalid file type", as other files are, and a campaign import leaves it out and says why; convert it to MP3, Ogg or WAV.
 
 - **A PDF uploaded under another name opens as a PDF.** A real PDF uploaded as, say, "handout.txt" is stored and served as a PDF, but the Documents page and a campaign's documents labelled it Text, showed its contents as unreadable text and offered **Edit**. They now go by what the file is.
 

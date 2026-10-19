@@ -66,7 +66,7 @@ import {
   ArchiveRefusedError,
   UnpackedTotal,
 } from '../utils/archive';
-import { getFileSizeLimit, getTempDirectory, isAllowedMimeType, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
+import { getFileSizeLimit, getTempDirectory, isAcceptedContent, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
 import { errorMessage } from '../utils/errors';
 import { startsWithMp3Header } from '../middleware/fileValidation';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
@@ -265,9 +265,10 @@ async function checkArchiveSize(archivePath: string, maxSize: number): Promise<v
 /**
  * What an imported asset file is, by its bytes, when that is a format the
  * upload route accepts for its type; null otherwise. The same rule as an
- * upload (middleware/fileValidation.ts): the detected type must be on the
- * type's allowlist, and an MP3 the detector does not know is accepted on its
- * header when its name says it is one.
+ * upload (middleware/fileValidation.ts): the detected type, and the extension
+ * it is stored under, must be ones the type allows (isAcceptedContent), and
+ * an MP3 the detector does not know is accepted on its header when its name
+ * says it is one.
  */
 async function identifyAsset(
   filePath: string,
@@ -277,7 +278,7 @@ async function identifyAsset(
   const found = await fileTypeFromFile(filePath);
   if (found) {
     const detected = storedFileType(found);
-    return isAllowedMimeType(type, detected.mime) ? detected : null;
+    return isAcceptedContent(type, detected) ? detected : null;
   }
   const named = path.extname(originalName).toLowerCase();
   if (type === 'AUDIO' && named === '.mp3' && (await startsWithMp3Header(filePath))) return { mime: 'audio/mpeg', ext: 'mp3' };

@@ -331,6 +331,18 @@ export function isAllowedExtension(assetType: AssetType, extension: string): boo
 }
 
 /**
+ * Whether a file whose bytes were identified as `detected` (after
+ * storedFileType) may be stored as this asset type: its type must be allowed,
+ * and so must the extension it is stored under. The type alone is not
+ * enough: MPEG layer 1 and 2 audio is audio/mpeg like an MP3, but would be
+ * stored as .mp1 or .mp2, which the audio route does not serve and no browser
+ * plays. The upload and the campaign import both decide by this.
+ */
+export function isAcceptedContent(assetType: AssetType, detected: { mime: string; ext: string }): boolean {
+  return isAllowedMimeType(assetType, detected.mime) && isAllowedExtension(assetType, detected.ext);
+}
+
+/**
  * Options for `res.sendFile` and `res.download` on a path the server built
  * itself, from a stored row or a name it has checked. Express 5's file sender
  * refuses any path with a folder whose name starts with a dot, and the
