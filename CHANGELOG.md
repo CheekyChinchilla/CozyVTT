@@ -79,6 +79,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A document you stop editing after a refused save shows its text again.** After a save was refused and you pressed **Cancel**, the reader showed the reason the save was refused where the document should be, until it was closed and opened again.
+
 - **The Upload Asset window's progress bar shows how much of the file has been sent.** It was a timer that counted to 90% and waited there however slow the connection, and after a refused upload it went on running, so the next upload's bar jumped about.
 
 - **A picture that fails to load no longer breaks the asset pickers.** In a picker such as the one in **Edit Map**, choosing another picture after the chosen one had failed to load could blank the window. The Asset Library's cards now show the asset's type icon where a picture fails, where they showed nothing, and its detail panel says "Preview not available" as before.

@@ -80,7 +80,11 @@ export default function DocumentReader({
   onSaved,
 }: DocumentReaderProps) {
   const [text, setText] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Why the document could not be loaded, which takes its place; and why the
+  // last save was refused, shown over the editor only. One state for both
+  // put a refused save's reason where the document was once editing stopped.
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [editing, setEditing] = useState(false);
@@ -103,7 +107,7 @@ export default function DocumentReader({
     }
     let cancelled = false;
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     // no-cache: always check with the server before showing a cached copy.
     // Text documents can be edited in place, and the server answers 304 when
     // nothing changed, so this costs one small request and never shows stale
@@ -121,7 +125,7 @@ export default function DocumentReader({
         if (!cancelled) setText(body);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load the document.');
+        if (!cancelled) setLoadError(err instanceof Error ? err.message : 'Could not load the document.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -136,7 +140,7 @@ export default function DocumentReader({
   const startEditing = () => {
     setDraft(text ?? '');
     setEditing(true);
-    setError(null);
+    setSaveError(null);
   };
 
   // Closing, or cancelling the edit, drops the draft. Ask first once it differs
@@ -160,7 +164,7 @@ export default function DocumentReader({
   const handleSave = async () => {
     if (!documentId) return;
     setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
       const { asset } = await api.updateDocumentContent(documentId, draft);
       setText(draft);
@@ -168,7 +172,7 @@ export default function DocumentReader({
       onSaved?.(asset.id, asset.fileSize);
     } catch (err) {
       // The server's own wording, which says what was wrong with the text.
-      setError(apiErrorMessage(err) ?? 'Could not save the document. Your text is still here.');
+      setSaveError(apiErrorMessage(err) ?? 'Could not save the document. Your text is still here.');
     } finally {
       setSaving(false);
     }
@@ -233,9 +237,9 @@ export default function DocumentReader({
              what makes it harmless is how it is rendered and served, not what
              is stripped here. A refused save keeps the text and shows why. */
           <>
-            {error && (
+            {saveError && (
               <p className="text-xs text-danger-ink mb-2" role="alert">
-                {error}
+                {saveError}
               </p>
             )}
             <Textarea
@@ -296,9 +300,9 @@ export default function DocumentReader({
             <Loader2 className="w-4 h-4 animate-spin" />
             Loading…
           </div>
-        ) : error ? (
+        ) : loadError ? (
           <p className="text-sm text-danger-ink" role="alert">
-            {error}
+            {loadError}
           </p>
         ) : format === 'markdown' ? (
           /* The shared renderer: raw HTML off, unsafe links stripped, tables and

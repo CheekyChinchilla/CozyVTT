@@ -245,6 +245,28 @@ describe('DocumentReader', () => {
       expect(screen.getByLabelText('Edit N')).toHaveValue('attempt');
     });
 
+    // One error state served the load and the save, so after a refused save
+    // and Cancel the reader showed the save's error where the document was.
+    it('shows the document again when a refused edit is given up', async () => {
+      mockFetch('the saved text');
+      updateDocumentContent.mockRejectedValue({
+        isAxiosError: true,
+        response: { data: { error: 'Validation Error', message: 'Text must be at most 1 MB.' } },
+      });
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
+      await screen.findByText('the saved text');
+      fireEvent.click(screen.getByRole('button', { name: /^edit$/i }));
+      fireEvent.change(screen.getByLabelText('Edit N'), { target: { value: 'far too long' } });
+      fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
+      await screen.findByRole('alert');
+
+      fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+      fireEvent.click(within(await screen.findByRole('dialog', { name: 'Discard your changes?' })).getByRole('button', { name: 'Discard changes' }));
+
+      expect(await screen.findByText('the saved text')).toBeInTheDocument();
+      expect(screen.queryByText('Text must be at most 1 MB.')).not.toBeInTheDocument();
+    });
+
     it('cancel returns to reading at once when nothing was changed', async () => {
       mockFetch('original');
       render(<DocumentReader isOpen onClose={vi.fn()} documentId="d" name="N" originalName="n.txt" canEdit />);
