@@ -6900,8 +6900,9 @@ paths:
 
         A player or spectator may fetch only the campaign's current map; any
         other map of the campaign answers 404 for them, as does everything
-        under it (walls, lights). A map of another campaign answers 404
-        (`Map not found in this campaign`) for everyone.
+        under it (walls, lights). A map of another campaign answers 404 for
+        everyone. Both are answered `Map not found`, as an id that names
+        nothing is, on every map route.
       operationId: getMapById
       security:
         - cookieAuth: []

@@ -892,7 +892,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -919,7 +919,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     if (membership.role !== 'DM') {
       const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
       if (!canReadMap(membership.role, map.id, campaign?.currentMapId)) {
-        return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+        return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
       }
     }
 
@@ -969,7 +969,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     if (existingMap.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1218,7 +1218,7 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1281,7 +1281,7 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1385,7 +1385,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1593,7 +1593,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1618,7 +1618,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // they may only fetch that one: a prepared map answers as if it were not
     // here, even where it holds a token they control.
     if (!canReadMap(membership.role, mapId, map.campaign.currentMapId)) {
-      return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     }
 
     // Get existing tokens array
@@ -1960,7 +1960,7 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -2012,7 +2012,9 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 
 /**
  * Helper: verify map belongs to campaign and return it, or send error response.
- * Returns null if a response was already sent.
+ * Returns null if a response was already sent. Another campaign's map, and a
+ * prepared map to anyone but the DM, are answered exactly as an id that names
+ * nothing, so the answer cannot confirm that a map exists.
  */
 async function findMapInCampaign(
   campaignId: string,
@@ -2026,14 +2028,14 @@ async function findMapInCampaign(
     return null;
   }
   if (map.campaignId !== campaignId) {
-    res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+    res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     return null;
   }
   // A prepared map is the DM's alone; to anyone else it is not here.
   if (role !== 'DM') {
     const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
     if (!canReadMap(role, map.id, campaign?.currentMapId)) {
-      res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      res.status(404).json({ error: 'Not Found', message: 'Map not found' });
       return null;
     }
   }

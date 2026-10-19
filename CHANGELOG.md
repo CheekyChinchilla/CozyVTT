@@ -76,6 +76,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Token templates.* `imageUrl` on create, update, `from-token` and `copy-to` is normalised as on creatures: a bare asset id is stored as `/api/assets/tokens/<id>`, and an address that is not an asset's (one on another site, say) answers 403 `You do not have access to that image`, where it was stored as sent.
   - *Assets.* New `GET /api/assets/maps/:id/thumbnail` and `GET /api/assets/tokens/:id/thumbnail` serve a picture's 512-pixel thumbnail by the full picture's read rule, or the full picture where there is none.
   - *Assets.* `GET /api/assets` takes `sort` (`date`, `name` or `size`), and `search` also matches an asset that has it as a whole tag, whatever its case.
+  - *Maps.* Every map route answers another campaign's map, and a player's request for a map the DM is preparing, with 404 `Map not found`, as for an unknown id; it said `Map not found in this campaign`.
 
 - **The Asset Library, the pickers and the Map Manager load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
 
@@ -308,6 +309,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **A map you may not see is answered as if it were not there.** Asking for a map of another campaign, or as a player for a map the DM is still preparing, answered differently from asking for one that does not exist, so a member could tell such a map existed. Both now get the same answer.
 
 - **A picture whose campaign was deleted no longer has its details shown to everyone.** Asking for the details of a campaign's picture or sound file after its campaign was gone showed them to anyone signed in. They are now the uploader's and the server admin's, as the file itself is.
 
