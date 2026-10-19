@@ -563,7 +563,8 @@ paths:
         default), the account is created unapproved and no session is started
         (201 with `pendingApproval: true` and no `user`); otherwise the account
         is approved and signed in on a fresh session. The email is lowercased
-        and has angle brackets removed before it is stored. Should no account
+        before it is stored; one holding `<` or `>` is refused with 400
+        `Invalid email format`. Should no account
         exist at all (setup normally creates the first), the account becomes
         ADMIN, approved and signed in, and the registration and approval
         settings are not consulted. Rate limited to 10 requests per hour per
@@ -634,7 +635,8 @@ paths:
             the email is over 254 or the password over 1,024 characters
             (`message` names the field: `Email is required`, `Password must
             be text`). Otherwise `Registration Failed`, with the reason as
-            `message`: an invalid email, a password that does not meet the
+            `message`: an invalid email (`Invalid email format`, also for
+            one holding `<` or `>`), a password that does not meet the
             strength rule (the unmet rules joined with ", ", with no `errors`
             array), a refused display name, or `Email already registered`.
             The `Validation Error` check runs before the 403; the others

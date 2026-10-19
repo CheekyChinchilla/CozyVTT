@@ -2,7 +2,7 @@ import argon2 from 'argon2';
 import crypto from 'crypto';
 import { prisma } from '../config/database';
 import { User, PlatformRole, type Prisma } from '@prisma/client';
-import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
+import { validatePasswordStrength, validateEmail } from '../utils/validation';
 import { parseDisplayName } from '../validators/users';
 
 /**
@@ -104,7 +104,9 @@ export interface PreparedRegistration {
  * anything that was sent wrongly.
  */
 export async function prepareRegistration(input: RegisterInput): Promise<PreparedRegistration> {
-  if (!validateEmail(input.email)) {
+  // An address holding < or > is refused, as Create User and Invite User
+  // refuse one, so the address stored is the one sign-in looks up.
+  if (!validateEmail(input.email) || /[<>]/.test(input.email)) {
     throw new RegistrationError('Invalid email format');
   }
 
@@ -118,13 +120,8 @@ export async function prepareRegistration(input: RegisterInput): Promise<Prepare
     throw new RegistrationError(parsedName.message);
   }
 
-  // TODO(accounts): the address is stored with its angle brackets removed,
-  // while sign-in looks it up as typed, so `jo<x>@example.com` registers as
-  // `jox@example.com` and cannot sign in with what was typed. Refuse an
-  // address holding < or >, as Create User and Invite User in routes/admin.ts
-  // now do, and store it as checked.
   return {
-    email: sanitizeInput(input.email.toLowerCase()),
+    email: input.email.toLowerCase(),
     displayName: parsedName.name,
     passwordHash: await hashPassword(input.password),
   };
