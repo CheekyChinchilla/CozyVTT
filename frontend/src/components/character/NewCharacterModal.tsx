@@ -8,6 +8,7 @@ import { Loader2, User, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import { Character, GameSystem, Campaign } from '@/types';
 import { GAME_SYSTEM_OPTIONS } from '@/constants/game-systems';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import api from '@/services/api';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
@@ -184,12 +185,9 @@ export default function NewCharacterModal({
       return;
     }
 
-    // TODO(sheets): the server and the sheet editors take 200 characters
-    // (SHEET_NAME_MAX), and 100 itself passes here though the message says
-    // "less than 100". The note below also promises a redirect to the editor
-    // that creation does not do.
-    if (name.trim().length > 100) {
-      setError('Character name must be less than 100 characters');
+    // The server and the sheet editors take names up to SHEET_NAME_MAX.
+    if (name.trim().length > SHEET_NAME_MAX) {
+      setError(`Character name can be at most ${SHEET_NAME_MAX} characters`);
       return;
     }
 
@@ -300,12 +298,13 @@ export default function NewCharacterModal({
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Aria Moonshadow"
                     disabled={loading}
+                    maxLength={SHEET_NAME_MAX}
                     className="input-cozy w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     autoFocus
                     required
                   />
                   <p className="mt-1 text-xs text-ink-muted">
-                    Give your character a memorable name (2-100 characters)
+                    Give your character a memorable name (2-{SHEET_NAME_MAX} characters)
                   </p>
                 </div>
 

@@ -1,0 +1,49 @@
+/**
+ * Create New Character.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import NewCharacterModal from '../NewCharacterModal';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+
+const listCampaigns = vi.fn();
+const getStarterSheet = vi.fn();
+const createCharacter = vi.fn();
+const createCharacterTemplate = vi.fn();
+
+vi.mock('@/services/api', () => {
+  const api = {
+    listCampaigns: () => listCampaigns(),
+    getStarterSheet: (system: string, template: string) => getStarterSheet(system, template),
+    createCharacter: (body: unknown) => createCharacter(body),
+    createCharacterTemplate: (body: unknown) => createCharacterTemplate(body),
+  };
+  return { default: api, api };
+});
+
+beforeEach(() => {
+  listCampaigns.mockReset().mockResolvedValue({ campaigns: [] });
+  getStarterSheet.mockReset().mockResolvedValue({ name: 'Blank', description: '', gameSystem: null, data: { sections: [] } });
+  createCharacter.mockReset().mockImplementation((body: { name: string; gameSystem?: string }) =>
+    Promise.resolve({ message: 'ok', character: { id: 'char-1', userId: 'user-1', campaignId: null, gameSystem: body.gameSystem ?? null, name: body.name, data: { sections: [] } } })
+  );
+  createCharacterTemplate.mockReset().mockResolvedValue({ id: 'tpl-1' });
+});
+
+const show = () => render(<NewCharacterModal isOpen onClose={vi.fn()} onSuccess={vi.fn()} />);
+const typeName = (name: string) => fireEvent.change(screen.getByLabelText(/Character Name/), { target: { value: name } });
+
+describe('the character name', () => {
+  it('takes as many characters as the server does', async () => {
+    show();
+    const name = 'A'.repeat(SHEET_NAME_MAX);
+    typeName(name);
+    fireEvent.click(screen.getByRole('button', { name: /Create Character/ }));
+    await waitFor(() => expect(createCharacter).toHaveBeenCalledWith(expect.objectContaining({ name })));
+  });
+
+  it('stops at that many', () => {
+    show();
+    expect(screen.getByLabelText(/Character Name/)).toHaveAttribute('maxLength', String(SHEET_NAME_MAX));
+  });
+});
