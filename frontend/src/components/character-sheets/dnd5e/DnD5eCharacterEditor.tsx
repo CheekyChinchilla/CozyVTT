@@ -813,23 +813,40 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.spellcasting?.spellAttackBonus,
   ]);
 
+  // The spell save DC and passive Perception are worked out from boxes all
+  // over the sheet, so what Save said about either goes once the total is at
+  // least 1, whichever box fixed it.
+  const passivePerception = passiveScore((formData.skills?.perception?.bonus ?? 0) + (formData.passivePerceptionBonus ?? 0));
+  useEffect(() => {
+    setErrors((prev) => {
+      const fixed = [
+        ...(prev['spellcasting.spellSaveDCOtherBonus'] && spellSaveDC >= 1 ? ['spellcasting.spellSaveDCOtherBonus'] : []),
+        ...(prev.passivePerceptionBonus && passivePerception >= 1 ? ['passivePerceptionBonus'] : []),
+      ];
+      if (fixed.length === 0) return prev;
+      const next = { ...prev };
+      for (const key of fixed) delete next[key];
+      return next;
+    });
+  }, [spellSaveDC, passivePerception]);
+
   // Handle token image upload
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        setErrors({ ...errors, tokenImage: 'Please select an image file' });
+        setErrors((prev) => ({ ...prev, tokenImage: 'Please select an image file' }));
         return;
       }
       // Validate file size against the server's token limit
       const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
       if (file.size > tokenLimit) {
-        setErrors({ ...errors, tokenImage: `Image must be smaller than ${formatUploadLimit(tokenLimit)}` });
+        setErrors((prev) => ({ ...prev, tokenImage: `Image must be smaller than ${formatUploadLimit(tokenLimit)}` }));
         return;
       }
       setTokenImageFile(file);
-      setErrors({ ...errors, tokenImage: '' });
+      setErrors((prev) => ({ ...prev, tokenImage: '' }));
       // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -888,7 +905,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     (formData.spellcasting?.spells ?? []).forEach((row, i) => {
       if (kept(row) && blank(row.name)) newErrors[`spellcasting.spells.${i}.name`] = 'Name this spell, or remove it';
     });
-    if (passiveScore((formData.skills?.perception?.bonus ?? 0) + (formData.passivePerceptionBonus ?? 0)) < 1) {
+    if (passivePerception < 1) {
       newErrors.passivePerceptionBonus = 'Passive Perception must be at least 1. Raise its Other bonus.';
     }
     if (formData.spellcasting && spellSaveDC < 1) {
@@ -1025,7 +1042,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           newTokenImageUrl = `/api/assets/tokens/${assetId}`;
         } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
+          setErrors((prev) => ({ ...prev, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' }));
           setIsSaving(false);
           return;
         }
@@ -1036,7 +1053,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       markClean();
     } catch (error) {
       console.error('Error saving character:', error);
-      setErrors({ ...errors, submit: 'Failed to save character. Please try again.' });
+      setErrors((prev) => ({ ...prev, submit: 'Failed to save character. Please try again.' }));
     } finally {
       setIsSaving(false);
     }
@@ -2890,15 +2907,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   <input
                     type="checkbox"
                     checked={item.requiresAttunement || false}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                      updateField(`inventory.${index}.requiresAttunement`, e.target.checked);
                       // An item that needs no attunement is not attuned, and
                       // would otherwise go on taking one of the three slots.
-                      updateField(`inventory.${index}`, {
-                        ...item,
-                        requiresAttunement: e.target.checked,
-                        ...(e.target.checked ? {} : { attuned: false }),
-                      })
-                    }
+                      if (!e.target.checked) updateField(`inventory.${index}.attuned`, false);
+                    }}
                     className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
                   />
                   <span className="text-stone-700">Requires Attunement</span>

@@ -188,3 +188,46 @@ describe('saving', () => {
     await waitFor(() => expect(onSave).toHaveBeenCalled());
   });
 });
+
+describe('what Save named', () => {
+  it('goes once the spell save DC is fixed by raising the ability', () => {
+    // Wisdom 1 (-5), other -5: 8 + 2 - 5 - 5 = 0.
+    open({ stats: { ...stats, wisdom: { score: 1, modifier: -5 } }, spellcasting: { ability: 'Wisdom', spellSaveDCOtherBonus: -5 } });
+    pressSave();
+    expect(screen.getByRole('alert')).toHaveTextContent('The spell save DC must be at least 1');
+
+    tab(/Stats/);
+    fireEvent.change(screen.getByLabelText('Wisdom score'), { target: { value: '10' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('goes once passive Perception is fixed through the skill', () => {
+    open();
+    fireEvent.change(screen.getByLabelText('Other bonus to Perception'), { target: { value: '-20' } });
+    pressSave();
+    expect(screen.getByRole('alert')).toHaveTextContent('Passive Perception must be at least 1');
+
+    fireEvent.change(screen.getByLabelText('Other bonus to Perception'), { target: { value: '0' } });
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('does not come back when the save then fails', async () => {
+    const onSave = open({ race: '' });
+    onSave.mockRejectedValueOnce(new Error('offline'));
+    pressSave();
+    fireEvent.change(screen.getByLabelText('Race'), { target: { value: 'Dwarf' } });
+    pressSave();
+
+    await waitFor(() => expect(screen.getByText('Failed to save character. Please try again.')).toBeInTheDocument());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('stays on an unnamed item when its attunement is ticked', () => {
+    open({ inventory: [{ name: '', quantity: 1 }] });
+    pressSave();
+    tab(/Inventory/);
+    fireEvent.click(screen.getByLabelText('Requires Attunement'));
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Name this item, or remove it');
+  });
+});
