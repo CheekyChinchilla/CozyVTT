@@ -988,7 +988,7 @@ value={formData.derivedStats?.luck?.score}
                     conditions: { ...formData.conditions, [key]: e.target.checked } as CoC7eConditions,
                   });
                 }}
-                className="rounded-sm border-ink/20 text-danger-ink focus:ring-brand"
+                className="rounded-sm border-ink/20 accent-danger focus:ring-brand"
               />
               {label}
             </label>

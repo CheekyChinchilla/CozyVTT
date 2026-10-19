@@ -1496,7 +1496,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             id="inspiration"
             checked={formData.inspiration || false}
             onChange={(e) => updateField('inspiration', e.target.checked)}
-            className="w-5 h-5 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+            className="w-5 h-5 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
           />
           <label htmlFor="inspiration" className="text-sm font-semibold text-ink-secondary">
             Inspiration
@@ -1578,7 +1578,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     onChange={(e) =>
                       updateField(`savingThrows.${ability}.proficient`, e.target.checked)
                     }
-                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                    className="w-4 h-4 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   <label htmlFor={`save-${ability}`} className="text-sm font-medium text-ink capitalize">
                     {ability}
@@ -1635,7 +1635,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         updateField(`skills.${skill}.expertise`, false);
                       }
                     }}
-                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                    className="w-4 h-4 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   {/* Expertise Checkbox (double circle) */}
                   <input
@@ -1644,7 +1644,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     checked={skillData.expertise}
                     disabled={!skillData.proficient}
                     onChange={(e) => updateField(`skills.${skill}.expertise`, e.target.checked)}
-                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-full focus:ring-2 focus:ring-brand disabled:opacity-30"
+                    className="w-4 h-4 accent-accent border-ink/20 rounded-full focus:ring-2 focus:ring-brand disabled:opacity-30"
                     title="Expertise (double proficiency)"
                   />
                   <label
@@ -1756,7 +1756,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         updateField(`customSkills.${index}.expertise`, false);
                       }
                     }}
-                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                    className="w-4 h-4 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   Prof
                 </label>
@@ -1767,7 +1767,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     checked={!!custom.expertise}
                     disabled={!custom.proficient}
                     onChange={(e) => updateField(`customSkills.${index}.expertise`, e.target.checked)}
-                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-full focus:ring-2 focus:ring-brand disabled:opacity-30"
+                    className="w-4 h-4 accent-accent border-ink/20 rounded-full focus:ring-2 focus:ring-brand disabled:opacity-30"
                     title="Expertise (double proficiency)"
                   />
                   Exp
@@ -2099,7 +2099,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       updateField('deathSaves.successes', i - 1);
                     }
                   }}
-                  className="w-6 h-6 text-success-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                  className="w-6 h-6 accent-success border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
               ))}
             </div>
@@ -2120,7 +2120,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       updateField('deathSaves.failures', i - 1);
                     }
                   }}
-                  className="w-6 h-6 text-danger-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                  className="w-6 h-6 accent-danger border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
               ))}
             </div>
@@ -2145,7 +2145,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     updateField('conditions', currentConditions.filter((c: string) => c !== condition.toLowerCase()));
                   }
                 }}
-                className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                className="w-4 h-4 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
               />
               <span className="text-sm text-ink-secondary">{condition}</span>
             </label>
@@ -2173,9 +2173,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label={level === 0 ? 'No exhaustion' : `Exhaustion level ${level}`}
                 aria-pressed={active}
                 className={`px-3 py-1 rounded-cozy border text-sm transition-all ${
-                  active
-                    ? 'bg-accent text-accent-text border-accent font-semibold'
-                    : 'bg-paper text-ink-secondary border-ink/20 hover:bg-ink/10'
+                  !active
+                    ? 'bg-paper text-ink-secondary border-ink/20 hover:bg-ink/10'
+                    : level === 0
+                      ? 'bg-accent text-accent-text border-accent font-semibold'
+                      // A level of exhaustion in the danger colour, as the sheet shows it.
+                      : 'bg-danger/15 text-danger-ink border-danger font-semibold'
                 }`}
               >
                 {level === 0 ? 'None' : level}
@@ -2699,7 +2702,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   type="checkbox"
                   checked={spell.prepared || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.prepared`, e.target.checked)}
-                  className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                  className="w-4 h-4 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
                 <span className="text-xs text-ink-secondary">Prep</span>
               </label>
@@ -2708,7 +2711,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   type="checkbox"
                   checked={spell.ritual || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.ritual`, e.target.checked)}
-                  className="w-4 h-4 text-info-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                  className="w-4 h-4 accent-info border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
                 <span className="text-xs text-ink-secondary">Rit</span>
               </label>
@@ -2717,7 +2720,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   type="checkbox"
                   checked={spell.concentration || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.concentration`, e.target.checked)}
-                  className="w-4 h-4 text-spirit-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                  className="w-4 h-4 accent-spirit border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
                 <span className="text-xs text-ink-secondary">Con</span>
               </label>
@@ -2886,7 +2889,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     type="checkbox"
                     checked={item.equipped || false}
                     onChange={(e) => updateField(`inventory.${index}.equipped`, e.target.checked)}
-                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                    className="w-4 h-4 accent-accent border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   <span className="text-ink-secondary">Equipped</span>
                 </label>
@@ -2900,7 +2903,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       // would otherwise go on taking one of the three slots.
                       if (!e.target.checked) updateField(`inventory.${index}.attuned`, false);
                     }}
-                    className="w-4 h-4 text-spirit-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                    className="w-4 h-4 accent-spirit border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   <span className="text-ink-secondary">Requires Attunement</span>
                 </label>
@@ -2912,7 +2915,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       type="checkbox"
                       checked={item.attuned || false}
                       onChange={(e) => updateField(`inventory.${index}.attuned`, e.target.checked)}
-                      className="w-4 h-4 text-spirit-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
+                      className="w-4 h-4 accent-spirit border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                     />
                     <span className="text-ink-secondary">Attuned</span>
                   </label>
