@@ -1208,17 +1208,21 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
     }
 
     // Create a copy with modified name. Not the Keeper's Notes: they are the
-    // Keeper's, and the copy is in no campaign.
+    // Keeper's, and the copy is in no campaign. The copy's name goes into the
+    // sheet too: a save takes the sheet's name for the record.
+    const name = copyName(originalCharacter.name);
+    const sheet = sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data);
+    const stored = readJsonObject(sheet);
+    const copiedSheet = originalCharacter.gameSystem && stored
+      ? applyIdentityToSheet(originalCharacter.gameSystem, stored, name, '')
+      : sheet;
     const copiedCharacter = await prisma.$transaction(async (tx) => {
       await roomForCharacter(tx, userId);
       return tx.character.create({
         data: {
           userId,
-          // TODO(sheets): the copied sheet keeps the original's name, and the name
-          // sync on save then renames the copy back, dropping " (Copy)"; write the
-          // copy's name into the sheet too.
-          name: copyName(originalCharacter.name),
-          data: toJson(sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data)),
+          name,
+          data: toJson(copiedSheet),
           tokenImageUrl: originalCharacter.tokenImageUrl,
           gameSystem: originalCharacter.gameSystem,
           campaignId: null, // Copies are unassigned by default
