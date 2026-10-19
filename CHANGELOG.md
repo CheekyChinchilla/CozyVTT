@@ -108,6 +108,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The instance's name and branding arrive once the server answers.** A page opened while CozyVTT was restarting kept the tab title **CozyVTT** and the default logo until it was reloaded. The page now asks again, after 5 seconds and then less often, until the server answers.
+
 - **The two-factor setup page says when the server is not answering.** Opened while CozyVTT was restarting, it showed a spinner until the server came back; it now shows **Can't reach the server** with **Try Again**, as the other pages do.
 
 - **Copy works for a new user's temporary password on a plain-HTTP instance.** In the Admin Panel, **Copy** beside a temporary password did nothing on an instance reached by `http://` on a home network, where the browser offers no clipboard access, and said nothing either. It now copies there too, and says so when it cannot, so you select the password and copy it yourself.
