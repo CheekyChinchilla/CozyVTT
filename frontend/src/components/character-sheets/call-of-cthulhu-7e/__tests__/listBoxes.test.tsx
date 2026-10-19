@@ -14,6 +14,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 interface Saved {
   possessions: { name: string; notes: string }[];
   spellsAndMythos: { spells: string[] };

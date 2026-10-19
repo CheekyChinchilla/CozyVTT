@@ -19,7 +19,7 @@ import {
   Upload,
   Palette,
 } from 'lucide-react';
-import { Character, AssetType } from '../../../types';
+import { Character } from '../../../types';
 import type { CharacterData } from '../../../types';
 import type {
   DnD5eCharacterData,
@@ -32,9 +32,8 @@ import type {
 import { apiErrorMessage } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
 import { collectSheetFeatures, readFeatureEntriesForEditing } from '@/utils/featureEntries';
-import { api } from '../../../services/api';
 import { useServerConfigQuery } from '@/hooks/queries';
-import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
+import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import NumberField from '../../ui/NumberField';
 import ListLimitNote, { ADD_BUTTON_OFF, listChangeAllowed, listIsFull } from '../ListLimitNote';
 import {
@@ -78,7 +77,6 @@ import {
   SHEET_SHORT_TEXT_MAX,
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
-import { assetNameFrom } from '@/utils/assetName';
 import { COLOR_PRESETS } from './colorPresets';
 
 /**
@@ -834,15 +832,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        setErrors((prev) => ({ ...prev, tokenImage: 'Please select an image file' }));
-        return;
-      }
-      // Validate file size against the server's token limit
-      const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
-      if (file.size > tokenLimit) {
-        setErrors((prev) => ({ ...prev, tokenImage: `Image must be smaller than ${formatUploadLimit(tokenLimit)}` }));
+      const problem = tokenPictureProblem(file, serverConfig);
+      if (problem) {
+        setErrors((prev) => ({ ...prev, tokenImage: problem }));
         return;
       }
       setTokenImageFile(file);
@@ -1022,24 +1014,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
-          // File last: multer parses parts in order, so the server knows the
-          // asset type even if it aborts an oversize file mid-stream.
-          const assetFormData = new FormData();
-          assetFormData.append('type', 'TOKEN');
-          if (character.campaignId) {
-            assetFormData.append('scope', 'CAMPAIGN');
-            assetFormData.append('campaignId', character.campaignId);
-          } else {
-            assetFormData.append('scope', 'USER');
-          }
-          assetFormData.append('name', assetNameFrom(`${formData.characterName || 'Character'} Token`));
-          assetFormData.append('file', tokenImageFile);
-
-          const uploadResponse = await api.uploadAsset(assetFormData);
-          const assetId = uploadResponse.asset.id;
-
-          // Store the new token URL to pass separately to onSave
-          newTokenImageUrl = `/api/assets/tokens/${assetId}`;
+          newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.characterName || 'Character', character.campaignId);
         } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
           setErrors((prev) => ({ ...prev, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' }));

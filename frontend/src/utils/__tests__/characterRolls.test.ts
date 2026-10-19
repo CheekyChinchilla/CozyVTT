@@ -345,3 +345,50 @@ describe('Pathfinder 2e lore names', () => {
     expect(warfare.label).toBe('Warfare lore +7');
   });
 });
+
+// The Call of Cthulhu roll menu skipped the Fighting and Firearms
+// specialisations a player adds, and any Firearms skill at 0.
+describe('Call of Cthulhu specialisations in the roll menu', () => {
+  const skill = (value: number, extra: Record<string, unknown> = {}) => ({ baseValue: value, currentValue: value, improvementChecked: false, ...extra });
+  const data = {
+    skills: {
+      fighting: { brawl: skill(25), custom: [skill(40, { specialization: 'Sword' })] },
+      firearms: { handgun: skill(20), rifle: skill(25), shotgun: skill(0), custom: [skill(30, { specialization: 'Bow' })] },
+    },
+  } as unknown as CharacterData;
+
+  it('offers each one by its name', () => {
+    const labels = getCharacterRolls('CALL_OF_CTHULHU_7E', data).skills.map((s) => s.label);
+    expect(labels).toEqual(expect.arrayContaining([
+      'Fighting (Sword) — target: 40%',
+      'Firearms (Bow) — target: 30%',
+      'Firearms (Shotgun) — target: 0%',
+    ]));
+  });
+});
+
+// A Call of Cthulhu weapon's damage written with DB was left out of the menu,
+// which cannot roll text, and its skill was the value stored with the weapon.
+describe('Call of Cthulhu weapons in the roll menu', () => {
+  const data = {
+    // STR 80 + SIZ 65: a damage bonus of +1D4.
+    characteristics: { STR: { regular: 80 }, SIZ: { regular: 65 } },
+    skills: { firearms: { handgun: { baseValue: 20, currentValue: 60, improvementChecked: false }, rifle: { currentValue: 25 }, shotgun: { currentValue: 25 }, custom: [] } },
+    combat: {
+      weapons: [
+        { name: 'Fist', skill: 'Brawl', skillValue: 25, damage: '1d3+DB' },
+        { name: '.38 Revolver', skill: 'Handgun', skillValue: 20, damage: '1d10' },
+      ],
+    },
+  } as unknown as CharacterData;
+
+  it('rolls the damage bonus in place of DB', () => {
+    const fist = getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat.find((c) => c.label.startsWith('Fist Damage'));
+    expect(fist?.expression).toBe('1d3+1d4');
+  });
+
+  it('takes the skill value from the skill the weapon names', () => {
+    const labels = getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat.map((c) => c.label);
+    expect(labels).toContain('.38 Revolver (Handgun, target: 60%)');
+  });
+});

@@ -13,6 +13,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 const skill = (currentValue: number) => ({ baseValue: 1, currentValue, improvementChecked: false });
 
 function sheetWithGroupedSkills(): Record<string, unknown> {
@@ -28,8 +30,7 @@ function sheetWithGroupedSkills(): Record<string, unknown> {
 
 /** The value box on the row headed `label`. */
 function valueBox(label: string): HTMLInputElement {
-  const row = screen.getByText(label).closest('.group') as HTMLElement;
-  return row.querySelector('input[type="number"]') as HTMLInputElement;
+  return screen.getByLabelText(`Value of ${label}`) as HTMLInputElement;
 }
 
 describe('grouped skills', () => {

@@ -5,6 +5,7 @@
  */
 
 import React from 'react';
+import NumberField from '../../../ui/NumberField';
 import { Dices } from 'lucide-react';
 
 interface CharacteristicBlockProps {
@@ -56,7 +57,7 @@ export const CharacteristicBlock: React.FC<CharacteristicBlockProps> = ({
       title={isClickable ? `Click to roll ${label} (target: ${regular}%)` : undefined}
     >
       {/* Label */}
-      <div className="flex items-center gap-1 text-xs font-semibold text-parchment-dark uppercase tracking-wider">
+      <div className="flex items-center gap-1 text-xs font-semibold text-ink-secondary uppercase tracking-wider">
         {label}
         {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
       </div>
@@ -64,13 +65,14 @@ export const CharacteristicBlock: React.FC<CharacteristicBlockProps> = ({
       {/* Regular Value */}
       <div className="w-16 h-16 rounded-md border-2 border-sepia-600 bg-parchment flex items-center justify-center">
         {editable ? (
-          <input
-            type="number"
+          <NumberField
+            aria-label={label}
             value={regular}
-            onChange={(e) => onChange?.(parseInt(e.target.value) || 0)}
+            onChange={(v: number) => onChange?.(v)}
             className="w-full h-full text-center text-2xl font-bold text-sepia-900 bg-transparent border-none focus:outline-hidden focus:ring-2 focus:ring-sepia-500 rounded-sm"
             min={0}
-            max={99}
+            max={100}
+            fallback={0}
           />
         ) : (
           <span className="text-2xl font-bold text-sepia-900">{regular}</span>

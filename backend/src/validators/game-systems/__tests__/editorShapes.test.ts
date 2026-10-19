@@ -176,7 +176,17 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
         languageOther: [{ language: 'Latin', ...skill }],
         science: [{ specialization: 'Chemistry', ...skill }],
         customSkills: [{ name: 'Cryptography', ...skill }],
+        // A Fighting or Firearms specialisation carries its name.
+        fighting: { brawl: { baseValue: 25, currentValue: 40, improvementChecked: false }, custom: [{ specialization: 'Sword', ...skill }] },
+        firearms: {
+          handgun: { baseValue: 20, currentValue: 20, improvementChecked: false },
+          rifle: { baseValue: 25, currentValue: 25, improvementChecked: false },
+          shotgun: { baseValue: 25, currentValue: 25, improvementChecked: false },
+          custom: [{ specialization: 'Bow', ...skill }],
+        },
+        artCraft: { baseValue: 5, currentValue: 25, improvementChecked: false, specialization: 'Photography' },
       },
+      contacts: [{ name: 'Professor Armitage', role: 'Librarian', notes: 'Miskatonic University' }],
       combat: {
         weapons: [{
           name: 'New Weapon', skill: '', skillValue: 25, damage: '1d3', range: 'Touch',
@@ -184,7 +194,7 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
         }],
       },
       possessions: [{ name: 'Knife', notes: 'sharp - old' }],
-      wealth: { spendingLevel: '', cash: 0, assets: '' },
+      wealth: { spendingLevel: '', cash: 0, assets: '', notes: 'A trust fund' },
       backstory: {
         description: '', personalDescription: '', ideology: '', significantPeople: '', meaningfulLocations: '',
         treasuredPossessions: '', traits: '', injuriesAndScars: '', phobiasAndManias: '',
@@ -193,6 +203,25 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
       appearance: { age: '', height: '', weight: '', eyes: '', hair: '', skin: '' },
       spellsAndMythos: { cthulhuMythos: 0, spells: ['Elder Sign'] },
       notes: '',
+    });
+  });
+});
+
+// The Call of Cthulhu editor's name boxes can be cleared to retype, and a
+// save then must not be refused for the empty name: the sheet shows "Other".
+describe('a Call of Cthulhu name box left empty', () => {
+  it('is kept', () => {
+    const sheet = blank(GameSystem.CALL_OF_CTHULHU_7E);
+    const skill = { baseValue: 1, currentValue: 10, improvementChecked: false };
+    const skills = sheet.skills as Sheet;
+    expectKeptWhole(GameSystem.CALL_OF_CTHULHU_7E, {
+      ...sheet,
+      skills: {
+        ...skills,
+        languageOwn: { ...(skills.languageOwn as Sheet), language: '' },
+        languageOther: [{ language: '', ...skill }],
+        science: [{ specialization: '', ...skill }],
+      },
     });
   });
 });

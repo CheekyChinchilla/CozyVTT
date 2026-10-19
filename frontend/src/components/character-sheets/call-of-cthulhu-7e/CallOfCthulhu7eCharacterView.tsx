@@ -16,7 +16,6 @@ import {
   Heart,
   Eye,
   Skull,
-  Palette,
 } from 'lucide-react';
 import { Character } from '../../../types';
 import type {
@@ -27,7 +26,7 @@ import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
-import { cocDodgeBase } from './dodge';
+import { cocDodgeBase, cocDerivedAttributes, cocHalfAndFifth } from '@/utils/rules/callOfCthulhu7e';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { isHexColor } from '@/utils/styleAllowlists';
@@ -66,10 +65,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const data = character.data as CoC7eCharacterData;
+  // Worked out from the characteristics, as the editor saves them.
+  const derived = cocDerivedAttributes(data);
+  const cthulhuMythos = Math.max(data.skills?.cthulhuMythos?.currentValue ?? 0, data.spellsAndMythos?.cthulhuMythos ?? 0);
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
   const [customColorHex, setCustomColorHex] = useState('');
-  const [showColorPicker, setShowColorPicker] = useState(false);
 
   // Load saved color preference from character metadata
   useEffect(() => {
@@ -85,19 +86,6 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
       }
     }
   }, [data.themeColor]);
-
-  // Handle custom color change
-  const handleCustomColorChange = (hex: string) => {
-    setCustomColorHex(hex);
-    setIsCustomColor(true);
-  };
-
-  // Handle preset color selection
-  const handlePresetColorSelect = (color: typeof COLOR_PRESETS[0]) => {
-    setThemeColor(color);
-    setIsCustomColor(false);
-    setShowColorPicker(false);
-  };
 
   // Render character header with vintage styling
   const renderHeader = () => {
@@ -115,94 +103,11 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 
     return (
       <div className={headerClasses} style={headerStyle}>
-        {/* TODO(sheets): the colour picked here only sets this component's
-           state and is never saved, so it is gone the next time the sheet
-           opens. Save it to the sheet's themeColor as the editor does, or
-           leave the choice to the editor and remove the button. */}
-        {/* Color Picker Button */}
-        <button
-          onClick={() => setShowColorPicker(!showColorPicker)}
-          className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-          title="Change theme color"
-        >
-          <Palette className="w-5 h-5" />
-        </button>
-
-        {/* Color Picker Dropdown */}
-        {showColorPicker && (
-          <div className="absolute top-16 right-4 bg-white text-stone-800 rounded-lg shadow-xl p-4 z-10 border-2 border-stone-200 max-w-md">
-            <h4 className="font-semibold mb-3">Theme Color</h4>
-
-            {/* Preset Colors */}
-            <div className="grid grid-cols-3 gap-2 mb-4">
-              {COLOR_PRESETS.map((color) => (
-                <button
-                  key={color.name}
-                  onClick={() => handlePresetColorSelect(color)}
-                  className={`px-2 py-2 rounded-lg text-sm font-medium transition-all ${
-                    !isCustomColor && themeColor.name === color.name
-                      ? 'ring-2 ring-stone-400 bg-stone-100'
-                      : 'hover:bg-stone-50'
-                  }`}
-                >
-                  <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
-                  <div className="text-xs">{color.name}</div>
-                </button>
-              ))}
-            </div>
-
-            {/* Custom Color Section */}
-            <div className="border-t pt-4 space-y-3">
-              <h5 className="text-sm font-semibold text-stone-700">Custom Color</h5>
-
-              <div className="flex items-center space-x-2">
-                {/* Native Color Picker */}
-                <input
-                  type="color"
-                  value={customColorHex || '#14532d'}
-                  onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300"
-                  title="Pick a custom color"
-                />
-
-                {/* Hex Code Input */}
-                <div className="flex-1">
-                  <input
-                    type="text"
-                    value={customColorHex}
-                    onChange={(e) => {
-                      const hex = e.target.value;
-                      // Validate hex format
-                      if (hex === '' || /^#[0-9A-Fa-f]{0,6}$/.test(hex)) {
-                        handleCustomColorChange(hex);
-                      }
-                    }}
-                    placeholder="#14532d"
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #14532d)</div>
-                </div>
-              </div>
-
-              {/* Custom Color Preview */}
-              {isCustomColor && customColorHex && /^#[0-9A-Fa-f]{6}$/.test(customColorHex) && (
-                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded-sm">
-                  <div
-                    className="w-8 h-8 rounded-sm"
-                    style={{ background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }}
-                  />
-                  <span className="text-sm font-medium">Custom: {customColorHex}</span>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Edit Button */}
         {onEdit && (
           <button
             onClick={onEdit}
-            className="absolute top-4 right-16 px-4 py-2 bg-amber-600/80 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+            className="absolute top-4 right-4 px-4 py-2 bg-amber-600/80 hover:bg-amber-600 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
             title="Edit investigator"
           >
             <Edit className="w-4 h-4" />
@@ -307,8 +212,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                   key={key}
                   label={key}
                   regular={data.characteristics[key as keyof CoC7eCharacteristics].regular}
-                  half={data.characteristics[key as keyof CoC7eCharacteristics].half}
-                  fifth={data.characteristics[key as keyof CoC7eCharacteristics].fifth}
+                  half={cocHalfAndFifth(data.characteristics[key as keyof CoC7eCharacteristics].regular).half}
+                  fifth={cocHalfAndFifth(data.characteristics[key as keyof CoC7eCharacteristics].regular).fifth}
                   onRoll={onRoll}
                 />
               ))}
@@ -322,8 +227,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <SanityTracker
           current={data.derivedStats.sanity.current}
           starting={data.derivedStats.sanity.starting}
-          maximum={data.derivedStats.sanity.maximum}
-          cthulhuMythos={data.skills?.cthulhuMythos?.currentValue || 0}
+          maximum={derived.maxSanity}
+          cthulhuMythos={cthulhuMythos}
         />
       )}
 
@@ -344,10 +249,10 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                 <span className="text-3xl font-bold text-red-700">
                   {data.derivedStats.hp.current}
                 </span>
-                <span className="text-lg text-red-500"> / {data.derivedStats.hp.maximum}</span>
+                <span className="text-lg text-red-500"> / {derived.hitPoints}</span>
               </div>
               <div className="text-xs text-red-600 text-center mt-1">
-                Major Wound: {data.derivedStats.hp.majorWoundThreshold} HP
+                Major Wound: {derived.majorWoundThreshold} HP
               </div>
             </div>
           )}
@@ -365,7 +270,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                 <span className="text-3xl font-bold text-purple-700">
                   {data.derivedStats.magicPoints.current}
                 </span>
-                <span className="text-lg text-purple-500"> / {data.derivedStats.magicPoints.maximum}</span>
+                <span className="text-lg text-purple-500"> / {derived.magicPoints}</span>
               </div>
               <div className="text-xs text-purple-600 text-center mt-1">POW / 5</div>
             </div>
@@ -388,6 +293,9 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
               <div className="text-xs text-yellow-600 text-center mt-1">
                 Spend to adjust rolls (1:1)
               </div>
+              {data.derivedStats.luck.notes && (
+                <p className="text-xs text-yellow-800 mt-2 whitespace-pre-wrap">{data.derivedStats.luck.notes}</p>
+              )}
             </div>
           )}
 
@@ -419,19 +327,19 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         {data.derivedStats?.moveRate !== undefined && (
           <div className="bg-parchment border border-sepia-400 rounded-md p-3 text-center">
             <div className="text-xs text-sepia-600 uppercase mb-1">Move Rate</div>
-            <div className="text-2xl font-bold text-sepia-900">{data.derivedStats.moveRate}</div>
+            <div className="text-2xl font-bold text-sepia-900">{derived.moveRate}</div>
           </div>
         )}
         {data.derivedStats?.build !== undefined && (
           <div className="bg-parchment border border-sepia-400 rounded-md p-3 text-center">
             <div className="text-xs text-sepia-600 uppercase mb-1">Build</div>
-            <div className="text-2xl font-bold text-sepia-900">{data.derivedStats.build}</div>
+            <div className="text-2xl font-bold text-sepia-900">{derived.build}</div>
           </div>
         )}
         {data.derivedStats?.damageBonus && (
           <div className="bg-parchment border border-sepia-400 rounded-md p-3 text-center">
             <div className="text-xs text-sepia-600 uppercase mb-1">Damage Bonus</div>
-            <div className="text-2xl font-bold text-sepia-900">{data.derivedStats.damageBonus}</div>
+            <div className="text-2xl font-bold text-sepia-900">{derived.damageBonus}</div>
           </div>
         )}
       </div>
@@ -473,7 +381,14 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   // Render Combat tab
   const renderCombatTab = () => (
     <div>
-      {data.combat?.weapons && <WeaponsList weapons={data.combat.weapons} onRoll={onRoll} />}
+      {data.combat?.weapons && (
+        <WeaponsList
+          weapons={data.combat.weapons}
+          onRoll={onRoll}
+          damageBonus={derived.damageBonus}
+          skills={data.skills}
+        />
+      )}
     </div>
   );
 
@@ -507,6 +422,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
             <div className="bg-white/50 rounded-sm p-3 mt-3">
               <div className="text-xs text-amber-700 font-semibold mb-1">Assets</div>
               <p className="text-sm text-amber-900">{data.wealth.assets}</p>
+            </div>
+          )}
+          {data.wealth.notes && (
+            <div className="bg-white/50 rounded-sm p-3 mt-3">
+              <div className="text-xs text-amber-700 font-semibold mb-1">Notes</div>
+              <p className="text-sm text-amber-900 whitespace-pre-wrap">{data.wealth.notes}</p>
             </div>
           )}
         </div>
@@ -606,16 +527,14 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           the official sheet and are among the most consequential things it
           records — the rating caps maximum Sanity. Neither had anywhere to be
           shown or set in the app until now. */}
-      {/* TODO(ui): when Cthulhu Mythos is 0 and the spell list is empty this
-         condition is the number 0, which React renders as a stray "0" on the
-         page. Compare both with > 0 so it is a boolean. */}
-      {(data.spellsAndMythos?.cthulhuMythos || data.spellsAndMythos?.spells?.length) && (
+      {/* The skill is the Cthulhu Mythos that counts; the box copy is older. */}
+      {(cthulhuMythos > 0 || (data.spellsAndMythos?.spells?.length ?? 0) > 0) && (
         <div className="mt-6 bg-purple-50 border-2 border-purple-300 rounded-lg p-4">
           <h3 className="text-lg font-bold text-purple-900 mb-3">Spells &amp; Mythos</h3>
           <div className="flex items-baseline gap-2 mb-3">
             <span className="text-xs text-purple-700 uppercase">Cthulhu Mythos</span>
             <span className="text-xl font-bold text-purple-900">
-              {data.spellsAndMythos?.cthulhuMythos ?? 0}%
+              {cthulhuMythos}%
             </span>
           </div>
           {data.spellsAndMythos?.spells && data.spellsAndMythos.spells.length > 0 && (

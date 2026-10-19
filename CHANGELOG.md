@@ -25,6 +25,10 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **A Call of Cthulhu investigator's contacts, and notes on Luck and wealth, can be edited.** The read-only sheet listed contacts that the editor had no way to add, change or remove; **Edit** now has a **Contacts** list on the **Possessions** tab, with **Add Contact**, a name, role and notes for each, and a remove button. A note under **Luck Score** and **Wealth notes** under **Assets** are new, and the read-only sheet shows both.
+
+- **Specialised skills can be added to a Call of Cthulhu investigator.** The **Skills** tab of **Edit** showed only the specialised skills a sheet already had, with no way to add, name or remove one. Fighting and Firearms specialisations and sciences can now be added from the rulebook's list at their base values, or as **Other** to be named; **Add Language** and **Add Skill** add another language or a skill of your own. Each added row has a name box and a remove button, and Art/Craft, Pilot, Survival and the investigator's own language each take a specialisation. Added specialisations roll from the sheet and the right-click roll menu by their names.
+
 - **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.** The **Inventory** tab lists each item's **Value** beside its weight and gives the carrying capacity the rules work out from Strength: 15 pounds a point, and twice that to push, drag or lift, for a Small or Medium character. The header names the player, as the Pathfinder 2e sheet does. All three were recorded in the editor and shown nowhere else.
 
 - **See and withdraw the invitations you have sent.** **Campaign Settings → Members** now lists the players you have invited who have not answered, under **Invited**, with an **×** to withdraw each one. An invitation sent from the app now runs out after 14 days; until now it never did.
@@ -82,6 +86,9 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` on an asset whose uploader's account was deleted answers 400, admins included.
   - *Character data.* A Pathfinder 2e sheet with more spell slots of a rank used than the rank's total is refused with 400, as a D&D 5e sheet already was.
   - *Character data.* A Pathfinder 2e sheet's `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` may be under 10; they were refused below it.
+  - *Character data.* A Call of Cthulhu entry under `skills.fighting` or `skills.firearms` takes an optional `specialization`, the name of a specialisation the player adds (Sword, Bow); it was dropped before. The name of an entry under `skills.languageOther` or `skills.science`, and `skills.languageOwn.language`, may now be empty.
+
+- **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
 - **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.** **Character Name**, **Race**, **Class** and the other header boxes showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
 
@@ -94,6 +101,32 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A screen reader names every box in the Call of Cthulhu character editor, and a skill's improvement check works from the keyboard.** Almost every box was announced by its placeholder or by nothing, and the improvement checks beside the skills could only be clicked; they are now checkboxes you can reach with Tab and tick with Space. Every text box also stops at the length a sheet stores, where only the investigator's name did, so a long paste no longer gets the save refused.
+
+- **A Call of Cthulhu investigator's own language follows EDU.** Language (Own) starts equal to EDU, but changing EDU in the editor left it where it was. Its base now follows EDU, as Dodge's follows half DEX, and points put into it stay above the base.
+
+- **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.** The read-only sheet showed hit points, the major wound threshold, magic points, maximum Sanity, damage bonus, build, move rate and each characteristic's half and fifth as last stored, so an investigator not saved since being made from a template or imported could show numbers its own characteristics do not give. They are now worked out as the editor works them out.
+
+- **A Call of Cthulhu investigator's token picture is checked and named after the investigator.** The editor took any file as the picture, which was then refused when the sheet was saved, and named every upload "Investigator Token". A file that is not a picture, or is over the token size limit, is now refused when it is chosen, as on the other sheets, and the picture is named after the investigator.
+
+- **A Call of Cthulhu weapon rolls its damage bonus and its skill's current value.** Damage written as the rulebook does, such as "1d3+DB" for a punch, could not be rolled from the sheet and was left out of the right-click roll menu; DB now rolls the investigator's damage bonus, and the legend says firearms take none. Half DB, for thrown weapons and bows, is dropped when the bonus is 0; any other damage the dice cannot read is shown without offering a roll. A weapon's attack used the skill value stored with the weapon, which fell behind as the skill rose; it now uses the value of the skill the weapon names, such as Brawl or Handgun, where the sheet has it.
+
+- **The Call of Cthulhu read-only sheet reads clearly.** It showed a stray "0" on the **Backstory** tab when Cthulhu Mythos was 0 and no spells were known, showed the Mythos from a copy nothing used, and drew the STR to EDU labels in a pale fill colour that was hard to read on the light theme. The labels are now in the theme's secondary text colour.
+
+- **Every Call of Cthulhu skill rolls from the sheet, named once.** The Firearms, Other Language and Science rows did nothing when clicked, where every other skill rolled, and the last two printed their language or specialisation twice, such as "Science (Physics) (Physics)".
+
+- **A Call of Cthulhu box can be cleared and retyped.** Clearing a characteristic, skill, Sanity or weapon skill box to type a new number set it to 0 first, so hit points and the half and fifth columns were worked out for 0 in between, and a Sanity left empty stayed at 0. The boxes now hold what you type, and take up to 100 where a sheet stores it. A weapon's ammunition or malfunction number of 0 shows as 0, where it showed empty.
+
+- **A Call of Cthulhu investigator stored without skills can be saved.** Such an investigator, from an import or a program, opened with no skills, which the server refuses, so it could never be saved. The editor now fills each skill in at the rulebook's base: Dodge at half DEX, the own language at EDU.
+
+- **A Call of Cthulhu investigator with POW 100 can be saved, and current Sanity stays within the maximum.** Starting Sanity is POW, but a sheet holds at most 99, so an investigator with POW 100 and no Sanity yet could not be saved; it now starts at 99. Raising Cthulhu Mythos lowers maximum Sanity, and current Sanity now comes down with it, as the rules say it never rises above the maximum. A maximum Sanity of 0 shows as 0, where it showed 99.
+
+- **Cthulhu Mythos typed on a Call of Cthulhu sheet lowers maximum Sanity.** The sheet kept Cthulhu Mythos twice, and the only box you could type in, under **Spells & Mythos**, changed neither maximum Sanity nor the skill that is rolled. The box now sets the skill, maximum Sanity follows it, and it stops at 99. An investigator whose two copies differ opens with the larger, which is the one you raised.
+
+- **The built-in Call of Cthulhu investigators' numbers follow from their characteristics.** The blank investigator had a major wound threshold of 1 for 10 hit points; the Private Investigator had 13 hit points where CON 60 and SIZ 65 give 12, a major wound of 1, and SIZ, APP and EDU halves rounded up. They now start with the numbers the rules give. Investigators already made are not changed; the editor works their numbers out again when they are next saved.
+
+- **A Call of Cthulhu major wound threshold rounds up.** A major wound is damage of at least half an investigator's maximum hit points in one attack, but the editor halved and rounded down, so at 13 hit points it named 6, which is under half. It now names 7; the threshold is saved the next time the investigator is saved.
 
 - **A screen reader names every box in the Pathfinder 2e character editor, and the boxes stop at the length a sheet stores.** Most boxes, every proficiency rank among them, were announced by their placeholder or by nothing; each is now named, such as "Proficiency in Athletics" or "Item bonus to Will saves". Only the character's name stopped at the length the server keeps, so a long paste anywhere else got the save refused; every text box now stops there.
 

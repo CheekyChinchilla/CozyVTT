@@ -292,6 +292,18 @@ describe('parity with the frontend copy', () => {
     expect(backendCopy).toBe(frontendCopy);
   });
 
+  // The Call of Cthulhu derived attributes, which the sheets work out and the
+  // template checks hold the built-in investigators to.
+  it('rules/callOfCthulhu7e.ts is byte-for-byte identical to the frontend copy', () => {
+    const backendCopy = readFileSync(path.resolve(__dirname, '../callOfCthulhu7e.ts'), 'utf8');
+    const frontendCopy = readFileSync(
+      path.resolve(__dirname, '../../../../../frontend/src/utils/rules/callOfCthulhu7e.ts'),
+      'utf8'
+    );
+
+    expect(backendCopy).toBe(frontendCopy);
+  });
+
   // Same arrangement for the initiative rules, which the server uses to decide
   // what is rolled while the sheets use it to decide what to display. If the two
   // drift, a character shows one initiative and rolls another.

@@ -16,6 +16,7 @@ import {
   X,
   Upload,
   Palette,
+  Plus,
 } from 'lucide-react';
 import { Character } from '../../../types';
 import type { CharacterData } from '../../../types';
@@ -39,28 +40,19 @@ import { COC7E_CONDITIONS } from '@/utils/conditions';
  * server stores the schema's parsed sheet, so anything this editor writes has
  * to be declared there too.
  */
-interface CoC7eFormData extends CoC7eCharacterData {
-  /**
-   * Not declared by `CoC7eCharacterData` or the schema, which keep the
-   * investigator's name at the top level as `investigatorName`, so the server
-   * drops it on save. Only the token-upload filename reads it, and falls back
-   * to "Investigator" without it.
-   */
-  personalDetails?: { name?: string };
-}
+type CoC7eFormData = CoC7eCharacterData;
 import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
-import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { LIMIT_NOTE_CLASS } from './limitNoteClass';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
-import { setCoC7eSkillField } from './skillEdits';
-import { cocDodgeBase, settleDodge } from './dodge';
+import { setCoC7eSkillField, withCoC7eSkillList } from './skillEdits';
+import { settleSkillBase } from './dodge';
 import {
   cocHitPoints,
   cocMagicPoints,
@@ -68,10 +60,15 @@ import {
   cocMoveRate,
   cocMaxSanity,
   cocHalfAndFifth,
-} from './derivedStats';
+  cocDodgeBase,
+  cocMajorWoundThreshold,
+  cocBlankSkills,
+} from '@/utils/rules/callOfCthulhu7e';
 import { parsePossessions, formatPossessions } from './possessions';
-import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
-import { assetNameFrom } from '@/utils/assetName';
+import { SHEET_LIST_MAX, SHEET_LONG_TEXT_MAX, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
+import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
+import { useServerConfigQuery } from '@/hooks/queries';
 import { COLOR_PRESETS } from './colorPresets';
 
 interface CallOfCthulhu7eCharacterEditorProps {
@@ -118,6 +115,27 @@ const COC_APPEARANCE_FIELDS: { key: keyof CoC7eAppearance; label: string }[] = [
 ];
 
 /**
+ * The sheet with one Cthulhu Mythos. It is stored twice: the skill, which sets
+ * maximum Sanity and is rolled, and the Spells & Mythos box, which was the
+ * only one the editor let a player change. Both take the larger, which is
+ * whichever the player last raised, and the box edits the skill from here on.
+ * It stops at 99, where maximum Sanity reaches 0: a stored 100 would make it
+ * -1, which the sheet cannot save.
+ */
+function withOneCthulhuMythos(sheet: CoC7eFormData): CoC7eFormData {
+  const skill = sheet.skills?.cthulhuMythos;
+  const mythos = Math.min(Math.max(skill?.currentValue ?? 0, sheet.spellsAndMythos?.cthulhuMythos ?? 0), 99);
+  return {
+    ...sheet,
+    skills: {
+      ...sheet.skills,
+      cthulhuMythos: { baseValue: 0, improvementChecked: false, ...skill, currentValue: mythos },
+    } as CoC7eSkills,
+    spellsAndMythos: { spells: [], ...sheet.spellsAndMythos, cthulhuMythos: mythos },
+  };
+}
+
+/**
  * CallOfCthulhu7eCharacterEditor - Editable CoC 7e character sheet
  */
 export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEditorProps> = ({
@@ -134,21 +152,25 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [customColorHex, setCustomColorHex] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { data: serverConfig } = useServerConfigQuery();
 
   const data = character.data as CoC7eFormData;
   // The Keeper is sent the notes field always, and nobody else ever is.
   const keeperNotesShown = typeof data.notes === 'string';
 
   // Form state
-  const [formData, setFormData] = useState<CoC7eFormData>(() => ({
+  const [formData, setFormData] = useState<CoC7eFormData>(() => withOneCthulhuMythos({
     ...data,
     characteristics: data.characteristics || {},
-    // TODO(typing): `{}` has none of the keys CoC7eDerivedStats and CoC7eSkills
-    // require, and the effects and inputs below read straight off them, so a
-    // sheet stored without either block reads undefined where a number is
-    // expected. The casts keep that behaviour exactly as it was.
+    // A sheet stored without derived attributes has them all worked out by
+    // the effect below as it opens; until then the inputs read them as absent.
     derivedStats: (data.derivedStats || {}) as CoC7eDerivedStats,
-    skills: (data.skills || {}) as CoC7eSkills,
+    // Every skill, at its base where the sheet has none: the server takes the
+    // whole block or nothing, so a sheet stored without one could not be saved.
+    skills: {
+      ...cocBlankSkills(data.characteristics?.DEX?.regular ?? 0, data.characteristics?.EDU?.regular ?? 0),
+      ...data.skills,
+    } as CoC7eSkills,
     combat: data.combat || { weapons: [] },
     possessions: data.possessions || [],
     wealth: data.wealth || {},
@@ -256,6 +278,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   // here can move Dodge's base without taking away the points spent on it.
   // Null until the sheet has been read once.
   const dodgeDexRef = useRef<number | null>(null);
+  // The same for EDU, which is Language (Own)'s base.
+  const languageEduRef = useRef<number | null>(null);
 
   // Auto-calculate derived stats
   useEffect(() => {
@@ -272,7 +296,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       // HP
       const maxHP = cocHitPoints(con, siz);
-      const majorWoundThreshold = Math.floor(maxHP / 2);
+      const majorWoundThreshold = cocMajorWoundThreshold(maxHP);
 
       // Magic Points
       const maxMP = cocMagicPoints(pow);
@@ -289,6 +313,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       const previousDex = dodgeDexRef.current;
       dodgeDexRef.current = dex;
       const previousDodgeBase = previousDex === null ? null : cocDodgeBase(previousDex);
+      // Language (Own) "automatically starts as equal to the investigator's
+      // EDU": EDU is its base, as half DEX is Dodge's.
+      const edu = char.EDU?.regular || 0;
+      const previousEdu = languageEduRef.current;
+      languageEduRef.current = edu;
 
       // Max Sanity (99 - Cthulhu Mythos)
       const cthulhuMythos = formData.skills?.cthulhuMythos?.currentValue || 0;
@@ -296,10 +325,15 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       setFormData((prev) => {
         const storedDodge = prev.skills?.dodge;
-        const dodge = storedDodge ? settleDodge(storedDodge, dodgeBase, previousDodgeBase) : undefined;
+        const dodge = storedDodge ? settleSkillBase(storedDodge, dodgeBase, previousDodgeBase) : undefined;
+        const storedLanguage = prev.skills?.languageOwn;
+        const languageOwn = storedLanguage ? settleSkillBase(storedLanguage, edu, previousEdu) : undefined;
+        const skillsChanged = (dodge && dodge !== storedDodge) || (languageOwn && languageOwn !== storedLanguage);
         return {
           ...prev,
-          ...(dodge && dodge !== storedDodge ? { skills: { ...prev.skills, dodge } as CoC7eSkills } : {}),
+          ...(skillsChanged
+            ? { skills: { ...prev.skills, ...(dodge ? { dodge } : {}), ...(languageOwn ? { languageOwn } : {}) } as CoC7eSkills }
+            : {}),
           derivedStats: {
             ...prev.derivedStats,
             hp: {
@@ -323,13 +357,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               improvementChecked: prev.derivedStats?.dodge?.improvementChecked || false,
             },
             sanity: {
-              // TODO(rules): POW may be 100 but the schema caps Sanity at 99, so
-              // an investigator with POW 100 and no Sanity yet gets 100 for both
-              // of these and the sheet cannot be saved. Cap the starting value at
-              // 99 and the current value at maxSanity.
-              starting: prev.derivedStats?.sanity?.starting ?? pow,
+              // Sanity begins at POW, and a sheet holds at most 99; current
+              // Sanity "can never increase above" the maximum, 99 less
+              // Cthulhu Mythos, so it comes down with it.
+              starting: prev.derivedStats?.sanity?.starting ?? Math.min(pow, 99),
               maximum: maxSanity,
-              current: prev.derivedStats?.sanity?.current ?? pow,
+              current: Math.min(prev.derivedStats?.sanity?.current ?? Math.min(pow, 99), maxSanity),
               formula: 'Starts equal to POW; max is 99 minus Cthulhu Mythos skill',
             },
             luck: prev.derivedStats?.luck || { score: 50, notes: '' },
@@ -343,6 +376,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     formData.characteristics?.STR?.regular,
     formData.characteristics?.DEX?.regular,
     formData.characteristics?.POW?.regular,
+    formData.characteristics?.EDU?.regular,
     formData.age,
     formData.skills?.cthulhuMythos?.currentValue,
   ]);
@@ -351,6 +385,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const problem = tokenPictureProblem(file, serverConfig);
+      if (problem) {
+        setErrors((prev) => ({ ...prev, tokenImage: problem }));
+        return;
+      }
+      setErrors((prev) => ({ ...prev, tokenImage: '' }));
       setTokenImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -412,25 +452,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
-          const assetFormData = new FormData();
-          assetFormData.append('file', tokenImageFile);
-          assetFormData.append('type', 'TOKEN');
-          if (character.campaignId) {
-            assetFormData.append('scope', 'CAMPAIGN');
-            assetFormData.append('campaignId', character.campaignId);
-          } else {
-            assetFormData.append('scope', 'USER');
-          }
-          assetFormData.append('name', assetNameFrom(`${formData.personalDetails?.name || 'Investigator'} Token`));
-
-          const uploadResponse = await api.uploadAsset(assetFormData);
-          const assetId = uploadResponse.asset.id;
-
-          // Store the new token URL to pass separately to onSave
-          newTokenImageUrl = `/api/assets/tokens/${assetId}`;
+          newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.investigatorName || 'Investigator', character.campaignId);
         } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
+          setErrors((prev) => ({ ...prev, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' }));
           setIsSaving(false);
           return;
         }
@@ -640,6 +665,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             onChange={(e) => setFormData({ ...formData, investigatorName: e.target.value })}
             maxLength={SHEET_NAME_MAX}
             placeholder="Investigator Name"
+            aria-label="Investigator name"
             className="text-3xl font-bold bg-white/10 border-2 border-white/30 rounded-sm px-3 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
           />
 
@@ -654,6 +680,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.occupation || ''}
               onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
               placeholder="Occupation"
+              aria-label="Occupation"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
             <input
@@ -661,6 +689,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.era || ''}
               onChange={(e) => setFormData({ ...formData, era: e.target.value })}
               placeholder="Era (e.g., 1920s)"
+              aria-label="Era"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -673,6 +703,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={(formData.age ?? 0) as number}
               onChange={(v: number) => setFormData({ ...formData, age: v })}
               placeholder="Age"
+              aria-label="Age"
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
               fallback={0}
             />
@@ -681,6 +712,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.sex || ''}
               onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
               placeholder="Sex"
+              aria-label="Sex"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
             <input
@@ -688,6 +721,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
               value={formData.residence || ''}
               onChange={(e) => setFormData({ ...formData, residence: e.target.value })}
               placeholder="Residence"
+              aria-label="Residence"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 col-span-2 text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
             />
           </div>
@@ -697,6 +732,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             value={formData.birthplace || ''}
             onChange={(e) => setFormData({ ...formData, birthplace: e.target.value })}
             placeholder="Birthplace"
+            aria-label="Birthplace"
+            maxLength={SHEET_SHORT_TEXT_MAX}
             className="text-sm bg-white/10 border border-white/30 rounded-sm px-2 py-1 w-full text-parchment placeholder:text-parchment-light/50 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
           />
         </div>
@@ -768,7 +805,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       <SanityTracker
         current={formData.derivedStats?.sanity?.current || 0}
         starting={formData.derivedStats?.sanity?.starting || 0}
-        maximum={formData.derivedStats?.sanity?.maximum || 99}
+        maximum={formData.derivedStats?.sanity?.maximum ?? 99}
         cthulhuMythos={formData.skills?.cthulhuMythos?.currentValue || 0}
         editable
         onChange={{
@@ -834,13 +871,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             </div>
             <div>
               <span className="text-blue-700 font-semibold">Max SAN:</span>{' '}
-              <span className="text-blue-900">{formData.derivedStats?.sanity?.maximum || 99}</span>
+              <span className="text-blue-900">{formData.derivedStats?.sanity?.maximum ?? 99}</span>
               <div className="text-xs text-blue-600">99 - Cthulhu Mythos</div>
             </div>
             <div>
               <span className="text-blue-700 font-semibold">Major Wound:</span>{' '}
               <span className="text-blue-900">{formData.derivedStats?.hp?.majorWoundThreshold || 0} HP</span>
-              <div className="text-xs text-blue-600">HP Max / 2</div>
+              <div className="text-xs text-blue-600">Half HP Max, rounded up</div>
             </div>
           </div>
         </div>
@@ -851,8 +888,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Current Status</h3>
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Current HP</label>
+            <label htmlFor="coc-current-hp" className="text-xs text-sepia-600 uppercase block mb-1">Current HP</label>
             <NumberField
+id="coc-current-hp"
 value={formData.derivedStats?.hp?.current}
               onChange={(v: number) => {
                 setFormData({
@@ -868,8 +906,9 @@ value={formData.derivedStats?.hp?.current}
             />
           </div>
           <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Current MP</label>
+            <label htmlFor="coc-current-mp" className="text-xs text-sepia-600 uppercase block mb-1">Current MP</label>
             <NumberField
+id="coc-current-mp"
 value={formData.derivedStats?.magicPoints?.current}
               onChange={(v: number) => {
                 setFormData({
@@ -888,8 +927,9 @@ value={formData.derivedStats?.magicPoints?.current}
             />
           </div>
           <div className="bg-white border border-sepia-400 rounded-md p-3">
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Luck Score</label>
+            <label htmlFor="coc-luck" className="text-xs text-sepia-600 uppercase block mb-1">Luck Score</label>
             <NumberField
+id="coc-luck"
 value={formData.derivedStats?.luck?.score}
               onChange={(v: number) => {
                 setFormData({
@@ -902,6 +942,23 @@ value={formData.derivedStats?.luck?.score}
               }}
               className="w-full text-center text-2xl font-bold text-yellow-700 border-none bg-transparent focus:outline-hidden focus:ring-2 focus:ring-yellow-500 rounded-sm"
             fallback={0}
+            />
+            <textarea
+              value={formData.derivedStats?.luck?.notes ?? ''}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  derivedStats: {
+                    ...prev.derivedStats,
+                    luck: { score: prev.derivedStats?.luck?.score ?? 50, ...prev.derivedStats?.luck, notes: e.target.value },
+                  } as CoC7eDerivedStats,
+                }))
+              }
+              aria-label="Luck notes"
+              placeholder="Notes (e.g. Luck spent)"
+              rows={2}
+              maxLength={SHEET_LONG_TEXT_MAX}
+              className="mt-2 w-full px-2 py-1 text-xs border border-sepia-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-yellow-500"
             />
           </div>
         </div>
@@ -952,6 +1009,12 @@ value={formData.derivedStats?.luck?.score}
             skills: setCoC7eSkillField(formData.skills ?? {}, skillName, field, value) as CoC7eSkills,
           });
         }}
+        onListChange={(list, entries) => {
+          setFormData((prev) => ({
+            ...prev,
+            skills: withCoC7eSkillList(prev.skills ?? {}, list, entries) as CoC7eSkills,
+          }));
+        }}
       />
     </div>
   );
@@ -961,6 +1024,7 @@ value={formData.derivedStats?.luck?.score}
     <div>
       <WeaponsList
         weapons={formData.combat?.weapons || []}
+        skills={formData.skills}
         editable
         onChange={(weapons) => {
           setFormData({
@@ -980,8 +1044,10 @@ value={formData.derivedStats?.luck?.score}
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Wealth</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-sm text-sepia-700 font-semibold block mb-1">Spending Level</label>
+            <label htmlFor="coc-spending-level" className="text-sm text-sepia-700 font-semibold block mb-1">Spending Level</label>
             <input
+              id="coc-spending-level"
+              maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.wealth?.spendingLevel || ''}
               onChange={(e) =>
@@ -995,8 +1061,9 @@ value={formData.derivedStats?.luck?.score}
             />
           </div>
           <div>
-            <label className="text-sm text-sepia-700 font-semibold block mb-1">Cash on Hand</label>
+            <label htmlFor="coc-cash" className="text-sm text-sepia-700 font-semibold block mb-1">Cash on Hand</label>
             <NumberField
+id="coc-cash"
 value={formData.wealth?.cash}
               onChange={(v: number) => setFormData({
                   ...formData,
@@ -1009,8 +1076,10 @@ value={formData.wealth?.cash}
           </div>
         </div>
         <div className="mt-3">
-          <label className="text-sm text-sepia-700 font-semibold block mb-1">Assets</label>
+          <label htmlFor="coc-assets" className="text-sm text-sepia-700 font-semibold block mb-1">Assets</label>
           <textarea
+            id="coc-assets"
+            maxLength={SHEET_LONG_TEXT_MAX}
             value={formData.wealth?.assets || ''}
             onChange={(e) =>
               setFormData({
@@ -1023,6 +1092,19 @@ value={formData.wealth?.cash}
             className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
           />
         </div>
+        <div className="mt-3">
+          <label htmlFor="coc-wealth-notes" className="text-sm text-sepia-700 font-semibold block mb-1">Wealth notes</label>
+          <textarea
+            id="coc-wealth-notes"
+            value={formData.wealth?.notes || ''}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, wealth: { ...prev.wealth, notes: e.target.value } as CoC7eWealth }))
+            }
+            rows={2}
+            maxLength={SHEET_LONG_TEXT_MAX}
+            className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+          />
+        </div>
       </div>
 
       {/* Possessions — free-text field */}
@@ -1030,6 +1112,7 @@ value={formData.wealth?.cash}
         <h3 className="text-lg font-bold text-sepia-900 mb-4">Possessions & Equipment</h3>
         <ListField
           multiline
+          aria-label="Possessions"
           value={Array.isArray(formData.possessions) ? formData.possessions : []}
           onChange={(possessions) => setFormData((prev) => ({ ...prev, possessions }))}
           parse={parsePossessions}
@@ -1040,6 +1123,74 @@ value={formData.wealth?.cash}
           rows={8}
           className="w-full bg-white border border-sepia-400 rounded-sm px-3 py-2 text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
         />
+      </div>
+
+      {/* Contacts, which the read-only sheet lists on this tab. */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-sepia-900">Contacts</h3>
+          <button
+            type="button"
+            onClick={() => setFormData((prev) => ({ ...prev, contacts: [...(prev.contacts ?? []), { name: 'New contact', role: '', notes: '' }] }))}
+            disabled={listIsFull(formData.contacts)}
+            className={`inline-flex items-center gap-1 text-sm font-medium text-sepia-800 hover:text-sepia-950 ${ADD_BUTTON_OFF}`}
+          >
+            <Plus className="w-4 h-4" />
+            Add Contact
+          </button>
+        </div>
+        <ListLimitNote full={listIsFull(formData.contacts)} className={LIMIT_NOTE_CLASS} />
+        <div className="space-y-2">
+          {(formData.contacts ?? []).map((contact, index) => {
+            const setContact = (field: 'name' | 'role' | 'notes', value: string) =>
+              setFormData((prev) => ({
+                ...prev,
+                contacts: (prev.contacts ?? []).map((c, i) => (i === index ? { ...c, [field]: value } : c)),
+              }));
+            return (
+              <div key={index} className="bg-white border border-sepia-400 rounded-md p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={contact.name}
+                    onChange={(e) => setContact('name', e.target.value)}
+                    aria-label={`Name of contact ${index + 1}`}
+                    placeholder="Name"
+                    maxLength={SHEET_SHORT_TEXT_MAX}
+                    className="flex-1 px-2 py-1 border border-sepia-300 rounded-sm text-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                  />
+                  <input
+                    type="text"
+                    value={contact.role ?? ''}
+                    onChange={(e) => setContact('role', e.target.value)}
+                    aria-label={`Role of contact ${index + 1}`}
+                    placeholder="Role"
+                    maxLength={SHEET_SHORT_TEXT_MAX}
+                    className="w-40 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, contacts: (prev.contacts ?? []).filter((_, i) => i !== index) }))}
+                    aria-label={`Remove ${contact.name || `contact ${index + 1}`}`}
+                    className="p-1 text-red-700 hover:text-red-900"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <textarea
+                  value={contact.notes ?? ''}
+                  onChange={(e) => setContact('notes', e.target.value)}
+                  aria-label={`Notes on contact ${index + 1}`}
+                  placeholder="Notes"
+                  rows={2}
+                  maxLength={SHEET_LONG_TEXT_MAX}
+                  className="w-full px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                />
+              </div>
+            );
+          })}
+          {(formData.contacts ?? []).length === 0 && <p className="text-sm text-sepia-600 italic">No contacts yet</p>}
+        </div>
       </div>
     </div>
   );
@@ -1065,8 +1216,10 @@ value={formData.wealth?.cash}
         <div className="bg-white border border-sepia-400 rounded-md p-3 grid grid-cols-2 md:grid-cols-3 gap-3">
           {COC_APPEARANCE_FIELDS.map(({ key, label }) => (
             <div key={key}>
-              <label className="text-xs text-sepia-600 uppercase block mb-1">{label}</label>
+              <label htmlFor={`coc-appearance-${key}`} className="text-xs text-sepia-600 uppercase block mb-1">{label}</label>
               <input
+                id={`coc-appearance-${key}`}
+                maxLength={SHEET_SHORT_TEXT_MAX}
                 type="text"
                 value={formData.appearance?.[key] ?? ''}
                 onChange={(e) => {
@@ -1088,20 +1241,20 @@ value={formData.wealth?.cash}
         <h3 className="text-lg font-bold text-sepia-900 mb-3">Spells &amp; Mythos</h3>
         <div className="bg-white border border-sepia-400 rounded-md p-3 space-y-3">
           <div>
-            <label className="text-xs text-sepia-600 uppercase block mb-1">Cthulhu Mythos</label>
+            <label htmlFor="coc-cthulhu-mythos" className="text-xs text-sepia-600 uppercase block mb-1">Cthulhu Mythos</label>
+            {/* The skill itself: maximum Sanity is 99 less it, so it stops at 99. */}
             <NumberField
-              value={formData.spellsAndMythos?.cthulhuMythos}
+              id="coc-cthulhu-mythos"
+              value={formData.skills?.cthulhuMythos?.currentValue}
               min={0}
-              max={100}
+              max={99}
               fallback={0}
               onChange={(v: number) => {
-                setFormData({
-                  ...formData,
-                  spellsAndMythos: {
-                    cthulhuMythos: v,
-                    spells: formData.spellsAndMythos?.spells ?? [],
-                  },
-                });
+                setFormData((prev) => ({
+                  ...prev,
+                  skills: { ...prev.skills, cthulhuMythos: { ...prev.skills?.cthulhuMythos, currentValue: v } } as CoC7eSkills,
+                  spellsAndMythos: { spells: prev.spellsAndMythos?.spells ?? [], cthulhuMythos: v },
+                }));
               }}
               className="w-24 px-2 py-1 border border-sepia-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
             />
@@ -1109,6 +1262,7 @@ value={formData.wealth?.cash}
           <div>
             <label className="text-xs text-sepia-600 uppercase block mb-1">Spells (one per line)</label>
             <ListField
+              aria-label="Spells"
               multiline
               rows={4}
               value={formData.spellsAndMythos?.spells ?? []}
@@ -1146,6 +1300,7 @@ value={formData.wealth?.cash}
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             placeholder="Notes kept by the Keeper about this investigator"
             aria-label="Keeper's Notes"
+            maxLength={SHEET_LONG_TEXT_MAX}
             className="w-full bg-white border border-sepia-400 rounded-md p-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
           />
         </div>
