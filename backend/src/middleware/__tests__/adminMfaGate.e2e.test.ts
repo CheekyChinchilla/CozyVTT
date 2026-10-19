@@ -16,6 +16,7 @@
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { MFA_ENROLMENT_REQUIRED } from '../adminMfa';
+import { PASSWORD_GATE_ALLOWED_PATHS } from '../passwordChange';
 import { ADMIN_MFA_POLICY_MESSAGE, resetAdminMfaPolicyCache } from '../../services/adminMfaPolicy';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 
@@ -67,6 +68,17 @@ it('refuses everything but enrolment to an administrator past the deadline, with
   const setup = await agent.post('/api/auth/mfa/setup').send({ password: TEST_PASSWORD });
   expect(setup.status).toBe(200);
   expect((await agent.post('/api/auth/logout')).status).toBe(200);
+});
+
+it('lets an administrator past the deadline reach everything the password gate allows', async () => {
+  const { agent } = await admin(10);
+  // Signing out last, since it ends the session the rest are asked with.
+  const paths = [...PASSWORD_GATE_ALLOWED_PATHS].sort((a, b) => Number(a === '/auth/logout') - Number(b === '/auth/logout'));
+  expect(paths.length).toBeGreaterThan(0);
+  for (const path of paths) {
+    const res = path === '/auth/logout' ? await agent.post(`/api${path}`) : await agent.get(`/api${path}`);
+    expect({ path, code: res.body?.code }).toEqual({ path, code: undefined });
+  }
 });
 
 it('leaves an administrator within the grace period, and one with MFA on, alone', async () => {

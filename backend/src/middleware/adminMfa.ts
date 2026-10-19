@@ -3,6 +3,7 @@ import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import { pastAdminMfaDeadline } from '../services/adminMfaPolicy';
 import { sessionIsSignedIn } from '../services/signedIn';
+import { PASSWORD_GATE_ALLOWED_PATHS } from './passwordChange';
 
 /**
  * Administrator accounts must use two-factor authentication.
@@ -26,16 +27,14 @@ import { sessionIsSignedIn } from '../services/signedIn';
 /** Machine-readable code so the frontend can send the admin to enrolment. */
 export const MFA_ENROLMENT_REQUIRED = 'MFA_ENROLMENT_REQUIRED';
 
-/** Paths that stay reachable past the deadline, relative to the /api mount point. */
-const ALLOWED_PATHS = new Set([
-  '/auth/mfa/setup', // the two steps of enrolment
+/**
+ * Paths that stay reachable past the deadline, relative to the /api mount
+ * point: the two steps of enrolment, and what the password gate allows.
+ */
+const ALLOWED_PATHS: ReadonlySet<string> = new Set([
+  '/auth/mfa/setup',
   '/auth/mfa/verify',
-  '/auth/change-password',
-  '/auth/logout',
-  '/auth/me',
-  '/auth/ping',
-  '/auth/appearance',
-  '/config',
+  ...PASSWORD_GATE_ALLOWED_PATHS,
 ]);
 
 export async function requireAdminMfa(req: Request, res: Response, next: NextFunction): Promise<void> {
