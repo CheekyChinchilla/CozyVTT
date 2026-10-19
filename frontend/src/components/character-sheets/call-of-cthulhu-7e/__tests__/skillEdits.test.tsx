@@ -13,6 +13,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 const skill = (currentValue: number) => ({ baseValue: 1, currentValue, improvementChecked: false });
 
 function sheetWithGroupedSkills(): Record<string, unknown> {

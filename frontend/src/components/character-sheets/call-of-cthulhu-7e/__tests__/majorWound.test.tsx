@@ -11,6 +11,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 it('saves half the maximum hit points, rounded up', async () => {
   const characteristics = COC_BLANK_SHEET.characteristics as Record<string, unknown>;
   // CON 65 and SIZ 65: 13 hit points.

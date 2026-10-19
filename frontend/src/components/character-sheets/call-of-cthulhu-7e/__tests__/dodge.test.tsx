@@ -16,6 +16,8 @@ import { CallOfCthulhu7eCharacterView } from '../CallOfCthulhu7eCharacterView';
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 interface SavedDodge {
   skills: { dodge: { baseValue: number; currentValue: number } };
   derivedStats: { dodge: { value: number } };

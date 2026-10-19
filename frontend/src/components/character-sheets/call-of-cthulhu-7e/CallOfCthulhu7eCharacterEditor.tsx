@@ -40,22 +40,13 @@ import { COC7E_CONDITIONS } from '@/utils/conditions';
  * server stores the schema's parsed sheet, so anything this editor writes has
  * to be declared there too.
  */
-interface CoC7eFormData extends CoC7eCharacterData {
-  /**
-   * Not declared by `CoC7eCharacterData` or the schema, which keep the
-   * investigator's name at the top level as `investigatorName`, so the server
-   * drops it on save. Only the token-upload filename reads it, and falls back
-   * to "Investigator" without it.
-   */
-  personalDetails?: { name?: string };
-}
+type CoC7eFormData = CoC7eCharacterData;
 import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
-import { api } from '../../../services/api';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { LIMIT_NOTE_CLASS } from './limitNoteClass';
@@ -76,7 +67,8 @@ import {
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_LIST_MAX, SHEET_LONG_TEXT_MAX, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
-import { assetNameFrom } from '@/utils/assetName';
+import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
+import { useServerConfigQuery } from '@/hooks/queries';
 import { COLOR_PRESETS } from './colorPresets';
 
 interface CallOfCthulhu7eCharacterEditorProps {
@@ -158,6 +150,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [customColorHex, setCustomColorHex] = useState('');
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const { data: serverConfig } = useServerConfigQuery();
 
   const data = character.data as CoC7eFormData;
   // The Keeper is sent the notes field always, and nobody else ever is.
@@ -377,6 +370,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      const problem = tokenPictureProblem(file, serverConfig);
+      if (problem) {
+        setErrors((prev) => ({ ...prev, tokenImage: problem }));
+        return;
+      }
+      setErrors((prev) => ({ ...prev, tokenImage: '' }));
       setTokenImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -438,25 +437,10 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
-          const assetFormData = new FormData();
-          assetFormData.append('file', tokenImageFile);
-          assetFormData.append('type', 'TOKEN');
-          if (character.campaignId) {
-            assetFormData.append('scope', 'CAMPAIGN');
-            assetFormData.append('campaignId', character.campaignId);
-          } else {
-            assetFormData.append('scope', 'USER');
-          }
-          assetFormData.append('name', assetNameFrom(`${formData.personalDetails?.name || 'Investigator'} Token`));
-
-          const uploadResponse = await api.uploadAsset(assetFormData);
-          const assetId = uploadResponse.asset.id;
-
-          // Store the new token URL to pass separately to onSave
-          newTokenImageUrl = `/api/assets/tokens/${assetId}`;
+          newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.investigatorName || 'Investigator', character.campaignId);
         } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
-          setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
+          setErrors((prev) => ({ ...prev, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' }));
           setIsSaving(false);
           return;
         }

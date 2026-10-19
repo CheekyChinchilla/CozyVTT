@@ -13,6 +13,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 const characteristics = COC_BLANK_SHEET.characteristics as Record<string, unknown>;
 const derivedStats = COC_BLANK_SHEET.derivedStats as Record<string, unknown>;
 

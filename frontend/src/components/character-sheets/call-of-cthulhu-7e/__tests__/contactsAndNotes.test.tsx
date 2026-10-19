@@ -12,6 +12,8 @@ import { CallOfCthulhu7eCharacterView } from '../CallOfCthulhu7eCharacterView';
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 const derivedStats = COC_BLANK_SHEET.derivedStats as Record<string, unknown>;
 const wealth = COC_BLANK_SHEET.wealth as Record<string, unknown>;
 

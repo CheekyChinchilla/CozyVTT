@@ -12,6 +12,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 function ageBox(age: string | number | undefined): HTMLInputElement {
   const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
   render(<CallOfCthulhu7eCharacterEditor character={cocCharacter({ age })} onSave={onSave} onCancel={vi.fn()} />);
