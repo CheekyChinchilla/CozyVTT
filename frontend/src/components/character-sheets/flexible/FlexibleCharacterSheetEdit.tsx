@@ -14,13 +14,10 @@ import { StatsEditor } from './components/sections/StatsEditor';
 import { ListEditor } from './components/sections/ListEditor';
 import { TextEditor } from './components/sections/TextEditor';
 import { TableEditor } from './components/sections/TableEditor';
-import { api } from '../../../services/api';
-import { AssetType } from '../../../types';
 import { useServerConfigQuery } from '@/hooks/queries';
-import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
+import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import { apiErrorMessage } from '@/utils/errors';
 import type { CharacterData } from '@/types';
-import { assetNameFrom } from '@/utils/assetName';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
@@ -93,13 +90,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        setTokenError('Please select an image file');
-        return;
-      }
-      const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
-      if (file.size > tokenLimit) {
-        setTokenError(`Image must be smaller than ${formatUploadLimit(tokenLimit)}`);
+      const problem = tokenPictureProblem(file, serverConfig);
+      if (problem) {
+        setTokenError(problem);
         return;
       }
       setTokenImageFile(file);
@@ -121,21 +114,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
-          const assetFormData = new FormData();
-          // File last so the server can name the type if it rejects the upload
-          assetFormData.append('type', 'TOKEN');
-          if (character.campaignId) {
-            assetFormData.append('scope', 'CAMPAIGN');
-            assetFormData.append('campaignId', character.campaignId);
-          } else {
-            assetFormData.append('scope', 'USER');
-          }
-          assetFormData.append('name', assetNameFrom(`${character.name} Token`));
-          assetFormData.append('file', tokenImageFile);
-
-          const uploadResponse = await api.uploadAsset(assetFormData);
-          const assetId = uploadResponse.asset.id;
-          newTokenImageUrl = `/api/assets/tokens/${assetId}`;
+          newTokenImageUrl = await uploadTokenPicture(tokenImageFile, character.name, character.campaignId);
         } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
           setTokenError(apiErrorMessage(uploadError) || 'Failed to upload token image');

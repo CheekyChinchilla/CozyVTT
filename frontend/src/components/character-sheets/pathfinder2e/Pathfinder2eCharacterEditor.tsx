@@ -21,8 +21,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { ProficiencyRank } from './components/ProficiencyIndicator';
-import { api } from '../../../services/api';
-import { AssetType } from '../../../types';
 import type { Character, CharacterData } from '../../../types';
 import type {
   PF2eCharacterData,
@@ -38,7 +36,7 @@ import type {
 } from '../../../types/game-systems';
 import { apiErrorMessage } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
-import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
+import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import NumberField from '../../ui/NumberField';
 import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
@@ -79,7 +77,6 @@ import {
   SHEET_SHORT_TEXT_MAX,
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
-import { assetNameFrom } from '@/utils/assetName';
 import { COLOR_PRESETS } from './colorPresets';
 
 /**
@@ -709,13 +706,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        setErrors({ ...errors, tokenImage: 'Please select an image file' });
-        return;
-      }
-      const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
-      if (file.size > tokenLimit) {
-        setErrors({ ...errors, tokenImage: `Image must be smaller than ${formatUploadLimit(tokenLimit)}` });
+      const problem = tokenPictureProblem(file, serverConfig);
+      if (problem) {
+        setErrors((prev) => ({ ...prev, tokenImage: problem }));
         return;
       }
       setTokenImageFile(file);
@@ -813,23 +806,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
-          const assetFormData = new FormData();
-          // File last so the server can name the type if it rejects the upload
-          assetFormData.append('type', 'TOKEN');
-          if (character.campaignId) {
-            assetFormData.append('scope', 'CAMPAIGN');
-            assetFormData.append('campaignId', character.campaignId);
-          } else {
-            assetFormData.append('scope', 'USER');
-          }
-          assetFormData.append('name', assetNameFrom(`${formData.characterName || 'Character'} Token`));
-          assetFormData.append('file', tokenImageFile);
-
-          const uploadResponse = await api.uploadAsset(assetFormData);
-          const assetId = uploadResponse.asset.id;
-
-          // Store the new token URL to pass separately to onSave
-          newTokenImageUrl = `/api/assets/tokens/${assetId}`;
+          newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.characterName || 'Character', character.campaignId);
         } catch (uploadError: unknown) {
           console.error('Error uploading token image:', uploadError);
           setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
