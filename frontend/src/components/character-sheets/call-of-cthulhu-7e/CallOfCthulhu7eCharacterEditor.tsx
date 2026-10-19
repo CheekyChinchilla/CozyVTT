@@ -531,6 +531,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
+    // TODO(ui): the editor's header text and boxes are always white, so on a
+    // pale custom colour such as white the name box cannot be read. Choose
+    // them with headerInk from utils/themeColor, as the read-only sheet does.
     const headerClasses = isCustomColor
       ? 'text-white p-6 rounded-t-lg relative border-b-4 border-white/20'
       : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} text-white p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
