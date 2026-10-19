@@ -86,6 +86,15 @@ export function copyName(original: string): string {
   return `${cutText(original, MAX_CHARACTER_NAME_LENGTH - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
 }
 
+/** The 400 body for a character of one game system joining a campaign of another. */
+function gameSystemMismatch(characterSystem: string | null | undefined, campaignSystem: string | null | undefined) {
+  return {
+    error: 'Game System Mismatch',
+    message: `Cannot assign a ${characterSystem ?? 'flexible'} character to a ${campaignSystem ?? 'flexible'} campaign. ` +
+      'Character and campaign game systems must match.',
+  };
+}
+
 /**
  * What the list returns for each character: everything but the sheet, which
  * GET /:id serves. The list is unpaged, and every sheet can be up to the 1 MB
@@ -167,14 +176,14 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
 
-      // TODO(rules): a gameSystem sent with the campaignId is not checked
-      // against the campaign's, so the API creates a Pathfinder 2e character
-      // straight into a D&D 5e campaign, or a typed one into a Flexible
-      // campaign, which assigning and accepting an invitation both refuse.
-      // It should answer 400 unless systemsCompatible(gameSystem, the
-      // campaign's) holds, with the same message as the assign route.
       if (!gameSystem) {
         finalGameSystem = campaign.gameSystem;
+      }
+
+      // Created into a campaign, it joins it, so it is held to the rule that
+      // assigning and accepting an invitation apply.
+      if (!systemsCompatible(finalGameSystem, campaign.gameSystem)) {
+        return res.status(400).json(gameSystemMismatch(finalGameSystem, campaign.gameSystem));
       }
     }
 
@@ -1116,12 +1125,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     const campSystem = campaign.gameSystem;
 
     if (!systemsCompatible(charSystem, campSystem)) {
-      const charLabel = charSystem ?? 'flexible';
-      const campLabel = campSystem ?? 'flexible';
-      return res.status(400).json({
-        error: 'Game System Mismatch',
-        message: `Cannot assign a ${charLabel} character to a ${campLabel} campaign. Character and campaign game systems must match.`,
-      });
+      return res.status(400).json(gameSystemMismatch(charSystem, campSystem));
     }
 
     // Moved under the character's lock, from the campaign it is in as it

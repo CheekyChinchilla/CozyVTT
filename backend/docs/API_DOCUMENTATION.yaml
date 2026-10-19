@@ -4773,10 +4773,11 @@ paths:
         - `name` is trimmed and must be 1 to 200 characters.
         - If `campaignId` is provided and `gameSystem` is omitted or null, the
           character inherits the campaign's `gameSystem`. A `gameSystem`
-          sent together with `campaignId` is not checked against the
-          campaign's own system, so a character can be created straight into a
-          campaign it does not match; `POST /api/characters/{id}/assign`
-          refuses that combination, but this endpoint does not.
+          sent together with `campaignId` must be the campaign's own, as
+          `POST /api/characters/{id}/assign` requires: a typed character only
+          in a campaign of the same system, none in a Flexible campaign.
+          Otherwise the answer is 400 `Game System Mismatch` with the assign
+          route's message, and nothing is created.
         - For a typed game system, `name` is written into the sheet's own name
           field (`characterName`, or `investigatorName` for
           `CALL_OF_CTHULHU_7E`) and the caller's display name into
@@ -4870,7 +4871,11 @@ paths:
             `FlexibleCharacterData` layout (message `Character data does not
             match the Flexible sheet layout`), answered with
             `validationErrors` listing each problem; or the caller already
-            owns 1,000 characters.
+            owns 1,000 characters; or the `gameSystem` sent does not match the
+            `campaignId`'s (error `Game System Mismatch`, message `Cannot
+            assign a <system> character to a <system> campaign. Character and
+            campaign game systems must match.`, with `flexible` for no
+            system).
           content:
             application/json:
               schema:

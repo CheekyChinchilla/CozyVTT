@@ -123,6 +123,35 @@ describe('POST /api/characters/:id/copy', () => {
   });
 });
 
+describe('POST /api/characters into a campaign', () => {
+  async function campaignOwnedBy(userId: string, gameSystem: 'DND_5E' | null) {
+    const made = await createTestCampaign(userId, { gameSystem });
+    campaigns.push(made.id);
+    await prisma.campaignMembership.create({ data: { userId, campaignId: made.id, role: 'DM', characterIds: [] } });
+    return made.id;
+  }
+
+  it('refuses a game system the campaign does not play, as assigning does', async () => {
+    const dnd = await campaignOwnedBy(ownerId, 'DND_5E');
+    const flexible = await campaignOwnedBy(ownerId, null);
+
+    const intoDnd = await owner.post('/api/characters').send({ name: 'Valeros', gameSystem: 'PATHFINDER_2E', campaignId: dnd, data: {} });
+    expect(intoDnd.status).toBe(400);
+    expect(intoDnd.body).toEqual({
+      error: 'Game System Mismatch',
+      message: 'Cannot assign a PATHFINDER_2E character to a DND_5E campaign. Character and campaign game systems must match.',
+    });
+
+    const intoFlexible = await owner.post('/api/characters').send({ name: 'Valeros', gameSystem: 'DND_5E', campaignId: flexible, data: {} });
+    expect(intoFlexible.status).toBe(400);
+    expect(intoFlexible.body.message).toBe(
+      'Cannot assign a DND_5E character to a flexible campaign. Character and campaign game systems must match.',
+    );
+
+    expect(await prisma.character.count({ where: { userId: ownerId, name: 'Valeros' } })).toBe(0);
+  });
+});
+
 describe('POST /api/campaigns', () => {
   it('creates the campaign with the caller as its owner and DM', async () => {
     const res = await owner.post('/api/campaigns').send({ name: '  The Sunless Citadel  ', gameSystem: 'DND_5E' });

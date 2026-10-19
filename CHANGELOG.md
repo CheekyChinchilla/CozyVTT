@@ -87,6 +87,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* A Pathfinder 2e sheet with more spell slots of a rank used than the rank's total is refused with 400, as a D&D 5e sheet already was.
   - *Character data.* A Pathfinder 2e sheet's `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` may be under 10; they were refused below it.
   - *Character data.* A Call of Cthulhu entry under `skills.fighting` or `skills.firearms` takes an optional `specialization`, the name of a specialisation the player adds (Sword, Bow); it was dropped before. The name of an entry under `skills.languageOther` or `skills.science`, `skills.languageOwn.language`, and a `contacts` entry's `name` and `role` may now be empty.
+  - *Character data.* `POST /api/characters` with a `campaignId` and a `gameSystem` that is not the campaign's answers 400 `Game System Mismatch` with the message `POST /api/characters/:id/assign` gives, and creates nothing; it created the character in the campaign.
 
 - **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
