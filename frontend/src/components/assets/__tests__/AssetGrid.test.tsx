@@ -203,4 +203,24 @@ describe('AssetGrid', () => {
     const shown = screen.getAllByRole('img').map((img) => img.getAttribute('alt'));
     expect(shown).toEqual(['Fresh upload', 'Goblin', 'Ogre']);
   });
+
+  // Pressed while a new search's first page was on its way, Load more added a
+  // page of the new search to the old one's results.
+  it('offers no Load more while a new search is loading', async () => {
+    let answerNew!: (value: unknown) => void;
+    mockListAssets.mockImplementation((params: { search?: string }) => (params.search === 'ogr'
+      ? new Promise((resolve) => { answerNew = resolve; })
+      : Promise.resolve({ assets: [GOBLIN], pagination: { page: 1, limit: 1, total: 2, totalPages: 2 } })));
+    const { rerender } = render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} limit={1} />);
+    expect(await screen.findByRole('button', { name: 'Load more' })).toBeEnabled();
+
+    rerender(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} limit={1} search="ogr" />);
+    await waitFor(() => expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ search: 'ogr' })));
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+
+    answerNew({ assets: [OGRE], pagination: { page: 1, limit: 1, total: 1, totalPages: 1 } });
+    expect(await screen.findByAltText('Ogre')).toBeInTheDocument();
+    expect(screen.queryByAltText('Goblin')).not.toBeInTheDocument();
+  });
 });
+

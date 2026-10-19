@@ -130,17 +130,21 @@ export default function AssetGrid({
     // and re-fetching on every parent render would hammer the endpoint.
   }, [type, limit, controlled, serverSearch]);
 
+  // Offered only once the first page of the current search is in (see the
+  // button below), and dropped if a new search starts meanwhile, so a page is
+  // only ever added to the results of the search it belongs to.
   const loadMore = async () => {
     const fetchId = latest.current;
+    const next = page + 1;
     setLoadingMore(true);
     try {
-      const res = await api.listAssets({ type, limit, usable: true, page: page + 1, ...(serverSearch ? { search: serverSearch } : {}) });
+      const res = await api.listAssets({ type, limit, usable: true, page: next, ...(serverSearch ? { search: serverSearch } : {}) });
       if (fetchId !== latest.current) return;
       const known = new Set(fetched.map((a) => a.id));
       const all = [...fetched, ...res.assets.filter((a) => !known.has(a.id))];
       setFetched(all);
-      setPage(page + 1);
-      setTotalPages(res.pagination?.totalPages ?? page + 1);
+      setPage(next);
+      setTotalPages(res.pagination?.totalPages ?? next);
       onAssetsLoaded?.(all);
     } catch (error: unknown) {
       // What is shown stays, and Load more can be pressed again.
@@ -229,7 +233,7 @@ export default function AssetGrid({
         })}
       </div>
       {emptyNote}
-      {!controlled && page < totalPages && (
+      {!controlled && !loading && page < totalPages && (
         <div className="flex justify-center pt-2">
           <Button type="button" variant="secondary" size="sm" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? 'Loading…' : 'Load more'}
