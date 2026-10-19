@@ -4773,10 +4773,11 @@ paths:
         - `name` is trimmed and must be 1 to 200 characters.
         - If `campaignId` is provided and `gameSystem` is omitted or null, the
           character inherits the campaign's `gameSystem`. A `gameSystem`
-          sent together with `campaignId` is not checked against the
-          campaign's own system, so a character can be created straight into a
-          campaign it does not match; `POST /api/characters/{id}/assign`
-          refuses that combination, but this endpoint does not.
+          sent together with `campaignId` must be the campaign's own, as
+          `POST /api/characters/{id}/assign` requires: a typed character only
+          in a campaign of the same system, none in a Flexible campaign.
+          Otherwise the answer is 400 `Game System Mismatch` with the assign
+          route's message, and nothing is created.
         - For a typed game system, `name` is written into the sheet's own name
           field (`characterName`, or `investigatorName` for
           `CALL_OF_CTHULHU_7E`) and the caller's display name into
@@ -4870,7 +4871,11 @@ paths:
             `FlexibleCharacterData` layout (message `Character data does not
             match the Flexible sheet layout`), answered with
             `validationErrors` listing each problem; or the caller already
-            owns 1,000 characters.
+            owns 1,000 characters; or the `gameSystem` sent does not match the
+            `campaignId`'s (error `Game System Mismatch`, message `Cannot
+            assign a <system> character to a <system> campaign. Character and
+            campaign game systems must match.`, with `flexible` for no
+            system).
           content:
             application/json:
               schema:
@@ -5282,9 +5287,10 @@ paths:
       summary: Validate character data against its game system schema
       description: |
         Re-runs the Zod schema for the character's `gameSystem` against its
-        current `data` blob. Useful after editing a character to surface fields
-        that no longer satisfy the schema (e.g. missing required ability
-        scores after a game-system update).
+        current `data` blob, or for a Flexible character (no `gameSystem`)
+        the `FlexibleCharacterData` layout. Useful after editing a character
+        to surface fields that no longer satisfy the schema (e.g. missing
+        required ability scores after a game-system update).
 
         Returns `200 OK` with `isValid: false` and a list of field-level errors
         even when validation fails — this is not an error condition for the
@@ -5326,22 +5332,6 @@ paths:
                       - path: 'stats.strength'
                         message: 'Invalid input: expected number, received string'
                         code: 'invalid_type'
-        '400':
-          description: Character has no game system assigned.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  isValid: { type: boolean, example: false }
-                  errors:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        path: { type: string }
-                        message: { type: string }
-                        code: { type: string }
         '403':
           description: The caller may read the character but does not own it.
           content:
@@ -5376,7 +5366,9 @@ paths:
         and `tokenImageUrl`. The copy is unassigned
         (`campaignId: null`), its name is the original's followed by a space
         and `(Copy)`, the original cut short first so the whole is at most 200
-        characters, and the response carries no `campaign` object. Only the
+        characters, written into the sheet's own name field too
+        (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`),
+        and the response carries no `campaign` object. Only the
         character's owner may copy it. A copy counts towards the 1,000
         characters one account may own; past that it answers 400 with the same
         message as `POST /api/characters`.
@@ -10854,7 +10846,9 @@ paths:
         system schema`, with `validationErrors`, otherwise; an omitted `data`
         is checked as `{}` and so fails), and is stored as the schema's parsed
         output, so a key the schema does not declare is dropped, as it is
-        for a character. Sheet
+        for a character. A typed sheet is stored without `playerName`, and a
+        `CALL_OF_CTHULHU_7E` one without its top-level `notes` (Keeper's
+        Notes), whoever sends it. Sheet
         fields from before version 1.3.0 are moved to their current names
         first, as they are for a character. Without
         a `gameSystem`, `data` must be an object
@@ -10939,6 +10933,10 @@ paths:
       tags: [Character Templates]
       summary: Get one shared character sheet
       operationId: getCharacterTemplate
+      description: |
+        Any signed-in user may read a template. Its `data` is sent without
+        `playerName` and a `CALL_OF_CTHULHU_7E` sheet's top-level `notes`
+        (Keeper's Notes), even when a template stored before 1.5.4 holds them.
       security:
         - cookieAuth: []
       parameters:
@@ -10992,10 +10990,18 @@ paths:
         whole sheet; it is checked against the template's game system (after
         moving sheet fields from before version 1.3.0 to their current names),
         or against `FlexibleCharacterData` if it has none, and stored as
-        parsed; a refused sheet answers 400 with `validationErrors` and the
-        message the create route gives.
+        parsed, without `playerName` or a `CALL_OF_CTHULHU_7E` sheet's
+        top-level `notes`, as on create; a refused sheet answers 400 with
+        `validationErrors` and the message the create route gives.
         `tokenImageUrl` follows the
-        rule on create, and null or an empty string removes the image.
+        rule on create, and null or an empty string removes the image. Send
+        `updatedAt` exactly as the template was loaded with, as a UTC ISO
+        timestamp ending in `Z`, to have the save refused with 409 if the
+        template has changed since; of two saves sent with the same
+        `updatedAt`, only one goes through. Without it the save is made
+        whatever changed in between. `updatedAt` alone does not count as a
+        field to change. A 200 response carries the new `updatedAt` for the
+        next save.
       operationId: updateCharacterTemplate
       security:
         - cookieAuth: []
@@ -11027,6 +11033,11 @@ paths:
                   type: string
                   nullable: true
                   maxLength: 500
+                updatedAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    The template's `updatedAt` as the caller loaded it, as a UTC ISO timestamp ending in `Z`. Optional. When sent and the template has changed since, the save is refused with 409 and nothing is written. A value that is not such a timestamp answers 400 `updatedAt must be the ISO timestamp the template was loaded with`.
       responses:
         '200':
           description: Template updated
@@ -11063,6 +11074,22 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The template changed after the `updatedAt` sent. Nothing was saved; load the template again and reapply the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  code:
+                    type: string
+                    example: TEMPLATE_CHANGED
+                  message:
+                    type: string
+                    example: This template was changed after you loaded it. Load it again and make your change on the new version.
     delete:
       tags: [Character Templates]
       summary: Delete a shared character sheet
@@ -13165,7 +13192,8 @@ components:
           description: >
             Machine-readable code, sent only where a client has to act on it:
             PASSWORD_CHANGE_REQUIRED, MFA_ENROLMENT_REQUIRED, SIGN_IN_EXPIRED,
-            CHARACTER_CHANGED, ASSET_IN_USE, UVTT_IMPORT_NEEDS_CONFIRMATION.
+            CHARACTER_CHANGED, TEMPLATE_CHANGED, ASSET_IN_USE,
+            UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.

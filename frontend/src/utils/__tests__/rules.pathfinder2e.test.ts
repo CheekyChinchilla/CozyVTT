@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { pf2eProficiencyBonus, pf2eArmorClass, pf2eClassDC } from '../rules/pathfinder2e';
+import { pf2eProficiencyBonus, pf2eArmorClass, pf2eClassDC, pf2eMaxHitPoints } from '../rules/pathfinder2e';
 
 /** The built-in Level 1 dwarf Fighter, as its own stored components describe it. */
 const seelah = {
@@ -141,5 +141,22 @@ describe('pf2eClassDC', () => {
     const odd = { ...seelah, classDC: { proficiencyRank: 'trained', keyAttribute: 'luck' } };
     expect(() => pf2eClassDC(odd)).not.toThrow();
     expect(pf2eClassDC(odd)).toBe(13); // 10 + 3 + 0
+  });
+});
+
+describe('pf2eMaxHitPoints', () => {
+  it.each([
+    // Dwarf (10) Fighter (10) with Constitution +2 at level 1.
+    [10, 10, 1, 2, 22],
+    // Human (8) Fighter (10) with Constitution +0.
+    [8, 10, 1, 0, 18],
+    // Elf (6) Wizard (6) with Constitution -1 at level 5.
+    [6, 6, 5, -1, 31],
+  ])('ancestry %i, class %i, level %i, Constitution %i give %i', (ancestry, cls, level, con, expected) => {
+    expect(pf2eMaxHitPoints(ancestry, cls, level, con)).toBe(expected);
+  });
+
+  it('is at least 1', () => {
+    expect(pf2eMaxHitPoints(0, 0, 1, -2)).toBe(1);
   });
 });

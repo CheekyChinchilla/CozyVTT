@@ -14,7 +14,7 @@ import { DnD5eCharacterEditor } from './DnD5eCharacterEditor';
  * DnD5eCharacterSheet - Mode switcher for D&D 5e character sheet
  */
 export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave, onDirtyChange, onEditStart } = props;
+  const { mode, character, onSave, onDirtyChange, onEditStart, allowTokenPicture } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   // Each time the editor opens, its form is made from the character passed now.
@@ -47,6 +47,7 @@ export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
         onDone={() => setCurrentMode('view')}
+        allowTokenPicture={allowTokenPicture}
       />
     );
   }

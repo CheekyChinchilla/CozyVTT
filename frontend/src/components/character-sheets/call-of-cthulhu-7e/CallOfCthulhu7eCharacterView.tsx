@@ -31,6 +31,7 @@ import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
+import { headerInk } from '@/utils/themeColor';
 
 interface CallOfCthulhu7eCharacterViewProps {
   character: Character;
@@ -94,12 +95,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
-    // TODO(ui): the header text is always white, so a pale custom colour
-    // such as white makes the investigator's name unreadable. Choose the text
-    // colour from the background, with readableTextOn in utils/color.ts.
+    // Light text on a dark header and dark on a light one, as the D&D 5e and
+    // Pathfinder 2e sheets choose it.
+    const ink = headerInk(isCustomColor ? customColorHex : themeColor.hex);
     const headerClasses = isCustomColor
-      ? 'text-white p-6 rounded-t-lg relative border-b-4 border-white/20'
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} text-white p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -107,7 +108,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         {onEdit && (
           <button
             onClick={onEdit}
-            className="absolute top-4 right-4 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
             title="Edit investigator"
           >
             <Edit className="w-4 h-4" />
@@ -123,10 +124,10 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
               <img
                 src={character.tokenImageUrl}
                 alt={data.investigatorName || 'Investigator'}
-                className="w-24 h-24 rounded-full border-4 border-white/20 object-cover shadow-xl"
+                className={`w-24 h-24 rounded-full border-4 ${ink.border} object-cover shadow-xl`}
               />
             ) : (
-              <div className="w-24 h-24 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center shadow-xl">
+              <div className={`w-24 h-24 rounded-full border-4 ${ink.border} bg-black/70 flex items-center justify-center shadow-xl`}>
                 <User className="w-12 h-12 text-white/40" />
               </div>
             )}
@@ -134,17 +135,17 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 
           {/* Character Info */}
           <div>
-            <h2 className="text-3xl font-bold mb-2 text-white drop-shadow-lg">
+            <h2 className="text-3xl font-bold mb-2 drop-shadow-lg">
               {data.investigatorName || 'Unnamed Investigator'}
             </h2>
-            <div className="space-y-1 text-white/80">
+            <div className={`space-y-1 ${ink.softer}`}>
               <div className="flex items-center space-x-4">
                 <span className="font-medium">{data.occupation || 'No Occupation'}</span>
                 {data.era && <span>• {data.era}</span>}
               </div>
               {data.residence && (
                 <div className="text-sm">
-                  <span className="text-white/90">Residence:</span> {data.residence}
+                  <span className={ink.soft}>Residence:</span> {data.residence}
                 </div>
               )}
               <div className="flex items-center space-x-4 text-sm">
@@ -159,8 +160,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         {/* Player Name */}
         {data.playerName && (
           <div className="text-right">
-            <div className="text-xs text-white/90 uppercase tracking-wide">Player</div>
-            <div className="text-lg font-semibold text-white">{data.playerName}</div>
+            <div className={`text-xs ${ink.soft} uppercase tracking-wide`}>Player</div>
+            <div className="text-lg font-semibold">{data.playerName}</div>
           </div>
         )}
       </div>

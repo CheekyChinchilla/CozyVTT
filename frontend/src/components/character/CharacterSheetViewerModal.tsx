@@ -10,7 +10,8 @@ import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
 import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
-import type { Campaign, Character, GameSystem, CampaignMembership } from '@/types';
+import type { Campaign, Character, CampaignMembership } from '@/types';
+import { gameSystemName } from '@/constants/game-systems';
 
 // Import view components
 import { DnD5eCharacterView } from '../character-sheets/dnd5e/DnD5eCharacterView';
@@ -67,31 +68,14 @@ export default function CharacterSheetViewerModal({
   const socket = ws?.socket;
   const tableRoll = useTableRoll(socket);
   const [character, setCharacter] = useState(initialCharacter);
-  const [ownerName, setOwnerName] = useState<string>('');
   const [showEditor, setShowEditor] = useState(false);
 
-  // Fetch character owner's name
-  // TODO(sheets): GET /api/users/:id answers 403 for anyone but the user and
-  // an admin, so a DM viewing a player's sheet sees "Unknown Player" and the
-  // console logs the refusal. Take the name from the campaign roster, which
-  // already holds every member's display name.
-  useEffect(() => {
-    const fetchOwnerName = async () => {
-      try {
-        const response = await api.getUser(character.userId);
-        setOwnerName(response.user.displayName);
-      } catch (error) {
-        console.error('Error fetching character owner:', error);
-        setOwnerName('Unknown Player');
-      }
-    };
-
-    if (character.userId !== user?.id) {
-      fetchOwnerName();
-    } else {
-      setOwnerName('You');
-    }
-  }, [character.userId, user?.id]);
+  // The owner's name comes with the character: GET /api/characters/:id names
+  // its owner to anyone who may read it. Asking GET /api/users/:id instead was
+  // refused for anyone but the owner and an admin.
+  const ownerName = character.userId === user?.id
+    ? 'You'
+    : character.user?.displayName ?? 'Unknown Player';
 
   // Listen for character updates via WebSocket
   useEffect(() => {
@@ -104,7 +88,9 @@ export default function CharacterSheetViewerModal({
       if (!data.character) return;
       if (data.characterId === character.id) {
         console.log('Character updated - refreshing viewer');
-        setCharacter(data.character);
+        // A live update carries no owner; keep the one already loaded.
+        const updated = data.character;
+        setCharacter((previous) => ({ ...updated, user: updated.user ?? previous.user }));
       }
     };
 
@@ -164,41 +150,21 @@ export default function CharacterSheetViewerModal({
   // the sheet leaves it to the editor.
   const modalRef = useFocusTrap(true, showEditor ? undefined : onClose);
 
-  // Get game system display name
-  const getSystemName = (gameSystem: GameSystem | null) => {
-    switch (gameSystem) {
-      case 'DND_5E':
-        return 'D&D 5th Edition';
-      case 'PATHFINDER_2E':
-        return 'Pathfinder 2nd Edition';
-      case 'SHADOWRUN_6E':
-        return 'Shadowrun 6th Edition';
-      case 'CALL_OF_CTHULHU_7E':
-        return 'Call of Cthulhu 7th Edition';
-      case null:
-        return 'Flexible/Custom';
-      default:
-        return gameSystem;
-    }
-  };
-
   // Handle click-to-roll: rolls at the table, and says so when refused.
   // Named so the panel heads the entry with the character whose sheet this
   // is, not with whoever happens to be reading it.
   const handleRoll = (expression: string, purpose: string) =>
     tableRoll({ expression, purpose, characterName: publicName ?? character.name });
 
-  // Passed to the sheet views only when this viewer may roll; without it the
-  // stats render as plain text rather than clickable rolls.
-  // TODO(ui): on the Characters page there is no socket, yet the owner still
-  // gets this handler, so the stats look clickable and a click rolls nothing.
-  // Pass a handler only when there is a live socket to roll on.
-  const rollHandler = canRoll ? handleRoll : undefined;
+  // Passed to the sheet views only when this viewer may roll and there is a
+  // table to roll at; without it the stats render as plain text. The
+  // Characters page has no socket, so its sheets offer no rolls.
+  const rollHandler = canRoll && socket ? handleRoll : undefined;
 
-  // Spending follows the same rule as rolling. The server checks it again —
-  // owner or DM — so this only decides whether the control is offered.
-  const spendHitDie = canRoll
-    ? (index: number) => socket?.emitHitDiceSpend({ characterId: character.id, index })
+  // Spending follows the same rule as rolling. The server checks it again
+  // (owner or DM), so this only decides whether the control is offered.
+  const spendHitDie = canRoll && socket
+    ? (index: number) => socket.emitHitDiceSpend({ characterId: character.id, index })
     : undefined;
 
   // Render appropriate character sheet view based on game system
@@ -243,7 +209,7 @@ export default function CharacterSheetViewerModal({
                 <div className="flex items-center gap-3 text-sm text-warm-gray">
                   <span>Player: {ownerName}</span>
                   <span>•</span>
-                  <span>{getSystemName(character.gameSystem)}</span>
+                  <span>{gameSystemName(character.gameSystem)}</span>
                 </div>
               </div>
             </div>

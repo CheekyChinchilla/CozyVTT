@@ -113,6 +113,16 @@ describe('Character Templates Validation', () => {
         expect(s.savingThrows[ability]).toEqual({ proficient: true, bonus: s.stats[ability].modifier + s.proficiencyBonus });
       }
     });
+
+    // SRD 5.1: chain mail is AC 16 (no Dexterity), a shield adds 2, and the
+    // Defense fighting style adds 1 while wearing armor. The Fighter shipped 18.
+    it('gives the Level 1 Fighter in chain mail with a shield and Defense AC 19', () => {
+      const fighter = getDnD5eTemplates().find((t) => t.name === 'Level 1 Fighter');
+      const data = fighter?.data as { armorClass: number; featuresAndTraits?: unknown; inventory: { name: string }[] };
+      expect(data.inventory.map((item) => item.name)).toEqual(expect.arrayContaining(['Chain Mail', 'Shield']));
+      expect(JSON.stringify(data)).toContain('Fighting Style: Defense');
+      expect(data.armorClass).toBe(19);
+    });
   });
 
   describe('Call of Cthulhu 7e Templates', () => {

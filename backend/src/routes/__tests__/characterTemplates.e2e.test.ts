@@ -208,6 +208,72 @@ describe('Character template routes', () => {
     });
   });
 
+  describe('what a template never carries', () => {
+    // Every system's sheet with a player's name, and Call of Cthulhu's with
+    // the Keeper's Notes, as Save as Template sends a character's.
+    const sheets = [AppGameSystem.DND_5E, AppGameSystem.PATHFINDER_2E, AppGameSystem.CALL_OF_CTHULHU_7E].map(
+      (gameSystem) => ({
+        gameSystem,
+        data: {
+          ...(getBlankCharacterTemplate(gameSystem) as Record<string, unknown>),
+          playerName: 'Their Player',
+          ...(gameSystem === AppGameSystem.CALL_OF_CTHULHU_7E && { notes: 'The Keeper alone knows this' }),
+        },
+      })
+    );
+
+    it('leaves out the player name and the Keeper\'s Notes when a template is published', async () => {
+      for (const { gameSystem, data } of sheets) {
+        const res = await createTemplate(otherAgent, { gameSystem, data });
+        expect(res.status).toBe(201);
+        expect(res.body.data).not.toHaveProperty('playerName');
+        expect(res.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: res.body.id } });
+        expect(stored.data).not.toHaveProperty('playerName');
+        expect(stored.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+      }
+    });
+
+    it('leaves them out when a template is saved, by its author or a template editor', async () => {
+      for (const [i, { gameSystem, data }] of sheets.entries()) {
+        const created = await createTemplate(authorAgent, { gameSystem, data: { ...data, playerName: undefined, notes: undefined } });
+        expect(created.status).toBe(201);
+        const agent = i % 2 === 0 ? authorAgent : editorAgent;
+        const res = await agent.put(`/api/character-templates/${created.body.id}`).send({ data });
+        expect(res.status).toBe(200);
+        const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
+        expect(stored.data).not.toHaveProperty('playerName');
+        expect(stored.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+      }
+    });
+
+    // A template published before these were left out still holds them; it
+    // is served without them, to everyone, and a details-only save does too.
+    it('leaves them out when a template stored with them is read', async () => {
+      for (const { gameSystem, data } of sheets) {
+        const created = await createTemplate(authorAgent, { gameSystem, data });
+        await prisma.characterTemplate.update({ where: { id: created.body.id }, data: { data: data as never } });
+        const read = await otherAgent.get(`/api/character-templates/${created.body.id}`);
+        expect(read.status).toBe(200);
+        expect(read.body.data).not.toHaveProperty('playerName');
+        expect(read.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+        const renamed = await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Renamed' });
+        expect(renamed.status).toBe(200);
+        expect(renamed.body.data).not.toHaveProperty('playerName');
+        expect(renamed.body.data).not.toHaveProperty('notes', 'The Keeper alone knows this');
+      }
+    });
+
+    it('keeps a Pathfinder 2e sheet\'s own notes, which are not the Keeper\'s', async () => {
+      const res = await createTemplate(authorAgent, {
+        gameSystem: GameSystem.PATHFINDER_2E,
+        data: { ...(getBlankCharacterTemplate(AppGameSystem.PATHFINDER_2E) as Record<string, unknown>), notes: 'Keep the shield polished' },
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.data.notes).toBe('Keep the shield polished');
+    });
+  });
+
   // A template is visible to everyone, so its image has to be too. A personal
   // asset would 403 for every reader but its owner.
   describe('the global-image rule', () => {
@@ -450,6 +516,70 @@ describe('Character template routes', () => {
         .put('/api/character-templates/2f1c8e5a-0000-4000-8000-000000000000')
         .send({ name: 'Ghost' });
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('a save made from an older version', () => {
+    const CHANGED = {
+      error: 'Conflict',
+      code: 'TEMPLATE_CHANGED',
+      message: 'This template was changed after you loaded it. Load it again and make your change on the new version.',
+    };
+
+    it('is refused with 409 once someone else has saved, and changes nothing', async () => {
+      const created = await createTemplate(authorAgent);
+      const loadedAt = created.body.updatedAt as string;
+
+      const first = await editorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Saved First', updatedAt: loadedAt });
+      expect(first.status).toBe(200);
+      expect(first.body.updatedAt).not.toBe(loadedAt);
+
+      const late = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Saved Late', data: { ...dnd5eSheet, characterName: 'Late Hero' }, updatedAt: loadedAt });
+      expect(late.status).toBe(409);
+      expect(late.body).toEqual(CHANGED);
+
+      const stored = await prisma.characterTemplate.findUniqueOrThrow({ where: { id: created.body.id } });
+      expect(stored.name).toBe('Saved First');
+      expect(stored.data).toMatchObject({ characterName: 'Template Hero' });
+
+      const fresh = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Saved Late', updatedAt: first.body.updatedAt });
+      expect(fresh.status).toBe(200);
+    });
+
+    it('lets only one of two saves made from the same version through', async () => {
+      const created = await createTemplate(authorAgent);
+      const loadedAt = created.body.updatedAt as string;
+
+      const answers = await Promise.all(
+        ['One', 'Two'].map((name) =>
+          authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name, updatedAt: loadedAt })
+        )
+      );
+      expect(answers.map((a) => a.status).sort()).toEqual([200, 409]);
+    });
+
+    it('goes ahead without updatedAt, and refuses one that is not a timestamp or comes alone', async () => {
+      const created = await createTemplate(authorAgent);
+      await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Moved On' }).expect(200);
+      expect((await authorAgent.put(`/api/character-templates/${created.body.id}`).send({ name: 'Again' })).status).toBe(200);
+
+      const notATime = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ name: 'Again', updatedAt: 'yesterday' });
+      expect(notATime.status).toBe(400);
+      expect(notATime.body.message).toBe('updatedAt must be the ISO timestamp the template was loaded with');
+
+      const alone = await authorAgent
+        .put(`/api/character-templates/${created.body.id}`)
+        .send({ updatedAt: created.body.updatedAt });
+      expect(alone.status).toBe(400);
+      expect(alone.body.message).toBe('At least one field must be provided');
     });
   });
 

@@ -22,6 +22,7 @@ import type { Campaign, CampaignInvitation } from '@/types';
 import { CampaignRole, PlatformRole } from '@/types';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
@@ -221,7 +222,7 @@ export default function DashboardPage() {
                               {character.name}
                             </p>
                             <p className="text-xs text-warm-gray truncate">
-                              {character.gameSystem || 'Flexible'}
+                              {gameSystemName(character.gameSystem)}
                             </p>
                           </div>
                         </div>

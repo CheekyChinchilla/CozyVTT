@@ -56,6 +56,7 @@ import {
   pf2eTotalBulk,
   pf2eBulkLimits,
   formatPf2eBulk,
+  pf2eMaxHitPoints,
 } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
@@ -118,6 +119,8 @@ interface Pathfinder2eCharacterEditorProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Whether to offer a token picture to upload; see CharacterSheetProps. */
+  allowTokenPicture?: boolean;
 }
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'feats' | 'bio';
@@ -127,6 +130,23 @@ interface Tab {
   label: string;
   icon: React.ElementType;
 }
+
+/** The tab a refused box is on, so Save can open it. */
+function tabOfError(key: string): TabId | null {
+  if (key.startsWith('loreSkills.')) return 'stats';
+  if (key.startsWith('strikes.')) return 'combat';
+  if (key.startsWith('spellcasting.')) return 'spells';
+  if (key.startsWith('inventory.')) return 'inventory';
+  if (key.startsWith('feats.')) return 'feats';
+  return null;
+}
+
+/**
+ * Errors the list above the sheet leaves out: a failed save and a refused
+ * picture are not about a box, and the colour's is shown in the colour picker,
+ * which Save opens.
+ */
+const NOT_IN_SUMMARY = new Set(['submit', 'tokenImage', 'themeColor']);
 
 const TABS: Tab[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
@@ -227,6 +247,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   onCancel,
   onDirtyChange,
   onDone,
+  allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
@@ -657,17 +678,15 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     setFormData((prev) => ({ ...prev, bulk: { current, encumbered, maximum } }));
   }, [formData.inventory, formData.currency, formData.attributes?.strength?.modifier]);
 
-  // Auto-calculate maximum HP
+  // Maximum HP from the shared rules. A sheet made from the old blank template
+  // stores neither ancestry nor class hit points and keeps its maximum until
+  // one is filled in.
   useEffect(() => {
     if (!formData.level || !formData.hp) return;
-    // TODO(sheets): a 0 typed for either becomes 6 here. The blank template
-    // stores both as 0 with a maximum of 10, so reading 0 as 0 would give it a
-    // maximum of 0, which the schema refuses; give the template its real
-    // numbers first, then read these with ?? instead.
-    const ancestryHp = formData.hp.ancestryHp || 6;
-    const classHpPerLevel = formData.hp.classHpPerLevel || 6;
-    const conMod = formData.attributes?.constitution?.modifier || 0;
-    const maximum = ancestryHp + (classHpPerLevel * formData.level) + (conMod * formData.level);
+    const { ancestryHp, classHpPerLevel } = formData.hp;
+    if (!ancestryHp && !classHpPerLevel) return;
+    const conMod = formData.attributes?.constitution?.modifier ?? 0;
+    const maximum = pf2eMaxHitPoints(ancestryHp ?? 0, classHpPerLevel ?? 0, formData.level, conMod);
     setFormData((prev) => ({ ...prev, hp: { ...prev.hp, maximum } as PF2eHitPoints }));
   }, [formData.level, formData.hp?.ancestryHp, formData.hp?.classHpPerLevel, formData.attributes?.constitution?.modifier]);
 
@@ -749,13 +768,36 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     });
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
+    const blank = (value: string | undefined) => (value ?? '').trim() === '';
     if (!formData.characterName || formData.characterName.trim() === '') {
       newErrors.characterName = 'Character name is required';
     }
     if (!formData.level || formData.level < 1 || formData.level > 20) {
       newErrors.level = 'Level must be between 1 and 20';
+    }
+    if (blank(formData.ancestry)) newErrors.ancestry = 'Ancestry is required';
+    if (blank(formData.heritage)) newErrors.heritage = 'Heritage is required';
+    if (blank(formData.class)) newErrors.class = 'Class is required';
+
+    // Each row starts named; one whose name was cleared is the player's to
+    // name again or remove.
+    const named = (rows: { name?: string }[] | undefined, path: string, what: string) => {
+      (rows ?? []).forEach((row, i) => {
+        if (blank(row.name)) newErrors[`${path}.${i}.name`] = `Name this ${what}, or remove it`;
+      });
+    };
+    named(formData.loreSkills, 'loreSkills', 'lore');
+    named(formData.strikes, 'strikes', 'strike');
+    named(formData.inventory, 'inventory', 'item');
+    named(formData.spellcasting?.cantrips, 'spellcasting.cantrips', 'cantrip');
+    named(formData.spellcasting?.spells, 'spellcasting.spells', 'spell');
+    named(formData.spellcasting?.focusSpells?.spells, 'spellcasting.focusSpells.spells', 'focus spell');
+    named(formData.spellcasting?.innateSpells, 'spellcasting.innateSpells', 'innate spell');
+    named(formData.spellcasting?.rituals, 'spellcasting.rituals', 'ritual');
+    for (const [key, feats] of Object.entries(formData.feats ?? {})) {
+      named(feats as { name?: string }[] | undefined, `feats.${key}`, 'feat');
     }
     // The server refuses a colour it cannot read, and the whole save with it.
     if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
@@ -763,7 +805,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       setShowColorPicker(true);
     }
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = async () => {
@@ -789,7 +831,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       // Typed while the save was in flight: the editor keeps it, unsaved.
       if (!stillDirty) onDone?.();
     };
-    if (!validateForm()) return;
+    const refused = Object.keys(validateForm());
+    if (refused.length > 0) {
+      // The first refused box that is on a tab, so the player sees it.
+      const onTab = refused.map(tabOfError).find((tab): tab is TabId => tab !== null);
+      if (onTab) setActiveTab(onTab);
+      return;
+    }
     setIsSaving(true);
     try {
       // Cast at the boundary: the sheet is saved exactly as the editor holds
@@ -917,6 +965,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
               the reserved padding on a narrow window and back under the
               buttons. */}
           <div className="flex items-start space-x-4 min-w-0">
+            {allowTokenPicture && (
             <div className="shrink-0 relative group">
               <input type="file" id="token-upload" accept="image/*" onChange={handleTokenImageChange} className="hidden" />
               <label htmlFor="token-upload" className="cursor-pointer block relative">
@@ -938,6 +987,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                 </div>
               )}
             </div>
+            )}
 
             <div className="space-y-2 min-w-0">
               <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} aria-label="Character name" placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-white' : 'border-white/20'} rounded-sm px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
@@ -952,9 +1002,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                   <NumberField
 id="pf2e-level" min={1} max={20} value={formData.level} onChange={(v: number) => updateField('level', v)} className={`w-16 bg-white/10 ${errors.level ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} fallback={1} />
                 </div>
-                <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} aria-label="Class" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Class" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} aria-label="Ancestry" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Ancestry" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} aria-label="Heritage" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Heritage" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} aria-label="Class" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Class" className={`bg-white/10 ${errors.class ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} aria-label="Ancestry" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Ancestry" className={`bg-white/10 ${errors.ancestry ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} aria-label="Heritage" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Heritage" className={`bg-white/10 ${errors.heritage ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
                 <input type="text" value={formData.background || ''} onChange={(e) => updateField('background', e.target.value)} aria-label="Background" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Background" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
                 {/* Deity and alignment are part of the sheet the schema
                     describes, and matter for a cleric, champion or oracle, but
@@ -1898,6 +1948,8 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
     </div>
   );
 
+  const refusals = [...new Set(Object.entries(errors).filter(([key, message]) => message && !NOT_IN_SUMMARY.has(key)).map(([, message]) => message))];
+
   return (
     <div
       className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg"
@@ -1907,6 +1959,16 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
     >
       {renderHeader()}
       {renderTabs()}
+      {refusals.length > 0 && (
+        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+          <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
+          <ul className="list-disc pl-5">
+            {refusals.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {openingChanges.length > 0 && (
         <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving

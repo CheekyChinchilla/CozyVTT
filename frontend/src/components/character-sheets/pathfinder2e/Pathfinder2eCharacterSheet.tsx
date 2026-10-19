@@ -12,7 +12,7 @@ import Pathfinder2eCharacterView from './Pathfinder2eCharacterView';
 import Pathfinder2eCharacterEditor from './Pathfinder2eCharacterEditor';
 
 export const Pathfinder2eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave, onDirtyChange, onEditStart } = props;
+  const { mode, character, onSave, onDirtyChange, onEditStart, allowTokenPicture } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   // Each time the editor opens, its form is made from the character passed now.
@@ -47,6 +47,7 @@ export const Pathfinder2eCharacterSheet: React.FC<CharacterSheetProps> = (props)
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
         onDone={() => setCurrentMode('view')}
+        allowTokenPicture={allowTokenPicture}
       />
     );
   }

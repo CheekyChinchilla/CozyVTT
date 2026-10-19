@@ -185,7 +185,8 @@ export const dnd5eFighterTemplate: CharacterTemplate = {
       survival: { proficient: true, expertise: false, bonus: 3 },
     },
     passivePerception: 13,
-    armorClass: 18,
+    // Chain mail 16, a shield 2 and the Defense fighting style 1.
+    armorClass: 19,
     initiative: 2,
     speed: 30,
     hp: {

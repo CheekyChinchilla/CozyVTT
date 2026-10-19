@@ -8,21 +8,22 @@
  * The sheet cannot tell the difference, and every system is supported for free.
  */
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/contexts/ToastContext';
+import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import type { Character, CharacterData, CharacterTemplate } from '@/types';
-
-/** Said when a sheet save from here came with a token picture, which a template cannot use. */
-export const TEMPLATE_PICTURE_NOT_USED =
-  "Template sheet saved, without the token picture you chose: a template's picture has to be a global asset, so that everyone who copies the template can see it.";
+import { TEMPLATE_PICTURE_NOT_USED } from '@/utils/templatePicture';
 import Modal from '@/components/ui/Modal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
 import Field from '@/components/ui/Field';
 import { Input, Textarea } from '@/components/ui/Input';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
+import { isStaleCharacterSave } from '@/utils/staleCharacter';
+import { useStaleSaveReapply } from './StaleSaveDialog';
 
 interface CharacterTemplateEditorModalProps {
   template: CharacterTemplate;
@@ -47,6 +48,16 @@ export default function CharacterTemplateEditorModal({
   // Whether the sheet holds edits not saved yet, as the sheet reports it.
   const [sheetDirty, setSheetDirty] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  // The version the sheet's form was made from, sent with each save so that
+  // a save over someone else's newer one is refused, and the sheet as it was
+  // then, what a refused save's changes are measured from. As in the
+  // character editor, they move on only with a save made from them.
+  const [loadedAt, setLoadedAt] = useState(opened.updatedAt);
+  const openedSheetRef = useRef(opened.data as CharacterData);
+  // The name and description as last loaded or saved: a refused details save
+  // goes ahead over a newer version only when these are still what it holds.
+  const detailsBaseRef = useRef({ name: opened.name, description: opened.description ?? null });
+  const staleSave = useStaleSaveReapply();
 
   // Ask before closing only when sheet edits would be lost.
   const requestClose = () => {
@@ -80,11 +91,30 @@ export default function CharacterTemplateEditorModal({
     }
     setSavingDetails(true);
     setError(null);
+    const details = { name: name.trim(), description: description.trim() || null };
     try {
-      const updated = await api.updateCharacterTemplate(template.id, {
-        name: name.trim(),
-        description: description.trim() || null,
-      });
+      let updated: CharacterTemplate;
+      try {
+        updated = await api.updateCharacterTemplate(template.id, { ...details, updatedAt: loadedAt });
+        // Made from the sheet's version, so the stored sheet is still the one
+        // the form was made from.
+        setLoadedAt(updated.updatedAt);
+      } catch (err) {
+        if (!isStaleCharacterSave(err)) throw err;
+        // Saved meanwhile by someone else. Only a change to the name or
+        // description is theirs to lose; a sheet change is left alone.
+        const latest = await api.getCharacterTemplate(template.id);
+        const base = detailsBaseRef.current;
+        if (latest.name !== base.name || (latest.description ?? null) !== base.description) {
+          detailsBaseRef.current = { name: latest.name, description: latest.description ?? null };
+          setError(
+            `Someone else changed this template's name or description after you opened it. It is now named "${latest.name}". Press Save Details again to save yours in its place.`
+          );
+          return;
+        }
+        updated = await api.updateCharacterTemplate(template.id, { ...details, updatedAt: latest.updatedAt });
+      }
+      detailsBaseRef.current = { name: updated.name, description: updated.description ?? null };
       setTemplate(updated);
       showToast('Template updated', 'success');
       onSaved();
@@ -109,25 +139,49 @@ export default function CharacterTemplateEditorModal({
    * the unchanged template and lost them.
    */
   const handleSheetSave = async (data: CharacterData, _showToast?: boolean, tokenImageUrl?: string) => {
+    let saved: CharacterTemplate;
+    let carriedOver = false;
     try {
-      setTemplate(await api.updateCharacterTemplate(template.id, { data }));
+      try {
+        saved = await api.updateCharacterTemplate(template.id, { data, updatedAt: loadedAt });
+      } catch (error) {
+        // Saving over someone else's newer version would undo it. The sheet
+        // stays in its editor, the changes are carried onto the newest
+        // version, and that is saved once the user says so.
+        if (!isStaleCharacterSave(error)) throw error;
+        const stored = await staleSave.reapply({
+          opened: openedSheetRef.current,
+          edited: data,
+          withNewPicture: false,
+          subject: 'template',
+          fetchLatest: () => api.getCharacterTemplate(template.id),
+          save: (merged, updatedAt) => api.updateCharacterTemplate(template.id, { data: merged, updatedAt }),
+        });
+        if (!stored) throw error;
+        saved = stored;
+        carriedOver = true;
+      }
     } catch (err) {
-      // TODO(ui): a refused sheet is reported here as "Template data does not
-      // match game system schema", with no box named, so a player whose
-      // template sheet is over a limit cannot tell what to shorten. Say it as
-      // the character editors do, with refusedSaveMessage from
-      // utils/sheetSaveRefusal and apiValidationIssues.
+      // The user chose to keep editing; the dialog has said why.
+      if (isStaleCharacterSave(err)) throw err;
+      // Name each box the server refused, as the character editors do, so
+      // whoever is over a limit knows what to shorten.
       showToast(
-        (err as { response?: { data?: { message?: string } } }).response?.data?.message ??
-          'Failed to save the sheet',
+        refusedSaveMessage(apiValidationIssues(err) ?? [], apiErrorMessage(err), 'Failed to save the sheet'),
         'error'
       );
       throw err;
     }
-    // TODO(ui): the sheet's token picker uploads the picture as the user's own
-    // asset, and a template's picture must be a global one, so the server
-    // refuses it; sending it would fail every save until the editor was
-    // cancelled. The picker should be hidden here, or offer global assets.
+    setTemplate(saved);
+    // After changes were carried over, the form is still the older version's,
+    // so its next save is refused and carried over in turn.
+    if (!carriedOver) {
+      setLoadedAt(saved.updatedAt);
+      openedSheetRef.current = saved.data as CharacterData;
+    }
+    // The sheet here has no token picker: it uploads the picture as the user's
+    // own asset, and a template's picture must be a global one. Should a
+    // picture come anyway, it is not sent, and the toast says so.
     if (tokenImageUrl !== undefined) {
       showToast(TEMPLATE_PICTURE_NOT_USED, 'warning');
     } else {
@@ -140,7 +194,7 @@ export default function CharacterTemplateEditorModal({
     <>
     <Modal
       open
-      onClose={confirmClose ? () => {} : requestClose}
+      onClose={confirmClose || staleSave.asking ? () => {} : requestClose}
       title="Edit Template"
       icon={FileText}
       size="xl"
@@ -186,6 +240,7 @@ export default function CharacterTemplateEditorModal({
             onSave={handleSheetSave}
             onCancel={requestClose}
             onDirtyChange={setSheetDirty}
+            allowTokenPicture={false}
           />
         </div>
       </div>
@@ -200,6 +255,7 @@ export default function CharacterTemplateEditorModal({
       onConfirm={onClose}
       onCancel={() => setConfirmClose(false)}
     />
+    {staleSave.dialog}
     </>
   );
 }

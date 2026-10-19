@@ -102,6 +102,8 @@ interface DnD5eCharacterEditorProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Whether to offer a token picture to upload; see CharacterSheetProps. */
+  allowTokenPicture?: boolean;
 }
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'features' | 'bio';
@@ -340,6 +342,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   onCancel,
   onDirtyChange,
   onDone,
+  allowTokenPicture = true,
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('stats');
   const [isSaving, setIsSaving] = useState(false);
@@ -1279,6 +1282,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             buttons. */}
         <div className="flex items-start space-x-4 min-w-0">
           {/* Token Image Upload */}
+          {allowTokenPicture && (
           <div className="shrink-0 relative group">
             <input
               type="file"
@@ -1317,6 +1321,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               </div>
             )}
           </div>
+          )}
 
           {/* Character Info */}
           <div className="space-y-2 min-w-0">

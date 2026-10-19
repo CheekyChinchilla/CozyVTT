@@ -47,6 +47,7 @@ import { collectSheetFeatures } from '../../../utils/featureEntries';
 import { readProficiencyGroups } from '../../../utils/proficiencies';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
+import { headerInk } from '@/utils/themeColor';
 
 interface DnD5eCharacterViewProps {
   character: Character;
@@ -155,12 +156,12 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
-    // TODO(ui): the header text is always white, so a pale custom colour such
-    // as white makes the character's name unreadable. Choose the text colour
-    // from the background, with readableTextOn in utils/color.ts.
+    // Light text on a dark header and dark on a light one, chosen as the
+    // editor chooses it.
+    const ink = headerInk(isCustomColor ? customColorHex : themeColor.hex);
     const headerClasses = isCustomColor
-      ? 'text-white p-6 rounded-t-lg relative'
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.to} text-white p-6 rounded-t-lg relative`;
+      ? `${ink.text} p-6 rounded-t-lg relative`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -168,7 +169,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
         {onEdit && (
           <button
             onClick={onEdit}
-            className="absolute top-4 right-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium"
+            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium`}
             title="Edit character"
           >
             <Edit className="w-4 h-4" />
@@ -184,10 +185,10 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
               <img
                 src={character.tokenImageUrl}
                 alt={data.characterName || 'Character'}
-                className="w-20 h-20 rounded-full border-4 border-white/20 object-cover"
+                className={`w-20 h-20 rounded-full border-4 ${ink.border} object-cover`}
               />
             ) : (
-              <div className="w-20 h-20 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
+              <div className={`w-20 h-20 rounded-full border-4 ${ink.border} bg-black/70 flex items-center justify-center`}>
                 <User className="w-10 h-10 text-white/40" />
               </div>
             )}
@@ -196,7 +197,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
           {/* Character Info */}
           <div>
             <h2 className="text-3xl font-bold mb-1">{data.characterName || 'Unnamed Character'}</h2>
-            <div className="flex items-center space-x-4 text-white/90">
+            <div className={`flex items-center space-x-4 ${ink.soft}`}>
               <span>
                 Level {data.level} {data.race} {data.class}
               </span>
@@ -209,7 +210,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
 
         {data.experiencePoints !== undefined && (
           <div className="text-right">
-            <div className="text-xs text-white/90">Experience</div>
+            <div className={`text-xs ${ink.soft}`}>Experience</div>
             <div className="text-xl font-bold">{data.experiencePoints.toLocaleString()}</div>
           </div>
         )}

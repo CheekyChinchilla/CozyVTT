@@ -87,6 +87,12 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* A Pathfinder 2e sheet with more spell slots of a rank used than the rank's total is refused with 400, as a D&D 5e sheet already was.
   - *Character data.* A Pathfinder 2e sheet's `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` may be under 10; they were refused below it.
   - *Character data.* A Call of Cthulhu entry under `skills.fighting` or `skills.firearms` takes an optional `specialization`, the name of a specialisation the player adds (Sword, Bow); it was dropped before. The name of an entry under `skills.languageOther` or `skills.science`, `skills.languageOwn.language`, and a `contacts` entry's `name` and `role` may now be empty.
+  - *Character data.* `POST /api/characters` with a `campaignId` and a `gameSystem` that is not the campaign's answers 400 `Game System Mismatch` with the message `POST /api/characters/:id/assign` gives, and creates nothing; it created the character in the campaign.
+  - *Character data.* `GET /api/characters/:id/validate` checks a Flexible character (no game system) against the Flexible sheet layout and answers 200 with `isValid` and, when false, `errors`, as for a typed one; it answered 400 `no_game_system`.
+  - *Character templates.* `PUT /api/character-templates/:id` takes an optional `updatedAt`, the template's as loaded; when it differs from the stored one the save answers 409 `Conflict` with `code` `TEMPLATE_CHANGED` and writes nothing, as `PUT /api/characters/:id` does. `updatedAt` alone answers 400 `At least one field must be provided`.
+  - *Character data.* `POST /api/characters/:id/copy` writes the copy's name, ending ` (Copy)`, into the sheet's own name field (`characterName`, or `investigatorName` for Call of Cthulhu) as well as the character's.
+  - *Character templates.* `POST /api/character-templates` and `PUT /api/character-templates/:id` store a typed sheet without `playerName`, and a Call of Cthulhu one without its top-level `notes` (Keeper's Notes), whoever sends it; the reply has neither, and `GET /api/character-templates/:id` leaves both out of a template stored with them.
+  - *Character data.* A Call of Cthulhu sheet's `derivedStats.hp.maximum` and `derivedStats.hp.majorWoundThreshold` may be 0, which CON plus SIZ under 10 gives; they were refused below 1.
 
 - **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
@@ -102,9 +108,51 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Call of Cthulhu investigator with CON and SIZ under 10 can be saved.** Their hit points work out to 0, which the server refused along with the whole save. Rolled characteristics never get that low; typed ones can.
+
+- **The Pathfinder 2e and Call of Cthulhu editors say which name is missing.** Clearing a Pathfinder 2e ancestry, heritage or class, or the name of a strike, lore, spell, ritual, item or feat, or a Call of Cthulhu occupation, era or weapon name, made Save fail with no reason given. Save now lists what to fill in and opens the tab it is on, as the D&D 5e editor does.
+
+- **The built-in character templates follow the rules.** The Pathfinder 2e Level 1 Fighter had 21 hit points where a Dwarf Fighter with Constitution +2 has 22, and attack bonuses one short (Warhammer +8, Crossbow +6, as an expert); the blank Pathfinder 2e sheet stored no ancestry or class hit points and now has a Human Fighter's 18; the D&D 5e Level 1 Fighter in chain mail with a shield and the Defense style has Armor Class 19, not 18. Characters already made from them keep their numbers.
+
+- **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.** The editor read a 0 typed in **Ancestry HP** or **Class HP/Level** as 6, so the maximum came out 6 higher than the boxes said. A character made from the older blank sheet, which stores neither, keeps its maximum until one is filled in.
+
+- **A feature listed twice is kept twice.** Two identical entries, such as two Ability Score Improvements written the same way, were shown as one on a D&D 5e sheet when they came from a template, and folded into one when an older sheet's special abilities were moved to its class features. A feature with no description no longer stops the list from loading.
+
+- **Save as Template works for a character with a picture.** Publishing failed with a message about global assets whenever the character had a picture, because a character's picture is its player's own upload and a template's has to be one everyone can load. The template is now published without the picture, and a message says it was left out; a picture that is already a global asset is kept.
+
+- **Two people editing one character template no longer undo each other.** When two people had the same template open, the later save put back the older version over everything the earlier one saved. A save over a newer version is now refused: for the sheet, **Edit Template** carries your changes onto the newest version and shows them before saving, as the character editor does, and for the name and description it says when someone else changed them.
+
+- **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
+
+- **A Flexible sheet's add buttons stop where the server does.** The server keeps at most 100 sections on a Flexible sheet, 200 stats in a section, 1,000 entries in a list, and 50 columns and 1,000 rows in a table, but **Add Section**, **Add Stat**, **Add Item**, **Add Row** and the add column button went on adding, making a sheet that could not be saved. Each now turns off at its limit, with a note saying why, as the other sheets' lists do.
+
+- **Game systems are named in words everywhere.** The dashboard's character list, **Delete Character**, the campaign list in **Create New Character** and the note in **Assign to Campaign** showed the stored code, such as `DND_5E`. They now show the system's name, such as "Dungeons & Dragons 5th Edition", as the game system lists do, and "Flexible" for a character with none; a character's sheet and a campaign invitation use the same names.
+
+- **You can delete your character while its campaign is being played.** **Delete Character** refused a character in an active or paused campaign and told you to unassign it first, although the server allows the delete. It now deletes it, after a warning that names the campaign and says the character leaves its roster for everyone at the table.
+
+- **Create & Publish as Template publishes the character you made.** It published the starter sheet the dialog began from, so the template carried the starter's name, such as "New Character" or "Brave Fighter", where the character had the name you gave it. The template now has the character's sheet as it was saved, and the game system it was saved with.
+
+- **Choosing a Flexible campaign in Create New Character makes the character Flexible.** After picking a campaign with a game system, picking one without kept the first campaign's system, so the character was made for a system its campaign does not play. The game system now follows each campaign chosen, a Flexible campaign's included, and stays as the campaign has it; it goes back to the blank sheet when it changes.
+
+- **Create New Character says what happens after Create.** Its note promised to take you to the character editor, which creating a character has never done. It now says the character appears in your list and that **Edit Character** on its card's menu fills in the rest of the sheet.
+
+- **Create Character publishes no template after a failed Create & Publish.** When **Create & Publish as Template** failed to make the character, the dialog remembered the choice, and a plain **Create Character** after it published a template as well. Each button now does only what it says.
+
+- **Create New Character takes a name as long as the sheet does.** It refused a name over 100 characters, although the server and the sheet editors take 200. It now takes up to 200, and the box stops there.
+
+- **A refused template sheet save names the boxes to fix.** **Edit Template** said only "Template data does not match game system schema" when the server turned a sheet down, so whoever was over a limit could not tell which box to shorten. It now names each box the server refused and why, as the character sheet editors do.
+
+- **Edit Template no longer offers a token picture it cannot use.** The sheet in **Edit Template** had the character sheet's picture box, which uploaded the picture to your own library and then left it off the template, since a template's picture has to be a global one. The box is gone from template sheets; character sheets keep theirs.
+
+- **A character's name reads on a pale header colour.** The read-only D&D 5e, Pathfinder 2e and Call of Cthulhu sheets drew their header text white on every colour, so on a pale custom colour such as white, or the pale Amber Gold and Golden presets, the name could hardly be read, and a Pathfinder sheet's header differed from its editor's. The header text, its softer lines and its **Edit** button are now dark on a pale colour and light on a dark one, chosen by one rule in the views and editors alike, which gives a few mid-tone custom colours, such as a pure green, dark text where the editors gave white; the Call of Cthulhu editor's header, whose name and boxes were always white, follows the same rule.
+
+- **A DM opening a player's sheet sees the player's name.** The sheet's header said **Player: Unknown Player** to everyone but the character's owner and an admin, and so did the note that you are viewing the character as DM. Both now name the player.
+
+- **A sheet opened from the Characters page no longer offers rolls it cannot make.** Away from a campaign's table the stats on your own D&D 5e, Pathfinder 2e and Call of Cthulhu sheets looked clickable, and D&D hit dice looked spendable, but there is no table there to roll at. They are now shown as plain text there, and roll as before from a sheet opened at the table.
+
 - **Coloured messages and labels are readable on their own backgrounds.** Error, warning, success and information boxes, badges and chips draw their text on a light wash of their colour, and the text was worked out only against the plain page, so it fell to about 3.5 to 1 in some themes; muted and secondary text did the same on shaded panels. Each theme now works these colours out against those backgrounds too, so they clear the usual readability bar everywhere.
 
-- **Character sheets follow your theme.** Sheets were fixed paper cards with some text in the theme's colours, so in a dark theme parts were hard to read. Every sheet now takes the theme's paper, text and borders, and its colours that mean something take the theme's: hit points, damage and remove buttons its danger colour, magic and attunement its spirit colour, notes its warning colour, as soft tints readable in every theme. The system colours on buttons (D&D's red "+ Add") are the app's own buttons, and coins are shown in the theme's text. Pathfinder 2e's proficiency ranks take five of the theme's colours, and its Bulk labels are readable. The Call of Cthulhu sheet's sepia paper is the theme's paper like the others', Sanity is a themed panel whose four states differ in colour and word, the two lowest also by an icon, with its points beside the state where they were drawn over the bar, and its header text stays white on the header colour, where in a dark theme it turned dark.
+- **Character sheets follow your theme.** Sheets were fixed paper cards with some text in the theme's colours, so in a dark theme parts were hard to read. Every sheet now takes the theme's paper, text and borders, and its colours that mean something take the theme's: hit points, damage and remove buttons its danger colour, magic and attunement its spirit colour, notes its warning colour, as soft tints readable in every theme. The system colours on buttons (D&D's red "+ Add") are the app's own buttons, and coins are shown in the theme's text. Pathfinder 2e's proficiency ranks take five of the theme's colours, and its Bulk labels are readable. The Call of Cthulhu sheet's sepia paper is the theme's paper like the others', Sanity is a themed panel whose four states differ in colour and word, the two lowest also by an icon, with its points beside the state where they were drawn over the bar, and its header text no longer takes the theme's colour, which in a dark theme turned it dark on the dark header.
 
 - **Text boxes, checkboxes and dropdown lists are dark in a dark theme.** In Obsidian Night, Shadow Realm, Deep Dungeon, Midnight Court and a dark custom theme the browser still drew its own controls light, with the theme's light text inside them. Checkboxes, radio buttons and sliders now take the theme's colour in every theme.
 
@@ -413,6 +461,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **A character saved as a template leaves the player's name and the Keeper's Notes behind.** Every user can read a template, but **Save as Template** kept the sheet's player name and a Call of Cthulhu investigator's Keeper's Notes, so anyone could read notes meant for the Keeper alone. A template is now saved without either, whoever saves it, and one published before is shown without them; a character made from it gets its own player's name, as before.
 
 - **A map you may not see is answered as if it were not there.** Asking for a map of another campaign, or as a player for a map the DM is still preparing, answered differently from asking for one that does not exist, so a member could tell such a map existed. Both now get the same answer.
 

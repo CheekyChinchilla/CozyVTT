@@ -48,7 +48,7 @@ import type {
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { readPf2eSpellSlots } from './spellcastingEntries';
-import { shouldUseWhiteText } from '@/utils/themeColor';
+import { headerInk } from '@/utils/themeColor';
 
 interface Pathfinder2eCharacterViewProps {
   character: Character;
@@ -135,16 +135,13 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
-    // TODO(sheets): a preset always gets white text here, but the editor picks
-    // by shouldUseWhiteText(selectedColor.hex), so Golden (#d97706) reads black
-    // in the editor and white here. Both should use shouldUseWhiteText.
-    const headerTextColor = isCustomColor
-      ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black')
-      : 'text-white';
+    // Light text on a dark header and dark on a light one, chosen as the
+    // editor chooses it, for a preset as for a custom colour.
+    const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
 
     const headerClasses = isCustomColor
-      ? `${headerTextColor} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+      ? `${ink.text} p-6 rounded-t-lg relative`
+      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${ink.text} p-6 rounded-t-lg relative`;
 
     return (
       <div className={headerClasses} style={headerStyle}>
@@ -152,7 +149,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         {onEdit && (
           <button
             onClick={onEdit}
-            className="absolute top-4 right-4 px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium"
+            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium`}
             title="Edit character"
           >
             <Edit className="w-4 h-4" />
@@ -167,7 +164,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
             <img
               src={character.tokenImageUrl}
               alt={data.characterName}
-              className="w-24 h-24 rounded-full border-4 border-white/20 object-cover"
+              className={`w-24 h-24 rounded-full border-4 ${ink.border} object-cover`}
             />
           )}
 
@@ -175,24 +172,24 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <div>
             <h2 className="text-3xl font-bold mb-2">{data.characterName}</h2>
             <div className="flex items-center flex-wrap gap-2 opacity-90">
-              <span className="px-3 py-1 bg-white/20 rounded-full text-sm font-medium">
+              <span className={`px-3 py-1 ${ink.chip} rounded-full text-sm font-medium`}>
                 Level {data.level} {data.class}
               </span>
-              <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+              <span className={`px-3 py-1 ${ink.chipFaint} rounded-full text-sm`}>
                 {data.ancestry} ({data.heritage})
               </span>
-              <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+              <span className={`px-3 py-1 ${ink.chipFaint} rounded-full text-sm`}>
                 {data.background}
               </span>
               {/* Deity and alignment: on the sheet and in the schema, but shown
                   nowhere in the app until now. */}
               {data.deity && (
-                <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+                <span className={`px-3 py-1 ${ink.chipFaint} rounded-full text-sm`}>
                   {data.deity}
                 </span>
               )}
               {data.alignment && (
-                <span className="px-3 py-1 bg-white/10 rounded-full text-sm">
+                <span className={`px-3 py-1 ${ink.chipFaint} rounded-full text-sm`}>
                   {data.alignment}
                 </span>
               )}

@@ -86,6 +86,15 @@ export function copyName(original: string): string {
   return `${cutText(original, MAX_CHARACTER_NAME_LENGTH - COPY_SUFFIX.length)}${COPY_SUFFIX}`;
 }
 
+/** The 400 body for a character of one game system joining a campaign of another. */
+function gameSystemMismatch(characterSystem: string | null | undefined, campaignSystem: string | null | undefined) {
+  return {
+    error: 'Game System Mismatch',
+    message: `Cannot assign a ${characterSystem ?? 'flexible'} character to a ${campaignSystem ?? 'flexible'} campaign. ` +
+      'Character and campaign game systems must match.',
+  };
+}
+
 /**
  * What the list returns for each character: everything but the sheet, which
  * GET /:id serves. The list is unpaged, and every sheet can be up to the 1 MB
@@ -167,14 +176,14 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         });
       }
 
-      // TODO(rules): a gameSystem sent with the campaignId is not checked
-      // against the campaign's, so the API creates a Pathfinder 2e character
-      // straight into a D&D 5e campaign, or a typed one into a Flexible
-      // campaign, which assigning and accepting an invitation both refuse.
-      // It should answer 400 unless systemsCompatible(gameSystem, the
-      // campaign's) holds, with the same message as the assign route.
       if (!gameSystem) {
         finalGameSystem = campaign.gameSystem;
+      }
+
+      // Created into a campaign, it joins it, so it is held to the rule that
+      // assigning and accepting an invitation apply.
+      if (!systemsCompatible(finalGameSystem, campaign.gameSystem)) {
+        return res.status(400).json(gameSystemMismatch(finalGameSystem, campaign.gameSystem));
       }
     }
 
@@ -510,26 +519,17 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
       });
     }
 
-    // Cannot validate without a game system
-    if (!character.gameSystem) {
-      return res.status(400).json({
-        isValid: false,
-        errors: [{
-          path: 'gameSystem',
-          message: 'Character has no game system assigned',
-          code: 'no_game_system',
-        }],
-      });
-    }
-
     // The validator reports rather than throws; a bad sheet is a 200 with
     // the reasons, as documented, since asking is not an error.
     // Judged on the sheet as its owner is sent it: a report on the Keeper's
-    // Notes would tell a player something of what is written there.
+    // Notes would tell a player something of what is written there. A
+    // Flexible character (no game system) is held to the Flexible layout.
     const ownSheet = (await isKeeperOf(userId, character.campaignId))
       ? character.data
       : sheetWithoutKeeperNotes(character.gameSystem, character.data);
-    const result = validateCharacterData(character.gameSystem as GameSystem, ownSheet);
+    const result = character.gameSystem
+      ? validateCharacterData(character.gameSystem as GameSystem, ownSheet)
+      : validateFlexibleSheet(ownSheet);
     if (result.success) {
       return res.status(200).json({ isValid: true });
     }
@@ -1116,12 +1116,7 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     const campSystem = campaign.gameSystem;
 
     if (!systemsCompatible(charSystem, campSystem)) {
-      const charLabel = charSystem ?? 'flexible';
-      const campLabel = campSystem ?? 'flexible';
-      return res.status(400).json({
-        error: 'Game System Mismatch',
-        message: `Cannot assign a ${charLabel} character to a ${campLabel} campaign. Character and campaign game systems must match.`,
-      });
+      return res.status(400).json(gameSystemMismatch(charSystem, campSystem));
     }
 
     // Moved under the character's lock, from the campaign it is in as it
@@ -1208,17 +1203,21 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
     }
 
     // Create a copy with modified name. Not the Keeper's Notes: they are the
-    // Keeper's, and the copy is in no campaign.
+    // Keeper's, and the copy is in no campaign. The copy's name goes into the
+    // sheet too: a save takes the sheet's name for the record.
+    const name = copyName(originalCharacter.name);
+    const sheet = sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data);
+    const stored = readJsonObject(sheet);
+    const copiedSheet = originalCharacter.gameSystem && stored
+      ? applyIdentityToSheet(originalCharacter.gameSystem, stored, name, '')
+      : sheet;
     const copiedCharacter = await prisma.$transaction(async (tx) => {
       await roomForCharacter(tx, userId);
       return tx.character.create({
         data: {
           userId,
-          // TODO(sheets): the copied sheet keeps the original's name, and the name
-          // sync on save then renames the copy back, dropping " (Copy)"; write the
-          // copy's name into the sheet too.
-          name: copyName(originalCharacter.name),
-          data: toJson(sheetWithoutKeeperNotes(originalCharacter.gameSystem, originalCharacter.data)),
+          name,
+          data: toJson(copiedSheet),
           tokenImageUrl: originalCharacter.tokenImageUrl,
           gameSystem: originalCharacter.gameSystem,
           campaignId: null, // Copies are unassigned by default

@@ -93,3 +93,14 @@ describe('the header Save button', () => {
     expect(save).toHaveClass('bg-white', 'text-black');
   });
 });
+
+// The Call of Cthulhu editor's header text and boxes were always white, so on
+// a pale custom colour the investigator's name could not be read.
+describe('the Call of Cthulhu editor header on a pale colour', () => {
+  it('draws its text and boxes dark', () => {
+    render(<CallOfCthulhu7eCharacterEditor character={cocCharacter({ themeColor: '#ffffff' })} onSave={noop} onCancel={vi.fn()} />);
+    expect(screen.getByLabelText('Investigator name')).toHaveClass('text-black');
+    expect(screen.getByLabelText('Occupation')).toHaveClass('text-black');
+    expect(screen.getByLabelText('Occupation')).not.toHaveClass('text-white');
+  });
+});

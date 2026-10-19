@@ -65,6 +65,16 @@ export function pf2eProficiencyBonus(level: unknown, rank: unknown): number {
 }
 
 /**
+ * Maximum hit points: the ancestry's hit points, then the class's hit points
+ * plus the Constitution modifier at every level. At least 1, the least a sheet
+ * stores; only boxes typed as 0 come lower, as an ancestry and a class each
+ * give 6 or more.
+ */
+export function pf2eMaxHitPoints(ancestryHp: unknown, classHpPerLevel: unknown, level: unknown, constitutionModifier: unknown): number {
+  return Math.max(1, num(ancestryHp) + (num(classHpPerLevel) + num(constitutionModifier)) * num(level));
+}
+
+/**
  * Armor Class.
  *
  * The Dexterity modifier is capped by the armour's Dex Cap where one is
