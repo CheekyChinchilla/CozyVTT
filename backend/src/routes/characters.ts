@@ -519,26 +519,17 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
       });
     }
 
-    // Cannot validate without a game system
-    if (!character.gameSystem) {
-      return res.status(400).json({
-        isValid: false,
-        errors: [{
-          path: 'gameSystem',
-          message: 'Character has no game system assigned',
-          code: 'no_game_system',
-        }],
-      });
-    }
-
     // The validator reports rather than throws; a bad sheet is a 200 with
     // the reasons, as documented, since asking is not an error.
     // Judged on the sheet as its owner is sent it: a report on the Keeper's
-    // Notes would tell a player something of what is written there.
+    // Notes would tell a player something of what is written there. A
+    // Flexible character (no game system) is held to the Flexible layout.
     const ownSheet = (await isKeeperOf(userId, character.campaignId))
       ? character.data
       : sheetWithoutKeeperNotes(character.gameSystem, character.data);
-    const result = validateCharacterData(character.gameSystem as GameSystem, ownSheet);
+    const result = character.gameSystem
+      ? validateCharacterData(character.gameSystem as GameSystem, ownSheet)
+      : validateFlexibleSheet(ownSheet);
     if (result.success) {
       return res.status(200).json({ isValid: true });
     }

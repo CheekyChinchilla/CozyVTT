@@ -5287,9 +5287,10 @@ paths:
       summary: Validate character data against its game system schema
       description: |
         Re-runs the Zod schema for the character's `gameSystem` against its
-        current `data` blob. Useful after editing a character to surface fields
-        that no longer satisfy the schema (e.g. missing required ability
-        scores after a game-system update).
+        current `data` blob, or for a Flexible character (no `gameSystem`)
+        the `FlexibleCharacterData` layout. Useful after editing a character
+        to surface fields that no longer satisfy the schema (e.g. missing
+        required ability scores after a game-system update).
 
         Returns `200 OK` with `isValid: false` and a list of field-level errors
         even when validation fails — this is not an error condition for the
@@ -5331,22 +5332,6 @@ paths:
                       - path: 'stats.strength'
                         message: 'Invalid input: expected number, received string'
                         code: 'invalid_type'
-        '400':
-          description: Character has no game system assigned.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  isValid: { type: boolean, example: false }
-                  errors:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        path: { type: string }
-                        message: { type: string }
-                        code: { type: string }
         '403':
           description: The caller may read the character but does not own it.
           content:
