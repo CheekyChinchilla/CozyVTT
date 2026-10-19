@@ -125,6 +125,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
 
+- **You can delete your character while its campaign is being played.** **Delete Character** refused a character in an active or paused campaign and told you to unassign it first, although the server allows the delete. It now deletes it, after a warning that names the campaign and says the character leaves its roster for everyone at the table.
+
 - **Create & Publish as Template publishes the character you made.** It published the starter sheet the dialog began from, so the template carried the starter's name, such as "New Character" or "Brave Fighter", where the character had the name you gave it. The template now has the character's sheet as it was saved, and the game system it was saved with.
 
 - **Choosing a Flexible campaign in Create New Character makes the character Flexible.** After picking a campaign with a game system, picking one without kept the first campaign's system, so the character was made for a system its campaign does not play. The game system now follows each campaign chosen, and goes back to the blank sheet when it changes.

@@ -1,6 +1,6 @@
 // ============================================
 // Delete Character Modal
-// Confirmation dialog with campaign assignment validation
+// Confirmation dialog, warning when the character is in a campaign
 // ============================================
 
 import { useState } from 'react';
@@ -48,13 +48,9 @@ export default function DeleteCharacterModal({
     campaign.status === 'ARCHIVED'
   );
 
+  // An owner may delete a character in a campaign being played, as the
+  // server allows; the dialog warns, naming the campaign.
   const handleConfirm = async () => {
-    // Prevent deletion if in active campaign
-    if (isInActiveCampaign) {
-      setError(`Cannot delete character assigned to ${campaign!.status.toLowerCase()} campaign`);
-      return;
-    }
-
     setError('');
     setLoading(true);
 
@@ -86,16 +82,12 @@ export default function DeleteCharacterModal({
                       <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
                       <div>
                         <h3 className="font-semibold text-warm-amber mb-1">
-                          Cannot Delete Character
+                          {character.name} is in a campaign being played
                         </h3>
                         <p className="text-sm text-stone-gray">
-                          This character is assigned to <strong>{campaign!.name}</strong>,
-                          which is currently {campaign!.status.toLowerCase()}. You cannot delete
-                          characters that are assigned to active or paused campaigns.
-                        </p>
-                        <p className="text-sm text-stone-gray mt-2">
-                          To delete this character, first unassign it from the campaign or wait
-                          until the campaign is completed or archived.
+                          Deleting it takes it off the roster of <strong>{campaign!.name}</strong>,
+                          which is currently {campaign!.status.toLowerCase()}, for everyone at the
+                          table. This cannot be undone.
                         </p>
                       </div>
                     </div>
@@ -170,7 +162,6 @@ export default function DeleteCharacterModal({
         <Button
           type="button"
           onClick={handleConfirm}
-          disabled={!!isInActiveCampaign}
           loading={loading}
           icon={Trash2}
           variant="danger"
