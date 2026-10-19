@@ -58,7 +58,10 @@ it('refuses to reset the caller\'s own password, and leaves it alone', async () 
   const res = await agent.post(`/api/users/${id}/reset-password`);
 
   expect(res.status).toBe(400);
-  expect(res.body.message).toMatch(/your own/i);
+  // Names the button as the profile page shows it.
+  expect(res.body.message).toBe(
+    'You cannot reset your own password from here. Use Change Password on your profile, which asks for your current password.'
+  );
   expect(res.body).not.toHaveProperty('temporaryPassword');
   const after = await prisma.user.findUniqueOrThrow({ where: { id }, select: { passwordHash: true, mustChangePassword: true } });
   expect(after.passwordHash).toBe(before.passwordHash);

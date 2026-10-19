@@ -556,7 +556,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
       // Admin Panel; the message should spell it the same way.
       return res.status(409).json({
         error: 'Conflict',
-        message: 'This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.',
+        message: 'This account has already signed in, so there is no invitation to resend. Use Send Reset Link to email them a link to set a new password.',
       });
     }
 

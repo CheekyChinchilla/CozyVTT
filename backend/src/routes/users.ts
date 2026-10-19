@@ -614,7 +614,7 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       // message should spell it the same way.
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.',
+        message: 'You cannot reset your own password from here. Use Change Password on your profile, which asks for your current password.',
       });
     }
 

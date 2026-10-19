@@ -96,6 +96,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Documents.* `POST /api/campaigns/:campaignId/documents` from a platform admin answers 403 `Only the person who uploaded a document can share it with a campaign` for a document that is not global and not theirs, as it does for anyone else (it answered 201). The message no longer says `, or an admin,`.
   - *Accounts and requests.* `DELETE /api/auth/account` and `DELETE /api/users/:id` turn a deleted account's personal asset whose every use (leaving out the account's own characters) is in one campaign into that campaign's: `scope` `CAMPAIGN` with that `campaignId`, and `uploadedById` null. One used in several campaigns, or outside one, stays `USER` and a `WARNING` line with its `assetId` in `context` is written to the activity log.
   - *Accounts and requests.* `POST /api/auth/register` answers 400 `Invalid email format` for an `email` holding `<` or `>`; it stored the address with them removed.
+  - *Accounts and requests.* The 409 from `POST /api/admin/users/:id/resend-invite` says `Use Send Reset Link` and the 400 from `POST /api/users/:id/reset-password` for the caller's own id says `Use Change Password`; they said `Send reset link` and `Change password`.
 
 - **A server admin moving someone's personal file into a campaign is written to the activity log.** An admin can move any user's personal file into any campaign, or to **Global**, which puts it in front of that table or of everyone, and nothing recorded it. The move now writes a line to **Recent Admin Actions** on the Admin Panel's **Activity** tab, naming the file, its owner's email address and where it went.
 
@@ -120,6 +121,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **Copy works for a new user's temporary password on a plain-HTTP instance.** In the Admin Panel, **Copy** beside a temporary password did nothing on an instance reached by `http://` on a home network, where the browser offers no clipboard access, and said nothing either. It now copies there too, and says so when it cannot, so you select the password and copy it yourself.
 
 - **A one-letter display name can be chosen on every page.** The server takes display names of 1 to 50 characters, and Invite Player finds one-letter names, but **Profile**, **Sign Up** and the setup wizard refused names under 2 characters, and **Sign Up** said "less than 50" though 50 is allowed.
+
+- **Two refusals name their buttons as the app shows them.** Resending an invitation to someone who has already signed in said to use "Send reset link", and an administrator resetting their own password from the Admin Panel was told to use "Change password". They now say **Send Reset Link** and **Change Password**, the buttons' own names.
 
 - **Signing up with an email address holding `<` or `>` is refused.** The address was saved with those characters taken out, so `jo<x>@example.com` made an account for `jox@example.com` that could not be signed in to with the address as typed. Sign-up now answers **Invalid email format**, as **Create User** in the Admin Panel already did.
 
