@@ -291,9 +291,20 @@ export async function prepareCampaignExport(
   }
   const assetManifestFile = { name: 'assets/asset-manifest.json', content: JSON.stringify(assetManifest, null, 2) };
 
-  // 11. Refuse an archive an import would refuse, before sending any of it:
-  // more files than an import reads, a data file larger than it reads, or
-  // more bytes than it takes. The import has no other count limits.
+  // 11. Refuse an archive an import would refuse or cut, before sending any
+  // of it: more creatures or token templates than an import takes, more
+  // files than it reads, a data file larger than it reads, or more bytes
+  // than it takes.
+  for (const [count, max, many] of [
+    [creaturesData.length, IMPORT_LIMITS.MAX_CREATURES, 'custom creatures'],
+    [tokenTemplatesData.length, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES, 'token templates'],
+  ] as const) {
+    if (count > max) {
+      throw new ExportTooLargeError(
+        `This campaign has ${count.toLocaleString('en-US')} ${many}, more than the ${max.toLocaleString('en-US')} a campaign archive can carry. Delete some it no longer uses, then export again.`
+      );
+    }
+  }
   const entryCount = dataFiles.length + 1 + assetMap.size;
   if (entryCount > IMPORT_LIMITS.MAX_FILE_COUNT) {
     throw new ExportTooLargeError(

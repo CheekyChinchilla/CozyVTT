@@ -149,7 +149,7 @@ export interface ImportResult {
  * Unpack one of the archive's data files and parse it, within the data-file
  * limit and the archive's running total.
  */
-async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
+async function readEntryText(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<string> {
   let bytes: Buffer;
   try {
     bytes = await readArchiveEntry(archivePath, entry, { maxEntryBytes: IMPORT_LIMITS.MAX_JSON_SIZE_BYTES, total });
@@ -161,11 +161,19 @@ async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: Un
   // later, the validation or the database's own encoder, then meets more
   // levels than an export ever writes.
   if (jsonNestsDeeperThan(text, IMPORT_LIMITS.MAX_JSON_DEPTH)) throw new NestedTooDeepError(entry.path);
+  return text;
+}
+
+function parseEntryText(text: string, entry: ArchiveEntry): unknown {
   try {
     return JSON.parse(text);
   } catch {
     throw new ArchiveRefusedError(`${entry.path} in the archive is damaged: it is not readable data.`);
   }
+}
+
+async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
+  return parseEntryText(await readEntryText(archivePath, entry, total), entry);
 }
 
 /** Why an item whose data nests too deeply is left out. */
@@ -210,8 +218,56 @@ export function jsonNestsDeeperThan(text: string, max: number): boolean {
 }
 
 /**
+ * How many items JSON text's top-level list holds, and where the `max`th one
+ * ends (the comma after it), when there are more; null when the text is not a
+ * list. Read without parsing, as jsonNestsDeeperThan reads: a list of tens of
+ * thousands of items costs far more parsed than its text.
+ */
+export function jsonListCut(text: string, max: number): { items: number; cutAt: number | null } | null {
+  let i = 0;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (text.charCodeAt(i) !== 0x5b) return null;
+  let depth = 0;
+  let inString = false;
+  let items = 0;
+  let holdsValue = false;
+  let cutAt: number | null = null;
+  for (; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // a backslash escapes the next character
+      else if (c === 0x22) inString = false;
+      continue;
+    }
+    if (c === 0x22) {
+      inString = true;
+      holdsValue = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      depth++;
+      if (depth > 1) holdsValue = true;
+    } else if (c === 0x7d || c === 0x5d) {
+      depth--;
+      if (depth === 0) {
+        if (holdsValue) items++;
+        break;
+      }
+    } else if (depth === 1) {
+      if (c === 0x2c) {
+        items++;
+        holdsValue = false;
+        if (items === max && cutAt === null) cutAt = i;
+      } else if (c !== 0x20 && c !== 0x0a && c !== 0x0d && c !== 0x09) {
+        holdsValue = true;
+      }
+    }
+  }
+  return { items, cutAt: items > max ? cutAt : null };
+}
+
+/**
  * Read the archive's creatures or templates, or nothing, listed as left
- * out, when the file nests deeper than an export ever writes.
+ * out, when the file nests deeper than an export ever writes. Only the first
+ * `max` items are parsed; the rest are listed as left out.
  */
 async function readListEntry(
   archivePath: string,
@@ -219,15 +275,26 @@ async function readListEntry(
   total: UnpackedTotal,
   kind: SkippedKind,
   what: string,
-  report: ImportReport
+  report: ImportReport,
+  limit: { max: number; one: string; many: string }
 ): Promise<unknown> {
+  let text: string;
   try {
-    return await readJsonEntry(archivePath, entry, total);
+    text = await readEntryText(archivePath, entry, total);
   } catch (error) {
     if (!(error instanceof NestedTooDeepError)) throw error;
     report.skip(kind, `${what} in the archive`, NESTED_TOO_DEEP_REASON);
     return [];
   }
+  const cut = jsonListCut(text, limit.max);
+  if (cut?.cutAt == null) return parseEntryText(text, entry);
+  const over = cut.items - limit.max;
+  report.skip(
+    kind,
+    `${over.toLocaleString('en-US')} ${over === 1 ? limit.one : limit.many}`,
+    `An archive can carry ${limit.max.toLocaleString('en-US')} ${limit.many}. These were the last in its list.`
+  );
+  return parseEntryText(`${text.slice(0, cut.cutAt)}]`, entry);
 }
 
 /** Say in words which limit an archive passed, or pass any other error on. */
@@ -770,7 +837,8 @@ export async function importCampaign(
           let creatureCount = 0;
           const creaturesEntry = directory.files.find((f) => f.path === 'creatures/creatures.json');
           if (creaturesEntry) {
-            const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report);
+            const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report,
+              { max: IMPORT_LIMITS.MAX_CREATURES, one: 'creature', many: 'creatures' });
             if (Array.isArray(creaturesRaw)) {
               creatureCount = await inBatches(creaturesRaw, (raw) => {
                 const row = prepareCreature(raw, { remapAsset, report });
@@ -783,7 +851,8 @@ export async function importCampaign(
           let tokenTemplateCount = 0;
           const templatesEntry = directory.files.find((f) => f.path === 'token-templates/templates.json');
           if (templatesEntry) {
-            const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report);
+            const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report,
+              { max: IMPORT_LIMITS.MAX_TOKEN_TEMPLATES, one: 'token template', many: 'token templates' });
             if (Array.isArray(templatesRaw)) {
               tokenTemplateCount = await inBatches(templatesRaw, (raw) => {
                 const row = prepareTokenTemplate(raw, { remapAsset, report });

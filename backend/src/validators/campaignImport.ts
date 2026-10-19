@@ -19,14 +19,17 @@ import { CAMPAIGN_LIMITS } from './campaignLimits';
 // Tokens on a map, walls and lights are held to the app's own limits
 // (MAP_LIMITS, validators/walls.ts), so anything the app stores imports.
 // How many maps, pictures and sound files an archive holds is bounded by
-// MAX_FILE_COUNT, since each is a file in it, and how many creatures and
-// token templates by MAX_JSON_SIZE_BYTES, since each list is one data file.
-// The export checks the same bounds, so a campaign that exports imports
-// again. (Counts of 50 maps, 200 creatures, 500 templates and 500 files used
-// to refuse whole archives a campaign could export.)
+// MAX_FILE_COUNT, since each is a file in it. Creatures and token templates
+// have counts of their own: bounded only by their 10 MB list, a list of
+// 65,000 minimal creatures stopped the server, and 2,000 import in about
+// 20 MB. The export checks the same bounds, so a campaign that exports
+// imports again. (Counts of 50 maps, 200 creatures, 500 templates and 500
+// files used to refuse or cut archives a campaign could export.)
 export const IMPORT_LIMITS = {
   MAX_JSON_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB per JSON file
   MAX_FILE_COUNT: 1000,
+  MAX_CREATURES: 2000,
+  MAX_TOKEN_TEMPLATES: 2000,
   // How deeply a data file may nest objects and lists. An export reaches
   // six, at a map token's stat block's proficiencies; this is five times that.
   MAX_JSON_DEPTH: 32,

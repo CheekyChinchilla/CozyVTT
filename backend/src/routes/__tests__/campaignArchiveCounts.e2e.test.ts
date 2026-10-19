@@ -4,10 +4,11 @@
  * The import refused a whole archive with more than 50 maps, 200 creatures,
  * 500 token templates or 500 pictures and sound files, while nothing limited
  * how many a campaign could hold, and the export did not check those counts:
- * a large campaign exported a file it could never import. The counts are now
- * limited only by what bounds an archive anyway (1,000 files in it, 10 MB for
- * each data file, the size limit), and the export refuses, saying why, a
- * campaign over those.
+ * a large campaign exported a file it could never import. Maps and files are
+ * now limited by what bounds an archive anyway (1,000 files in it, 10 MB for
+ * each data file, the size limit); creatures and token templates to 2,000
+ * each, since a 10 MB list of tens of thousands stopped the server. The
+ * export refuses, saying why, a campaign over any of them.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -87,3 +88,13 @@ it('refuses to export a campaign whose archive would hold more files than an imp
   expect(res.status).toBe(422);
   expect(JSON.parse((res.body as Buffer).toString()).message).toMatch(/files/);
 });
+
+it('refuses to export a campaign with more custom creatures than an import takes, saying why', async () => {
+  const campaignId = await campaignOf('Bestiary', 0, IMPORT_LIMITS.MAX_CREATURES + 1);
+  const res = await exportOf(campaignId);
+  expect(res.status).toBe(422);
+  expect(JSON.parse((res.body as Buffer).toString()).message).toBe(
+    'This campaign has 2,001 custom creatures, more than the 2,000 a campaign archive can carry. Delete some it no longer uses, then export again.'
+  );
+});
+

@@ -9294,7 +9294,8 @@ paths:
             The archive would be one an import refuses: larger than the size
             setting (the message gives its size and the limit, and says whether
             leaving out audio would bring it under), more than 1,000 files (one
-            for each map and each picture or sound file), or with a data file
+            for each map and each picture or sound file), more than 2,000 custom
+            creatures or 2,000 token templates, or with a data file
             over 10 MB (all the creatures, say).
           content:
             application/json:
@@ -9449,8 +9450,10 @@ paths:
         manifest gives more than 1,000 maps or assets is refused whole with
         400 (`Import Failed`), as is one whose asset manifest lists more than
         1,000 assets; the preview route refuses the same manifest with
-        `Invalid Archive`. Creatures and token templates have no count limit
-        of their own: each list is one data file, held to 10 MB.
+        `Invalid Archive`. An archive carries up to 2,000 creatures and 2,000
+        token templates, each list one data file held to 10 MB; those past
+        the first 2,000 are left out and listed in `skipped` as one entry
+        (`name` like `50 creatures`), and are never parsed.
 
         Every file in the archive is unpacked through a counter and stopped
         as soon as it passes its limit. Each JSON file may unpack to 10 MB,
