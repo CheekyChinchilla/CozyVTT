@@ -196,7 +196,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   return (
-    <div className="glass-panel p-6">
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
       {/* Header with Save/Cancel */}
       <div className="flex items-center justify-between pb-4 border-b border-moss-green/20 mb-6">
         <div className="flex items-center gap-4">

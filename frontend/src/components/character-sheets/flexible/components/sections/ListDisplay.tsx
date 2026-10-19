@@ -25,7 +25,7 @@ export const ListDisplay: React.FC<ListDisplayProps> = ({ section }) => {
         {section.items.map((item) => (
           <li
             key={item.id}
-            className="flex items-start gap-3 p-2 hover:bg-parchment/20 rounded-sm transition-colors"
+            className="flex items-start gap-3 p-2 hover:bg-ink/10 rounded-sm transition-colors"
           >
             {item.checked !== undefined && (
               <div className="shrink-0 mt-0.5">

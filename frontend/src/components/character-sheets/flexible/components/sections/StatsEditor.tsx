@@ -55,7 +55,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
         {section.fields.map((field) => (
           <div
             key={field.id}
-            className="bg-parchment/30 border border-moss-green/20 rounded-lg p-3 relative group"
+            className="bg-ink/5 border border-moss-green/20 rounded-lg p-3 relative group"
           >
             <button
               onClick={() => removeField(field.id)}

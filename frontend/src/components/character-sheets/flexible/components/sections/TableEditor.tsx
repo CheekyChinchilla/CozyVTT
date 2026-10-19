@@ -118,7 +118,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
             <tr
               key={row.id}
               className={`border-b border-stone-gray/20 group ${
-                rowIndex % 2 === 0 ? 'bg-parchment/10' : ''
+                rowIndex % 2 === 0 ? 'bg-ink/5' : ''
               }`}
             >
               {section.columns.map((column) => (
