@@ -70,6 +70,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A campaign archive is uploaded once when you import it.** The import window sent the whole archive (up to 500 MB) to the server to show what it holds, then sent it again to import it. It now reads that from the archive in your browser, and asks the server only about an archive it cannot read itself, so the server can say what is wrong with it.
+
 - **A map you switch to cannot be deleted at the same moment.** Deleting a map while switching to it, from two tabs say, could delete it anyway and leave the campaign with no map on screen; switching to a map being deleted failed with a server error. The delete is now refused for the map that became current, and the switch says the map is gone.
 
 - **The Campaign Roster keeps up with characters deleted, created into the campaign, or moved to another one.** A deleted character stayed listed until the page was reloaded, one created straight into the campaign did not appear, and one moved to another campaign stayed in the old one's roster. Characters brought or taken out at the same moment could also go missing from the roster, and a character moved twice at once could show in two campaigns.

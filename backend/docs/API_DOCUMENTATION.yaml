@@ -9087,8 +9087,10 @@ paths:
       summary: Preview import archive
       description: >-
         Upload a .cozyvtt archive and return its manifest without creating
-        anything. Only `manifest.json` is read and validated. Any signed-in
-        user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
+        anything. Only `manifest.json` is read and validated. The app's import
+        window reads the manifest in the browser and calls this only for an
+        archive it cannot read there, so that the server says what is wrong
+        with it. Any signed-in user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
         and one archive operation at a time. The upload is one file in the `file` field, at most
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its

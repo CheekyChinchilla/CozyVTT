@@ -665,7 +665,7 @@ Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may e
 
 ### `POST /api/campaigns/import/preview`
 
-Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
+Upload a `.cozyvtt` archive and return its manifest preview without creating anything. The app's import window reads the manifest in the browser and uses this route only for an archive it cannot read there. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
 
 **Request:** `multipart/form-data` with field `file` containing the archive, at most 500 MB; a larger one answers `413`. The bundled nginx gives this route and the import 512 MB, apart from `NGINX_MAX_BODY_SIZE`, and five minutes to answer.
 
