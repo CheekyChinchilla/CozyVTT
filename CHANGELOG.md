@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e item's value keeps fractions of a gold piece.** The **Value** box took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. An item's quantity can also be 0, and a strike's range of 0 shows as 0 where it showed an empty box.
+
 - **The Pathfinder 2e sheet and editor agree on more of a character.** The sheet wrote a Dex Cap of -1 as "+-1", showed a land Speed of 0 as 30 ft., and ran the paragraphs of personality, backstory, allies and notes together; it now writes them as typed. An innate spell's notes, which the sheet showed, can be edited. A strike's proficiency rank did nothing; the editor now shows what the rank, attribute and item bonus give beside the attack bonus, which stays as typed.
 
 - **Pathfinder 2e spell slots never show more used than there are.** Lowering a rank's **Total** left its **Used** count above it, which saved, and the sheet then showed a negative number of slots left. Lowering the total now brings the used count down with it, a character stored with more used opens with them brought down and a note saying so, and the sheet never shows fewer than none left. As for D&D 5e, the server now refuses more used than the total.

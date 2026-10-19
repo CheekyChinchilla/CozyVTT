@@ -649,6 +649,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // Auto-calculate maximum HP
   useEffect(() => {
     if (!formData.level || !formData.hp) return;
+    // TODO(sheets): a 0 typed for either becomes 6 here. The blank template
+    // stores both as 0 with a maximum of 10, so reading 0 as 0 would give it a
+    // maximum of 0, which the schema refuses; give the template its real
+    // numbers first, then read these with ?? instead.
     const ancestryHp = formData.hp.ancestryHp || 6;
     const classHpPerLevel = formData.hp.classHpPerLevel || 6;
     const conMod = formData.attributes?.constitution?.modifier || 0;
@@ -1345,7 +1349,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
                 </div>
                 <input type="text" value={strike.damageRoll} onChange={(e) => updateField(`strikes.${index}.damageRoll`, e.target.value)} placeholder="1d6" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 <input type="text" value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <input type="number" min="0" value={strike.range || ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="number" min="0" value={strike.range ?? ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
               </div>
               <ListField max={SHEET_ROW_TAGS_MAX} value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
               <input type="text" value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
@@ -1706,10 +1710,11 @@ min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updat
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <NumberField
-min={1} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
+min={0} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
                 <input type="text" value={item.bulk} onChange={(e) => updateField(`inventory.${index}.bulk`, e.target.value)} placeholder="Bulk" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                {/* Prices run to silver and copper: 5 sp is 0.5 gp. */}
                 <NumberField
-min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${index}.value`, v)} placeholder="Value" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} step="0.01" integer={false} value={item.value} onChange={(v: number) => updateField(`inventory.${index}.value`, v)} placeholder="Value" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
                 <div className="flex items-center space-x-1 text-xs">
                   <label className="flex items-center">
                     <input type="checkbox" checked={item.equipped || false} onChange={(e) => updateField(`inventory.${index}.equipped`, e.target.checked)} className="mr-1" />
