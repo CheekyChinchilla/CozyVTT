@@ -298,6 +298,38 @@ function displayName(originalName: string, type: ImportableAssetType, ext: strin
   return shortenFileName(`${base}.${ext}`, MAX_ORIGINAL_NAME_LENGTH);
 }
 
+/** Rows written to the database in one statement, so a long list is never held as one. */
+const WRITE_BATCH = 500;
+
+/**
+ * Prepare each item and write the rows in batches, returning how many were
+ * written. Written whole, a list as long as its 10 MB file allows (some
+ * 65,000 creatures) took the heap to about a gigabyte in one createMany and
+ * stopped the server.
+ */
+export async function inBatches<Row>(
+  items: unknown[],
+  prepare: (item: unknown) => Row | null,
+  write: (rows: Row[]) => Promise<unknown>
+): Promise<number> {
+  let written = 0;
+  let batch: Row[] = [];
+  for (const item of items) {
+    const row = prepare(item);
+    if (row) batch.push(row);
+    if (batch.length === WRITE_BATCH) {
+      await write(batch);
+      written += batch.length;
+      batch = [];
+    }
+  }
+  if (batch.length > 0) {
+    await write(batch);
+    written += batch.length;
+  }
+  return written;
+}
+
 // ── Preview ───────────────────────────────────────────────────────
 
 /**
@@ -740,13 +772,10 @@ export async function importCampaign(
           if (creaturesEntry) {
             const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report);
             if (Array.isArray(creaturesRaw)) {
-              const creatures: Prisma.CreatureTemplateCreateManyInput[] = [];
-              for (const raw of creaturesRaw) {
+              creatureCount = await inBatches(creaturesRaw, (raw) => {
                 const row = prepareCreature(raw, { remapAsset, report });
-                if (row) creatures.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
-              }
-              if (creatures.length > 0) await tx.creatureTemplate.createMany({ data: creatures });
-              creatureCount = creatures.length;
+                return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
+              }, (data: Prisma.CreatureTemplateCreateManyInput[]) => tx.creatureTemplate.createMany({ data }));
             }
           }
 
@@ -756,13 +785,10 @@ export async function importCampaign(
           if (templatesEntry) {
             const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report);
             if (Array.isArray(templatesRaw)) {
-              const templates: Prisma.TokenTemplateCreateManyInput[] = [];
-              for (const raw of templatesRaw) {
+              tokenTemplateCount = await inBatches(templatesRaw, (raw) => {
                 const row = prepareTokenTemplate(raw, { remapAsset, report });
-                if (row) templates.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
-              }
-              if (templates.length > 0) await tx.tokenTemplate.createMany({ data: templates });
-              tokenTemplateCount = templates.length;
+                return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
+              }, (data: Prisma.TokenTemplateCreateManyInput[]) => tx.tokenTemplate.createMany({ data }));
             }
           }
 
