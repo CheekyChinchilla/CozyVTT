@@ -51,6 +51,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { copyText } from '@/utils/clipboard';
 import { adminService } from '@/services/admin.service';
 import type {
   User,
@@ -623,18 +624,13 @@ export default function AdminPage() {
     if (left.length === 0) setDeleteError('');
   };
 
-  // TODO(ui): navigator.clipboard is undefined over plain HTTP, so on a LAN
-  // instance this copies nothing and says nothing; the temporary password
-  // stays on screen to copy by hand. Use copyText from utils/clipboard, which
-  // falls back to the older copy, and say so when it fails, as the two-factor
-  // Copy buttons do.
+  // copyText also works over plain HTTP, where navigator.clipboard is missing.
   const handleCopyToClipboard = async (text: string, setCopiedFn: (v: boolean) => void) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       setCopiedFn(true);
       setTimeout(() => setCopiedFn(false), 2000);
-    } catch {
-      // clipboard unavailable — user can select manually
+    } else {
+      showToast('Could not copy the password. Select it and copy it yourself.', 'warning');
     }
   };
 
