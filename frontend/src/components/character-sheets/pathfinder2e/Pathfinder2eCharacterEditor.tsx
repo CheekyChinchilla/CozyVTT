@@ -20,17 +20,14 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { ProficiencyRank, calculateProficiencyBonus } from './components/ProficiencyIndicator';
+import type { ProficiencyRank } from './components/ProficiencyIndicator';
 import { api } from '../../../services/api';
 import { AssetType } from '../../../types';
 import type { Character, CharacterData } from '../../../types';
 import type {
   PF2eCharacterData,
-  PF2eInventoryItem,
   PF2eSkills,
   PF2eSpellcasting,
-  PF2eAttributes,
-  PF2eSavingThrows,
   PF2ePerception,
   PF2eArmorClass,
   PF2eInitiative,
@@ -46,7 +43,21 @@ import NumberField from '../../ui/NumberField';
 import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
-import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
+import {
+  pf2eArmorClass,
+  pf2eClassDC,
+  pf2eAttributeName,
+  pf2eProficiencyBonus,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+  pf2eSkillTotal,
+  pf2eCheckPenalty,
+  pf2eSaveTotal,
+  pf2ePerceptionTotal,
+  pf2eTotalBulk,
+  pf2eBulkLimits,
+  formatPf2eBulk,
+} from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
 import {
@@ -62,8 +73,10 @@ import {
   PF2E_ITEM_BONUS_MAX,
   PF2E_ITEM_BONUS_MIN,
   SHEET_LIST_MAX,
+  SHEET_LONG_TEXT_MAX,
   SHEET_NAME_MAX,
   SHEET_ROW_TAGS_MAX,
+  SHEET_SHORT_TEXT_MAX,
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';
@@ -131,18 +144,84 @@ const PROFICIENCY_RANKS: ProficiencyRank[] = ['untrained', 'trained', 'expert', 
 const calculateModifier = (score: number): number => Math.floor((score - 10) / 2);
 const formatModifier = (mod: number): string => mod >= 0 ? `+${mod}` : `${mod}`;
 
-// TODO(sheets): the inventory's Bulk box stores what is typed as a string, so
-// an item typed as "2" counts as 0 here and in bulkToNumber in BulkTracker, and
-// only light items add to the total. Read a numeric string as its number.
-const calculateTotalBulk = (inventory: PF2eInventoryItem[]): number => {
-  return inventory.reduce((total, item) => {
-    let itemBulk = 0;
-    if (typeof item.bulk === 'number') itemBulk = item.bulk;
-    else if (item.bulk === 'L') itemBulk = 0.1;
-    else if (item.bulk === '—' || item.bulk === '-') itemBulk = 0;
-    return total + (itemBulk * (item.quantity || 1));
-  }, 0);
-};
+/**
+ * A category's feats with one text each. The built-in templates write a
+ * feat's text to `notes`, which this editor has no box for, so it is folded
+ * into the description, after any description already there.
+ */
+function withFeatTextInDescription<T extends { description?: string; notes?: string }>(feats: T[] | undefined): T[] {
+  return (feats ?? []).map((feat) => {
+    if (!feat.notes) return feat;
+    const { notes, ...rest } = feat;
+    return { ...rest, description: [feat.description, notes].filter((text) => text && text.trim()).join('\n\n') } as T;
+  });
+}
+
+/** A skill's name as the sheet shows it: "sleightOfHand" as "Sleight Of Hand". */
+const skillLabel = (key: string): string =>
+  key.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()).trim();
+
+/**
+ * The skills with each check penalty stored as the negative number it is. The
+ * box used to subtract what was typed, so a sheet may hold a penalty of 2.
+ */
+function withCheckPenaltiesNegative(skills: PF2eSkills): PF2eSkills {
+  return Object.fromEntries(
+    Object.entries(skills).map(([key, skill]) => [key, skill ? { ...skill, armorPenalty: pf2eCheckPenalty(skill.armorPenalty) } : skill])
+  ) as unknown as PF2eSkills;
+}
+
+/**
+ * The focus spells with no more points left than the pool holds. The editor
+ * held the points to 3 rather than to the pool, so a sheet may have stored more.
+ */
+function withPointsInPool(focus: PF2eSpellcasting['focusSpells'] | undefined): NonNullable<PF2eSpellcasting['focusSpells']> {
+  const stored = focus ?? { focusPoints: { total: 0, current: 0 }, spells: [] };
+  const total = stored.focusPoints?.total ?? 0;
+  const current = Math.min(stored.focusPoints?.current ?? 0, total);
+  return { ...stored, focusPoints: { total, current } };
+}
+
+/**
+ * What opening this sheet changes to follow the rules, each as "what (stored
+ * to now)": the editor works these out afresh, and the next save stores them.
+ * Worked out once, from the sheet as stored.
+ */
+function changedOnOpen(sheet: PF2eFormData): string[] {
+  const changes: string[] = [];
+  for (const [key, skill] of Object.entries(sheet.skills ?? {})) {
+    const penalty = (skill as { armorPenalty?: unknown } | undefined)?.armorPenalty;
+    if (typeof penalty === 'number' && penalty > 0) {
+      changes.push(`${skillLabel(key)} check penalty (${penalty} to ${pf2eCheckPenalty(penalty)})`);
+    }
+  }
+  const spellcasting = sheet.spellcasting;
+  if (spellcasting) {
+    const rank = spellcasting.spellAttackBonus?.proficiencyRank ?? spellcasting.spellDC?.proficiencyRank ?? 'untrained';
+    const dcRank = spellcasting.spellDC?.proficiencyRank;
+    if (dcRank && dcRank !== rank) changes.push(`spell DC rank (${dcRank} to ${rank})`);
+    const dc = spellcasting.spellDC?.dc;
+    // The editor works each modifier out from its score before the DC, so
+    // the note does too.
+    const attributes = Object.fromEntries(
+      Object.entries(sheet.attributes ?? {}).map(([name, entry]) => [name, { ...entry, modifier: calculateModifier(entry?.score || 10) }])
+    );
+    const nowDC = pf2eSpellDC({ ...sheet, attributes });
+    if (typeof dc === 'number' && dc !== nowDC) changes.push(`spell DC (${dc} to ${nowDC})`);
+    const storedSlots = (spellcasting.slots ?? {}) as unknown as Record<string, { expended?: unknown; used?: unknown } | undefined>;
+    const readSlots = readPf2eSpellSlots(spellcasting.slots) as unknown as Record<string, { expended: number }>;
+    for (const [rank, slot] of Object.entries(readSlots)) {
+      const stored = storedSlots[rank]?.expended || storedSlots[rank]?.used;
+      if (typeof stored === 'number' && stored > slot.expended) changes.push(`rank ${rank} spell slots used (${stored} to ${slot.expended})`);
+    }
+    const points = spellcasting.focusSpells?.focusPoints;
+    const inPool = withPointsInPool(spellcasting.focusSpells).focusPoints.current;
+    if (points && typeof points.current === 'number' && points.current !== inPool) {
+      changes.push(`focus points left (${points.current} to ${inPool})`);
+    }
+  }
+  return changes;
+}
 
 export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorProps> = ({
   character,
@@ -158,6 +237,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const { data: serverConfig } = useServerConfigQuery();
 
   const data = character.data as PF2eFormData;
+  // Said once, above the sheet, for as long as it is open.
+  const [openingChanges] = useState(() => changedOnOpen(data ?? ({} as PF2eFormData)));
 
   const [formData, setFormData] = useState<PF2eFormData>(() => ({
     ...data,
@@ -177,7 +258,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     perception: data.perception || { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0, senses: [] },
     // Attributes and spellcasting are read in the editor's spelling, so a sheet
     // a template wrote with "str" or "Arcane" keeps its numbers.
-    skills: data.skills ? withFullSkillAttributes(data.skills) : {
+    skills: data.skills ? withCheckPenaltiesNegative(withFullSkillAttributes(data.skills)) : {
       acrobatics: { attribute: 'dexterity', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       arcana: { attribute: 'intelligence', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
       athletics: { attribute: 'strength', proficiencyRank: 'untrained', armorPenalty: 0, itemBonus: 0, bonus: 0 },
@@ -215,11 +296,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     bulk: data.bulk || { current: 0, encumbered: 5, maximum: 10 },
     languages: data.languages || [],
     feats: {
-      ancestryAndHeritage: data.feats?.ancestryAndHeritage || [],
-      class: data.feats?.class || [],
-      skill: data.feats?.skill || [],
-      general: data.feats?.general || [],
-      bonus: data.feats?.bonus || [],
+      ancestryAndHeritage: withFeatTextInDescription(data.feats?.ancestryAndHeritage),
+      class: withFeatTextInDescription(data.feats?.class),
+      skill: withFeatTextInDescription(data.feats?.skill),
+      general: withFeatTextInDescription(data.feats?.general),
+      bonus: withFeatTextInDescription(data.feats?.bonus),
     },
     classFeatures: data.classFeatures || [],
     spellcasting: data.spellcasting ? {
@@ -227,10 +308,20 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       tradition: editorTradition(data.spellcasting.tradition),
       type: editorCastingType(data.spellcasting.type),
       keyAttribute: fullAttributeName(data.spellcasting.keyAttribute),
+      // Whole, so the totals worked out below are saved with a rank and an
+      // item bonus: a block stored without either is refused otherwise.
+      // The rank both share, from the DC on a block that records no attack.
+      spellAttackBonus: {
+        proficiencyRank: data.spellcasting.spellDC?.proficiencyRank ?? 'untrained',
+        itemBonus: 0,
+        bonus: 0,
+        ...data.spellcasting.spellAttackBonus,
+      },
+      spellDC: { proficiencyRank: 'untrained', itemBonus: 0, dc: 10, ...data.spellcasting.spellDC },
       cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
-      focusSpells: data.spellcasting.focusSpells || { focusPoints: { total: 0, current: 0 }, spells: [] },
+      focusSpells: withPointsInPool(data.spellcasting.focusSpells),
       innateSpells: data.spellcasting.innateSpells || [],
       rituals: (data.spellcasting.rituals ?? []).map((ritual) =>
         typeof ritual === 'string' ? { name: ritual, rank: 1 } : ritual),
@@ -380,13 +471,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     if (!formData.attributes || !formData.savingThrows || !formData.level) return;
     const updatedSavingThrows = { ...formData.savingThrows };
-    const saveAttributes: Record<keyof PF2eSavingThrows, keyof PF2eAttributes> = { fortitude: 'constitution', reflex: 'dexterity', will: 'wisdom' };
     let hasChanges = false;
-    (Object.entries(saveAttributes) as [keyof PF2eSavingThrows, keyof PF2eAttributes][]).forEach(([save, attribute]) => {
-      const abilityMod = formData.attributes[attribute]?.modifier || 0;
-      const profBonus = calculateProficiencyBonus(formData.level, updatedSavingThrows[save]?.proficiencyRank || 'untrained');
-      const itemBonus = updatedSavingThrows[save]?.itemBonus || 0;
-      const newBonus = abilityMod + profBonus + itemBonus;
+    (['fortitude', 'reflex', 'will'] as const).forEach((save) => {
+      const newBonus = pf2eSaveTotal(formData, save);
       if (updatedSavingThrows[save]?.bonus !== newBonus) {
         updatedSavingThrows[save] = { ...updatedSavingThrows[save], bonus: newBonus };
         hasChanges = true;
@@ -400,10 +487,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   // Auto-calculate perception
   useEffect(() => {
     if (!formData.attributes || !formData.perception || !formData.level) return;
-    const wisdomMod = formData.attributes.wisdom?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.perception!.proficiencyRank || 'untrained');
-    const itemBonus = formData.perception.itemBonus || 0;
-    setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus: wisdomMod + profBonus + itemBonus } as PF2ePerception }));
+    const bonus = pf2ePerceptionTotal(formData);
+    setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus } as PF2ePerception }));
   }, [formData.level, formData.attributes?.wisdom?.modifier, formData.perception?.proficiencyRank, formData.perception?.itemBonus]);
 
   // Auto-calculate skills
@@ -413,12 +498,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.keys(updatedSkills) as (keyof PF2eSkills)[]).forEach((skill) => {
       if (!updatedSkills[skill]) return;
-      const attribute = updatedSkills[skill].attribute;
-      const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
-      const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
-      const itemBonus = updatedSkills[skill].itemBonus || 0;
-      const armorPenalty = updatedSkills[skill].armorPenalty || 0;
-      const newBonus = abilityMod + profBonus + itemBonus - armorPenalty;
+      const newBonus = pf2eSkillTotal(formData, updatedSkills[skill]);
       if (updatedSkills[skill].bonus !== newBonus) {
         updatedSkills[skill] = { ...updatedSkills[skill], bonus: newBonus };
         hasChanges = true;
@@ -490,10 +570,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.attributes || !formData.loreSkills || !formData.level) return;
     let hasChanges = false;
     const updatedLoreSkills = formData.loreSkills.map((lore) => {
-      const abilityMod = formData.attributes[lore.attribute as keyof PF2eAttributes]?.modifier || 0;
-      const profBonus = calculateProficiencyBonus(formData.level, lore.proficiencyRank || 'untrained');
-      const itemBonus = lore.itemBonus || 0;
-      const newBonus = abilityMod + profBonus + itemBonus;
+      const newBonus = pf2eSkillTotal(formData, lore);
       if (lore.bonus !== newBonus) {
         hasChanges = true;
       }
@@ -573,17 +650,22 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     formData.classDC?.proficiencyRank,
   ]);
 
-  // Auto-calculate bulk
+  // Bulk carried and the limits, kept in step for exports; the sheets work
+  // them out from the inventory with the same rules.
   useEffect(() => {
     if (!formData.inventory) return;
-    const currentBulk = calculateTotalBulk(formData.inventory);
-    const strMod = formData.attributes?.strength?.modifier || 0;
-    setFormData((prev) => ({ ...prev, bulk: { current: currentBulk, encumbered: 5 + strMod, maximum: 10 + strMod } }));
-  }, [formData.inventory, formData.attributes?.strength?.modifier]);
+    const current = pf2eTotalBulk(formData.inventory, formData.currency).bulk;
+    const { encumbered, maximum } = pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0);
+    setFormData((prev) => ({ ...prev, bulk: { current, encumbered, maximum } }));
+  }, [formData.inventory, formData.currency, formData.attributes?.strength?.modifier]);
 
   // Auto-calculate maximum HP
   useEffect(() => {
     if (!formData.level || !formData.hp) return;
+    // TODO(sheets): a 0 typed for either becomes 6 here. The blank template
+    // stores both as 0 with a maximum of 10, so reading 0 as 0 would give it a
+    // maximum of 0, which the schema refuses; give the template its real
+    // numbers first, then read these with ?? instead.
     const ancestryHp = formData.hp.ancestryHp || 6;
     const classHpPerLevel = formData.hp.classHpPerLevel || 6;
     const conMod = formData.attributes?.constitution?.modifier || 0;
@@ -591,25 +673,24 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     setFormData((prev) => ({ ...prev, hp: { ...prev.hp, maximum } as PF2eHitPoints }));
   }, [formData.level, formData.hp?.ancestryHp, formData.hp?.classHpPerLevel, formData.attributes?.constitution?.modifier]);
 
-  // Auto-calculate spellcasting
+  // Spell attack and spell DC, from the shared rules: one spellcasting rank,
+  // recorded on the attack and copied to the DC so the stored sheet agrees
+  // with itself, and each its own item bonus.
   useEffect(() => {
     if (!formData.spellcasting || !formData.attributes || !formData.level) return;
-    const keyAttr = formData.spellcasting!.keyAttribute || 'intelligence';
-    const attrMod = formData.attributes[keyAttr as keyof PF2eAttributes]?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.spellcasting!.spellAttackBonus?.proficiencyRank || 'untrained');
-    const itemBonus = formData.spellcasting!.spellAttackBonus?.itemBonus || 0;
-    const newBonus = attrMod + profBonus + itemBonus;
-    const newDC = 10 + attrMod + profBonus + itemBonus;
-    if (formData.spellcasting!.spellAttackBonus?.bonus !== newBonus || formData.spellcasting!.spellDC?.dc !== newDC) {
-      setFormData((prev) => ({
-        ...prev,
-        spellcasting: {
-          ...prev.spellcasting,
-          spellAttackBonus: { ...prev.spellcasting!.spellAttackBonus, bonus: newBonus },
-          spellDC: { ...prev.spellcasting!.spellDC, dc: newDC },
-        } as PF2eEditorSpellcasting,
-      }));
-    }
+    const bonus = pf2eSpellAttack(formData);
+    const dc = pf2eSpellDC(formData);
+    const rank = formData.spellcasting.spellAttackBonus?.proficiencyRank ?? 'untrained';
+    const stored = formData.spellcasting;
+    if (stored.spellAttackBonus?.bonus === bonus && stored.spellDC?.dc === dc && stored.spellDC?.proficiencyRank === rank) return;
+    setFormData((prev) => ({
+      ...prev,
+      spellcasting: {
+        ...prev.spellcasting,
+        spellAttackBonus: { ...prev.spellcasting!.spellAttackBonus, bonus },
+        spellDC: { ...prev.spellcasting!.spellDC, dc, proficiencyRank: rank },
+      } as PF2eEditorSpellcasting,
+    }));
   }, [
     formData.level,
     formData.attributes?.strength?.modifier,
@@ -621,6 +702,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     formData.spellcasting?.keyAttribute,
     formData.spellcasting?.spellAttackBonus?.proficiencyRank,
     formData.spellcasting?.spellAttackBonus?.itemBonus,
+    formData.spellcasting?.spellDC?.itemBonus,
+    formData.spellcasting?.spellDC?.proficiencyRank,
   ]);
 
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -766,8 +849,16 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     }
   };
 
-  const renderProficiencySelector = (path: string, currentRank: ProficiencyRank) => (
+  /** What a strike's rank, attribute and item bonus give, shown beside its typed bonus. */
+  const strikeFromRank = (strike: { attributeModifier?: string; proficiencyRank?: string; itemBonus?: number }): number => {
+    const attribute = pf2eAttributeName(strike.attributeModifier);
+    const modifier = attribute ? formData.attributes?.[attribute]?.modifier ?? 0 : 0;
+    return modifier + pf2eProficiencyBonus(formData.level, strike.proficiencyRank) + (strike.itemBonus ?? 0);
+  };
+
+  const renderProficiencySelector = (path: string, currentRank: ProficiencyRank, label: string) => (
     <select
+      aria-label={label}
       value={currentRank}
       onChange={(e) => updateField(path, e.target.value as ProficiencyRank)}
       className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
@@ -867,7 +958,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
             </div>
 
             <div className="space-y-2 min-w-0">
-              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded-sm px-3 py-1 ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
+              <input type="text" value={formData.characterName || ''} onChange={(e) => updateField('characterName', e.target.value)} maxLength={SHEET_NAME_MAX} aria-label="Character name" placeholder="Character Name" className={`w-full text-3xl font-bold bg-white/10 border-2 ${errors.characterName ? 'border-red-300' : 'border-white/20'} rounded-sm px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
               <div className="flex items-center flex-wrap gap-2 opacity-90">
                 {/* Read-only: the player name is whoever owns the character,
                     filled from their display name at creation. */}
@@ -875,30 +966,30 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
               </div>
               <div className="flex items-center flex-wrap gap-2 opacity-90">
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs">Level</span>
+                  <label htmlFor="pf2e-level" className="text-xs">Level</label>
                   <NumberField
-min={1} max={20} value={formData.level} onChange={(v: number) => updateField('level', v)} className={`w-16 bg-white/10 border ${errors.level ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} fallback={1} />
+id="pf2e-level" min={1} max={20} value={formData.level} onChange={(v: number) => updateField('level', v)} className={`w-16 bg-white/10 border ${errors.level ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} fallback={1} />
                 </div>
-                <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} placeholder="Class" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} placeholder="Ancestry" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} placeholder="Heritage" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.background || ''} onChange={(e) => updateField('background', e.target.value)} placeholder="Background" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} aria-label="Class" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Class" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} aria-label="Ancestry" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Ancestry" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} aria-label="Heritage" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Heritage" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.background || ''} onChange={(e) => updateField('background', e.target.value)} aria-label="Background" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Background" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
                 {/* Deity and alignment are part of the sheet the schema
                     describes, and matter for a cleric, champion or oracle, but
                     had no field anywhere in the app until now. */}
-                <input type="text" value={formData.deity || ''} onChange={(e) => updateField('deity', e.target.value)} placeholder="Deity" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.alignment || ''} onChange={(e) => updateField('alignment', e.target.value)} placeholder="Alignment" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.deity || ''} onChange={(e) => updateField('deity', e.target.value)} aria-label="Deity" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Deity" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.alignment || ''} onChange={(e) => updateField('alignment', e.target.value)} aria-label="Alignment" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Alignment" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
               </div>
             </div>
           </div>
 
           <div className="text-right space-y-2">
-            <div className="text-xs opacity-70">Experience Points</div>
+            <label htmlFor="pf2e-experience" className="block text-xs opacity-70">Experience Points</label>
             <NumberField
-min={0} value={formData.experiencePoints} onChange={(v: number) => updateField('experiencePoints', v)} className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
-            <div className="text-xs opacity-70">Hero Points</div>
+id="pf2e-experience" min={0} value={formData.experiencePoints} onChange={(v: number) => updateField('experiencePoints', v)} className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
+            <label htmlFor="pf2e-hero-points" className="block text-xs opacity-70">Hero Points</label>
             <NumberField
-min={0} max={3} value={formData.heroPoints} onChange={(v: number) => updateField('heroPoints', Math.min(v, 3))} className={`w-16 text-lg font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
+id="pf2e-hero-points" min={0} max={3} value={formData.heroPoints} onChange={(v: number) => updateField('heroPoints', Math.min(v, 3))} className={`w-16 text-lg font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`} fallback={0} />
           </div>
         </div>
       </div>
@@ -935,7 +1026,7 @@ min={0} max={3} value={formData.heroPoints} onChange={(v: number) => updateField
                   <span className="text-2xl font-bold text-white">{formatModifier(abilityData.modifier)}</span>
                 </div>
                 <NumberField
-min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(`attributes.${ability}.score`, v)} className="w-16 px-2 py-1 text-center font-semibold border-2 border-stone-300 rounded-sm mt-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={10} />
+aria-label={`${ability.charAt(0).toUpperCase()}${ability.slice(1)} score`} min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(`attributes.${ability}.score`, v)} className="w-16 px-2 py-1 text-center font-semibold border-2 border-stone-300 rounded-sm mt-2 focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={10} />
               </div>
             );
           })}
@@ -952,11 +1043,11 @@ min={1} max={30} value={abilityData.score} onChange={(v: number) => updateField(
               <div key={save} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-3">
                 <div className="flex items-center space-x-3">
                   <span className="font-semibold text-stone-800 capitalize w-24">{save}</span>
-                  {renderProficiencySelector(`savingThrows.${save}.proficiencyRank`, saveData.proficiencyRank as ProficiencyRank)}
+                  {renderProficiencySelector(`savingThrows.${save}.proficiencyRank`, saveData.proficiencyRank as ProficiencyRank, `Proficiency in ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`)}
                   <div className="flex items-center space-x-2">
                     <label className="text-xs text-stone-600">Item:</label>
                     <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label={`Item bonus to ${save.charAt(0).toUpperCase()}${save.slice(1)} saves`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} onChange={(v: number) => updateField(`savingThrows.${save}.itemBonus`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
                   </div>
                 </div>
                 <span className="text-2xl font-bold text-blue-700">{formatModifier(saveData.bonus)}</span>
@@ -971,18 +1062,18 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={saveData.itemBonus} o
         <h3 className="text-lg font-bold text-stone-800 mb-3">Perception</h3>
         <div className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-3 mb-3">
           <div className="flex items-center space-x-3">
-            {renderProficiencySelector('perception.proficiencyRank', formData.perception?.proficiencyRank as ProficiencyRank || 'untrained')}
+            {renderProficiencySelector('perception.proficiencyRank', formData.perception?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Perception')}
             <div className="flex items-center space-x-2">
               <label className="text-xs text-stone-600">Item:</label>
               <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.itemBonus} onChange={(v: number) => updateField('perception.itemBonus', v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Item bonus to Perception" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.itemBonus} onChange={(v: number) => updateField('perception.itemBonus', v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
             </div>
           </div>
           <span className="text-2xl font-bold text-blue-700">{formatModifier(formData.perception?.bonus || 0)}</span>
         </div>
         <div>
           <label className="text-sm font-semibold text-stone-700 mb-2 block">Senses (comma-separated)</label>
-          <ListField max={SHEET_LIST_MAX} value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <ListField max={SHEET_LIST_MAX} aria-label="Senses" value={formData.perception?.senses || []} onChange={(items) => updateField('perception.senses', items)} parse={parseCommaList} format={formatCommaList} placeholder="low-light vision, darkvision 60 ft." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
 
@@ -992,7 +1083,7 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {(Object.keys(formData.skills ?? {}) as (keyof PF2eSkills)[]).map((skillName) => {
             const skillData = formData.skills![skillName];
-            const displayName = skillName.replace(/([A-Z])/g, ' $1').replace(/^./, (str) => str.toUpperCase()).trim();
+            const displayName = skillLabel(skillName);
             return (
               <div key={skillName} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-1">
@@ -1000,11 +1091,21 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.perception?.
                   <span className="text-lg font-bold text-blue-700">{formatModifier(skillData.bonus)}</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {renderProficiencySelector(`skills.${skillName}.proficiencyRank`, skillData.proficiencyRank as ProficiencyRank)}
+                  {renderProficiencySelector(`skills.${skillName}.proficiencyRank`, skillData.proficiencyRank as ProficiencyRank, `Proficiency in ${displayName}`)}
                   <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label={`Item bonus to ${displayName}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={skillData.itemBonus} onChange={(v: number) => updateField(`skills.${skillName}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+                  {/* A penalty, so 0 or below, as armor prints it (-1 to -3). */}
                   <NumberField
-value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${skillName}.armorPenalty`, v)} placeholder="Penalty" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+                    aria-label={`Check penalty for ${displayName}`}
+                    title="Check penalty"
+                    min={PF2E_ITEM_BONUS_MIN}
+                    max={0}
+                    value={skillData.armorPenalty}
+                    onChange={(v: number) => updateField(`skills.${skillName}.armorPenalty`, pf2eCheckPenalty(v))}
+                    placeholder="Penalty"
+                    className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    fallback={0}
+                  />
                 </div>
               </div>
             );
@@ -1026,15 +1127,15 @@ value={skillData.armorPenalty} onChange={(v: number) => updateField(`skills.${sk
           {(formData.loreSkills || []).map((lore, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="text" aria-label={`Name of lore skill ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={lore.name} onChange={(e) => updateField(`loreSkills.${index}.name`, e.target.value)} placeholder="Lore Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 <button onClick={() => { const newLoreSkills = formData.loreSkills!.filter((_, i) => i !== index); updateField('loreSkills', newLoreSkills); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
               <div className="flex items-center space-x-2">
-                {renderProficiencySelector(`loreSkills.${index}.proficiencyRank`, lore.proficiencyRank as ProficiencyRank)}
+                {renderProficiencySelector(`loreSkills.${index}.proficiencyRank`, lore.proficiencyRank as ProficiencyRank, `Proficiency in lore skill ${index + 1}`)}
                 <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label={`Item bonus to lore skill ${index + 1}`} min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onChange={(v: number) => updateField(`loreSkills.${index}.itemBonus`, v)} placeholder="Item" className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
                 <span className="text-lg font-bold text-blue-700">{formatModifier(lore.bonus)}</span>
               </div>
             </div>
@@ -1054,15 +1155,15 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={lore.itemBonus} onCha
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <h3 className="text-lg font-bold text-stone-800 mb-3">Armor Class</h3>
           <div className="space-y-2">
-            {renderProficiencySelector('armorClass.proficiencyRank', formData.armorClass?.proficiencyRank as ProficiencyRank || 'untrained')}
+            {renderProficiencySelector('armorClass.proficiencyRank', formData.armorClass?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in armor')}
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-24">DEX Cap:</label>
-              <input type="number" min="-1" value={formData.armorClass?.capDex === null ? '' : formData.armorClass?.capDex} onChange={(e) => updateField('armorClass.capDex', e.target.value === '' ? null : parseInt(e.target.value))} placeholder="null" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <input type="number" aria-label="DEX Cap" min="-1" value={formData.armorClass?.capDex === null ? '' : formData.armorClass?.capDex} onChange={(e) => updateField('armorClass.capDex', e.target.value === '' ? null : parseInt(e.target.value))} placeholder="null" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-24">Item Bonus:</label>
               <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Armor item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.itemBonus} onChange={(v: number) => updateField('armorClass.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
             </div>
             <div className="text-center pt-2 border-t border-stone-300">
               <div className="text-xs text-stone-600 mb-1">Total AC</div>
@@ -1076,13 +1177,13 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-32">Key Attribute:</label>
-              <select value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <select aria-label="Key Attribute" value={formData.classDC?.keyAttribute || 'intelligence'} onChange={(e) => updateField('classDC.keyAttribute', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
                 ))}
               </select>
             </div>
-            {renderProficiencySelector('classDC.proficiencyRank', formData.classDC?.proficiencyRank as ProficiencyRank || 'untrained')}
+            {renderProficiencySelector('classDC.proficiencyRank', formData.classDC?.proficiencyRank as ProficiencyRank || 'untrained', 'Proficiency in Class DC')}
             <div className="text-center pt-2 border-t border-stone-300">
               <div className="text-xs text-stone-600 mb-1">Total DC</div>
               <div className="text-4xl font-bold text-purple-800">{formData.classDC?.total || 10}</div>
@@ -1095,7 +1196,7 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.
           <div className="space-y-2">
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-24">Uses:</label>
-              <select value={formData.initiative?.usedStat || 'perception'} onChange={(e) => updateField('initiative.usedStat', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <select aria-label="Initiative uses" value={formData.initiative?.usedStat || 'perception'} onChange={(e) => updateField('initiative.usedStat', e.target.value)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 <option value="perception">Perception</option>
                 <option value="stealth">Stealth</option>
               </select>
@@ -1113,11 +1214,11 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.armorClass?.
             <div className="flex items-center space-x-2">
               <label className="text-sm text-stone-700 w-24">Land (ft):</label>
               <NumberField
-min={0} value={formData.speed?.land} onChange={(v: number) => updateField('speed.land', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={30} />
+min={0} aria-label="Land speed (ft)" value={formData.speed?.land} onChange={(v: number) => updateField('speed.land', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={30} />
             </div>
             <div>
               <label className="text-sm text-stone-700 mb-1 block">Other (comma-separated):</label>
-              <ListField max={SHEET_LIST_MAX} value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <ListField max={SHEET_LIST_MAX} aria-label="Other speeds" value={formData.speed?.other || []} onChange={(items) => updateField('speed.other', items)} parse={parseCommaList} format={formatCommaList} placeholder="fly 30 ft., swim 20 ft." className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
         </div>
@@ -1130,12 +1231,12 @@ min={0} value={formData.speed?.land} onChange={(v: number) => updateField('speed
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Ancestry HP</label>
             <NumberField
-min={0} value={formData.hp?.ancestryHp} onChange={(v: number) => updateField('hp.ancestryHp', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={6} />
+min={0} aria-label="Ancestry HP" value={formData.hp?.ancestryHp} onChange={(v: number) => updateField('hp.ancestryHp', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={6} />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Class HP/Level</label>
             <NumberField
-min={0} value={formData.hp?.classHpPerLevel} onChange={(v: number) => updateField('hp.classHpPerLevel', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={6} />
+min={0} aria-label="Class HP per level" value={formData.hp?.classHpPerLevel} onChange={(v: number) => updateField('hp.classHpPerLevel', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={6} />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Maximum</label>
@@ -1144,26 +1245,26 @@ min={0} value={formData.hp?.classHpPerLevel} onChange={(v: number) => updateFiel
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Current</label>
             <NumberField
-min={0} value={formData.hp?.current} onChange={(v: number) => updateField('hp.current', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center text-red-700 font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} aria-label="Current HP" value={formData.hp?.current} onChange={(v: number) => updateField('hp.current', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center text-red-700 font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Temporary</label>
             <NumberField
-min={0} value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.temporary', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center text-blue-700 font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} aria-label="Temporary HP" value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.temporary', v)} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center text-blue-700 font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
           </div>
         </div>
         <div className="grid grid-cols-3 gap-2">
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Resistances (comma-sep)</label>
-            <ListField max={SHEET_LIST_MAX} value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <ListField max={SHEET_LIST_MAX} aria-label="Resistances" value={formData.hp?.resistances || []} onChange={(items) => updateField('hp.resistances', items)} parse={parseCommaList} format={formatCommaList} placeholder="fire 5" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Immunities (comma-sep)</label>
-            <ListField max={SHEET_LIST_MAX} value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <ListField max={SHEET_LIST_MAX} aria-label="Immunities" value={formData.hp?.immunities || []} onChange={(items) => updateField('hp.immunities', items)} parse={parseCommaList} format={formatCommaList} placeholder="poison" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
           </div>
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Weaknesses (comma-sep)</label>
-            <ListField max={SHEET_LIST_MAX} value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <ListField max={SHEET_LIST_MAX} aria-label="Weaknesses" value={formData.hp?.weaknesses || []} onChange={(items) => updateField('hp.weaknesses', items)} parse={parseCommaList} format={formatCommaList} placeholder="cold 5" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-xs focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
           </div>
         </div>
       </div>
@@ -1175,17 +1276,17 @@ min={0} value={formData.hp?.temporary} onChange={(v: number) => updateField('hp.
           <div>
             <label className="text-sm font-semibold text-red-700 mb-1 block">Dying (0-4)</label>
             <NumberField
-min={0} max={4} value={formData.deathAndDying?.dying} onChange={(v: number) => updateField('deathAndDying.dying', Math.min(v, 4))} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-red-700 focus:outline-hidden focus:ring-2 focus:ring-red-500" fallback={0} />
+min={0} max={4} aria-label="Dying" value={formData.deathAndDying?.dying} onChange={(v: number) => updateField('deathAndDying.dying', Math.min(v, 4))} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-red-700 focus:outline-hidden focus:ring-2 focus:ring-red-500" fallback={0} />
           </div>
           <div>
             <label className="text-sm font-semibold text-amber-700 mb-1 block">Wounded (0+)</label>
             <NumberField
-min={0} value={formData.deathAndDying?.wounded} onChange={(v: number) => updateField('deathAndDying.wounded', v)} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-amber-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500" fallback={0} />
+min={0} aria-label="Wounded" value={formData.deathAndDying?.wounded} onChange={(v: number) => updateField('deathAndDying.wounded', v)} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-amber-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500" fallback={0} />
           </div>
           <div>
             <label className="text-sm font-semibold text-purple-700 mb-1 block">Doomed (0+)</label>
             <NumberField
-min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateField('deathAndDying.doomed', v)} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-purple-700 focus:outline-hidden focus:ring-2 focus:ring-purple-500" fallback={0} />
+min={0} aria-label="Doomed" value={formData.deathAndDying?.doomed} onChange={(v: number) => updateField('deathAndDying.doomed', v)} className="w-full px-3 py-2 border border-stone-300 rounded-sm text-center text-xl font-bold text-purple-700 focus:outline-hidden focus:ring-2 focus:ring-purple-500" fallback={0} />
           </div>
         </div>
       </div>
@@ -1193,7 +1294,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
       {/* Conditions */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Conditions (comma-separated)</h3>
-        <ListField max={SHEET_LIST_MAX} value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+        <ListField max={SHEET_LIST_MAX} aria-label="Conditions" value={formData.conditions || []} onChange={(items) => updateField('conditions', items)} parse={parseCommaList} format={formatCommaList} placeholder="frightened, sickened, etc." className="w-full px-3 py-2 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Proficiencies */}
@@ -1204,7 +1305,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
             {(['simple', 'martial', 'advanced', 'unarmed'] as const).map((weapon) => (
               <div key={weapon} className="flex items-center justify-between">
                 <span className="text-sm font-medium text-stone-800 capitalize">{weapon}</span>
-                {renderProficiencySelector(`proficiencies.weapons.${weapon}`, formData.proficiencies?.weapons?.[weapon] as ProficiencyRank || 'untrained')}
+                {renderProficiencySelector(`proficiencies.weapons.${weapon}`, formData.proficiencies?.weapons?.[weapon] as ProficiencyRank || 'untrained', `Proficiency with ${weapon} weapons`)}
               </div>
             ))}
           </div>
@@ -1216,7 +1317,7 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
             {(['unarmored', 'light', 'medium', 'heavy'] as const).map((armor) => (
               <div key={armor} className="flex items-center justify-between">
                 <span className="text-sm font-medium text-stone-800 capitalize">{armor}</span>
-                {renderProficiencySelector(`proficiencies.armor.${armor}`, formData.proficiencies?.armor?.[armor] as ProficiencyRank || 'untrained')}
+                {renderProficiencySelector(`proficiencies.armor.${armor}`, formData.proficiencies?.armor?.[armor] as ProficiencyRank || 'untrained', `Proficiency in ${armor} armor`)}
               </div>
             ))}
           </div>
@@ -1237,25 +1338,36 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
           {(formData.strikes || []).map((strike, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="text" aria-label={`Name of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.name} onChange={(e) => updateField(`strikes.${index}.name`, e.target.value)} placeholder="Attack Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 <button onClick={() => { const newStrikes = formData.strikes!.filter((_, i) => i !== index); updateField('strikes', newStrikes); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <select value={strike.type} onChange={(e) => updateField(`strikes.${index}.type`, e.target.value)} className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+                <select aria-label={`Type of strike ${index + 1}`} value={strike.type} onChange={(e) => updateField(`strikes.${index}.type`, e.target.value)} className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                   <option value="melee">Melee</option>
                   <option value="ranged">Ranged</option>
                 </select>
-                {renderProficiencySelector(`strikes.${index}.proficiencyRank`, strike.proficiencyRank as ProficiencyRank)}
-                <NumberField
-value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index}.attackBonus`, v)} placeholder="Attack Bonus" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
-                <input type="text" value={strike.damageRoll} onChange={(e) => updateField(`strikes.${index}.damageRoll`, e.target.value)} placeholder="1d6" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <input type="text" value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-                <input type="number" min="0" value={strike.range || ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                {renderProficiencySelector(`strikes.${index}.proficiencyRank`, strike.proficiencyRank as ProficiencyRank, `Proficiency for strike ${index + 1}`)}
+                <div>
+                  <NumberField
+                    aria-label={`Attack bonus of strike ${index + 1}`}
+                     value={strike.attackBonus}
+                    onChange={(v: number) => updateField(`strikes.${index}.attackBonus`, v)}
+                    placeholder="Attack Bonus"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    fallback={0}
+                  />
+                  {/* The bonus stays as typed; this says what the rank gives
+                      with the strike's attribute and item bonus, to check it. */}
+                  <p className="mt-0.5 text-xs text-stone-500">Rank, attribute and item give {formatModifier(strikeFromRank(strike))}</p>
+                </div>
+                <input type="text" aria-label={`Damage roll of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.damageRoll} onChange={(e) => updateField(`strikes.${index}.damageRoll`, e.target.value)} placeholder="1d6" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="text" aria-label={`Damage type of strike ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="number" min="0" aria-label={`Range of strike ${index + 1}`} value={strike.range ?? ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
               </div>
-              <ListField max={SHEET_ROW_TAGS_MAX} value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-              <input type="text" value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <ListField max={SHEET_ROW_TAGS_MAX} aria-label={`Traits of strike ${index + 1}`} value={strike.traits || []} onChange={(items) => updateField(`strikes.${index}.traits`, items)} parse={parseCommaList} format={formatCommaList} placeholder="Traits (comma-separated)" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <input type="text" aria-label={`Notes for strike ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={strike.notes || ''} onChange={(e) => updateField(`strikes.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
           {(!formData.strikes || formData.strikes.length === 0) && (
@@ -1267,6 +1379,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
   );
 
   const renderSpellsTab = () => {
+    const focusPool = formData.spellcasting?.focusSpells?.focusPoints?.total ?? 0;
     if (!formData.spellcasting) {
       return (
         <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-6 text-center">
@@ -1283,10 +1396,10 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
         {/* Spellcasting Config */}
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <h3 className="text-lg font-bold text-stone-800 mb-3">Spellcasting Configuration</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Tradition</label>
-              <select value={formData.spellcasting!.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <select aria-label="Tradition" value={formData.spellcasting!.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 {['arcane', 'divine', 'primal', 'occult'].map((t) => (
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
@@ -1294,16 +1407,31 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
             </div>
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Type</label>
-              <select value={formData.spellcasting!.type} onChange={(e) => updateField('spellcasting.type', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <select aria-label="Type" value={formData.spellcasting!.type} onChange={(e) => updateField('spellcasting.type', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 <option value="prepared">Prepared</option>
                 <option value="spontaneous">Spontaneous</option>
               </select>
             </div>
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Key Attribute</label>
-              <select value={formData.spellcasting!.keyAttribute} onChange={(e) => updateField('spellcasting.keyAttribute', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
+              <select aria-label="Spellcasting Key Attribute" value={formData.spellcasting!.keyAttribute} onChange={(e) => updateField('spellcasting.keyAttribute', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
                 {['intelligence', 'wisdom', 'charisma'].map((attr) => (
                   <option key={attr} value={attr}>{attr.charAt(0).toUpperCase() + attr.slice(1)}</option>
+                ))}
+              </select>
+            </div>
+            {/* One rank for spell attack rolls and spell DCs, as a class
+                gives it (Core Rulebook, "Spellcasting"). */}
+            <div>
+              <label htmlFor="pf2e-spellcasting-rank" className="text-sm font-semibold text-stone-700 mb-1 block">Spellcasting proficiency</label>
+              <select
+                id="pf2e-spellcasting-rank"
+                value={formData.spellcasting!.spellAttackBonus?.proficiencyRank || 'untrained'}
+                onChange={(e) => updateField('spellcasting.spellAttackBonus.proficiencyRank', e.target.value as ProficiencyRank)}
+                className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              >
+                {PROFICIENCY_RANKS.map((rank) => (
+                  <option key={rank} value={rank}>{rank.charAt(0).toUpperCase() + rank.slice(1)}</option>
                 ))}
               </select>
             </div>
@@ -1315,11 +1443,10 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
           <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Attack</h3>
             <div className="space-y-2">
-              {renderProficiencySelector('spellcasting.spellAttackBonus.proficiencyRank', formData.spellcasting!.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained')}
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Spell attack item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellAttackBonus?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellAttackBonus.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-stone-300">
                 <div className="text-xs text-stone-600 mb-1">Total Attack</div>
@@ -1331,11 +1458,10 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting
           <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Spell DC</h3>
             <div className="space-y-2">
-              {renderProficiencySelector('spellcasting.spellDC.proficiencyRank', formData.spellcasting!.spellDC?.proficiencyRank as ProficiencyRank || 'untrained')}
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
-min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+aria-label="Spell DC item bonus" min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting!.spellDC?.itemBonus} onChange={(v: number) => updateField('spellcasting.spellDC.itemBonus', v)} className="flex-1 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
               </div>
               <div className="text-center pt-2 border-t border-stone-300">
                 <div className="text-xs text-stone-600 mb-1">Total DC</div>
@@ -1358,7 +1484,7 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting
           <div className="space-y-2">
             {(formData.spellcasting!.cantrips || []).map((cantrip, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <input type="text" aria-label={`Name of cantrip ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={cantrip.name} onChange={(e) => updateField(`spellcasting.cantrips.${index}.name`, e.target.value)} placeholder="Cantrip Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
                 <button onClick={() => { const newCantrips = formData.spellcasting!.cantrips!.filter((_, i) => i !== index); updateField('spellcasting.cantrips', newCantrips); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1381,9 +1507,9 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting
                   <div className="text-xs font-semibold text-center text-stone-600 mb-1">Rank {rank}</div>
                   <div className="flex flex-col space-y-1">
                     <NumberField
-min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.total`, v)} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
+aria-label={`Rank ${rank} slots`} min={0} max={SPELL_SLOTS_MAX} value={slots.total} onChange={(v: number) => updateField(`spellcasting.slots.${rank}`, { total: v, expended: Math.min(slots.expended, Math.max(0, v)) })} placeholder="Total" className="w-full px-1 py-0.5 border border-stone-300 rounded-sm text-xs text-center focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
                     <NumberField
-min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded-sm text-xs text-center text-purple-700 focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
+aria-label={`Rank ${rank} slots used`} min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => updateField(`spellcasting.slots.${rank}.expended`, Math.min(v, slots.total || 0))} placeholder="Used" className="w-full px-1 py-0.5 border border-purple-300 rounded-sm text-xs text-center text-purple-700 focus:outline-hidden focus:ring-1 focus:ring-purple-500" fallback={0} />
                   </div>
                 </div>
               );
@@ -1405,13 +1531,13 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
             {(formData.spellcasting!.spells || []).map((spell, index) => (
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                  <input type="text" aria-label={`Name of spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)} placeholder="Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
                   <button onClick={() => { const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.spells', newSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <select value={spell.rank} onChange={(e) => updateField(`spellcasting.spells.${index}.rank`, parseInt(e.target.value))} className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500">
+                  <select aria-label={`Rank of spell ${index + 1}`} value={spell.rank} onChange={(e) => updateField(`spellcasting.spells.${index}.rank`, parseInt(e.target.value))} className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
                       <option key={r} value={r}>Rank {r}</option>
                     ))}
@@ -1436,13 +1562,39 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-lg font-bold text-stone-800">Focus Spells</h3>
             <div className="flex items-center space-x-3">
+              {/* Points left, out of the pool. The pool is 1 with the first
+                  focus spell and at most 3 (Core Rulebook, "Focus Spells");
+                  feats that add a spell typically add a point, which the
+                  player sets here. */}
               <div className="flex items-center space-x-2">
-                <label className="text-sm font-semibold text-stone-700">Focus Points:</label>
+                <span className="text-sm font-semibold text-stone-700">Focus Points:</span>
                 <NumberField
-min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current} onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, 3))} className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500" fallback={0} />
-                <span className="text-sm text-stone-600">/ 3</span>
+                  aria-label="Focus points left"
+                  min={0}
+                  max={focusPool}
+                  value={formData.spellcasting!.focusSpells?.focusPoints?.current}
+                  onChange={(v: number) => updateField('spellcasting.focusSpells.focusPoints.current', Math.min(v, focusPool))}
+                  className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  fallback={0}
+                />
+                <span className="text-sm text-stone-600">/</span>
+                <NumberField
+                  aria-label="Focus point total"
+                  min={0}
+                  max={3}
+                  value={focusPool}
+                  onChange={(v: number) => {
+                    const total = Math.max(0, Math.min(v, 3));
+                    updateField('spellcasting.focusSpells.focusPoints', {
+                      total,
+                      current: Math.min(formData.spellcasting!.focusSpells?.focusPoints?.current ?? 0, total),
+                    });
+                  }}
+                  className="w-12 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-purple-500"
+                  fallback={0}
+                />
               </div>
-              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); updateField('spellcasting.focusSpells.focusPoints.total', 3); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+              <button onClick={() => { const newFocusSpells = [...(formData.spellcasting!.focusSpells?.spells || []), newPf2eFocusSpell()]; updateField('spellcasting.focusSpells.spells', newFocusSpells); if (focusPool === 0) updateField('spellcasting.focusSpells.focusPoints.total', 1); }} disabled={listIsFull(formData.spellcasting!.focusSpells?.spells)} className={`px-3 py-1 text-sm font-medium text-white bg-purple-700 hover:bg-purple-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
                 <Plus className="w-4 h-4" />
                 <span>Add Focus Spell</span>
               </button>
@@ -1452,7 +1604,7 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
           <div className="space-y-2">
             {(formData.spellcasting!.focusSpells?.spells || []).map((spell, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <input type="text" aria-label={`Name of focus spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.focusSpells.spells.${index}.name`, e.target.value)} placeholder="Focus Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
                 <button onClick={() => { const newFocusSpells = (formData.spellcasting?.focusSpells?.spells ?? []).filter((_, i) => i !== index); updateField('spellcasting.focusSpells.spells', newFocusSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -1478,12 +1630,13 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
             {(formData.spellcasting!.innateSpells || []).map((spell, index) => (
               <div key={index} className="bg-white border border-stone-200 rounded-lg p-2">
                 <div className="flex items-center justify-between mb-2">
-                  <input type="text" value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                  <input type="text" aria-label={`Name of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.name} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.name`, e.target.value)} placeholder="Innate Spell Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
                   <button onClick={() => { const newInnateSpells = (formData.spellcasting?.innateSpells ?? []).filter((_, i) => i !== index); updateField('spellcasting.innateSpells', newInnateSpells); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
-                <input type="text" value={spell.frequency} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.frequency`, e.target.value)} placeholder="Frequency (e.g., at will, 1/day)" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <input type="text" aria-label={`Frequency of innate spell ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={spell.frequency} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.frequency`, e.target.value)} placeholder="Frequency (e.g., at will, 1/day)" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <textarea maxLength={SHEET_LONG_TEXT_MAX} value={spell.notes || ''} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.notes`, e.target.value)} placeholder="Notes (e.g., where it comes from)" aria-label={`Notes for innate spell ${index + 1}`} rows={2} className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
               </div>
             ))}
             {(!formData.spellcasting!.innateSpells || formData.spellcasting!.innateSpells.length === 0) && (
@@ -1505,8 +1658,8 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
           <div className="space-y-2">
             {(formData.spellcasting!.rituals || []).map((ritual, index) => (
               <div key={index} className="flex items-center justify-between bg-white border border-stone-200 rounded-lg p-2">
-                <input type="text" value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
-                <select value={ritual.rank} onChange={(e) => updateField(`spellcasting.rituals.${index}.rank`, parseInt(e.target.value))} className="ml-2 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500">
+                <input type="text" aria-label={`Name of ritual ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={ritual.name} onChange={(e) => updateField(`spellcasting.rituals.${index}.name`, e.target.value)} placeholder="Ritual Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <select aria-label={`Rank of ritual ${index + 1}`} value={ritual.rank} onChange={(e) => updateField(`spellcasting.rituals.${index}.rank`, parseInt(e.target.value))} className="ml-2 px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500">
                   {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
                     <option key={r} value={r}>Rank {r}</option>
                   ))}
@@ -1535,7 +1688,7 @@ min={0} max={3} value={formData.spellcasting!.focusSpells?.focusPoints?.current}
             <div key={currency.key}>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">{currency.label}</label>
               <NumberField
-min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updateField(`currency.${currency.key}`, v)} className="w-full px-2 py-2 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} aria-label={currency.label} value={formData.currency?.[currency.key]} onChange={(v: number) => updateField(`currency.${currency.key}`, v)} className="w-full px-2 py-2 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
             </div>
           ))}
         </div>
@@ -1545,7 +1698,9 @@ min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updat
       <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
         <h3 className="text-lg font-bold text-blue-800 mb-2">Bulk Summary</h3>
         <div className="text-sm text-blue-700">
-          <span className="font-semibold">{formData.bulk?.current?.toFixed(1) || 0}</span> / Encumbered: {formData.bulk?.encumbered || 5} / Max: {formData.bulk?.maximum || 10}
+          <span className="font-semibold">{formatPf2eBulk(pf2eTotalBulk(formData.inventory, formData.currency))}</span> / Encumbered above:{' '}
+          {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).encumbered} / Max:{' '}
+          {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).maximum}
         </div>
       </div>
 
@@ -1563,17 +1718,18 @@ min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updat
           {(formData.inventory || []).map((item, index) => (
             <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
               <div className="flex items-center justify-between mb-2">
-                <input type="text" value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                <input type="text" aria-label={`Name of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.name} onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)} placeholder="Item Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 <button onClick={() => { const newInventory = formData.inventory!.filter((_, i) => i !== index); updateField('inventory', newInventory); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
               <div className="grid grid-cols-4 gap-2">
                 <NumberField
-min={1} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
-                <input type="text" value={item.bulk} onChange={(e) => updateField(`inventory.${index}.bulk`, e.target.value)} placeholder="Bulk" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+min={0} aria-label={`Quantity of item ${index + 1}`} value={item.quantity} onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)} placeholder="Qty" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
+                <input type="text" aria-label={`Bulk of item ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={item.bulk} onChange={(e) => updateField(`inventory.${index}.bulk`, e.target.value)} placeholder="Bulk" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                {/* Prices run to silver and copper: 5 sp is 0.5 gp. */}
                 <NumberField
-min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${index}.value`, v)} placeholder="Value" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+min={0} step="0.01" integer={false} aria-label={`Value of item ${index + 1}`} value={item.value} onChange={(v: number) => updateField(`inventory.${index}.value`, v)} placeholder="Value" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
                 <div className="flex items-center space-x-1 text-xs">
                   <label className="flex items-center">
                     <input type="checkbox" checked={item.equipped || false} onChange={(e) => updateField(`inventory.${index}.equipped`, e.target.checked)} className="mr-1" />
@@ -1585,7 +1741,7 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
                   </label>
                 </div>
               </div>
-              <input type="text" value={item.notes || ''} onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <input type="text" aria-label={`Notes for item ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={item.notes || ''} onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)} placeholder="Notes" className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
           {(!formData.inventory || formData.inventory.length === 0) && (
@@ -1597,12 +1753,14 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
   );
 
   const renderFeatsTab = () => {
-    const featCategories: { key: keyof PF2eFeats; label: string; color: string }[] = [
-      { key: 'ancestryAndHeritage', label: 'Ancestry & Heritage Feats', color: 'green' },
-      { key: 'class', label: 'Class Feats', color: 'blue' },
-      { key: 'skill', label: 'Skill Feats', color: 'amber' },
-      { key: 'general', label: 'General Feats', color: 'purple' },
-      { key: 'bonus', label: 'Bonus Feats', color: 'rose' },
+    // Written out in full: Tailwind generates only the classes it finds in
+    // the source, so a class put together at run time has no style.
+    const featCategories: { key: keyof PF2eFeats; word: string; label: string; button: string }[] = [
+      { key: 'ancestryAndHeritage', word: 'ancestry and heritage', label: 'Ancestry & Heritage Feats', button: 'bg-green-700 hover:bg-green-800' },
+      { key: 'class', word: 'class', label: 'Class Feats', button: 'bg-blue-700 hover:bg-blue-800' },
+      { key: 'skill', word: 'skill', label: 'Skill Feats', button: 'bg-amber-700 hover:bg-amber-800' },
+      { key: 'general', word: 'general', label: 'General Feats', button: 'bg-purple-700 hover:bg-purple-800' },
+      { key: 'bonus', word: 'bonus', label: 'Bonus Feats', button: 'bg-rose-700 hover:bg-rose-800' },
     ];
 
     return (
@@ -1628,7 +1786,8 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
                     type="text"
                     value={feature.name}
                     onChange={(e) => updateField('classFeatures', classFeatureRows.map((f, i) => i === index ? { ...f, name: e.target.value } : f))}
-                    placeholder="Class Feature Name"
+                    maxLength={SHEET_SHORT_TEXT_MAX}
+                     placeholder="Class Feature Name"
                     aria-label={`Class feature ${index + 1} name`}
                     className="flex-1 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                   />
@@ -1639,7 +1798,8 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
                 <textarea
                   value={feature.description}
                   onChange={(e) => updateField('classFeatures', classFeatureRows.map((f, i) => i === index ? { ...f, description: e.target.value } : f))}
-                  placeholder="Description (optional)"
+                  maxLength={SHEET_LONG_TEXT_MAX}
+                   placeholder="Description (optional)"
                   aria-label={`Class feature ${index + 1} description`}
                   rows={2}
                   className="w-full px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
@@ -1653,11 +1813,11 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
         </div>
 
         {/* Feats by Category */}
-        {featCategories.map(({ key, label, color }) => (
+        {featCategories.map(({ key, word, label, button }) => (
           <div key={key} className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-lg font-bold text-stone-800">{label}</h3>
-              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className={`px-3 py-1 text-sm font-medium text-white bg-${color}-700 hover:bg-${color}-800 rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
+              <button onClick={() => { const currentFeats = formData.feats?.[key] || []; const newFeats = [...currentFeats, { name: 'New Feat', level: formData.level || 1, description: '' }]; updateField(`feats.${key}`, newFeats); }} disabled={listIsFull(formData.feats?.[key])} className={`px-3 py-1 text-sm font-medium text-white ${button} rounded-lg transition-colors flex items-center space-x-1 ${ADD_BUTTON_OFF}`}>
                 <Plus className="w-4 h-4" />
                 <span>Add Feat</span>
               </button>
@@ -1667,22 +1827,17 @@ min={0} value={item.value} onChange={(v: number) => updateField(`inventory.${ind
               {(formData.feats?.[key] || []).map((feat, index) => (
                 <div key={index} className="bg-white border border-stone-200 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <input type="text" value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                    <input type="text" aria-label={`Name of ${word} feat ${index + 1}`} maxLength={SHEET_SHORT_TEXT_MAX} value={feat.name} onChange={(e) => updateField(`feats.${key}.${index}.name`, e.target.value)} placeholder="Feat Name" className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                     <div className="flex items-center space-x-2 ml-2">
                       <label className="text-xs text-stone-600">Level:</label>
                       <NumberField
-min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
+aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.${key}.${index}.level`, v)} className="w-16 px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={1} />
                     </div>
                     <button onClick={() => { const newFeats = formData.feats![key].filter((_, i) => i !== index); updateField(`feats.${key}`, newFeats); }} className="ml-2 px-2 py-1 text-red-600 hover:text-red-800">
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  {/* TODO(sheets): a feat from the built-in templates holds
-                     its text in notes, which the view shows and this box
-                     does not, so the editor opens it empty and the notes can
-                     be neither changed nor removed. Show notes here when
-                     there is no description, and keep one field. */}
-                  <textarea value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+                  <textarea aria-label={`Description of ${word} feat ${index + 1}`} maxLength={SHEET_LONG_TEXT_MAX} value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 </div>
               ))}
               {(!formData.feats?.[key] || formData.feats![key].length === 0) && (
@@ -1703,12 +1858,12 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-semibold text-stone-600 mb-1 block">Age</label>
-            <input type="text" value={formData.appearance?.age || ''} onChange={(e) => updateField('appearance.age', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+            <input type="text" aria-label="Age" maxLength={SHEET_SHORT_TEXT_MAX} value={formData.appearance?.age || ''} onChange={(e) => updateField('appearance.age', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
           </div>
           {(['height', 'weight', 'eyes', 'skin', 'hair'] as const).map((field) => (
             <div key={field}>
               <label className="text-xs font-semibold text-stone-600 mb-1 block capitalize">{field}</label>
-              <input type="text" value={formData.appearance?.[field] || ''} onChange={(e) => updateField(`appearance.${field}`, e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <input type="text" aria-label={field.charAt(0).toUpperCase() + field.slice(1)} maxLength={SHEET_SHORT_TEXT_MAX} value={formData.appearance?.[field] || ''} onChange={(e) => updateField(`appearance.${field}`, e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
         </div>
@@ -1721,7 +1876,7 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
           {(['traits', 'ideals', 'bonds', 'flaws'] as const).map((field) => (
             <div key={field}>
               <label className="text-sm font-semibold text-stone-700 mb-1 block capitalize">{field}</label>
-              <textarea value={formData.personality?.[field] || ''} onChange={(e) => updateField(`personality.${field}`, e.target.value)} rows={2} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+              <textarea aria-label={field.charAt(0).toUpperCase() + field.slice(1)} maxLength={SHEET_LONG_TEXT_MAX} value={formData.personality?.[field] || ''} onChange={(e) => updateField(`personality.${field}`, e.target.value)} rows={2} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
             </div>
           ))}
         </div>
@@ -1730,21 +1885,21 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
       {/* Languages */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Languages (comma-separated)</h3>
-        <ListField max={SHEET_LIST_MAX} value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+        <ListField max={SHEET_LIST_MAX} aria-label="Languages" value={formData.languages || []} onChange={(items) => updateField('languages', items)} parse={parseCommaList} format={formatCommaList} placeholder="Common, Elven, Draconic" className="w-full px-3 py-2 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Backstory */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Backstory</h3>
-        <textarea value={formData.backstory || ''} onChange={(e) => updateField('backstory', e.target.value)} rows={6} placeholder="Tell your character's story..." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+        <textarea aria-label="Backstory" maxLength={SHEET_LONG_TEXT_MAX} value={formData.backstory || ''} onChange={(e) => updateField('backstory', e.target.value)} rows={6} placeholder="Tell your character's story..." className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
       </div>
 
       {/* Allies & Organizations */}
       <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
         <h3 className="text-lg font-bold text-stone-800 mb-3">Allies & Organizations</h3>
         <div className="space-y-2">
-          <input type="text" value={formData.alliesAndOrganizations?.name || ''} onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)} placeholder="Organization Name" className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
-          <textarea value={formData.alliesAndOrganizations?.description || ''} onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)} rows={3} placeholder="Description" className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <input type="text" aria-label="Organization" maxLength={SHEET_LONG_TEXT_MAX} value={formData.alliesAndOrganizations?.name || ''} onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)} placeholder="Organization Name" className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <textarea aria-label="Organization description" maxLength={SHEET_LONG_TEXT_MAX} value={formData.alliesAndOrganizations?.description || ''} onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)} rows={3} placeholder="Description" className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
 
@@ -1752,11 +1907,11 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
           <h3 className="text-md font-bold text-stone-800 mb-2">Notes</h3>
-          <textarea value={formData.notes || ''} onChange={(e) => updateField('notes', e.target.value)} rows={4} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <textarea aria-label="Notes" maxLength={SHEET_LONG_TEXT_MAX} value={formData.notes || ''} onChange={(e) => updateField('notes', e.target.value)} rows={4} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
         </div>
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
           <h3 className="text-md font-bold text-stone-800 mb-2">Treasure</h3>
-          <textarea value={formData.treasure || ''} onChange={(e) => updateField('treasure', e.target.value)} rows={4} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
+          <textarea aria-label="Treasure" maxLength={SHEET_LONG_TEXT_MAX} value={formData.treasure || ''} onChange={(e) => updateField('treasure', e.target.value)} rows={4} className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
         </div>
       </div>
     </div>
@@ -1771,6 +1926,12 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
     >
       {renderHeader()}
       {renderTabs()}
+      {openingChanges.length > 0 && (
+        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg">
+          Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving
+          keeps the new values.
+        </p>
+      )}
       <div className="p-6">
         {activeTab === 'stats' && renderStatsTab()}
         {activeTab === 'combat' && renderCombatTab()}

@@ -347,10 +347,13 @@ export const pf2eFighterTemplate: CharacterTemplate = {
         notes: 'Contains adventuring gear',
       },
     ],
+    // Strength +3: encumbered above 8, at most 13. The two light items count
+    // as no Bulk until there are ten, and 5 gp as none until there are 1,000
+    // coins.
     bulk: {
-      current: 5.3,
-      encumbered: 10,
-      maximum: 15,
+      current: 5,
+      encumbered: 8,
+      maximum: 13,
     },
     currency: {
       cp: 0,

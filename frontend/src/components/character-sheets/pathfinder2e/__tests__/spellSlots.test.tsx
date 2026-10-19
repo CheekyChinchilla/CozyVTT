@@ -11,6 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Pathfinder2eCharacterEditor } from '../Pathfinder2eCharacterEditor';
+import { Pathfinder2eCharacterView } from '../Pathfinder2eCharacterView';
 import type { CharacterData } from '../../../../types';
 import { PF2E_BLANK_SHEET, pf2eCharacter } from './pf2eFixture';
 
@@ -62,5 +63,30 @@ describe('spell slots', () => {
     const slots = await openSpellsAndSave(spellcastingWithSlots({ '1': { total: 3, expended: 0, used: 2 } }));
 
     expect(slots['1']).toEqual({ total: 3, expended: 2 });
+  });
+});
+
+// Used slots above the total, which the server now refuses as it does for
+// D&D, and which the read-only sheet showed as a negative number left.
+describe('used slots above the total', () => {
+  it('come down when the total is lowered', async () => {
+    const slots = await openSpellsAndSave(spellcastingWithSlots({ '1': { total: 3, expended: 2 } }), () => {
+      fireEvent.change(screen.getAllByPlaceholderText('Total')[0], { target: { value: '1' } });
+    });
+    expect(slots['1']).toEqual({ total: 1, expended: 1 });
+  });
+
+  it('come down on a sheet stored with them, which a note names', async () => {
+    let note: string | null = null;
+    const slots = await openSpellsAndSave(spellcastingWithSlots({ '2': { total: 2, expended: 3 } }), () => {
+      note = screen.getByText(/changed to follow the rules as it opened/).textContent;
+    });
+    expect(slots['2']).toEqual({ total: 2, expended: 2 });
+    expect(note).toContain('rank 2 spell slots used (3 to 2)');
+  });
+
+  it('leave the read-only sheet showing none left, not fewer', () => {
+    render(<Pathfinder2eCharacterView character={pf2eCharacter({ spellcasting: spellcastingWithSlots({ '1': { total: 2, expended: 3 } }) })} />);
+    expect(screen.queryByText(/-1/)).toBeNull();
   });
 });

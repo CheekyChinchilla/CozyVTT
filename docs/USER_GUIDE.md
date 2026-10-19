@@ -293,7 +293,7 @@ Click **Save** to save your progress. A timestamp in the header shows when your 
 
 **If the character changed while you were editing it**, for example your DM took hit points at the table or you saved it from another window, your save is refused so that it cannot put the old values back. Nothing you typed is lost. The editor stays open and a box headed **This character has changed** lists your changes, already put onto the newest version of the character. Press **Save my changes** to save them, or **Keep editing** to go back to the editor without saving anything. If you changed something that was also changed in the newer version, it is listed under **Changed in both places** with both values; pick the one to keep for each, and **Save my changes** becomes available. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
-**Lists on a sheet stop at 500 entries.** On a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet that covers inventory or possessions, attacks, strikes or weapons, spells, cantrips, features, feats and the other lists, and the boxes that take a list, such as languages, senses and possessions; the traits of one Pathfinder 2e strike stop at 50, a D&D 5e sheet's **Your Own Skills** at 30, and the **Other Damage Rolls** of one D&D 5e attack at 10. At 500 the **+ Add** button is greyed out and a note under it says the list is full; remove an entry to add another. The Cantrips box and the boxes that take a list stop taking entries at the limit. On a Pathfinder 2e sheet an item bonus is from -30 to +30 and a spell rank has at most 20 slots; the boxes correct a number outside that when you leave them. A sheet saved with more entries opens with all of them, and cannot be saved until the list is shortened; the message after **Save** names the list.
+**Lists on a sheet stop at 500 entries.** On a D&D 5e, Pathfinder 2e or Call of Cthulhu sheet that covers inventory or possessions, attacks, strikes or weapons, spells, cantrips, features, feats and the other lists, and the boxes that take a list, such as languages, senses and possessions; the traits of one Pathfinder 2e strike stop at 50, a D&D 5e sheet's **Your Own Skills** at 30, and the **Other Damage Rolls** of one D&D 5e attack at 10. At 500 the **+ Add** button is greyed out and a note under it says the list is full; remove an entry to add another. The Cantrips box and the boxes that take a list stop taking entries at the limit. On a Pathfinder 2e sheet an item bonus is from -30 to +30 and a spell rank has at most 20 slots, no more of them used than there are; the boxes correct a number outside that when you leave them, and lowering a rank's total brings its used count down with it. A sheet saved with more entries opens with all of them, and cannot be saved until the list is shortened; the message after **Save** names the list.
 
 While a sheet has changes you haven't saved, you stay signed in however long you take. **If you are signed out anyway**, for example because your computer slept for over an hour or your password was changed on another device, your changes are not lost. Pressing **Save** shows "You've been signed out" above the sheet and keeps everything you typed. Click **Sign in in a new tab**, sign in there, come back to the editor and press **Save** again. This works the same in the editor that opens over a character sheet on the Characters page or at the table.
 
@@ -366,9 +366,9 @@ The action-economy tactician's dream:
 
 - Attributes (STR, DEX, CON, INT, WIS, CHA) with ancestry, class, and item bonuses
 - Skills with trained/expert/master/legendary proficiencies
-- Class features, feats, and focus points
-- Spells and spell slots
-- Inventory with bulk tracking
+- Class features, feats, and focus points: the pool holds 1 point with your first focus spell, up to 3 as you set it, and the points left stay within it
+- Spells and spell slots, with the spell attack and spell DC worked out from one **Spellcasting proficiency** and each its own item bonus
+- Inventory with bulk tracking: ten light items make 1 Bulk, and you are encumbered only above 5 + Strength
 - Ancestry, background, and heritage
 
 *Screenshot pending — Pathfinder 2e character sheet.*

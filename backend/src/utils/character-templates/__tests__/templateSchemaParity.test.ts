@@ -20,7 +20,17 @@ import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
-import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus } from '../../rules/pathfinder2e';
+import {
+  pf2eArmorClass,
+  pf2eClassDC,
+  pf2eSkillTotal,
+  pf2eSaveTotal,
+  pf2ePerceptionTotal,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+  pf2eTotalBulk,
+  pf2eBulkLimits,
+} from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
@@ -98,6 +108,27 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       expect(stored).toBe(pf2eClassDC(data));
     });
 
+    it(`${template.name} stores the saves and Perception its own components give`, () => {
+      const saves = data.savingThrows as Record<'fortitude' | 'reflex' | 'will', { bonus: number }>;
+      for (const save of ['fortitude', 'reflex', 'will'] as const) expect(saves[save].bonus).toBe(pf2eSaveTotal(data, save));
+      expect((data.perception as { bonus: number }).bonus).toBe(pf2ePerceptionTotal(data));
+    });
+
+    it(`${template.name} stores the spell attack and spell DC its own components give`, () => {
+      const spellcasting = data.spellcasting as { spellAttackBonus: { bonus: number }; spellDC: { dc: number } } | undefined;
+      if (!spellcasting) return;
+      expect(spellcasting.spellAttackBonus.bonus).toBe(pf2eSpellAttack(data));
+      expect(spellcasting.spellDC.dc).toBe(pf2eSpellDC(data));
+    });
+
+    it(`${template.name} stores the Bulk its inventory and Strength give`, () => {
+      const stored = data.bulk as { current: number; encumbered: number; maximum: number } | undefined;
+      if (stored === undefined) return;
+      const strength = (data.attributes as { strength?: { modifier?: number } } | undefined)?.strength?.modifier ?? 0;
+      const { encumbered, maximum } = pf2eBulkLimits(strength);
+      expect(stored).toEqual({ current: pf2eTotalBulk(data.inventory, data.currency).bulk, encumbered, maximum });
+    });
+
     // The editor looks attributes up by their full name and offers the
     // traditions and casting types in lower case. A template that abbreviates
     // them has its skill totals recomputed without the attribute on first save.
@@ -116,12 +147,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
 
     it(`${template.name} stores the skill and lore totals its own components give`, () => {
       type Skill = { attribute: string; proficiencyRank: string; itemBonus?: number; armorPenalty?: number; bonus: number };
-      const attributes = data.attributes as Record<string, { modifier: number } | undefined>;
-      const total = (skill: Skill) =>
-        (attributes[skill.attribute]?.modifier ?? 0) +
-        pf2eProficiencyBonus(data.level, skill.proficiencyRank) +
-        (skill.itemBonus ?? 0) -
-        (skill.armorPenalty ?? 0);
+      const total = (skill: Skill) => pf2eSkillTotal(data, skill);
       const skills = [
         ...Object.values(data.skills as Record<string, Skill>),
         ...((data.loreSkills ?? []) as Skill[]),

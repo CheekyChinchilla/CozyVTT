@@ -33,7 +33,10 @@ export function readPf2eSpellSlots(stored: unknown): PF2eSpellSlots {
   const source = asRecord(stored);
   const entries = PF2E_SLOT_RANKS.map((rank) => {
     const slot = asRecord(source[rank]);
-    return [rank, { total: count(slot.total), expended: count(slot.expended) || count(slot.used) }] as const;
+    // No more used than the total: the server refuses it, and the sheet would
+    // show a negative number left.
+    const total = count(slot.total);
+    return [rank, { total, expended: Math.min(count(slot.expended) || count(slot.used), total) }] as const;
   });
   return Object.fromEntries(entries) as unknown as PF2eSpellSlots;
 }

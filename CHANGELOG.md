@@ -80,8 +80,10 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* `GET /api/assets` takes `sort` (`date`, `name` or `size`), and `search` also matches an asset that has it as a whole tag, whatever its case.
   - *Maps.* Every map route answers another campaign's map, and a player's request for a map the DM is preparing, with 404 `Map not found`, as for an unknown id; it said `Map not found in this campaign`.
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` on an asset whose uploader's account was deleted answers 400, admins included.
+  - *Character data.* A Pathfinder 2e sheet with more spell slots of a rank used than the rank's total is refused with 400, as a D&D 5e sheet already was.
+  - *Character data.* A Pathfinder 2e sheet's `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` may be under 10; they were refused below it.
 
-- **The placeholders in the D&D 5e editor's header take the header's own colour.** **Character Name**, **Race** and **Class** showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
+- **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.** **Character Name**, **Race**, **Class** and the other header boxes showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
 
 - **The Asset Library, the pickers and the Map Manager load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
 
@@ -92,6 +94,36 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A screen reader names every box in the Pathfinder 2e character editor, and the boxes stop at the length a sheet stores.** Most boxes, every proficiency rank among them, were announced by their placeholder or by nothing; each is now named, such as "Proficiency in Athletics" or "Item bonus to Will saves". Only the character's name stopped at the length the server keeps, so a long paste anywhere else got the save refused; every text box now stops there.
+
+- **A Pathfinder 2e item's value keeps fractions of a gold piece.** The **Value** box took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. An item's quantity can also be 0, and a strike's range of 0 shows as 0 where it showed an empty box.
+
+- **The Pathfinder 2e sheet and editor agree on more of a character.** The sheet wrote a Dex Cap of -1 as "+-1", showed a land Speed of 0 as 30 ft., and ran the paragraphs of personality, backstory, allies and notes together; it now writes them as typed. An innate spell's notes, which the sheet showed, can be edited. A strike's proficiency rank did nothing; the editor now shows what the rank, attribute and item bonus give beside the attack bonus, which stays as typed.
+
+- **Pathfinder 2e spell slots never show more used than there are.** Lowering a rank's **Total** left its **Used** count above it, which saved, and the sheet then showed a negative number of slots left. Lowering the total now brings the used count down with it, a character stored with more used opens with them brought down and a note saying so, and the sheet never shows fewer than none left. As for D&D 5e, the server now refuses more used than the total.
+
+- **A Pathfinder 2e lore named with "Lore" rolls under its own name.** A lore skill named as the rulebook writes them, such as Warfare Lore from the built-in Fighter, rolled as "Warfare Lore Lore Check". "Lore" is now added only to a name without it.
+
+- **The Pathfinder 2e sheet shows and rolls the saves, Perception and skills its own numbers give.** The read-only sheet, the right-click roll menu and initiative used the totals last stored, so a character the editor had not saved since, such as one made from a template or imported, showed and rolled numbers that did not follow from its ranks, attributes and bonuses. They are now worked out from those, as AC and Class DC already were.
+
+- **A Pathfinder 2e check penalty lowers the skill however it is typed.** The penalty box subtracted what was typed, so a penalty entered as armor prints it, such as -2, raised the skill by 2. The box is now labelled **Check penalty** and takes 0 or below. A skill whose penalty was typed as a negative number goes down by twice that penalty, to what the rules give; one stored as a positive number opens as negative, and a note above the sheet says so.
+
+- **The Pathfinder 2e focus pool holds what your character has.** **Add Focus Spell** set the pool to 3 points whatever the spells, and the points left could not be held below a smaller pool. The pool now has its own box, from 0 to 3; the first focus spell makes it 1 point, as the rules give, and the points left stay within it. A character stored with more points left than its pool opens with them brought down, and a note above the sheet says so.
+
+- **A Pathfinder 2e feat with no level is listed first on the sheet.** Such a feat, from an import or a program, landed anywhere in its list and read "Level undefined". It now comes first, with no level shown.
+
+- **A Pathfinder 2e feat from a built-in template opens with its text in the editor.** The templates stored a feat's text where the editor had no box, so a Fighter's Power Attack opened with an empty description and its text could be neither changed nor removed. The editor now puts that text in the description as it opens, after any description already there.
+
+- **A Pathfinder 2e character stored with spellcasting but no spell attack or spell DC can be saved.** Such a character, from an import or a program, saved those two without a rank or item bonus, and every save was refused. The editor now fills them in as it opens.
+
+- **A Pathfinder 2e spell DC uses its own item bonus, and one spellcasting rank sets both spell attack and spell DC.** The editor offered a rank and an item bonus for each, but worked the DC out from the attack's, so the DC's own boxes did nothing, and the read-only sheet showed the DC with a rank it did not use. The rules give one proficiency for spell attacks and spell DCs, so the Spells tab now has one **Spellcasting proficiency**, and each item bonus counts toward its own total. A character whose attack item bonus was raising the DC, or whose two ranks differed, sees its spell DC change; a note above the sheet names the change when it opens.
+
+- **Pathfinder 2e Bulk follows the rules on the sheet and in the editor.** A Bulk typed in an item's box, such as 2, counted as nothing; a light item counted as 0.1 with nothing rounded down, so a character carrying exactly 5 + Strength, or a few light items more, was marked encumbered; an item with no quantity made the total unreadable, and one with no Bulk at all stopped the sheet from opening. Ten light items now make 1 Bulk with the rest rounded down, coins count as the rules give (1 Bulk a thousand, of any kind), a character is encumbered only above 5 + Strength, and the sheet works Bulk out from the inventory and Strength. The built-in Level 1 Fighter's stored Bulk is corrected to 5, encumbered above 8, at most 13.
+
+- **A Pathfinder 2e character whose AC, Class DC or Spell DC works out under 10 can be saved.** All three were refused below 10, although the rules allow less: Dexterity 8 untrained gives AC 9, and such a character could not be saved at all.
+
+- **Every Pathfinder 2e Add Feat button has its colour.** On the **Feats & Features** tab, the **Add Feat** buttons for Ancestry & Heritage, Skill and Bonus feats had no background, so their white text could not be seen.
 
 - **A D&D 5e item's value keeps fractions of a gold piece.** **Value (gp)** took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. A spell's level box also takes 0, and a hit die pool's **Left** stops at its **Max**, with any extra brought down when the sheet is saved.
 

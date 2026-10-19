@@ -5,6 +5,7 @@ import { isValidDiceExpression } from './diceExpression';
 // Re-exported so the many callers that reach for it here keep working.
 export { isValidDiceExpression };
 import { readCustomSkills, dnd5eCustomSkillBonus, dnd5eSkillBonus, dnd5eSaveBonus } from '@/utils/rules/dnd5e';
+import { pf2ePerceptionTotal, pf2eSaveTotal, pf2eSkillTotal } from '@/utils/rules/pathfinder2e';
 import type {
   DnD5eCharacterData,
   DnD5eStats,
@@ -302,6 +303,15 @@ const PF2E_SKILL_NAMES: Record<string, string> = {
   thievery:       'Thievery',
 };
 
+/**
+ * A lore skill's name as rolled: "Sailing" as "Sailing Lore", and a name that
+ * already ends in Lore, as the Core Rulebook writes them ("Warfare Lore"), as
+ * it is.
+ */
+export function pf2eLoreName(name: string): string {
+  return /\blore$/i.test(name.trim()) ? name.trim() : `${name.trim()} Lore`;
+}
+
 function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
   const abilities: RollOption[] = [];
   const skills:    RollOption[] = [];
@@ -327,7 +337,8 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
     for (const [key, name] of Object.entries(PF2E_SAVE_NAMES)) {
       const save = data.savingThrows[key as keyof PF2eSavingThrows];
       if (!save) continue;
-      const bonus = save.bonus ?? 0;
+      // Worked out from the parts, as the sheet shows them.
+      const bonus = pf2eSaveTotal(data, key as keyof PF2eSavingThrows);
       const expr = `1d20${fmt(bonus)}`;
       saves.push({
         label:             `${name} ${fmt(bonus)}`,
@@ -340,7 +351,7 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
 
   // Perception
   if (data.perception) {
-    const bonus = data.perception.bonus ?? 0;
+    const bonus = pf2ePerceptionTotal(data);
     saves.push({
       label:             `Perception ${fmt(bonus)}`,
       expression:        `1d20${fmt(bonus)}`,
@@ -354,7 +365,7 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
     for (const [key, name] of Object.entries(PF2E_SKILL_NAMES)) {
       const skill = data.skills[key as keyof PF2eSkills];
       if (!skill) continue;
-      const total = skill.bonus ?? 0;
+      const total = pf2eSkillTotal(data, skill);
       const expr = `1d20${fmt(total)}`;
       skills.push({
         label:             `${name} ${fmt(total)}`,
@@ -369,11 +380,11 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
   if (Array.isArray(data.loreSkills)) {
     for (const lore of data.loreSkills) {
       if (!lore.name) continue;
-      const total = lore.bonus ?? 0;
+      const total = pf2eSkillTotal(data, lore);
       skills.push({
-        label:             `${lore.name} Lore ${fmt(total)}`,
+        label:             `${pf2eLoreName(lore.name)} ${fmt(total)}`,
         expression:        `1d20${fmt(total)}`,
-        purpose:           `${lore.name} Lore Check`,
+        purpose:           `${pf2eLoreName(lore.name)} Check`,
         supportsAdvantage: true,
       });
     }

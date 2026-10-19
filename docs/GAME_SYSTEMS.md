@@ -64,7 +64,7 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | Entries in a list inside one row (the traits of one Pathfinder 2e strike, the firing modes of one Shadowrun weapon): at most 50, because it multiplies by the rows around it | `SHEET_ROW_TAGS_MAX` | `pathfinder2e.schema.ts` and `shadowrun6e.schema.ts`; the strike's traits box turns away the 51st |
 | D&D 5e: skills of the player's own, at most 30; further damage lines on one attack, at most 10 | `DND5E_CUSTOM_SKILLS_MAX`, `DND5E_ATTACK_DAMAGE_ROLLS_MAX` | `dnd5e.schema.ts`; the editor's **+ Add Skill** and **+ Add Damage Roll** stop there, as above |
 | Pathfinder 2e item bonus (saving throws, Perception, skills, lore skills, armor class, strikes, spell attack and spell DC): -30 to +30. The Core Rulebook's run from +4 down to -2 | `PF2E_ITEM_BONUS_MIN`, `PF2E_ITEM_BONUS_MAX` | `itemBonusSchema` in `pathfinder2e.schema.ts`; the editor's boxes clamp to the range when left |
-| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count (D&D 5e: and no more used than the total) | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20 |
+| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20, and it brings the used count within the total when a sheet opens and when the total is lowered |
 | D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
 
 A sheet stored before a limit existed still loads, with every entry; its next save is refused, with the path of each field over a limit in `validationErrors`, until the list is shortened. The two sheet editors, the Character Editor page and the editor that opens over a sheet at the table or on the Characters page, turn that into one message through `refusedSaveMessage` in `frontend/src/utils/sheetSaveRefusal.ts`: "Not saved." and the first five paths with their reasons, then a count of the rest.
@@ -149,7 +149,13 @@ question, and getting it wrong invents numbers the designers never intended.
 
   **Player characters are different.** A PF2e character sheet records the parts
   — proficiency rank, item bonus, Dex cap, key attribute — so Armor Class, Class
-  DC and initiative *are* derivable, and `rules/pathfinder2e.ts` derives them.
+  DC, saving throws, Perception, skills (a check penalty always a penalty),
+  initiative, spell attack and spell DC *are* derivable (one spellcasting rank
+  for both, each its own item bonus), and `rules/pathfinder2e.ts` derives them
+  for the editor, the read-only sheet, the roll menu and the server's
+  initiative roll alike,
+  with the Bulk an inventory and purse carry (ten light items or a thousand
+  coins to 1 Bulk, the rest rounded down) and its limits.
   The distinction is where the number comes from: a creature's is printed by
   Paizo, a character's is built from their own sheet.
 - **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and
