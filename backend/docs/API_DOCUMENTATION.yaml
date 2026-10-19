@@ -6060,8 +6060,10 @@ paths:
         '400':
           description: >-
             "scope must be GLOBAL, USER, or CAMPAIGN", "campaignId must be a
-            campaign id" (any scope), or "campaignId is required when scope is
-            CAMPAIGN".
+            campaign id" (any scope), "campaignId is required when scope is
+            CAMPAIGN", or, for `scope: USER` on an asset whose uploader's
+            account was deleted, "This asset has no uploader, so it has no
+            personal library to go to".
           content:
             application/json:
               schema:

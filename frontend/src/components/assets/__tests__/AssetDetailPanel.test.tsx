@@ -134,6 +134,16 @@ describe('the Campaign choice', () => {
   });
 });
 
+// An asset whose uploader's account is gone has no personal library to go to.
+describe('an asset with no uploader', () => {
+  it('offers no Personal, even to an admin', () => {
+    me.user = { id: 'u1', platformRole: 'ADMIN', globalAssetManager: false };
+    const orphan = { ...asset, type: AssetType.MAP, scope: AssetScope.GLOBAL, uploadedById: null, canChange: true } as unknown as Asset;
+    render(<AssetDetailPanel asset={orphan} onClose={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Personal' })).not.toBeInTheDocument();
+  });
+});
+
 // The preview's fallback replaced React's children with innerHTML, so the next
 // render that touched the preview (a move, say) found its nodes gone.
 describe('a preview that fails to load', () => {

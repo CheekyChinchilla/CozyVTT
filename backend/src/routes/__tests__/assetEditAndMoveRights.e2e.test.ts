@@ -341,3 +341,29 @@ describe('moving an asset to Personal', () => {
     expect(res.body.asset).toMatchObject({ scope: 'USER', campaignId: null });
   });
 });
+
+// Personal is an uploader's own library. An asset whose uploader's account
+// was deleted has none, and moved there it would be nobody's: readable by
+// admins alone, so every map using it would break for its table.
+describe('moving an asset with no uploader to Personal', () => {
+  it('is refused, even to an admin, and the asset stays where it is', async () => {
+    const admin = await createTestUser({ displayName: 'Move Admin', role: 'ADMIN' });
+    userIds.push(admin.id);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').send({ email: admin.email, password: TEST_PASSWORD })).status).toBe(200);
+    const orphan = await prisma.asset.create({
+      data: {
+        type: 'MAP', scope: 'GLOBAL', uploadedById: null, filename: 'o.png', originalName: 'o.png', mimeType: 'image/png',
+        fileSize: 1, filePath: path.join(UPLOAD_DIR, 'o.png'), name: 'Left by a deleted account', tags: [],
+      },
+    });
+    try {
+      const res = await agent.patch(`/api/assets/${orphan.id}/scope`).send({ scope: 'USER' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('This asset has no uploader, so it has no personal library to go to');
+      expect((await prisma.asset.findUniqueOrThrow({ where: { id: orphan.id } })).scope).toBe('GLOBAL');
+    } finally {
+      await prisma.asset.delete({ where: { id: orphan.id } });
+    }
+  });
+});

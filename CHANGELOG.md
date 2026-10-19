@@ -77,6 +77,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* New `GET /api/assets/maps/:id/thumbnail` and `GET /api/assets/tokens/:id/thumbnail` serve a picture's 512-pixel thumbnail by the full picture's read rule, or the full picture where there is none.
   - *Assets.* `GET /api/assets` takes `sort` (`date`, `name` or `size`), and `search` also matches an asset that has it as a whole tag, whatever its case.
   - *Maps.* Every map route answers another campaign's map, and a player's request for a map the DM is preparing, with 404 `Map not found`, as for an unknown id; it said `Map not found in this campaign`.
+  - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` on an asset whose uploader's account was deleted answers 400, admins included.
 
 - **The Asset Library, the pickers and the Map Manager load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
 

@@ -1403,6 +1403,16 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
 
     const isAdmin = req.session.platformRole === 'ADMIN';
 
+    // Personal is the uploader's own library. An asset whose uploader's
+    // account was deleted has none: moved there it would be nobody's, readable
+    // by admins alone, and every map using it would break for its table.
+    if (scope === 'USER' && !asset.uploadedById) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'This asset has no uploader, so it has no personal library to go to',
+      });
+    }
+
     // Check globalAssetManager only when GLOBAL scope is involved
     let isGlobalAssetManager = false;
     if (!isAdmin && (scope === 'GLOBAL' || asset.scope === 'GLOBAL')) {
