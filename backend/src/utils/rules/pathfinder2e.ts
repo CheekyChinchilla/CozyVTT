@@ -174,9 +174,13 @@ export function pf2ePerceptionTotal(data: unknown): number {
   return attributeModifier(sheet, 'wisdom') + pf2eProficiencyBonus(sheet?.level, entry?.proficiencyRank) + num(entry?.itemBonus);
 }
 
-/** The spellcasting proficiency rank, which spell attack rolls and spell DCs share. */
+/**
+ * The spellcasting proficiency rank, which spell attack rolls and spell DCs
+ * share: the one recorded on the attack, or on the DC for a sheet that
+ * records no attack.
+ */
 function spellcastingRank(spellcasting: Record<string, unknown> | undefined): unknown {
-  return rec(spellcasting?.spellAttackBonus)?.proficiencyRank;
+  return rec(spellcasting?.spellAttackBonus)?.proficiencyRank ?? rec(spellcasting?.spellDC)?.proficiencyRank;
 }
 
 /** The spellcasting attribute modifier plus the spellcasting proficiency bonus. */

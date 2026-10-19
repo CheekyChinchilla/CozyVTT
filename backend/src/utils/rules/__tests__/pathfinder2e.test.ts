@@ -170,3 +170,11 @@ describe('pf2eSaveTotal and pf2ePerceptionTotal', () => {
     expect(pf2ePerceptionTotal({})).toBe(0);
   });
 });
+
+describe('the spellcasting rank on a sheet with no spell attack', () => {
+  it('is the spell DC\'s, so an imported DC keeps its rank', () => {
+    const sheet = { level: 5, attributes: { intelligence: { modifier: 4 } }, spellcasting: { keyAttribute: 'int', spellDC: { proficiencyRank: 'expert', itemBonus: 0, dc: 23 } } };
+    expect(pf2eSpellDC(sheet)).toBe(23);
+    expect(pf2eSpellAttack(sheet)).toBe(13);
+  });
+});

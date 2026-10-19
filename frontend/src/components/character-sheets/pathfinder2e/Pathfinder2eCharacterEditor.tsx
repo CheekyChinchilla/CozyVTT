@@ -197,7 +197,7 @@ function changedOnOpen(sheet: PF2eFormData): string[] {
   }
   const spellcasting = sheet.spellcasting;
   if (spellcasting) {
-    const rank = spellcasting.spellAttackBonus?.proficiencyRank ?? 'untrained';
+    const rank = spellcasting.spellAttackBonus?.proficiencyRank ?? spellcasting.spellDC?.proficiencyRank ?? 'untrained';
     const dcRank = spellcasting.spellDC?.proficiencyRank;
     if (dcRank && dcRank !== rank) changes.push(`spell DC rank (${dcRank} to ${rank})`);
     const dc = spellcasting.spellDC?.dc;
@@ -305,7 +305,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       keyAttribute: fullAttributeName(data.spellcasting.keyAttribute),
       // Whole, so the totals worked out below are saved with a rank and an
       // item bonus: a block stored without either is refused otherwise.
-      spellAttackBonus: { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0, ...data.spellcasting.spellAttackBonus },
+      // The rank both share, from the DC on a block that records no attack.
+      spellAttackBonus: {
+        proficiencyRank: data.spellcasting.spellDC?.proficiencyRank ?? 'untrained',
+        itemBonus: 0,
+        bonus: 0,
+        ...data.spellcasting.spellAttackBonus,
+      },
       spellDC: { proficiencyRank: 'untrained', itemBonus: 0, dc: 10, ...data.spellcasting.spellDC },
       cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),

@@ -33,3 +33,21 @@ it('saves the spell attack and spell DC whole', async () => {
   expect(saved.spellAttackBonus).toEqual({ proficiencyRank: 'untrained', itemBonus: 0, bonus: 0 });
   expect(saved.spellDC).toEqual({ proficiencyRank: 'untrained', itemBonus: 0, dc: 10 });
 });
+
+it('takes the spell DC\'s rank for both when the block has no spell attack', async () => {
+  const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);
+  render(
+    <Pathfinder2eCharacterEditor
+      character={pf2eCharacter({ spellcasting: { tradition: 'divine', type: 'prepared', keyAttribute: 'wis', spellDC: { proficiencyRank: 'expert', itemBonus: 0, dc: 15 } } })}
+      onSave={onSave}
+      onCancel={vi.fn()}
+    />
+  );
+  expect(screen.queryByText(/spell DC rank/)).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+  await waitFor(() => expect(onSave).toHaveBeenCalled());
+
+  const saved = (onSave.mock.calls[0][0] as unknown as { spellcasting: Record<string, { proficiencyRank: string }> }).spellcasting;
+  expect(saved.spellAttackBonus.proficiencyRank).toBe('expert');
+  expect(saved.spellDC.proficiencyRank).toBe('expert');
+});
