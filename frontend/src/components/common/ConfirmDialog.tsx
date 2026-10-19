@@ -38,7 +38,7 @@ const VARIANT_CONFIG: Record<ConfirmVariant, {
   confirmClass: string;
 }> = {
   danger: {
-    icon: <AlertTriangle className="w-6 h-6 text-danger" aria-hidden="true" />,
+    icon: <AlertTriangle className="w-6 h-6 text-danger-ink" aria-hidden="true" />,
     iconBg: 'bg-danger/10',
     confirmClass: 'bg-danger hover:bg-danger/85 focus:ring-danger text-white',
   },

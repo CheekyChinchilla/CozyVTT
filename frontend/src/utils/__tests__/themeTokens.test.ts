@@ -67,6 +67,19 @@ describe('themed surfaces use semantic tokens', () => {
     ).toHaveLength(0);
   });
 
+  // danger, accent and the other state colours are fills; as text they fall
+  // under 4.5:1 in some themes (danger on a dark theme's paper is about 3.3:1).
+  // Text takes the -ink variant, derived per theme to stay readable. No file
+  // is exempt.
+  it('colours text with the readable -ink variants, never a fill token', () => {
+    const FILL_AS_TEXT = /\btext-(?:danger|success|warning|info|spirit|accent|brand)(?![-\w])/g;
+    const found = Object.entries(SOURCES)
+      .map(([path, source]) => ({ file: path, count: (source.match(FILL_AS_TEXT) ?? []).length }))
+      .filter((entry) => entry.count > 0)
+      .map((entry) => `${entry.file} (${entry.count})`);
+    expect(found).toEqual([]);
+  });
+
   it('keeps the exemption list small and intentional', () => {
     // A growing exemption list means the rule is being worked around rather
     // than followed; make that visible in review.

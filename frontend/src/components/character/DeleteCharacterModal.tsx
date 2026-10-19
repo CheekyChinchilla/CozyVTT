@@ -73,7 +73,7 @@ export default function DeleteCharacterModal({
       {/* Error Alert */}
       {error && (
         <div role="alert" className="mb-4 bg-danger/10 border border-danger/30 rounded-lg p-4">
-          <p className="text-sm text-danger font-medium">{error}</p>
+          <p className="text-sm text-danger-ink font-medium">{error}</p>
         </div>
       )}
 

@@ -156,7 +156,7 @@ export default function InvitePlayerModal({
         {/* Error */}
         {error && (
           <div role="alert" className="p-3 rounded-lg bg-danger/10 border border-danger/30">
-            <p className="text-sm text-danger">{error}</p>
+            <p className="text-sm text-danger-ink">{error}</p>
           </div>
         )}
 
