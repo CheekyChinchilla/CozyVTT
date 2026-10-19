@@ -9,7 +9,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import indexCss from '../../index.css?raw';
-import { PRESET_THEMES, applyThemeColors } from '../../themes';
+import { PRESET_THEMES, applyThemeColors, buildCustomThemeColors } from '../../themes';
 
 afterEach(() => {
   document.documentElement.removeAttribute('style');
@@ -21,7 +21,17 @@ describe('color-scheme', () => {
     expect(document.documentElement.style.colorScheme).toBe(theme.category === 'dark' ? 'dark' : 'light');
   });
 
-  it('follows a custom theme by how light its paper is', () => {
+  // A custom theme on a grey background is built light or dark by the grey,
+  // and its text is then nudged to read; the scheme follows the text it ends
+  // up with, which a cut-off on the paper alone got wrong between greys.
+  it.each([60, 90, 105, 120, 135, 160, 200])('follows a custom theme on grey %i by the text it ends up with', (grey) => {
+    const colors = buildCustomThemeColors({ primary: '120 160 120', accent: '200 150 90', background: `${grey} ${grey} ${grey}`, text: '235 235 235' });
+    applyThemeColors(colors);
+    const inkLighter = Number(colors.ink.split(' ')[0]) > Number(colors.paper.split(' ')[0]);
+    expect(document.documentElement.style.colorScheme).toBe(inkLighter ? 'dark' : 'light');
+  });
+
+  it('follows a custom theme by whether its text is lighter than its paper', () => {
     const dark = PRESET_THEMES.find((theme) => theme.id === 'obsidian-night')!;
     applyThemeColors({ ...dark.colors, paper: '250 250 250' });
     expect(document.documentElement.style.colorScheme).toBe('light');
