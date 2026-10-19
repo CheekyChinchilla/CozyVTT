@@ -20,7 +20,17 @@ import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
-import { pf2eArmorClass, pf2eClassDC, pf2eSkillTotal, pf2eTotalBulk, pf2eBulkLimits } from '../../rules/pathfinder2e';
+import {
+  pf2eArmorClass,
+  pf2eClassDC,
+  pf2eSkillTotal,
+  pf2eSaveTotal,
+  pf2ePerceptionTotal,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+  pf2eTotalBulk,
+  pf2eBulkLimits,
+} from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
@@ -96,6 +106,19 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const stored = (data.classDC as { total?: number } | undefined)?.total;
       if (stored === undefined) return;
       expect(stored).toBe(pf2eClassDC(data));
+    });
+
+    it(`${template.name} stores the saves and Perception its own components give`, () => {
+      const saves = data.savingThrows as Record<'fortitude' | 'reflex' | 'will', { bonus: number }>;
+      for (const save of ['fortitude', 'reflex', 'will'] as const) expect(saves[save].bonus).toBe(pf2eSaveTotal(data, save));
+      expect((data.perception as { bonus: number }).bonus).toBe(pf2ePerceptionTotal(data));
+    });
+
+    it(`${template.name} stores the spell attack and spell DC its own components give`, () => {
+      const spellcasting = data.spellcasting as { spellAttackBonus: { bonus: number }; spellDC: { dc: number } } | undefined;
+      if (!spellcasting) return;
+      expect(spellcasting.spellAttackBonus.bonus).toBe(pf2eSpellAttack(data));
+      expect(spellcasting.spellDC.dc).toBe(pf2eSpellDC(data));
     });
 
     it(`${template.name} stores the Bulk its inventory and Strength give`, () => {
