@@ -93,10 +93,12 @@ export default function NumberField({
   };
 
   const handleBlur = () => {
-    // Now that editing has finished, settle on something valid.
+    // Now that editing has finished, settle on something valid. A value that
+    // is already the committed one is not reported again: focus passing
+    // through a box is not an edit.
     if (text === '' || text === '-' || !Number.isFinite(Number(text))) {
       setText(String(resolvedFallback));
-      onChange(resolvedFallback);
+      if (resolvedFallback !== value) onChange(resolvedFallback);
       return;
     }
 
@@ -106,7 +108,7 @@ export default function NumberField({
     if (max !== undefined && settled > max) settled = max;
 
     setText(String(settled));
-    onChange(settled);
+    if (settled !== value) onChange(settled);
   };
 
   return (

@@ -25,6 +25,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **A D&D 5e sheet shows an item's value, the character's carrying capacity and the player's name.** The **Inventory** tab lists each item's **Value** beside its weight and gives the carrying capacity the rules work out from Strength: 15 pounds a point, and twice that to push, drag or lift, for a Small or Medium character. The header names the player, as the Pathfinder 2e sheet does. All three were recorded in the editor and shown nowhere else.
+
 - **See and withdraw the invitations you have sent.** **Campaign Settings → Members** now lists the players you have invited who have not answered, under **Invited**, with an **×** to withdraw each one. An invitation sent from the app now runs out after 14 days; until now it never did.
 
 - **Continue anyway on the campaign page in a narrow window.** ([#85](https://github.com/CheekyChinchilla/CozyVTT/issues/85)) Below 1024 pixels wide the page showed only a **Desktop Required** notice, so a laptop with two windows side by side was turned away like a phone. The notice now has a **Continue anyway** button that opens the table in its desktop layout, which is cramped at that size; your browser remembers the choice. A layout made for phones is still to come.
@@ -79,6 +81,8 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Maps.* Every map route answers another campaign's map, and a player's request for a map the DM is preparing, with 404 `Map not found`, as for an unknown id; it said `Map not found in this campaign`.
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` on an asset whose uploader's account was deleted answers 400, admins included.
 
+- **The placeholders in the D&D 5e editor's header take the header's own colour.** **Character Name**, **Race** and **Class** showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
+
 - **The Asset Library, the pickers and the Map Manager load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
 
 - **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader: Chrome and Edge showed a page saying the content was blocked, and Safari a blank space. The reader now says so in place of the frame, with **Open this PDF in a new tab**. Firefox on a computer still shows the PDF inside the reader. Showing PDFs inside CozyVTT in every browser is planned.
@@ -88,6 +92,30 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **A D&D 5e item's value keeps fractions of a gold piece.** **Value (gp)** took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. A spell's level box also takes 0, and a hit die pool's **Left** stops at its **Max**, with any extra brought down when the sheet is saved.
+
+- **The D&D 5e editor says when it has brought a stored number within range.** A sheet stored with more than 20 spell slots of a level, or a bonus outside -30 to +30, opened with the number lowered or raised, and the next save stored it so, with nothing said. A note above the sheet now names each one, such as "level 3 spell slots (24 to 20)".
+
+- **The D&D 5e editor says what to fix before a save is refused.** It let **Race** or **Class** be emptied, **Armor Class** or maximum hit points go to 0, a custom skill's **Other** take any number, the spell save DC or passive Perception fall below 1 and a text box take more than a sheet stores, and then the server refused the save, often for a box on another tab. The boxes now stop where a sheet does, and **Save** lists anything still to fix, opens the tab it is on and marks the box. A character stored without hit points saves as it was.
+
+- **A row added by mistake no longer stops a D&D 5e sheet from saving.** **+ Add Attack**, **+ Add Item** and **+ Add Spell** made a row with no name, and **+ Add Hit Die** one with no class, and the sheet could not be saved until each was filled in or removed. A row nobody has typed in is now left out when the sheet is saved, and a new hit die starts with the character's class.
+
+- **A D&D 5e character's Proficiency Bonus follows their level.** Raising **Level** left **Proficiency Bonus** where it was, so every save, skill and spell number worked out from it stayed a level behind. It now moves with **Level** when it was the old level's bonus. A bonus set by hand to something else is kept, and the sheet shows what the level gives under it, with a button to use that. See [Levelling up (D&D 5e)](docs/PLAYER_GUIDE.md#levelling-up-dd-5e).
+
+- **A screen reader names every box in the D&D 5e character editor.** Most boxes, among them **Proficiency Bonus**, **Armor Class**, the hit points, an attack's bonus and damage, an item's quantity and weight, the coins and the whole **Biography** tab, were announced by their placeholder or by nothing. Each is now named by the label beside it.
+
+- **A D&D 5e sheet stops adding skills and damage rolls where it can still be saved.** A sheet keeps at most 30 skills under **Your Own Skills** and 10 **Other Damage Rolls** on one attack, but **+ Add Skill** and **+ Add Damage Roll** went on adding, and the sheet could not be saved. At the limit each button is now greyed out, with a note saying the list is full.
+
+- **Unticking Requires Attunement on a D&D 5e item ends its attunement.** The **Attuned** box was hidden but stayed ticked, so the item went on taking one of the three attunement slots. Unticking **Requires Attunement** now unticks **Attuned** too, and an item already stored attuned shows its **Attuned** box so it can be cleared.
+
+- **A D&D 5e sheet's Total Weight counts items with no weight or quantity.** One item with either left out made **Total Weight** read 0.0 for the whole inventory, and the rows showed a bare "lb", or "ft" for an attack with no range. An item with no weight now counts as weighing nothing and one with no quantity as one item, and a number that was never filled in shows as a dash.
+
+- **The blank D&D 5e character is a Fighter by the rules.** It started with a d8 hit die, 8 hit points and no saving throw proficiencies. It now starts with a d10 hit die, 10 hit points and proficiency in Strength and Constitution saves, as the rules give a 1st level Fighter with Constitution 10. Characters already made are not changed.
+
+- **Naming a D&D 5e spellcasting ability raises the spell save DC and spell attack.** On a sheet saved with **Spellcasting Ability** empty, typing it in afterwards left the DC at 8 plus proficiency and the attack at proficiency, with minus the ability modifier recorded as **Other bonus**. The ability now counts. A sheet already saved this way shows that negative **Other bonus** on its Spells tab; set it back to 0.
+
+- **A D&D 5e character stored without its saving throws can be saved from the editor.** Such a character, from an import or a program, opened with no saving throws, and ticking one stored that one alone, so every save was refused. The editor now fills in all six, and all eighteen skills, as it opens.
 
 - **A document saved twice at the same moment records the size of the text it keeps.** Two saves close together, from two tabs say, could leave the document holding one text and its listed size belonging to the other.
 

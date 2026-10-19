@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import {
   ABILITY_KEYS,
+  carryingCapacity,
   DND5E_SKILLS,
   abilityModifier,
   decomposeBonus,
@@ -246,6 +247,20 @@ describe('skills of the player\'s own', () => {
         expect(readCustomSkills(data)).toEqual([]);
       }
     );
+  });
+});
+
+// Basic Rules, "Lifting and Carrying": Strength times 15, and twice that to
+// push, drag or lift.
+describe('carryingCapacity', () => {
+  it('is fifteen pounds a point of Strength, and twice that to push, drag or lift', () => {
+    expect(carryingCapacity(10)).toEqual({ carry: 150, pushDragLift: 300 });
+    expect(carryingCapacity(18)).toEqual({ carry: 270, pushDragLift: 540 });
+  });
+
+  it('is nothing for a score that is not a number or below 0', () => {
+    expect(carryingCapacity(Number.NaN)).toEqual({ carry: 0, pushDragLift: 0 });
+    expect(carryingCapacity(-3)).toEqual({ carry: 0, pushDragLift: 0 });
   });
 });
 
