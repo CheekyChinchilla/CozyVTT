@@ -93,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e character whose AC, Class DC or Spell DC works out under 10 can be saved.** All three were refused below 10, although the rules allow less: Dexterity 8 untrained gives AC 9, and such a character could not be saved at all.
+
 - **Every Pathfinder 2e Add Feat button has its colour.** On the **Feats & Features** tab, the **Add Feat** buttons for Ancestry & Heritage, Skill and Bonus feats had no background, so their white text could not be seen.
 
 - **A D&D 5e item's value keeps fractions of a gold piece.** **Value (gp)** took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. A spell's level box also takes 0, and a hit die pool's **Left** stops at its **Max**, with any extra brought down when the sheet is saved.

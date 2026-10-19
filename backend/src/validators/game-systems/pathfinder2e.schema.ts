@@ -144,12 +144,10 @@ const loreSkillSchema = z.object({
  * Armor class
  */
 const armorClassSchema = z.object({
-  // TODO(rules): this minimum of 10, and the ones on the class DC total and the
-  // spell DC below, refuse a sheet whose derived value is under 10, which a
-  // negative modifier with an untrained rank produces (Dexterity -1 gives AC
-  // 9). The editor derives these, so such a sheet cannot be saved at all. Drop
-  // the minimums, or floor them at a value the formulas cannot go below.
-  total: z.number().int().min(10),
+  // No minimum, nor on the class DC and spell DC totals: each is 10 plus a
+  // modifier that can be negative (Dexterity 8 untrained gives AC 9), and the
+  // editor works them out.
+  total: z.number().int(),
   proficiencyRank: proficiencyRankSchema,
   capDex: z.number().int().nullable(),
   itemBonus: itemBonusSchema,
@@ -160,7 +158,7 @@ const armorClassSchema = z.object({
  * Class DC
  */
 const classDCSchema = z.object({
-  total: z.number().int().min(10),
+  total: z.number().int(),
   keyAttribute: shortText.min(1),
   proficiencyRank: proficiencyRankSchema,
 });
@@ -376,7 +374,7 @@ const spellAttackBonusSchema = z.object({
 const spellDCSchema = z.object({
   proficiencyRank: proficiencyRankSchema,
   itemBonus: itemBonusSchema,
-  dc: z.number().int().min(10),
+  dc: z.number().int(),
 });
 
 /**
