@@ -47,6 +47,7 @@ import {
   exhaustionLevel,
   exhaustionEffects,
   dnd5eCustomSkillBonus,
+  dnd5eSkillBonus,
   dnd5eBackfilledSkillOtherBonus,
   dnd5eBackfilledSaveOtherBonus,
   proficiencyBonusForLevel,
@@ -230,6 +231,45 @@ function bonusWithinRange<T>(value: T): T | number {
 }
 
 /**
+ * The numbers a stored sheet holds outside what a sheet stores, each as
+ * "what (stored to shown)": the form brings them within range so the sheet can
+ * be saved, and the next save stores them so. Worked out once, from the sheet
+ * as it was stored, including a bonus an older sheet's total implies.
+ */
+function numbersBroughtWithinRange(sheet: DnD5eFormData): string[] {
+  const changes: string[] = [];
+  const note = (what: string, stored: unknown, shown: number) => {
+    if (typeof stored === 'number' && Number.isFinite(stored) && stored !== shown) {
+      changes.push(`${what} (${stored} to ${shown})`);
+    }
+  };
+  const noteBonus = (what: string, stored: number | null | undefined) => {
+    if (stored != null) note(what, stored, withinBonusRange(stored));
+  };
+
+  const storedSlots = (sheet.spellcasting?.slots ?? {}) as Record<string, { total?: unknown; expended?: unknown } | undefined>;
+  const shownSlots = withAllSlotLevels(sheet.spellcasting?.slots) as unknown as Record<string, { total: number; expended: number }>;
+  for (const level of ['1', '2', '3', '4', '5', '6', '7', '8', '9']) {
+    note(`level ${level} spell slots`, storedSlots[level]?.total, shownSlots[level].total);
+    note(`level ${level} spell slots used`, storedSlots[level]?.expended, shownSlots[level].expended);
+  }
+
+  noteBonus('initiative other bonus', sheet.initiativeBonus ?? dnd5eBackfilledInitiativeBonus(sheet));
+  noteBonus(
+    'passive Perception other bonus',
+    sheet.passivePerceptionBonus ??
+      (typeof sheet.passivePerception === 'number'
+        ? sheet.passivePerception - passiveScore(dnd5eSkillBonus(sheet, 'perception'))
+        : null)
+  );
+  if (sheet.spellcasting) {
+    noteBonus('spell save DC other bonus', sheet.spellcasting.spellSaveDCOtherBonus ?? dnd5eBackfilledSpellSaveDCBonus(sheet));
+    noteBonus('spell attack other bonus', sheet.spellcasting.spellAttackOtherBonus ?? dnd5eBackfilledSpellAttackBonus(sheet));
+  }
+  return changes;
+}
+
+/**
  * Drop the separate `languages` list a sheet written before 1.3.0 carries.
  *
  * The form's proficiency boxes are read from the stored sheet, which puts
@@ -325,6 +365,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Type assertion for D&D 5e character data
   const data = character.data as DnD5eFormData;
+  // Said once, above the sheet, for as long as it is open.
+  const [broughtWithinRange] = useState(() => numbersBroughtWithinRange(data ?? ({} as DnD5eFormData)));
 
 
   // Form state, initialised from the editor's own copy of the sheet. The
@@ -3220,6 +3262,12 @@ min={1}
             ))}
           </ul>
         </div>
+      )}
+      {broughtWithinRange.length > 0 && (
+        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg">
+          Some numbers were outside what a sheet can store and now show within it:{' '}
+          {broughtWithinRange.join(', ')}. Saving keeps the new values.
+        </p>
       )}
       <div className="p-6">
         {activeTab === 'stats' && renderStatsTab()}
