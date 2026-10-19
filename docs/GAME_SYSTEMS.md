@@ -149,7 +149,9 @@ question, and getting it wrong invents numbers the designers never intended.
 
   **Player characters are different.** A PF2e character sheet records the parts
   — proficiency rank, item bonus, Dex cap, key attribute — so Armor Class, Class
-  DC and initiative *are* derivable, and `rules/pathfinder2e.ts` derives them.
+  DC and initiative *are* derivable, and `rules/pathfinder2e.ts` derives them,
+  with the Bulk an inventory carries (ten light items to 1 Bulk, the rest
+  rounded down) and its limits.
   The distinction is where the number comes from: a creature's is printed by
   Paizo, a character's is built from their own sheet.
 - **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and

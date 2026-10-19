@@ -20,7 +20,7 @@ import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
 import { getTemplatesForGameSystem } from '../index';
-import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus } from '../../rules/pathfinder2e';
+import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus, pf2eTotalBulk, pf2eBulkLimits } from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
@@ -96,6 +96,14 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const stored = (data.classDC as { total?: number } | undefined)?.total;
       if (stored === undefined) return;
       expect(stored).toBe(pf2eClassDC(data));
+    });
+
+    it(`${template.name} stores the Bulk its inventory and Strength give`, () => {
+      const stored = data.bulk as { current: number; encumbered: number; maximum: number } | undefined;
+      if (stored === undefined) return;
+      const strength = (data.attributes as { strength?: { modifier?: number } } | undefined)?.strength?.modifier ?? 0;
+      const { encumbered, maximum } = pf2eBulkLimits(strength);
+      expect(stored).toEqual({ current: pf2eTotalBulk(data.inventory).bulk, encumbered, maximum });
     });
 
     // The editor looks attributes up by their full name and offers the

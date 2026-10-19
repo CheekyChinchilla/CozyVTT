@@ -26,7 +26,6 @@ import { AssetType } from '../../../types';
 import type { Character, CharacterData } from '../../../types';
 import type {
   PF2eCharacterData,
-  PF2eInventoryItem,
   PF2eSkills,
   PF2eSpellcasting,
   PF2eAttributes,
@@ -46,7 +45,7 @@ import NumberField from '../../ui/NumberField';
 import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
-import { pf2eArmorClass, pf2eClassDC } from '@/utils/rules/pathfinder2e';
+import { pf2eArmorClass, pf2eClassDC, pf2eTotalBulk, pf2eBulkLimits, formatPf2eBulk } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
 import {
@@ -130,19 +129,6 @@ const PROFICIENCY_RANKS: ProficiencyRank[] = ['untrained', 'trained', 'expert', 
 
 const calculateModifier = (score: number): number => Math.floor((score - 10) / 2);
 const formatModifier = (mod: number): string => mod >= 0 ? `+${mod}` : `${mod}`;
-
-// TODO(sheets): the inventory's Bulk box stores what is typed as a string, so
-// an item typed as "2" counts as 0 here and in bulkToNumber in BulkTracker, and
-// only light items add to the total. Read a numeric string as its number.
-const calculateTotalBulk = (inventory: PF2eInventoryItem[]): number => {
-  return inventory.reduce((total, item) => {
-    let itemBulk = 0;
-    if (typeof item.bulk === 'number') itemBulk = item.bulk;
-    else if (item.bulk === 'L') itemBulk = 0.1;
-    else if (item.bulk === '—' || item.bulk === '-') itemBulk = 0;
-    return total + (itemBulk * (item.quantity || 1));
-  }, 0);
-};
 
 export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorProps> = ({
   character,
@@ -573,12 +559,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     formData.classDC?.proficiencyRank,
   ]);
 
-  // Auto-calculate bulk
+  // Bulk carried and the limits, kept in step for exports; the sheets work
+  // them out from the inventory with the same rules.
   useEffect(() => {
     if (!formData.inventory) return;
-    const currentBulk = calculateTotalBulk(formData.inventory);
-    const strMod = formData.attributes?.strength?.modifier || 0;
-    setFormData((prev) => ({ ...prev, bulk: { current: currentBulk, encumbered: 5 + strMod, maximum: 10 + strMod } }));
+    const current = pf2eTotalBulk(formData.inventory).bulk;
+    const { encumbered, maximum } = pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0);
+    setFormData((prev) => ({ ...prev, bulk: { current, encumbered, maximum } }));
   }, [formData.inventory, formData.attributes?.strength?.modifier]);
 
   // Auto-calculate maximum HP
@@ -1545,7 +1532,9 @@ min={0} value={formData.currency?.[currency.key]} onChange={(v: number) => updat
       <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">
         <h3 className="text-lg font-bold text-blue-800 mb-2">Bulk Summary</h3>
         <div className="text-sm text-blue-700">
-          <span className="font-semibold">{formData.bulk?.current?.toFixed(1) || 0}</span> / Encumbered: {formData.bulk?.encumbered || 5} / Max: {formData.bulk?.maximum || 10}
+          <span className="font-semibold">{formatPf2eBulk(pf2eTotalBulk(formData.inventory))}</span> / Encumbered above:{' '}
+          {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).encumbered} / Max:{' '}
+          {pf2eBulkLimits(formData.attributes?.strength?.modifier ?? 0).maximum}
         </div>
       </div>
 

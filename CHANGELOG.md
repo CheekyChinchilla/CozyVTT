@@ -93,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **Pathfinder 2e Bulk follows the rules on the sheet and in the editor.** A Bulk typed in an item's box, such as 2, counted as nothing; a light item counted as 0.1 with nothing rounded down, so a character carrying exactly 5 + Strength, or a few light items more, was marked encumbered; an item with no quantity made the total unreadable, and one with no Bulk at all stopped the sheet from opening. Ten light items now make 1 Bulk with the rest rounded down, a character is encumbered only above 5 + Strength, and the sheet works Bulk out from the inventory and Strength. The built-in Level 1 Fighter's stored Bulk is corrected to 5, encumbered above 8, at most 13.
+
 - **A Pathfinder 2e character whose AC, Class DC or Spell DC works out under 10 can be saved.** All three were refused below 10, although the rules allow less: Dexterity 8 untrained gives AC 9, and such a character could not be saved at all.
 
 - **Every Pathfinder 2e Add Feat button has its colour.** On the **Feats & Features** tab, the **Add Feat** buttons for Ancestry & Heritage, Skill and Bonus feats had no background, so their white text could not be seen.

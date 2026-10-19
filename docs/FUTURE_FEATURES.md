@@ -35,7 +35,6 @@ _Nothing at present._
 - `1.5.4` **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.4` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
 - `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
-- `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
 - `1.5.4` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
 - `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
 - `1.5.4` **In a dark theme, parts of a character sheet are hard to read.** The sheets are only partly themed: the D&D 5e sheet stays white while its saving throw names take the theme's light text color, and the Call of Cthulhu sheet turns dark around its dark sepia numbers (`components/character-sheets/`).

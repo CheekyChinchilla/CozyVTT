@@ -3,62 +3,29 @@
  *
  * Displays inventory with Pathfinder 2e bulk system.
  * Bulk can be: number (1, 2, 3...), "L" (light), or "—" (negligible).
- * 10 light items = 1 bulk.
+ * 10 light items = 1 bulk, fractions rounded down.
  */
 
 import React from 'react';
 import { Package } from 'lucide-react';
 
 import type { PF2eInventoryItem as InventoryItem } from '@/types/game-systems';
-
-export interface BulkData {
-  current: number;
-  encumbered: number; // 5 + STR modifier
-  maximum: number; // 10 + STR modifier
-}
+import { formatPf2eBulk, pf2eBulkLimits, pf2eItemBulk, pf2eTotalBulk } from '@/utils/rules/pathfinder2e';
 
 interface BulkTrackerProps {
   inventory: InventoryItem[];
-  bulk: BulkData;
+  /** The character's Strength modifier, which sets the limits. */
+  strengthModifier: number;
 }
 
 /**
- * Convert bulk value to number for calculation
+ * The inventory and the Bulk it carries, worked out from the items and
+ * Strength by the shared rules, so the sheet shows what is carried now rather
+ * than what was last stored.
  */
-const bulkToNumber = (bulk: number | string | undefined): number => {
-  if (typeof bulk === 'number') return bulk;
-  if (bulk === 'L') return 0.1;
-  if (bulk === '—' || bulk === '-') return 0;
-  return 0;
-};
-
-/**
- * Calculate total bulk from inventory
- */
-export const calculateTotalBulk = (inventory: InventoryItem[]): number => {
-  return inventory.reduce((total, item) => {
-    const itemBulk = bulkToNumber(item.bulk);
-    // TODO(sheets): an item with no quantity makes the total NaN. Right: count
-    // a missing quantity as 1.
-    return total + (itemBulk * item.quantity!);
-  }, 0);
-};
-
-/**
- * Format bulk for display
- */
-const formatBulk = (bulk: number | string): string => {
-  if (bulk === 'L') return 'L';
-  if (bulk === '—' || bulk === '-') return '—';
-  if (typeof bulk === 'number') {
-    return bulk % 1 === 0 ? bulk.toString() : bulk.toFixed(1);
-  }
-  return bulk.toString();
-};
-
-export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => {
-  const isEncumbered = bulk.current >= bulk.encumbered;
-  const isOverloaded = bulk.current > bulk.maximum;
+export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, strengthModifier }) => {
+  const carried = pf2eTotalBulk(inventory);
+  const { encumbered, maximum, isEncumbered, isOverloaded } = pf2eBulkLimits(strengthModifier, carried.bulk);
 
   return (
     <div className="space-y-4">
@@ -68,11 +35,11 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => 
           <div>
             <h4 className="font-bold text-blue-800 text-lg mb-1">Bulk Carried</h4>
             <div className="text-sm text-blue-700">
-              <span className="font-semibold">{bulk.current.toFixed(1)}</span>
+              <span className="font-semibold">{formatPf2eBulk(carried)}</span>
               {' / '}
-              <span>Encumbered: {bulk.encumbered}</span>
+              <span>Encumbered above: {encumbered}</span>
               {' / '}
-              <span>Max: {bulk.maximum}</span>
+              <span>Max: {maximum}</span>
             </div>
           </div>
           <div className="text-right">
@@ -104,7 +71,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => 
                 ? 'bg-amber-500'
                 : 'bg-green-500'
             }`}
-            style={{ width: `${Math.min((bulk.current / bulk.maximum) * 100, 100)}%` }}
+            style={{ width: `${maximum > 0 ? Math.min((carried.bulk / maximum) * 100, 100) : 100}%` }}
           />
         </div>
 
@@ -148,21 +115,18 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, bulk }) => 
 
                 <div className="grid grid-cols-3 gap-2 text-xs text-stone-600 mt-2">
                   <div>
-                    <span className="font-semibold">Qty:</span> {item.quantity}
+                    <span className="font-semibold">Qty:</span> {item.quantity ?? 1}
                   </div>
                   <div>
-                    {/* TODO(sheets): formatBulk calls toString on an item's bulk, so an item
-                        saved with none (the schema allows it) throws and the sheet shows its
-                        error screen. Right: show a dash, and treat a missing quantity as 1. */}
-                    <span className="font-semibold">Bulk:</span> {formatBulk(item.bulk!)}
-                    {item.quantity! > 1 && (
+                    <span className="font-semibold">Bulk:</span> {formatPf2eBulk(pf2eItemBulk(item.bulk))}
+                    {(item.quantity ?? 1) > 1 && (
                       <span className="text-stone-500">
-                        {' '}(× {item.quantity} = {(bulkToNumber(item.bulk) * item.quantity!).toFixed(1)})
+                        {' '}(× {item.quantity} = {formatPf2eBulk(pf2eTotalBulk([item]))})
                       </span>
                     )}
                   </div>
                   <div>
-                    <span className="font-semibold">Value:</span> {item.value} gp
+                    <span className="font-semibold">Value:</span> {item.value != null ? `${item.value} gp` : '—'}
                   </div>
                 </div>
 

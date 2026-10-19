@@ -1,7 +1,7 @@
 /**
  * rules/pathfinder2e.ts
  * Pathfinder 2e derived numbers: proficiency bonus, Armor Class, Class DC,
- * and the attribute a sheet names.
+ * the attribute a sheet names, and Bulk.
  *
  * ---------------------------------------------------------------------------
  * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
@@ -117,4 +117,75 @@ export function pf2eClassDC(data: unknown): number {
   const attrMod = matched ? num(rec(attributes[matched])?.modifier) : 0;
 
   return 10 + attrMod + pf2eProficiencyBonus(sheet?.level, dc.proficiencyRank);
+}
+
+/** Light items that make 1 Bulk. */
+export const LIGHT_ITEMS_PER_BULK = 10;
+
+/** Bulk carried: whole Bulk, and light items left over that make less than 1. */
+export interface Pf2eBulk {
+  bulk: number;
+  light: number;
+}
+
+/**
+ * One item's Bulk, read the ways a sheet stores it: a number, a number typed
+ * as text ("2"), "L" in either case, or a number between 0 and 1 (the built-in
+ * templates wrote 0.1) for a light item, and "—", "-" or nothing for
+ * negligible. Anything else counts as nothing.
+ */
+export function pf2eItemBulk(value: unknown): Pf2eBulk {
+  const text = typeof value === 'string' ? value.trim() : null;
+  if (text !== null && text.toLowerCase() === 'l') return { bulk: 0, light: 1 };
+  const amount = text !== null ? (text === '' ? NaN : Number(text)) : value;
+  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return { bulk: 0, light: 0 };
+  return amount < 1 ? { bulk: 0, light: 1 } : { bulk: amount, light: 0 };
+}
+
+/**
+ * The Bulk an inventory carries.
+ *
+ * Core Rulebook, "Bulk": "Ten light items count as 1 Bulk, and you round down
+ * fractions (so 9 light items count as 0 Bulk, and 11 light items count as 1
+ * Bulk)". An item with no quantity is one item; a quantity of 0 is none.
+ */
+export function pf2eTotalBulk(inventory: unknown): Pf2eBulk {
+  let bulk = 0;
+  let light = 0;
+  for (const entry of Array.isArray(inventory) ? inventory : []) {
+    const item = rec(entry);
+    if (!item) continue;
+    const quantity = typeof item.quantity === 'number' && Number.isFinite(item.quantity) && item.quantity >= 0 ? item.quantity : 1;
+    const each = pf2eItemBulk(item.bulk);
+    bulk += each.bulk * quantity;
+    light += each.light * quantity;
+  }
+  return { bulk: bulk + Math.floor(light / LIGHT_ITEMS_PER_BULK), light: light % LIGHT_ITEMS_PER_BULK };
+}
+
+/**
+ * The Bulk a character can carry, and whether `carried` is past either limit.
+ *
+ * Core Rulebook: "5 plus your Strength modifier without penalty; if you carry
+ * more, you gain the encumbered condition. You can't hold or carry more Bulk
+ * than 10 plus your Strength modifier." Light items short of a whole Bulk do
+ * not count, so the whole Bulk is what is compared.
+ */
+export function pf2eBulkLimits(strengthModifier: number, carried = 0): {
+  encumbered: number;
+  maximum: number;
+  isEncumbered: boolean;
+  isOverloaded: boolean;
+} {
+  const encumbered = 5 + num(strengthModifier);
+  const maximum = 10 + num(strengthModifier);
+  return { encumbered, maximum, isEncumbered: carried > encumbered, isOverloaded: carried > maximum };
+}
+
+/** Bulk as a sheet writes it: "—" for none, "3 L", "5", or "5 and 2 L". */
+export function formatPf2eBulk({ bulk, light }: Pf2eBulk): string {
+  const whole = Number.isInteger(bulk) ? String(bulk) : bulk.toFixed(1);
+  if (bulk === 0 && light === 0) return '—';
+  if (bulk === 0) return `${light} L`;
+  return light === 0 ? whole : `${whole} and ${light} L`;
 }

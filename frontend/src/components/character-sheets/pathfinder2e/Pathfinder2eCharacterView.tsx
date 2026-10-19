@@ -604,10 +604,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         </div>
       </div>
 
-      <BulkTracker
-        inventory={data.inventory || []}
-        bulk={data.bulk || { current: 0, encumbered: 5, maximum: 10 }}
-      />
+      <BulkTracker inventory={data.inventory || []} strengthModifier={data.attributes?.strength?.modifier ?? 0} />
 
       {/* Treasure — recorded on the sheet but never shown here before. */}
       {data.treasure && (
