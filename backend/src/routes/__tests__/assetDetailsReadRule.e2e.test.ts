@@ -6,8 +6,8 @@
  * showed the DM's own map could load the picture but not its details, and a
  * campaign asset whose campaign was gone (no campaign recorded) was shown to
  * anyone signed in. It now asks what the file routes ask (canReadAsset). A
- * reader who is not a member of the asset's campaign is not told that
- * campaign's name.
+ * reader who is not a member of the asset's campaign is not told which
+ * campaign it is, by name or by id.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -86,8 +86,9 @@ it('shows a player the details of the DM\'s own map the table is showing', async
 it('shows a player another campaign\'s picture their table uses, without that campaign\'s name', async () => {
   const res = await details('player', ids.otherCampaignArt);
   expect(res.status).toBe(200);
-  expect(res.body.asset).toMatchObject({ id: ids.otherCampaignArt, name: 'Borrowed goblin', campaign: null });
+  expect(res.body.asset).toMatchObject({ id: ids.otherCampaignArt, name: 'Borrowed goblin', campaign: null, campaignId: null });
   expect(JSON.stringify(res.body)).not.toContain('The Other Table');
+  expect(JSON.stringify(res.body)).not.toContain(otherCampaign);
 });
 
 it('names the campaign to its own members', async () => {

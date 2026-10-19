@@ -5788,9 +5788,9 @@ paths:
         personal map the table is showing, a token's art, a document shared
         with the campaign, the atmosphere track); GLOBAL to anyone signed in.
         A campaign asset with no campaign recorded is its uploader's and an
-        admin's alone. `campaign` names the asset's campaign only to that
-        campaign's members and to admins; anyone else is sent `campaign:
-        null`.
+        admin's alone. `campaign` and `campaignId` name the asset's campaign
+        only to that campaign's members and to admins; anyone else is sent
+        both as `null`.
       operationId: getAssetById
       security:
         - cookieAuth: []

@@ -576,14 +576,15 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
     }
 
-    // A campaign's name is for its members. A reader whose campaign uses the
-    // asset, or who was shared a document, is not told whose it is.
+    // Which campaign an asset is in is for its members. A reader whose
+    // campaign uses the asset, or who was shared a document, is told neither
+    // its name nor its id.
     if (asset.campaign && req.session.platformRole !== 'ADMIN') {
       const member = await prisma.campaignMembership.findUnique({
         where: { userId_campaignId: { userId, campaignId: asset.campaign.id } },
         select: { userId: true },
       });
-      if (!member) return res.json({ asset: { ...asset, campaign: null } });
+      if (!member) return res.json({ asset: { ...asset, campaign: null, campaignId: null } });
     }
 
     return res.json({ asset });
