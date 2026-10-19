@@ -36,3 +36,19 @@ it('offers no roll for damage the dice cannot read', () => {
   expect(onRoll).not.toHaveBeenCalledWith(expect.anything(), 'Rock Damage');
   expect(damage.closest('td')).not.toHaveAttribute('title');
 });
+
+it('says in the editor which skill a weapon rolls at, where the sheet has it', () => {
+  render(
+    <WeaponsList
+      weapons={[
+        { name: 'Fist', skill: 'Brawl', skillValue: 25, damage: '1d3+DB', range: 'Touch', attacks: 1 },
+        { name: 'Whip', skill: 'Whip', skillValue: 15, damage: '1d3', range: '10 ft', attacks: 1 },
+      ]}
+      skills={{ fighting: { brawl: { baseValue: 25, currentValue: 55, improvementChecked: false }, custom: [] } }}
+      editable
+      onChange={vi.fn()}
+    />
+  );
+  expect(screen.getByText('Rolls at 55%, the sheet\'s Brawl')).toBeInTheDocument();
+  expect(screen.queryByText(/the sheet's Whip/)).not.toBeInTheDocument();
+});

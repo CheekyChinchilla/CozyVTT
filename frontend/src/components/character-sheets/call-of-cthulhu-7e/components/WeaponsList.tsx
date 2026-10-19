@@ -132,6 +132,9 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                 // The skill the weapon names, where the sheet has it; the
                 // value stored with the weapon goes stale as the skill rises.
                 const skillValue = cocWeaponSkillValue(skills, weapon.skill ?? '', weapon.skillValue ?? 0);
+                // Without a stored value to fall back on, a skill the sheet
+                // does not have reads as no number.
+                const namedValue = cocWeaponSkillValue(skills, weapon.skill ?? '', Number.NaN);
                 const damageRoll = weapon.damage ? cocDamageWithBonus(weapon.damage, damageBonus) : '';
                 // Damage the dice cannot read is shown and not offered as a roll.
                 const rollsDamage = isClickable && damageRoll !== '' && isValidDiceExpression(damageRoll);
@@ -181,15 +184,21 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                   {/* Skill Value */}
                   <td className="px-3 py-2 text-center">
                     {editable ? (
-                      <NumberField
-                        value={weapon.skillValue}
-                        aria-label={`Skill value of weapon ${index + 1}`}
-                        onChange={(v: number) => handleWeaponChange(index, 'skillValue', v)}
-                        className="w-16 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
-                        min={0}
-                        max={100}
-                        fallback={0}
-                      />
+                      <>
+                        <NumberField
+                          value={weapon.skillValue}
+                          aria-label={`Skill value of weapon ${index + 1}`}
+                          onChange={(v: number) => handleWeaponChange(index, 'skillValue', v)}
+                          className="w-16 bg-white/50 border border-sepia-400 rounded-sm px-2 py-1 text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+                          min={0}
+                          max={100}
+                          fallback={0}
+                        />
+                        {/* The box is used only where the sheet has no such skill. */}
+                        {!Number.isNaN(namedValue) && (
+                          <div className="text-xs text-sepia-600 mt-0.5">Rolls at {namedValue}%, the sheet's {weapon.skill?.trim()}</div>
+                        )}
+                      </>
                     ) : (
                       <span className="font-semibold text-sepia-900">{skillValue}%</span>
                     )}
@@ -308,7 +317,7 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
       <div className="bg-sepia-100/50 rounded-md p-3">
         <div className="text-xs text-sepia-700 space-y-1">
           <div><strong>Skill:</strong> The skill used to attack with this weapon</div>
-          <div><strong>Value:</strong> Your skill percentage (Regular / Half / Fifth)</div>
+          <div><strong>Value:</strong> Your skill percentage (Regular / Half / Fifth), taken from the skill of that name where the sheet has one</div>
           <div><strong>Damage:</strong> Dice expression for damage (e.g., "1d10" or "1d3+DB"); DB rolls your damage bonus. Half DB, for thrown weapons and bows, is dropped when your bonus is 0 and otherwise left to roll yourself. Firearms take no damage bonus</div>
           <div><strong>Range:</strong> Effective range (Touch, 15 yards, 50 yards, etc.)</div>
           <div><strong>Atks:</strong> Number of attacks per round</div>

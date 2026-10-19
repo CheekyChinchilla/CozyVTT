@@ -1024,6 +1024,7 @@ value={formData.derivedStats?.luck?.score}
     <div>
       <WeaponsList
         weapons={formData.combat?.weapons || []}
+        skills={formData.skills}
         editable
         onChange={(weapons) => {
           setFormData({
