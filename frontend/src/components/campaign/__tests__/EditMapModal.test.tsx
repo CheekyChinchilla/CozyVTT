@@ -22,7 +22,7 @@ vi.mock('@/services/map.service', () => ({
   },
 }));
 vi.mock('@/services/api', () => {
-  const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}` };
+  const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}`, getAssetThumbnailUrl: (id: string) => `/api/assets/maps/${id}/thumbnail` };
   return { api: client, default: client };
 });
 vi.mock('@/utils/detectMapGrid', () => ({ detectMapGrid: vi.fn().mockResolvedValue(null) }));

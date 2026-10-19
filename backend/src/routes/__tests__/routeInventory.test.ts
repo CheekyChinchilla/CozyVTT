@@ -151,6 +151,8 @@ const TESTED: Record<string, string> = {
   'GET /api/assets/documents/:id': 'routes/__tests__/atmosphereTrackWrite.e2e.test.ts',
   'GET /api/assets/maps/:id': 'routes/__tests__/assetScopeAndReferences.e2e.test.ts',
   'GET /api/assets/tokens/:id': 'routes/__tests__/assetReferenceChecks.e2e.test.ts',
+  'GET /api/assets/maps/:id/thumbnail': 'routes/__tests__/assetThumbnails.e2e.test.ts',
+  'GET /api/assets/tokens/:id/thumbnail': 'routes/__tests__/assetThumbnails.e2e.test.ts',
   'GET /api/assets/audio/:id': 'routes/__tests__/atmosphereAudioAccess.e2e.test.ts',
   'PATCH /api/assets/:id/scope': 'routes/__tests__/assetScopeAndReferences.e2e.test.ts',
   'POST /api/invitations/:id/accept': 'routes/__tests__/invitationAccept.e2e.test.ts',

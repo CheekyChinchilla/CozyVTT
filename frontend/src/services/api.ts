@@ -977,6 +977,14 @@ class ApiClient {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
   }
 
+  /**
+   * A map or token picture's thumbnail, at most 512 pixels, for cards and
+   * pickers; the full picture for one that has none.
+   */
+  getAssetThumbnailUrl(id: string, type: 'maps' | 'tokens'): string {
+    return `${API_BASE_URL}/api/assets/${type}/${id}/thumbnail`;
+  }
+
   /** The address that downloads an asset under its original file name. */
   getAssetDownloadUrl(id: string): string {
     return `${API_BASE_URL}/api/assets/${encodeURIComponent(id)}/download`;

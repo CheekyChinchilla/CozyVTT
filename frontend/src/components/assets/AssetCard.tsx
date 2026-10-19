@@ -62,10 +62,10 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   // Get asset thumbnail URL
   const getThumbnailUrl = (): string => {
     if (asset.type === AssetType.MAP) {
-      return api.getAssetUrl(asset.id, 'maps');
+      return api.getAssetThumbnailUrl(asset.id, 'maps');
     }
     if (asset.type === AssetType.TOKEN) {
-      return api.getAssetUrl(asset.id, 'tokens');
+      return api.getAssetThumbnailUrl(asset.id, 'tokens');
     }
     // An avatar is served by its owner's id; a deleted account's has none.
     if (asset.type === AssetType.AVATAR) {

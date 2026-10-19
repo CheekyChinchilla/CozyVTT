@@ -57,6 +57,7 @@ vi.mock('@/services/campaign.service', () => ({
 const api = vi.hoisted(() => ({
   deleteAsset: vi.fn(),
   getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
+  getAssetThumbnailUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}/thumbnail`,
 }));
 vi.mock('@/services/api', () => ({ api, default: api }));
 

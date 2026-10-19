@@ -160,7 +160,7 @@ export default function AssetGrid({
               </span>
             ) : (
               <img
-                src={api.getAssetUrl(asset.id, dir)}
+                src={dir === 'maps' || dir === 'tokens' ? api.getAssetThumbnailUrl(asset.id, dir) : api.getAssetUrl(asset.id, dir)}
                 alt={asset.name}
                 className="w-full h-full object-cover"
                 onError={() => setFailed((prev) => new Set(prev).add(asset.id))}

@@ -17,6 +17,7 @@ import { AssetType, AssetScope } from '@/types';
 vi.mock('../../../services/api', () => ({
   api: {
     getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
+    getAssetThumbnailUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}/thumbnail`,
     getAssetDownloadUrl: (id: string) => `https://api.example.com/api/assets/${id}/download`,
   },
 }));
@@ -44,10 +45,10 @@ describe('AssetCard', () => {
   it.each([
     [AssetType.MAP, 'maps'],
     [AssetType.TOKEN, 'tokens'],
-  ])('shows a %s as a picture from its serving route', (type, dir) => {
+  ])('shows a %s as its thumbnail, not the full picture', (type, dir) => {
     const { container } = renderCard(asset(type, 'thing.png'));
     const img = container.querySelector('img');
-    expect(img?.getAttribute('src')).toBe(`/api/assets/${dir}/a1`);
+    expect(img?.getAttribute('src')).toBe(`/api/assets/${dir}/a1/thumbnail`);
   });
 
   it('shows an avatar as a picture keyed by its owner', () => {

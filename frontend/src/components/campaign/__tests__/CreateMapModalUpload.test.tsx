@@ -13,7 +13,7 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 vi.mock('@/services/api', () => {
-  const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}`, listAssets: vi.fn().mockResolvedValue({ assets: [], pagination: {} }) };
+  const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}`, getAssetThumbnailUrl: (id: string) => `/api/assets/maps/${id}/thumbnail`, listAssets: vi.fn().mockResolvedValue({ assets: [], pagination: {} }) };
   return { api: client, default: client };
 });
 vi.mock('@/services/map.service', () => ({ default: { createMap: vi.fn() } }));

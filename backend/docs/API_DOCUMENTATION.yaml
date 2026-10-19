@@ -6488,6 +6488,92 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
+  /api/assets/maps/{id}/thumbnail:
+    get:
+      tags:
+        - Assets
+      summary: Serve map thumbnail
+      description: >-
+        Serves the thumbnail of a MAP asset's picture, at most 512 pixels on
+        its longer side, made at upload, for the Asset Library's cards and the
+        pickers. The same read rule, 404 for a refused read, content types,
+        `nosniff` and caching as `GET /api/assets/maps/{id}`, with an ETag
+        of its own. An asset with no thumbnail (one imported from a campaign
+        archive, or uploaded before thumbnails were made) is sent its full
+        picture, with the full picture's ETag.
+      operationId: serveMapThumbnail
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The thumbnail, or the full picture where there is none.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
+        '404':
+          description: >-
+            No MAP asset with this id that the caller may read
+            (`Map asset not found`; one they may not read is answered the same way),
+            or neither the thumbnail nor the picture is on disk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/assets/tokens/{id}/thumbnail:
+    get:
+      tags:
+        - Assets
+      summary: Serve token thumbnail
+      description: >-
+        Serves the thumbnail of a TOKEN asset's picture, at most 512 pixels on
+        its longer side, made at upload, for the Asset Library's cards and the
+        pickers. The same read rule, 404 for a refused read, content types,
+        `nosniff` and caching as `GET /api/assets/tokens/{id}`, with an ETag
+        of its own. An asset with no thumbnail (one imported from a campaign
+        archive, or uploaded before thumbnails were made) is sent its full
+        picture, with the full picture's ETag.
+      operationId: serveTokenThumbnail
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The thumbnail, or the full picture where there is none.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
+        '404':
+          description: >-
+            No TOKEN asset with this id that the caller may read
+            (`Token asset not found`; one they may not read is answered the same way),
+            or neither the thumbnail nor the picture is on disk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/assets/audio/{id}:
     get:
       tags:

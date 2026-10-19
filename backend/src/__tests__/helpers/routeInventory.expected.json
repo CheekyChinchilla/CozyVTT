@@ -1018,6 +1018,22 @@
     },
     {
       "method": "GET",
+      "path": "/api/assets/maps/:id/thumbnail",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
+      "path": "/api/assets/tokens/:id/thumbnail",
+      "handlers": [
+        "requireAuth",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "GET",
       "path": "/api/assets/audio/:id",
       "handlers": [
         "requireAuth",

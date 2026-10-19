@@ -21,6 +21,7 @@ vi.mock('@/services/api', () => ({
   api: {
     listAssets: vi.fn(),
     getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
+    getAssetThumbnailUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}/thumbnail`,
   },
 }));
 
@@ -55,17 +56,18 @@ describe('AssetGrid', () => {
     expect(mockListAssets).toHaveBeenCalledWith(expect.objectContaining({ type: AssetType.TOKEN, usable: true }));
   });
 
-  it('builds thumbnail URLs from the type-specific serving route', async () => {
+  // The thumbnail made at upload, where the full picture was drawn into a
+  // 100-pixel square.
+  it('shows each thumbnail from the type-specific thumbnail route', async () => {
     render(<AssetGrid type={AssetType.TOKEN} selectedId={null} onSelect={vi.fn()} />);
     const img = await screen.findByAltText('Goblin');
-    // Not /api/assets/a1/file — that route does not exist on the server.
-    expect(img).toHaveAttribute('src', '/api/assets/tokens/a1');
+    expect(img).toHaveAttribute('src', '/api/assets/tokens/a1/thumbnail');
   });
 
   it('uses the maps route for map assets', async () => {
     render(<AssetGrid type={AssetType.MAP} selectedId={null} onSelect={vi.fn()} />);
     const img = await screen.findByAltText('Goblin');
-    expect(img).toHaveAttribute('src', '/api/assets/maps/a1');
+    expect(img).toHaveAttribute('src', '/api/assets/maps/a1/thumbnail');
   });
 
   it('reports the clicked asset', async () => {

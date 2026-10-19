@@ -1145,6 +1145,43 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
 });
 
 /**
+ * GET /api/assets/maps/:id/thumbnail and /api/assets/tokens/:id/thumbnail
+ * Serve the picture's thumbnail (at most 512 pixels), made at upload, for the
+ * Asset Library's cards and the pickers, which drew them from the full
+ * picture. Read as the full picture is read. An asset with no thumbnail (one
+ * imported, or uploaded before they were made) is sent its full picture.
+ * Requires: Authentication + access to asset
+ */
+function serveThumbnail(type: 'MAP' | 'TOKEN', notFound: string, label: string) {
+  return async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const asset = await prisma.asset.findUnique({ where: { id: req.params.id, type } });
+      // One the caller may not read is answered as if it were not there.
+      if (!asset || !(await canReadAssetFile(asset, req))) {
+        return res.status(404).json({ error: 'Not Found', message: notFound });
+      }
+      const thumbnail = asset.thumbnailPath ? normalizePath(asset.thumbnailPath) : null;
+      if (thumbnail && fs.existsSync(thumbnail)) {
+        if (handleAssetCaching(req, res, `${asset.id}-thumbnail`)) return;
+        return sendImageAsset(res, thumbnail);
+      }
+      const full = normalizePath(asset.filePath);
+      if (!fs.existsSync(full)) {
+        return res.status(404).json({ error: 'Not Found', message: 'Asset file not found on server' });
+      }
+      if (handleAssetCaching(req, res, asset.id)) return;
+      return sendImageAsset(res, full);
+    } catch (error) {
+      logger.error(`Error serving ${label} thumbnail`, { err: error });
+      return res.status(500).json({ error: 'Internal Server Error', message: `Failed to serve ${label} thumbnail` });
+    }
+  };
+}
+
+router.get('/maps/:id/thumbnail', authenticated, serveThumbnail('MAP', 'Map asset not found', 'map'));
+router.get('/tokens/:id/thumbnail', authenticated, serveThumbnail('TOKEN', 'Token asset not found', 'token'));
+
+/**
  * GET /api/assets/audio/:id
  * Stream an audio file
  * Requires: Authentication + access to asset
