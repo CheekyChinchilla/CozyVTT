@@ -80,7 +80,7 @@ describe('the editor', () => {
 describe('the read-only sheet', () => {
   it('shows the DC worked out with the spellcasting rank', () => {
     render(<Pathfinder2eCharacterView character={wizard({ proficiencyRank: 'expert', itemBonus: 0 }, { proficiencyRank: 'trained', itemBonus: 0, dc: 15 })} />);
-    const dc = screen.getByText('Spell DC').closest('div.bg-white') as HTMLElement;
+    const dc = screen.getByText('Spell DC').closest('div.bg-paper') as HTMLElement;
     expect(dc.textContent).toContain('21');
   });
 });

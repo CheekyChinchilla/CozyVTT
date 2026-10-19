@@ -38,18 +38,18 @@ describe('the read-only sheet', () => {
   it('works out a save', () => {
     render(<Pathfinder2eCharacterView character={character()} />);
     // Wisdom +3, level 1 expert +5.
-    expect(total('will', 'div.bg-white')).toContain('+8');
+    expect(total('will', 'div.bg-paper')).toContain('+8');
   });
 
   it('works out Perception', () => {
     render(<Pathfinder2eCharacterView character={character()} />);
     // Wisdom +3, trained +3, item +1.
-    expect(total('Perception', 'div.bg-stone-50')).toContain('+7');
+    expect(total('Perception', 'div.bg-ink\\/5')).toContain('+7');
   });
 
   it('works out a skill, its check penalty taken off', () => {
     render(<Pathfinder2eCharacterView character={character()} />);
     // Strength +2, trained +3, check penalty -1.
-    expect(total('Athletics', 'div.bg-white')).toContain('+4');
+    expect(total('Athletics', 'div.bg-paper')).toContain('+4');
   });
 });

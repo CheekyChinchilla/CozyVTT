@@ -30,7 +30,6 @@ const HEADER_COLOURS = /\/character-sheets\/[^/]+\/colorPresets\.ts$/;
 // TODO(sheets): the sheets moving onto the theme tokens, one folder at a time;
 // each entry goes as its sheet is converted, then this list.
 const NOT_YET_THEMED = [
-  '/src/components/character-sheets/pathfinder2e/',
   '/src/components/character-sheets/call-of-cthulhu-7e/',
 ];
 

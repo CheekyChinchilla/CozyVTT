@@ -32,11 +32,11 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
   return (
     <div className="space-y-4">
       {/* Bulk Summary */}
-      <div className="bg-linear-to-r/srgb from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4">
+      <div className="bg-info/10 border-2 border-info/30 rounded-lg p-4">
         <div className="flex items-center justify-between">
           <div>
-            <h4 className="font-bold text-blue-800 text-lg mb-1">Bulk Carried</h4>
-            <div className="text-sm text-blue-700">
+            <h4 className="font-bold text-info-ink text-lg mb-1">Bulk Carried</h4>
+            <div className="text-sm text-info-ink">
               <span className="font-semibold">{formatPf2eBulk(carried)}</span>
               {' / '}
               <span>Encumbered above: {encumbered}</span>
@@ -46,17 +46,17 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
           </div>
           <div className="text-right">
             {isOverloaded && (
-              <div className="px-3 py-1 bg-red-600 text-white text-sm font-bold rounded-lg">
+              <div className="px-3 py-1 bg-danger/15 border border-danger/30 text-danger-ink text-sm font-bold rounded-lg">
                 OVERLOADED
               </div>
             )}
             {isEncumbered && !isOverloaded && (
-              <div className="px-3 py-1 bg-amber-600 text-white text-sm font-bold rounded-lg">
+              <div className="px-3 py-1 bg-warning/15 border border-warning/30 text-warning-ink text-sm font-bold rounded-lg">
                 ENCUMBERED
               </div>
             )}
             {!isEncumbered && (
-              <div className="px-3 py-1 bg-green-600 text-white text-sm font-bold rounded-lg">
+              <div className="px-3 py-1 bg-success/15 border border-success/30 text-success-ink text-sm font-bold rounded-lg">
                 UNENCUMBERED
               </div>
             )}
@@ -64,21 +64,21 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
         </div>
 
         {/* Bulk Bar */}
-        <div className="mt-3 bg-stone-200 rounded-full h-3 overflow-hidden">
+        <div className="mt-3 bg-ink/15 rounded-full h-3 overflow-hidden">
           <div
             className={`h-full transition-all ${
               isOverloaded
-                ? 'bg-red-600'
+                ? 'bg-danger'
                 : isEncumbered
-                ? 'bg-amber-500'
-                : 'bg-green-500'
+                ? 'bg-warning'
+                : 'bg-success'
             }`}
             style={{ width: `${maximum > 0 ? Math.min((carried.bulk / maximum) * 100, 100) : 100}%` }}
           />
         </div>
 
         {isEncumbered && (
-          <div className="mt-2 text-xs text-blue-700">
+          <div className="mt-2 text-xs text-info-ink">
             <strong>Encumbered:</strong> -10 ft. to all speeds, Clumsy 1 condition
           </div>
         )}
@@ -87,7 +87,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
       {/* Inventory List */}
       <div className="space-y-2">
         {inventory.length === 0 && (
-          <div className="text-center py-8 text-stone-500 italic">
+          <div className="text-center py-8 text-ink-muted italic">
             No items in inventory
           </div>
         )}
@@ -95,34 +95,34 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
         {inventory.map((item, index) => (
           <div
             key={`${item.name}-${index}`}
-            className="bg-white border border-stone-200 rounded-lg p-3 shadow-xs hover:shadow-md transition-shadow"
+            className="bg-paper border border-ink/10 rounded-lg p-3 shadow-xs hover:shadow-md transition-shadow"
           >
             <div className="flex items-start justify-between">
               {/* Item Info */}
               <div className="flex-1">
                 <div className="flex items-center space-x-2 mb-1">
-                  <Package className="w-4 h-4 text-stone-500" />
-                  <span className="font-semibold text-stone-800">{item.name}</span>
+                  <Package className="w-4 h-4 text-ink-muted" />
+                  <span className="font-semibold text-ink">{item.name}</span>
                   {item.equipped && (
-                    <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                    <span className="px-2 py-0.5 bg-success/15 text-success-ink text-xs rounded-full font-medium">
                       Equipped
                     </span>
                   )}
                   {item.invested && (
-                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs rounded-full font-medium">
+                    <span className="px-2 py-0.5 bg-spirit/15 text-spirit-ink text-xs rounded-full font-medium">
                       Invested
                     </span>
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 text-xs text-stone-600 mt-2">
+                <div className="grid grid-cols-3 gap-2 text-xs text-ink-secondary mt-2">
                   <div>
                     <span className="font-semibold">Qty:</span> {item.quantity ?? 1}
                   </div>
                   <div>
                     <span className="font-semibold">Bulk:</span> {formatPf2eBulk(pf2eItemBulk(item.bulk))}
                     {(item.quantity ?? 1) > 1 && (
-                      <span className="text-stone-500">
+                      <span className="text-ink-muted">
                         {' '}(× {item.quantity} = {formatPf2eBulk(pf2eTotalBulk([item]))})
                       </span>
                     )}
@@ -133,7 +133,7 @@ export const BulkTracker: React.FC<BulkTrackerProps> = ({ inventory, currency, s
                 </div>
 
                 {item.notes && (
-                  <div className="mt-2 text-xs text-stone-600 italic">
+                  <div className="mt-2 text-xs text-ink-secondary italic">
                     {item.notes}
                   </div>
                 )}
