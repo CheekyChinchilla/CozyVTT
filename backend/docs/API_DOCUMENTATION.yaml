@@ -5553,7 +5553,9 @@ paths:
                       totalPages:
                         type: integer
         '400':
-          description: A `type` or `scope` outside its enum, or sent more than once.
+          description: >-
+            A `type` or `scope` outside its enum, or any parameter sent more
+            than once (`Send search once, as text`).
           content:
             application/json:
               schema:
@@ -8188,7 +8190,9 @@ paths:
                   offset:
                     type: integer
         '400':
-          description: A `gameSystem` outside the enum.
+          description: >-
+            A `gameSystem` outside the enum, or any parameter sent more than
+            once (`Send search once, as text`).
           content:
             application/json:
               schema:

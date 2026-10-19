@@ -5,7 +5,9 @@
  * `scope` and `gameSystem` filters straight to Prisma, whose enum columns throw
  * on a value they do not know, and a negative asset page became a negative
  * skip. Unknown values are refused now, and the page is clamped, as the
- * character-template list already clamps its paging.
+ * character-template list already clamps its paging. A text parameter sent
+ * twice arrives as a list, which the asset and creature lists handed to Prisma
+ * and answered 500; it is refused with 400 too.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -49,6 +51,16 @@ describe('GET /api/assets', () => {
     expect(res.body.error).toBe('Validation Error');
   });
 
+  it.each(['search=a&search=b', 'campaignId=x&campaignId=y', 'page=1&page=2', 'limit=5&limit=6', 'uploadedBy=none&uploadedBy=none', 'usable=true&usable=true'])(
+    'refuses %s, a parameter sent twice, with 400',
+    async (query) => {
+      const res = await agent.get(`/api/assets?${query}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
+    },
+  );
+
   it.each(['type=MAP', 'scope=USER', 'type=DOCUMENT&scope=GLOBAL', 'page=-3', 'page=0&limit=-5'])(
     'answers %s with 200',
     async (query) => {
@@ -72,6 +84,16 @@ describe('GET /api/campaigns/:campaignId/creatures', () => {
 
     expect(res.status).toBe(200);
   });
+
+  it.each(['search=a&search=b', 'source=srd&source=srd', 'cr=1&cr=2', 'limit=5&limit=6', 'offset=0&offset=1'])(
+    'refuses %s, a parameter sent twice, with 400',
+    async (query) => {
+      const res = await agent.get(`/api/campaigns/${campaignId}/creatures?${query}`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
+    },
+  );
 });
 
 describe('GET /api/character-templates', () => {
