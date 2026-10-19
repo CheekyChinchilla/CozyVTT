@@ -57,7 +57,7 @@ export const CharacteristicBlock: React.FC<CharacteristicBlockProps> = ({
       title={isClickable ? `Click to roll ${label} (target: ${regular}%)` : undefined}
     >
       {/* Label */}
-      <div className="flex items-center gap-1 text-xs font-semibold text-parchment-dark uppercase tracking-wider">
+      <div className="flex items-center gap-1 text-xs font-semibold text-ink-secondary uppercase tracking-wider">
         {label}
         {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
       </div>

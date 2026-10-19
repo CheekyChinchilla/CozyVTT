@@ -83,6 +83,8 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* A Pathfinder 2e sheet with more spell slots of a rank used than the rank's total is refused with 400, as a D&D 5e sheet already was.
   - *Character data.* A Pathfinder 2e sheet's `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` may be under 10; they were refused below it.
 
+- **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
+
 - **The placeholders in the D&D 5e and Pathfinder 2e editors' headers take the header's own colour.** **Character Name**, **Race**, **Class** and the other header boxes showed their placeholder in a fixed grey whatever the theme colour, which was hard to read on a dark one. The placeholder is now the header's text colour at half strength.
 
 - **The Asset Library, the pickers and the Map Manager load small previews of maps and tokens.** Every map and token upload has always made a preview of at most 512 pixels, but the library and pickers drew their cards from the full-size pictures, so a library of large maps was slow to open, on a phone or tablet especially. They now load the previews. A picture imported from a campaign archive, or uploaded before previews were made, has none and is still shown full size.
@@ -94,6 +96,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **The Call of Cthulhu read-only sheet reads clearly.** It showed a stray "0" on the **Backstory** tab when Cthulhu Mythos was 0 and no spells were known, showed the Mythos from a copy nothing used, and drew the STR to EDU labels in a pale fill colour that was hard to read on the light theme. The labels are now in the theme's secondary text colour.
 
 - **Every Call of Cthulhu skill rolls from the sheet, named once.** The Firearms, Other Language and Science rows did nothing when clicked, where every other skill rolled, and the last two printed their language or specialisation twice, such as "Science (Physics) (Physics)".
 
