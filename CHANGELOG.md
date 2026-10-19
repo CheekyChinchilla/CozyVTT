@@ -93,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e character stored with spellcasting but no spell attack or spell DC can be saved.** Such a character, from an import or a program, saved those two without a rank or item bonus, and every save was refused. The editor now fills them in as it opens.
+
 - **A Pathfinder 2e spell DC uses its own item bonus, and one spellcasting rank sets both spell attack and spell DC.** The editor offered a rank and an item bonus for each, but worked the DC out from the attack's, so the DC's own boxes did nothing, and the read-only sheet showed the DC with a rank it did not use. The rules give one proficiency for spell attacks and spell DCs, so the Spells tab now has one **Spellcasting proficiency**, and each item bonus counts toward its own total. A character whose attack item bonus was raising the DC, or whose two ranks differed, sees its spell DC change; a note above the sheet names the change when it opens.
 
 - **Pathfinder 2e Bulk follows the rules on the sheet and in the editor.** A Bulk typed in an item's box, such as 2, counted as nothing; a light item counted as 0.1 with nothing rounded down, so a character carrying exactly 5 + Strength, or a few light items more, was marked encumbered; an item with no quantity made the total unreadable, and one with no Bulk at all stopped the sheet from opening. Ten light items now make 1 Bulk with the rest rounded down, a character is encumbered only above 5 + Strength, and the sheet works Bulk out from the inventory and Strength. The built-in Level 1 Fighter's stored Bulk is corrected to 5, encumbered above 8, at most 13.

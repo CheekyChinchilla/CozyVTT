@@ -243,6 +243,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       tradition: editorTradition(data.spellcasting.tradition),
       type: editorCastingType(data.spellcasting.type),
       keyAttribute: fullAttributeName(data.spellcasting.keyAttribute),
+      // Whole, so the totals worked out below are saved with a rank and an
+      // item bonus: a block stored without either is refused otherwise.
+      spellAttackBonus: { proficiencyRank: 'untrained', itemBonus: 0, bonus: 0, ...data.spellcasting.spellAttackBonus },
+      spellDC: { proficiencyRank: 'untrained', itemBonus: 0, dc: 10, ...data.spellcasting.spellDC },
       cantrips: readPf2eCantrips(data.spellcasting.cantrips),
       slots: readPf2eSpellSlots(data.spellcasting.slots),
       spells: data.spellcasting.spells || [],
