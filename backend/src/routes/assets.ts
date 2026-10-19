@@ -555,45 +555,24 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       select: ASSET_PUBLIC_SELECT,
     });
 
-    if (!asset) {
+    // The rule the file routes use, so whoever may load the picture may read
+    // its details. One the caller may not read is answered as if it were not
+    // there.
+    if (!asset || !(await canReadAssetFile(asset, req))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Asset not found',
       });
     }
 
-    const isAdmin = req.session.platformRole === 'ADMIN';
-
-    // One the caller may not read is answered as if it were not there.
-    const unreadable = { error: 'Not Found', message: 'Asset not found' };
-
-    // USER-scoped assets: only owner or admin can access
-    if (asset.scope === 'USER' && asset.uploadedById !== userId && !isAdmin) {
-      return res.status(404).json(unreadable);
-    }
-
-    // TODO(assets): a CAMPAIGN asset whose campaign is gone passes this check, so
-    // anyone signed in reads its details; decide with canReadAsset, as the file
-    // routes do.
-    // CAMPAIGN-scoped assets: only campaign members can access
-    if (asset.scope === 'CAMPAIGN' && asset.campaignId && !isAdmin) {
-      const membership = await prisma.campaignMembership.findUnique({
-        where: {
-          userId_campaignId: {
-            userId,
-            campaignId: asset.campaignId,
-          },
-        },
+    // A campaign's name is for its members. A reader whose campaign uses the
+    // asset, or who was shared a document, is not told whose it is.
+    if (asset.campaign && req.session.platformRole !== 'ADMIN') {
+      const member = await prisma.campaignMembership.findUnique({
+        where: { userId_campaignId: { userId, campaignId: asset.campaign.id } },
+        select: { userId: true },
       });
-
-      if (!membership) {
-        return res.status(404).json(unreadable);
-      }
-      // A map's spirit layer is shown to a player only once they have crossed
-      // over; the library entry follows the map.
-      if (membership.role !== 'DM' && (await spiritLayerAssetIdsHiddenFrom(userId, [asset.campaignId])).includes(asset.id)) {
-        return res.status(404).json(unreadable);
-      }
+      if (!member) return res.json({ asset: { ...asset, campaign: null } });
     }
 
     return res.json({ asset });
