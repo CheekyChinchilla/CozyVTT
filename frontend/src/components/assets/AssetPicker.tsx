@@ -55,11 +55,14 @@ export default function AssetPicker({
   const [expanded, setExpanded] = useState(false);
   const [search, setSearch] = useState('');
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
-  // What AssetGrid has fetched, so the selected-asset preview can name it
-  // without a second fetch; and what was uploaded here, which the grid shows
+  // Every asset AssetGrid has fetched, kept across searches, so the
+  // selected-asset preview can name it without a second fetch while the grid
+  // shows something else; and what was uploaded here, which the grid shows
   // first without a refetch.
   const [assets, setAssets] = useState<Asset[]>([]);
   const [uploaded, setUploaded] = useState<Asset[]>([]);
+  const remember = (loaded: Asset[]) =>
+    setAssets((known) => [...loaded, ...known.filter((a) => !loaded.some((l) => l.id === a.id))]);
 
   const handleUploadSuccess = (asset: Asset) => {
     setUploaded((prev) => [asset, ...prev]);
@@ -172,7 +175,7 @@ export default function AssetPicker({
                 columns={columns}
                 showNames
                 emptyMessage={emptyMessage}
-                onAssetsLoaded={setAssets}
+                onAssetsLoaded={remember}
               />
             </div>
           </motion.div>
