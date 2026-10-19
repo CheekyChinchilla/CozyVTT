@@ -66,4 +66,11 @@ describe('Cthulhu Mythos', () => {
     fireEvent.click(screen.getByRole('button', { name: /Backstory/ }));
     expect(screen.getByLabelText('Cthulhu Mythos')).toHaveAttribute('max', '99');
   });
+
+  it('opens a stored 100 at 99, which the sheet can save', async () => {
+    const saved = await open(100, undefined)();
+    expect(saved.skills.cthulhuMythos.currentValue).toBe(99);
+    expect(saved.spellsAndMythos.cthulhuMythos).toBe(99);
+    expect(saved.derivedStats.sanity.maximum).toBe(0);
+  });
 });

@@ -119,10 +119,12 @@ const COC_APPEARANCE_FIELDS: { key: keyof CoC7eAppearance; label: string }[] = [
  * maximum Sanity and is rolled, and the Spells & Mythos box, which was the
  * only one the editor let a player change. Both take the larger, which is
  * whichever the player last raised, and the box edits the skill from here on.
+ * It stops at 99, where maximum Sanity reaches 0: a stored 100 would make it
+ * -1, which the sheet cannot save.
  */
 function withOneCthulhuMythos(sheet: CoC7eFormData): CoC7eFormData {
   const skill = sheet.skills?.cthulhuMythos;
-  const mythos = Math.max(skill?.currentValue ?? 0, sheet.spellsAndMythos?.cthulhuMythos ?? 0);
+  const mythos = Math.min(Math.max(skill?.currentValue ?? 0, sheet.spellsAndMythos?.cthulhuMythos ?? 0), 99);
   return {
     ...sheet,
     skills: {
