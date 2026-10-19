@@ -206,3 +206,22 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
     });
   });
 });
+
+// The Call of Cthulhu editor's name boxes can be cleared to retype, and a
+// save then must not be refused for the empty name: the sheet shows "Other".
+describe('a Call of Cthulhu name box left empty', () => {
+  it('is kept', () => {
+    const sheet = blank(GameSystem.CALL_OF_CTHULHU_7E);
+    const skill = { baseValue: 1, currentValue: 10, improvementChecked: false };
+    const skills = sheet.skills as Sheet;
+    expectKeptWhole(GameSystem.CALL_OF_CTHULHU_7E, {
+      ...sheet,
+      skills: {
+        ...skills,
+        languageOwn: { ...(skills.languageOwn as Sheet), language: '' },
+        languageOther: [{ language: '', ...skill }],
+        science: [{ specialization: '', ...skill }],
+      },
+    });
+  });
+});

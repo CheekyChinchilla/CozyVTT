@@ -148,20 +148,21 @@ const firearmsSkillsSchema = z.object({
 });
 
 /**
- * Language skill
+ * Language skill. The name may be empty, as the sheet's other name boxes may:
+ * clearing one to retype it writes an empty string.
  */
 const languageSkillSchema = z.object({
-  language: shortText.min(1),
+  language: shortText,
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
 });
 
 /**
- * Science skill
+ * Science skill. The specialisation may be empty, as a language's name may.
  */
 const scienceSkillSchema = z.object({
-  specialization: shortText.min(1),
+  specialization: shortText,
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
@@ -191,7 +192,7 @@ const skillsSchema = z.object({
   history: skillSchema,
   intimidate: skillSchema,
   jump: skillSchema,
-  languageOwn: skillSchema.extend({ language: shortText.min(1) }),
+  languageOwn: skillSchema.extend({ language: shortText }),
   languageOther: sheetList(languageSkillSchema),
   law: skillSchema,
   libraryUse: skillSchema,
