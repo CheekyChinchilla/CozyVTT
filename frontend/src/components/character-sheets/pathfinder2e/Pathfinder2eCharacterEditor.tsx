@@ -140,6 +140,19 @@ const calculateModifier = (score: number): number => Math.floor((score - 10) / 2
 const formatModifier = (mod: number): string => mod >= 0 ? `+${mod}` : `${mod}`;
 
 /**
+ * A category's feats with one text each. The built-in templates write a
+ * feat's text to `notes`, which this editor has no box for, so it is folded
+ * into the description, after any description already there.
+ */
+function withFeatTextInDescription<T extends { description?: string; notes?: string }>(feats: T[] | undefined): T[] {
+  return (feats ?? []).map((feat) => {
+    if (!feat.notes) return feat;
+    const { notes, ...rest } = feat;
+    return { ...rest, description: [feat.description, notes].filter((text) => text && text.trim()).join('\n\n') } as T;
+  });
+}
+
+/**
  * What opening this sheet changes to follow the rules, each as "what (stored
  * to now)": the editor works these out afresh, and the next save stores them.
  * Worked out once, from the sheet as stored.
@@ -231,11 +244,11 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     bulk: data.bulk || { current: 0, encumbered: 5, maximum: 10 },
     languages: data.languages || [],
     feats: {
-      ancestryAndHeritage: data.feats?.ancestryAndHeritage || [],
-      class: data.feats?.class || [],
-      skill: data.feats?.skill || [],
-      general: data.feats?.general || [],
-      bonus: data.feats?.bonus || [],
+      ancestryAndHeritage: withFeatTextInDescription(data.feats?.ancestryAndHeritage),
+      class: withFeatTextInDescription(data.feats?.class),
+      skill: withFeatTextInDescription(data.feats?.skill),
+      general: withFeatTextInDescription(data.feats?.general),
+      bonus: withFeatTextInDescription(data.feats?.bonus),
     },
     classFeatures: data.classFeatures || [],
     spellcasting: data.spellcasting ? {
@@ -1716,11 +1729,6 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                  {/* TODO(sheets): a feat from the built-in templates holds
-                     its text in notes, which the view shows and this box
-                     does not, so the editor opens it empty and the notes can
-                     be neither changed nor removed. Show notes here when
-                     there is no description, and keep one field. */}
                   <textarea value={feat.description || ''} onChange={(e) => updateField(`feats.${key}.${index}.description`, e.target.value)} placeholder="Feat description or benefits..." rows={2} className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 </div>
               ))}

@@ -33,7 +33,6 @@ _Nothing at present._
 - `1.5.4` **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
 - `1.5.4` **Call of Cthulhu: Firearms, Other Language and Science rows do not roll from the sheet,** and the last two print their language or specialization twice (`components/SkillsList.tsx`).
 - `1.5.4` **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
-- `1.5.4` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
 - `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
 - `1.5.4` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
 - `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
