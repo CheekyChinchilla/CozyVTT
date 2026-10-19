@@ -180,6 +180,10 @@ info:
       and the setup-gate 403, as described above and below.
     - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
+    - **415** `{ error: 'Unsupported Media Type', message }` for a body in a
+      charset or `Content-Encoding` the server cannot read, such as
+      `Content-Type: application/json; charset=foo` (`message`
+      `unsupported charset "FOO"`).
     - **500** `{ error, message }` on an unexpected error, whatever a route
       throws. In production the message does not describe the failure. A
       route that fails after its answer has started, such as a download part

@@ -23,6 +23,10 @@ function app(): express.Express {
   a.get('/boom', () => {
     throw new Error('kaboom');
   });
+  a.get('/library-numbering', () => {
+    // A status a library chose for itself, not marked as safe to show.
+    throw Object.assign(new Error('connection to db:5432 refused'), { status: 404 });
+  });
   a.get('/thrown-words', () => {
     throw 'plain words';
   });
@@ -93,6 +97,46 @@ describe('a request body over the size limit', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0]).toMatchObject({ level: 'warn', type: 'entity.too.large', status: 413 });
     expect(logs.lines.join('')).not.toContain('hunter2');
+  });
+});
+
+// body-parser refuses a charset or content encoding it cannot read with its
+// own 415, marked `expose` as a refusal it is safe to show. It was answered
+// 500, as if the server had failed.
+describe('a request body in a charset the parser cannot read', () => {
+  it('is answered 415 and logged as a refused body', async () => {
+    const logs = captureLogs();
+    const res = await request(app())
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json; charset=foo')
+      .send(`{"password":"${SECRET}"}`);
+    const entries = await logs.stop();
+
+    expect(res.status).toBe(415);
+    expect(res.body).toEqual({ error: 'Unsupported Media Type', message: 'unsupported charset "FOO"' });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ level: 'warn', type: 'charset.unsupported', status: 415 });
+    expect(logs.lines.join('')).not.toContain('hunter2');
+  });
+
+  it('is answered 415 for a content encoding it does not know', async () => {
+    const res = await request(app())
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .set('Content-Encoding', 'nonsense')
+      .send('{}');
+    expect(res.status).toBe(415);
+  });
+});
+
+describe('an error carrying a status it was not marked safe to show', () => {
+  it('is answered 500 with nothing of its message', async () => {
+    const logs = captureLogs();
+    const res = await request(app()).get('/library-numbering');
+    await logs.stop();
+
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'Internal Server Error', message: 'An unexpected error occurred' });
   });
 });
 
