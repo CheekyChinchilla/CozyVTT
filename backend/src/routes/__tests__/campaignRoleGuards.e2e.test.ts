@@ -27,6 +27,8 @@ const DM_ONLY = [
   'PUT /api/campaigns/:campaignId/vibe',
   'GET /api/campaigns/:campaignId/invitable-users',
   'POST /api/campaigns/:campaignId/invite',
+  'GET /api/campaigns/:campaignId/invitations',
+  'DELETE /api/campaigns/:campaignId/invitations/:invitationId',
   'DELETE /api/campaigns/:campaignId/members/:userId',
   'PUT /api/campaigns/:campaignId/members/:userId/role',
   'DELETE /api/campaigns/:campaignId/messages/join-leave',
