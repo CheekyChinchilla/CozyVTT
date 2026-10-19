@@ -23,6 +23,7 @@ import {
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
 import { copyText } from '@/utils/clipboard';
+import { BACKUP_CODE_COUNT } from '@/constants/accountLimits';
 
 // ============================================
 // Inline Disable Form
@@ -272,7 +273,7 @@ export default function MFASection() {
                   <span className="text-brand-ink font-medium">Enabled</span>
                   {typeof user?.mfaBackupCodesRemaining === 'number' && (
                     <span className={`ml-2 ${user.mfaBackupCodesRemaining <= 3 ? 'text-warning-ink font-medium' : ''}`}>
-                      {user.mfaBackupCodesRemaining} of 10 backup codes left
+                      {user.mfaBackupCodesRemaining} of {BACKUP_CODE_COUNT} backup codes left
                     </span>
                   )}
                 </>

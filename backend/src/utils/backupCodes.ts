@@ -11,12 +11,13 @@
 
 import crypto from 'crypto';
 import { hashPassword, verifyPassword } from '../services/auth';
+import { BACKUP_CODE_COUNT } from '../validators/accountLimits';
 
 /** Ambiguous glyphs (I, O, 0, 1) are excluded so a written-down code is legible. */
 const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-/** Ten single-use codes, each formatted `XXXX-XXXX` for readability. */
-export function generateBackupCodes(count = 10): string[] {
+/** Single-use codes, BACKUP_CODE_COUNT of them, each formatted `XXXX-XXXX` for readability. */
+export function generateBackupCodes(count = BACKUP_CODE_COUNT): string[] {
   const codes: string[] = [];
   for (let i = 0; i < count; i++) {
     const bytes = crypto.randomBytes(8);

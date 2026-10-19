@@ -402,6 +402,16 @@ describe('the display name limits', () => {
   );
 });
 
+// Profile said "of 10 backup codes left", repeating the server's count.
+describe('the number of two-factor backup codes', () => {
+  it('is the one the server makes, read by the profile', () => {
+    expect(read('backend/src/utils/backupCodes.ts')).toContain('BACKUP_CODE_COUNT');
+    const profile = read('frontend/src/components/profile/MFASection.tsx');
+    expect(profile).toContain("from '@/constants/accountLimits'");
+    expect(profile).not.toMatch(/of \d+ backup codes/);
+  });
+});
+
 describe('the Invite Player search limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/inviteSearchLimits.ts')).toBe(read('backend/src/validators/inviteSearchLimits.ts'));

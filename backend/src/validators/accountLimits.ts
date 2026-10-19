@@ -1,5 +1,6 @@
 /**
- * The limits of an account's display name.
+ * The limits of an account: its display name, and how many two-factor backup
+ * codes it is given.
  *
  * The server applies them and Profile, Sign Up and the setup wizard check
  * them before sending. This file exists twice, as
@@ -12,3 +13,5 @@
 export const DISPLAY_NAME_MIN_LENGTH = 1;
 /** The most characters a display name has. */
 export const DISPLAY_NAME_MAX_LENGTH = 50;
+/** How many single-use two-factor backup codes an account is given at a time. */
+export const BACKUP_CODE_COUNT = 10;
