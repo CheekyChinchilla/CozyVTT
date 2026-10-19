@@ -976,7 +976,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         rows?.filter((row) => !untouchedRows.current.has(row) || (named(row) ?? '').trim() !== '');
       updatedData.attacks = filledIn(updatedData.attacks, (row) => row.name);
       updatedData.inventory = filledIn(updatedData.inventory, (row) => row.name);
-      updatedData.hitDice = filledIn(updatedData.hitDice, (row) => row.class);
+      updatedData.hitDice = filledIn(updatedData.hitDice, (row) => row.class)?.map((row) =>
+        typeof row.maximum === 'number' && row.remaining > row.maximum ? { ...row, remaining: row.maximum } : row
+      );
 
       // Cantrips, parsed into a new spellcasting block. Written into the one
       // the form holds, the array showed up in the form while the save was in
@@ -1996,9 +1998,12 @@ min={1}
                 title="One hit die — d10 for a fighter. Something like 2d6 works too if your game uses it."
                 className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
+              {/* Shown no higher than the pool holds, and brought down on save,
+                  as a spell slot's used count is. */}
               <NumberField
                 min={0}
-                value={die.remaining}
+                max={die.maximum ?? hitDiceMaximum(die) ?? undefined}
+                value={Math.min(die.remaining, die.maximum ?? hitDiceMaximum(die) ?? die.remaining)}
                 onChange={(v: number) => updateField(`hitDice.${index}.remaining`, v)}
                 aria-label="Hit dice left"
                 title="How many are unspent right now"
@@ -2634,14 +2639,14 @@ min={1}
             <React.Fragment key={index}>
             <div className="bg-white border border-stone-300 rounded-lg p-3 flex items-center space-x-3">
               <NumberField
-min={1}
+                min={0}
                 max={9}
                 value={spell.level}
                 onChange={(v: number) => updateField(`spellcasting.spells.${index}.level`, v)}
                 className="w-14 px-2 py-1 border border-stone-300 rounded-sm text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 title="Spell Level"
                 aria-label={`Level of spell ${index + 1}`}
-              fallback={1}
+              fallback={0}
               />
               <input
                 type="text"
@@ -2817,6 +2822,9 @@ min={1}
                   <NumberField
                     id={`item-${index}-value`}
                     min={0}
+                    step="0.01"
+                    // Prices run to silver and copper: 5 sp is 0.5 gp.
+                    integer={false}
                     value={item.value}
                     onChange={(v: number) => updateField(`inventory.${index}.value`, v)}
                     className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"

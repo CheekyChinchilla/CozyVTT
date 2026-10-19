@@ -91,6 +91,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A D&D 5e item's value keeps fractions of a gold piece.** **Value (gp)** took whole numbers only, so 5 sp typed as 0.5 was saved as 0. It now keeps fractions. A spell's level box also takes 0, and a hit die pool's **Left** stops at its **Max**, with any extra brought down when the sheet is saved.
+
 - **The D&D 5e editor says when it has brought a stored number within range.** A sheet stored with more than 20 spell slots of a level, or a bonus outside -30 to +30, opened with the number lowered or raised, and the next save stored it so, with nothing said. A note above the sheet now names each one, such as "level 3 spell slots (24 to 20)".
 
 - **The D&D 5e editor says what to fix before a save is refused.** It let **Race** or **Class** be emptied, **Armor Class** or maximum hit points go to 0, a custom skill's **Other** take any number and the spell save DC fall below 1, and then the server refused the save, often for a box on another tab. The boxes now stop where a sheet does, and **Save** lists anything still to fix, opens the tab it is on and marks the box. A character stored without hit points saves as it was.
