@@ -314,10 +314,6 @@ router.put('/settings', async (req, res) => {
     } satisfies Record<string, string | null | undefined>;
     for (const [field, value] of Object.entries(branding)) {
       if (value === undefined) continue;
-      // TODO(accounts): isSameOriginPath accepts a protocol-relative address
-      // such as //other.example/logo.png, which names another server; the
-      // page's img-src 'self' blocks it, so it shows broken. Accept only a path
-      // on this host: refuse a leading // and a backslash too.
       if (typeof value === 'string' && value !== '' && !isSameOriginPath(value)) {
         return res.status(400).json({
           error: 'Validation Error',
