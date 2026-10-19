@@ -924,11 +924,20 @@ class ApiClient {
    * Upload a picture, sound, PDF or other file (up to 50 MB for a map picture
    * or PDF). Serves map pictures, PDFs, token art, avatars and sheet portraits.
    */
-  async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
+  /**
+   * `onProgress` is told the share of the request sent so far, 0 to 100, as
+   * the browser reports it.
+   */
+  async uploadAsset(formData: FormData, onProgress?: (percent: number) => void): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: onProgress
+        ? (event) => {
+            if (event.total) onProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        : undefined,
       // No limit of the page's own: the shared 30 seconds count the upload
       // itself, so a 50 MB file on a connection slower than about 14 Mbit/s
       // was cut off with "Failed to upload asset" before it had arrived.

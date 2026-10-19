@@ -271,13 +271,9 @@ export default function AssetUploadModal({
       }
       formData.append('file', selectedFile);
 
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => Math.min(prev + 10, 90));
-      }, 200);
-
-      const response = await api.uploadAsset(formData);
-
-      clearInterval(progressInterval);
+      // How much has been sent, held under 100 until the server has answered:
+      // it still checks and stores the file once the last byte arrives.
+      const response = await api.uploadAsset(formData, (percent) => setUploadProgress(Math.min(percent, 99)));
       setUploadProgress(100);
 
       setTimeout(() => {
