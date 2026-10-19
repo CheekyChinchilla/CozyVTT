@@ -10,7 +10,11 @@
  * Their personal files go too: the avatar always, and any other personal
  * upload that nothing uses and no campaign has shared, row and file. A
  * personal file a map, token, template, creature or campaign setting still
- * names stays, owned by no one, like a campaign's files. The rows are
+ * names stays, owned by no one, like a campaign's files. A file with no
+ * uploader grants nobody reading through its uses, so one whose every use is
+ * in a single campaign becomes that campaign's own, in the deletion's
+ * transaction; one used anywhere else stays personal, readable by admins
+ * alone, and the activity log names it so an admin can move it. The rows are
  * deleted with the account; the files are removed by removePersonalFiles,
  * which the routes start once the account's sessions have ended and the answer
  * is on its way (removePersonalFilesAfterwards), since working out which may
@@ -24,7 +28,8 @@
 
 import type { AssetType } from '@prisma/client';
 import { prisma } from '../config/database';
-import { isAssetInUse } from './assetUsage';
+import { findUses, isAssetInUse } from './assetUsage';
+import { writeSystemLog } from './systemLog';
 import { deleteFile } from '../utils/fileUtils';
 import logger from '../utils/logger';
 import { destroyUserLoginSessions } from './sessionStore';
@@ -49,6 +54,13 @@ export interface PersonalAsset {
   type: AssetType;
 }
 
+/** A kept personal file left personal: used in several campaigns, or outside one. */
+interface LeftPersonal {
+  id: string;
+  name: string;
+  outsideCampaigns: boolean;
+}
+
 /**
  * `personal` lists the account's personal uploads, for removePersonalFiles
  * to delete the ones nothing uses once the account's sessions have ended.
@@ -65,8 +77,11 @@ export type AccountDeletion =
  * seat handed over meanwhile, is seen before anything is written.
  */
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
-  return inSerializableTransaction(async (tx): Promise<AccountDeletion> => {
-    const account = await tx.user.findUnique({ where: { id: userId }, select: { platformRole: true } });
+  type Inside =
+    | Exclude<AccountDeletion, { deleted: true }>
+    | (Extract<AccountDeletion, { deleted: true }> & { email: string; leftPersonal: LeftPersonal[] });
+  return inSerializableTransaction(async (tx): Promise<Inside> => {
+    const account = await tx.user.findUnique({ where: { id: userId }, select: { platformRole: true, email: true } });
     if (account?.platformRole === 'ADMIN' && (await isOnlyAdmin(userId, tx))) {
       return { deleted: false, refused: 'onlyAdmin' };
     }
@@ -119,13 +134,48 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
     const campaignIds = (await tx.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
       .map((m) => m.campaignId);
     // Their personal uploads, read while the rows still name them.
-    const personal = await tx.asset.findMany({ where: { uploadedById: userId, scope: 'USER' }, select: { id: true, type: true } });
+    const uploads = await tx.asset.findMany({
+      where: { uploadedById: userId, scope: 'USER' },
+      select: { id: true, type: true, name: true },
+    });
+    // A file a campaign uses is kept. Its uses stop granting reading once it
+    // has no uploader, so one used in a single campaign becomes that
+    // campaign's. Their own characters go with the account and do not count.
+    const personal: PersonalAsset[] = [];
+    const leftPersonal: LeftPersonal[] = [];
+    for (const asset of uploads) {
+      if (asset.type !== 'AVATAR') {
+        const uses = (await findUses(asset.id, tx)).filter((u) => !(u.kind === 'character' && u.ownerId === userId));
+        const where = new Set(uses.map((u) => u.campaignId));
+        const [only] = where;
+        if (where.size === 1 && only) {
+          await tx.asset.update({ where: { id: asset.id }, data: { scope: 'CAMPAIGN', campaignId: only } });
+          continue;
+        }
+        if (uses.length > 0) leftPersonal.push({ id: asset.id, name: asset.name, outsideCampaigns: where.has(null) });
+      }
+      personal.push({ id: asset.id, type: asset.type });
+    }
     // Their sign-ins end with the row, in the same transaction: the guards
     // read the session, so a deleted admin's other device would otherwise
     // keep the role until the session expired.
     await destroyUserLoginSessions(userId, undefined, tx);
     await tx.user.delete({ where: { id: userId } });
-    return { deleted: true, campaignIds, personal };
+    return { deleted: true, campaignIds, personal, leftPersonal, email: account?.email ?? '' };
+  }).then(async (result) => {
+    if (!result.deleted) return result;
+    // Written once the deletion has committed: a retried transaction would
+    // otherwise write each line again.
+    for (const file of result.leftPersonal) {
+      await writeSystemLog({
+        level: 'WARNING',
+        message: `Kept "${file.name}", a personal file of the deleted account ${result.email}, with no owner: it is used ${
+          file.outsideCampaigns ? 'outside a campaign' : 'in more than one campaign'
+        }, so only an admin can see it until it is moved`,
+        context: { assetId: file.id },
+      });
+    }
+    return { deleted: true, campaignIds: result.campaignIds, personal: result.personal };
   });
 }
 
@@ -144,12 +194,6 @@ export async function removePersonalFiles(personal: PersonalAsset[]): Promise<vo
     const doomed: string[] = [];
     for (const asset of personal) {
       if (asset.type !== 'AVATAR') {
-        // TODO(accounts): a personal file kept here because a campaign uses it
-        // can no longer be read by that campaign's members, since a null
-        // uploader grants nothing in assetUsedInUserCampaign, so their maps and
-        // tokens show it as missing. Either move such a file into the campaign
-        // that uses it, or let the use rule accept a file with no uploader.
-        // Both change who may read it, so it waits for a decision.
         if (await isAssetInUse(asset.id)) continue;
         if ((await prisma.campaignDocument.count({ where: { assetId: asset.id } })) > 0) continue;
       }

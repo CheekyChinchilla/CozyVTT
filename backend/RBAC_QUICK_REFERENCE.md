@@ -516,7 +516,11 @@ Two things to get right when adding a check of this kind:
 
 - **Assets with no uploader.** `uploadedById` is set to null when the uploader's
   account is deleted, and a null uploader grants no one anything through
-  `assetUsedInUserCampaign`. A `USER` asset in that state is movable and
+  `assetUsedInUserCampaign`. So the deletion (`services/accountDeletion.ts`)
+  gives a personal asset whose every use is in one campaign to that campaign
+  (`CAMPAIGN` scope), where its members read it by scope; one used in several
+  campaigns, or outside one, stays `USER` and is named in the activity log.
+  A `USER` asset in that state is movable and
   deletable by platform admins alone, and readable by them alone, except a
   document still shared into a campaign, which that campaign's members go on
   reading. `GET /api/assets?uploadedBy=none` lists every asset with no

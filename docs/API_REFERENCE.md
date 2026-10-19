@@ -263,7 +263,8 @@ characters, notes and dice macros, their avatar, and every personal (`USER`
 scope) upload that nothing names and no campaign shares, row and file. Chat
 messages, dice rolls, campaign uploads, shared documents and personal uploads
 something still names stay, with no owner, as do the character templates they
-published and the token templates and creatures they made.
+published and the token templates and creatures they made. A personal upload
+that only one campaign uses becomes that campaign's.
 Every sign-in of the account ends, on every device, and any open game connection
 of the account is dropped. The instance's only admin is
 refused with `409` until another user has been promoted to admin, and so is
@@ -1508,7 +1509,7 @@ change their own password with `POST /api/auth/change-password`, which asks for 
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A campaign they own passes to its sitting DM.
+Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A personal upload that only one campaign uses becomes that campaign's. A campaign they own passes to its sitting DM.
 
 **409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 
