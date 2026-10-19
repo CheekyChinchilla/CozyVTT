@@ -3023,8 +3023,11 @@ paths:
         open connections take their new roles at once; `campaign.dm.transferred`
         and a `roster.updated` for each go to the campaign, and the initiative
         order and the map on screen are sent again as each new role sees it.
-        The caller need not be a member, so an unknown campaign is a 404 here,
-        as is a `userId` that is not a member; naming the sitting DM is a 400.
+        The caller need not be a member when they own the campaign or are an
+        admin, so the route answers for itself: a campaign that does not exist,
+        or one the caller is neither a member of, its owner nor an admin,
+        answers 404, as does a `userId` that is not a member; naming the
+        sitting DM is a 400.
         Who may hand the seat over, who holds it and the change are read and
         made as one serializable transaction, so of two hand-overs at the same
         moment the second sees the first: a sitting DM whose seat was handed
@@ -4794,9 +4797,9 @@ paths:
         - With no game system (a Flexible character), `data` must be an
           object matching `FlexibleCharacterData`; null, a string, a number or
           an array answers 400. An omitted `data` is stored as `{}`.
-        - If `campaignId` is provided, the campaign must exist (404) and the
-          caller must already be a member of it (403); otherwise nothing is
-          created. The character is added to the caller's membership as well
+        - If `campaignId` is provided, it must be a campaign the caller is
+          already a member of; one that does not exist and one they are not in
+          both answer 404 `Campaign not found`, and nothing is created. The character is added to the caller's membership as well
           as carrying the `campaignId` column, in one transaction, because the
           campaign roster and the token permission checks read the membership;
           the campaign is then sent `roster.updated` with `action`
@@ -4907,7 +4910,8 @@ paths:
       description: >-
         The owner can always read it. If it is in a campaign, any member of
         that campaign (DM, player or spectator) can read it too, as long as
-        the owner is still a member there; otherwise anyone else gets 403.
+        the owner is still a member there; anyone else gets 404, as for an id
+        that names nothing.
         The response includes `campaign` (`id`, `name`) and the owner as
         `user` (`id`, `displayName`, `avatarUrl`). A Call of Cthulhu sheet's
         Keeper's Notes go to the campaign's DM alone (see `Character.data`).
@@ -5183,18 +5187,18 @@ paths:
         Assigning is the owner's alone. Unassigning is the owner's, or the
         campaign DM's: the DM of the campaign the character is in may take it
         out of that campaign while its owner is still a member, and it stays
-        with its owner. Anyone else answers
+        with its owner. Anyone else who may read the character answers
         403 (`Only the character owner can assign this character to a
         campaign`, or `Only the character owner, or the DM of its campaign, can
-        take it out of a campaign`). A `campaignId` that is not a string or null
+        take it out of a campaign`); anyone who may not answers 404. A `campaignId` that is not a string or null
         answers 400 (`Validation Error`) before anything is looked up.
         - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
           character: its `campaignId` column is cleared and it is removed from
           its owner's membership `characterIds` in its previous campaign, if
           it had one. The owner needs no campaign membership for this.
-        - Sending a `campaignId` assigns the character to that campaign. The
-          campaign must exist (404 otherwise) and the caller must already be a
-          member of it (403 otherwise). The character's `gameSystem` must
+        - Sending a `campaignId` assigns the character to that campaign, which
+          must be one the caller is already a member of (404 `Campaign not
+          found` otherwise, whether or not it exists). The character's `gameSystem` must
           match the campaign's (both flexible, or the same typed system), or
           the request answers 400 and nothing changes. If the character was
           assigned to another campaign, it is removed from the caller's
@@ -6451,8 +6455,9 @@ paths:
         - Assets
       summary: Serve token image
       description: >-
-        Serves a TOKEN asset's file, with the same read rule, 403, content
-        types, caching and 304 as `GET /api/assets/maps/{id}`.
+        Serves a TOKEN asset's file, with the same read rule, 404 for a
+        refused read, content types, caching and 304 as
+        `GET /api/assets/maps/{id}`.
       operationId: serveToken
       security:
         - cookieAuth: []
@@ -8922,8 +8927,8 @@ paths:
       summary: Update token template
       description: >-
         Update a token template (DM only). A field left out keeps its value.
-        An unknown id answers 404 and another campaign's template 403, both
-        before the body is validated. An image address on this server must be
+        An unknown id and another campaign's template both answer 404, before
+        the body is validated. An image address on this server must be
         an asset's exact address (`/api/assets/<kind>/<id>`), and one naming
         an existing asset must name one the caller can read (403 otherwise),
         unless this campaign already stores that exact address somewhere, as a
