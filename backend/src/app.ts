@@ -120,7 +120,7 @@ export function createApp(options: AppOptions): express.Express {
           // every supported browser, so the host is named; a Host header that
           // is not a plain host and port adds nothing. As in
           // frontend/security-headers.conf.
-          connectSrc: ["'self'", (req) => socketSources(req.headers.host)],
+          connectSrc: ["'self'", (req) => socketSources(req.headers?.host)],
           mediaSrc: ["'self'"],                     // Audio playback
           fontSrc: ["'self'"],
           objectSrc: ["'none'"],
