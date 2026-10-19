@@ -63,7 +63,10 @@ describe('the app page policy', () => {
     expect(directive('img-src')).toContain('data:');
     expect(directive('img-src')).toContain('blob:');
     // Socket.io, and the sandboxed PDF frame in the document reader.
-    expect(directive('connect-src')).toMatch(/ws:|wss:/);
+    // The socket on the page's own host, named outright: a bare ws: or wss:
+    // allowed a connection to any host, and 'self' alone does not match ws:
+    // and wss: in every supported browser.
+    expect(directive('connect-src').split(/\s+/)).toEqual(["'self'", 'ws://$host:*', 'wss://$host:*']);
     expect(directive('frame-src')).toContain("'self'");
     expect(directive('media-src')).toContain("'self'");
   });

@@ -930,9 +930,10 @@ container. A Content-Security-Policy on a JSON response governs nothing, which
 is why the page had no protection until the second file existed.
 
 The page's policy is the wider of the two, since it also covers the page's
-stylesheets, fonts and the document reader's frame. Apart from live
-connections (`connect-src` names `ws:` and `wss:`, which match any host),
-nothing it allows is on another site: the typefaces are part of the app
+stylesheets, fonts and the document reader's frame. Nothing it allows is on
+another site: `connect-src` names the live connection's `ws://` and `wss://`
+on the page's own host, any port, because `'self'` alone does not match them
+in every supported browser and the proxy's `Host` carries no port; the typefaces are part of the app
 (`frontend/src/assets/fonts`, one `@font-face` per family and character range, and per weight where a family
 has no variable font, so a browser fetches only
 what the page uses), and the build inlines the smallest as `data:` addresses.

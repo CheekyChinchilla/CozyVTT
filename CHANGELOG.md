@@ -462,6 +462,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Security
 
+- **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the address the app was loaded from. A reverse proxy of your own must pass the browser's host name to CozyVTT (`proxy_set_header Host $host;` in nginx, as the deployment guide shows); otherwise the live table falls back to a slower connection.
+
 - **A character saved as a template leaves the player's name and the Keeper's Notes behind.** Every user can read a template, but **Save as Template** kept the sheet's player name and a Call of Cthulhu investigator's Keeper's Notes, so anyone could read notes meant for the Keeper alone. A template is now saved without either, whoever saves it, and one published before is shown without them; a character made from it gets its own player's name, as before.
 
 - **A map you may not see is answered as if it were not there.** Asking for a map of another campaign, or as a player for a map the DM is still preparing, answered differently from asking for one that does not exist, so a member could tell such a map existed. Both now get the same answer.

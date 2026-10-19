@@ -40,6 +40,16 @@ import configRoutes from './routes/config';
 import { prisma } from './config/database';
 import { positiveIntegerFromEnv } from './config/env';
 
+/**
+ * `ws://` and `wss://` for the request's own host on any port, or nothing for
+ * a malformed one. Any port: the bundled proxy passes the host without the
+ * port the browser used, so naming one would miss an instance on 8160.
+ */
+function socketSources(host: string | undefined): string {
+  const name = /^([A-Za-z0-9.-]+|\[[0-9A-Fa-f:.]+\])(?::\d{1,5})?$/.exec(host ?? '')?.[1];
+  return name ? `ws://${name}:* wss://${name}:*` : '';
+}
+
 export interface AppOptions {
   /**
    * The sign-in session's settings. The server passes config/session.ts's,
@@ -105,11 +115,12 @@ export function createApp(options: AppOptions): express.Express {
           scriptSrc: ["'self'"],
           styleSrc: ["'self'", "'unsafe-inline'"], // Required for Framer Motion / Tailwind inline styles
           imgSrc: ["'self'", 'data:', 'blob:'],    // Canvas exports and base64 avatars
-          // TODO(security): ws: and wss: allow a live connection to any host.
-          // CSP Level 3 lets 'self' match the page's own ws: and wss:; check
-          // the socket still connects with 'self' alone in each browser at the
-          // floor, then drop both here and in frontend/security-headers.conf.
-          connectSrc: ["'self'", 'ws:', 'wss:'],   // WebSocket connections
+          // The live table's socket on this host only. A bare ws: or wss:
+          // allowed any host, and 'self' alone does not match ws: and wss: in
+          // every supported browser, so the host is named; a Host header that
+          // is not a plain host and port adds nothing. As in
+          // frontend/security-headers.conf.
+          connectSrc: ["'self'", (req) => socketSources(req.headers.host)],
           mediaSrc: ["'self'"],                     // Audio playback
           fontSrc: ["'self'"],
           objectSrc: ["'none'"],
