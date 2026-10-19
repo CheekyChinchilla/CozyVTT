@@ -561,12 +561,12 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
 
     const isAdmin = req.session.platformRole === 'ADMIN';
 
+    // One the caller may not read is answered as if it were not there.
+    const unreadable = { error: 'Not Found', message: 'Asset not found' };
+
     // USER-scoped assets: only owner or admin can access
     if (asset.scope === 'USER' && asset.uploadedById !== userId && !isAdmin) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You do not have access to this asset',
-      });
+      return res.status(404).json(unreadable);
     }
 
     // TODO(assets): a CAMPAIGN asset whose campaign is gone passes this check, so
@@ -584,18 +584,12 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       });
 
       if (!membership) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You do not have access to this asset',
-        });
+        return res.status(404).json(unreadable);
       }
       // A map's spirit layer is shown to a player only once they have crossed
       // over; the library entry follows the map.
       if (membership.role !== 'DM' && (await spiritLayerAssetIdsHiddenFrom(userId, [asset.campaignId])).includes(asset.id)) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You do not have access to this asset',
-        });
+        return res.status(404).json(unreadable);
       }
     }
 
@@ -653,6 +647,10 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
     // Scope-based permission matrix, shared with the scope move and the
     // document editor (mayChangeAsset).
     if (!(await mayChangeAsset(asset, userId, isAdmin))) {
+      // One the caller may not even read is answered as if it were not there.
+      if (!(await canReadAssetFile(asset, req))) {
+        return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
+      }
       return res.status(403).json({ error: 'Forbidden', message: DELETE_REFUSALS[asset.scope] });
     }
 
@@ -742,7 +740,7 @@ router.get('/:id/download', authenticated, async (req: AuthenticatedRequest, res
     // uses it or because a document was shared, so a member who could read a
     // file inline was refused when downloading the same bytes.
     if (!(await canReadAssetFile(asset, req))) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
+      return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -1093,9 +1091,9 @@ router.get('/maps/:id', authenticated, async (req: AuthenticatedRequest, res: Re
       });
     }
 
-    // Check access permissions
+    // One the caller may not read is answered as if it were not there.
     if (!(await canReadAssetFile(asset, req))) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
+      return res.status(404).json({ error: 'Not Found', message: 'Map asset not found' });
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -1139,9 +1137,9 @@ router.get('/tokens/:id', authenticated, async (req: AuthenticatedRequest, res: 
       });
     }
 
-    // Check access permissions
+    // One the caller may not read is answered as if it were not there.
     if (!(await canReadAssetFile(asset, req))) {
-      return res.status(403).json({ error: 'Forbidden', message: 'You do not have access to this asset' });
+      return res.status(404).json({ error: 'Not Found', message: 'Token asset not found' });
     }
 
     // Check if file exists (normalize path for cross-platform compatibility)
@@ -1348,8 +1346,9 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
     const { scope, campaignId } = parsed.data;
     const userId = req.session.userId!;
 
+    // One the caller may not read is answered as if it were not there.
     const asset = await prisma.asset.findUnique({ where: { id } });
-    if (!asset) {
+    if (!asset || !(await canReadAssetFile(asset, req))) {
       return res.status(404).json({ error: 'Not Found', message: 'Asset not found' });
     }
 
@@ -1382,8 +1381,12 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
           message: 'campaignId is required when scope is CAMPAIGN',
         });
       }
-      const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
-      if (!campaign) {
+      // A campaign the caller is not in answers as one that is not there.
+      const campaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { id: true, memberships: { where: { userId }, select: { userId: true } } },
+      });
+      if (!campaign || (!isAdmin && campaign.memberships.length === 0)) {
         return res.status(404).json({ error: 'Not Found', message: 'Campaign not found' });
       }
       resolvedCampaignId = campaignId;

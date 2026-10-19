@@ -73,13 +73,11 @@ router.get('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
   try {
     const { campaignId, id } = req.params;
 
-    const template = await prisma.tokenTemplate.findUnique({ where: { id } });
-
+    // Another campaign's template answers as one that is not there, so the
+    // answer cannot confirm an id exists.
+    const template = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!template) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (template.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     return res.json(template);
@@ -147,12 +145,9 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
   try {
     const { campaignId, id } = req.params;
 
-    const existing = await prisma.tokenTemplate.findUnique({ where: { id } });
+    const existing = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!existing) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (existing.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     const parsed = UpdateTokenTemplateSchema.safeParse(req.body);
@@ -201,12 +196,9 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
   try {
     const { campaignId, id } = req.params;
 
-    const existing = await prisma.tokenTemplate.findUnique({ where: { id } });
+    const existing = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!existing) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (existing.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     await prisma.tokenTemplate.delete({ where: { id } });
@@ -303,12 +295,9 @@ router.post('/:id/copy-to/:targetCampaignId', campaignDM, async (req: Authentica
     }
 
     // Fetch source template
-    const source = await prisma.tokenTemplate.findUnique({ where: { id } });
+    const source = await prisma.tokenTemplate.findFirst({ where: { id, campaignId } });
     if (!source) {
       return res.status(404).json({ error: 'Not Found', message: 'Token template not found' });
-    }
-    if (source.campaignId !== campaignId) {
-      return res.status(403).json({ error: 'Forbidden', message: 'Token template belongs to another campaign' });
     }
 
     // The copy stores the picture in the target campaign, which may not use

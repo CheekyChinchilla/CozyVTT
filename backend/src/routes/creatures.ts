@@ -294,7 +294,9 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
       where: { id: creatureId },
     });
 
-    if (!existing) {
+    // Another campaign's creature answers as one that is not there, as the
+    // GET does.
+    if (!existing || !isVisibleFromCampaign(existing, campaignId)) {
       return res.status(404).json({ error: 'Not Found', message: 'Creature template not found' });
     }
 
@@ -354,7 +356,7 @@ router.delete('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res:
       where: { id: creatureId },
     });
 
-    if (!existing) {
+    if (!existing || !isVisibleFromCampaign(existing, campaignId)) {
       return res.status(404).json({ error: 'Not Found', message: 'Creature template not found' });
     }
 

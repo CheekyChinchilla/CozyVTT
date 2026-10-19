@@ -81,7 +81,7 @@ describe('DELETE /api/characters/:id', () => {
 
   it('refuses anyone else, and keeps the character', async () => {
     const kept = await character(ownerId);
-    expect((await other.delete(`/api/characters/${kept.id}`)).status).toBe(403);
+    expect((await other.delete(`/api/characters/${kept.id}`)).status).toBe(404);
     expect((await request(app).delete(`/api/characters/${kept.id}`)).status).toBe(401);
     expect(await prisma.character.findUnique({ where: { id: kept.id } })).not.toBeNull();
   });
@@ -112,7 +112,7 @@ describe('POST /api/characters/:id/copy', () => {
     const original = await character(ownerId, 'Not for copying');
     const before = await prisma.character.count({ where: { userId: otherId } });
 
-    expect((await other.post(`/api/characters/${original.id}/copy`)).status).toBe(403);
+    expect((await other.post(`/api/characters/${original.id}/copy`)).status).toBe(404);
     expect((await request(app).post(`/api/characters/${original.id}/copy`)).status).toBe(401);
 
     expect(await prisma.character.count({ where: { userId: otherId } })).toBe(before);

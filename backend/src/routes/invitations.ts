@@ -97,12 +97,9 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
       include: { campaign: true },
     });
 
-    if (!invitation) {
+    // Someone else's invitation answers as one that is not there.
+    if (!invitation || invitation.userId !== userId) {
       return res.status(404).json({ message: 'Invitation not found' });
-    }
-
-    if (invitation.userId !== userId) {
-      return res.status(403).json({ message: 'Not authorized' });
     }
 
     if (invitation.status !== 'PENDING') {
@@ -233,12 +230,9 @@ router.post('/:id/decline', authenticated, async (req: AuthenticatedRequest, res
       where: { id: invitationId },
     });
 
-    if (!invitation) {
+    // Someone else's invitation answers as one that is not there.
+    if (!invitation || invitation.userId !== userId) {
       return res.status(404).json({ message: 'Invitation not found' });
-    }
-
-    if (invitation.userId !== userId) {
-      return res.status(403).json({ message: 'Not authorized' });
     }
 
     if (invitation.status !== 'PENDING') {

@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { ownerStillIn } from '../utils/characterCampaign';
+import { ownerStillIn, mayReadCharacter } from '../utils/characterCampaign';
 import { holdCharacter, addToMemberCharacters, removeFromMemberCharacters, removeFromEveryMemberCharacters } from '../utils/memberCharacters';
 import type { Prisma } from '@prisma/client';
 import { normalizeAssetUrl } from '../utils/asset-urls';
@@ -159,10 +159,11 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
         select: { userId: true },
       });
 
+      // A campaign the caller is not in answers as one that is not there.
       if (!membershipToJoin) {
-        return res.status(403).json({
-          error: 'Forbidden',
-          message: 'You must be a member of the campaign to create a character in it',
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Campaign not found',
         });
       }
 
@@ -451,10 +452,10 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       return res.status(200).json({ character: characterForReader(character, keeper) });
     }
 
-    // Not authorized
-    return res.status(403).json({
-      error: 'Forbidden',
-      message: 'You do not have permission to view this character',
+    // Anyone else is answered as if it were not there.
+    return res.status(404).json({
+      error: 'Not Found',
+      message: 'Character not found',
     });
   } catch (error) {
     logger.error('Error fetching character', { err: error });
@@ -488,6 +489,13 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
     });
 
     if (!character) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(character, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',
@@ -568,6 +576,13 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     });
 
     if (!character) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(character, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',
@@ -926,6 +941,13 @@ router.delete('/:id', authenticated, async (req: AuthenticatedRequest, res: Resp
       });
     }
 
+    if (!(await mayReadCharacter(character, userId))) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
     // Only owner can delete
     if (character.userId !== userId) {
       return res.status(403).json({
@@ -982,6 +1004,13 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
     });
 
     if (!character) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(character, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',
@@ -1072,10 +1101,11 @@ router.post('/:id/assign', authenticated, async (req: AuthenticatedRequest, res:
       },
     });
 
+    // A campaign the caller is not in answers as one that is not there.
     if (!membership) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'You must be a member of the campaign to assign a character to it',
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Campaign not found',
       });
     }
 
@@ -1156,6 +1186,13 @@ router.post('/:id/copy', authenticated, async (req: AuthenticatedRequest, res: R
     });
 
     if (!originalCharacter) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Character not found',
+      });
+    }
+
+    if (!(await mayReadCharacter(originalCharacter, userId))) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Character not found',

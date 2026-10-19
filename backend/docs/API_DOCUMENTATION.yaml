@@ -3080,7 +3080,9 @@ paths:
                 error: Bad Request
                 message: That member is already the Dungeon Master
         '403':
-          description: The caller is not the sitting DM, the campaign owner or a platform admin.
+          description: >-
+            The caller is a member of the campaign but not the sitting DM, the
+            campaign owner or a platform admin.
           content:
             application/json:
               schema:
@@ -3090,9 +3092,10 @@ paths:
                 message: Only the DM, the campaign owner, or an admin can transfer the DM role
         '404':
           description: >-
-            The campaign does not exist ("Campaign not found"), checked before
-            who the caller is, or `userId` is not a member of it ("That user
-            is not a member of this campaign").
+            The campaign does not exist, or the caller is neither a member, its
+            owner nor a platform admin ("Campaign not found", answered alike
+            for both), or `userId` is not a member of it ("That user is not a
+            member of this campaign").
           content:
             application/json:
               schema:
@@ -3409,16 +3412,11 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 message: Invitation expired
-        '403':
-          description: The invitation does not belong to the authenticated user.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                message: Not authorized
         '404':
-          description: No invitation with that id exists.
+          description: >-
+            No invitation with that id addressed to the caller. Someone else's
+            is answered the same way, so the answer cannot confirm that an id
+            exists.
           content:
             application/json:
               schema:
@@ -3467,16 +3465,11 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 message: Invitation already processed
-        '403':
-          description: The invitation does not belong to the authenticated user.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                message: Not authorized
         '404':
-          description: No invitation with that id exists.
+          description: >-
+            No invitation with that id addressed to the caller. Someone else's
+            is answered the same way, so the answer cannot confirm that an id
+            exists.
           content:
             application/json:
               schema:
@@ -4898,11 +4891,13 @@ paths:
                           type: string
         '403':
           description: >
-            The caller is not a member of the campaign named by `campaignId`,
-            or `tokenImageUrl` names a picture the caller may not use. Nothing
+            `tokenImageUrl` names a picture the caller may not use. Nothing
             is created.
         '404':
-          description: No campaign exists with the id given in `campaignId`
+          description: >-
+            No campaign the caller is a member of has the id given in
+            `campaignId` (`Campaign not found`): one that exists and one that
+            does not are answered alike. Nothing is created.
 
   /api/characters/{id}:
     get:
@@ -4936,10 +4931,20 @@ paths:
                 properties:
                   character:
                     $ref: '#/components/schemas/Character'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
 
     put:
       tags:
@@ -4954,8 +4959,9 @@ paths:
           current value: the same value is accepted and ignored, a different
           one (or null on a typed character) answers 400. A character's game
           system cannot change. This comparison happens after the permission
-          check, so a caller who may not edit the character gets 403 for any
-          of the four values or null. The body's shape is checked before the
+          check, so a caller who may not edit the character gets the same
+          answer (404 for one they may not read, 403 for one they may) for
+          any of the four values or null. The body's shape is checked before the
           character is looked up: a `name` that is empty or over 200
           characters, a `gameSystem` that is not one of the four values or
           null, a `tokenImageUrl` that is not text, or a malformed `updatedAt`
@@ -5082,12 +5088,23 @@ paths:
                           type: string
         '403':
           description: >-
-            The caller is neither the owner nor the DM of the character's
-            campaign (or is that DM but the owner has left the campaign), or is
-            a spectator in the character's campaign, or `tokenImageUrl` names a
-            picture the caller may not use.
+            The caller may read the character but is neither its owner nor the
+            DM of its campaign, or is a spectator in that campaign, or
+            `tokenImageUrl` names a picture the caller may not use.
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
         '409':
           description: The character changed after the `updatedAt` sent. Nothing was saved; load the character again and reapply the change.
           content:
@@ -5134,9 +5151,28 @@ paths:
                   message:
                     type: string
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may read the character but does not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the character owner can delete this character
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
 
   /api/characters/{id}/assign:
     post:
@@ -5225,12 +5261,15 @@ paths:
                     example: Cannot assign a DND_5E character to a flexible campaign. Character and campaign game systems must match.
         '403':
           description: >-
-            The caller does not own the character, or (when assigning) is not
-            a member of the target campaign.
+            The caller may read the character but does not own it (when
+            unassigning, the DM of its campaign may also take it out).
         '404':
           description: >-
-            The character does not exist, or (when assigning) no campaign
-            exists with the given `campaignId`.
+            No character with this id that the caller may read (`Character
+            not found`), or, when assigning, no campaign the caller is a member
+            of with the given `campaignId` (`Campaign not found`). A record the
+            caller may not read is answered the same way as an id that names
+            nothing.
 
   /api/characters/{id}/validate:
     get:
@@ -5300,9 +5339,25 @@ paths:
                         message: { type: string }
                         code: { type: string }
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may read the character but does not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5344,9 +5399,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may read the character but does not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5700,7 +5771,7 @@ paths:
         anyone signed in. It does not extend access to a caller whose
         campaign merely *uses* the asset (a DM's personal map shown to the
         table, a document shared with the campaign, the atmosphere track), so
-        the metadata can answer 403 for an asset whose file the same caller
+        the metadata can answer 404 for an asset whose file the same caller
         may read.
       operationId: getAssetById
       security:
@@ -5722,17 +5793,18 @@ paths:
                 properties:
                   asset:
                     $ref: '#/components/schemas/Asset'
-        '403':
-          description: The caller may not read this asset.
+        '404':
+          description: >-
+            No asset with this id that the caller may read. One they may not
+            read is answered the same way, so the answer cannot confirm that an
+            id exists.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: Forbidden
-                message: You do not have access to this asset
-        '404':
-          $ref: '#/components/responses/NotFound'
+                error: Not Found
+                message: Asset not found
 
     delete:
       tags:
@@ -5797,7 +5869,7 @@ paths:
                     example: Asset deleted successfully
         '403':
           description: >-
-            The caller may not delete this asset. The message names the rule
+            The caller may read this asset but may not delete it. The message names the rule
             for its scope: "Only admins or the uploading global asset manager
             can delete global assets", "Only the owner can delete personal
             assets" or "Only the uploader while a member of the campaign, its
@@ -5810,7 +5882,9 @@ paths:
                 error: Forbidden
                 message: Only the owner can delete personal assets
         '404':
-          description: No asset with this id.
+          description: >-
+            No asset with this id that the caller may read. One they may not
+            read is answered the same way.
           content:
             application/json:
               schema:
@@ -5987,7 +6061,12 @@ paths:
                 error: Forbidden
                 message: Only the asset owner can move personal assets
         '404':
-          description: '"Asset not found", or, for `scope: CAMPAIGN`, "Campaign not found".'
+          description: >-
+            "Asset not found" for an asset that does not exist or that the
+            caller may not read; or, for `scope: CAMPAIGN`, "Campaign not
+            found" for a campaign that does not exist or that the caller (not
+            an admin) is not a member of. Each is answered alike, so the answer
+            cannot confirm that an id exists.
           content:
             application/json:
               schema:
@@ -6031,17 +6110,18 @@ paths:
               schema:
                 type: string
                 format: binary
-        '403':
-          description: The caller may not read this asset.
+        '404':
+          description: >-
+            No asset with this id that the caller may read. One they may not
+            read is answered the same way, so the answer cannot confirm that an
+            id exists.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: Forbidden
-                message: You do not have access to this asset
-        '404':
-          $ref: '#/components/responses/NotFound'
+                error: Not Found
+                message: Asset not found
 
   /api/assets/documents:
     post:
@@ -6303,7 +6383,8 @@ paths:
         member counts only the one the campaign is currently showing. A document
         shared with one of the caller's campaigns is also readable.
 
-        A refused read answers 403 here and on the token route. The file is
+        A refused read answers 404 here and on the token route, as for an id
+        that names nothing. The file is
         served with its content type chosen from its stored extension
         (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, or
         `application/pdf`, for a map stored as a PDF before PDFs were refused
@@ -6335,17 +6416,11 @@ paths:
                 format: binary
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
-        '403':
-          description: The caller may not read this asset.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                error: Forbidden
-                message: You do not have access to this asset
         '404':
-          description: No MAP asset with this id, or its file is missing from disk.
+          description: >-
+            No MAP asset with this id that the caller may read (`Map asset not
+            found`; one they may not read is answered the same way), or its
+            file is missing from disk.
           content:
             application/json:
               schema:
@@ -6379,17 +6454,11 @@ paths:
                 format: binary
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
-        '403':
-          description: The caller may not read this asset.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                error: Forbidden
-                message: You do not have access to this asset
         '404':
-          description: No TOKEN asset with this id, or its file is missing from disk.
+          description: >-
+            No TOKEN asset with this id that the caller may read (`Token asset
+            not found`; one they may not read is answered the same way), or
+            its file is missing from disk.
           content:
             application/json:
               schema:
@@ -8280,8 +8349,8 @@ paths:
       description: >-
         Update a campaign-specific custom creature template (DM only). A
         field left out keeps its value; `null` clears a nullable one. An SRD
-        creature, or a creature of another campaign, answers 403 (not 404,
-        unlike the read routes); only an unknown id answers 404. The body is
+        creature answers 403; a creature of another campaign answers 404, as
+        an unknown id does and as the read routes do. The body is
         validated before the creature is looked up. `imageUrl` is normalised
         and checked as on create, and `""` or `null` clears it; the address
         already stored may be sent back unchanged.
@@ -8380,23 +8449,32 @@ paths:
         '403':
           description: >-
             Not the campaign's DM; an SRD creature ("Cannot edit SRD
-            creatures. Duplicate it first to create a custom version."); a
-            creature of another campaign; or an image the caller may not
-            reference.
+            creatures. Duplicate it first to create a custom version."); or an
+            image the caller may not reference.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No creature with this id that this campaign can see. Another
+            campaign's creature is answered the same way, so the answer cannot
+            confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Creature template not found
 
     delete:
       tags: [Creatures]
       summary: Delete custom creature
       description: >-
         Delete a campaign-specific custom creature template (DM only). An SRD
-        creature, or a creature of another campaign, answers 403; only an
-        unknown id answers 404. Everyone's favourites of it are removed with
+        creature answers 403; a creature of another campaign answers 404, as
+        an unknown id does. Everyone's favourites of it are removed with
         it. Tokens already placed from it are not changed.
       operationId: deleteCreature
       security:
@@ -8422,7 +8500,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No creature with this id that this campaign can see. Another
+            campaign's creature is answered the same way, so the answer cannot
+            confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Creature template not found
 
   /api/campaigns/{campaignId}/creatures/{creatureId}/duplicate:
     post:
@@ -8781,7 +8869,8 @@ paths:
       summary: Get token template
       description: >-
         Campaign DM only, like the list. A template of another campaign
-        answers 403 ("Token template belongs to another campaign").
+        answers 404, as an unknown id does, so the answer cannot confirm that
+        an id exists.
       operationId: getTokenTemplate
       security:
         - cookieAuth: []
@@ -8795,7 +8884,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way, so the answer cannot confirm
+            that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
     put:
       tags: [Token Templates]
       summary: Update token template
@@ -8840,7 +8939,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way, so the answer cannot confirm
+            that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
     delete:
       tags: [Token Templates]
       summary: Delete token template
@@ -8860,7 +8969,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way, so the answer cannot confirm
+            that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
 
   /api/campaigns/{campaignId}/token-templates/from-token:
     post:
@@ -8924,8 +9043,8 @@ paths:
         not already use, answers 403 and nothing is copied.
 
         Checked in this order: the same campaign as source and target (400);
-        DM of the target (403); the template exists (404); it belongs to the
-        source campaign (403); the picture (403).
+        DM of the target (403); the template exists in the source campaign
+        (404, for one of another campaign too); the picture (403).
       operationId: copyTokenTemplate
       security:
         - cookieAuth: []
@@ -8954,7 +9073,9 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: The template does not exist.
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way.
           content:
             application/json:
               schema:

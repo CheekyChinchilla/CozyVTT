@@ -1174,12 +1174,15 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     }
     const { userId: incomingId } = parsed.data;
 
+    // A campaign the caller is not in, does not own and cannot run as an
+    // admin answers as one that is not there; a member who may not hand the
+    // seat over is told so below.
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { id: true },
+      select: { ownerId: true, memberships: { where: { userId: callerId }, select: { userId: true } } },
     });
 
-    if (!campaign) {
+    if (!campaign || (platformRole !== 'ADMIN' && campaign.ownerId !== callerId && campaign.memberships.length === 0)) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Campaign not found',

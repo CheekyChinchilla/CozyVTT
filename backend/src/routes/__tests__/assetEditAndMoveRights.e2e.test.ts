@@ -164,7 +164,7 @@ describe('moving a campaign asset with no campaign recorded', () => {
     });
 
     const res = await stranger.agent.patch(`/api/assets/${orphan.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: theirs.id });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect((await prisma.asset.findUniqueOrThrow({ where: { id: orphan.id } })).campaignId).toBeNull();
   });
 });

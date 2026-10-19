@@ -763,7 +763,7 @@ For a character with a game system, `name` is written into the sheet's `characte
 
 ### `GET /api/characters/:id`
 
-Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `403`. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
+Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `404`, as for an id that names nothing. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
 
 ---
 

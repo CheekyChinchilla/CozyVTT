@@ -170,14 +170,14 @@ describe('Asset deletion permissions', () => {
     it('refuses another user', async () => {
       const asset = await makeAsset({ scope: AssetScope.USER, uploadedById: strangerId });
       const res = await dmAgent.delete(`/api/assets/${asset.id}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     // The flag is about global assets; it must not leak into personal ones.
     it('does not let a global asset manager delete someone else\'s personal asset', async () => {
       const asset = await makeAsset({ scope: AssetScope.USER, uploadedById: strangerId });
       const res = await managerAgent.delete(`/api/assets/${asset.id}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
 
     it('lets an admin delete it', async () => {
@@ -203,7 +203,7 @@ describe('Asset deletion permissions', () => {
     it('refuses someone outside the campaign', async () => {
       const asset = await makeAsset({ scope: AssetScope.CAMPAIGN, uploadedById: strangerId, campaignId });
       const res = await managerAgent.delete(`/api/assets/${asset.id}`);
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
     });
   });
 

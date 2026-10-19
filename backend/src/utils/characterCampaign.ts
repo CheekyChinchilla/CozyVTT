@@ -29,3 +29,21 @@ export async function characterInCampaign(
 ): Promise<boolean> {
   return character.campaignId === campaignId && (await ownerStillIn(character.userId, campaignId));
 }
+
+/**
+ * Whether a user may read a character at all: its owner, or a member of the
+ * campaign whose character it is. The character routes answer anyone else as
+ * if it were not there, so an id cannot be tested for being real.
+ */
+export async function mayReadCharacter(
+  character: { userId: string; campaignId: string | null },
+  userId: string
+): Promise<boolean> {
+  if (character.userId === userId) return true;
+  if (!character.campaignId) return false;
+  const reader = await prisma.campaignMembership.findUnique({
+    where: { userId_campaignId: { userId, campaignId: character.campaignId } },
+    select: { userId: true },
+  });
+  return reader !== null && (await ownerStillIn(character.userId, character.campaignId));
+}

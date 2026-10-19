@@ -85,11 +85,13 @@ it('lets the DM of its campaign take a character out, leaving it with its owner'
   }));
 });
 
+// Another player may read the character, so is told no; the DM of another
+// campaign may not, so is answered as for a character that is not there.
 it.each([
-  ['another player of the campaign', 'otherPlayer'],
-  ['the DM of another campaign', 'otherDm'],
-])('refuses %s', async (_who, agent) => {
-  expect((await unassign(agent)).status).toBe(403);
+  ['another player of the campaign', 'otherPlayer', 403],
+  ['the DM of another campaign', 'otherDm', 404],
+])('refuses %s', async (_who, agent, status) => {
+  expect((await unassign(agent)).status).toBe(status);
   expect((await prisma.character.findUniqueOrThrow({ where: { id: characterId } })).campaignId).toBe(campaignId);
 });
 
@@ -100,7 +102,7 @@ it('refuses the DM a character whose owner has left the campaign', async () => {
   await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId } } });
   try {
     const res = await unassign('dm');
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(res.body.data).toBeUndefined();
     expect((await prisma.character.findUniqueOrThrow({ where: { id: characterId } })).campaignId).toBe(campaignId);
   } finally {
@@ -111,5 +113,5 @@ it('refuses the DM a character whose owner has left the campaign', async () => {
 it('still lets only the owner assign a character to a campaign', async () => {
   await prisma.character.update({ where: { id: characterId }, data: { campaignId: null } });
   const res = await agents.dm.post(`/api/characters/${characterId}/assign`).send({ campaignId });
-  expect(res.status).toBe(403);
+  expect(res.status).toBe(404);
 });

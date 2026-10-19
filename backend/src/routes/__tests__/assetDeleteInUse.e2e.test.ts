@@ -347,7 +347,7 @@ describe('who may ask', () => {
 
     const res = await stranger.delete(`/api/assets/${id}?force=true`);
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect(res.body.usage).toBeUndefined();
     expect(await prisma.asset.findUnique({ where: { id } })).not.toBeNull();
   });
