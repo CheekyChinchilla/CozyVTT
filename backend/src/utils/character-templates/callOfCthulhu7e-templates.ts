@@ -5,6 +5,7 @@
  */
 
 import { GameSystem } from '@prisma/client';
+import { cocBlankSkills } from '../rules/callOfCthulhu7e';
 
 export interface CharacterTemplate {
   name: string;
@@ -45,62 +46,9 @@ export const coc7eBlankTemplate: CharacterTemplate = {
       damageBonus: '0',
       dodge: { value: 25, formula: 'DEX/2', improvementChecked: false },
     },
-    skills: {
-      accounting: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      anthropology: { baseValue: 1, currentValue: 1, improvementChecked: false },
-      appraise: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      archaeology: { baseValue: 1, currentValue: 1, improvementChecked: false },
-      libraryUse: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      occult: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      spotHidden: { baseValue: 25, currentValue: 25, improvementChecked: false },
-      listen: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      naturalWorld: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      charm: { baseValue: 15, currentValue: 15, improvementChecked: false },
-      fastTalk: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      intimidate: { baseValue: 15, currentValue: 15, improvementChecked: false },
-      persuade: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      psychology: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      climb: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      jump: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      swim: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      throw: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      stealth: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      dodge: { baseValue: 25, currentValue: 25, improvementChecked: false },
-      fighting: {
-        brawl: { baseValue: 25, currentValue: 25, improvementChecked: false },
-        custom: [],
-      },
-      firearms: {
-        handgun: { baseValue: 20, currentValue: 20, improvementChecked: false },
-        rifle: { baseValue: 25, currentValue: 25, improvementChecked: false },
-        shotgun: { baseValue: 25, currentValue: 25, improvementChecked: false },
-        custom: [],
-      },
-      artCraft: { baseValue: 5, currentValue: 5, improvementChecked: false, specialization: null },
-      disguise: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      driveAuto: { baseValue: 20, currentValue: 20, improvementChecked: false },
-      firstAid: { baseValue: 30, currentValue: 30, improvementChecked: false },
-      locksmith: { baseValue: 1, currentValue: 1, improvementChecked: false },
-      mechanicalRepair: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      electricalRepair: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      operateHeavyMachinery: { baseValue: 1, currentValue: 1, improvementChecked: false },
-      sleightOfHand: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      pilot: { baseValue: 1, currentValue: 1, improvementChecked: false, specialization: null },
-      history: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      languageOwn: { baseValue: 50, currentValue: 50, improvementChecked: false, language: 'English' },
-      languageOther: [],
-      law: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      medicine: { baseValue: 1, currentValue: 1, improvementChecked: false },
-      science: [],
-      navigate: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      survival: { baseValue: 10, currentValue: 10, improvementChecked: false, specialization: null },
-      track: { baseValue: 10, currentValue: 10, improvementChecked: false },
-      creditRating: { baseValue: 0, currentValue: 0, improvementChecked: false },
-      cthulhuMythos: { baseValue: 0, currentValue: 0, improvementChecked: false },
-      psychoanalysis: { baseValue: 1, currentValue: 1, improvementChecked: false },
-      ride: { baseValue: 5, currentValue: 5, improvementChecked: false },
-      customSkills: [],
-    },
+    // Every skill at the rulebook's base, from the table the editor also
+    // fills a sheet with: Dodge at half DEX and the own language at EDU.
+    skills: cocBlankSkills(50, 50),
     combat: {
       weapons: [],
     },

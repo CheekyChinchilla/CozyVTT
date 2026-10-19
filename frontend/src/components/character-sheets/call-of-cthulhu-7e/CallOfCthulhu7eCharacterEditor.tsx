@@ -70,6 +70,7 @@ import {
   cocHalfAndFifth,
   cocDodgeBase,
   cocMajorWoundThreshold,
+  cocBlankSkills,
 } from '@/utils/rules/callOfCthulhu7e';
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
@@ -164,12 +165,15 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   const [formData, setFormData] = useState<CoC7eFormData>(() => withOneCthulhuMythos({
     ...data,
     characteristics: data.characteristics || {},
-    // TODO(typing): `{}` has none of the keys CoC7eDerivedStats and CoC7eSkills
-    // require, and the effects and inputs below read straight off them, so a
-    // sheet stored without either block reads undefined where a number is
-    // expected. The casts keep that behaviour exactly as it was.
+    // A sheet stored without derived attributes has them all worked out by
+    // the effect below as it opens; until then the inputs read them as absent.
     derivedStats: (data.derivedStats || {}) as CoC7eDerivedStats,
-    skills: (data.skills || {}) as CoC7eSkills,
+    // Every skill, at its base where the sheet has none: the server takes the
+    // whole block or nothing, so a sheet stored without one could not be saved.
+    skills: {
+      ...cocBlankSkills(data.characteristics?.DEX?.regular ?? 0, data.characteristics?.EDU?.regular ?? 0),
+      ...data.skills,
+    } as CoC7eSkills,
     combat: data.combat || { weapons: [] },
     possessions: data.possessions || [],
     wealth: data.wealth || {},

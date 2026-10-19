@@ -90,3 +90,42 @@ export function cocMoveRate(str: number, dex: number, siz: number, age: number):
 
   return Math.max(1, moveRate);
 }
+
+/**
+ * Each skill's base on a fresh investigator, from the Keeper Rulebook's skill
+ * list ("Accounting (05%)" and so on). Dodge (half DEX) and Language (Own)
+ * (EDU) are worked out from the characteristics; the specialised skills each
+ * start empty, with a base of their own per specialisation.
+ */
+export const COC_SKILL_BASES = {
+  accounting: 5, anthropology: 1, appraise: 5, archaeology: 1, artCraft: 5, charm: 15, climb: 20,
+  creditRating: 0, cthulhuMythos: 0, disguise: 5, driveAuto: 20, electricalRepair: 10, fastTalk: 5,
+  firstAid: 30, history: 5, intimidate: 15, jump: 20, law: 5, libraryUse: 20, listen: 20, locksmith: 1,
+  mechanicalRepair: 10, medicine: 1, naturalWorld: 10, navigate: 10, occult: 5, operateHeavyMachinery: 1,
+  persuade: 10, pilot: 1, psychoanalysis: 1, psychology: 10, ride: 5, sleightOfHand: 10, spotHidden: 25,
+  stealth: 20, survival: 10, swim: 20, throw: 20, track: 10,
+} as const;
+
+/** A skill at its base, not yet improved. */
+function freshSkill(base: number): { baseValue: number; currentValue: number; improvementChecked: boolean } {
+  return { baseValue: base, currentValue: base, improvementChecked: false };
+}
+
+/**
+ * A fresh investigator's skills block: every skill at its base, with Dodge at
+ * half DEX, the own language at EDU, Brawl at 25, Handgun at 20 and Rifle and
+ * Shotgun at 25.
+ */
+export function cocBlankSkills(dex: number, edu: number): Record<string, unknown> {
+  const skills: Record<string, unknown> = {};
+  for (const [key, base] of Object.entries(COC_SKILL_BASES)) skills[key] = freshSkill(base);
+  for (const key of ['artCraft', 'pilot', 'survival']) skills[key] = { ...freshSkill(COC_SKILL_BASES[key as 'pilot']), specialization: null };
+  skills.dodge = freshSkill(cocDodgeBase(dex));
+  skills.languageOwn = { ...freshSkill(Number.isFinite(edu) ? edu : 0), language: 'English' };
+  skills.fighting = { brawl: freshSkill(25), custom: [] };
+  skills.firearms = { handgun: freshSkill(20), rifle: freshSkill(25), shotgun: freshSkill(25), custom: [] };
+  skills.languageOther = [];
+  skills.science = [];
+  skills.customSkills = [];
+  return skills;
+}
