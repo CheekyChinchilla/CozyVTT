@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The Pathfinder 2e editor says which name is missing.** Clearing the ancestry, heritage or class, or the name of a strike, lore, spell, ritual, item or feat, made Save fail with no reason given. Save now lists what to fill in and opens the tab it is on, as the D&D 5e editor does.
+
 - **The built-in character templates follow the rules.** The Pathfinder 2e Level 1 Fighter had 21 hit points where a Dwarf Fighter with Constitution +2 has 22, and attack bonuses one short (Warhammer +8, Crossbow +6, as an expert); the blank Pathfinder 2e sheet stored no ancestry or class hit points and now has a Human Fighter's 18; the D&D 5e Level 1 Fighter in chain mail with a shield and the Defense style has Armor Class 19, not 18. Characters already made from them keep their numbers.
 
 - **A Pathfinder 2e ancestry or class with 0 hit points counts as 0.** The editor read a 0 typed in **Ancestry HP** or **Class HP/Level** as 6, so the maximum came out 6 higher than the boxes said. A character made from the older blank sheet, which stores neither, keeps its maximum until one is filled in.

@@ -129,6 +129,23 @@ interface Tab {
   icon: React.ElementType;
 }
 
+/** The tab a refused box is on, so Save can open it. */
+function tabOfError(key: string): TabId | null {
+  if (key.startsWith('loreSkills.')) return 'stats';
+  if (key.startsWith('strikes.')) return 'combat';
+  if (key.startsWith('spellcasting.')) return 'spells';
+  if (key.startsWith('inventory.')) return 'inventory';
+  if (key.startsWith('feats.')) return 'feats';
+  return null;
+}
+
+/**
+ * Errors the list above the sheet leaves out: a failed save and a refused
+ * picture are not about a box, and the colour's is shown in the colour picker,
+ * which Save opens.
+ */
+const NOT_IN_SUMMARY = new Set(['submit', 'tokenImage', 'themeColor']);
+
 const TABS: Tab[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
@@ -748,13 +765,36 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     });
   };
 
-  const validateForm = (): boolean => {
+  const validateForm = (): Record<string, string> => {
     const newErrors: Record<string, string> = {};
+    const blank = (value: string | undefined) => (value ?? '').trim() === '';
     if (!formData.characterName || formData.characterName.trim() === '') {
       newErrors.characterName = 'Character name is required';
     }
     if (!formData.level || formData.level < 1 || formData.level > 20) {
       newErrors.level = 'Level must be between 1 and 20';
+    }
+    if (blank(formData.ancestry)) newErrors.ancestry = 'Ancestry is required';
+    if (blank(formData.heritage)) newErrors.heritage = 'Heritage is required';
+    if (blank(formData.class)) newErrors.class = 'Class is required';
+
+    // Each row starts named; one whose name was cleared is the player's to
+    // name again or remove.
+    const named = (rows: { name?: string }[] | undefined, path: string, what: string) => {
+      (rows ?? []).forEach((row, i) => {
+        if (blank(row.name)) newErrors[`${path}.${i}.name`] = `Name this ${what}, or remove it`;
+      });
+    };
+    named(formData.loreSkills, 'loreSkills', 'lore');
+    named(formData.strikes, 'strikes', 'strike');
+    named(formData.inventory, 'inventory', 'item');
+    named(formData.spellcasting?.cantrips, 'spellcasting.cantrips', 'cantrip');
+    named(formData.spellcasting?.spells, 'spellcasting.spells', 'spell');
+    named(formData.spellcasting?.focusSpells?.spells, 'spellcasting.focusSpells.spells', 'focus spell');
+    named(formData.spellcasting?.innateSpells, 'spellcasting.innateSpells', 'innate spell');
+    named(formData.spellcasting?.rituals, 'spellcasting.rituals', 'ritual');
+    for (const [key, feats] of Object.entries(formData.feats ?? {})) {
+      named(feats as { name?: string }[] | undefined, `feats.${key}`, 'feat');
     }
     // The server refuses a colour it cannot read, and the whole save with it.
     if (isCustomColor && customColorHex !== '' && !toStoredHexColor(customColorHex)) {
@@ -762,7 +802,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       setShowColorPicker(true);
     }
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return newErrors;
   };
 
   const handleSubmit = async () => {
@@ -788,7 +828,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       // Typed while the save was in flight: the editor keeps it, unsaved.
       if (!stillDirty) onDone?.();
     };
-    if (!validateForm()) return;
+    const refused = Object.keys(validateForm());
+    if (refused.length > 0) {
+      // The first refused box that is on a tab, so the player sees it.
+      const onTab = refused.map(tabOfError).find((tab): tab is TabId => tab !== null);
+      if (onTab) setActiveTab(onTab);
+      return;
+    }
     setIsSaving(true);
     try {
       // Cast at the boundary: the sheet is saved exactly as the editor holds
@@ -951,9 +997,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
                   <NumberField
 id="pf2e-level" min={1} max={20} value={formData.level} onChange={(v: number) => updateField('level', v)} className={`w-16 bg-white/10 ${errors.level ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`} fallback={1} />
                 </div>
-                <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} aria-label="Class" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Class" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} aria-label="Ancestry" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Ancestry" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
-                <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} aria-label="Heritage" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Heritage" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.class || ''} onChange={(e) => updateField('class', e.target.value)} aria-label="Class" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Class" className={`bg-white/10 ${errors.class ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.ancestry || ''} onChange={(e) => updateField('ancestry', e.target.value)} aria-label="Ancestry" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Ancestry" className={`bg-white/10 ${errors.ancestry ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
+                <input type="text" value={formData.heritage || ''} onChange={(e) => updateField('heritage', e.target.value)} aria-label="Heritage" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Heritage" className={`bg-white/10 ${errors.heritage ? 'border-2 border-white' : 'border border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
                 <input type="text" value={formData.background || ''} onChange={(e) => updateField('background', e.target.value)} aria-label="Background" maxLength={SHEET_SHORT_TEXT_MAX} placeholder="Background" className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`} />
                 {/* Deity and alignment are part of the sheet the schema
                     describes, and matter for a cleric, champion or oracle, but
@@ -1897,6 +1943,8 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
     </div>
   );
 
+  const refusals = [...new Set(Object.entries(errors).filter(([key, message]) => message && !NOT_IN_SUMMARY.has(key)).map(([, message]) => message))];
+
   return (
     <div
       className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg"
@@ -1906,6 +1954,16 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
     >
       {renderHeader()}
       {renderTabs()}
+      {refusals.length > 0 && (
+        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+          <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
+          <ul className="list-disc pl-5">
+            {refusals.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       {openingChanges.length > 0 && (
         <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving
