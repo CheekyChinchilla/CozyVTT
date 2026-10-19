@@ -139,6 +139,15 @@ async function resolveTemplateImage(
 }
 
 /**
+ * A template as it is sent: without the player's name and the Keeper's Notes,
+ * which one published before they were left out may still hold.
+ */
+function servedTemplate<T extends { gameSystem: GameSystem | null; data: unknown }>(template: T): T {
+  const { gameSystem } = template;
+  return { ...template, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, template.data)) };
+}
+
+/**
  * Validate sheet data against its game system, mirroring how characters are
  * checked, and return the sheet to store: the schema's parsed output, so a key
  * the sheet does not declare never reaches the database. A Flexible template
@@ -154,15 +163,6 @@ async function resolveTemplateImage(
  * are the Keeper's alone, or the player's name, which is the character
  * owner's: whoever saves one, a template editor included, both are left out.
  */
-/**
- * A template as it is sent: without the player's name and the Keeper's Notes,
- * which one published before they were left out may still hold.
- */
-function servedTemplate<T extends { gameSystem: GameSystem | null; data: unknown }>(template: T): T {
-  const { gameSystem } = template;
-  return { ...template, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, template.data)) };
-}
-
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
   data: unknown

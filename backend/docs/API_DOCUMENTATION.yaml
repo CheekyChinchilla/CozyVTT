@@ -5366,7 +5366,9 @@ paths:
         and `tokenImageUrl`. The copy is unassigned
         (`campaignId: null`), its name is the original's followed by a space
         and `(Copy)`, the original cut short first so the whole is at most 200
-        characters, and the response carries no `campaign` object. Only the
+        characters, written into the sheet's own name field too
+        (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`),
+        and the response carries no `campaign` object. Only the
         character's owner may copy it. A copy counts towards the 1,000
         characters one account may own; past that it answers 400 with the same
         message as `POST /api/characters`.

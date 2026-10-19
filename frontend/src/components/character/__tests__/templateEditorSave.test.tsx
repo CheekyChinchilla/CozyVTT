@@ -18,7 +18,6 @@ import type { CharacterTemplate } from '@/types';
 
 const showToast = vi.fn();
 const updateCharacterTemplate = vi.fn();
-const uploadAsset = vi.fn();
 const listCharacterTemplates = vi.fn();
 const getCharacterTemplate = vi.fn();
 
@@ -35,7 +34,6 @@ vi.mock('@/contexts/AuthContext', () => ({
 vi.mock('@/services/api', () => {
   const api = {
     updateCharacterTemplate: (id: string, body: unknown) => updateCharacterTemplate(id, body),
-    uploadAsset: (form: FormData) => uploadAsset(form),
     listCharacterTemplates: (params: unknown) => listCharacterTemplates(params),
     getCharacterTemplate: (id: string) => getCharacterTemplate(id),
   };
@@ -70,7 +68,6 @@ beforeAll(async () => {
 beforeEach(() => {
   showToast.mockReset();
   updateCharacterTemplate.mockReset();
-  uploadAsset.mockReset();
   getCharacterTemplate.mockReset();
 });
 
