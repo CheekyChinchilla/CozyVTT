@@ -811,6 +811,13 @@ export async function importCampaign(
             }
             let mapRaw: unknown;
             try {
+              // TODO(import): a map file may unpack to 10 MB, and parsing one
+              // that is a list of 200,000 tiny walls took the heap to about
+              // 160 MB before prepareMap kept the first 5,000; at 10 MB that
+              // nears the backend's 268 MB heap on its own. Bound what one map
+              // file costs before it is parsed (count its lists on the text,
+              // as jsonListCut does for the creatures, or a lower size limit
+              // for map files measured against real maps).
               mapRaw = await readJsonEntry(archivePath, mapEntry, total);
             } catch (error) {
               if (!(error instanceof NestedTooDeepError)) throw error;
