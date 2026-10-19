@@ -727,6 +727,10 @@ goes stale if the role changes underneath it. A DM transfer therefore updates
 connected sockets in place (`applyRoleToLiveSockets`) and broadcasts
 `campaign.dm.transferred`, rather than waiting for a reconnect. REST needs no
 equivalent: `loadCampaignMembership` reads the membership per request.
+`authenticate` takes the new campaign's room and role with nothing awaited
+after its membership read, so a change made while it tells the old campaign
+finds the socket in the new room, and it reads the membership once more at
+the end and applies what it finds (`settleMembership` in `websocket/events.ts`).
 
 Taking access away works the same way. Removing a member and deleting a
 campaign make the affected sockets leave the room and forget the campaign

@@ -264,15 +264,19 @@ socket.on('error', (data) => {
      authentication; if it is, the same "Unauthorized" and close
    - The campaign exists ("Campaign not found") and the user is a member of
      it ("You are not a member of this campaign")
-3. The socket leaves every other campaign room it is in; each of those
-   campaigns gets 'user.left' and a fresh 'presence.state'
-4. Server joins socket to campaign room
-5. Server attaches campaignId and role to socket
-6. Server emits 'authenticated' to client
-7. If the socket was already in this campaign with the same role (a re-join),
-   the server sends 'presence.state' to that socket alone and stops; nobody
-   else is told. Otherwise it broadcasts 'user.joined' to the other campaign
-   members, then 'presence.state' to the whole campaign
+3. In one step after that check, the socket leaves every other campaign room
+   it is in, joins the campaign room and takes the campaignId and role
+4. Each campaign left gets 'user.left' and a fresh 'presence.state'. A
+   removal from the new campaign made meanwhile ends the join here: the
+   socket is sent 'campaign.access.revoked' and no 'authenticated'
+5. Server emits 'authenticated' to client
+6. If the socket was already in this campaign with the same role (a re-join),
+   the server sends 'presence.state' to that socket alone; nobody else is
+   told. Otherwise it broadcasts 'user.joined' to the other campaign members,
+   then 'presence.state' to the whole campaign
+7. The server reads the membership once more: if it is gone the socket is
+   sent 'campaign.access.revoked' (reason 'removed') and leaves the campaign;
+   if the role changed, the socket takes the new one
 ```
 
 ### Permission Checks

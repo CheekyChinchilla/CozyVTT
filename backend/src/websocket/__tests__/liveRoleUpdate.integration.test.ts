@@ -22,6 +22,9 @@ import { randomUUID } from 'crypto';
 import type { Socket as ClientSocket } from 'socket.io-client';
 import { prisma } from '../../config/database';
 import { applyRoleToLiveSockets, broadcastToCampaign } from '../utils';
+import * as utils from '../utils';
+import * as auth from '../auth';
+import type { AuthenticatedSocket } from '../auth';
 import {
   createWsTestServer,
   waitForEvent,
@@ -186,5 +189,110 @@ describe('campaign.dm.transferred', () => {
 
     dmClient.disconnect();
     playerClient.disconnect();
+  });
+});
+
+/**
+ * A change made while a socket is switching campaigns. `authenticate` read
+ * the membership, then awaited leaving the old campaign and telling it who
+ * was online, and only then took the new campaign's room and role. A removal
+ * or a role change in that gap found the socket outside the new room, so it
+ * was missed, and the socket joined with what it had read.
+ */
+describe('a change while a connection switches campaigns', () => {
+  let campaignA: string;
+  let campaignB: string;
+
+  beforeEach(async () => {
+    const [a, b] = await Promise.all(
+      ['A', 'B'].map((label) => prisma.campaign.create({ data: { name: `Switch ${label} ${runId}`, ownerId: dmId, vibeSettings: {} } }))
+    );
+    campaignA = a.id;
+    campaignB = b.id;
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: playerId, campaignId: campaignA, role: 'PLAYER', characterIds: [] },
+        { userId: playerId, campaignId: campaignB, role: 'DM', characterIds: [] },
+      ],
+    });
+  });
+
+  afterEach(async () => {
+    jest.restoreAllMocks();
+    await prisma.campaign.deleteMany({ where: { id: { in: [campaignA, campaignB] } } });
+  });
+
+  /** The server's socket for a client. */
+  function serverSocket(client: ClientSocket): AuthenticatedSocket {
+    const found = server.io.of('/').sockets.get(client.id ?? '');
+    if (!found) throw new Error('no server socket for the client');
+    return found as AuthenticatedSocket;
+  }
+
+  /** Switch to B and wait until the server has finished with it, `authenticated` or not. */
+  async function switchToB(client: ClientSocket): Promise<AuthenticatedSocket> {
+    const socket = serverSocket(client);
+    client.emit('authenticate', { campaignId: campaignB });
+    // The event has to arrive before the chain it joins can be awaited.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await socket.authenticating;
+    return socket;
+  }
+
+  it("leaves the connection out of a campaign it was removed from during the old campaign's presence broadcast", async () => {
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = utils.broadcastPresence;
+    jest.spyOn(utils, 'broadcastPresence').mockImplementation(async (room: string) => {
+      if (room === campaignA) {
+        // What removing a member does: the row, then the live sockets.
+        await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
+        await utils.clearCampaignFromLiveSockets(playerId, campaignB);
+      }
+      return original(room);
+    });
+
+    const socket = await switchToB(client);
+    expect(socket.rooms.has(campaignB)).toBe(false);
+    expect(socket.campaignId).toBeUndefined();
+    expect(socket.role).toBeUndefined();
+    client.disconnect();
+  });
+
+  it("takes the role a demotion during the old campaign's presence broadcast gave", async () => {
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = utils.broadcastPresence;
+    jest.spyOn(utils, 'broadcastPresence').mockImplementation(async (room: string) => {
+      if (room === campaignA) {
+        await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } }, data: { role: 'PLAYER' } });
+        await utils.applyRoleToLiveSockets(playerId, campaignB, 'PLAYER');
+      }
+      return original(room);
+    });
+
+    const socket = await switchToB(client);
+    expect(socket.campaignId).toBe(campaignB);
+    expect(socket.role).toBe('PLAYER');
+    client.disconnect();
+  });
+
+  it('reads the membership again, for a removal whose live clear-out ran before the connection joined', async () => {
+    const client = await server.connectAndAuth(playerCookie, campaignA);
+    const original = auth.authenticateCampaign;
+    jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
+      const result = await original(s, id);
+      // Removed after the read: the route's clear-out finds nothing to clear yet.
+      if (id === campaignB) {
+        await prisma.campaignMembership.delete({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } } });
+        await utils.clearCampaignFromLiveSockets(playerId, campaignB);
+      }
+      return result;
+    });
+
+    const revoked = waitForEvent<{ campaignId: string; reason: string }>(client, 'campaign.access.revoked');
+    const socket = await switchToB(client);
+    expect(socket.rooms.has(campaignB)).toBe(false);
+    expect(socket.campaignId).toBeUndefined();
+    await expect(revoked).resolves.toMatchObject({ campaignId: campaignB, reason: 'removed' });
+    client.disconnect();
   });
 });

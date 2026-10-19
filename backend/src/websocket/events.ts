@@ -1,8 +1,10 @@
 import { types } from 'util';
 import { Server } from 'socket.io';
+import type { CampaignRole } from '@prisma/client';
+import { prisma } from '../config/database';
 import { AuthenticatedSocket, authenticateSocket, authenticateCampaign, socketSessionIsLive } from './auth';
 import { databaseBeingReplaced, RESTORING_MESSAGE } from '../services/restoreState';
-import { broadcastPresence, getOnlineUserIds } from './utils';
+import { broadcastPresence, getOnlineUserIds, clearCampaignFromLiveSockets, applyRoleToLiveSockets } from './utils';
 import logger from '../utils/logger';
 import { stateRequestAllowed, withinCeiling, MAX_SOCKETS_PER_USER, TOO_MANY_SOCKETS } from './shared';
 import { registerTokenHandlers } from './handlers/tokens';
@@ -117,15 +119,32 @@ export function registerEventHandlers(io: Server): void {
           return;
         }
 
+        // Already in this campaign with this role: nothing about this socket
+        // changes for anyone else, so the table is not told again.
+        const rejoined = socket.campaignId === data.campaignId && socket.role === result.role && socket.rooms.has(data.campaignId);
+
         // SECURITY: one campaign per socket. Leave every other campaign room
         // before taking the new campaign's role, or a role-filtered fan-out in
         // an old room would find this socket still there and answer it with
         // the new role's view of that campaign. A socket's rooms are its own
         // id, its user room and campaign rooms, nothing else.
-        for (const room of [...socket.rooms]) {
-          if (room === socket.id || room === socket.userId || room === data.campaignId) continue;
-          await socket.leave(room);
+        //
+        // Nothing is awaited from the membership read to the new room and
+        // role: a removal or role change for this campaign made while the old
+        // campaigns are told below finds the socket in it, and reaches it
+        // (clearCampaignFromLiveSockets, applyRoleToLiveSockets).
+        const oldRooms = [...socket.rooms].filter(
+          (room) => room !== socket.id && room !== socket.userId && room !== data.campaignId
+        );
+        const leaving = oldRooms.map((room) => socket.leave(room));
+        // The role is refreshed even when the campaign is the same, since a
+        // client re-authenticates after a reconnect.
+        socket.join(data.campaignId);
+        socket.campaignId = data.campaignId;
+        socket.role = result.role;
+        await Promise.all(leaving);
 
+        for (const room of oldRooms) {
           // Notify old campaign that user left
           socket.to(room).emit('user.left', {
             userId: socket.userId,
@@ -139,15 +158,8 @@ export function registerEventHandlers(io: Server): void {
           await broadcastPresence(room);
         }
 
-        // Already in this campaign with this role: nothing about this socket
-        // changes for anyone else, so the table is not told again.
-        const rejoined = socket.campaignId === data.campaignId && socket.role === result.role && socket.rooms.has(data.campaignId);
-
-        // Join the campaign room. Role is refreshed even when the campaign is
-        // the same, since a client re-authenticates after a reconnect.
-        socket.join(data.campaignId);
-        socket.campaignId = data.campaignId;
-        socket.role = result.role;
+        // Removed meanwhile, and told so: the join is over.
+        if (socket.campaignId !== data.campaignId) return;
 
         // Notify the user they've been authenticated
         socket.emit('authenticated', {
@@ -159,26 +171,55 @@ export function registerEventHandlers(io: Server): void {
 
         if (rejoined) {
           socket.emit('presence.state', { campaignId: data.campaignId, onlineUserIds: await getOnlineUserIds(data.campaignId) });
-          return;
+        } else {
+          // No "X has joined" chat message. This handler runs on every socket
+          // authentication — so once per page load, per refresh and per recovered
+          // network blip — and each one wrote a permanent Message row as well as
+          // a live notification. A player reloading twice buried the actual
+          // conversation. Who is present is now shown as a dot in the campaign
+          // roster instead, which is what the message was really trying to say.
+          socket.to(data.campaignId).emit('user.joined', {
+            userId: socket.userId,
+            timestamp: new Date().toISOString(),
+          });
+
+          await broadcastPresence(data.campaignId);
+
+          logger.info('authenticated', { userId: socket.userId, campaignId: data.campaignId, role: result.role });
         }
 
-        // No "X has joined" chat message. This handler runs on every socket
-        // authentication — so once per page load, per refresh and per recovered
-        // network blip — and each one wrote a permanent Message row as well as
-        // a live notification. A player reloading twice buried the actual
-        // conversation. Who is present is now shown as a dot in the campaign
-        // roster instead, which is what the message was really trying to say.
-        socket.to(data.campaignId).emit('user.joined', {
-          userId: socket.userId,
-          timestamp: new Date().toISOString(),
-        });
-
-        await broadcastPresence(data.campaignId);
-
-        logger.info('authenticated', { userId: socket.userId, campaignId: data.campaignId, role: result.role });
+        await settleMembership(data.campaignId);
       } catch (error) {
         logger.error('authenticate failed', { err: error });
         socket.emit('error', { message: 'Authentication failed' });
+      }
+    }
+
+    /**
+     * Read the membership once more and apply it. A removal or role change
+     * committed after `authenticate` read the membership, whose live update
+     * ran before the socket had joined, is caught here. A failed read leaves
+     * the first one standing.
+     */
+    async function settleMembership(campaignId: string): Promise<void> {
+      const userId = socket.userId;
+      if (!userId) return;
+      let membership: { role: CampaignRole } | null;
+      try {
+        membership = await prisma.campaignMembership.findUnique({
+          where: { userId_campaignId: { userId, campaignId } },
+          select: { role: true },
+        });
+      } catch (error) {
+        logger.error('authenticate could not read the membership again', { err: error, userId, campaignId });
+        return;
+      }
+      if (socket.campaignId !== campaignId) return;
+      if (!membership) {
+        await clearCampaignFromLiveSockets(userId, campaignId);
+        await broadcastPresence(campaignId);
+      } else if (membership.role !== socket.role) {
+        await applyRoleToLiveSockets(userId, campaignId, membership.role);
       }
     }
 
