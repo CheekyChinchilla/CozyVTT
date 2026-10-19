@@ -6354,7 +6354,10 @@ paths:
               schema:
                 type: string
         '304':
-          description: Unchanged since the ETag in `If-None-Match`. No body.
+          description: >-
+            Unchanged since the ETag in `If-None-Match`. No body; the same
+            `Content-Security-Policy` and `X-Content-Type-Options` as the 200,
+            since a browser replaces the headers it kept with these.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':

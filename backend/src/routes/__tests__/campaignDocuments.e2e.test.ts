@@ -276,6 +276,20 @@ describe('campaign documents', () => {
       expect(res.headers['content-disposition']).toMatch(/^inline/);
     });
 
+    // A browser keeps the headers it stored with the document and replaces
+    // them with a 304's, so a 304 carrying the app's own policy unsandboxed a
+    // text document opened directly.
+    it.each([['a text document', () => txtId], ['a PDF', () => pdfId]])(
+      'sandboxes %s when it answers 304 too',
+      async (_label, id) => {
+        const first = await serve(owner, id());
+        const again = await owner.get(`/api/assets/documents/${id()}`).set('If-None-Match', first.headers.etag);
+        expect(again.status).toBe(304);
+        expect(again.headers['content-security-policy']).toBe("default-src 'none'; sandbox");
+        expect(again.headers['x-content-type-options']).toBe('nosniff');
+      },
+    );
+
     it('ignores the stored mimeType entirely', async () => {
       // Tamper with the row the way a compromised upload path might.
       await prisma.asset.update({ where: { id: txtId }, data: { mimeType: 'text/html' } });

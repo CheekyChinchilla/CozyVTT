@@ -1036,6 +1036,14 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
     }
 
+    // On every answer, a 304 included: a browser replaces the headers it
+    // stored with the document with a 304's, so a 304 carrying the app's own
+    // policy would unsandbox a document opened directly.
+    res.set({
+      'Content-Security-Policy': "default-src 'none'; sandbox",
+      'X-Content-Type-Options': 'nosniff',
+    });
+
     if (ext === '.pdf') {
       // A PDF cannot change under its id; the edit route refuses it and a
       // replacement is a new asset. The year-long immutable cache is right.
@@ -1048,9 +1056,6 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       const etag = `"${asset.id}-${stat.size}-${Math.floor(stat.mtimeMs)}"`;
       res.set('Cache-Control', 'private, no-cache');
       res.set('ETag', etag);
-      // TODO(assets): this 304 goes out before the document's sandbox CSP is set,
-      // so it carries the app-wide policy and the browser keeps that one; set the
-      // document's headers first.
       if (req.headers['if-none-match'] === etag) {
         return res.status(304).end();
       }
@@ -1061,8 +1066,6 @@ router.get('/documents/:id', authenticated, async (req: AuthenticatedRequest, re
       headers: {
         'Content-Type': contentType,
         'Content-Disposition': 'inline',
-        'Content-Security-Policy': "default-src 'none'; sandbox",
-        'X-Content-Type-Options': 'nosniff',
       },
     });
   } catch (error) {

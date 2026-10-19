@@ -68,6 +68,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Records by id.* A record the caller may not read now answers 404 with the same message as an id that names nothing, where it answered 403: `GET`, `PUT` and `DELETE /api/campaigns/:campaignId/token-templates/:id` and its `copy-to` (`Token template not found`); `PUT` and `DELETE /api/campaigns/:campaignId/creatures/:creatureId` for another campaign's creature; `GET`, `PUT`, `DELETE /api/characters/:id`, `/validate`, `/copy` and `/assign` (`Character not found`); `GET /api/assets/:id`, `DELETE /api/assets/:id`, `/download`, `GET /api/assets/maps/:id` and `/tokens/:id`, and `PATCH /api/assets/:id/scope`; `POST /api/invitations/:id/accept` and `/decline` (`Invitation not found`). A campaign named in a body that the caller is not a member of answers 404 `Campaign not found` on `POST /api/characters`, `POST /api/characters/:id/assign` and `PATCH /api/assets/:id/scope`, as does `PUT /api/campaigns/:campaignId/dm` for a caller who is not a member, its owner or an admin. 403 stays for a record the caller may read but not change, such as an SRD creature.
   - *Lists.* `GET /api/assets` and `GET /api/campaigns/:campaignId/creatures` answer 400 `Validation Error` for any parameter sent more than once (`Send search once, as text`), where a repeated text parameter answered 500.
   - *Lists.* `search` on `GET /api/assets`, `GET /api/campaigns/:campaignId/creatures`, `GET /api/campaigns/:campaignId/token-templates` and `GET /api/character-templates` matches `%` and `_` literally; they were wildcards.
+  - *Documents.* A 304 from `GET /api/assets/documents/:id` carries the document's `Content-Security-Policy: default-src 'none'; sandbox` and `X-Content-Type-Options: nosniff`, as the 200 does.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
@@ -260,6 +261,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **A text document opened from the browser's cache keeps its sandbox.** A document opened directly is served with a policy that stops it running anything as a page. When the browser asked whether its copy was still current, the answer carried the app's own policy instead, which then replaced the document's. Both answers now carry the document's.
 
 - **Asking for something you may not see is answered as if it were not there.** Asking for another campaign's token template or creature, someone else's character, a picture or file you may not open, or someone else's invitation answered differently from asking for one that does not exist, so a signed-in user holding an id could tell that it was real. Both now get the same answer. Who may see or change what is unchanged.
 
