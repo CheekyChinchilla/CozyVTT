@@ -83,11 +83,11 @@ const SkillRow: React.FC<{
 
   const getProficiencyIcon = () => {
     if (skill.expertise) {
-      return <CircleDot className="w-4 h-4 text-red-700" />;
+      return <CircleDot className="w-4 h-4 text-accent-ink" />;
     } else if (skill.proficient) {
-      return <CheckCircle2 className="w-4 h-4 text-red-700" />;
+      return <CheckCircle2 className="w-4 h-4 text-accent-ink" />;
     } else {
-      return <Circle className="w-4 h-4 text-stone-500" />;
+      return <Circle className="w-4 h-4 text-ink-muted" />;
     }
   };
 
@@ -98,7 +98,7 @@ const SkillRow: React.FC<{
   return (
     <div
       className={`flex items-center justify-between py-1 px-2 rounded group ${
-        isClickable ? 'cursor-pointer hover:bg-red-50 select-none' : 'hover:bg-stone-50'
+        isClickable ? 'cursor-pointer hover:bg-accent/10 select-none' : 'hover:bg-ink/5'
       }`}
       onClick={isClickable ? () => onRoll(expression, purpose) : undefined}
       onContextMenu={onRollContext ? (e) => { e.preventDefault(); onRollContext(e, expression, purpose); } : undefined}
@@ -106,13 +106,13 @@ const SkillRow: React.FC<{
     >
       <div className="flex items-center space-x-2">
         {getProficiencyIcon()}
-        <span className="text-sm text-stone-700">{name}</span>
+        <span className="text-sm text-ink-secondary">{name}</span>
       </div>
       <div className="flex items-center gap-1">
         {isClickable && (
-          <Dices className="w-3 h-3 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />
+          <Dices className="w-3 h-3 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />
         )}
-        <span className="text-sm font-semibold text-stone-900 min-w-12 text-right">
+        <span className="text-sm font-semibold text-ink min-w-12 text-right">
           {formatBonus(skill.bonus)}
         </span>
       </div>
@@ -136,8 +136,8 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
       {/* The player's own — separated so it is obvious which are the standard
           eighteen and which this character added. */}
       {customSkills && customSkills.length > 0 && (
-        <div className="pt-2 border-t border-stone-200">
-          <div className="text-xs font-semibold text-stone-500 uppercase tracking-wide px-2 mb-1">
+        <div className="pt-2 border-t border-ink/10">
+          <div className="text-xs font-semibold text-ink-muted uppercase tracking-wide px-2 mb-1">
             Your Own Skills
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4">
@@ -156,12 +156,12 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
 
       {/* Passive Perception */}
       {passivePerception !== undefined && (
-        <div className="pt-3 border-t border-stone-200">
-          <div className="flex items-center justify-between px-2 py-1 bg-red-50 rounded-sm">
-            <span className="text-sm font-semibold text-stone-700">
+        <div className="pt-3 border-t border-ink/10">
+          <div className="flex items-center justify-between px-2 py-1 bg-accent/10 rounded-sm">
+            <span className="text-sm font-semibold text-ink-secondary">
               Passive Perception
             </span>
-            <span className="text-lg font-bold text-red-700">
+            <span className="text-lg font-bold text-accent-ink">
               {passivePerception}
             </span>
           </div>
@@ -169,18 +169,18 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, passivePerceptio
       )}
 
       {/* Legend */}
-      <div className="pt-3 border-t border-stone-200">
-        <div className="flex flex-wrap gap-4 text-xs text-stone-600">
+      <div className="pt-3 border-t border-ink/10">
+        <div className="flex flex-wrap gap-4 text-xs text-ink-secondary">
           <div className="flex items-center space-x-1">
-            <Circle className="w-3 h-3 text-stone-500" />
+            <Circle className="w-3 h-3 text-ink-muted" />
             <span>Not Proficient</span>
           </div>
           <div className="flex items-center space-x-1">
-            <CheckCircle2 className="w-3 h-3 text-red-700" />
+            <CheckCircle2 className="w-3 h-3 text-accent-ink" />
             <span>Proficient</span>
           </div>
           <div className="flex items-center space-x-1">
-            <CircleDot className="w-3 h-3 text-red-700" />
+            <CircleDot className="w-3 h-3 text-accent-ink" />
             <span>Expertise</span>
           </div>
         </div>

@@ -102,7 +102,7 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
-- **Character sheets follow your theme.** Sheets were fixed paper cards with some text in the theme's colours, so in a dark theme parts were hard to read. The Flexible sheet's buttons are now the app's own, readable in every theme, and its remove buttons and notes take the theme's colours.
+- **Character sheets follow your theme.** Sheets were fixed paper cards with some text in the theme's colours, so in a dark theme parts were hard to read. Every sheet now takes the theme's paper, text and borders, and its colours that mean something take the theme's: hit points, damage and remove buttons its danger colour, magic and attunement its spirit colour, notes its warning colour, as soft tints readable in every theme. The system colours on buttons (D&D's red "+ Add") are the app's own buttons, and coins are shown in the theme's text. The D&D 5e and Flexible sheets are done.
 
 - **Text boxes, checkboxes and dropdown lists are dark in a dark theme.** In Obsidian Night, Shadow Realm, Deep Dungeon, Midnight Court and a dark custom theme the browser still drew its own controls light, with the theme's light text inside them. Checkboxes, radio buttons and sliders now take the theme's colour in every theme.
 

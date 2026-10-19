@@ -78,6 +78,7 @@ import {
   SPELL_SLOTS_MAX,
 } from '@/constants/sheetLimits';
 import { COLOR_PRESETS } from './colorPresets';
+import Button from '@/components/ui/Button';
 
 /**
  * The sheet as this editor holds it.
@@ -1121,7 +1122,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   /** What Save said about a box, under it. */
   const fieldError = (key: string) =>
-    errors[key] ? <p className="mt-1 text-xs text-red-600">{errors[key]}</p> : null;
+    errors[key] ? <p className="mt-1 text-xs text-danger-ink">{errors[key]}</p> : null;
 
   const updateField = (path: string, value: unknown) => {
     clearErrorsAt(path);
@@ -1155,8 +1156,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
     // Determine text color based on background luminance
     const headerTextColor = isCustomColor
-      ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-stone-900')
-      : (shouldUseWhiteText(selectedColor.hex) ? 'text-white' : 'text-stone-900');
+      ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black')
+      : (shouldUseWhiteText(selectedColor.hex) ? 'text-white' : 'text-black');
+    // Hints under the token picture, a little softer than the header text.
+    const headerHintColor = headerTextColor === 'text-white' ? 'text-white/90' : 'text-black/80';
 
     const headerClasses = isCustomColor
       ? `${headerTextColor} p-6 rounded-t-lg relative`
@@ -1166,17 +1169,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       <div className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
         <div className="absolute top-4 right-16 flex items-center space-x-2">
-          <button
+          <Button
+            variant="primary"
             onClick={handleSubmit}
             disabled={isSaving}
-            className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg disabled:opacity-50"
+            className="flex items-center space-x-2 shadow-lg"
           >
             <Save className="w-4 h-4" />
             <span>{isSaving ? 'Saving...' : 'Save'}</span>
-          </button>
+          </Button>
           <button
             onClick={onCancel}
-            className="px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+            className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
           >
             <X className="w-4 h-4" />
             <span>Cancel</span>
@@ -1194,7 +1198,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
         {/* Color Picker Dropdown */}
         {showColorPicker && (
-          <div className="absolute top-16 right-4 bg-white text-stone-800 rounded-lg shadow-xl p-4 z-10 border-2 border-stone-200 max-w-md">
+          <div className="absolute top-16 right-4 bg-paper text-ink rounded-lg shadow-xl p-4 z-10 border-2 border-ink/10 max-w-md">
             <h4 className="font-semibold mb-3">Theme Color</h4>
 
             {/* Preset Colors */}
@@ -1205,8 +1209,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   onClick={() => handlePresetColorSelect(color)}
                   className={`px-2 py-2 rounded-lg text-sm font-medium transition-all ${
                     !isCustomColor && selectedColor.name === color.name
-                      ? 'ring-2 ring-stone-400 bg-stone-100'
-                      : 'hover:bg-stone-50'
+                      ? 'ring-2 ring-brand bg-ink/10'
+                      : 'hover:bg-ink/5'
                   }`}
                 >
                   <div className={`w-full h-6 rounded-sm mb-1 bg-linear-to-r/srgb ${color.from} ${color.to}`} />
@@ -1216,8 +1220,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             </div>
 
             {/* Custom Color Section */}
-            <div className="border-t pt-4 space-y-3">
-              <h5 className="text-sm font-semibold text-stone-700">Custom Color</h5>
+            <div className="border-t border-ink/10 pt-4 space-y-3">
+              <h5 className="text-sm font-semibold text-ink-secondary">Custom Color</h5>
 
               <div className="flex items-center space-x-2">
                 {/* Native Color Picker */}
@@ -1225,7 +1229,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   type="color"
                   value={customColorHex || '#b91c1c'}
                   onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-stone-300"
+                  className="w-12 h-12 rounded-sm cursor-pointer border-2 border-ink/20"
                   title="Pick a custom color"
                 />
 
@@ -1243,16 +1247,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     }}
                     placeholder="#b91c1c"
                     aria-label="Custom colour hex code"
-                    className="w-full px-3 py-2 border border-stone-300 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-ink/20 rounded-lg text-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
-                  <div className="text-xs text-stone-500 mt-1">Enter hex code (e.g., #b91c1c)</div>
-                  {errors.themeColor && <div className="text-xs text-red-600 mt-1">{errors.themeColor}</div>}
+                  <div className="text-xs text-ink-muted mt-1">Enter hex code (e.g., #b91c1c)</div>
+                  {errors.themeColor && <div className="text-xs text-danger-ink mt-1">{errors.themeColor}</div>}
                 </div>
               </div>
 
               {/* Custom Color Preview */}
               {isCustomColor && customColorHex && /^#[0-9A-Fa-f]{6}$/.test(customColorHex) && (
-                <div className="flex items-center space-x-2 p-2 bg-stone-50 rounded-sm">
+                <div className="flex items-center space-x-2 p-2 bg-ink/5 rounded-sm">
                   <div
                     className="w-8 h-8 rounded-sm"
                     style={{ background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }}
@@ -1293,7 +1297,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   className="w-40 h-40 rounded-full border-4 border-white/20 object-cover"
                 />
               ) : (
-                <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-stone-800 flex items-center justify-center">
+                <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
                   <User className="w-20 h-20 text-white/40" />
                 </div>
               )}
@@ -1302,12 +1306,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               </div>
             </label>
             {errors.tokenImage && (
-              <div className="absolute top-full mt-1 text-xs text-red-200 whitespace-nowrap">
+              <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
                 {errors.tokenImage}
               </div>
             )}
             {!character.campaignId && (
-              <div className="absolute top-full mt-1 text-xs text-amber-200 whitespace-nowrap">
+              <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
                 Saves as personal token
               </div>
             )}
@@ -1323,7 +1327,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               placeholder="Character Name"
               aria-label="Character name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
-                errors.characterName ? 'border-red-300' : 'border-white/20'
+                errors.characterName ? 'border-white' : 'border-white/20'
               } rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
             />
             {/* Player name is who owns this character, not free text — it is
@@ -1353,7 +1357,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   value={formData.level}
                   onChange={changeLevel}
                   className={`w-16 bg-white/10 border ${
-                    errors.level ? 'border-red-300' : 'border-white/20'
+                    errors.level ? 'border-white border-2' : 'border-white/20'
                   } rounded px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
                 fallback={1}
                 />
@@ -1367,7 +1371,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label="Race"
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors.race}
-                className={`bg-white/10 border ${errors.race ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
+                className={`bg-white/10 border ${errors.race ? 'border-white border-2' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
               />
               <input
                 type="text"
@@ -1377,7 +1381,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label="Class"
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors.class}
-                className={`bg-white/10 border ${errors.class ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
+                className={`bg-white/10 border ${errors.class ? 'border-white border-2' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
               />
             </div>
           </div>
@@ -1401,7 +1405,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   // Render tabs
   const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-stone-200 bg-stone-50 px-4">
+    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
       {TABS.map((tab) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
@@ -1413,8 +1417,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             className={`
               flex items-center space-x-2 px-4 py-3 font-medium transition-colors
               ${isActive
-                ? 'text-ink border-b-2 -mb-0.5 bg-white'
-                : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'
+                ? 'text-ink border-b-2 -mb-0.5 bg-paper'
+                : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
               }
             `}
             // The underline in the header colour; the label in the theme's text.
@@ -1434,7 +1438,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Character Details */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label htmlFor="dnd5e-alignment" className="block text-sm font-semibold text-stone-700 mb-1">Alignment</label>
+          <label htmlFor="dnd5e-alignment" className="block text-sm font-semibold text-ink-secondary mb-1">Alignment</label>
           <input
             id="dnd5e-alignment"
             maxLength={SHEET_SHORT_TEXT_MAX}
@@ -1442,11 +1446,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             value={formData.alignment || ''}
             onChange={(e) => updateField('alignment', e.target.value)}
             placeholder="e.g., Lawful Good"
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
         <div>
-          <label htmlFor="dnd5e-background" className="block text-sm font-semibold text-stone-700 mb-1">Background</label>
+          <label htmlFor="dnd5e-background" className="block text-sm font-semibold text-ink-secondary mb-1">Background</label>
           <input
             id="dnd5e-background"
             maxLength={SHEET_SHORT_TEXT_MAX}
@@ -1454,7 +1458,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             value={formData.background || ''}
             onChange={(e) => updateField('background', e.target.value)}
             placeholder="e.g., Sage"
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
       </div>
@@ -1462,23 +1466,23 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Proficiency Bonus and Inspiration */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label htmlFor="dnd5e-proficiency-bonus" className="block text-sm font-semibold text-stone-700 mb-1">Proficiency Bonus</label>
+          <label htmlFor="dnd5e-proficiency-bonus" className="block text-sm font-semibold text-ink-secondary mb-1">Proficiency Bonus</label>
           <NumberField
             id="dnd5e-proficiency-bonus"
             min={2}
             max={6}
             value={formData.proficiencyBonus}
             onChange={(v: number) => updateField('proficiencyBonus', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
           fallback={2}
           />
           {formData.proficiencyBonus !== levelBonus && (
-            <p className="mt-1 text-xs text-stone-600">
+            <p className="mt-1 text-xs text-ink-secondary">
               Level {formData.level} gives {formatModifier(levelBonus)}.{' '}
               <button
                 type="button"
                 onClick={() => updateField('proficiencyBonus', levelBonus)}
-                className="font-semibold text-red-700 hover:text-red-900 underline"
+                className="font-semibold text-accent-ink hover:text-ink underline"
               >
                 Use {formatModifier(levelBonus)}
               </button>
@@ -1491,17 +1495,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             id="inspiration"
             checked={formData.inspiration || false}
             onChange={(e) => updateField('inspiration', e.target.checked)}
-            className="w-5 h-5 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+            className="w-5 h-5 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
           />
-          <label htmlFor="inspiration" className="text-sm font-semibold text-stone-700">
+          <label htmlFor="inspiration" className="text-sm font-semibold text-ink-secondary">
             Inspiration
           </label>
         </div>
       </div>
 
       {/* Ability Scores */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-4">Ability Scores</h3>
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-4">Ability Scores</h3>
         <div className="grid grid-cols-3 md:grid-cols-6 gap-4">
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const abilityData = formData.stats?.[ability] || { score: 10, modifier: 0 };
@@ -1521,12 +1525,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
             // Determine text color based on background luminance
             const textColor = isCustomColor
-              ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-stone-900')
+              ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black')
               : 'text-white';
 
             return (
               <div key={ability} className="flex flex-col items-center space-y-1">
-                <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide">
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide">
                   {ability.slice(0, 3)}
                 </div>
                 <div className={circleClasses} style={{ ...circleStyle, ...borderStyle }}>
@@ -1542,11 +1546,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   onChange={(v: number) => updateField(`stats.${ability}.score`, v)
                   }
                   className={`w-16 px-2 py-1 text-center font-semibold border-2 ${
-                    error ? 'border-red-500' : 'border-stone-300'
-                  } rounded focus:outline-hidden focus:ring-2 focus:ring-red-500`}
+                    error ? 'border-danger' : 'border-ink/20'
+                  } rounded focus:outline-hidden focus:ring-2 focus:ring-brand`}
                 fallback={10}
                 />
-                {error && <div className="text-xs text-red-600">{error}</div>}
+                {error && <div className="text-xs text-danger-ink">{error}</div>}
               </div>
             );
           })}
@@ -1554,9 +1558,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Saving Throws */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-1">Saving Throws</h3>
-        <p className="text-xs text-stone-500 mb-3">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-1">Saving Throws</h3>
+        <p className="text-xs text-ink-muted mb-3">
           Worked out from your ability scores and proficiency. Use the box beside each one for
           anything else that adds to it, such as Aura of Protection or a Ring of Protection.
         </p>
@@ -1564,7 +1568,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           {(['strength', 'dexterity', 'constitution', 'intelligence', 'wisdom', 'charisma'] as const).map((ability) => {
             const saveData = formData.savingThrows?.[ability] || { proficient: false, bonus: 0 };
             return (
-              <div key={ability} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded-sm">
+              <div key={ability} className="flex items-center justify-between p-2 hover:bg-ink/10 rounded-sm">
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
@@ -1573,9 +1577,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     onChange={(e) =>
                       updateField(`savingThrows.${ability}.proficient`, e.target.checked)
                     }
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
-                  <label htmlFor={`save-${ability}`} className="text-sm font-medium text-stone-800 capitalize">
+                  <label htmlFor={`save-${ability}`} className="text-sm font-medium text-ink capitalize">
                     {ability}
                   </label>
                 </div>
@@ -1585,10 +1589,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     onChange={(v: number) => updateField(`savingThrows.${ability}.otherBonus`, v)}
                     aria-label={`Other bonus to ${ability.charAt(0).toUpperCase() + ability.slice(1)} saves`}
                     title="Other bonus"
-                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-12 px-1 py-0.5 text-xs border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     fallback={0}
                   />
-                  <span className={`w-8 text-right text-sm font-semibold ${saveData.proficient ? 'text-red-700' : 'text-stone-600'}`}>
+                  <span className={`w-8 text-right text-sm font-semibold ${saveData.proficient ? 'text-accent-ink' : 'text-ink-secondary'}`}>
                     {formatModifier(saveData.bonus)}
                   </span>
                 </div>
@@ -1599,9 +1603,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Skills */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-1">Skills</h3>
-        <p className="text-xs text-stone-500 mb-3">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-1">Skills</h3>
+        <p className="text-xs text-ink-muted mb-3">
           Worked out from your ability scores, proficiency and expertise. Use the box beside each
           one for anything else that adds to it, such as Jack of All Trades or a magic item.
         </p>
@@ -1616,7 +1620,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             const abilityAbbr = ability.slice(0, 3).toUpperCase();
 
             return (
-              <div key={skill} className="flex items-center justify-between p-2 hover:bg-stone-100 rounded-sm">
+              <div key={skill} className="flex items-center justify-between p-2 hover:bg-ink/10 rounded-sm">
                 <div className="flex items-center space-x-2">
                   {/* Proficiency Checkbox */}
                   <input
@@ -1630,7 +1634,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         updateField(`skills.${skill}.expertise`, false);
                       }
                     }}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   {/* Expertise Checkbox (double circle) */}
                   <input
@@ -1639,15 +1643,15 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     checked={skillData.expertise}
                     disabled={!skillData.proficient}
                     onChange={(e) => updateField(`skills.${skill}.expertise`, e.target.checked)}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded-full focus:ring-2 focus:ring-red-500 disabled:opacity-30"
+                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-full focus:ring-2 focus:ring-brand disabled:opacity-30"
                     title="Expertise (double proficiency)"
                   />
                   <label
                     htmlFor={`skill-prof-${skill}`}
-                    className="text-sm font-medium text-stone-800 cursor-pointer"
+                    className="text-sm font-medium text-ink cursor-pointer"
                   >
                     {skillLabel}
-                    <span className="text-xs text-stone-500 ml-1">({abilityAbbr})</span>
+                    <span className="text-xs text-ink-muted ml-1">({abilityAbbr})</span>
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1656,16 +1660,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     onChange={(v: number) => updateField(`skills.${skill}.otherBonus`, v)}
                     aria-label={`Other bonus to ${skillLabel}`}
                     title="Other bonus"
-                    className="w-12 px-1 py-0.5 text-xs border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-12 px-1 py-0.5 text-xs border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     fallback={0}
                   />
                   <span
                     className={`w-8 text-right text-sm font-semibold ${
                       skillData.expertise
-                        ? 'text-purple-700'
+                        ? 'text-spirit-ink'
                         : skillData.proficient
-                        ? 'text-red-700'
-                        : 'text-stone-600'
+                        ? 'text-accent-ink'
+                        : 'text-ink-secondary'
                     }`}
                   >
                     {formatModifier(skillData.bonus)}
@@ -1682,10 +1686,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           your proficiency bonus to any ability check you make using that tool"
           (Basic Rules p. 51). Same arithmetic as a skill, so the bonus is
           derived here too rather than typed in. */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold text-stone-800">Your Own Skills</h3>
-          <button
+          <h3 className="text-lg font-semibold text-ink">Your Own Skills</h3>
+          <Button
+            variant="primary"
+            size="sm"
             type="button"
             onClick={() =>
               updateField('customSkills', [
@@ -1694,13 +1700,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               ])
             }
             disabled={listIsFull(formData.customSkills, DND5E_CUSTOM_SKILLS_MAX)}
-            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Skill
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.customSkills, DND5E_CUSTOM_SKILLS_MAX)} max={DND5E_CUSTOM_SKILLS_MAX} />
-        <p className="text-xs text-stone-500 mb-3">
+        <p className="text-xs text-ink-muted mb-3">
           Tool proficiencies, or anything your table made up. Pick the ability it uses
           and the bonus is worked out for you.
         </p>
@@ -1716,7 +1721,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             });
 
             return (
-              <div key={index} className="flex flex-wrap items-center gap-2 bg-white border border-stone-300 rounded-lg p-2">
+              <div key={index} className="flex flex-wrap items-center gap-2 bg-paper border border-ink/20 rounded-lg p-2">
                 <input
                   type="text"
                   value={custom.name || ''}
@@ -1724,14 +1729,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   placeholder="e.g. Thieves' Tools"
                   aria-label={`Name of skill ${index + 1}`}
                   maxLength={60}
-                  className="flex-1 min-w-36 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                  className="flex-1 min-w-36 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
 
                 <select
                   value={custom.ability}
                   onChange={(e) => updateField(`customSkills.${index}.ability`, e.target.value)}
                   aria-label={`Ability used by ${custom.name || 'this skill'}`}
-                  className="px-2 py-1 text-sm border border-stone-300 rounded-sm bg-white focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                  className="px-2 py-1 text-sm border border-ink/20 rounded-sm bg-paper focus:outline-hidden focus:ring-2 focus:ring-brand"
                 >
                   {DND5E_ABILITY_NAMES.map((ability) => (
                     <option key={ability} value={ability}>
@@ -1740,7 +1745,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   ))}
                 </select>
 
-                <label className="flex items-center gap-1 text-xs text-stone-700">
+                <label className="flex items-center gap-1 text-xs text-ink-secondary">
                   <input
                     type="checkbox"
                     checked={!!custom.proficient}
@@ -1750,25 +1755,25 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         updateField(`customSkills.${index}.expertise`, false);
                       }
                     }}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
                   Prof
                 </label>
 
-                <label className="flex items-center gap-1 text-xs text-stone-700">
+                <label className="flex items-center gap-1 text-xs text-ink-secondary">
                   <input
                     type="checkbox"
                     checked={!!custom.expertise}
                     disabled={!custom.proficient}
                     onChange={(e) => updateField(`customSkills.${index}.expertise`, e.target.checked)}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded-full focus:ring-2 focus:ring-red-500 disabled:opacity-30"
+                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-full focus:ring-2 focus:ring-brand disabled:opacity-30"
                     title="Expertise (double proficiency)"
                   />
                   Exp
                 </label>
 
                 <div className="flex items-center gap-1">
-                  <label htmlFor={`custom-skill-${index}-other`} className="text-xs text-stone-500">Other</label>
+                  <label htmlFor={`custom-skill-${index}-other`} className="text-xs text-ink-muted">Other</label>
                   <NumberField
                     id={`custom-skill-${index}-other`}
                     aria-label={`Other bonus to ${custom.name || `skill ${index + 1}`}`}
@@ -1776,14 +1781,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     max={MAX_BONUS_OVERRIDE}
                     value={custom.otherBonus ?? 0}
                     onChange={(v: number) => updateField(`customSkills.${index}.otherBonus`, v)}
-                    className="w-14 px-1 py-1 text-sm border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-14 px-1 py-1 text-sm border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     fallback={0}
                   />
                 </div>
 
                 <span
                   className={`text-sm font-semibold w-10 text-right ${
-                    custom.expertise ? 'text-purple-700' : custom.proficient ? 'text-red-700' : 'text-stone-600'
+                    custom.expertise ? 'text-spirit-ink' : custom.proficient ? 'text-accent-ink' : 'text-ink-secondary'
                   }`}
                 >
                   {formatModifier(bonus)}
@@ -1798,7 +1803,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     )
                   }
                   aria-label={`Remove ${custom.name || 'skill'}`}
-                  className="px-2 text-red-600 hover:text-red-800 font-bold"
+                  className="px-2 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
                 </button>
@@ -1807,7 +1812,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           })}
 
           {(formData.customSkills || []).length === 0 && (
-            <p className="text-sm text-stone-500 italic">None yet</p>
+            <p className="text-sm text-ink-muted italic">None yet</p>
           )}
         </div>
       </div>
@@ -1815,16 +1820,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Passive Perception — derived from the Perception bonus plus anything
           that is not the skill itself, never from the stored field, so this
           matches the view exactly. */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-2">Passive Perception</h3>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-2">Passive Perception</h3>
         <div className="flex items-end gap-4">
-          <div className="text-2xl font-bold text-stone-800">
+          <div className="text-2xl font-bold text-ink">
             {passiveScore(
               (formData.skills?.perception?.bonus ?? 0) + (formData.passivePerceptionBonus ?? 0)
             )}
           </div>
           <div>
-            <label htmlFor="passive-perception-other-bonus" className="block text-xs font-semibold text-stone-600 mb-1">
+            <label htmlFor="passive-perception-other-bonus" className="block text-xs font-semibold text-ink-secondary mb-1">
               Other bonus
             </label>
             <NumberField
@@ -1834,13 +1839,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               max={MAX_BONUS_OVERRIDE}
               value={formData.passivePerceptionBonus ?? 0}
               onChange={(v: number) => updateField('passivePerceptionBonus', v)}
-              className="w-20 px-2 py-1 border border-stone-300 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-20 px-2 py-1 border border-ink/20 rounded-sm text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
               fallback={0}
             />
             {fieldError('passivePerceptionBonus')}
           </div>
         </div>
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-ink-muted">
           10 + your Perception bonus, plus anything that raises passive scores
           without changing the skill — the Observant feat (+5), for instance.
         </p>
@@ -1862,13 +1867,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Combat Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label htmlFor="dnd5e-armor-class" className="block text-sm font-semibold text-stone-700 mb-1">Armor Class</label>
+          <label htmlFor="dnd5e-armor-class" className="block text-sm font-semibold text-ink-secondary mb-1">Armor Class</label>
           <NumberField
             id="dnd5e-armor-class"
             min={1}
             value={formData.armorClass}
             onChange={(v: number) => updateField('armorClass', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
           fallback={10}
           />
           {fieldError('armorClass')}
@@ -1878,10 +1883,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               "Other bonus" below — it used to be a single hand-typed number
               that nothing kept in step with Dexterity, and that the roll then
               ignored entirely. */}
-          <div id="dnd5e-initiative-label" className="block text-sm font-semibold text-stone-700 mb-1">Initiative</div>
+          <div id="dnd5e-initiative-label" className="block text-sm font-semibold text-ink-secondary mb-1">Initiative</div>
           <output
             aria-labelledby="dnd5e-initiative-label"
-            className="block w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold bg-stone-100 text-stone-800"
+            className="block w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-xl font-bold bg-ink/10 text-ink"
             title={`Dexterity ${formatModifier(formData.stats?.dexterity?.modifier ?? 0)}${
               formData.initiativeBonus ? `, other ${formatModifier(formData.initiativeBonus)}` : ''
             }`}
@@ -1890,13 +1895,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           </output>
         </div>
         <div>
-          <label htmlFor="dnd5e-speed" className="block text-sm font-semibold text-stone-700 mb-1">Speed (ft)</label>
+          <label htmlFor="dnd5e-speed" className="block text-sm font-semibold text-ink-secondary mb-1">Speed (ft)</label>
           <NumberField
             id="dnd5e-speed"
             min={0}
             value={formData.speed}
             onChange={(v: number) => updateField('speed', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
           fallback={30}
           />
         </div>
@@ -1908,7 +1913,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           subclasses that swap in Wisdom or Intelligence. */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label htmlFor="initiative-other-bonus" className="block text-sm font-semibold text-stone-700 mb-1">
+          <label htmlFor="initiative-other-bonus" className="block text-sm font-semibold text-ink-secondary mb-1">
             Initiative — other bonus
           </label>
           <NumberField
@@ -1917,10 +1922,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             max={MAX_BONUS_OVERRIDE}
             value={formData.initiativeBonus ?? 0}
             onChange={(v: number) => updateField('initiativeBonus', v)}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={0}
           />
-          <p className="mt-1 text-xs text-stone-500">
+          <p className="mt-1 text-xs text-ink-muted">
             Alert (+5), Jack of All Trades, Remarkable Athlete, and anything else
             beyond your Dexterity modifier.
           </p>
@@ -1928,43 +1933,43 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Hit Points */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Hit Points</h3>
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Hit Points</h3>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label htmlFor="dnd5e-hp-maximum" className="block text-xs font-semibold text-stone-600 mb-1">Maximum</label>
+            <label htmlFor="dnd5e-hp-maximum" className="block text-xs font-semibold text-ink-secondary mb-1">Maximum</label>
             <NumberField
               id="dnd5e-hp-maximum"
               aria-label="Maximum hit points"
               min={1}
               value={formData.hp?.maximum}
               onChange={(v: number) => updateField('hp.maximum', v)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={1}
             />
             {fieldError('hp.maximum')}
           </div>
           <div>
-            <label htmlFor="dnd5e-hp-current" className="block text-xs font-semibold text-stone-600 mb-1">Current</label>
+            <label htmlFor="dnd5e-hp-current" className="block text-xs font-semibold text-ink-secondary mb-1">Current</label>
             <NumberField
               id="dnd5e-hp-current"
               aria-label="Current hit points"
               min={0}
               value={formData.hp?.current}
               onChange={(v: number) => updateField('hp.current', v)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-red-700 focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-lg font-bold text-danger-ink focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={0}
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-hp-temporary" className="block text-xs font-semibold text-stone-600 mb-1">Temporary</label>
+            <label htmlFor="dnd5e-hp-temporary" className="block text-xs font-semibold text-ink-secondary mb-1">Temporary</label>
             <NumberField
               id="dnd5e-hp-temporary"
               aria-label="Temporary hit points"
               min={0}
               value={formData.hp?.temporary}
               onChange={(v: number) => updateField('hp.temporary', v)}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-blue-700 focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg text-center text-lg font-bold text-info-ink focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={0}
             />
           </div>
@@ -1972,10 +1977,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Hit Dice */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-stone-800">Hit Dice</h3>
-          <button
+          <h3 className="text-lg font-semibold text-ink">Hit Dice</h3>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               const newHitDice = [
                 ...(formData.hitDice || []),
@@ -1984,18 +1991,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               updateField('hitDice', newHitDice);
             }}
             disabled={listIsFull(formData.hitDice)}
-            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Hit Die
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.hitDice)} />
         <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem_0.75rem_3.5rem_1.75rem] gap-2 items-center mb-1">
-          <span aria-hidden="true" className="text-xs font-semibold text-stone-600">Class</span>
-          <span aria-hidden="true" className="text-xs font-semibold text-stone-600 text-center">Die</span>
-          <span aria-hidden="true" className="text-xs font-semibold text-stone-600 text-center">Left</span>
+          <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary">Class</span>
+          <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary text-center">Die</span>
+          <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary text-center">Left</span>
           <span aria-hidden="true" />
-          <span aria-hidden="true" className="text-xs font-semibold text-stone-600 text-center">Max</span>
+          <span aria-hidden="true" className="text-xs font-semibold text-ink-secondary text-center">Max</span>
           <span aria-hidden="true" />
         </div>
         <div className="space-y-2">
@@ -2009,7 +2015,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label={`Class of hit dice ${index + 1}`}
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors[`hitDice.${index}.class`]}
-                className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
               <input
                 type="text"
@@ -2019,7 +2025,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label={`Hit die of row ${index + 1}`}
                 maxLength={50}
                 title="One hit die — d10 for a fighter. Something like 2d6 works too if your game uses it."
-                className="min-w-0 px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
               {/* Shown no higher than the pool holds, and brought down on save,
                   as a spell slot's used count is. */}
@@ -2030,17 +2036,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 onChange={(v: number) => updateField(`hitDice.${index}.remaining`, v)}
                 aria-label={`Hit dice left in row ${index + 1}`}
                 title="How many are unspent right now"
-                className="min-w-0 px-1 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-1 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                 fallback={0}
               />
-              <span className="text-stone-400 select-none" aria-hidden="true">/</span>
+              <span className="text-ink-muted select-none" aria-hidden="true">/</span>
               <NumberField
                 min={0}
                 value={die.maximum ?? hitDiceMaximum(die) ?? 0}
                 onChange={(v: number) => updateField(`hitDice.${index}.maximum`, v)}
                 aria-label={`Hit dice in row ${index + 1} at full`}
                 title="How many this pool holds when nothing is spent"
-                className="min-w-0 px-1 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="min-w-0 px-1 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                 fallback={0}
               />
               <button
@@ -2050,22 +2056,22 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 }}
                 aria-label={`Remove ${die.class || 'this'} hit dice`}
                 title="Remove"
-                className="text-red-600 hover:text-red-800 font-bold leading-none"
+                className="text-danger-ink hover:bg-danger/10 font-bold leading-none"
               >
                 ×
               </button>
               {errors[`hitDice.${index}.class`] && (
-                <p className="col-span-6 text-xs text-red-600">{errors[`hitDice.${index}.class`]}</p>
+                <p className="col-span-6 text-xs text-danger-ink">{errors[`hitDice.${index}.class`]}</p>
               )}
             </div>
           ))}
           {(!formData.hitDice || formData.hitDice.length === 0) && (
-            <div className="text-sm text-stone-500 italic">
+            <div className="text-sm text-ink-muted italic">
               No hit dice yet. Add one for each class you have levels in.
             </div>
           )}
         </div>
-        <p className="mt-2 text-xs text-stone-500">
+        <p className="mt-2 text-xs text-ink-muted">
           One row per class. <strong>Die</strong> is a single hit die — a fighter's is
           d10 — and <strong>Max</strong> is how many of them you have at your level.{' '}
           <strong>Left</strong> counts down as you spend them on a short rest.
@@ -2073,11 +2079,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Death Saves */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Death Saves</h3>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Death Saves</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-semibold text-green-700 mb-2">Successes</label>
+            <label className="block text-sm font-semibold text-success-ink mb-2">Successes</label>
             <div className="flex space-x-2">
               {[1, 2, 3].map((i) => (
                 <input
@@ -2092,13 +2098,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       updateField('deathSaves.successes', i - 1);
                     }
                   }}
-                  className="w-6 h-6 text-green-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-green-500"
+                  className="w-6 h-6 text-success-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
               ))}
             </div>
           </div>
           <div>
-            <label className="block text-sm font-semibold text-red-700 mb-2">Failures</label>
+            <label className="block text-sm font-semibold text-danger-ink mb-2">Failures</label>
             <div className="flex space-x-2">
               {[1, 2, 3].map((i) => (
                 <input
@@ -2113,7 +2119,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       updateField('deathSaves.failures', i - 1);
                     }
                   }}
-                  className="w-6 h-6 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                  className="w-6 h-6 text-danger-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
               ))}
             </div>
@@ -2122,11 +2128,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Conditions */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Conditions</h3>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Conditions</h3>
         <div className="grid grid-cols-3 gap-2">
           {conditions.map((condition) => (
-            <label key={condition} className="flex items-center space-x-2 cursor-pointer hover:bg-stone-100 p-1 rounded-sm">
+            <label key={condition} className="flex items-center space-x-2 cursor-pointer hover:bg-ink/10 p-1 rounded-sm">
               <input
                 type="checkbox"
                 checked={(formData.conditions || []).includes(condition.toLowerCase())}
@@ -2138,9 +2144,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     updateField('conditions', currentConditions.filter((c: string) => c !== condition.toLowerCase()));
                   }
                 }}
-                className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
               />
-              <span className="text-sm text-stone-700">{condition}</span>
+              <span className="text-sm text-ink-secondary">{condition}</span>
             </label>
           ))}
         </div>
@@ -2150,9 +2156,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           Basic Rules, Appendix A: six cumulative levels, not something you
           either have or do not. It used to be one checkbox in the list above,
           which could not tell disadvantage on ability checks apart from death. */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-1">Exhaustion</h3>
-        <p className="text-xs text-stone-600 mb-3">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-1">Exhaustion</h3>
+        <p className="text-xs text-ink-secondary mb-3">
           Six levels, and each one carries every level below it. A long rest with food
           and drink removes one.
         </p>
@@ -2167,8 +2173,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-pressed={active}
                 className={`px-3 py-1 rounded-cozy border text-sm transition-all ${
                   active
-                    ? 'bg-red-700 text-white border-red-800 font-semibold'
-                    : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-100'
+                    ? 'bg-accent text-accent-text border-accent font-semibold'
+                    : 'bg-paper text-ink-secondary border-ink/20 hover:bg-ink/10'
                 }`}
               >
                 {level === 0 ? 'None' : level}
@@ -2177,12 +2183,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           })}
         </div>
         {exhaustionEffects(exhaustion).length > 0 && (
-          <ul className="text-sm text-stone-700 space-y-0.5">
+          <ul className="text-sm text-ink-secondary space-y-0.5">
             {exhaustionEffects(exhaustion).map((effect, idx) => (
               <li key={idx} className="flex items-start space-x-2">
-                <span className="text-red-600">•</span>
+                <span className="text-danger-ink">•</span>
                 <span>
-                  <span className="text-stone-500 mr-1">{idx + 1}.</span>
+                  <span className="text-ink-muted mr-1">{idx + 1}.</span>
                   {effect}
                 </span>
               </li>
@@ -2192,10 +2198,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Attacks */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-stone-800">Attacks & Spellcasting</h3>
-          <button
+          <h3 className="text-lg font-semibold text-ink">Attacks & Spellcasting</h3>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               const newAttacks = [
                 ...(formData.attacks || []),
@@ -2204,15 +2212,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               updateField('attacks', newAttacks);
             }}
             disabled={listIsFull(formData.attacks)}
-            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Attack
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.attacks)} />
         <div className="space-y-4">
           {(formData.attacks || []).map((attack, index) => (
-            <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
+            <div key={index} className="bg-paper border border-ink/20 rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between">
                 <input
                   type="text"
@@ -2222,7 +2229,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   aria-label={`Name of attack ${index + 1}`}
                   maxLength={SHEET_SHORT_TEXT_MAX}
                   aria-invalid={!!errors[`attacks.${index}.name`]}
-                  className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                  className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
                 <button
                   onClick={() => {
@@ -2230,7 +2237,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     updateField('attacks', newAttacks);
                     removeCustomPropertyDraft(index);
                   }}
-                  className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                  className="ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
                 </button>
@@ -2238,17 +2245,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               {fieldError(`attacks.${index}.name`)}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label htmlFor={`attack-${index}-bonus`} className="block text-xs font-semibold text-stone-600 mb-1">Attack Bonus</label>
+                  <label htmlFor={`attack-${index}-bonus`} className="block text-xs font-semibold text-ink-secondary mb-1">Attack Bonus</label>
                   <NumberField
                     id={`attack-${index}-bonus`}
                     value={attack.attackBonus}
                     onChange={(v: number) => updateField(`attacks.${index}.attackBonus`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={0}
                   />
                 </div>
                 <div>
-                  <label htmlFor={`attack-${index}-damage`} className="block text-xs font-semibold text-stone-600 mb-1">Damage Roll</label>
+                  <label htmlFor={`attack-${index}-damage`} className="block text-xs font-semibold text-ink-secondary mb-1">Damage Roll</label>
                   <input
                     id={`attack-${index}-damage`}
                     maxLength={SHEET_SHORT_TEXT_MAX}
@@ -2256,11 +2263,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     value={attack.damageRoll || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageRoll`, e.target.value)}
                     placeholder="e.g., 1d8+3"
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                 </div>
                 <div>
-                  <label htmlFor={`attack-${index}-damage-type`} className="block text-xs font-semibold text-stone-600 mb-1">Damage Type</label>
+                  <label htmlFor={`attack-${index}-damage-type`} className="block text-xs font-semibold text-ink-secondary mb-1">Damage Type</label>
                   <input
                     id={`attack-${index}-damage-type`}
                     maxLength={SHEET_SHORT_TEXT_MAX}
@@ -2268,17 +2275,17 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     value={attack.damageType || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageType`, e.target.value)}
                     placeholder="e.g., slashing"
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                 </div>
                 <div>
-                  <label htmlFor={`attack-${index}-range`} className="block text-xs font-semibold text-stone-600 mb-1">Range (ft)</label>
+                  <label htmlFor={`attack-${index}-range`} className="block text-xs font-semibold text-ink-secondary mb-1">Range (ft)</label>
                   <NumberField
                     id={`attack-${index}-range`}
                     min={0}
                     value={attack.range}
                     onChange={(v: number) => updateField(`attacks.${index}.range`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={0}
                   />
                 </div>
@@ -2289,7 +2296,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   offer was a note reading "e.g., Versatile, Finesse", which
                   stored prose nothing could read. */}
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Properties</label>
+                <label className="block text-xs font-semibold text-ink-secondary mb-1">Properties</label>
                 <div className="flex flex-wrap gap-1.5">
                   {DND5E_WEAPON_PROPERTIES.map((property) => {
                     const on = hasWeaponProperty(attack.properties || [], property);
@@ -2307,8 +2314,8 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         }
                         className={`px-2 py-0.5 text-xs rounded-full border capitalize transition-colors ${ADD_BUTTON_OFF} ${
                           on
-                            ? 'bg-red-700 border-red-700 text-white'
-                            : 'bg-white border-stone-300 text-stone-600 hover:border-red-400'
+                            ? 'bg-accent border-accent text-accent-text'
+                            : 'bg-paper border-ink/20 text-ink-secondary hover:border-accent'
                         }`}
                       >
                         {property}
@@ -2332,7 +2339,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                           )
                         }
                         title={`Remove "${property}"`}
-                        className="px-2 py-0.5 text-xs rounded-full border border-amber-400 bg-amber-50 text-amber-800 hover:bg-amber-100"
+                        className="px-2 py-0.5 text-xs rounded-full border border-warning/30 bg-warning/10 text-warning-ink hover:bg-warning/15"
                       >
                         {property} ×
                       </button>
@@ -2358,13 +2365,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     maxLength={MAX_WEAPON_PROPERTY_LENGTH}
                     placeholder="Add your own property"
                     aria-label="Add a custom weapon property"
-                    className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="flex-1 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                   <button
                     type="button"
                     onClick={() => commitCustomProperty(index, attack.properties || [])}
                     disabled={propertiesFull(attack.properties)}
-                    className={`px-3 py-1 text-sm font-medium text-red-700 hover:text-red-900 ${ADD_BUTTON_OFF}`}
+                    className={`px-3 py-1 text-sm font-medium text-accent-ink hover:text-ink ${ADD_BUTTON_OFF}`}
                   >
                     Add
                   </button>
@@ -2377,7 +2384,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   the note where nothing could roll it. */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-stone-600">
+                  <label className="block text-xs font-semibold text-ink-secondary">
                     Other Damage Rolls
                   </label>
                   <button
@@ -2389,7 +2396,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       ])
                     }
                     disabled={listIsFull(attack.additionalDamage, DND5E_ATTACK_DAMAGE_ROLLS_MAX)}
-                    className={`px-2 py-0.5 text-xs font-medium text-red-700 hover:text-red-900 ${ADD_BUTTON_OFF}`}
+                    className={`px-2 py-0.5 text-xs font-medium text-accent-ink hover:text-ink ${ADD_BUTTON_OFF}`}
                   >
                     + Add Damage Roll
                   </button>
@@ -2412,7 +2419,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       placeholder="When (e.g. Two-handed)"
                       aria-label={`When damage roll ${dmgIndex + 1} applies`}
                       maxLength={60}
-                      className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                      className="flex-1 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <input
                       type="text"
@@ -2426,7 +2433,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       placeholder="1d10+3"
                       aria-label={`Damage roll ${dmgIndex + 1}`}
                       maxLength={60}
-                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                      className="w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <input
                       type="text"
@@ -2440,7 +2447,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       placeholder="slashing"
                       aria-label={`Damage type of roll ${dmgIndex + 1}`}
                       maxLength={40}
-                      className="w-28 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                      className="w-28 px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <button
                       type="button"
@@ -2451,7 +2458,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         )
                       }
                       aria-label={`Remove damage roll ${dmgIndex + 1}`}
-                      className="px-2 text-red-600 hover:text-red-800 font-bold"
+                      className="px-2 text-danger-ink hover:bg-danger/10 font-bold"
                     >
                       ×
                     </button>
@@ -2459,20 +2466,20 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 ))}
               </div>
               <div>
-                <label htmlFor={`attack-${index}-notes`} className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
+                <label htmlFor={`attack-${index}-notes`} className="block text-xs font-semibold text-ink-secondary mb-1">Notes</label>
                 <input
                   id={`attack-${index}-notes`}
                   type="text"
                   value={attack.notes || ''}
                   onChange={(e) => updateField(`attacks.${index}.notes`, e.target.value)}
                   placeholder="e.g., silvered, returns when thrown"
-                  className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                  className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
               </div>
             </div>
           ))}
           {(!formData.attacks || formData.attacks.length === 0) && (
-            <div className="text-sm text-stone-500 italic">No attacks added yet</div>
+            <div className="text-sm text-ink-muted italic">No attacks added yet</div>
           )}
         </div>
       </div>
@@ -2492,7 +2499,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* Spellcasting class and ability */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Spellcasting Class</label>
+          <label className="block text-sm font-semibold text-ink-secondary mb-1">Spellcasting Class</label>
           <input
             type="text"
             value={formData.spellcasting?.class || ''}
@@ -2500,15 +2507,15 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             placeholder="e.g., Wizard — leave blank if you don't cast"
             aria-label="Spellcasting Class"
             maxLength={SHEET_SHORT_TEXT_MAX}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
-          <p className="mt-1 text-xs text-stone-600">
+          <p className="mt-1 text-xs text-ink-secondary">
             Shown as the heading on your sheet. There was no field for this, so every
             character read &quot;Wizard Spellcasting&quot; whatever they were.
           </p>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Spellcasting Ability</label>
+          <label className="block text-sm font-semibold text-ink-secondary mb-1">Spellcasting Ability</label>
           <input
             type="text"
             value={formData.spellcasting?.ability || ''}
@@ -2516,7 +2523,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             placeholder="e.g., Intelligence"
             aria-label="Spellcasting Ability"
             maxLength={SHEET_SHORT_TEXT_MAX}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
       </div>
@@ -2527,57 +2534,57 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           without changing either input — and they are separate, because a Wand
           of the War Mage raises the attack roll and not the DC. */}
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
-          <div id="dnd5e-spell-dc-label" className="block text-sm font-semibold text-stone-700 mb-1">Spell Save DC</div>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-3">
+          <div id="dnd5e-spell-dc-label" className="block text-sm font-semibold text-ink-secondary mb-1">Spell Save DC</div>
           <output
             aria-labelledby="dnd5e-spell-dc-label"
-            className="block w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+            className="block w-full px-3 py-2 bg-paper border border-ink/20 rounded-lg text-center text-xl font-bold text-ink"
             title={`8 + proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
           >
             {spellSaveDC}
           </output>
-          <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
+          <label className="block text-xs font-semibold text-ink-secondary mt-2 mb-1">Other bonus</label>
           <NumberField
             min={dcOtherBonusMin}
             max={MAX_BONUS_OVERRIDE}
             value={formData.spellcasting?.spellSaveDCOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellSaveDCOtherBonus', v)}
             aria-label="Spell save DC other bonus"
-            className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={0}
           />
           {fieldError('spellcasting.spellSaveDCOtherBonus')}
         </div>
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
-          <div id="dnd5e-spell-attack-label" className="block text-sm font-semibold text-stone-700 mb-1">Spell Attack Bonus</div>
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-3">
+          <div id="dnd5e-spell-attack-label" className="block text-sm font-semibold text-ink-secondary mb-1">Spell Attack Bonus</div>
           <output
             aria-labelledby="dnd5e-spell-attack-label"
-            className="block w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+            className="block w-full px-3 py-2 bg-paper border border-ink/20 rounded-lg text-center text-xl font-bold text-ink"
             title={`proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
           >
             {formatModifier(spellAttackBonus)}
           </output>
-          <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
+          <label className="block text-xs font-semibold text-ink-secondary mt-2 mb-1">Other bonus</label>
           <NumberField
             min={MIN_BONUS_OVERRIDE}
             max={MAX_BONUS_OVERRIDE}
             value={formData.spellcasting?.spellAttackOtherBonus}
             onChange={(v: number) => updateField('spellcasting.spellAttackOtherBonus', v)}
             aria-label="Spell attack other bonus"
-            className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
             fallback={0}
           />
         </div>
       </div>
-      <p className="text-xs text-stone-600">
+      <p className="text-xs text-ink-secondary">
         Both are worked out from your proficiency bonus and spellcasting ability. Use
         &quot;Other bonus&quot; for anything else that changes them — a Rod of the Pact
         Keeper, a Robe of the Archmagi. They are separate because some items raise only one.
       </p>
 
       {/* Cantrips */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Cantrips</h3>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Cantrips</h3>
         <textarea
           value={cantripsText}
           onChange={(e) => {
@@ -2593,35 +2600,35 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           placeholder="Enter cantrips separated by commas (e.g., Fire Bolt, Mage Hand, Prestidigitation)"
           aria-label="Cantrips"
           rows={2}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
         />
         <ListLimitNote full={cantripsTurnedAway || parseCommaSeparated(cantripsText).length >= SHEET_LIST_MAX} />
       </div>
 
       {/* Spell Slots */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Spell Slots</h3>
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Spell Slots</h3>
         <div className="grid grid-cols-3 gap-3">
           {([1, 2, 3, 4, 5, 6, 7, 8, 9] as const).map((level) => {
             const slotData = formData.spellcasting?.slots?.[level] || { total: 0, expended: 0 };
             return (
-              <div key={level} className="bg-white border border-stone-300 rounded-lg p-3">
-                <div className="text-sm font-semibold text-stone-700 mb-2 text-center">Level {level}</div>
+              <div key={level} className="bg-paper border border-ink/20 rounded-lg p-3">
+                <div className="text-sm font-semibold text-ink-secondary mb-2 text-center">Level {level}</div>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label htmlFor={`spell-slots-${level}-total`} className="block text-xs text-stone-600 mb-1">Total</label>
+                    <label htmlFor={`spell-slots-${level}-total`} className="block text-xs text-ink-secondary mb-1">Total</label>
                     <NumberField
                       id={`spell-slots-${level}-total`}
                       min={0}
                       max={SPELL_SLOTS_MAX}
                       value={slotData.total}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.total`, v)}
-                      className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                      className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                       fallback={0}
                     />
                   </div>
                   <div>
-                    <label htmlFor={`spell-slots-${level}-used`} className="block text-xs text-stone-600 mb-1">Used</label>
+                    <label htmlFor={`spell-slots-${level}-used`} className="block text-xs text-ink-secondary mb-1">Used</label>
                     {/* Shown no higher than the total. The stored count is
                         brought down on save, so typing a new total digit by
                         digit does not lose it. */}
@@ -2631,7 +2638,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       max={slotData.total}
                       value={Math.min(slotData.expended, slotData.total)}
                       onChange={(v: number) => updateField(`spellcasting.slots.${level}.expended`, v)}
-                      className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                      className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                       fallback={0}
                     />
                   </div>
@@ -2643,10 +2650,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Spells List */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-stone-800">Spells</h3>
-          <button
+          <h3 className="text-lg font-semibold text-ink">Spells</h3>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               const newSpells = [
                 ...(formData.spellcasting?.spells || []),
@@ -2655,22 +2664,21 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               updateField('spellcasting.spells', newSpells);
             }}
             disabled={listIsFull(formData.spellcasting?.spells)}
-            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Spell
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.spellcasting?.spells)} />
         <div className="space-y-2">
           {(formData.spellcasting?.spells || []).map((spell, index) => (
             <React.Fragment key={index}>
-            <div className="bg-white border border-stone-300 rounded-lg p-3 flex items-center space-x-3">
+            <div className="bg-paper border border-ink/20 rounded-lg p-3 flex items-center space-x-3">
               <NumberField
                 min={0}
                 max={9}
                 value={spell.level}
                 onChange={(v: number) => updateField(`spellcasting.spells.${index}.level`, v)}
-                className="w-14 px-2 py-1 border border-stone-300 rounded-sm text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="w-14 px-2 py-1 border border-ink/20 rounded-sm text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                 title="Spell Level"
                 aria-label={`Level of spell ${index + 1}`}
               fallback={0}
@@ -2683,41 +2691,41 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label={`Name of spell ${index + 1}`}
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors[`spellcasting.spells.${index}.name`]}
-                className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-brand"
               />
               <label className="flex items-center space-x-1 cursor-pointer" title="Prepared">
                 <input
                   type="checkbox"
                   checked={spell.prepared || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.prepared`, e.target.checked)}
-                  className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                  className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
-                <span className="text-xs text-stone-600">Prep</span>
+                <span className="text-xs text-ink-secondary">Prep</span>
               </label>
               <label className="flex items-center space-x-1 cursor-pointer" title="Ritual">
                 <input
                   type="checkbox"
                   checked={spell.ritual || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.ritual`, e.target.checked)}
-                  className="w-4 h-4 text-blue-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-blue-500"
+                  className="w-4 h-4 text-info-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
-                <span className="text-xs text-stone-600">Rit</span>
+                <span className="text-xs text-ink-secondary">Rit</span>
               </label>
               <label className="flex items-center space-x-1 cursor-pointer" title="Concentration">
                 <input
                   type="checkbox"
                   checked={spell.concentration || false}
                   onChange={(e) => updateField(`spellcasting.spells.${index}.concentration`, e.target.checked)}
-                  className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
+                  className="w-4 h-4 text-spirit-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                 />
-                <span className="text-xs text-stone-600">Con</span>
+                <span className="text-xs text-ink-secondary">Con</span>
               </label>
               <button
                 onClick={() => {
                   const newSpells = (formData.spellcasting?.spells ?? []).filter((_, i) => i !== index);
                   updateField('spellcasting.spells', newSpells);
                 }}
-                className="px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                className="px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
               >
                 ×
               </button>
@@ -2726,7 +2734,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             </React.Fragment>
           ))}
           {(!formData.spellcasting?.spells || formData.spellcasting.spells.length === 0) && (
-            <div className="text-sm text-stone-500 italic">No spells added yet</div>
+            <div className="text-sm text-ink-muted italic">No spells added yet</div>
           )}
         </div>
       </div>
@@ -2737,18 +2745,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const renderInventoryTab = () => (
     <div className="space-y-6">
       {/* Currency */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Currency</h3>
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Currency</h3>
         <div className="grid grid-cols-5 gap-3">
           {([
-            { key: 'cp', label: 'Copper (CP)', color: 'text-amber-700' },
-            { key: 'sp', label: 'Silver (SP)', color: 'text-stone-500' },
-            { key: 'ep', label: 'Electrum (EP)', color: 'text-green-600' },
-            { key: 'gp', label: 'Gold (GP)', color: 'text-yellow-600' },
-            { key: 'pp', label: 'Platinum (PP)', color: 'text-slate-300' },
+            { key: 'cp', label: 'Copper (CP)' },
+            { key: 'sp', label: 'Silver (SP)' },
+            { key: 'ep', label: 'Electrum (EP)' },
+            { key: 'gp', label: 'Gold (GP)' },
+            { key: 'pp', label: 'Platinum (PP)' },
           ] as const).map((currency) => (
             <div key={currency.key}>
-              <label htmlFor={`currency-${currency.key}`} className={`block text-xs font-semibold ${currency.color} mb-1`}>
+              <label htmlFor={`currency-${currency.key}`} className="block text-xs font-semibold text-ink mb-1">
                 {currency.label}
               </label>
               <NumberField
@@ -2756,7 +2764,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 min={0}
                 value={formData.currency?.[currency.key]}
                 onChange={(v: number) => updateField(`currency.${currency.key}`, v)}
-                className="w-full px-2 py-2 border border-stone-300 rounded-lg text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                className="w-full px-2 py-2 border border-ink/20 rounded-lg text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-brand"
               fallback={0}
               />
             </div>
@@ -2765,10 +2773,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       </div>
 
       {/* Inventory Items */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold text-stone-800">Inventory</h3>
-          <button
+          <h3 className="text-lg font-semibold text-ink">Inventory</h3>
+          <Button
+            variant="primary"
+            size="sm"
             onClick={() => {
               const newInventory = [
                 ...(formData.inventory || []),
@@ -2786,15 +2796,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               updateField('inventory', newInventory);
             }}
             disabled={listIsFull(formData.inventory)}
-            className={`px-3 py-1 text-sm font-medium text-white bg-red-700 hover:bg-red-800 rounded-lg transition-colors ${ADD_BUTTON_OFF}`}
           >
             + Add Item
-          </button>
+          </Button>
         </div>
         <ListLimitNote full={listIsFull(formData.inventory)} />
         <div className="space-y-3">
           {(formData.inventory || []).map((item, index) => (
-            <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
+            <div key={index} className="bg-paper border border-ink/20 rounded-lg p-3 space-y-2">
               <div className="flex items-start justify-between">
                 <input
                   type="text"
@@ -2804,14 +2813,14 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                   aria-label={`Name of item ${index + 1}`}
                   maxLength={SHEET_SHORT_TEXT_MAX}
                   aria-invalid={!!errors[`inventory.${index}.name`]}
-                  className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                  className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
                 <button
                   onClick={() => {
                     const newInventory = formData.inventory!.filter((_, i) => i !== index);
                     updateField('inventory', newInventory);
                   }}
-                  className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                  className="ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                 >
                   ×
                 </button>
@@ -2819,18 +2828,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               {fieldError(`inventory.${index}.name`)}
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label htmlFor={`item-${index}-quantity`} className="block text-xs font-semibold text-stone-600 mb-1">Quantity</label>
+                  <label htmlFor={`item-${index}-quantity`} className="block text-xs font-semibold text-ink-secondary mb-1">Quantity</label>
                   <NumberField
                     id={`item-${index}-quantity`}
                     min={0}
                     value={item.quantity}
                     onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={1}
                   />
                 </div>
                 <div>
-                  <label htmlFor={`item-${index}-weight`} className="block text-xs font-semibold text-stone-600 mb-1">Weight (lb)</label>
+                  <label htmlFor={`item-${index}-weight`} className="block text-xs font-semibold text-ink-secondary mb-1">Weight (lb)</label>
                   <NumberField
                     id={`item-${index}-weight`}
                     min={0}
@@ -2840,12 +2849,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     integer={false}
                     value={item.weight}
                     onChange={(v: number) => updateField(`inventory.${index}.weight`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={0}
                   />
                 </div>
                 <div>
-                  <label htmlFor={`item-${index}-value`} className="block text-xs font-semibold text-stone-600 mb-1">Value (gp)</label>
+                  <label htmlFor={`item-${index}-value`} className="block text-xs font-semibold text-ink-secondary mb-1">Value (gp)</label>
                   <NumberField
                     id={`item-${index}-value`}
                     min={0}
@@ -2854,20 +2863,20 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     integer={false}
                     value={item.value}
                     onChange={(v: number) => updateField(`inventory.${index}.value`, v)}
-                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 border border-ink/20 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-brand"
                   fallback={0}
                   />
                 </div>
               </div>
               <div>
-                <label htmlFor={`item-${index}-notes`} className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
+                <label htmlFor={`item-${index}-notes`} className="block text-xs font-semibold text-ink-secondary mb-1">Notes</label>
                 <input
                   id={`item-${index}-notes`}
                   type="text"
                   value={item.notes || ''}
                   onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)}
                   placeholder="Item description or notes"
-                  className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                  className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                 />
               </div>
               <div className="flex items-center space-x-4 text-sm">
@@ -2876,9 +2885,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     type="checkbox"
                     checked={item.equipped || false}
                     onChange={(e) => updateField(`inventory.${index}.equipped`, e.target.checked)}
-                    className="w-4 h-4 text-red-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-red-500"
+                    className="w-4 h-4 text-accent-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
-                  <span className="text-stone-700">Equipped</span>
+                  <span className="text-ink-secondary">Equipped</span>
                 </label>
                 <label className="flex items-center space-x-1 cursor-pointer">
                   <input
@@ -2890,9 +2899,9 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       // would otherwise go on taking one of the three slots.
                       if (!e.target.checked) updateField(`inventory.${index}.attuned`, false);
                     }}
-                    className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
+                    className="w-4 h-4 text-spirit-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                   />
-                  <span className="text-stone-700">Requires Attunement</span>
+                  <span className="text-ink-secondary">Requires Attunement</span>
                 </label>
                 {/* Also on an item stored attuned without requiring it, so
                     that can be cleared. */}
@@ -2902,16 +2911,16 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       type="checkbox"
                       checked={item.attuned || false}
                       onChange={(e) => updateField(`inventory.${index}.attuned`, e.target.checked)}
-                      className="w-4 h-4 text-purple-700 border-stone-300 rounded-sm focus:ring-2 focus:ring-purple-500"
+                      className="w-4 h-4 text-spirit-ink border-ink/20 rounded-sm focus:ring-2 focus:ring-brand"
                     />
-                    <span className="text-stone-700">Attuned</span>
+                    <span className="text-ink-secondary">Attuned</span>
                   </label>
                 )}
               </div>
             </div>
           ))}
           {(!formData.inventory || formData.inventory.length === 0) && (
-            <div className="text-sm text-stone-500 italic">No items in inventory yet</div>
+            <div className="text-sm text-ink-muted italic">No items in inventory yet</div>
           )}
         </div>
       </div>
@@ -2936,13 +2945,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     return (
       <div className="space-y-6">
         {/* Proficiencies */}
-        <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-4">Proficiencies & Training</h3>
+        <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-4">Proficiencies & Training</h3>
 
           <div className="space-y-4">
             {/* Armor */}
             <div>
-              <label htmlFor="dnd5e-proficiencies-armor" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Armor</label>
+              <label htmlFor="dnd5e-proficiencies-armor" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Armor</label>
               <textarea
                 id="dnd5e-proficiencies-armor"
                 maxLength={PROFICIENCY_BOX_MAX}
@@ -2950,13 +2959,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 onChange={(e) => updateField('proficiencies.armor', e.target.value)}
                 placeholder="Light Armor, Medium Armor, Shields"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand text-sm"
               />
             </div>
 
             {/* Weapons */}
             <div>
-              <label htmlFor="dnd5e-proficiencies-weapons" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Weapons</label>
+              <label htmlFor="dnd5e-proficiencies-weapons" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Weapons</label>
               <textarea
                 id="dnd5e-proficiencies-weapons"
                 maxLength={PROFICIENCY_BOX_MAX}
@@ -2964,13 +2973,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 onChange={(e) => updateField('proficiencies.weapons', e.target.value)}
                 placeholder="Simple Weapons, Martial Weapons, or specific weapons (Daggers, Longswords, Shortbows)"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand text-sm"
               />
             </div>
 
             {/* Tools */}
             <div>
-              <label htmlFor="dnd5e-proficiencies-tools" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Tools</label>
+              <label htmlFor="dnd5e-proficiencies-tools" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Tools</label>
               <textarea
                 id="dnd5e-proficiencies-tools"
                 maxLength={PROFICIENCY_BOX_MAX}
@@ -2978,13 +2987,13 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 onChange={(e) => updateField('proficiencies.tools', e.target.value)}
                 placeholder="Thieves' Tools, Smith's Tools, Calligrapher's Supplies, Musical Instruments, Vehicles (Land/Water)"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand text-sm"
               />
             </div>
 
             {/* Languages */}
             <div>
-              <label htmlFor="dnd5e-proficiencies-languages" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Languages</label>
+              <label htmlFor="dnd5e-proficiencies-languages" className="block text-sm font-bold text-ink-secondary mb-2 uppercase tracking-wide">Languages</label>
               <textarea
                 id="dnd5e-proficiencies-languages"
                 maxLength={PROFICIENCY_BOX_MAX}
@@ -2992,37 +3001,38 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 onChange={(e) => updateField('proficiencies.languages', e.target.value)}
                 placeholder="Common, Elvish, Dwarvish, Draconic"
                 rows={2}
-                className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500 text-sm"
+                className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand text-sm"
               />
             </div>
           </div>
         </div>
 
         {/* Features & Traits */}
-        <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
+        <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-semibold text-stone-800">Features &amp; Traits</h3>
-            <button
+            <h3 className="text-lg font-semibold text-ink">Features &amp; Traits</h3>
+            <Button
+              variant="primary"
+              size="sm"
               onClick={() =>
                 updateField('featuresAndTraits', [...featureRows, { name: '', description: '' }])
               }
               disabled={listIsFull(featureRows)}
-              className={`px-3 py-1 bg-red-600 text-white rounded-sm hover:bg-red-700 text-sm ${ADD_BUTTON_OFF}`}
             >
               + Add Feature
-            </button>
+            </Button>
           </div>
           <ListLimitNote full={listIsFull(featureRows)} />
-          <p className="text-xs text-stone-600 mb-3">
+          <p className="text-xs text-ink-secondary mb-3">
             Class features, racial traits and feats. A description is optional — leave it blank
             for anything that is just a name.
           </p>
           {featureRows.length === 0 ? (
-            <p className="text-sm text-stone-500 italic">No features added yet</p>
+            <p className="text-sm text-ink-muted italic">No features added yet</p>
           ) : (
             <div className="space-y-3">
               {featureRows.map((feature, index) => (
-                <div key={index} className="bg-white border border-stone-300 rounded-lg p-3 space-y-2">
+                <div key={index} className="bg-paper border border-ink/20 rounded-lg p-3 space-y-2">
                   <div className="flex items-start justify-between">
                     <input
                       type="text"
@@ -3037,7 +3047,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                       }
                       placeholder="Feature name, e.g. Darkvision"
                       aria-label={`Feature ${index + 1} name`}
-                      className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                      className="flex-1 px-2 py-1 border border-ink/20 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand"
                     />
                     <button
                       onClick={() =>
@@ -3047,7 +3057,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                         )
                       }
                       aria-label={`Remove ${feature.name || 'feature'}`}
-                      className="ml-2 px-2 py-1 text-red-600 hover:text-red-800 font-bold"
+                      className="ml-2 px-2 py-1 text-danger-ink hover:bg-danger/10 font-bold"
                     >
                       ×
                     </button>
@@ -3065,7 +3075,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                     placeholder="Description (optional)"
                     aria-label={`Feature ${index + 1} description`}
                     rows={2}
-                    className="w-full px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+                    className="w-full px-2 py-1 text-sm border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
                   />
                 </div>
               ))}
@@ -3074,18 +3084,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         </div>
 
         {/* Additional Features & Traits */}
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+          <h3 className="text-lg font-semibold text-ink mb-3">
             <label htmlFor="dnd5e-additional-features">Additional Features & Traits</label>
           </h3>
-          <p className="text-xs text-stone-600 mb-3">Detailed descriptions of features, special abilities, or notes</p>
+          <p className="text-xs text-ink-secondary mb-3">Detailed descriptions of features, special abilities, or notes</p>
           <textarea
             id="dnd5e-additional-features"
             value={formData.additionalFeaturesAndTraits || ''}
             onChange={(e) => updateField('additionalFeaturesAndTraits', e.target.value)}
             placeholder="Describe any additional features, traits, or special abilities in detail..."
             rows={8}
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         </div>
       </div>
@@ -3096,22 +3106,22 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
   const renderBiographyTab = () => (
     <div className="space-y-6">
       {/* Appearance */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Appearance</h3>
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Appearance</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
-            <label htmlFor="dnd5e-appearance-age" className="block text-xs font-semibold text-stone-600 mb-1">Age</label>
+            <label htmlFor="dnd5e-appearance-age" className="block text-xs font-semibold text-ink-secondary mb-1">Age</label>
             <input
               id="dnd5e-appearance-age"
               maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.age || ''}
               onChange={(e) => updateField('appearance.age', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-appearance-height" className="block text-xs font-semibold text-stone-600 mb-1">Height</label>
+            <label htmlFor="dnd5e-appearance-height" className="block text-xs font-semibold text-ink-secondary mb-1">Height</label>
             <input
               id="dnd5e-appearance-height"
               maxLength={SHEET_SHORT_TEXT_MAX}
@@ -3119,11 +3129,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               value={formData.appearance?.height || ''}
               onChange={(e) => updateField('appearance.height', e.target.value)}
               placeholder="e.g., 5'7&quot;"
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-appearance-weight" className="block text-xs font-semibold text-stone-600 mb-1">Weight</label>
+            <label htmlFor="dnd5e-appearance-weight" className="block text-xs font-semibold text-ink-secondary mb-1">Weight</label>
             <input
               id="dnd5e-appearance-weight"
               maxLength={SHEET_SHORT_TEXT_MAX}
@@ -3131,99 +3141,99 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               value={formData.appearance?.weight || ''}
               onChange={(e) => updateField('appearance.weight', e.target.value)}
               placeholder="e.g., 130 lbs"
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-appearance-eyes" className="block text-xs font-semibold text-stone-600 mb-1">Eyes</label>
+            <label htmlFor="dnd5e-appearance-eyes" className="block text-xs font-semibold text-ink-secondary mb-1">Eyes</label>
             <input
               id="dnd5e-appearance-eyes"
               maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.eyes || ''}
               onChange={(e) => updateField('appearance.eyes', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-appearance-skin" className="block text-xs font-semibold text-stone-600 mb-1">Skin</label>
+            <label htmlFor="dnd5e-appearance-skin" className="block text-xs font-semibold text-ink-secondary mb-1">Skin</label>
             <input
               id="dnd5e-appearance-skin"
               maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.skin || ''}
               onChange={(e) => updateField('appearance.skin', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-appearance-hair" className="block text-xs font-semibold text-stone-600 mb-1">Hair</label>
+            <label htmlFor="dnd5e-appearance-hair" className="block text-xs font-semibold text-ink-secondary mb-1">Hair</label>
             <input
               id="dnd5e-appearance-hair"
               maxLength={SHEET_SHORT_TEXT_MAX}
               type="text"
               value={formData.appearance?.hair || ''}
               onChange={(e) => updateField('appearance.hair', e.target.value)}
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
       </div>
 
       {/* Personality */}
-      <div className="bg-stone-50 border-2 border-stone-300 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Personality</h3>
+      <div className="bg-ink/5 border-2 border-ink/20 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Personality</h3>
         <div className="space-y-3">
           <div>
-            <label htmlFor="dnd5e-personality-traits" className="block text-sm font-semibold text-stone-700 mb-1">Personality Traits</label>
+            <label htmlFor="dnd5e-personality-traits" className="block text-sm font-semibold text-ink-secondary mb-1">Personality Traits</label>
             <textarea
               id="dnd5e-personality-traits"
               value={formData.personality?.traits || ''}
               onChange={(e) => updateField('personality.traits', e.target.value)}
               placeholder="Describe your character's personality traits..."
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-personality-ideals" className="block text-sm font-semibold text-stone-700 mb-1">Ideals</label>
+            <label htmlFor="dnd5e-personality-ideals" className="block text-sm font-semibold text-ink-secondary mb-1">Ideals</label>
             <textarea
               id="dnd5e-personality-ideals"
               value={formData.personality?.ideals || ''}
               onChange={(e) => updateField('personality.ideals', e.target.value)}
               placeholder="What drives your character? What do they believe in?"
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-personality-bonds" className="block text-sm font-semibold text-stone-700 mb-1">Bonds</label>
+            <label htmlFor="dnd5e-personality-bonds" className="block text-sm font-semibold text-ink-secondary mb-1">Bonds</label>
             <textarea
               id="dnd5e-personality-bonds"
               value={formData.personality?.bonds || ''}
               onChange={(e) => updateField('personality.bonds', e.target.value)}
               placeholder="What connections does your character have?"
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-personality-flaws" className="block text-sm font-semibold text-stone-700 mb-1">Flaws</label>
+            <label htmlFor="dnd5e-personality-flaws" className="block text-sm font-semibold text-ink-secondary mb-1">Flaws</label>
             <textarea
               id="dnd5e-personality-flaws"
               value={formData.personality?.flaws || ''}
               onChange={(e) => updateField('personality.flaws', e.target.value)}
               placeholder="What are your character's weaknesses or flaws?"
               rows={2}
-              className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
       </div>
 
       {/* Backstory */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">
           <label htmlFor="dnd5e-backstory">Backstory</label>
         </h3>
         <textarea
@@ -3232,42 +3242,42 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           onChange={(e) => updateField('backstory', e.target.value)}
           placeholder="Tell your character's story..."
           rows={6}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
         />
       </div>
 
       {/* Allies & Organizations */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Allies & Organizations</h3>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">Allies & Organizations</h3>
         <div className="space-y-2">
           <div>
-            <label htmlFor="dnd5e-allies-name" className="block text-xs font-semibold text-stone-600 mb-1">Name</label>
+            <label htmlFor="dnd5e-allies-name" className="block text-xs font-semibold text-ink-secondary mb-1">Name</label>
             <input
               id="dnd5e-allies-name"
               type="text"
               value={formData.alliesAndOrganizations?.name || ''}
               onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)}
               placeholder="e.g., The Arcane Brotherhood"
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label htmlFor="dnd5e-allies-description" className="block text-xs font-semibold text-stone-600 mb-1">Description</label>
+            <label htmlFor="dnd5e-allies-description" className="block text-xs font-semibold text-ink-secondary mb-1">Description</label>
             <textarea
               id="dnd5e-allies-description"
               value={formData.alliesAndOrganizations?.description || ''}
               onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)}
               placeholder="Describe your allies and organizations..."
               rows={3}
-              className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
+              className="w-full px-2 py-1 border border-ink/20 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
       </div>
 
       {/* Treasure */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h3 className="text-lg font-semibold text-ink mb-3">
           <label htmlFor="dnd5e-treasure">Treasure & Other Notes</label>
         </h3>
         <textarea
@@ -3276,7 +3286,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           onChange={(e) => updateField('treasure', e.target.value)}
           placeholder="Special items, treasure, or other important notes..."
           rows={4}
-          className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
+          className="w-full px-3 py-2 border border-ink/20 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-brand"
         />
       </div>
     </div>
@@ -3287,7 +3297,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
 
   return (
     <div
-      className="bg-white border-2 border-stone-200 rounded-lg overflow-hidden shadow-lg"
+      className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg"
       onInputCapture={noteInteraction}
       onChangeCapture={noteInteraction}
       onPointerDownCapture={noteInteraction}
@@ -3295,7 +3305,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {renderHeader()}
       {renderTabs()}
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg">
+        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -3305,7 +3315,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         </div>
       )}
       {broughtWithinRange.length > 0 && (
-        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg">
+        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers were outside what a sheet can store and now show within it:{' '}
           {broughtWithinRange.join(', ')}. Saving keeps the new values.
         </p>
@@ -3319,7 +3329,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         {activeTab === 'bio' && renderBiographyTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 pb-4 text-sm text-red-600">{errors.submit}</div>
+        <div className="px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
       )}
     </div>
   );

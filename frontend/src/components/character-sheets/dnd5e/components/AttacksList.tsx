@@ -58,8 +58,8 @@ const AttackRow: React.FC<{
 
   return (
     <div
-      className={`p-3 bg-stone-50 border border-stone-200 rounded-lg transition-colors group ${
-        isClickable ? 'cursor-pointer hover:bg-red-50 hover:border-red-200 select-none' : 'hover:bg-stone-100'
+      className={`p-3 bg-ink/5 border border-ink/10 rounded-lg transition-colors group ${
+        isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 select-none' : 'hover:bg-ink/10'
       }`}
       onClick={isClickable ? handleAttackClick : undefined}
       onContextMenu={isClickable ? handleAttackContext : undefined}
@@ -69,14 +69,14 @@ const AttackRow: React.FC<{
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center space-x-2">
           {isSpell ? (
-            <Zap className="w-5 h-5 text-red-600" />
+            <Zap className="w-5 h-5 text-accent-ink" />
           ) : (
-            <Sword className="w-5 h-5 text-stone-600" />
+            <Sword className="w-5 h-5 text-ink-secondary" />
           )}
-          <span className="font-semibold text-stone-800">{attack.name}</span>
+          <span className="font-semibold text-ink">{attack.name}</span>
         </div>
         {isClickable && (
-          <Dices className="w-4 h-4 text-red-700 opacity-0 group-hover:opacity-60 transition-opacity" />
+          <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />
         )}
       </div>
 
@@ -84,36 +84,36 @@ const AttackRow: React.FC<{
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
         {/* Attack Bonus */}
         <div>
-          <span className="text-xs text-stone-500">Attack</span>
-          <div className="font-semibold text-red-700">
+          <span className="text-xs text-ink-muted">Attack</span>
+          <div className="font-semibold text-accent-ink">
             {formatBonus(attack.attackBonus)}
           </div>
         </div>
 
         {/* Damage — click separately to roll damage only */}
         <div
-          className={isClickable && attack.damageRoll ? 'cursor-pointer hover:text-red-700' : ''}
+          className={isClickable && attack.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
           onClick={isClickable && attack.damageRoll ? handleDamageClick : undefined}
           title={isClickable && attack.damageRoll ? `Click to roll damage: ${attack.damageRoll}` : undefined}
         >
-          <span className="text-xs text-stone-500">Damage</span>
-          <div className="font-semibold text-stone-700">
+          <span className="text-xs text-ink-muted">Damage</span>
+          <div className="font-semibold text-ink-secondary">
             {attack.damageRoll}
           </div>
         </div>
 
         {/* Damage Type */}
         <div>
-          <span className="text-xs text-stone-500">Type</span>
-          <div className="font-semibold text-stone-700 capitalize">
+          <span className="text-xs text-ink-muted">Type</span>
+          <div className="font-semibold text-ink-secondary capitalize">
             {attack.damageType}
           </div>
         </div>
 
         {/* Range */}
         <div>
-          <span className="text-xs text-stone-500">Range</span>
-          <div className="font-semibold text-stone-700">
+          <span className="text-xs text-ink-muted">Range</span>
+          <div className="font-semibold text-ink-secondary">
             {attack.range != null ? `${attack.range} ft` : '—'}
           </div>
         </div>
@@ -133,7 +133,7 @@ const AttackRow: React.FC<{
                 <div
                   key={idx}
                   className={`flex items-baseline gap-2 text-sm ${
-                    rollable ? 'cursor-pointer hover:text-red-700' : ''
+                    rollable ? 'cursor-pointer hover:text-danger-ink' : ''
                   }`}
                   onClick={
                     rollable
@@ -145,10 +145,10 @@ const AttackRow: React.FC<{
                   }
                   title={rollable ? `Click to roll ${label}: ${roll}` : undefined}
                 >
-                  <span className="text-xs text-stone-500">{label}</span>
-                  <span className="font-semibold text-stone-700">{roll}</span>
+                  <span className="text-xs text-ink-muted">{label}</span>
+                  <span className="font-semibold text-ink-secondary">{roll}</span>
                   {entry.damageType && (
-                    <span className="text-xs text-stone-500 capitalize">{entry.damageType}</span>
+                    <span className="text-xs text-ink-muted capitalize">{entry.damageType}</span>
                   )}
                 </div>
               );
@@ -163,7 +163,7 @@ const AttackRow: React.FC<{
             {attack.properties.map((prop, idx) => (
               <span
                 key={idx}
-                className="px-2 py-0.5 text-xs bg-stone-200 text-stone-700 rounded-full capitalize"
+                className="px-2 py-0.5 text-xs bg-ink/15 text-ink-secondary rounded-full capitalize"
               >
                 {prop}
               </span>
@@ -174,7 +174,7 @@ const AttackRow: React.FC<{
 
       {/* Notes */}
       {attack.notes && (
-        <div className="mt-2 text-xs text-stone-600 italic">
+        <div className="mt-2 text-xs text-ink-secondary italic">
           {attack.notes}
         </div>
       )}
@@ -188,7 +188,7 @@ const AttackRow: React.FC<{
 export const AttacksList: React.FC<AttacksListProps> = ({ attacks, onRoll, onRollContext }) => {
   if (!attacks || attacks.length === 0) {
     return (
-      <div className="text-center py-8 text-stone-500">
+      <div className="text-center py-8 text-ink-muted">
         No attacks configured
       </div>
     );
