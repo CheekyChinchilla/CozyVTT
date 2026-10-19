@@ -231,10 +231,12 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
             className={`
               flex items-center space-x-2 px-4 py-3 font-medium transition-colors
               ${isActive
-                ? `text-${themeColor.accent} border-b-2 border-${themeColor.accent} -mb-0.5 bg-white`
+                ? 'text-ink border-b-2 -mb-0.5 bg-white'
                 : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'
               }
             `}
+            // The underline in the header colour; the label in the theme's text.
+            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
           >
             <Icon className="w-4 h-4" />
             <span>{tab.label}</span>

@@ -514,7 +514,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
     const headerClasses = isCustomColor
       ? 'text-parchment p-6 rounded-t-lg relative border-b-4 border-amber-600'
-      : `bg-linear-to-r/srgb ${themeColor.from} via-${themeColor.accent} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 border-${themeColor.border}`;
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} text-parchment p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
       <div className={headerClasses} style={headerStyle}>

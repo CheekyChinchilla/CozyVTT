@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The header colour you pick is drawn everywhere a sheet uses it.** On D&D 5e and Pathfinder 2e sheets the open tab was meant to be underlined and labelled in the header colour, and for most colours neither was drawn; it is now underlined in the colour you picked, a custom one included, with its label in the theme's text colour so it reads on a dark theme. Call of Cthulhu headers gain the middle of their gradient, and three colours their amber bottom border.
+
 - **Error messages are readable in the dark themes.** The error under a box, the "You've been signed out" notice, the warning icon in confirmations and the errors in the campaign, character and invitation dialogs were drawn in the danger fill colour, about 3.3 to 1 against the page in Obsidian Night, Shadow Realm, Deep Dungeon and Midnight Court; they now use the readable shade each theme works out. The open panel's button on the table toolbar does the same with the accent colour, which was faint in the light themes.
 
 - **A screen reader names every box in the Call of Cthulhu character editor, and a skill's improvement check works from the keyboard.** Almost every box was announced by its placeholder or by nothing, and the improvement checks beside the skills could only be clicked; they are now checkboxes you can reach with Tab and tick with Space. Every text box also stops at the length a sheet stores, where only the investigator's name did, so a long paste no longer gets the save refused.

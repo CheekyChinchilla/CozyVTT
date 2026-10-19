@@ -19,6 +19,7 @@ import {
   type CoCSpecialisation,
 } from '../specialisations';
 import { readCoC7eSkillList, type CoC7eSkillList } from '../skillEdits';
+import type { COLOR_PRESETS } from '../colorPresets';
 import type {
   CoC7eSkill,
   CoC7eSkills,
@@ -40,14 +41,7 @@ interface Skill extends CoC7eSkill {
   name?: string;
 }
 
-interface ThemeColor {
-  name: string;
-  from: string;
-  to: string;
-  accent: string;
-  border: string;
-  hex: string;
-}
+type ThemeColor = (typeof COLOR_PRESETS)[number];
 
 interface SkillsListProps {
   /** Skills object from character data */
@@ -178,10 +172,8 @@ const SkillRow: React.FC<{
 
   // Determine checkbox styling based on theme color
   const getCheckboxClasses = () => {
-    if (skill.improvementChecked && themeColor) {
-      // Use theme color for checked state
-      return `bg-${themeColor.accent} border-${themeColor.accent}`;
-    }
+    // Ticked in a header colour: the inline style below fills it.
+    if (skill.improvementChecked && themeColor) return 'shadow-xs';
     return skill.improvementChecked
       ? 'bg-sepia-700 border-sepia-800 shadow-xs'
       : 'border-sepia-600 bg-white shadow-inner';

@@ -979,7 +979,8 @@ id="pf2e-hero-points" min={0} max={3} value={formData.heroPoints} onChange={(v: 
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
         return (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center space-x-2 px-4 py-3 font-medium transition-colors ${isActive ? `text-${selectedColor.accent} border-b-2 border-${selectedColor.accent} -mb-0.5 bg-white` : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'}`}>
+          // The underline in the header colour; the label in the theme's text.
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center space-x-2 px-4 py-3 font-medium transition-colors ${isActive ? 'text-ink border-b-2 -mb-0.5 bg-white' : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'}`} style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : selectedColor.hex } : undefined}>
             <Icon className="w-4 h-4" />
             <span>{tab.label}</span>
           </button>

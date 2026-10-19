@@ -133,8 +133,8 @@ function CoCStatBlock({ statBlock, tokenName }: { statBlock: NpcStatBlock; token
  * Per-system accent classes.
  *
  * Written out in full because Tailwind only ships classes it can find as
- * literal strings — the previous `text-${accentColor}-800` template produced
- * class names that were never generated, so the accent silently did nothing.
+ * literal strings — a template joining `text-` to the accent's name at runtime
+ * produced class names that were never generated, so the accent did nothing.
  */
 const ACCENTS = {
   danger: { text: 'text-danger-ink', border: 'border-danger/20' },

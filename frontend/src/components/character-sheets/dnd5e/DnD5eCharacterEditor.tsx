@@ -1413,10 +1413,12 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             className={`
               flex items-center space-x-2 px-4 py-3 font-medium transition-colors
               ${isActive
-                ? `text-${selectedColor.accent} border-b-2 border-${selectedColor.accent} -mb-0.5 bg-white`
+                ? 'text-ink border-b-2 -mb-0.5 bg-white'
                 : 'text-stone-600 hover:text-stone-800 hover:bg-stone-100'
               }
             `}
+            // The underline in the header colour; the label in the theme's text.
+            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : selectedColor.hex } : undefined}
           >
             <Icon className="w-4 h-4" />
             <span>{tab.label}</span>

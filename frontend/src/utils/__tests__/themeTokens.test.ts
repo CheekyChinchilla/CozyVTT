@@ -80,6 +80,18 @@ describe('themed surfaces use semantic tokens', () => {
     expect(found).toEqual([]);
   });
 
+  // Tailwind generates only class names written out in full in the source, so
+  // `text-${accent}` draws nothing for most values. No file is exempt.
+  it('builds no colour class from a variable at runtime', () => {
+    const BUILT = /\b(?:text|bg|border|ring|from|via|to)-\$\{/g;
+    const found = Object.entries(SOURCES)
+      .filter(([path]) => !path.includes('/__tests__/'))
+      .map(([path, source]) => ({ file: path, count: (source.match(BUILT) ?? []).length }))
+      .filter((entry) => entry.count > 0)
+      .map((entry) => `${entry.file} (${entry.count})`);
+    expect(found).toEqual([]);
+  });
+
   it('keeps the exemption list small and intentional', () => {
     // A growing exemption list means the rule is being worked around rather
     // than followed; make that visible in review.
