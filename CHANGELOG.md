@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.** The read-only sheet showed hit points, the major wound threshold, magic points, maximum Sanity, damage bonus, build, move rate and each characteristic's half and fifth as last stored, so an investigator not saved since being made from a template or imported could show numbers its own characteristics do not give. They are now worked out as the editor works them out.
+
 - **A Call of Cthulhu investigator's token picture is checked and named after the investigator.** The editor took any file as the picture, which was then refused when the sheet was saved, and named every upload "Investigator Token". A file that is not a picture, or is over the token size limit, is now refused when it is chosen, as on the other sheets, and the picture is named after the investigator.
 
 - **A Call of Cthulhu weapon rolls its damage bonus and its skill's current value.** Damage written as the rulebook does, such as "1d3+DB" for a punch, could not be rolled from the sheet and was left out of the right-click roll menu; DB now rolls the investigator's damage bonus, and the legend says firearms take none. A weapon's attack used the skill value stored with the weapon, which fell behind as the skill rose; it now uses the value of the skill the weapon names, such as Brawl or Handgun, where the sheet has it.

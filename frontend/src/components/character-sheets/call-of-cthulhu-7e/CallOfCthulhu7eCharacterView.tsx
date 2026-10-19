@@ -26,7 +26,7 @@ import { CharacteristicBlock } from './components/CharacteristicBlock';
 import { orderedCharacteristics } from './characteristics';
 import { SanityTracker } from './components/SanityTracker';
 import { SkillsList } from './components/SkillsList';
-import { cocDodgeBase } from '@/utils/rules/callOfCthulhu7e';
+import { cocDodgeBase, cocDerivedAttributes, cocHalfAndFifth } from '@/utils/rules/callOfCthulhu7e';
 import { WeaponsList } from './components/WeaponsList';
 import { BackstorySection } from './components/BackstorySection';
 import { isHexColor } from '@/utils/styleAllowlists';
@@ -65,6 +65,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 }) => {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
   const data = character.data as CoC7eCharacterData;
+  // Worked out from the characteristics, as the editor saves them.
+  const derived = cocDerivedAttributes(data);
   const cthulhuMythos = Math.max(data.skills?.cthulhuMythos?.currentValue ?? 0, data.spellsAndMythos?.cthulhuMythos ?? 0);
   const [themeColor, setThemeColor] = useState(COLOR_PRESETS[0]);
   const [isCustomColor, setIsCustomColor] = useState(false);
@@ -210,8 +212,8 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                   key={key}
                   label={key}
                   regular={data.characteristics[key as keyof CoC7eCharacteristics].regular}
-                  half={data.characteristics[key as keyof CoC7eCharacteristics].half}
-                  fifth={data.characteristics[key as keyof CoC7eCharacteristics].fifth}
+                  half={cocHalfAndFifth(data.characteristics[key as keyof CoC7eCharacteristics].regular).half}
+                  fifth={cocHalfAndFifth(data.characteristics[key as keyof CoC7eCharacteristics].regular).fifth}
                   onRoll={onRoll}
                 />
               ))}
@@ -225,7 +227,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <SanityTracker
           current={data.derivedStats.sanity.current}
           starting={data.derivedStats.sanity.starting}
-          maximum={data.derivedStats.sanity.maximum}
+          maximum={derived.maxSanity}
           cthulhuMythos={cthulhuMythos}
         />
       )}
@@ -247,10 +249,10 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                 <span className="text-3xl font-bold text-red-700">
                   {data.derivedStats.hp.current}
                 </span>
-                <span className="text-lg text-red-500"> / {data.derivedStats.hp.maximum}</span>
+                <span className="text-lg text-red-500"> / {derived.hitPoints}</span>
               </div>
               <div className="text-xs text-red-600 text-center mt-1">
-                Major Wound: {data.derivedStats.hp.majorWoundThreshold} HP
+                Major Wound: {derived.majorWoundThreshold} HP
               </div>
             </div>
           )}
@@ -268,7 +270,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                 <span className="text-3xl font-bold text-purple-700">
                   {data.derivedStats.magicPoints.current}
                 </span>
-                <span className="text-lg text-purple-500"> / {data.derivedStats.magicPoints.maximum}</span>
+                <span className="text-lg text-purple-500"> / {derived.magicPoints}</span>
               </div>
               <div className="text-xs text-purple-600 text-center mt-1">POW / 5</div>
             </div>
@@ -325,19 +327,19 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         {data.derivedStats?.moveRate !== undefined && (
           <div className="bg-parchment border border-sepia-400 rounded-md p-3 text-center">
             <div className="text-xs text-sepia-600 uppercase mb-1">Move Rate</div>
-            <div className="text-2xl font-bold text-sepia-900">{data.derivedStats.moveRate}</div>
+            <div className="text-2xl font-bold text-sepia-900">{derived.moveRate}</div>
           </div>
         )}
         {data.derivedStats?.build !== undefined && (
           <div className="bg-parchment border border-sepia-400 rounded-md p-3 text-center">
             <div className="text-xs text-sepia-600 uppercase mb-1">Build</div>
-            <div className="text-2xl font-bold text-sepia-900">{data.derivedStats.build}</div>
+            <div className="text-2xl font-bold text-sepia-900">{derived.build}</div>
           </div>
         )}
         {data.derivedStats?.damageBonus && (
           <div className="bg-parchment border border-sepia-400 rounded-md p-3 text-center">
             <div className="text-xs text-sepia-600 uppercase mb-1">Damage Bonus</div>
-            <div className="text-2xl font-bold text-sepia-900">{data.derivedStats.damageBonus}</div>
+            <div className="text-2xl font-bold text-sepia-900">{derived.damageBonus}</div>
           </div>
         )}
       </div>
@@ -383,7 +385,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         <WeaponsList
           weapons={data.combat.weapons}
           onRoll={onRoll}
-          damageBonus={data.derivedStats?.damageBonus ?? '0'}
+          damageBonus={derived.damageBonus}
           skills={data.skills}
         />
       )}

@@ -371,7 +371,8 @@ describe('Call of Cthulhu specialisations in the roll menu', () => {
 // which cannot roll text, and its skill was the value stored with the weapon.
 describe('Call of Cthulhu weapons in the roll menu', () => {
   const data = {
-    derivedStats: { damageBonus: '+1d4' },
+    // STR 80 + SIZ 65: a damage bonus of +1D4.
+    characteristics: { STR: { regular: 80 }, SIZ: { regular: 65 } },
     skills: { firearms: { handgun: { baseValue: 20, currentValue: 60, improvementChecked: false }, rifle: { currentValue: 25 }, shotgun: { currentValue: 25 }, custom: [] } },
     combat: {
       weapons: [

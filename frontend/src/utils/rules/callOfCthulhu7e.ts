@@ -172,3 +172,40 @@ export function cocWeaponSkillValue(skills: unknown, skillName: string, stored: 
   const plain = key ? valueOf(all[key]) : null;
   return plain ?? stored;
 }
+
+/**
+ * An investigator's derived attributes, worked out from the sheet's
+ * characteristics, age and Cthulhu Mythos as the editor works them out, so a
+ * sheet the editor has not saved since shows what its parts give.
+ */
+export function cocDerivedAttributes(data: unknown): {
+  hitPoints: number;
+  majorWoundThreshold: number;
+  magicPoints: number;
+  maxSanity: number;
+  damageBonus: string;
+  build: number;
+  moveRate: number;
+} {
+  const sheet = (data && typeof data === 'object' ? data : {}) as Record<string, unknown>;
+  const characteristics = (sheet.characteristics && typeof sheet.characteristics === 'object' ? sheet.characteristics : {}) as Record<string, unknown>;
+  const c = (key: string): number => {
+    const value = (characteristics[key] as { regular?: unknown } | undefined)?.regular;
+    return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  };
+  const skills = (sheet.skills && typeof sheet.skills === 'object' ? sheet.skills : {}) as Record<string, unknown>;
+  const mythosSkill = (skills.cthulhuMythos as { currentValue?: unknown } | undefined)?.currentValue;
+  const mythosBox = (sheet.spellsAndMythos as { cthulhuMythos?: unknown } | undefined)?.cthulhuMythos;
+  const mythos = Math.max(typeof mythosSkill === 'number' ? mythosSkill : 0, typeof mythosBox === 'number' ? mythosBox : 0);
+  const hitPoints = cocHitPoints(c('CON'), c('SIZ'));
+  const { damageBonus, build } = cocDamageBonusAndBuild(c('STR'), c('SIZ'));
+  return {
+    hitPoints,
+    majorWoundThreshold: cocMajorWoundThreshold(hitPoints),
+    magicPoints: cocMagicPoints(c('POW')),
+    maxSanity: cocMaxSanity(mythos),
+    damageBonus,
+    build,
+    moveRate: cocMoveRate(c('STR'), c('DEX'), c('SIZ'), Number(sheet.age) || 30),
+  };
+}
