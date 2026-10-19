@@ -95,6 +95,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The built-in Call of Cthulhu investigators' numbers follow from their characteristics.** The blank investigator had a major wound threshold of 1 for 10 hit points; the Private Investigator had 13 hit points where CON 60 and SIZ 65 give 12, a major wound of 1, and SIZ, APP and EDU halves rounded up. They now start with the numbers the rules give. Investigators already made are not changed; the editor works their numbers out again when they are next saved.
+
 - **A Call of Cthulhu major wound threshold rounds up.** A major wound is damage of at least half an investigator's maximum hit points in one attack, but the editor halved and rounded down, so at 13 hit points it named 6, which is under half. It now names 7; the threshold is saved the next time the investigator is saved.
 
 - **A screen reader names every box in the Pathfinder 2e character editor, and the boxes stop at the length a sheet stores.** Most boxes, every proficiency rank among them, were announced by their placeholder or by nothing; each is now named, such as "Proficiency in Athletics" or "Item bonus to Will saves". Only the character's name stopped at the length the server keeps, so a long paste anywhere else got the save refused; every text box now stops there.

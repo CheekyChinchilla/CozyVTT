@@ -36,7 +36,7 @@ export const coc7eBlankTemplate: CharacterTemplate = {
       EDU: { regular: 50, half: 25, fifth: 10 },
     },
     derivedStats: {
-      hp: { maximum: 10, current: 10, formula: '(CON+SIZ)/10', majorWoundThreshold: 1 },
+      hp: { maximum: 10, current: 10, formula: '(CON+SIZ)/10', majorWoundThreshold: 5 },
       magicPoints: { maximum: 10, current: 10, formula: 'POW/5' },
       sanity: { starting: 50, current: 50, maximum: 99, formula: 'POW' },
       luck: { score: 50, notes: '' },
@@ -145,15 +145,17 @@ export const coc7ePrivateInvestigatorTemplate: CharacterTemplate = {
     characteristics: {
       STR: { regular: 60, half: 30, fifth: 12 },
       CON: { regular: 60, half: 30, fifth: 12 },
-      SIZ: { regular: 65, half: 33, fifth: 13 },
+      SIZ: { regular: 65, half: 32, fifth: 13 },
       DEX: { regular: 70, half: 35, fifth: 14 },
-      APP: { regular: 55, half: 28, fifth: 11 },
+      APP: { regular: 55, half: 27, fifth: 11 },
       INT: { regular: 70, half: 35, fifth: 14 },
       POW: { regular: 60, half: 30, fifth: 12 },
-      EDU: { regular: 65, half: 33, fifth: 13 },
+      EDU: { regular: 65, half: 32, fifth: 13 },
     },
     derivedStats: {
-      hp: { maximum: 13, current: 13, formula: '(CON+SIZ)/10', majorWoundThreshold: 1 },
+      // CON 60 + SIZ 65 = 125, a tenth rounded down; a major wound is half,
+      // rounded up.
+      hp: { maximum: 12, current: 12, formula: '(CON+SIZ)/10', majorWoundThreshold: 6 },
       magicPoints: { maximum: 12, current: 12, formula: 'POW/5' },
       sanity: { starting: 60, current: 60, maximum: 99, formula: 'POW' },
       luck: { score: 55, notes: '' },

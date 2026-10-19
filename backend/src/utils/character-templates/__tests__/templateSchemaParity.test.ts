@@ -32,6 +32,16 @@ import {
   pf2eBulkLimits,
 } from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
+import {
+  cocHitPoints,
+  cocMajorWoundThreshold,
+  cocMagicPoints,
+  cocMaxSanity,
+  cocHalfAndFifth,
+  cocDamageBonusAndBuild,
+  cocMoveRate,
+  cocDodgeBase,
+} from '../../rules/callOfCthulhu7e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
 function schemaKeys(file: string, marker: string): Set<string> {
@@ -171,6 +181,44 @@ describe('D&D 5e templates agree with the rules maths', () => {
       const saves = Object.keys((data.savingThrows ?? {}) as Record<string, unknown>);
       expect(skills.filter((key) => dnd5eBackfilledSkillOtherBonus(data, key) !== null)).toEqual([]);
       expect(saves.filter((key) => dnd5eBackfilledSaveOtherBonus(data, key) !== null)).toEqual([]);
+    });
+  }
+});
+
+// The Call of Cthulhu templates stored a major wound of 1 for 10 hit points,
+// 13 hit points where CON and SIZ give 12, and halves rounded up.
+describe('Call of Cthulhu templates agree with the rules maths', () => {
+  for (const template of getTemplatesForGameSystem(GameSystem.CALL_OF_CTHULHU_7E)) {
+    const data = template.data as {
+      age?: unknown;
+      characteristics: Record<string, { regular: number; half: number; fifth: number }>;
+      derivedStats: {
+        hp: { maximum: number; current: number; majorWoundThreshold: number };
+        magicPoints: { maximum: number };
+        sanity: { maximum: number };
+        damageBonus: string;
+        build: number;
+        moveRate: number;
+      };
+      skills: { cthulhuMythos: { currentValue: number }; dodge: { baseValue: number } };
+    };
+    const c = (key: string) => data.characteristics[key].regular;
+
+    it(`${template.name} stores each characteristic's half and fifth`, () => {
+      for (const [key, entry] of Object.entries(data.characteristics)) {
+        expect({ key, half: entry.half, fifth: entry.fifth }).toEqual({ key, ...cocHalfAndFifth(entry.regular) });
+      }
+    });
+
+    it(`${template.name} stores the derived attributes its characteristics give`, () => {
+      const hp = cocHitPoints(c('CON'), c('SIZ'));
+      const { damageBonus, build } = cocDamageBonusAndBuild(c('STR'), c('SIZ'));
+      expect(data.derivedStats.hp).toMatchObject({ maximum: hp, current: hp, majorWoundThreshold: cocMajorWoundThreshold(hp) });
+      expect(data.derivedStats.magicPoints.maximum).toBe(cocMagicPoints(c('POW')));
+      expect(data.derivedStats.sanity.maximum).toBe(cocMaxSanity(data.skills.cthulhuMythos.currentValue));
+      expect({ damageBonus: data.derivedStats.damageBonus, build: data.derivedStats.build }).toEqual({ damageBonus, build });
+      expect(data.derivedStats.moveRate).toBe(cocMoveRate(c('STR'), c('DEX'), c('SIZ'), Number(data.age) || 30));
+      expect(data.skills.dodge.baseValue).toBe(cocDodgeBase(c('DEX')));
     });
   }
 });
