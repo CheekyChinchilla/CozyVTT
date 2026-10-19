@@ -176,7 +176,17 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
         languageOther: [{ language: 'Latin', ...skill }],
         science: [{ specialization: 'Chemistry', ...skill }],
         customSkills: [{ name: 'Cryptography', ...skill }],
+        // A Fighting or Firearms specialisation carries its name.
+        fighting: { brawl: { baseValue: 25, currentValue: 40, improvementChecked: false }, custom: [{ specialization: 'Sword', ...skill }] },
+        firearms: {
+          handgun: { baseValue: 20, currentValue: 20, improvementChecked: false },
+          rifle: { baseValue: 25, currentValue: 25, improvementChecked: false },
+          shotgun: { baseValue: 25, currentValue: 25, improvementChecked: false },
+          custom: [{ specialization: 'Bow', ...skill }],
+        },
+        artCraft: { baseValue: 5, currentValue: 25, improvementChecked: false, specialization: 'Photography' },
       },
+      contacts: [{ name: 'Professor Armitage', role: 'Librarian', notes: 'Miskatonic University' }],
       combat: {
         weapons: [{
           name: 'New Weapon', skill: '', skillValue: 25, damage: '1d3', range: 'Touch',
@@ -184,7 +194,7 @@ describe('what the Call of Cthulhu 7e editor writes', () => {
         }],
       },
       possessions: [{ name: 'Knife', notes: 'sharp - old' }],
-      wealth: { spendingLevel: '', cash: 0, assets: '' },
+      wealth: { spendingLevel: '', cash: 0, assets: '', notes: 'A trust fund' },
       backstory: {
         description: '', personalDescription: '', ideology: '', significantPeople: '', meaningfulLocations: '',
         treasuredPossessions: '', traits: '', injuriesAndScars: '', phobiasAndManias: '',

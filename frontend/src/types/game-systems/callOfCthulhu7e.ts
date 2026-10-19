@@ -117,6 +117,8 @@ export interface CoC7eFightingSkill {
   baseValue: number;
   currentValue: number;
   improvementChecked: boolean;
+  /** A specialisation's name (Sword, Axe); Brawl has none. */
+  specialization?: string;
 }
 
 /**
@@ -134,6 +136,8 @@ export interface CoC7eFirearmsSkill {
   baseValue: number;
   currentValue: number;
   improvementChecked: boolean;
+  /** A specialisation's name (Bow, Submachine Gun); the printed three have none. */
+  specialization?: string;
 }
 
 /**

@@ -108,12 +108,14 @@ const skillSchema = z.object({
 });
 
 /**
- * Fighting skill
+ * Fighting skill. A specialisation the player adds (Sword, Axe) carries its
+ * name; Brawl has none.
  */
 const fightingSkillSchema = z.object({
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
+  specialization: shortText.optional(),
 });
 
 /**
@@ -125,12 +127,14 @@ const fightingSkillsSchema = z.object({
 });
 
 /**
- * Firearms skill
+ * Firearms skill. A specialisation the player adds (Bow, Submachine Gun)
+ * carries its name; the three printed on the sheet have none.
  */
 const firearmsSkillSchema = z.object({
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
+  specialization: shortText.optional(),
 });
 
 /**
