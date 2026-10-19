@@ -74,6 +74,16 @@ describe('the game system', () => {
     expect(getStarterSheet).toHaveBeenCalledWith('null', 'blank');
     expect(createCharacter.mock.calls[0][0]).toMatchObject({ campaignId: 'camp-flex', gameSystem: undefined });
   });
+
+  // A Flexible campaign takes only Flexible characters, so the system is
+  // held there as a campaign's own system is.
+  it('cannot be changed once a Flexible campaign is chosen', async () => {
+    listCampaigns.mockResolvedValue({ campaigns: [{ id: 'camp-flex', name: 'Freeform', gameSystem: null }] });
+    show();
+    await screen.findByRole('option', { name: /Freeform/ });
+    fireEvent.change(screen.getByLabelText(/^Campaign/), { target: { value: 'camp-flex' } });
+    await waitFor(() => expect(screen.getByLabelText(/^Game System/)).toBeDisabled());
+  });
 });
 
 describe('the note under the form', () => {

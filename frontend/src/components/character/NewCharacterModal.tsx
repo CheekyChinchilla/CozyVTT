@@ -139,12 +139,10 @@ export default function NewCharacterModal({
       return true;
     }
 
-    // If campaign is selected and has a game system, lock it
+    // A chosen campaign decides the system, Flexible for a campaign with none:
+    // the server takes only a character of the campaign's own system.
     if (selectedCampaignId && availableCampaigns.length > 0) {
-      const selectedCampaign = availableCampaigns.find(
-        (c) => c.id === selectedCampaignId
-      );
-      return selectedCampaign?.gameSystem !== null && selectedCampaign?.gameSystem !== undefined;
+      return availableCampaigns.some((c) => c.id === selectedCampaignId);
     }
 
     return false;
