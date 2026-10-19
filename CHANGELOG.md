@@ -70,10 +70,13 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Lists.* `search` on `GET /api/assets`, `GET /api/campaigns/:campaignId/creatures`, `GET /api/campaigns/:campaignId/token-templates` and `GET /api/character-templates` matches `%` and `_` literally; they were wildcards.
   - *Documents.* A 304 from `GET /api/assets/documents/:id` carries the document's `Content-Security-Policy: default-src 'none'; sandbox` and `X-Content-Type-Options: nosniff`, as the 200 does.
   - *Assets.* `GET /api/assets/:id` decides with the same read rule as the file routes, so a member of a campaign that uses an asset may read its details; a campaign asset whose campaign is gone is no longer shown to anyone signed in. `campaign` is `null` for a reader who is not a member of the asset's campaign.
+  - *Assets.* The reply to `PATCH /api/assets/:id/scope` gives the asset's `canChange`, as the asset list does.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
 ### Fixed
+
+- **The Asset Library offers Delete and Move to whoever may use them.** It offered both only to an asset's uploader or a server admin. A campaign's DM, whom the server lets delete and move the assets in their campaign's library, was not offered them, and an uploader who had left the campaign, or no longer had Global Assets, was offered them and then refused. The library now offers them by the server's own rule.
 
 - **A move the Asset Library refuses says why.** The detail panel showed only "Forbidden". It now shows the server's reason, such as "Only the asset owner or campaign DM can move this asset".
 

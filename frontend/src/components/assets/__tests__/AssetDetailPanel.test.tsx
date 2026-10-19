@@ -62,7 +62,7 @@ describe('a move the server refuses', () => {
     patchAssetScope.mockRejectedValue(Object.assign(new Error('Request failed with status code 403'), {
       response: { status: 403, data: { error: 'Forbidden', message: 'Only the asset owner or campaign DM can move this asset' } },
     }));
-    const art = { ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1' } as unknown as Asset;
+    const art = { ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1', canChange: true } as unknown as Asset;
     render(<AssetDetailPanel asset={art} onClose={vi.fn()} onDelete={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Personal' }));
@@ -70,5 +70,23 @@ describe('a move the server refuses', () => {
 
     expect(await screen.findByText('Only the asset owner or campaign DM can move this asset')).toBeInTheDocument();
     expect(screen.queryByText('Forbidden')).not.toBeInTheDocument();
+  });
+});
+
+// Offered by a rule of its own (the uploader or an admin), as the card was.
+describe('Delete and Move in the panel', () => {
+  const campaignArt = (over: Partial<Asset>) =>
+    ({ ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1', ...over }) as unknown as Asset;
+
+  it('are offered where the server will allow them, to the campaign\'s DM say', () => {
+    render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'a-player', canChange: true })} onClose={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
+    expect(screen.getByText('Move to…')).toBeInTheDocument();
+  });
+
+  it('are not offered where the server would refuse them, even to the uploader', () => {
+    render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'u1', canChange: false })} onClose={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
+    expect(screen.queryByText('Move to…')).not.toBeInTheDocument();
   });
 });

@@ -14,7 +14,6 @@ import {
   FileText,
 } from 'lucide-react';
 import { Asset, AssetType, AssetScope } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { assetScopeLabel } from '@/utils/assetUrl';
@@ -32,16 +31,13 @@ interface AssetCardProps {
  * Displays a single asset with thumbnail and actions
  */
 function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
-  const { user } = useAuth();
   const [showActions, setShowActions] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Check if current user can delete this asset
-  // TODO(assets): the server also lets the DM of a campaign asset's campaign
-  // delete it; offer Delete to that DM, as AssetDetailPanel should.
-  const canDelete =
-    user?.id === asset.uploadedById || user?.platformRole === 'ADMIN';
+  // What the asset list says the server will allow: the uploader, the DM of
+  // a campaign asset's campaign, or an admin, by the delete route's own rule.
+  const canDelete = asset.canChange === true;
 
   // Format file size
   const formatFileSize = (bytes: number): string => {

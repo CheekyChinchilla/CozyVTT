@@ -6031,7 +6031,17 @@ paths:
                     type: string
                     example: Asset scope updated successfully
                   asset:
-                    $ref: '#/components/schemas/Asset'
+                    allOf:
+                      - $ref: '#/components/schemas/Asset'
+                      - type: object
+                        required: [canChange]
+                        properties:
+                          canChange:
+                            type: boolean
+                            description: >-
+                              Whether the caller may still delete or move the
+                              asset where it now is, as the list says of each
+                              asset.
         '400':
           description: >-
             "scope must be GLOBAL, USER, or CAMPAIGN", "campaignId must be a

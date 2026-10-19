@@ -14,10 +14,6 @@ import AssetCard from '../AssetCard';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
 
-vi.mock('../../../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1', platformRole: 'USER' } }),
-}));
-
 vi.mock('../../../services/api', () => ({
   api: {
     getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
@@ -79,5 +75,21 @@ describe('AssetCard', () => {
     } finally {
       open.mockRestore();
     }
+  });
+});
+
+// The card offered Delete to the uploader or an admin by a rule of its own,
+// though the server also lets a campaign's DM delete its assets and refuses
+// an uploader who has left the campaign. It now goes by what the asset list
+// says the server will allow (canChange).
+describe('AssetCard Delete', () => {
+  it('is offered where the server will allow it, whoever uploaded the asset', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), uploadedById: 'someone-else', scope: AssetScope.CAMPAIGN, canChange: true }, 'list');
+    expect(screen.getByRole('button', { name: 'Delete Thing' })).toBeInTheDocument();
+  });
+
+  it('is not offered where the server would refuse it, even to the uploader', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), scope: AssetScope.CAMPAIGN, canChange: false }, 'list');
+    expect(screen.queryByRole('button', { name: 'Delete Thing' })).not.toBeInTheDocument();
   });
 });

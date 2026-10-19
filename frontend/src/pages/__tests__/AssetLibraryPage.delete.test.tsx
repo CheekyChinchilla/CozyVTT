@@ -37,6 +37,8 @@ const token: Asset = {
   description: null,
   tags: [],
   createdAt: '2026-01-01T00:00:00.000Z',
+  // As the asset list says of the uploader's own personal asset.
+  canChange: true,
 };
 
 vi.mock('@/hooks/queries', () => ({

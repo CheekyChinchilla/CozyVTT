@@ -278,3 +278,25 @@ describe('the asset list', () => {
     expect((await dm.agent.put(`/api/assets/documents/${handout}/content`).send({ content: '# Revised' })).status).toBe(200);
   });
 });
+
+// The Asset Library offers Delete and Move from canChange, which the list
+// sends; the move's reply carries it too, so the panel stays right afterwards.
+describe('a move\'s reply', () => {
+  it('says whether the mover may still change the asset where it now is', async () => {
+    const dm = await signedIn('Move Reply DM');
+    const table = await createTestCampaign(dm.id);
+    campaignIds.push(table.id);
+    await prisma.campaignMembership.create({ data: { userId: dm.id, campaignId: table.id, role: 'DM', characterIds: [] } });
+    const art = await prisma.asset.create({
+      data: {
+        type: 'TOKEN', scope: 'USER', uploadedById: dm.id, filename: 'art.png', originalName: 'art.png', mimeType: 'image/png',
+        fileSize: 1, filePath: path.join(UPLOAD_DIR, 'art.png'), name: 'Art', tags: [],
+      },
+    });
+
+    const res = await dm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.asset).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id, canChange: true });
+  });
+});

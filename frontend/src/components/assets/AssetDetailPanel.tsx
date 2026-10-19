@@ -75,21 +75,18 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   }, [asset.id]);
 
   // ---------- Permission helpers ----------
-  const isOwner = user?.id === currentAsset.uploadedById;
   const isAdmin = user?.platformRole === PlatformRole.ADMIN;
   const canUploadGlobal = isAdmin || !!user?.globalAssetManager;
 
-  // Check permissions
-  // TODO(assets): the server also lets the DM of a campaign asset's campaign
-  // delete and move it, but this and canMove below offer Delete and Move only
-  // to the uploader or an admin. Offer both to that DM too.
-  const canDelete = isOwner || isAdmin;
+  // What the server will allow (canChange, from the asset list and the move's
+  // reply): the uploader, the DM of a campaign asset's campaign, or an admin,
+  // by the rule the delete and move routes share.
+  const canDelete = currentAsset.canChange === true;
 
   // Scope is fixed for avatars
   const isScopeFixed = currentAsset.type === AssetType.AVATAR;
 
-  // User can move if they own the asset or are admin
-  const canMove = !isScopeFixed && (isOwner || isAdmin);
+  const canMove = !isScopeFixed && currentAsset.canChange === true;
 
   // Campaigns the current user runs. Owning a campaign is a different thing —
   // after a handover the owner is an ordinary player there, and it is the new

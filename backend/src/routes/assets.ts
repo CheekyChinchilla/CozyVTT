@@ -1402,7 +1402,10 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
       select: ASSET_PUBLIC_SELECT,
     });
 
-    return res.json({ message: 'Asset scope updated successfully', asset: updated });
+    // As the list says of each asset, so the Asset Library can keep offering
+    // Delete and Move by the server's rule once the asset is somewhere new.
+    const canChange = await mayChangeAsset(updated, userId, isAdmin);
+    return res.json({ message: 'Asset scope updated successfully', asset: { ...updated, canChange } });
   } catch (error) {
     logger.error('Error updating asset scope', { err: error });
     return res.status(500).json({
