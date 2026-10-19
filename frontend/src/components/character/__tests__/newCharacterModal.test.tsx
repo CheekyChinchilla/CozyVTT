@@ -48,6 +48,34 @@ describe('the character name', () => {
   });
 });
 
+describe('the game system', () => {
+  it('goes back to Flexible when a campaign without one is chosen after one with one', async () => {
+    listCampaigns.mockResolvedValue({
+      campaigns: [
+        { id: 'camp-dnd', name: 'Dragons', gameSystem: 'DND_5E' },
+        { id: 'camp-flex', name: 'Freeform', gameSystem: null },
+      ],
+    });
+    show();
+    const campaignBox = screen.getByLabelText(/^Campaign/);
+    await screen.findByRole('option', { name: /Freeform/ });
+    const systemBox = screen.getByLabelText(/^Game System/);
+
+    fireEvent.change(campaignBox, { target: { value: 'camp-dnd' } });
+    await waitFor(() => expect(systemBox).toHaveValue('DND_5E'));
+    fireEvent.click(screen.getByRole('radio', { name: /Level 1 Fighter/ }));
+
+    fireEvent.change(campaignBox, { target: { value: 'camp-flex' } });
+    await waitFor(() => expect(systemBox).toHaveValue(''));
+
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create Character/ }));
+    await waitFor(() => expect(createCharacter).toHaveBeenCalled());
+    expect(getStarterSheet).toHaveBeenCalledWith('null', 'blank');
+    expect(createCharacter.mock.calls[0][0]).toMatchObject({ campaignId: 'camp-flex', gameSystem: undefined });
+  });
+});
+
 describe('the note under the form', () => {
   it('says what happens after Create, which opens no editor', () => {
     show();

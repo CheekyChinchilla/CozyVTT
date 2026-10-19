@@ -107,17 +107,19 @@ export default function NewCharacterModal({
     }
   }, [isOpen, campaign]);
 
-  // Update game system when campaign selection changes
-  useEffect(() => {
-    if (selectedCampaignId && availableCampaigns.length > 0) {
-      const selectedCampaign = availableCampaigns.find(
-        (c) => c.id === selectedCampaignId
-      );
-      if (selectedCampaign?.gameSystem) {
-        setGameSystem(selectedCampaign.gameSystem);
-      }
+  // The game system follows the chosen campaign's, Flexible for a campaign
+  // with none: a D&D campaign and then a Flexible one left D&D chosen, with
+  // nothing locking it. A new system starts from its blank sheet.
+  const chooseCampaign = (campaignId: string | null) => {
+    setSelectedCampaignId(campaignId);
+    const chosen = availableCampaigns.find((c) => c.id === campaignId);
+    if (!chosen) return;
+    const system = chosen.gameSystem ?? null;
+    if (system !== gameSystem) {
+      setGameSystem(system);
+      setSelectedTemplate('blank');
     }
-  }, [selectedCampaignId, availableCampaigns]);
+  };
 
   const fetchUserCampaigns = async () => {
     setLoadingCampaigns(true);
@@ -323,9 +325,7 @@ export default function NewCharacterModal({
                     <select
                       id="campaign"
                       value={selectedCampaignId || ''}
-                      onChange={(e) =>
-                        setSelectedCampaignId(e.target.value || null)
-                      }
+                      onChange={(e) => chooseCampaign(e.target.value || null)}
                       disabled={loading || loadingCampaigns}
                       className="input-cozy w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >

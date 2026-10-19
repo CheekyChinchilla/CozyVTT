@@ -125,6 +125,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
 
+- **Choosing a Flexible campaign in Create New Character makes the character Flexible.** After picking a campaign with a game system, picking one without kept the first campaign's system, so the character was made for a system its campaign does not play. The game system now follows each campaign chosen, and goes back to the blank sheet when it changes.
+
 - **Create New Character says what happens after Create.** Its note promised to take you to the character editor, which creating a character has never done. It now says the character appears in your list and that **Edit Character** on its card's menu fills in the rest of the sheet.
 
 - **Create Character publishes no template after a failed Create & Publish.** When **Create & Publish as Template** failed to make the character, the dialog remembered the choice, and a plain **Create Character** after it published a template as well. Each button now does only what it says.
