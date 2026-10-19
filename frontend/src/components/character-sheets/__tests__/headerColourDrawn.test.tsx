@@ -10,13 +10,15 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { DnD5eCharacterView } from '../dnd5e/DnD5eCharacterView';
 import { DnD5eCharacterEditor } from '../dnd5e/DnD5eCharacterEditor';
 import { Pathfinder2eCharacterEditor } from '../pathfinder2e/Pathfinder2eCharacterEditor';
 import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
 import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
 import { COLOR_PRESETS as COC_PRESETS } from '../call-of-cthulhu-7e/colorPresets';
+import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulhu7eCharacterView';
+import { COC_BLANK_SHEET, cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
@@ -47,5 +49,31 @@ describe('the Call of Cthulhu header colours', () => {
   it.each(COC_PRESETS.map((preset) => [preset.name, preset] as const))('%s has whole class names', (_name, preset) => {
     expect(preset.via).toMatch(/^via-[a-z]+-\d{2,3}$/);
     expect(preset.border).toMatch(/^border-[a-z]+-\d{2,3}$/);
+  });
+});
+
+describe('the Call of Cthulhu sheet', () => {
+  const ticked = (themeColor: string) => {
+    const skills = COC_BLANK_SHEET.skills as Record<string, Record<string, unknown>>;
+    render(<CallOfCthulhu7eCharacterView character={cocCharacter({ themeColor, skills: { ...skills, accounting: { ...skills.accounting, improvementChecked: true } } })} />);
+    screen.getAllByRole('button', { name: /^Skills$/ }).forEach((tab) => fireEvent.click(tab));
+    return screen.getAllByRole('img', { name: 'Marked for improvement' })[0];
+  };
+
+  it('underlines the open tab in a custom colour', () => {
+    render(<CallOfCthulhu7eCharacterView character={cocCharacter({ themeColor: '#123456' })} />);
+    expect(screen.getByRole('button', { name: /^Overview$/ })).toHaveStyle({ borderBottomColor: '#123456' });
+  });
+
+  it('ticks a skill in a custom colour, with a tick that reads on it', () => {
+    const mark = ticked('#ffeecc');
+    expect(mark).toHaveStyle({ backgroundColor: '#ffeecc' });
+    expect(mark.querySelector('svg')).toHaveClass('text-black');
+  });
+
+  it('ticks a skill in a preset colour with a white tick on a dark one', () => {
+    const mark = ticked('Dark Forest');
+    expect(mark).toHaveStyle({ backgroundColor: '#14532d' });
+    expect(mark.querySelector('svg')).toHaveClass('text-white');
   });
 });

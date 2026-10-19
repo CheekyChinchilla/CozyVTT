@@ -1003,7 +1003,7 @@ value={formData.derivedStats?.luck?.score}
     <div>
       <SkillsList
         skills={formData.skills || {}}
-        themeColor={themeColor}
+        tickColour={isCustomColor ? customColorHex : themeColor.hex}
         editable
         onChange={(skillName, field, value) => {
           setFormData({

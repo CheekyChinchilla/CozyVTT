@@ -376,7 +376,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
   // Render Skills tab
   const renderSkillsTab = () => (
     <div>
-      {data.skills && <SkillsList skills={data.skills} themeColor={themeColor} onRoll={onRoll} />}
+      {data.skills && <SkillsList skills={data.skills} tickColour={isCustomColor ? customColorHex : themeColor.hex} onRoll={onRoll} />}
     </div>
   );
 

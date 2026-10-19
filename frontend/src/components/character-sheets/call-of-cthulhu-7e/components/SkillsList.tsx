@@ -19,7 +19,7 @@ import {
   type CoCSpecialisation,
 } from '../specialisations';
 import { readCoC7eSkillList, type CoC7eSkillList } from '../skillEdits';
-import type { COLOR_PRESETS } from '../colorPresets';
+import { shouldUseWhiteText } from '@/utils/themeColor';
 import type {
   CoC7eSkill,
   CoC7eSkills,
@@ -41,14 +41,14 @@ interface Skill extends CoC7eSkill {
   name?: string;
 }
 
-type ThemeColor = (typeof COLOR_PRESETS)[number];
 
 interface SkillsListProps {
   /** Skills object from character data */
   skills: Partial<CoC7eSkills>;
 
   /** Theme color for styling checkboxes */
-  themeColor?: ThemeColor;
+  /** The header colour in use (a preset's or a custom one), which a ticked box is filled with. */
+  tickColour?: string;
 
   /** Edit mode */
   editable?: boolean;
@@ -156,7 +156,8 @@ const SkillRow: React.FC<{
   displayName: string;
   skill: Skill;
   editable: boolean;
-  themeColor?: ThemeColor;
+  /** The header colour in use (a preset's or a custom one), which a ticked box is filled with. */
+  tickColour?: string;
   onChange?: (field: keyof Skill, value: unknown) => void;
   onRoll?: (expression: string, purpose: string) => void;
   /** Edit mode: the row's name is typed, after `prefix` ("Fighting"). */
@@ -167,17 +168,20 @@ const SkillRow: React.FC<{
   onRemove?: () => void;
   /** What the row's controls are named after, where it differs from its name. */
   controlName?: string;
-}> = ({ name, displayName, skill, editable, themeColor, onChange, onRoll, nameBox, detailBox, onRemove, controlName = displayName }) => {
+}> = ({ name, displayName, skill, editable, tickColour, onChange, onRoll, nameBox, detailBox, onRemove, controlName = displayName }) => {
   if (!skill) return null;
 
   // Determine checkbox styling based on theme color
   const getCheckboxClasses = () => {
     // Ticked in a header colour: the inline style below fills it.
-    if (skill.improvementChecked && themeColor) return 'shadow-xs';
+    if (skill.improvementChecked && tickColour) return 'shadow-xs';
     return skill.improvementChecked
       ? 'bg-accent border-accent shadow-xs'
       : 'border-ink/30 bg-paper shadow-inner';
   };
+
+  // The tick reads on its fill: black on a pale header colour.
+  const tickClass = tickColour && !shouldUseWhiteText(tickColour) ? 'text-black' : 'text-white';
 
   const isClickable = !!onRoll && !editable;
   const purpose = `${displayName} — target: ${skill.currentValue}%`;
@@ -199,25 +203,25 @@ const SkillRow: React.FC<{
           onClick={() => onChange?.('improvementChecked', !skill.improvementChecked)}
           className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-brand ${getCheckboxClasses()}`}
           style={
-            skill.improvementChecked && themeColor
-              ? { backgroundColor: themeColor.hex, borderColor: themeColor.hex }
+            skill.improvementChecked && tickColour
+              ? { backgroundColor: tickColour, borderColor: tickColour }
               : undefined
           }
         >
-          {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-3" />}
+          {skill.improvementChecked && <Check className={`w-3.5 h-3.5 font-bold stroke-3 ${tickClass}`} />}
         </button>
       ) : (
         <div
           className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-default ${getCheckboxClasses()}`}
           style={
-            skill.improvementChecked && themeColor
-              ? { backgroundColor: themeColor.hex, borderColor: themeColor.hex }
+            skill.improvementChecked && tickColour
+              ? { backgroundColor: tickColour, borderColor: tickColour }
               : undefined
           }
           role="img"
           aria-label={skill.improvementChecked ? 'Marked for improvement' : 'Not marked for improvement'}
         >
-          {skill.improvementChecked && <Check className="w-3.5 h-3.5 text-white font-bold stroke-3" />}
+          {skill.improvementChecked && <Check className={`w-3.5 h-3.5 font-bold stroke-3 ${tickClass}`} />}
         </div>
       )}
 
@@ -360,7 +364,7 @@ const freshEntry = (base: number) => ({ baseValue: base, currentValue: base, imp
 /**
  * SkillsList - Display all skills organized by category
  */
-export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, editable = false, onChange, onRoll, onListChange }) => {
+export const SkillsList: React.FC<SkillsListProps> = ({ skills, tickColour, editable = false, onChange, onRoll, onListChange }) => {
   const handleSkillChange = (skillName: string, field: keyof Skill, value: unknown) => {
     onChange?.(skillName, field, value);
   };
@@ -385,7 +389,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
         controlName={names.indexOf(names[index]) === names.lastIndexOf(names[index]) ? names[index] : `${names[index]}, row ${index + 1}`}
         skill={entry as unknown as Skill}
         editable={editable}
-        themeColor={themeColor}
+        tickColour={tickColour}
         onRoll={onRoll}
         onChange={(field, value) => handleSkillChange(`${list}.${index}`, field, value)}
         nameBox={{
@@ -474,7 +478,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                         displayName="Fighting (Brawl)"
                         skill={fighting.brawl}
                         editable={editable}
-                        themeColor={themeColor}
+                        tickColour={tickColour}
                         onRoll={onRoll}
                         onChange={(field, value) => handleSkillChange('fighting.brawl', field, value)}
                       />
@@ -507,7 +511,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                           displayName={`Firearms (${gun.charAt(0).toUpperCase()}${gun.slice(1)})`}
                           skill={firearms[gun]}
                           editable={editable}
-                          themeColor={themeColor}
+                          tickColour={tickColour}
                           onRoll={onRoll}
                           onChange={(field, value) => handleSkillChange(`firearms.${gun}`, field, value)}
                         />
@@ -570,7 +574,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
                     displayName={SKILL_NAMES[skillName] || skillName}
                     skill={skill}
                     editable={editable}
-                    themeColor={themeColor}
+                    tickColour={tickColour}
                     onRoll={onRoll}
                     onChange={(field, value) => handleSkillChange(skillName, field, value)}
                     detailBox={detailBoxFor(skillName, skill as Skill)}
