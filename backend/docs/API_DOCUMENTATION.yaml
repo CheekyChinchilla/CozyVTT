@@ -3614,8 +3614,9 @@ paths:
         sharing cannot be used to grant a table access to a stranger's private
         file from nothing but its id. A document the caller can read but did
         not upload answers 403: being shared into one campaign does not let a
-        member who runs another pass it on. Admins may share anything. An
-        asset that is not a document answers 404. Sharing a document that is
+        member who runs another pass it on. The same holds for an admin: an
+        admin can read every file, and may still share only their own or a
+        global one. An asset that is not a document answers 404. Sharing a document that is
         already shared answers 201 with the existing link, unchanged.
       operationId: linkCampaignDocument
       security:

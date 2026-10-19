@@ -18,8 +18,9 @@ import { AssetType, AssetScope } from '@/types';
 // Not under test here, and it needs a QueryClient of its own.
 vi.mock('@/components/assets/AssetUploadModal', () => ({ default: () => null }));
 
+const auth = vi.hoisted(() => ({ platformRole: 'USER' }));
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'dm', platformRole: 'USER', globalAssetManager: false } }),
+  useAuth: () => ({ user: { id: 'dm', platformRole: auth.platformRole, globalAssetManager: false } }),
 }));
 
 vi.mock('@/services/api', () => {
@@ -192,6 +193,27 @@ describe('CampaignDocumentsModal', () => {
       expect(screen.getByText('House Rules')).toBeInTheDocument();
       expect(screen.getByText('System Reference')).toBeInTheDocument();
       expect(screen.queryByText("Someone Else's Handout")).toBeNull();
+    });
+
+    it('offers a DM who is a server admin no one else\'s private document either', async () => {
+      // An admin can read every file, and the server still refuses to let an
+      // admin share someone else's private document into their table.
+      auth.platformRole = 'ADMIN';
+      try {
+        const theirs = { ...mine('d3', 'Someone Else\'s Notes', 'notes.md'), uploadedById: 'other', scope: AssetScope.USER } as Asset;
+        listAssets.mockResolvedValue({
+          assets: [mine('d2', 'House Rules', 'house.md'), theirs],
+          pagination: { page: 1, limit: 100, total: 2 },
+        });
+        render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+        await screen.findByText('Core Rules');
+        fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
+
+        expect(screen.getByText('House Rules')).toBeInTheDocument();
+        expect(screen.queryByText("Someone Else's Notes")).toBeNull();
+      } finally {
+        auth.platformRole = 'USER';
+      }
     });
 
     it('shares and refreshes the list', async () => {

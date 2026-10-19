@@ -93,6 +93,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Character data.* `POST /api/characters/:id/copy` writes the copy's name, ending ` (Copy)`, into the sheet's own name field (`characterName`, or `investigatorName` for Call of Cthulhu) as well as the character's.
   - *Character templates.* `POST /api/character-templates` and `PUT /api/character-templates/:id` store a typed sheet without `playerName`, and a Call of Cthulhu one without its top-level `notes` (Keeper's Notes), whoever sends it; the reply has neither, and `GET /api/character-templates/:id` leaves both out of a template stored with them.
   - *Character data.* A Call of Cthulhu sheet's `derivedStats.hp.maximum` and `derivedStats.hp.majorWoundThreshold` may be 0, which CON plus SIZ under 10 gives; they were refused below 1.
+  - *Documents.* `POST /api/campaigns/:campaignId/documents` from a platform admin answers 403 `Only the person who uploaded a document can share it with a campaign` for a document that is not global and not theirs, as it does for anyone else (it answered 201). The message no longer says `, or an admin,`.
 
 - **The Call of Cthulhu read-only sheet no longer has a palette button.** It changed the header colour only until you left the sheet and saved nothing, which the other sheets never offered. Choose the colour in **Edit**, as on the D&D 5e and Pathfinder 2e sheets; **Edit** now sits in the corner, clear of the PLAYER line it covered.
 
@@ -471,6 +472,8 @@ There is no new setting, no setting is removed, and there is no database change 
 ### Security
 
 - **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the address the app was loaded from. A reverse proxy of your own must pass the browser's host name to CozyVTT (`proxy_set_header Host $host;` in nginx, as the deployment guide shows); otherwise the live table falls back to a slower connection.
+
+- **A server admin who runs a campaign can share only their own documents and global ones with it.** A server admin can open every file on the server, and as a DM could share anyone's private document with their table from the campaign's document list, so its players could read it. An admin is now held to the rule every DM is: a document someone else uploaded is refused with **Only the person who uploaded a document can share it with a campaign**. Documents already shared stay shared; **Stop sharing** removes one.
 
 - **A character saved as a template leaves the player's name and the Keeper's Notes behind.** Every user can read a template, but **Save as Template** kept the sheet's player name and a Call of Cthulhu investigator's Keeper's Notes, so anyone could read notes meant for the Keeper alone. A template is now saved without either, whoever saves it, and one published before is shown without them; a character made from it gets its own player's name, as before.
 

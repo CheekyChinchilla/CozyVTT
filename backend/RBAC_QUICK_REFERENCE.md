@@ -417,7 +417,9 @@ when a DM has linked the document to a campaign the caller belongs to
 the DM first, so a link can only ever grant what the DM could already read,
 and then requires the document to be the DM's own or `GLOBAL`, so a document
 shared into one campaign cannot be passed on by a member who runs another. A
-DM who is a platform admin passes both checks, so may share any document.
+DM who is a platform admin passes the first check for every document and is
+held to the second like anyone else, so may share only their own documents and
+global ones.
 
 Three things this deliberately does **not** do:
 
@@ -488,8 +490,8 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   would land in the uploader's personal library, so a DM moving a player's
   upload there would take it out of the campaign and out of their own reach.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
-  and sharing is limited to the DM's own documents and global ones, unless the
-  DM is a platform admin, who may share any document. A DM may read a document
+  and sharing is limited to the DM's own documents and global ones, for a DM
+  who is a platform admin too. A DM may read a document
   shared with a table they play at; they may not re-share it. Unlinking
   revokes read for the whole campaign at once.
 - **Refusals are `404`, not `403`**, on the serving and edit routes, and on

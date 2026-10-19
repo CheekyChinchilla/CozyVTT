@@ -182,6 +182,26 @@ describe('campaign documents', () => {
       }
     });
 
+    it('an admin who runs a campaign cannot share someone else\'s private document into it', async () => {
+      // An admin can read every file, so reading proves nothing here. Linking
+      // takes the linker's own document or a global one, admin or not: the
+      // uploader chose who sees it, and an admin's table is not on that list.
+      const admin = await createTestUser({ email: `campdocs-admin-${Date.now()}@test.cozyvtt.local`, role: 'ADMIN' });
+      const table = (await createTestCampaign(admin.id, { name: `Docs Admin ${Date.now()}` })).id;
+      await prisma.campaignMembership.create({ data: { userId: admin.id, campaignId: table, role: 'DM', characterIds: [] } });
+      try {
+        const adminAgent = await login(admin.email);
+        const res = await link(adminAgent, table, pdfId);
+        expect(res.status).toBe(403);
+        expect(res.body.message).toMatch(/uploaded/i);
+        expect(res.body.message).not.toMatch(/admin/i);
+        expect(await prisma.campaignDocument.count({ where: { campaignId: table } })).toBe(0);
+      } finally {
+        await cleanupCampaigns([table]);
+        await cleanupUsers([admin.id]);
+      }
+    });
+
     it('a DM can share a global document they did not upload', async () => {
       const global = await prisma.asset.create({
         data: {
