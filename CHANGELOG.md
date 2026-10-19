@@ -89,6 +89,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A D&D 5e sheet's Total Weight counts items with no weight or quantity.** One item with either left out made **Total Weight** read 0.0 for the whole inventory, and the rows showed a bare "lb", or "ft" for an attack with no range. An item with no weight now counts as weighing nothing and one with no quantity as one item, and a number that was never filled in shows as a dash.
+
 - **The blank D&D 5e character is a Fighter by the rules.** It started with a d8 hit die, 8 hit points and no saving throw proficiencies. It now starts with a d10 hit die, 10 hit points and proficiency in Strength and Constitution saves, as the rules give a 1st level Fighter with Constitution 10. Characters already made are not changed.
 
 - **Naming a D&D 5e spellcasting ability raises the spell save DC and spell attack.** On a sheet saved with **Spellcasting Ability** empty, typing it in afterwards left the DC at 8 plus proficiency and the attack at proficiency, with minus the ability modifier recorded as **Other bonus**. The ability now counts. A sheet already saved this way shows that negative **Other bonus** on its Spells tab; set it back to 0.

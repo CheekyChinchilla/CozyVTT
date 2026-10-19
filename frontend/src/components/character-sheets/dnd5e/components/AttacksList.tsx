@@ -114,7 +114,7 @@ const AttackRow: React.FC<{
         <div>
           <span className="text-xs text-stone-500">Range</span>
           <div className="font-semibold text-stone-700">
-            {attack.range} ft
+            {attack.range != null ? `${attack.range} ft` : '—'}
           </div>
         </div>
       </div>
