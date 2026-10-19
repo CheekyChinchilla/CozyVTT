@@ -66,7 +66,7 @@ describe('the app page policy', () => {
     // The socket on the page's own host, named outright: a bare ws: or wss:
     // allowed a connection to any host, and 'self' alone does not match ws:
     // and wss: in every supported browser.
-    expect(directive('connect-src').split(/\s+/)).toEqual(["'self'", 'ws://$host:*', 'wss://$host:*']);
+    expect(directive('connect-src').split(/\s+/)).toEqual(["'self'", '$csp_socket_sources']);
     expect(directive('frame-src')).toContain("'self'");
     expect(directive('media-src')).toContain("'self'");
   });
@@ -129,5 +129,23 @@ describe('the site config', () => {
 
   it('does not name its nginx version', () => {
     expect(setting('server_tokens')).toBe('off');
+  });
+});
+
+// The host comes from the request's Host header; only a plain host name or a
+// bracketed IPv6 address is written into the policy, so a Host such as
+// "*" or "a;sandbox" cannot widen it or add a directive.
+describe('the live connection in the policy', () => {
+  it('names the socket only for a well-formed host', () => {
+    const map = /map \$host \$csp_socket_sources \{([^}]*)\}/.exec(siteConfig)?.[1] ?? '';
+    expect(map).toMatch(/default\s+"";/);
+    const pattern = /~(\S+)\s+"ws:\/\/\$host:\* wss:\/\/\$host:\*";/.exec(map)?.[1];
+    expect(pattern).toBeDefined();
+    const accepts = (host: string) => new RegExp(pattern!).test(host);
+    expect(accepts('table.example')).toBe(true);
+    expect(accepts('[::1]')).toBe(true);
+    expect(accepts('*')).toBe(false);
+    expect(accepts('a;sandbox')).toBe(false);
+    expect(accepts("evil.example'*")).toBe(false);
   });
 });

@@ -851,6 +851,13 @@ pm2 startup  # Follow the printed instructions to enable autostart
 Create `/etc/nginx/sites-available/cozyvtt`:
 
 ```nginx
+# The live table's address for the page's security policy below: this
+# server's own name, written only when the browser sent a well-formed one.
+map $host $csp_socket_sources {
+    ~^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)$  "ws://$host:* wss://$host:*";
+    default                            "";
+}
+
 server {
     listen 80;
     server_name your-domain.com;
@@ -984,7 +991,7 @@ server {
         # because a location that sets any header of its own loses the ones
         # set in the server block above.
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://$host:* wss://$host:*; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' $csp_socket_sources; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;

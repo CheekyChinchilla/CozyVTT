@@ -23,6 +23,10 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The app needs Firefox 128 or newer.** Chrome and Edge 111 and Safari 16.4 are still enough.
 
+#### What to do afterwards, if it applies to you
+
+- **If you serve CozyVTT with your own Nginx** following [Serve with Nginx](docs/DEPLOYMENT.md#5-serve-with-nginx), you can narrow its security policy as the bundled one now is: copy the `map $host $csp_socket_sources` block from the top of the example into the top of your site file, and in your `Content-Security-Policy` line change `connect-src 'self' ws: wss:` to `connect-src 'self' $csp_socket_sources`. Then `sudo nginx -t` and `sudo systemctl reload nginx`. Your current line keeps working if you leave it.
+
 ### Added
 
 - **See and clear an account's sign-in lock from the Admin Panel.** Ten wrong passwords in an hour lock an account from every address, and until now an administrator could open it again only by giving it a new password. In **Admin → Users** a locked account now shows **Locked until** and the time the lock ends by itself, and **Clear lock** on its row lets it sign in at once with its usual password, after asking. Wrong two-factor codes for the account (five in fifteen minutes) are cleared with it. Each clear is a line in **Admin → Activity**. See [Logging In](docs/USER_GUIDE.md#logging-in) in the user guide.
@@ -491,7 +495,7 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Security
 
-- **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the address the app was loaded from. A reverse proxy of your own must pass the browser's host name to CozyVTT (`proxy_set_header Host $host;` in nginx, as the deployment guide shows); otherwise the live table falls back to a slower connection.
+- **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the host name the app was loaded from, on any port. A reverse proxy of your own should pass the browser's host name on to CozyVTT (`proxy_set_header Host $host;` in Nginx, as the deployment guide shows); where it does not, the live table still works over a slower connection.
 
 - **A server admin who runs a campaign can share only their own documents and global ones with it.** A server admin can open every file on the server, and as a DM could share anyone's private document with their table from the campaign's document list, so its players could read it. An admin is now held to the rule every DM is: a document someone else uploaded is refused with **Only the person who uploaded a document can share it with a campaign**. Documents already shared stay shared; **Stop sharing** removes one.
 
