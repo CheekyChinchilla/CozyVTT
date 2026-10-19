@@ -54,9 +54,12 @@ vi.mock('@/services/api', () => ({ api, default: api }));
 const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
 });
 
 it('labels and opens a PDF stored from a file named .txt as a PDF', async () => {
+  // A browser that shows a PDF in the reader's frame.
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0');
   globalThis.fetch = vi.fn(async () => new Response('%PDF-1.7 binary')) as typeof fetch;
   render(
     <QueryClientProvider client={new QueryClient()}>

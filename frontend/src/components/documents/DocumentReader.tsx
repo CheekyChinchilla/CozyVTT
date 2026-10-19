@@ -44,6 +44,20 @@ export function documentFormat(filename: string): DocumentFormat {
   return 'text';
 }
 
+/**
+ * Whether this browser shows a PDF inside the reader's sandboxed frame.
+ *
+ * Only Firefox on a computer does: its viewer runs in a frame sandboxed
+ * without allow-same-origin. Chrome and Edge block their viewer there and
+ * show a blocked page, Safari shows a blank frame, and phones do not show a
+ * PDF inside a page at all. There is nothing to test for, since the frame
+ * reports no failure, so this goes by the browser's name. Showing PDFs inside
+ * CozyVTT in every browser is planned (docs/FUTURE_FEATURES.md).
+ */
+export function pdfShowsInFrame(userAgent: string): boolean {
+  return /\bFirefox\//.test(userAgent) && !/\b(Mobile|Android|Tablet)\b/.test(userAgent);
+}
+
 /** What each format is called wherever a document is listed. */
 export const FORMAT_LABEL: Record<DocumentFormat, string> = {
   pdf: 'PDF',
@@ -138,6 +152,7 @@ export default function DocumentReader({
   }, [isOpen, documentId, format, url]);
 
   const editable = canEdit && format !== 'pdf';
+  const openInNewTab = () => window.open(url, '_blank', 'noopener,noreferrer');
 
   const startEditing = () => {
     setDraft(text ?? '');
@@ -221,7 +236,7 @@ export default function DocumentReader({
             <Button
               type="button"
               variant="secondary"
-              onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+              onClick={openInNewTab}
               className="flex items-center gap-2"
             >
               <ExternalLink className="w-4 h-4" />
@@ -252,6 +267,19 @@ export default function DocumentReader({
               disabled={saving}
             />
           </>
+        ) : format === 'pdf' && !pdfShowsInFrame(navigator.userAgent) ? (
+          /* Where the sandboxed frame shows nothing useful (pdfShowsInFrame),
+             the PDF is offered as a page of its own, which every browser
+             shows. No frame is drawn, so Chrome's blocked page and Safari's
+             blank one never appear. */
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 px-6 text-center rounded-lg border border-moss-green/20 bg-parchment/60">
+            <FileText className="w-10 h-10 text-ink-secondary" aria-hidden="true" />
+            <p className="text-sm text-ink">This browser does not show a PDF inside CozyVTT.</p>
+            <Button type="button" onClick={openInNewTab} className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4" aria-hidden="true" />
+              Open this PDF in a new tab
+            </Button>
+          </div>
         ) : format === 'pdf' ? (
           /* The browser's own PDF viewer, in a sandboxed frame.
 
@@ -264,32 +292,21 @@ export default function DocumentReader({
              not one; that was checked, not assumed.
 
              allow-scripts is needed because the viewers themselves are script.
-             allow-same-origin is deliberately absent.
-
-             TODO(safari): Safari shows a blank frame here. The suspected
-             cause is the double sandbox, this attribute plus the sandbox
-             directive in the response's Content-Security-Policy; Safari
-             18.4's notes say that combination was fixed for a main frame
-             only. Confirm it from the frame request's status before
-             relaxing either one. The link below is the workaround. */
+             allow-same-origin is deliberately absent. Only Firefox's viewer
+             works under it; the others are offered the page above. */
           <>
-            {/* Some browsers show nothing at all for a PDF inside a page, and
-                the frame is white, so there is no way to tell that from a
-                slow load. Safari is the one reported. Opening it as a page of
-                its own always works, so say so where it will be read. */}
+            {/* A frame that fails stays white, which cannot be told from a
+                slow load, so the way out is offered here too. */}
             <p className="mb-2 text-xs text-ink-secondary">
               Not showing?{' '}
               <button
                 type="button"
-                onClick={() => window.open(url, '_blank', 'noopener,noreferrer')}
+                onClick={openInNewTab}
                 className="underline underline-offset-2 hover:text-brand-ink"
               >
                 Open this PDF in a new tab
               </button>
             </p>
-            {/* TODO(ui): Chrome's PDF viewer does not run in a frame sandboxed without
-                allow-same-origin, so Chromium shows its blocked page here; opening the
-                file directly works. Show PDFs a way Chrome can display. */}
             <iframe
               src={url}
               title={name}

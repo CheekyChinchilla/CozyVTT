@@ -14,7 +14,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
-import DocumentReader, { documentFormat } from '../DocumentReader';
+import DocumentReader, { documentFormat, pdfShowsInFrame } from '../DocumentReader';
 
 vi.mock('@/services/api', () => {
   const client = {
@@ -35,12 +35,53 @@ function mockFetch(body: string, status = 200) {
   ) as typeof fetch;
 }
 
+const FIREFOX = 'Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0';
+const CHROME = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
+const SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+const FIREFOX_ANDROID = 'Mozilla/5.0 (Android 14; Mobile; rv:128.0) Gecko/128.0 Firefox/128.0';
+
+/** Run as this browser: which way a PDF is shown depends on it. */
+function browserIs(userAgent: string) {
+  vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  browserIs(FIREFOX);
 });
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  vi.restoreAllMocks();
+});
+
+describe('pdfShowsInFrame', () => {
+  // Firefox's own viewer runs in the reader's sandboxed frame. Chrome's and
+  // Edge's are blocked there, Safari's shows a blank frame, and phones do not
+  // show a PDF inside a page at all.
+  it('is true for Firefox on a computer only', () => {
+    expect(pdfShowsInFrame(FIREFOX)).toBe(true);
+    expect(pdfShowsInFrame(CHROME)).toBe(false);
+    expect(pdfShowsInFrame(SAFARI)).toBe(false);
+    expect(pdfShowsInFrame(FIREFOX_ANDROID)).toBe(false);
+  });
+});
+
+describe('a PDF in a browser that will not show it in the frame', () => {
+  it.each([['Chrome', CHROME], ['Safari', SAFARI], ['Firefox on Android', FIREFOX_ANDROID]])(
+    'is offered as a button to open it in a new tab, in %s',
+    (_name, userAgent) => {
+      browserIs(userAgent);
+      const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+      render(<DocumentReader isOpen onClose={vi.fn()} documentId="doc-1" name="Rules" filename="rules.pdf" />);
+
+      // No frame: Chrome would show its blocked page in it, Safari nothing.
+      expect(document.querySelector('iframe')).toBeNull();
+      expect(screen.getByText('This browser does not show a PDF inside CozyVTT.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Open this PDF in a new tab' }));
+      expect(open).toHaveBeenCalledWith('/api/assets/documents/doc-1', '_blank', 'noopener,noreferrer');
+    },
+  );
 });
 
 describe('documentFormat', () => {

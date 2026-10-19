@@ -74,6 +74,8 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` answers 403 `Only the asset's uploader can move it to their personal library` to anyone but the uploader or an admin.
   - *Documents.* `GET /api/campaigns/:campaignId/documents` gives each document's stored `filename`, whose extension decides what it is served as.
 
+- **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader: Chrome and Edge showed a page saying the content was blocked, and Safari a blank space. The reader now says so in place of the frame, with **Open this PDF in a new tab**. Firefox on a computer still shows the PDF inside the reader. Showing PDFs inside CozyVTT in every browser is planned.
+
 - **Only an asset's uploader can move it to their Personal library.** A campaign's DM could move a player's upload in the campaign's library to **Personal**, which put it in the player's own library, out of the campaign and out of the DM's reach. The DM can still delete such an asset and make the other moves they could. A server admin can still move any asset.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
