@@ -1119,7 +1119,7 @@ CAMPAIGN_ARCHIVE_RATE_LIMIT=20
 
 Then apply it with `docker compose up -d`. Leave it out and the default of 20 applies. A value that is not a whole number above zero is ignored, with a warning in the backend log.
 
-Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT`.
+Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT` in the same way. A value that is not a whole number above zero is ignored there too, with a warning in the backend log.
 
 ### Other settings
 

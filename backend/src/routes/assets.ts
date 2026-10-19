@@ -5,6 +5,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
+import { positiveIntegerFromEnv } from '../config/env';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import {
@@ -60,9 +61,9 @@ const router = Router();
 // this ceiling instead of keeping a second one that could drift.
 export const uploadLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute
-  // TODO(assets): a value that is not a number gives NaN and turns this limit
-  // off; read it with positiveIntegerFromEnv as app.ts reads the general limit.
-  max: parseInt(process.env.ASSET_UPLOAD_RATE_LIMIT || '30'),
+  // A value that is not a whole number above zero is ignored with a warning,
+  // so a mistyped setting cannot turn the limit off.
+  max: positiveIntegerFromEnv('ASSET_UPLOAD_RATE_LIMIT', 30),
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {

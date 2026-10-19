@@ -72,6 +72,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A mistyped `ASSET_UPLOAD_RATE_LIMIT` no longer turns the upload limit off.** A value that was not a number, such as `30/min`, let every upload through. Such a value is now ignored, with a warning in the backend log, and the default of 30 uploads a minute per user applies, as for the other limits.
+
 - **A campaign archive is uploaded once when you import it.** The import window sent the whole archive (up to 500 MB) to the server to show what it holds, then sent it again to import it. It now reads that from the archive in your browser, and asks the server only about an archive it cannot read itself, so the server can say what is wrong with it.
 
 - **A map you switch to cannot be deleted at the same moment.** Deleting a map while switching to it, from two tabs say, could delete it anyway and leave the campaign with no map on screen; switching to a map being deleted failed with a server error. The delete is now refused for the map that became current, and the switch says the map is gone.
