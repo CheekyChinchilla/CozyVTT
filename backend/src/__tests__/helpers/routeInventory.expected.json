@@ -483,6 +483,26 @@
       ]
     },
     {
+      "method": "GET",
+      "path": "/api/campaigns/:campaignId/invitations",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/campaigns/:campaignId/invitations/:invitationId",
+      "handlers": [
+        "requireAuth",
+        "loadCampaignMembership",
+        "requireDM",
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "DELETE",
       "path": "/api/campaigns/:campaignId/members/:userId",
       "handlers": [
@@ -666,6 +686,7 @@
         "requireAuth",
         "loadCampaignMembership",
         "requireDM",
+        "downloadOnly",
         "oneCampaignArchiveAtATime",
         "<anonymous>",
         "<anonymous>"
@@ -1059,6 +1080,8 @@
         "requireAuth",
         "loadCampaignMembership",
         "requireDM",
+        "downloadOnly",
+        "oneCampaignArchiveAtATime",
         "<anonymous>"
       ]
     },

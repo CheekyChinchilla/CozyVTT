@@ -116,9 +116,11 @@ src/
 │   ├── invitationEmailLimiter.ts  How many invitation emails a DM may have the instance send
 │   ├── leftNotesDownloadLimiter.ts  How often a user may download all the notes of a campaign they have left
 │   ├── campaignArchiveLimits.ts  Per-user hourly limits on previewing, importing
-│   │                  and exporting campaign archives, one archive at a time
-│   │                  (the other HTTP limiters are declared beside their routes,
-│   │                  and the general /api limiter in app.ts)
+│   │                  and exporting campaign archives, one archive at a time, which the
+│   │                  Universal VTT map export shares (the other HTTP limiters are
+│   │                  declared beside their routes, and the general /api limiter in app.ts)
+│   ├── downloadOnly.ts    Refuses an export the browser is loading as part of a page
+│   │                  (Sec-Fetch-Dest), so a page cannot have the server build archives
 │   ├── fileValidation.ts  Content check: an upload must be a type its asset kind allows
 │   └── upload.ts      Multer configuration
 ├── routes/            HTTP route handlers
