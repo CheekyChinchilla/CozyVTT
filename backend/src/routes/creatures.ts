@@ -474,22 +474,18 @@ router.post('/:creatureId/favorite', campaignDM, async (req: AuthenticatedReques
       },
     });
 
+    // Each write leaves the state it means whatever another click did between
+    // the read and here: a second remove finds nothing, a second add finds
+    // the favourite already there. Both answered 500.
     if (existing) {
-      // Unfavorite
-      await prisma.creatureFavorite.delete({ where: { id: existing.id } });
+      await prisma.creatureFavorite.deleteMany({ where: { campaignId, userId, creatureId } });
       return res.json({ favorited: false });
-    } else {
-      // Favorite
-      await prisma.creatureFavorite.create({
-        data: {
-          id: randomUUID(),
-          campaignId,
-          userId,
-          creatureId,
-        },
-      });
-      return res.json({ favorited: true });
     }
+    await prisma.creatureFavorite.createMany({
+      data: [{ id: randomUUID(), campaignId, userId, creatureId }],
+      skipDuplicates: true,
+    });
+    return res.json({ favorited: true });
   } catch (error) {
     logger.error('Error toggling creature favorite:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to toggle favorite' });
