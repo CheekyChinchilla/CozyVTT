@@ -1,10 +1,10 @@
 /**
- * An asset moved from the detail panel takes its new place in the library.
+ * The Asset Library page and its detail panel.
  *
  * The page gave the panel nothing to tell it of a move, so the asset stayed
  * listed where it had been, under its old scope filter and badge, until the
  * list was fetched again. The page now fetches the library again once a move
- * goes through.
+ * goes through. The panel also closes with the animation it opens with.
  */
 import { it, expect, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -77,4 +77,26 @@ it('fetches the library again once the move goes through', async () => {
 
   expect(await screen.findByText('Asset moved successfully.')).toBeInTheDocument();
   await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['assets'] }));
+});
+
+// The panel was mounted outside AnimatePresence, so it vanished at once when
+// closed while it slid in when opened.
+it('slides the detail panel out when it is closed', async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <AssetLibraryPage />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'List view' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+  expect(await screen.findByText('Move to…')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Close details' }));
+
+  // Still on screen as it leaves, then gone.
+  expect(screen.getByText('Move to…')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByText('Move to…')).not.toBeInTheDocument(), { timeout: 3000 });
 });

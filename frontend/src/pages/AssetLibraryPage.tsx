@@ -444,17 +444,18 @@ export default function AssetLibraryPage() {
         onSuccess={handleUploadSuccess}
       />
 
-      {/* Detail Panel */}
-      {/* TODO(ui): mounted outside AnimatePresence, so the panel has no exit
-          animation; wrap it so it slides out as it slides in. */}
-      {selectedAsset && (
-        <AssetDetailPanel
-          asset={selectedAsset}
-          onClose={() => setSelectedAsset(null)}
-          onDelete={handleDeleteAsset}
-          onUpdate={handleAssetMoved}
-        />
-      )}
+      {/* Detail Panel, inside AnimatePresence so it slides out as it slides in */}
+      <AnimatePresence>
+        {selectedAsset && (
+          <AssetDetailPanel
+            key="asset-detail"
+            asset={selectedAsset}
+            onClose={() => setSelectedAsset(null)}
+            onDelete={handleDeleteAsset}
+            onUpdate={handleAssetMoved}
+          />
+        )}
+      </AnimatePresence>
 
       {assetDelete.inUseDialog}
 

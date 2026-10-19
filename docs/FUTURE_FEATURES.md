@@ -52,7 +52,6 @@ _Nothing at present._
 
 - `1.5.4` **The asset library's search box filters only the page of results on screen,** not the whole library (`AssetLibraryPage.tsx`).
 - `1.5.4` **In Chrome, the document reader shows a blocked page for a PDF.** Chrome's PDF viewer does not run in the reader's sandboxed frame; opening the file directly works (`DocumentReader.tsx`).
-- `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
 
 ### Play and connection
 

@@ -79,6 +79,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **The Asset Library's detail panel slides away when you close it,** as it slides in when it opens. It vanished at once. Its close button is also named for screen readers now.
+
 - **In Firefox, the Asset Library's cards fade in once as it opens.** Each card faded in, vanished and faded in again.
 
 - **An asset you move in the Asset Library takes its new place at once.** It stayed listed where it had been, under its old library, until the page was loaded again.
