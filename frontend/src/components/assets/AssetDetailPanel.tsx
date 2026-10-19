@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { isCampaignDm, campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
+import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import {
@@ -88,10 +88,11 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
 
   const canMove = !isScopeFixed && currentAsset.canChange === true;
 
-  // Campaigns the current user runs. Owning a campaign is a different thing —
-  // after a handover the owner is an ordinary player there, and it is the new
-  // DM who needs campaign scope offered to them.
-  const dmCampaigns = userCampaigns.filter((c) => isCampaignDm(c, user?.id));
+  // The campaigns that would take this asset: the ones the user runs, and for
+  // token art the ones they play in too. The server refuses the rest, so the
+  // picker offers only these. Running a campaign is not owning it: after a
+  // handover the owner is an ordinary player there.
+  const campaignTargets = campaignsToPlaceAssetIn(userCampaigns, currentAsset.type === AssetType.TOKEN, user?.id);
 
   // Available scopes to move to (exclude current). Personal is the
   // uploader's library, so only they (or an admin) may move an asset there,
@@ -99,7 +100,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const isUploader = user?.id === currentAsset.uploadedById;
   const availableMoveScopes: AssetScope[] = [];
   if (currentAsset.scope !== AssetScope.USER && (isUploader || isAdmin)) availableMoveScopes.push(AssetScope.USER);
-  if (currentAsset.scope !== AssetScope.CAMPAIGN && userCampaigns.length > 0)
+  if (currentAsset.scope !== AssetScope.CAMPAIGN && campaignTargets.length > 0)
     availableMoveScopes.push(AssetScope.CAMPAIGN);
   if (currentAsset.scope !== AssetScope.GLOBAL && canUploadGlobal)
     availableMoveScopes.push(AssetScope.GLOBAL);
@@ -193,13 +194,6 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
       setMoving(false);
     }
   };
-
-  // Campaigns available in the picker depend on target scope. Moving into a
-  // campaign is the DM's, with token art the one thing a player may bring in;
-  // the server refuses the rest, so the picker offers only what it accepts.
-  const playerOrDmCampaigns = campaignsToPlaceAssetIn(userCampaigns, true, user?.id);
-  const campaignsForPicker =
-    moveScope === AssetScope.CAMPAIGN && currentAsset.type === AssetType.TOKEN ? playerOrDmCampaigns : dmCampaigns;
 
   return (
     <>
@@ -380,7 +374,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                           className="w-full px-3 py-2 bg-paper-white border border-moss-green/30 rounded-lg text-stone-gray text-sm focus:outline-hidden focus:border-moss-green"
                         >
                           <option value="">— choose a campaign —</option>
-                          {campaignsForPicker.map((c) => (
+                          {campaignTargets.map((c) => (
                             <option key={c.id} value={c.id}>
                               {c.name}
                             </option>

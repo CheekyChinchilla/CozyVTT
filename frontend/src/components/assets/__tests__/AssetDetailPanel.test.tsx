@@ -11,6 +11,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 
 const patchAssetScope = vi.hoisted(() => vi.fn());
 const me = vi.hoisted(() => ({ user: { id: 'u1', platformRole: 'USER', globalAssetManager: false } }));
+const myCampaigns = vi.hoisted(() => ({ list: [] as Array<{ id: string; name: string; userRole: string }> }));
 import AssetDetailPanel from '../AssetDetailPanel';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
@@ -21,10 +22,11 @@ vi.mock('../../../contexts/AuthContext', () => ({
 
 beforeEach(() => {
   me.user = { id: 'u1', platformRole: 'USER', globalAssetManager: false };
+  myCampaigns.list = [];
 });
 
 vi.mock('../../../services/campaign.service', () => ({
-  default: { getCampaigns: () => Promise.resolve([]) },
+  default: { getCampaigns: () => Promise.resolve(myCampaigns.list) },
 }));
 
 vi.mock('../../../services/api', () => ({
@@ -107,5 +109,27 @@ describe('Delete and Move in the panel', () => {
     render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'u1', canChange: false })} onClose={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Move to…')).not.toBeInTheDocument();
+  });
+});
+
+// A map goes into a campaign its DM runs. A player was offered Campaign for
+// their own map anyway, with nothing in the list to choose.
+describe('the Campaign choice', () => {
+  const myMap = { ...asset, type: AssetType.MAP, scope: AssetScope.USER, uploadedById: 'u1', canChange: true } as unknown as Asset;
+
+  it('is not offered when no campaign of the user\'s would take the asset', async () => {
+    myCampaigns.list = [{ id: 'c1', name: 'Friday game', userRole: 'PLAYER' }];
+    render(<AssetDetailPanel asset={myMap} onClose={vi.fn()} onDelete={vi.fn()} />);
+    // Let the campaign list arrive first.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(screen.queryByRole('button', { name: 'Campaign' })).not.toBeInTheDocument();
+  });
+
+  it('is offered with the campaigns the user runs', async () => {
+    myCampaigns.list = [{ id: 'c1', name: 'Friday game', userRole: 'PLAYER' }, { id: 'c2', name: 'My table', userRole: 'DM' }];
+    render(<AssetDetailPanel asset={myMap} onClose={vi.fn()} onDelete={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Campaign' }));
+    expect(screen.getByRole('option', { name: 'My table' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Friday game' })).not.toBeInTheDocument();
   });
 });
