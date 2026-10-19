@@ -1704,7 +1704,14 @@ paths:
       tags:
         - Users
       summary: List all users
-      description: Get list of all users, newest account first, including unapproved ones (Admin only)
+      description: >-
+        Get list of all users, newest account first, including unapproved ones
+        (Admin only). Each user also has `signInLockedUntil`: when the
+        account's sign-in lock ends (10 wrong passwords within an hour, or 5
+        wrong sign-in codes within 15 minutes, whichever ends later), or
+        `null` when it is not locked. The locks are kept in memory, so a
+        restart clears them. `DELETE /api/admin/users/{id}/sign-in-lock`
+        clears one.
       operationId: listUsers
       security:
         - cookieAuth: []
@@ -1719,7 +1726,14 @@ paths:
                   users:
                     type: array
                     items:
-                      $ref: '#/components/schemas/User'
+                      allOf:
+                        - $ref: '#/components/schemas/User'
+                        - type: object
+                          properties:
+                            signInLockedUntil:
+                              type: string
+                              format: date-time
+                              nullable: true
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -10431,6 +10445,49 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /api/admin/users/{id}/sign-in-lock:
+    delete:
+      tags: [Admin]
+      summary: Clear an account's sign-in lock
+      description: >-
+        Forgets the account's wrong passwords (10 within an hour lock it for
+        every address) and wrong sign-in codes (5 within 15 minutes), so its
+        next correct password signs in at once. Named by user id, so it says
+        nothing about whether an address has an account. Answers 200 whether
+        or not the account was locked. Written to the admins' activity log as
+        `Cleared the sign-in lock on <email>`, with `targetUserId`. The
+        per-address limits are not changed.
+      operationId: adminClearUserSignInLock
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Sign-in lock cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No account has this id (`User not found`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/admin/smtp/test:
     post:

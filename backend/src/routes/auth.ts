@@ -16,7 +16,7 @@ import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
-import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, mfaAccountLimiter } from '../middleware/authLimiters';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
 import { adminMfaDeadline } from '../services/adminMfaPolicy';
@@ -175,21 +175,6 @@ export const mfaLoginLimiter = failureLimiter({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: 'Too many MFA login attempts, please try again later',
-});
-
-/**
- * The code step, per account: 5 wrong codes per 15 minutes for one account,
- * from wherever they come. The limiter above counts per address, so someone
- * who already has the password could otherwise spread their guesses at the
- * code across many addresses. Keyed on the account the pending sign-in
- * belongs to, which the password step put in the session; a request with no
- * sign-in pending is refused by the handler and neither held nor counted here.
- */
-export const mfaAccountLimiter = failureLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many MFA login attempts for this account, please try again later',
-  key: (req) => (req.session?.mfaPendingUserId ? `mfa-account:${req.session.mfaPendingUserId}` : null),
 });
 
 /**

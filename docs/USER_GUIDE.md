@@ -70,11 +70,13 @@ Navigate to your CozyVTT URL and enter your email and password. If Multi-Factor 
 | Limit | What the sign-in page says | When it lifts |
 |---|---|---|
 | Five wrong passwords in 15 minutes from one internet address, such as everyone on your home network (a password reset link that does not work counts too) | "Too many authentication attempts, please try again later" | 15 minutes after the oldest of the five |
-| Ten wrong passwords in an hour for your account, from every device together | "Too many failed sign-ins for this account, please try again later" | An hour after the oldest of the ten, or at once when you get a new password: set it with the **Forgot password?** link (if your instance sends email), or ask an administrator for a temporary one |
+| Ten wrong passwords in an hour for your account, from every device together | "Too many failed sign-ins for this account, please try again later" | An hour after the oldest of the ten, or at once when you get a new password: set it with the **Forgot password?** link (if your instance sends email), or ask an administrator for a temporary one. An administrator can also clear the lock, and your password stays as it was |
 
 If you connect over IPv6, your internet provider usually gives your home or office a whole block of addresses, and the first limit counts all of them as one, as it counts everyone behind one IPv4 address.
 
-When the second limit locks an account, the Admin Panel's **Activity** tab gets a line naming the account and the address the last wrong password came from (see [The activity log](#the-activity-log-admins)). The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three say "Too many wrong passwords, please try again later".
+When the second limit locks an account, the Admin Panel's **Activity** tab gets a line naming the account and the address the last wrong password came from (see [The activity log](#the-activity-log-admins)).
+
+**Clearing a sign-in lock (admins).** In the **Users** tab of the Admin Panel, a locked account shows **Locked until** and the time the lock ends by itself. The lock counts wrong passwords, and on an account with two-factor sign-in wrong codes too (five in fifteen minutes); the time shown is whichever ends later. **Clear lock** on that row asks you to confirm, then lets the account sign in at once with its usual password, and writes a line to the **Activity** tab. If the owner did not make those attempts, someone may be guessing the password, so consider resetting it as well. The locks are kept in the backend's memory, so restarting it also clears them, and the list shows a lock as it stood when the tab was opened: **Refresh** reads it again. The same goes for the password you confirm when changing your password, your email address or deleting your account: ten wrong ones in fifteen minutes, and those three say "Too many wrong passwords, please try again later".
 
 **How long a sign-in lasts.** Tick **Remember me** on the sign-in page to stay signed in between visits. Without it, a sign-in ends after an hour with no activity; with it, after 30 days with no activity. Those are the usual lengths; the person who runs your instance can change them. A campaign page that is open counts as activity, and so does a character sheet with unsaved changes, so neither drops you in the middle of a game. Whichever you choose, **a sign-in lasts at most 30 days**, however much you use it. Your administrator can change both lengths. When the 30 days run out you are taken to the sign-in page, which says "Your sign-in has reached its 30-day limit. Sign in again." Signing in again takes you back to the page you were on.
 
@@ -106,6 +108,7 @@ The **Activity** tab of the Admin Panel, headed **Platform Activity** and reload
 - grants or takes away **Global Assets** or template editing;
 - changes someone else's email address, display name, avatar or bio (the line says the bio changed and keeps none of its text);
 - resets someone's password or two-factor authentication, or sends them a reset link or an invitation;
+- clears an account's sign-in lock;
 - changes the instance's settings or default theme (only the settings whose value changed are listed, and saving without changing anything writes no line);
 - makes, deletes or restores a backup, or deletes leftover files;
 - moves someone else's personal file into a campaign or to **Global** (the line names the file, its owner and where it went);

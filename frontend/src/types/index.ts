@@ -261,6 +261,15 @@ export interface User {
   isApproved?: boolean;
 }
 
+/**
+ * A user as the Admin Panel's user list has them (GET /api/users, admins
+ * only): when the account's sign-in lock ends, or null when it is not locked.
+ * Absent on a user from any other route.
+ */
+export interface AdminListedUser extends User {
+  signInLockedUntil?: string | null;
+}
+
 /** One match from the invite picker's search: never an email address. */
 export type InvitableUser = Pick<User, 'id' | 'displayName' | 'avatarUrl'>;
 

@@ -32,7 +32,8 @@
  * answer the API gives, so the pages can show the message.
  *
  * A key's count can be forgotten (`forget`) when the credential the guesses
- * were at has changed: a new password opens a locked account at once.
+ * were at has changed: a new password opens a locked account at once. An
+ * admin can read a key's count (`peek`) and forget it too.
  *
  * Kept in memory, like the other limiters: a restart forgets it.
  */
@@ -45,6 +46,8 @@ export interface FailureLimiter extends RequestHandler {
   recordFailure(req: Request): void;
   /** Forget the wrong answers counted against `key`, as the `key` option returns it. Requests waiting on it are let through. */
   forget(key: string): void;
+  /** The wrong answers counted against `key` within the window, and when its refusals end if it is refused now. */
+  peek(key: string): { failures: number; lockedUntil: Date | null };
 }
 
 export interface FailureLimiterOptions {
@@ -248,6 +251,15 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
       state.failures.length = 0;
       for (const waiter of state.waiting.splice(0)) waiter();
       forgetIfIdle(key, state);
+    },
+    peek(key: string): { failures: number; lockedUntil: Date | null } {
+      const state = addresses.get(key);
+      if (!state) return { failures: 0, lockedUntil: null };
+      prune(state, Date.now());
+      const failures = state.failures.length;
+      // Refused until enough of the oldest have aged out to leave one fewer than the limit.
+      const lockedUntil = failures >= max ? new Date(state.failures[failures - max] + windowMs) : null;
+      return { failures, lockedUntil };
     },
   });
 }

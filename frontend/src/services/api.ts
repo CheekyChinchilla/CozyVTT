@@ -5,6 +5,7 @@ import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
 import type {
   User,
+  AdminListedUser,
   InvitableUserSearch,
   AuthResponse,
   MFARequiredResponse,
@@ -312,8 +313,8 @@ class ApiClient {
   // Users
   // ============================================
 
-  async listUsers(): Promise<{ users: User[] }> {
-    const response = await this.client.get<{ users: User[] }>('/api/users');
+  async listUsers(): Promise<{ users: AdminListedUser[] }> {
+    const response = await this.client.get<{ users: AdminListedUser[] }>('/api/users');
     return response.data;
   }
 
@@ -440,6 +441,12 @@ class ApiClient {
 
   async resetAdminUserMfa(userId: string): Promise<{ message: string }> {
     const response = await this.client.post(`/api/admin/users/${userId}/reset-mfa`);
+    return response.data;
+  }
+
+  /** Forget an account's wrong passwords and sign-in codes, so it can sign in at once. */
+  async clearAdminUserSignInLock(userId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/admin/users/${userId}/sign-in-lock`);
     return response.data;
   }
 

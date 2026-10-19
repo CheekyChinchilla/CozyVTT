@@ -29,6 +29,7 @@ import { hashPassword, sanitizeUser } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeAdminLog } from '../services/systemLog';
+import { clearSignInLock } from '../middleware/authLimiters';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
@@ -627,6 +628,30 @@ router.post('/users/:id/approve', async (req, res) => {
   } catch (error) {
     logger.error('Error approving user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to approve user' });
+  }
+});
+
+// ============================================
+// DELETE /api/admin/users/:id/sign-in-lock
+// Clears an account's sign-in lock: its wrong passwords and wrong codes are
+// forgotten, so the right ones sign in at once. By user id, so it never says
+// whether an address has an account.
+// ============================================
+router.delete('/users/:id/sign-in-lock', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true } });
+    if (!target) {
+      return res.status(404).json({ error: 'Not Found', message: 'User not found' });
+    }
+
+    clearSignInLock(target);
+    await writeAdminLog(req.session.userId!, `Cleared the sign-in lock on ${target.email}`, 'INFO', { targetUserId: target.id });
+
+    return res.json({ message: 'Sign-in lock cleared.' });
+  } catch (error) {
+    logger.error('Error clearing a sign-in lock', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to clear the sign-in lock' });
   }
 });
 

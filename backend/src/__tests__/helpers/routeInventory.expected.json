@@ -286,6 +286,13 @@
       ]
     },
     {
+      "method": "DELETE",
+      "path": "/api/admin/users/:id/sign-in-lock",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
       "method": "POST",
       "path": "/api/admin/users/:id/reset-mfa",
       "handlers": [

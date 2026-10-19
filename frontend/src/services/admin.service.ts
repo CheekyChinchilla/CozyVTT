@@ -8,6 +8,7 @@
 import api, { type RestoreReply } from './api';
 import type {
   User,
+  AdminListedUser,
   SystemStats,
   AdminHealth,
   AdminSystemSettings,
@@ -35,7 +36,7 @@ class AdminService {
     return api.updateAdminSettings(data);
   }
 
-  async getUsers(): Promise<User[]> {
+  async getUsers(): Promise<AdminListedUser[]> {
     const { users } = await api.listUsers();
     return users;
   }
@@ -89,6 +90,10 @@ class AdminService {
 
   async resetMfa(userId: string): Promise<void> {
     await api.resetAdminUserMfa(userId);
+  }
+
+  async clearSignInLock(userId: string): Promise<void> {
+    await api.clearAdminUserSignInLock(userId);
   }
 
   async approveUser(userId: string): Promise<void> {

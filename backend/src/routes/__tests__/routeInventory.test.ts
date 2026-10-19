@@ -172,6 +172,7 @@ const TESTED: Record<string, string> = {
   'POST /api/admin/users/:id/resend-invite': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'POST /api/admin/users/:id/approve': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'POST /api/admin/users/:id/reset-mfa': 'routes/__tests__/adminRoutes.e2e.test.ts',
+  'DELETE /api/admin/users/:id/sign-in-lock': 'routes/__tests__/adminSignInLock.e2e.test.ts',
   'GET /api/admin/activity': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'POST /api/admin/smtp/test': 'routes/__tests__/adminRoutes.e2e.test.ts',
   'GET /api/admin/backups/:filename/download': 'routes/__tests__/adminRoutes.e2e.test.ts',

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, signInLockedUntil } from '../middleware/authLimiters';
 import { prisma } from '../config/database';
 import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
@@ -30,7 +30,8 @@ const router = Router();
 
 /**
  * GET /api/users
- * List all users (Admin only)
+ * List all users (Admin only), each with `signInLockedUntil`: when the
+ * account's sign-in lock ends, or null.
  * Requires: Admin role
  */
 router.get('/', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
@@ -40,7 +41,10 @@ router.get('/', requireAuth, requireAdmin, async (_req: Request, res: Response) 
     });
 
     // Sanitize all users before returning
-    const sanitizedUsers = users.map((user) => sanitizeUser(user));
+    const sanitizedUsers = users.map((user) => ({
+      ...sanitizeUser(user),
+      signInLockedUntil: signInLockedUntil(user)?.toISOString() ?? null,
+    }));
 
     return res.status(200).json({ users: sanitizedUsers });
   } catch (error) {

@@ -536,6 +536,15 @@ Two things to get right when adding a check of this kind:
   out. The delete looks each name up in a fresh scan, so a name outside the
   asset folders reaches nothing, and writes what it deleted to the activity
   log.
+- **An account's sign-in lock.** `GET /api/users` (admins only) gives each
+  user `signInLockedUntil`, when the account's lock for wrong passwords
+  (`accountLoginLimiter`) or wrong sign-in codes (`mfaAccountLimiter`, both in
+  `middleware/authLimiters.ts`) ends, or null. `DELETE
+  /api/admin/users/:id/sign-in-lock` forgets both counts and writes an
+  activity log line; it is behind the admin router's `requireAuth` and
+  `requireAdmin` and the two-factor gate. It takes a user id, never an
+  address, so it cannot be used to learn which addresses have accounts; an
+  unknown id answers `404`, a player `403`.
 - **The SRD creature import.** `POST /api/campaigns/:campaignId/creatures/seed`
   fills the creature library every campaign shares and fetches from Open5e on
   every run, so it is guarded by `requireAuth` and a platform admin check in

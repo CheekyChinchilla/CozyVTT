@@ -48,6 +48,7 @@ import {
   Upload,
   RotateCcw,
   Palette,
+  LockOpen,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
@@ -55,6 +56,7 @@ import { copyText } from '@/utils/clipboard';
 import { adminService } from '@/services/admin.service';
 import type {
   User,
+  AdminListedUser,
   SystemStats,
   AdminHealth,
   AdminSystemSettings,
@@ -125,6 +127,11 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
+/** The time of day a sign-in lock ends, as the user list shows it. */
+function formatLockTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+}
+
 function formatRelativeTime(dateStr: string | null): string {
   if (!dateStr) return '\u2014';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -189,7 +196,7 @@ export default function AdminPage() {
   const [healthFailed, setHealthFailed] = useState<{ reachedServer: boolean } | null>(null);
 
   // ---- Users ----
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AdminListedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState('');
   const [userSearch, setUserSearch] = useState('');
@@ -239,6 +246,10 @@ export default function AdminPage() {
 
   // User approval
   const [approvingUserId, setApprovingUserId] = useState<string | null>(null);
+
+  // Clearing a sign-in lock, after the confirmation
+  const [lockToClear, setLockToClear] = useState<AdminListedUser | null>(null);
+  const [clearingLock, setClearingLock] = useState(false);
 
   // ---- Settings ----
   const [settings, setSettings] = useState<AdminSystemSettings | null>(null);
@@ -520,7 +531,7 @@ export default function AdminPage() {
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, templateEditor: next } : x));
     try {
       const updated = await adminService.updateUser(u.id, { templateEditor: next });
-      setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       showToast(`Template editing ${next ? 'enabled' : 'disabled'} for ${u.displayName}`, 'success');
     } catch (err: unknown) {
       // Revert on error
@@ -539,7 +550,7 @@ export default function AdminPage() {
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, globalAssetManager: next } : x));
     try {
       const updated = await adminService.updateUser(u.id, { globalAssetManager: next });
-      setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       showToast(`Global Assets ${next ? 'enabled' : 'disabled'} for ${u.displayName}`, 'success');
     } catch (err: unknown) {
       // Revert on error
@@ -559,7 +570,7 @@ export default function AdminPage() {
         ? PlatformRole.USER
         : PlatformRole.ADMIN;
       const updated = await adminService.updateUser(u.id, { platformRole: newRole });
-      setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       showToast(`Role updated to ${newRole}`, 'success');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -748,6 +759,20 @@ export default function AdminPage() {
       setResetMfaError(apiErrorMessage(e) ?? 'Failed to reset MFA');
     } finally {
       setIsResettingMfa(false);
+    }
+  };
+
+  const handleClearSignInLock = async (target: AdminListedUser) => {
+    setClearingLock(true);
+    try {
+      await adminService.clearSignInLock(target.id);
+      setUsers(prev => prev.map(u => u.id === target.id ? { ...u, signInLockedUntil: null } : u));
+      showToast(`Sign-in lock cleared for ${target.displayName}`, 'success');
+    } catch (err: unknown) {
+      showToast(apiErrorMessage(err) ?? 'Failed to clear the sign-in lock', 'error');
+    } finally {
+      setClearingLock(false);
+      setLockToClear(null);
     }
   };
 
@@ -1252,6 +1277,14 @@ export default function AdminPage() {
                                     {isPending && (
                                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-warning/10 text-warning-ink font-medium">Pending</span>
                                     )}
+                                    {u.signInLockedUntil && (
+                                      <span
+                                        className="text-xs px-1.5 py-0.5 rounded-full bg-danger/10 text-danger-ink font-medium whitespace-nowrap"
+                                        title="Too many wrong passwords or sign-in codes. The account cannot sign in until then, or until the lock is cleared."
+                                      >
+                                        Locked until {formatLockTime(u.signInLockedUntil)}
+                                      </span>
+                                    )}
                                   </div>
                                 </td>
                                 {/* Email */}
@@ -1346,6 +1379,17 @@ export default function AdminPage() {
                                           ? <Loader2 className="w-3 h-3 animate-spin" />
                                           : <Mail className="w-3 h-3" />}
                                         Invite
+                                      </button>
+                                    )}
+                                    {/* Clear lock: only while the account's sign-in is locked */}
+                                    {u.signInLockedUntil && (
+                                      <button
+                                        onClick={() => setLockToClear(u)}
+                                        title="Let this account sign in again at once (asks to confirm)"
+                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors whitespace-nowrap"
+                                      >
+                                        <LockOpen className="w-3 h-3" />
+                                        Clear lock
                                       </button>
                                     )}
                                     {/* Approve — only when pending */}
@@ -2889,6 +2933,22 @@ export default function AdminPage() {
         variant="warning"
         onConfirm={() => roleChangeTarget && handleRoleChange(roleChangeTarget)}
         onCancel={() => setRoleChangeTarget(null)}
+      />
+
+      {/* Clear sign-in lock confirmation */}
+      <ConfirmDialog
+        isOpen={lockToClear !== null}
+        title="Clear Sign-in Lock"
+        message={
+          lockToClear?.signInLockedUntil
+            ? `Clear the sign-in lock on ${lockToClear.displayName} (${lockToClear.email})? Too many wrong passwords or sign-in codes locked it until ${formatLockTime(lockToClear.signInLockedUntil)}. Clearing it lets the next correct password sign in at once. If they did not make those attempts, someone may be guessing the password: consider resetting it as well.`
+            : ''
+        }
+        confirmLabel="Clear lock"
+        variant="warning"
+        isLoading={clearingLock}
+        onConfirm={() => lockToClear && handleClearSignInLock(lockToClear)}
+        onCancel={() => setLockToClear(null)}
       />
 
       {/* Restore backup confirmation */}
