@@ -1,7 +1,7 @@
 /**
  * rules/pathfinder2e.ts
  * Pathfinder 2e derived numbers: proficiency bonus, Armor Class, Class DC,
- * the attribute a sheet names, and Bulk.
+ * spell attack and spell DC, the attribute a sheet names, and Bulk.
  *
  * ---------------------------------------------------------------------------
  * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
@@ -117,6 +117,42 @@ export function pf2eClassDC(data: unknown): number {
   const attrMod = matched ? num(rec(attributes[matched])?.modifier) : 0;
 
   return 10 + attrMod + pf2eProficiencyBonus(sheet?.level, dc.proficiencyRank);
+}
+
+/** The spellcasting proficiency rank, which spell attack rolls and spell DCs share. */
+function spellcastingRank(spellcasting: Record<string, unknown> | undefined): unknown {
+  return rec(spellcasting?.spellAttackBonus)?.proficiencyRank;
+}
+
+/** The spellcasting attribute modifier plus the spellcasting proficiency bonus. */
+function spellcastingBase(data: unknown): number {
+  const sheet = rec(data);
+  const spellcasting = rec(sheet?.spellcasting);
+  if (!spellcasting) return 0;
+  const matched = pf2eAttributeName(spellcasting.keyAttribute);
+  const attrMod = matched ? num(rec(rec(sheet?.attributes)?.[matched])?.modifier) : 0;
+  return attrMod + pf2eProficiencyBonus(sheet?.level, spellcastingRank(spellcasting));
+}
+
+/**
+ * Spell attack: "your spellcasting ability modifier + proficiency bonus +
+ * other bonuses + penalties" (Core Rulebook, "Spell Attack Rolls"). The rank
+ * is the one recorded on the attack, which the spell DC shares: a class gives
+ * one proficiency for "spell attack rolls and spell DCs".
+ */
+export function pf2eSpellAttack(data: unknown): number {
+  const spellcasting = rec(rec(data)?.spellcasting);
+  return spellcastingBase(data) + num(rec(spellcasting?.spellAttackBonus)?.itemBonus);
+}
+
+/**
+ * Spell DC: "10 + your spellcasting ability modifier + proficiency bonus +
+ * other bonuses + penalties", with the spellcasting rank and the DC's own item
+ * bonus. An item that raises the attack roll does not raise the DC.
+ */
+export function pf2eSpellDC(data: unknown): number {
+  const spellcasting = rec(rec(data)?.spellcasting);
+  return 10 + spellcastingBase(data) + num(rec(spellcasting?.spellDC)?.itemBonus);
 }
 
 /** Light items that make 1 Bulk. */

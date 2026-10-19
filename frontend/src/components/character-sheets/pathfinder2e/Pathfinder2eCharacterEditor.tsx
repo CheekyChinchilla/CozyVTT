@@ -20,7 +20,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { ProficiencyRank, calculateProficiencyBonus } from './components/ProficiencyIndicator';
+import type { ProficiencyRank } from './components/ProficiencyIndicator';
 import { api } from '../../../services/api';
 import { AssetType } from '../../../types';
 import type { Character, CharacterData } from '../../../types';
@@ -45,7 +45,16 @@ import NumberField from '../../ui/NumberField';
 import ListField, { parseCommaList, formatCommaList } from '../../ui/ListField';
 import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
-import { pf2eArmorClass, pf2eClassDC, pf2eTotalBulk, pf2eBulkLimits, formatPf2eBulk } from '@/utils/rules/pathfinder2e';
+import {
+  pf2eArmorClass,
+  pf2eClassDC,
+  pf2eProficiencyBonus,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+  pf2eTotalBulk,
+  pf2eBulkLimits,
+  formatPf2eBulk,
+} from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
 import {
@@ -130,6 +139,25 @@ const PROFICIENCY_RANKS: ProficiencyRank[] = ['untrained', 'trained', 'expert', 
 const calculateModifier = (score: number): number => Math.floor((score - 10) / 2);
 const formatModifier = (mod: number): string => mod >= 0 ? `+${mod}` : `${mod}`;
 
+/**
+ * What opening this sheet changes to follow the rules, each as "what (stored
+ * to now)": the editor works these out afresh, and the next save stores them.
+ * Worked out once, from the sheet as stored.
+ */
+function changedOnOpen(sheet: PF2eFormData): string[] {
+  const changes: string[] = [];
+  const spellcasting = sheet.spellcasting;
+  if (spellcasting) {
+    const rank = spellcasting.spellAttackBonus?.proficiencyRank ?? 'untrained';
+    const dcRank = spellcasting.spellDC?.proficiencyRank;
+    if (dcRank && dcRank !== rank) changes.push(`spell DC rank (${dcRank} to ${rank})`);
+    const dc = spellcasting.spellDC?.dc;
+    const nowDC = pf2eSpellDC(sheet);
+    if (typeof dc === 'number' && dc !== nowDC) changes.push(`spell DC (${dc} to ${nowDC})`);
+  }
+  return changes;
+}
+
 export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorProps> = ({
   character,
   onSave,
@@ -144,6 +172,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   const { data: serverConfig } = useServerConfigQuery();
 
   const data = character.data as PF2eFormData;
+  // Said once, above the sheet, for as long as it is open.
+  const [openingChanges] = useState(() => changedOnOpen(data ?? ({} as PF2eFormData)));
 
   const [formData, setFormData] = useState<PF2eFormData>(() => ({
     ...data,
@@ -370,7 +400,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     (Object.entries(saveAttributes) as [keyof PF2eSavingThrows, keyof PF2eAttributes][]).forEach(([save, attribute]) => {
       const abilityMod = formData.attributes[attribute]?.modifier || 0;
-      const profBonus = calculateProficiencyBonus(formData.level, updatedSavingThrows[save]?.proficiencyRank || 'untrained');
+      const profBonus = pf2eProficiencyBonus(formData.level, updatedSavingThrows[save]?.proficiencyRank || 'untrained');
       const itemBonus = updatedSavingThrows[save]?.itemBonus || 0;
       const newBonus = abilityMod + profBonus + itemBonus;
       if (updatedSavingThrows[save]?.bonus !== newBonus) {
@@ -387,7 +417,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
   useEffect(() => {
     if (!formData.attributes || !formData.perception || !formData.level) return;
     const wisdomMod = formData.attributes.wisdom?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.perception!.proficiencyRank || 'untrained');
+    const profBonus = pf2eProficiencyBonus(formData.level, formData.perception!.proficiencyRank || 'untrained');
     const itemBonus = formData.perception.itemBonus || 0;
     setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus: wisdomMod + profBonus + itemBonus } as PF2ePerception }));
   }, [formData.level, formData.attributes?.wisdom?.modifier, formData.perception?.proficiencyRank, formData.perception?.itemBonus]);
@@ -401,7 +431,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       if (!updatedSkills[skill]) return;
       const attribute = updatedSkills[skill].attribute;
       const abilityMod = formData.attributes[attribute as keyof PF2eAttributes]?.modifier || 0;
-      const profBonus = calculateProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
+      const profBonus = pf2eProficiencyBonus(formData.level, updatedSkills[skill].proficiencyRank || 'untrained');
       const itemBonus = updatedSkills[skill].itemBonus || 0;
       const armorPenalty = updatedSkills[skill].armorPenalty || 0;
       const newBonus = abilityMod + profBonus + itemBonus - armorPenalty;
@@ -477,7 +507,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     let hasChanges = false;
     const updatedLoreSkills = formData.loreSkills.map((lore) => {
       const abilityMod = formData.attributes[lore.attribute as keyof PF2eAttributes]?.modifier || 0;
-      const profBonus = calculateProficiencyBonus(formData.level, lore.proficiencyRank || 'untrained');
+      const profBonus = pf2eProficiencyBonus(formData.level, lore.proficiencyRank || 'untrained');
       const itemBonus = lore.itemBonus || 0;
       const newBonus = abilityMod + profBonus + itemBonus;
       if (lore.bonus !== newBonus) {
@@ -578,25 +608,24 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     setFormData((prev) => ({ ...prev, hp: { ...prev.hp, maximum } as PF2eHitPoints }));
   }, [formData.level, formData.hp?.ancestryHp, formData.hp?.classHpPerLevel, formData.attributes?.constitution?.modifier]);
 
-  // Auto-calculate spellcasting
+  // Spell attack and spell DC, from the shared rules: one spellcasting rank,
+  // recorded on the attack and copied to the DC so the stored sheet agrees
+  // with itself, and each its own item bonus.
   useEffect(() => {
     if (!formData.spellcasting || !formData.attributes || !formData.level) return;
-    const keyAttr = formData.spellcasting!.keyAttribute || 'intelligence';
-    const attrMod = formData.attributes[keyAttr as keyof PF2eAttributes]?.modifier || 0;
-    const profBonus = calculateProficiencyBonus(formData.level, formData.spellcasting!.spellAttackBonus?.proficiencyRank || 'untrained');
-    const itemBonus = formData.spellcasting!.spellAttackBonus?.itemBonus || 0;
-    const newBonus = attrMod + profBonus + itemBonus;
-    const newDC = 10 + attrMod + profBonus + itemBonus;
-    if (formData.spellcasting!.spellAttackBonus?.bonus !== newBonus || formData.spellcasting!.spellDC?.dc !== newDC) {
-      setFormData((prev) => ({
-        ...prev,
-        spellcasting: {
-          ...prev.spellcasting,
-          spellAttackBonus: { ...prev.spellcasting!.spellAttackBonus, bonus: newBonus },
-          spellDC: { ...prev.spellcasting!.spellDC, dc: newDC },
-        } as PF2eEditorSpellcasting,
-      }));
-    }
+    const bonus = pf2eSpellAttack(formData);
+    const dc = pf2eSpellDC(formData);
+    const rank = formData.spellcasting.spellAttackBonus?.proficiencyRank ?? 'untrained';
+    const stored = formData.spellcasting;
+    if (stored.spellAttackBonus?.bonus === bonus && stored.spellDC?.dc === dc && stored.spellDC?.proficiencyRank === rank) return;
+    setFormData((prev) => ({
+      ...prev,
+      spellcasting: {
+        ...prev.spellcasting,
+        spellAttackBonus: { ...prev.spellcasting!.spellAttackBonus, bonus },
+        spellDC: { ...prev.spellcasting!.spellDC, dc, proficiencyRank: rank },
+      } as PF2eEditorSpellcasting,
+    }));
   }, [
     formData.level,
     formData.attributes?.strength?.modifier,
@@ -608,6 +637,8 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     formData.spellcasting?.keyAttribute,
     formData.spellcasting?.spellAttackBonus?.proficiencyRank,
     formData.spellcasting?.spellAttackBonus?.itemBonus,
+    formData.spellcasting?.spellDC?.itemBonus,
+    formData.spellcasting?.spellDC?.proficiencyRank,
   ]);
 
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1270,7 +1301,7 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
         {/* Spellcasting Config */}
         <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
           <h3 className="text-lg font-bold text-stone-800 mb-3">Spellcasting Configuration</h3>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="text-sm font-semibold text-stone-700 mb-1 block">Tradition</label>
               <select value={formData.spellcasting!.tradition} onChange={(e) => updateField('spellcasting.tradition', e.target.value)} className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500">
@@ -1294,6 +1325,21 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
                 ))}
               </select>
             </div>
+            {/* One rank for spell attack rolls and spell DCs, as a class
+                gives it (Core Rulebook, "Spellcasting"). */}
+            <div>
+              <label htmlFor="pf2e-spellcasting-rank" className="text-sm font-semibold text-stone-700 mb-1 block">Spellcasting proficiency</label>
+              <select
+                id="pf2e-spellcasting-rank"
+                value={formData.spellcasting!.spellAttackBonus?.proficiencyRank || 'untrained'}
+                onChange={(e) => updateField('spellcasting.spellAttackBonus.proficiencyRank', e.target.value as ProficiencyRank)}
+                className="w-full px-2 py-1 border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+              >
+                {PROFICIENCY_RANKS.map((rank) => (
+                  <option key={rank} value={rank}>{rank.charAt(0).toUpperCase() + rank.slice(1)}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -1302,7 +1348,6 @@ value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index
           <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Spell Attack</h3>
             <div className="space-y-2">
-              {renderProficiencySelector('spellcasting.spellAttackBonus.proficiencyRank', formData.spellcasting!.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained')}
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
@@ -1318,7 +1363,6 @@ min={PF2E_ITEM_BONUS_MIN} max={PF2E_ITEM_BONUS_MAX} value={formData.spellcasting
           <div className="bg-stone-50 border-2 border-stone-200 rounded-lg p-4">
             <h3 className="text-lg font-bold text-stone-800 mb-3">Spell DC</h3>
             <div className="space-y-2">
-              {renderProficiencySelector('spellcasting.spellDC.proficiencyRank', formData.spellcasting!.spellDC?.proficiencyRank as ProficiencyRank || 'untrained')}
               <div className="flex items-center space-x-2">
                 <label className="text-sm text-stone-700">Item Bonus:</label>
                 <NumberField
@@ -1762,6 +1806,12 @@ min={1} max={20} value={feat.level} onChange={(v: number) => updateField(`feats.
     >
       {renderHeader()}
       {renderTabs()}
+      {openingChanges.length > 0 && (
+        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg">
+          Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving
+          keeps the new values.
+        </p>
+      )}
       <div className="p-6">
         {activeTab === 'stats' && renderStatsTab()}
         {activeTab === 'combat' && renderCombatTab()}

@@ -7,7 +7,7 @@
  * your Strength modifier."
  */
 import { describe, it, expect } from '@jest/globals';
-import { pf2eItemBulk, pf2eTotalBulk, pf2eBulkLimits, formatPf2eBulk } from '../pathfinder2e';
+import { pf2eItemBulk, pf2eTotalBulk, pf2eBulkLimits, formatPf2eBulk, pf2eSpellAttack, pf2eSpellDC } from '../pathfinder2e';
 
 describe('pf2eItemBulk', () => {
   it.each([
@@ -66,5 +66,37 @@ describe('formatPf2eBulk', () => {
     [{ bulk: 5, light: 2 }, '5 and 2 L'],
   ])('writes %j as %s', (total, text) => {
     expect(formatPf2eBulk(total)).toBe(text);
+  });
+});
+
+/**
+ * Core Rulebook p. 298: "Spell attack roll = your spellcasting ability
+ * modifier + proficiency bonus + other bonuses + penalties" and "Spell DC = 10
+ * + your spellcasting ability modifier + proficiency bonus + other bonuses +
+ * penalties", with one proficiency rank for both (p. 27).
+ */
+describe('pf2eSpellAttack and pf2eSpellDC', () => {
+  const wizard = (spellcasting: Record<string, unknown>) => ({
+    level: 3,
+    attributes: { intelligence: { score: 18, modifier: 4 } },
+    spellcasting: { keyAttribute: 'int', ...spellcasting },
+  });
+
+  it('add the key attribute and the spellcasting rank, which the DC shares', () => {
+    const sheet = wizard({ spellAttackBonus: { proficiencyRank: 'expert', itemBonus: 0 }, spellDC: { proficiencyRank: 'trained', itemBonus: 0 } });
+    // Level 3 expert: 3 + 4 = +7.
+    expect(pf2eSpellAttack(sheet)).toBe(11);
+    expect(pf2eSpellDC(sheet)).toBe(21);
+  });
+
+  it('count each item bonus toward its own total only', () => {
+    const sheet = wizard({ spellAttackBonus: { proficiencyRank: 'trained', itemBonus: 1 }, spellDC: { proficiencyRank: 'trained', itemBonus: 2 } });
+    expect(pf2eSpellAttack(sheet)).toBe(4 + 5 + 1);
+    expect(pf2eSpellDC(sheet)).toBe(10 + 4 + 5 + 2);
+  });
+
+  it('are the bare base with no spellcasting', () => {
+    expect(pf2eSpellAttack({ level: 1 })).toBe(0);
+    expect(pf2eSpellDC({ level: 1 })).toBe(10);
   });
 });

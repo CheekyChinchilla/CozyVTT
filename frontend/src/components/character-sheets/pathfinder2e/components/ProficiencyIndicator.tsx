@@ -95,18 +95,4 @@ export const ProficiencyIndicator: React.FC<ProficiencyIndicatorProps> = ({
   );
 };
 
-/**
- * Calculate proficiency bonus based on character level and proficiency rank
- */
-export const calculateProficiencyBonus = (level: number, rank: ProficiencyRank): number => {
-  switch (rank) {
-    case 'untrained': return 0;
-    case 'trained': return level + 2;
-    case 'expert': return level + 4;
-    case 'master': return level + 6;
-    case 'legendary': return level + 8;
-    default: return 0;
-  }
-};
-
 export default ProficiencyIndicator;

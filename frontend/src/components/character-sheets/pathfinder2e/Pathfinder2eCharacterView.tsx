@@ -30,7 +30,7 @@ import BulkTracker from './components/BulkTracker';
 import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
 import { readFeatureEntries } from '../../../utils/featureEntries';
 import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
-import { pf2eArmorClass, pf2eClassDC } from '../../../utils/rules/pathfinder2e';
+import { pf2eArmorClass, pf2eClassDC, pf2eSpellAttack, pf2eSpellDC } from '../../../utils/rules/pathfinder2e';
 import type { Character } from '../../../types';
 import type {
   PF2eCharacterData,
@@ -762,19 +762,20 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               <span className="text-sm font-semibold text-purple-800">Spell Attack</span>
             </div>
             <span className="text-2xl font-bold text-purple-700">
-              {formatModifier(spellcasting.spellAttackBonus?.bonus || 0)}
+              {formatModifier(pf2eSpellAttack(data))}
             </span>
           </div>
           <div className="bg-white border border-purple-200 rounded-lg p-3 flex items-center justify-between">
             <div className="flex items-center space-x-2">
+              {/* The spellcasting rank, which the DC shares with the attack. */}
               <ProficiencyIndicator
-                rank={spellcasting.spellDC?.proficiencyRank as ProficiencyRank || 'untrained'}
+                rank={spellcasting.spellAttackBonus?.proficiencyRank as ProficiencyRank || 'untrained'}
                 size="sm"
               />
               <span className="text-sm font-semibold text-purple-800">Spell DC</span>
             </div>
             <span className="text-2xl font-bold text-purple-700">
-              {spellcasting.spellDC?.dc || 10}
+              {pf2eSpellDC(data)}
             </span>
           </div>
         </div>
