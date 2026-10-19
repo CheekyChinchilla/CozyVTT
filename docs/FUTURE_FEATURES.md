@@ -50,7 +50,6 @@ _Nothing at present._
 
 ### Campaigns and assets
 
-- `1.5.4` **The asset library's search box filters only the page of results on screen,** not the whole library (`AssetLibraryPage.tsx`).
 
 ### Play and connection
 

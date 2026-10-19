@@ -193,8 +193,18 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     if (!scopeFilter.ok) {
       return res.status(400).json({ error: 'Validation Error', message: scopeFilter.message });
     }
+    const sortFilter = readEnumQuery(req.query.sort, 'sort', ['date', 'name', 'size'] as const);
+    if (!sortFilter.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: sortFilter.message });
+    }
     const type = typeFilter.value;
     const scope = scopeFilter.value;
+    // Newest first unless asked, as the library always listed; ties by id so
+    // the pages do not overlap.
+    const orderBy: Prisma.AssetOrderByWithRelationInput[] =
+      sortFilter.value === 'name' ? [{ name: 'asc' }, { id: 'asc' }]
+      : sortFilter.value === 'size' ? [{ fileSize: 'desc' }, { id: 'asc' }]
+      : [{ createdAt: 'desc' }, { id: 'asc' }];
 
     // Pagination parameters, clamped to page 1 or later and 1 to 100 per page
     const pageNum = Math.max(1, parseInt(page ?? '') || 1);
@@ -219,10 +229,16 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       where.scope = scope;
     }
 
-    // Name search
+    // Search: a name in part, matched as typed (a % or _ in it is not a
+    // wildcard), or a tag whole, whatever its case. Tags are kept as typed and
+    // Prisma matches an array's items by exact case, so the tag match is a
+    // query of its own. In AND, as the visibility rules below use OR and id.
     if (search) {
-      // Matched as typed: a % or _ in it is not a wildcard.
-      where.name = { contains: escapeLikePattern(search), mode: 'insensitive' };
+      const tagged = await prisma.$queryRaw<Array<{ id: string }>>`
+        SELECT id FROM "Asset"
+        WHERE EXISTS (SELECT 1 FROM unnest(tags) AS tag WHERE lower(tag) = lower(${search}))
+        LIMIT 10000`;
+      where.AND = [{ OR: [{ name: { contains: escapeLikePattern(search), mode: 'insensitive' } }, { id: { in: tagged.map((row) => row.id) } }] }];
     }
 
     // Campaign filter
@@ -288,9 +304,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const rows = await prisma.asset.findMany({
       where,
       select: ASSET_PUBLIC_SELECT,
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy,
       skip,
       take: limitNum,
     });

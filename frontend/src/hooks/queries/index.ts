@@ -134,6 +134,10 @@ export interface AssetListParams {
   limit: number;
   type?: AssetType;
   scope?: AssetScope;
+  /** A name in part or a tag whole, searched by the server across every page. */
+  search?: string;
+  /** Newest first when left out. */
+  sort?: 'name' | 'size';
 }
 
 export function useAssetsQuery(params: AssetListParams) {

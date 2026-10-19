@@ -439,7 +439,7 @@ Click **Upload Asset** to add a new asset. You'll choose:
 
 ### Finding Assets
 
-Use the **search bar** to find assets by name or tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size. Click a tag chip to filter to just assets with that tag. The library shows 24 assets at a time; once there are more, **Previous** and **Next** under the grid move between pages. For now the search, the tag filter and the sort apply to the page on screen only, so an asset on another page does not show up until you move to that page; a later release makes them cover the whole library.
+Use the **search bar** to find assets across your whole library, by part of a name or by a whole tag. Filter by scope (Global, Personal, Campaign), type (Maps, Tokens, Audio, Avatars), and sort by date, name or size; the sort covers the whole library too. The library shows 24 assets at a time; once there are more, **Previous** and **Next** under the grid move between pages. The tag chips under the toolbar are the tags on the page on screen: click one to show only the assets on that page with that tag.
 
 ### Viewing and Managing Assets
 

@@ -5483,7 +5483,10 @@ paths:
             format: uuid
         - name: search
           in: query
-          description: Filter by name (case-insensitive partial match; `%` and `_` match only themselves)
+          description: >-
+            Assets whose name holds it (case-insensitive; `%` and `_` match
+            only themselves), or that have it as a whole tag, whatever its
+            case.
           schema:
             type: string
         - name: uploadedBy
@@ -5515,6 +5518,14 @@ paths:
             Ignored when `campaignId` is given.
           schema:
             type: boolean
+        - name: sort
+          in: query
+          description: >-
+            `date`, newest first, when left out; `name`, A to Z; or `size`,
+            largest first. Anything else answers 400.
+          schema:
+            type: string
+            enum: [date, name, size]
       responses:
         '200':
           description: List of assets
