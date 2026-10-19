@@ -1518,10 +1518,12 @@ paths:
         template, creature or campaign setting) and that no campaign has
         shared. A personal asset something still names, or one shared into a
         campaign, stays. One whose every use (leaving out the user's own
-        characters, which go with them) is in a single campaign becomes that
+        characters, which go with them, and counting each campaign it is
+        shared into) is in a single campaign the user was in becomes that
         campaign's: `scope` `CAMPAIGN` and its `campaignId`, in the deletion's
-        transaction. One used in several campaigns, or outside one, stays
-        `USER` and an activity log line names it. Their chat messages, dice rolls, campaign assets and
+        transaction. One used in several campaigns, in a campaign the user
+        was not in, or outside a campaign, stays `USER` and an activity log
+        line names it. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
         null, and documents they shared into a campaign stay shared (the
         share passes to the campaign's DM, or its owner). Character
@@ -2022,9 +2024,10 @@ paths:
                       Count of the user's personal-scope assets, taken before
                       deletion. Their avatar and the ones nothing uses or
                       shares are deleted with the account; the rest stay,
-                      owned by no one. One used in a single campaign becomes
-                      that campaign's, as for `DELETE /api/auth/account`; the
-                      others are readable by admins only. Assets of other
+                      owned by no one. One used only in a single campaign the
+                      user was in becomes that campaign's, as for `DELETE
+                      /api/auth/account`; the others are readable by admins
+                      only. Assets of other
                       scopes also stay but are not counted.
         '400':
           description: >-

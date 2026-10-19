@@ -10,11 +10,14 @@
  * Their personal files go too: the avatar always, and any other personal
  * upload that nothing uses and no campaign has shared, row and file. A
  * personal file a map, token, template, creature or campaign setting still
- * names stays, owned by no one, like a campaign's files. A file with no
- * uploader grants nobody reading through its uses, so one whose every use is
- * in a single campaign becomes that campaign's own, in the deletion's
- * transaction; one used anywhere else stays personal, readable by admins
- * alone, and the activity log names it so an admin can move it. Where each
+ * names, or a campaign has shared, stays, owned by no one, like a campaign's
+ * files. A file with no uploader grants nobody reading through its uses, so
+ * one whose every use is in a single campaign the account was in becomes that
+ * campaign's own, in the deletion's transaction. Only the account's own
+ * campaigns can be given a file: anyone who could read it could name it in a
+ * campaign of theirs, and take it that way. One used anywhere else stays
+ * personal, readable by admins alone, and the activity log names it so an
+ * admin can move it. Where each
  * file is used is read before the transaction (personalUploadUses). The rows are
  * deleted with the account; the files are removed by removePersonalFiles,
  * which the routes start once the account's sessions have ended and the answer
@@ -55,12 +58,22 @@ export interface PersonalAsset {
   type: AssetType;
 }
 
-/** A kept personal file left personal: used in several campaigns, or outside one. */
+/**
+ * A kept personal file left personal, and why: used in a campaign the account
+ * was not in, outside a campaign, or in several of its campaigns.
+ */
 interface LeftPersonal {
   id: string;
   name: string;
-  outsideCampaigns: boolean;
+  usedIn: 'notTheirs' | 'outside' | 'several';
 }
+
+/** How the activity log says where a file left personal is used. */
+const USED_IN: Record<LeftPersonal['usedIn'], string> = {
+  notTheirs: 'in a campaign the account was not in',
+  outside: 'outside a campaign',
+  several: 'in more than one campaign',
+};
 
 /**
  * `personal` lists the account's personal uploads, for removePersonalFiles
@@ -175,9 +188,15 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       where: { uploadedById: userId, scope: 'USER' },
       select: { id: true, type: true, name: true },
     });
-    // A file a campaign uses is kept. Its uses stop granting reading once it
-    // has no uploader, so one used in a single campaign becomes that
-    // campaign's. Their own characters go with the account and do not count.
+    // A file a campaign uses or has shared is kept. Its uses stop granting
+    // reading once it has no uploader, so one used in a single campaign of
+    // theirs becomes that campaign's. Their own characters go with the
+    // account and do not count. A share counts as a use where it was shared.
+    const theirCampaigns = new Set([...campaignIds, ...owned.map((c) => c.id)]);
+    const links = await tx.campaignDocument.findMany({
+      where: { assetId: { in: uploads.map((u) => u.id) } },
+      select: { assetId: true, campaignId: true },
+    });
     const personal: PersonalAsset[] = [];
     const leftPersonal: LeftPersonal[] = [];
     const moves = new Map<string, string[]>();
@@ -185,13 +204,17 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       if (asset.type !== 'AVATAR') {
         // One uploaded since the read is read here.
         const uses = usesRead.get(asset.id) ?? (await usesAtDeletion(asset.id, userId, tx));
-        const where = new Set(uses.map((u) => u.campaignId));
+        const where = new Set<string | null>(uses.map((u) => u.campaignId));
+        for (const link of links) if (link.assetId === asset.id) where.add(link.campaignId);
         const [only] = where;
-        if (where.size === 1 && only) {
+        if (where.size === 1 && only && theirCampaigns.has(only)) {
           moves.set(only, [...(moves.get(only) ?? []), asset.id]);
           continue;
         }
-        if (uses.length > 0) leftPersonal.push({ id: asset.id, name: asset.name, outsideCampaigns: where.has(null) });
+        if (where.size > 0) {
+          const notTheirs = [...where].some((id) => id !== null && !theirCampaigns.has(id));
+          leftPersonal.push({ id: asset.id, name: asset.name, usedIn: notTheirs ? 'notTheirs' : where.has(null) ? 'outside' : 'several' });
+        }
       }
       personal.push({ id: asset.id, type: asset.type });
     }
@@ -212,7 +235,7 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
       await writeSystemLog({
         level: 'WARNING',
         message: `Kept "${file.name}", a personal file of the deleted account ${result.email}, with no owner: it is used ${
-          file.outsideCampaigns ? 'outside a campaign' : 'in more than one campaign'
+          USED_IN[file.usedIn]
         }, so only an admin can see it until it is moved`,
         context: { assetId: file.id },
       });

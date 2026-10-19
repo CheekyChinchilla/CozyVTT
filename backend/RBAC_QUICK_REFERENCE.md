@@ -517,9 +517,12 @@ Two things to get right when adding a check of this kind:
 - **Assets with no uploader.** `uploadedById` is set to null when the uploader's
   account is deleted, and a null uploader grants no one anything through
   `assetUsedInUserCampaign`. So the deletion (`services/accountDeletion.ts`)
-  gives a personal asset whose every use is in one campaign to that campaign
-  (`CAMPAIGN` scope), where its members read it by scope; one used in several
-  campaigns, or outside one, stays `USER` and is named in the activity log.
+  gives a personal asset whose every use, counting each campaign it is shared
+  into, is in one campaign the account was in to that campaign (`CAMPAIGN`
+  scope), where its members read it by scope. Only the account's own
+  campaigns count: anyone who could read the file could name it in a campaign
+  of theirs. One used in several campaigns, in a campaign the account was not
+  in, or outside a campaign, stays `USER` and is named in the activity log.
   A `USER` asset in that state is movable and
   deletable by platform admins alone, and readable by them alone, except a
   document still shared into a campaign, which that campaign's members go on
