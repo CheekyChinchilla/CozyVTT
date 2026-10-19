@@ -89,6 +89,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A screen reader names every box in the D&D 5e character editor.** Most boxes, among them **Proficiency Bonus**, **Armor Class**, the hit points, an attack's bonus and damage, an item's quantity and weight, the coins and the whole **Biography** tab, were announced by their placeholder or by nothing. Each is now named by the label beside it.
+
 - **A D&D 5e sheet stops adding skills and damage rolls where it can still be saved.** A sheet keeps at most 30 skills under **Your Own Skills** and 10 **Other Damage Rolls** on one attack, but **+ Add Skill** and **+ Add Damage Roll** went on adding, and the sheet could not be saved. At the limit each button is now greyed out, with a note saying the list is full.
 
 - **Unticking Requires Attunement on a D&D 5e item ends its attunement.** The **Attuned** box was hidden but stayed ticked, so the item went on taking one of the three attunement slots. Unticking **Requires Attunement** now unticks **Attuned** too, and an item already stored attuned shows its **Attuned** box so it can be cleared.

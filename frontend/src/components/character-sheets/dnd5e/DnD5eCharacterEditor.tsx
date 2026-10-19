@@ -1134,6 +1134,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               onChange={(e) => updateField('characterName', e.target.value)}
               maxLength={SHEET_NAME_MAX}
               placeholder="Character Name"
+              aria-label="Character name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
                 errors.characterName ? 'border-red-300' : 'border-white/20'
               } rounded px-3 py-1 ${headerTextColor} focus:outline-hidden focus:border-white/40`}
@@ -1148,9 +1149,10 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
             </div>
             <div className={`flex items-center flex-wrap gap-2 opacity-80`}>
               <div className="flex items-center space-x-2">
-                <span className="text-xs">Level</span>
+                <label htmlFor="dnd5e-level" className="text-xs">Level</label>
                 <NumberField
-min={1}
+                  id="dnd5e-level"
+                  min={1}
                   max={20}
                   value={formData.level}
                   onChange={(v: number) => updateField('level', v)}
@@ -1165,6 +1167,7 @@ min={1}
                 value={formData.race || ''}
                 onChange={(e) => updateField('race', e.target.value)}
                 placeholder="Race"
+                aria-label="Race"
                 className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
               />
               <input
@@ -1172,6 +1175,7 @@ min={1}
                 value={formData.class || ''}
                 onChange={(e) => updateField('class', e.target.value)}
                 placeholder="Class"
+                aria-label="Class"
                 className={`bg-white/10 border border-white/20 rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
               />
             </div>
@@ -1179,9 +1183,10 @@ min={1}
         </div>
 
         <div className="text-right space-y-1">
-          <div className={`text-xs opacity-70`}>Experience Points</div>
+          <label htmlFor="dnd5e-experience" className="block text-xs opacity-70">Experience Points</label>
           <NumberField
-min={0}
+            id="dnd5e-experience"
+            min={0}
             value={formData.experiencePoints}
             onChange={(v: number) => updateField('experiencePoints', v)}
             className={`w-24 text-xl font-bold bg-white/10 border border-white/20 rounded-sm px-2 py-1 ${headerTextColor} text-right focus:outline-hidden focus:border-white/40`}
@@ -1251,9 +1256,10 @@ min={0}
       {/* Proficiency Bonus and Inspiration */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Proficiency Bonus</label>
+          <label htmlFor="dnd5e-proficiency-bonus" className="block text-sm font-semibold text-stone-700 mb-1">Proficiency Bonus</label>
           <NumberField
-min={2}
+            id="dnd5e-proficiency-bonus"
+            min={2}
             max={6}
             value={formData.proficiencyBonus}
             onChange={(v: number) => updateField('proficiencyBonus', v)}
@@ -1497,6 +1503,7 @@ min={1}
                   value={custom.name || ''}
                   onChange={(e) => updateField(`customSkills.${index}.name`, e.target.value)}
                   placeholder="e.g. Thieves' Tools"
+                  aria-label={`Name of skill ${index + 1}`}
                   maxLength={60}
                   className="flex-1 min-w-36 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
@@ -1542,8 +1549,10 @@ min={1}
                 </label>
 
                 <div className="flex items-center gap-1">
-                  <label className="text-xs text-stone-500">Other</label>
+                  <label htmlFor={`custom-skill-${index}-other`} className="text-xs text-stone-500">Other</label>
                   <NumberField
+                    id={`custom-skill-${index}-other`}
+                    aria-label={`Other bonus to ${custom.name || `skill ${index + 1}`}`}
                     value={custom.otherBonus ?? 0}
                     onChange={(v: number) => updateField(`customSkills.${index}.otherBonus`, v)}
                     className="w-14 px-1 py-1 text-sm border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -1631,9 +1640,10 @@ min={1}
       {/* Combat Stats */}
       <div className="grid grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Armor Class</label>
+          <label htmlFor="dnd5e-armor-class" className="block text-sm font-semibold text-stone-700 mb-1">Armor Class</label>
           <NumberField
-min={0}
+            id="dnd5e-armor-class"
+            min={0}
             value={formData.armorClass}
             onChange={(v: number) => updateField('armorClass', v)}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -1645,20 +1655,22 @@ min={0}
               "Other bonus" below — it used to be a single hand-typed number
               that nothing kept in step with Dexterity, and that the roll then
               ignored entirely. */}
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Initiative</label>
-          <div
-            className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold bg-stone-100 text-stone-800"
+          <div id="dnd5e-initiative-label" className="block text-sm font-semibold text-stone-700 mb-1">Initiative</div>
+          <output
+            aria-labelledby="dnd5e-initiative-label"
+            className="block w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold bg-stone-100 text-stone-800"
             title={`Dexterity ${formatModifier(formData.stats?.dexterity?.modifier ?? 0)}${
               formData.initiativeBonus ? `, other ${formatModifier(formData.initiativeBonus)}` : ''
             }`}
           >
             {formatModifier(initiativeModifier)}
-          </div>
+          </output>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Speed (ft)</label>
+          <label htmlFor="dnd5e-speed" className="block text-sm font-semibold text-stone-700 mb-1">Speed (ft)</label>
           <NumberField
-min={0}
+            id="dnd5e-speed"
+            min={0}
             value={formData.speed}
             onChange={(v: number) => updateField('speed', v)}
             className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-xl font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -1697,9 +1709,11 @@ min={0}
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Hit Points</h3>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Maximum</label>
+            <label htmlFor="dnd5e-hp-maximum" className="block text-xs font-semibold text-stone-600 mb-1">Maximum</label>
             <NumberField
-min={0}
+              id="dnd5e-hp-maximum"
+              aria-label="Maximum hit points"
+              min={0}
               value={formData.hp?.maximum}
               onChange={(v: number) => updateField('hp.maximum', v)}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -1707,9 +1721,11 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Current</label>
+            <label htmlFor="dnd5e-hp-current" className="block text-xs font-semibold text-stone-600 mb-1">Current</label>
             <NumberField
-min={0}
+              id="dnd5e-hp-current"
+              aria-label="Current hit points"
+              min={0}
               value={formData.hp?.current}
               onChange={(v: number) => updateField('hp.current', v)}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-red-700 focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -1717,9 +1733,11 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Temporary</label>
+            <label htmlFor="dnd5e-hp-temporary" className="block text-xs font-semibold text-stone-600 mb-1">Temporary</label>
             <NumberField
-min={0}
+              id="dnd5e-hp-temporary"
+              aria-label="Temporary hit points"
+              min={0}
               value={formData.hp?.temporary}
               onChange={(v: number) => updateField('hp.temporary', v)}
               className="w-full px-3 py-2 border border-stone-300 rounded-lg text-center text-lg font-bold text-blue-700 focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -1832,6 +1850,7 @@ min={0}
                 <input
                   key={`success-${i}`}
                   type="checkbox"
+                  aria-label={`Death save success ${i}`}
                   checked={(formData.deathSaves?.successes || 0) >= i}
                   onChange={(e) => {
                     if (e.target.checked) {
@@ -1852,6 +1871,7 @@ min={0}
                 <input
                   key={`failure-${i}`}
                   type="checkbox"
+                  aria-label={`Death save failure ${i}`}
                   checked={(formData.deathSaves?.failures || 0) >= i}
                   onChange={(e) => {
                     if (e.target.checked) {
@@ -1966,6 +1986,7 @@ min={0}
                   value={attack.name || ''}
                   onChange={(e) => updateField(`attacks.${index}.name`, e.target.value)}
                   placeholder="Attack Name"
+                  aria-label={`Name of attack ${index + 1}`}
                   className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
                 <button
@@ -1981,17 +2002,19 @@ min={0}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Attack Bonus</label>
+                  <label htmlFor={`attack-${index}-bonus`} className="block text-xs font-semibold text-stone-600 mb-1">Attack Bonus</label>
                   <NumberField
-value={attack.attackBonus}
+                    id={`attack-${index}-bonus`}
+                    value={attack.attackBonus}
                     onChange={(v: number) => updateField(`attacks.${index}.attackBonus`, v)}
                     className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                   fallback={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Damage Roll</label>
+                  <label htmlFor={`attack-${index}-damage`} className="block text-xs font-semibold text-stone-600 mb-1">Damage Roll</label>
                   <input
+                    id={`attack-${index}-damage`}
                     type="text"
                     value={attack.damageRoll || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageRoll`, e.target.value)}
@@ -2000,8 +2023,9 @@ value={attack.attackBonus}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Damage Type</label>
+                  <label htmlFor={`attack-${index}-damage-type`} className="block text-xs font-semibold text-stone-600 mb-1">Damage Type</label>
                   <input
+                    id={`attack-${index}-damage-type`}
                     type="text"
                     value={attack.damageType || ''}
                     onChange={(e) => updateField(`attacks.${index}.damageType`, e.target.value)}
@@ -2010,9 +2034,10 @@ value={attack.attackBonus}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Range (ft)</label>
+                  <label htmlFor={`attack-${index}-range`} className="block text-xs font-semibold text-stone-600 mb-1">Range (ft)</label>
                   <NumberField
-min={0}
+                    id={`attack-${index}-range`}
+                    min={0}
                     value={attack.range}
                     onChange={(v: number) => updateField(`attacks.${index}.range`, v)}
                     className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -2144,6 +2169,7 @@ min={0}
                         )
                       }
                       placeholder="When (e.g. Two-handed)"
+                      aria-label={`When damage roll ${dmgIndex + 1} applies`}
                       className="flex-1 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <input
@@ -2156,6 +2182,7 @@ min={0}
                         )
                       }
                       placeholder="1d10+3"
+                      aria-label={`Damage roll ${dmgIndex + 1}`}
                       className="w-28 px-2 py-1 text-sm border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <input
@@ -2168,6 +2195,7 @@ min={0}
                         )
                       }
                       placeholder="slashing"
+                      aria-label={`Damage type of roll ${dmgIndex + 1}`}
                       className="w-28 px-2 py-1 text-sm border border-stone-300 rounded-sm focus:outline-hidden focus:ring-2 focus:ring-red-500"
                     />
                     <button
@@ -2187,8 +2215,9 @@ min={0}
                 ))}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
+                <label htmlFor={`attack-${index}-notes`} className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
                 <input
+                  id={`attack-${index}-notes`}
                   type="text"
                   value={attack.notes || ''}
                   onChange={(e) => updateField(`attacks.${index}.notes`, e.target.value)}
@@ -2253,13 +2282,14 @@ min={0}
           of the War Mage raises the attack roll and not the DC. */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Spell Save DC</label>
-          <div
-            className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+          <div id="dnd5e-spell-dc-label" className="block text-sm font-semibold text-stone-700 mb-1">Spell Save DC</div>
+          <output
+            aria-labelledby="dnd5e-spell-dc-label"
+            className="block w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
             title={`8 + proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
           >
             {spellSaveDC}
-          </div>
+          </output>
           <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
             min={MIN_BONUS_OVERRIDE}
@@ -2272,13 +2302,14 @@ min={0}
           />
         </div>
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-3">
-          <label className="block text-sm font-semibold text-stone-700 mb-1">Spell Attack Bonus</label>
-          <div
-            className="w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
+          <div id="dnd5e-spell-attack-label" className="block text-sm font-semibold text-stone-700 mb-1">Spell Attack Bonus</div>
+          <output
+            aria-labelledby="dnd5e-spell-attack-label"
+            className="block w-full px-3 py-2 bg-white border border-stone-300 rounded-lg text-center text-xl font-bold text-stone-800"
             title={`proficiency ${formatModifier(formData.proficiencyBonus ?? 0)} + ability ${formatModifier(spellAbilityModifier)}`}
           >
             {formatModifier(spellAttackBonus)}
-          </div>
+          </output>
           <label className="block text-xs font-semibold text-stone-600 mt-2 mb-1">Other bonus</label>
           <NumberField
             min={MIN_BONUS_OVERRIDE}
@@ -2313,6 +2344,7 @@ min={0}
             updateField('spellcasting.cantrips', e.target.value);
           }}
           placeholder="Enter cantrips separated by commas (e.g., Fire Bolt, Mage Hand, Prestidigitation)"
+          aria-label="Cantrips"
           rows={2}
           className="w-full px-3 py-2 border border-stone-300 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-red-500"
         />
@@ -2392,6 +2424,7 @@ min={1}
                 onChange={(v: number) => updateField(`spellcasting.spells.${index}.level`, v)}
                 className="w-14 px-2 py-1 border border-stone-300 rounded-sm text-center font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 title="Spell Level"
+                aria-label={`Level of spell ${index + 1}`}
               fallback={1}
               />
               <input
@@ -2399,6 +2432,7 @@ min={1}
                 value={spell.name || ''}
                 onChange={(e) => updateField(`spellcasting.spells.${index}.name`, e.target.value)}
                 placeholder="Spell Name"
+                aria-label={`Name of spell ${index + 1}`}
                 className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-medium focus:outline-hidden focus:ring-2 focus:ring-red-500"
               />
               <label className="flex items-center space-x-1 cursor-pointer" title="Prepared">
@@ -2462,11 +2496,12 @@ min={1}
             { key: 'pp', label: 'Platinum (PP)', color: 'text-slate-300' },
           ] as const).map((currency) => (
             <div key={currency.key}>
-              <label className={`block text-xs font-semibold ${currency.color} mb-1`}>
+              <label htmlFor={`currency-${currency.key}`} className={`block text-xs font-semibold ${currency.color} mb-1`}>
                 {currency.label}
               </label>
               <NumberField
-min={0}
+                id={`currency-${currency.key}`}
+                min={0}
                 value={formData.currency?.[currency.key]}
                 onChange={(v: number) => updateField(`currency.${currency.key}`, v)}
                 className="w-full px-2 py-2 border border-stone-300 rounded-lg text-center font-bold focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -2515,6 +2550,7 @@ min={0}
                   value={item.name || ''}
                   onChange={(e) => updateField(`inventory.${index}.name`, e.target.value)}
                   placeholder="Item Name"
+                  aria-label={`Name of item ${index + 1}`}
                   className="flex-1 px-2 py-1 border border-stone-300 rounded-sm font-semibold focus:outline-hidden focus:ring-2 focus:ring-red-500"
                 />
                 <button
@@ -2529,9 +2565,10 @@ min={0}
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Quantity</label>
+                  <label htmlFor={`item-${index}-quantity`} className="block text-xs font-semibold text-stone-600 mb-1">Quantity</label>
                   <NumberField
-min={0}
+                    id={`item-${index}-quantity`}
+                    min={0}
                     value={item.quantity}
                     onChange={(v: number) => updateField(`inventory.${index}.quantity`, v)}
                     className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -2539,9 +2576,10 @@ min={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Weight (lb)</label>
+                  <label htmlFor={`item-${index}-weight`} className="block text-xs font-semibold text-stone-600 mb-1">Weight (lb)</label>
                   <NumberField
-min={0}
+                    id={`item-${index}-weight`}
+                    min={0}
                     step="0.1"
                     // The one genuinely fractional field on the sheet: half a
                     // pound of rations is a real weight.
@@ -2553,9 +2591,10 @@ min={0}
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-stone-600 mb-1">Value (gp)</label>
+                  <label htmlFor={`item-${index}-value`} className="block text-xs font-semibold text-stone-600 mb-1">Value (gp)</label>
                   <NumberField
-min={0}
+                    id={`item-${index}-value`}
+                    min={0}
                     value={item.value}
                     onChange={(v: number) => updateField(`inventory.${index}.value`, v)}
                     className="w-full px-2 py-1 border border-stone-300 rounded-sm text-center focus:outline-hidden focus:ring-2 focus:ring-red-500"
@@ -2564,8 +2603,9 @@ min={0}
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
+                <label htmlFor={`item-${index}-notes`} className="block text-xs font-semibold text-stone-600 mb-1">Notes</label>
                 <input
+                  id={`item-${index}-notes`}
                   type="text"
                   value={item.notes || ''}
                   onChange={(e) => updateField(`inventory.${index}.notes`, e.target.value)}
@@ -2648,8 +2688,9 @@ min={0}
           <div className="space-y-4">
             {/* Armor */}
             <div>
-              <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Armor</label>
+              <label htmlFor="dnd5e-proficiencies-armor" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Armor</label>
               <textarea
+                id="dnd5e-proficiencies-armor"
                 value={profs.armor}
                 onChange={(e) => updateField('proficiencies.armor', e.target.value)}
                 placeholder="Light Armor, Medium Armor, Shields"
@@ -2660,8 +2701,9 @@ min={0}
 
             {/* Weapons */}
             <div>
-              <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Weapons</label>
+              <label htmlFor="dnd5e-proficiencies-weapons" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Weapons</label>
               <textarea
+                id="dnd5e-proficiencies-weapons"
                 value={profs.weapons}
                 onChange={(e) => updateField('proficiencies.weapons', e.target.value)}
                 placeholder="Simple Weapons, Martial Weapons, or specific weapons (Daggers, Longswords, Shortbows)"
@@ -2672,8 +2714,9 @@ min={0}
 
             {/* Tools */}
             <div>
-              <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Tools</label>
+              <label htmlFor="dnd5e-proficiencies-tools" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Tools</label>
               <textarea
+                id="dnd5e-proficiencies-tools"
                 value={profs.tools}
                 onChange={(e) => updateField('proficiencies.tools', e.target.value)}
                 placeholder="Thieves' Tools, Smith's Tools, Calligrapher's Supplies, Musical Instruments, Vehicles (Land/Water)"
@@ -2684,8 +2727,9 @@ min={0}
 
             {/* Languages */}
             <div>
-              <label className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Languages</label>
+              <label htmlFor="dnd5e-proficiencies-languages" className="block text-sm font-bold text-stone-700 mb-2 uppercase tracking-wide">Languages</label>
               <textarea
+                id="dnd5e-proficiencies-languages"
                 value={profs.languages}
                 onChange={(e) => updateField('proficiencies.languages', e.target.value)}
                 placeholder="Common, Elvish, Dwarvish, Draconic"
@@ -2773,9 +2817,12 @@ min={0}
 
         {/* Additional Features & Traits */}
         <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-stone-800 mb-3">Additional Features & Traits</h3>
+          <h3 className="text-lg font-semibold text-stone-800 mb-3">
+            <label htmlFor="dnd5e-additional-features">Additional Features & Traits</label>
+          </h3>
           <p className="text-xs text-stone-600 mb-3">Detailed descriptions of features, special abilities, or notes</p>
           <textarea
+            id="dnd5e-additional-features"
             value={formData.additionalFeaturesAndTraits || ''}
             onChange={(e) => updateField('additionalFeaturesAndTraits', e.target.value)}
             placeholder="Describe any additional features, traits, or special abilities in detail..."
@@ -2795,8 +2842,9 @@ min={0}
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Appearance</h3>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Age</label>
+            <label htmlFor="dnd5e-appearance-age" className="block text-xs font-semibold text-stone-600 mb-1">Age</label>
             <input
+              id="dnd5e-appearance-age"
               type="text"
               value={formData.appearance?.age || ''}
               onChange={(e) => updateField('appearance.age', e.target.value)}
@@ -2804,8 +2852,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Height</label>
+            <label htmlFor="dnd5e-appearance-height" className="block text-xs font-semibold text-stone-600 mb-1">Height</label>
             <input
+              id="dnd5e-appearance-height"
               type="text"
               value={formData.appearance?.height || ''}
               onChange={(e) => updateField('appearance.height', e.target.value)}
@@ -2814,8 +2863,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Weight</label>
+            <label htmlFor="dnd5e-appearance-weight" className="block text-xs font-semibold text-stone-600 mb-1">Weight</label>
             <input
+              id="dnd5e-appearance-weight"
               type="text"
               value={formData.appearance?.weight || ''}
               onChange={(e) => updateField('appearance.weight', e.target.value)}
@@ -2824,8 +2874,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Eyes</label>
+            <label htmlFor="dnd5e-appearance-eyes" className="block text-xs font-semibold text-stone-600 mb-1">Eyes</label>
             <input
+              id="dnd5e-appearance-eyes"
               type="text"
               value={formData.appearance?.eyes || ''}
               onChange={(e) => updateField('appearance.eyes', e.target.value)}
@@ -2833,8 +2884,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Skin</label>
+            <label htmlFor="dnd5e-appearance-skin" className="block text-xs font-semibold text-stone-600 mb-1">Skin</label>
             <input
+              id="dnd5e-appearance-skin"
               type="text"
               value={formData.appearance?.skin || ''}
               onChange={(e) => updateField('appearance.skin', e.target.value)}
@@ -2842,8 +2894,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Hair</label>
+            <label htmlFor="dnd5e-appearance-hair" className="block text-xs font-semibold text-stone-600 mb-1">Hair</label>
             <input
+              id="dnd5e-appearance-hair"
               type="text"
               value={formData.appearance?.hair || ''}
               onChange={(e) => updateField('appearance.hair', e.target.value)}
@@ -2858,8 +2911,9 @@ min={0}
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Personality</h3>
         <div className="space-y-3">
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">Personality Traits</label>
+            <label htmlFor="dnd5e-personality-traits" className="block text-sm font-semibold text-stone-700 mb-1">Personality Traits</label>
             <textarea
+              id="dnd5e-personality-traits"
               value={formData.personality?.traits || ''}
               onChange={(e) => updateField('personality.traits', e.target.value)}
               placeholder="Describe your character's personality traits..."
@@ -2868,8 +2922,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">Ideals</label>
+            <label htmlFor="dnd5e-personality-ideals" className="block text-sm font-semibold text-stone-700 mb-1">Ideals</label>
             <textarea
+              id="dnd5e-personality-ideals"
               value={formData.personality?.ideals || ''}
               onChange={(e) => updateField('personality.ideals', e.target.value)}
               placeholder="What drives your character? What do they believe in?"
@@ -2878,8 +2933,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">Bonds</label>
+            <label htmlFor="dnd5e-personality-bonds" className="block text-sm font-semibold text-stone-700 mb-1">Bonds</label>
             <textarea
+              id="dnd5e-personality-bonds"
               value={formData.personality?.bonds || ''}
               onChange={(e) => updateField('personality.bonds', e.target.value)}
               placeholder="What connections does your character have?"
@@ -2888,8 +2944,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-1">Flaws</label>
+            <label htmlFor="dnd5e-personality-flaws" className="block text-sm font-semibold text-stone-700 mb-1">Flaws</label>
             <textarea
+              id="dnd5e-personality-flaws"
               value={formData.personality?.flaws || ''}
               onChange={(e) => updateField('personality.flaws', e.target.value)}
               placeholder="What are your character's weaknesses or flaws?"
@@ -2902,8 +2959,11 @@ min={0}
 
       {/* Backstory */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Backstory</h3>
+        <h3 className="text-lg font-semibold text-stone-800 mb-3">
+          <label htmlFor="dnd5e-backstory">Backstory</label>
+        </h3>
         <textarea
+          id="dnd5e-backstory"
           value={formData.backstory || ''}
           onChange={(e) => updateField('backstory', e.target.value)}
           placeholder="Tell your character's story..."
@@ -2917,8 +2977,9 @@ min={0}
         <h3 className="text-lg font-semibold text-stone-800 mb-3">Allies & Organizations</h3>
         <div className="space-y-2">
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Name</label>
+            <label htmlFor="dnd5e-allies-name" className="block text-xs font-semibold text-stone-600 mb-1">Name</label>
             <input
+              id="dnd5e-allies-name"
               type="text"
               value={formData.alliesAndOrganizations?.name || ''}
               onChange={(e) => updateField('alliesAndOrganizations.name', e.target.value)}
@@ -2927,8 +2988,9 @@ min={0}
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-stone-600 mb-1">Description</label>
+            <label htmlFor="dnd5e-allies-description" className="block text-xs font-semibold text-stone-600 mb-1">Description</label>
             <textarea
+              id="dnd5e-allies-description"
               value={formData.alliesAndOrganizations?.description || ''}
               onChange={(e) => updateField('alliesAndOrganizations.description', e.target.value)}
               placeholder="Describe your allies and organizations..."
@@ -2941,8 +3003,11 @@ min={0}
 
       {/* Treasure */}
       <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h3 className="text-lg font-semibold text-stone-800 mb-3">Treasure & Other Notes</h3>
+        <h3 className="text-lg font-semibold text-stone-800 mb-3">
+          <label htmlFor="dnd5e-treasure">Treasure & Other Notes</label>
+        </h3>
         <textarea
+          id="dnd5e-treasure"
           value={formData.treasure || ''}
           onChange={(e) => updateField('treasure', e.target.value)}
           placeholder="Special items, treasure, or other important notes..."
