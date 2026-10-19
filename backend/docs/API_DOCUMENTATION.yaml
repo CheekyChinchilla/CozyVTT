@@ -8847,8 +8847,9 @@ paths:
         otherwise), unless this campaign already stores that exact address
         somewhere, as a copy of a token, template or creature does; an address
         naming an asset that no longer exists is accepted. `imageUrl` is
-        stored exactly as sent, not normalised: a bare asset id is checked as
-        that asset, and an address on another site is accepted unchecked.
+        normalised as the creature routes normalise it: a bare asset id is
+        stored as `/api/assets/tokens/<id>`, and any other address that is
+        not an asset's is refused with 403.
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -8928,9 +8929,10 @@ paths:
         unless this campaign already stores that exact address somewhere, as a
         copy of a token, template or creature does; an address naming an asset
         that no longer exists is accepted. The address already stored may be
-        sent back unchanged. `imageUrl` is stored exactly as sent, not
-        normalised: a bare asset id is checked as that asset, and an address
-        on another site is accepted unchecked.
+        sent back unchanged. `imageUrl` is normalised as the creature
+        routes normalise it: a bare asset id is stored as
+        `/api/assets/tokens/<id>`, and any other address that is not an
+        asset's is refused with 403.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -9015,9 +9017,10 @@ paths:
         name one the caller can read (403 otherwise), unless this campaign
         already stores that exact address somewhere, as a copy of a token,
         template or creature does; an address naming an asset that no longer
-        exists is accepted. `imageUrl` is stored exactly as sent, not
-        normalised: a bare asset id is checked as that asset, and an address
-        on another site is accepted unchecked.
+        exists is accepted. `imageUrl` is normalised as the creature
+        routes normalise it: a bare asset id is stored as
+        `/api/assets/tokens/<id>`, and any other address that is not an
+        asset's is refused with 403.
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []

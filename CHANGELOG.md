@@ -73,6 +73,7 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Assets.* The reply to `PATCH /api/assets/:id/scope` gives the asset's `canChange`, as the asset list does.
   - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` answers 403 `Only the asset's uploader can move it to their personal library` to anyone but the uploader or an admin.
   - *Documents.* `GET /api/campaigns/:campaignId/documents` gives each document's stored `filename`, whose extension decides what it is served as.
+  - *Token templates.* `imageUrl` on create, update, `from-token` and `copy-to` is normalised as on creatures: a bare asset id is stored as `/api/assets/tokens/<id>`, and an address that is not an asset's (one on another site, say) answers 403 `You do not have access to that image`, where it was stored as sent.
 
 - **In Chrome, Edge, Safari and on phones, the document reader offers a PDF as a button to open it in a new tab.** Those browsers will not show a PDF inside the reader: Chrome and Edge showed a page saying the content was blocked, and Safari a blank space. The reader now says so in place of the frame, with **Open this PDF in a new tab**. Firefox on a computer still shows the PDF inside the reader. Showing PDFs inside CozyVTT in every browser is planned.
 
