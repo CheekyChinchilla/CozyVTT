@@ -13,11 +13,6 @@ import type { CoC7eSkill } from '@/types/game-systems';
 /** The highest skill value the sheet can store. */
 const MAX_SKILL_VALUE = 100;
 
-/** Dodge's base for an investigator's DEX: half, rounded down. */
-export function cocDodgeBase(dex: number): number {
-  return Number.isFinite(dex) ? Math.floor(dex / 2) : 0;
-}
-
 /**
  * Dodge with its base set for the investigator's DEX.
  *

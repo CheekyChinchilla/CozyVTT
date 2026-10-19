@@ -170,7 +170,10 @@ question, and getting it wrong invents numbers the designers never intended.
   as its floor, and when DEX changes in the editor the points above the old
   base stay above the new one. `derivedStats.dodge.value` is a copy kept for
   older readers and follows the skill on save; the sheet shows and rolls the
-  skill. The helpers are in
+  skill. The base is `cocDodgeBase` in `rules/callOfCthulhu7e.ts`, with the
+  sheet's other derived attributes (hit points, magic points, maximum Sanity,
+  half and fifth, damage bonus and build, move rate), mirrored in both projects
+  like the other rules modules; keeping the points above the base is
   `components/character-sheets/call-of-cthulhu-7e/dodge.ts`.
 
 **Where a number is derived, give it a manual bonus alongside.** The 5e sheet

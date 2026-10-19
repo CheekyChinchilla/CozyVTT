@@ -60,7 +60,7 @@ import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { LIMIT_NOTE_CLASS } from './limitNoteClass';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { setCoC7eSkillField } from './skillEdits';
-import { cocDodgeBase, settleDodge } from './dodge';
+import { settleDodge } from './dodge';
 import {
   cocHitPoints,
   cocMagicPoints,
@@ -68,7 +68,8 @@ import {
   cocMoveRate,
   cocMaxSanity,
   cocHalfAndFifth,
-} from './derivedStats';
+  cocDodgeBase,
+} from '@/utils/rules/callOfCthulhu7e';
 import { parsePossessions, formatPossessions } from './possessions';
 import { SHEET_LIST_MAX, SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import { assetNameFrom } from '@/utils/assetName';

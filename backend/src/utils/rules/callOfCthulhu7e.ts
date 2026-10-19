@@ -1,10 +1,22 @@
 /**
+ * rules/callOfCthulhu7e.ts
  * The Call of Cthulhu 7e derived attributes, worked out from the
  * characteristics as the core rulebook's investigator creation steps say.
  *
- * Kept apart from the editor so they can be tested on their own. Dodge's base
- * is in dodge.ts.
+ * ---------------------------------------------------------------------------
+ * DUPLICATED FILE — these two copies must stay byte-for-byte identical:
+ *   frontend/src/utils/rules/callOfCthulhu7e.ts
+ *   backend/src/utils/rules/callOfCthulhu7e.ts
+ * ---------------------------------------------------------------------------
+ * The sheets work these out, and the backend suite checks the built-in
+ * templates against them, so a template cannot ship a number that does not
+ * follow from its own characteristics. A parity test fails on any difference.
  */
+
+/** Dodge's base for an investigator's DEX: half, rounded down ("Dodge (half DEX)"). */
+export function cocDodgeBase(dex: number): number {
+  return Number.isFinite(dex) ? Math.floor(dex / 2) : 0;
+}
 
 /** Hit points: CON plus SIZ, divided by ten, rounded down. */
 export function cocHitPoints(con: number, siz: number): number {

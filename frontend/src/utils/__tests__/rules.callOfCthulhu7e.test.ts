@@ -13,7 +13,7 @@ import {
   cocMoveRate,
   cocMaxSanity,
   cocHalfAndFifth,
-} from '../derivedStats';
+} from '../rules/callOfCthulhu7e';
 
 describe('hit points', () => {
   it('are CON plus SIZ divided by ten, rounded down', () => {
