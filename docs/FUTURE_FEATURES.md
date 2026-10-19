@@ -31,7 +31,6 @@ _Nothing at present._
 - `1.5.4` **D&D 5e and Call of Cthulhu read-only headers always use light text,** so a pale custom colour such as white makes the name unreadable (`DnD5eCharacterView.tsx`, `CallOfCthulhu7eCharacterView.tsx`).
 - `1.5.4` **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
 - `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
-- `1.5.4` **In a dark theme, parts of a character sheet are hard to read.** The sheets are only partly themed: the D&D 5e sheet stays white while its saving throw names take the theme's light text color, and the Call of Cthulhu sheet turns dark around its dark sepia numbers (`components/character-sheets/`).
 - `1.5.4` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
 
 ### Tokens

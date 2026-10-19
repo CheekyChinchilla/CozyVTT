@@ -175,8 +175,8 @@ const SkillRow: React.FC<{
     // Ticked in a header colour: the inline style below fills it.
     if (skill.improvementChecked && themeColor) return 'shadow-xs';
     return skill.improvementChecked
-      ? 'bg-sepia-700 border-sepia-800 shadow-xs'
-      : 'border-sepia-600 bg-white shadow-inner';
+      ? 'bg-accent border-accent shadow-xs'
+      : 'border-ink/30 bg-paper shadow-inner';
   };
 
   const isClickable = !!onRoll && !editable;
@@ -184,7 +184,7 @@ const SkillRow: React.FC<{
 
   return (
     <div
-      className={`flex items-center space-x-2 py-1.5 px-2 rounded-sm group ${isClickable ? 'cursor-pointer hover:bg-sepia-100/50 select-none' : 'hover:bg-parchment-light/30'}`}
+      className={`flex items-center space-x-2 py-1.5 px-2 rounded-sm group ${isClickable ? 'cursor-pointer hover:bg-ink/5 select-none' : 'hover:bg-ink/5'}`}
       onClick={isClickable ? () => onRoll!('1d100', purpose) : undefined}
       title={isClickable ? `Click to roll ${displayName} (target: ${skill.currentValue}%)` : undefined}
     >
@@ -197,7 +197,7 @@ const SkillRow: React.FC<{
           aria-checked={skill.improvementChecked}
           aria-label={`Improvement check for ${controlName}`}
           onClick={() => onChange?.('improvementChecked', !skill.improvementChecked)}
-          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-sepia-500 ${getCheckboxClasses()}`}
+          className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all cursor-pointer hover:scale-110 focus:outline-hidden focus:ring-2 focus:ring-brand ${getCheckboxClasses()}`}
           style={
             skill.improvementChecked && themeColor
               ? { backgroundColor: themeColor.hex, borderColor: themeColor.hex }
@@ -225,7 +225,7 @@ const SkillRow: React.FC<{
       <div className="flex-1 min-w-0 flex items-center gap-1">
         {editable && nameBox ? (
           <>
-            <span className="text-sm text-sepia-900 shrink-0">{nameBox.prefix}</span>
+            <span className="text-sm text-ink shrink-0">{nameBox.prefix}</span>
             <input
               type="text"
               value={nameBox.value}
@@ -233,11 +233,11 @@ const SkillRow: React.FC<{
               aria-label={nameBox.label}
               placeholder={nameBox.placeholder}
               maxLength={SHEET_SHORT_TEXT_MAX}
-              className="min-w-0 flex-1 text-sm text-sepia-900 bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+              className="min-w-0 flex-1 text-sm text-ink bg-paper border border-ink/20 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-brand"
             />
           </>
         ) : (
-          <span className="text-sm text-sepia-900 truncate">{displayName}</span>
+          <span className="text-sm text-ink truncate">{displayName}</span>
         )}
         {editable && detailBox && (
           <input
@@ -247,22 +247,22 @@ const SkillRow: React.FC<{
             aria-label={detailBox.label}
             placeholder={detailBox.placeholder}
             maxLength={SHEET_SHORT_TEXT_MAX}
-            className="min-w-0 w-28 text-xs text-sepia-900 bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+            className="min-w-0 w-28 text-xs text-ink bg-paper border border-ink/20 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-brand"
           />
         )}
-        {isClickable && <Dices className="w-3 h-3 text-sepia-600 opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />}
+        {isClickable && <Dices className="w-3 h-3 text-ink-secondary opacity-0 group-hover:opacity-60 transition-opacity shrink-0" />}
         {/* Beside the name only where the name does not already carry it,
             as "Science (Physics)" and "Language (Latin)" do. */}
         {!(editable && detailBox) && skill.specialization && !displayName.includes(`(${skill.specialization})`) && (
-          <span className="text-xs text-sepia-600 ml-1">({skill.specialization})</span>
+          <span className="text-xs text-ink-secondary ml-1">({skill.specialization})</span>
         )}
         {!(editable && detailBox) && skill.language && !displayName.includes(`(${skill.language})`) && (
-          <span className="text-xs text-sepia-600 ml-1">({skill.language})</span>
+          <span className="text-xs text-ink-secondary ml-1">({skill.language})</span>
         )}
       </div>
 
       {/* Base Value */}
-      <div className="w-10 text-center text-xs text-sepia-600">
+      <div className="w-10 text-center text-xs text-ink-secondary">
         {skill.baseValue}%
       </div>
 
@@ -273,22 +273,22 @@ const SkillRow: React.FC<{
             aria-label={`Value of ${controlName}`}
             value={skill.currentValue}
             onChange={(v: number) => onChange?.('currentValue', v)}
-            className="w-full text-center text-sm font-semibold text-sepia-900 bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+            className="w-full text-center text-sm font-semibold text-ink bg-paper border border-ink/20 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-brand"
             min={0}
             max={100}
             fallback={skill.baseValue ?? 0}
           />
         ) : (
-          <div className="text-center text-sm font-semibold text-sepia-900">
+          <div className="text-center text-sm font-semibold text-ink">
             {skill.currentValue}%
           </div>
         )}
       </div>
 
       {/* Half & Fifth (for reference) */}
-      <div className="flex items-center space-x-1 text-xs text-sepia-600">
+      <div className="flex items-center space-x-1 text-xs text-ink-secondary">
         <span>{Math.floor(skill.currentValue / 2)}</span>
-        <span className="text-sepia-400">/</span>
+        <span className="text-ink-muted">/</span>
         <span>{Math.floor(skill.currentValue / 5)}</span>
       </div>
 
@@ -298,7 +298,7 @@ const SkillRow: React.FC<{
           onClick={onRemove}
           aria-label={`Remove ${controlName}`}
           title="Remove"
-          className="p-0.5 text-red-700 hover:text-red-900 shrink-0"
+          className="p-0.5 rounded-sm text-danger-ink hover:bg-danger/10 shrink-0"
         >
           <X className="w-4 h-4" />
         </button>
@@ -329,7 +329,7 @@ const AddSkillControl: React.FC<{
             value={choice}
             onChange={(e) => setChoice(e.target.value)}
             aria-label={`${label} to add`}
-            className="text-xs bg-white/50 border border-sepia-400 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-sepia-500"
+            className="text-xs bg-paper border border-ink/20 rounded-sm px-1 py-0.5 focus:outline-hidden focus:ring-2 focus:ring-brand"
           >
             {choices.map((option) => (
               <option key={option.name} value={option.name}>
@@ -343,7 +343,7 @@ const AddSkillControl: React.FC<{
           disabled={full}
           onClick={() => onAdd(choices.find((option) => option.name === choice) ?? COC_OTHER_SPECIALISATION)}
           aria-label={`Add ${label}`}
-          className="inline-flex items-center gap-1 text-xs font-medium text-sepia-800 hover:text-sepia-950 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 text-xs font-medium text-ink hover:text-ink disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="w-3.5 h-3.5" />
           Add {label}
@@ -443,8 +443,8 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between px-2 pb-2 border-b-2 border-sepia-400">
-        <div className="flex items-center space-x-4 text-xs text-sepia-700 font-semibold uppercase">
+      <div className="flex items-center justify-between px-2 pb-2 border-b-2 border-ink/20">
+        <div className="flex items-center space-x-4 text-xs text-ink-secondary font-semibold uppercase">
           <span className="w-4">✓</span>
           <span className="flex-1">Skill Name</span>
           <span className="w-10">Base</span>
@@ -456,7 +456,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
       {/* Skills by Category */}
       {Object.entries(SKILL_CATEGORIES).map(([category, skillNames]) => (
         <div key={category}>
-          <h4 className="text-sm font-bold text-sepia-800 uppercase tracking-wider mb-2 px-2">
+          <h4 className="text-sm font-bold text-ink uppercase tracking-wider mb-2 px-2">
             {category}
           </h4>
           <div className="space-y-0.5">
@@ -587,7 +587,7 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
       {/* Skills of the player's own */}
       {(editable || readCoC7eSkillList(skills, 'customSkills').length > 0) && (
         <div>
-          <h4 className="text-sm font-bold text-sepia-800 uppercase tracking-wider mb-2 px-2">
+          <h4 className="text-sm font-bold text-ink uppercase tracking-wider mb-2 px-2">
             Custom Skills
           </h4>
           <div className="space-y-0.5">
@@ -604,11 +604,11 @@ export const SkillsList: React.FC<SkillsListProps> = ({ skills, themeColor, edit
       )}
 
       {/* Legend */}
-      <div className="bg-sepia-100/50 rounded-md p-3 mt-4">
-        <div className="text-xs text-sepia-700 space-y-1">
+      <div className="bg-ink/5 rounded-md p-3 mt-4">
+        <div className="text-xs text-ink-secondary space-y-1">
           <div className="flex items-center space-x-2">
-            <div className="w-4 h-4 rounded-sm border border-sepia-400 bg-parchment flex items-center justify-center shrink-0">
-              <Check className="w-3 h-3 text-sepia-600" />
+            <div className="w-4 h-4 rounded-sm border border-ink/20 bg-paper flex items-center justify-center shrink-0">
+              <Check className="w-3 h-3 text-ink-secondary" />
             </div>
             <span>Check this box when you use a skill successfully to mark it for improvement between sessions.</span>
           </div>

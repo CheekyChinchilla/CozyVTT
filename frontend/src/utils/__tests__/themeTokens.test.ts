@@ -27,11 +27,6 @@ const EXEMPT = [
 ];
 const HEADER_COLOURS = /\/character-sheets\/[^/]+\/colorPresets\.ts$/;
 
-// TODO(sheets): the sheets moving onto the theme tokens, one folder at a time;
-// each entry goes as its sheet is converted, then this list.
-const NOT_YET_THEMED = [
-  '/src/components/character-sheets/call-of-cthulhu-7e/',
-];
 
 /**
  * Palette families that have a semantic token to use instead. Teal and lime
@@ -52,7 +47,7 @@ const SOURCES = import.meta.glob(['/src/**/*.tsx', '/src/**/*.ts', '!/src/**/__t
 describe('themed surfaces use semantic tokens', () => {
   const offenders = Object.entries(SOURCES)
     .filter(([path]) => !EXEMPT.some((exempt) => path.startsWith(exempt) || path === exempt))
-    .filter(([path]) => !HEADER_COLOURS.test(path) && !NOT_YET_THEMED.some((folder) => path.startsWith(folder)))
+    .filter(([path]) => !HEADER_COLOURS.test(path))
     .map(([path, source]) => ({
       file: path,
       matches: [...new Set(source.match(RAW_COLOR) ?? [])],

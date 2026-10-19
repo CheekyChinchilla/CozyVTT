@@ -54,7 +54,8 @@
   --color-spirit-red: rgb(var(--rgb-danger));
   --color-spirit-purple: rgb(var(--rgb-spirit));
 
-  /* Call of Cthulhu 7e's 1920s palette: static, it does not follow the theme. */
+  /* The Call of Cthulhu sheet's Deep Sepia header colour (colorPresets.ts): a
+     header is the player's choice and does not follow the theme. */
   --color-sepia-100: #f5ebd9;
   --color-sepia-200: #e8d5b7;
   --color-sepia-300: #d4b896;
