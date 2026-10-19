@@ -5,7 +5,9 @@
  * writing empties it first, so a save that stopped partway left the document
  * empty or cut off, with the earlier text gone. A delete that landed during a
  * save left the file the save had written with no row naming it, and the
- * save answered 500.
+ * save answered 500. Two saves at once each wrote the whole file, but their
+ * size updates could land the other way round, recording the size of the
+ * text that lost; each document's saves now take turns.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -20,6 +22,7 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { prisma as appPrisma } from '../../config/database';
 
 const app = createTestApp();
 const userIds: string[] = [];
@@ -104,3 +107,34 @@ it('leaves no file behind when the document is deleted while the save is writing
   expect(res.body.message).toBe('Document not found');
   expect(fs.existsSync(filePath)).toBe(false);
 });
+
+it('records the size of the text that is kept when two saves overlap', async () => {
+  const agent = await signedIn();
+  const { id, filePath } = await documentWith(agent, 'start');
+
+  // The first save's size update waits until the second save has had every
+  // chance to run, as a slow database would make it.
+  let releaseFirst!: () => void;
+  const firstHeld = new Promise<void>((resolve) => { releaseFirst = resolve; });
+  const realUpdate = appPrisma.asset.update.bind(appPrisma.asset);
+  let updates = 0;
+  jest.spyOn(appPrisma.asset, 'update').mockImplementation((async (args: never) => {
+    updates += 1;
+    if (updates === 1) await firstHeld;
+    return realUpdate(args);
+  }) as never);
+
+  const first = agent.put(`/api/assets/documents/${id}/content`).send({ content: 'a much longer first text' }).then((r) => r);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const second = agent.put(`/api/assets/documents/${id}/content`).send({ content: 'short' }).then((r) => r);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  releaseFirst();
+  expect((await first).status).toBe(200);
+  expect((await second).status).toBe(200);
+
+  const onDisk = fs.readFileSync(filePath);
+  const row = await prisma.asset.findUniqueOrThrow({ where: { id }, select: { fileSize: true } });
+  expect(onDisk.toString('utf8')).toBe('short');
+  expect(row.fileSize).toBe(onDisk.length);
+});
+

@@ -87,6 +87,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A document saved twice at the same moment records the size of the text it keeps.** Two saves close together, from two tabs say, could leave the document holding one text and its listed size belonging to the other.
+
 - **Every sound file and document you may use is offered.** The Atmosphere panel and the time of day editor chose from the newest 50 sound files of all your campaigns, so a track of this campaign's past those was not offered, and a campaign's **Share existing** list showed only your newest 100 documents. They now offer all of them.
 
 - **The picture pickers can find every picture you may use.** The pickers in **Create Map**, **Edit Map**, the creature editor, the Token Manager and **Edit Token** showed only the newest 50 or 100 pictures, and their search looked only among those, so an older map or token picture could not be chosen. Each now searches your whole library, by part of a name or a whole tag, and **Load more** shows older pictures. The Token Manager and **Edit Token** gain a search box.

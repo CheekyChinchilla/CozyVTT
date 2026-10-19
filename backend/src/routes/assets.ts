@@ -6,6 +6,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { positiveIntegerFromEnv } from '../config/env';
+import { createTurnQueue } from '../utils/turnQueue';
 import { UploadRequest, uploadGeneric, handleUploadError } from '../middleware/upload';
 import { validateFileType, validateFileSize } from '../middleware/fileValidation';
 import {
@@ -842,6 +843,9 @@ router.post('/documents', authenticated, uploadLimiter, async (req: Authenticate
  * A PDF cannot be edited here; it is a file, not text. The size recorded on
  * the row is updated so the library keeps telling the truth about it.
  */
+/** Each document's saves, in turn: see the route below. */
+const documentSaveTurns = createTurnQueue();
+
 router.put('/documents/:id/content', authenticated, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const parsed = UpdateDocumentContentSchema.safeParse(req.body);
@@ -874,10 +878,15 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
 
     const documentPath = normalizePath(asset.filePath);
     const bytes = Buffer.from(parsed.data.content, 'utf8');
-    await writeFileAtomically(documentPath, bytes);
 
+    // One save of a document at a time, its file and its recorded size
+    // together. Two at once each replaced the whole file, but their size
+    // updates could land the other way round and record the size of the text
+    // that lost.
+    const done = await documentSaveTurns.turnFor(asset.id);
     let updated: Prisma.AssetGetPayload<{ select: typeof ASSET_PUBLIC_SELECT }>;
     try {
+      await writeFileAtomically(documentPath, bytes);
       updated = await prisma.asset.update({
         where: { id: asset.id },
         data: { fileSize: bytes.length },
@@ -893,6 +902,8 @@ router.put('/documents/:id/content', authenticated, async (req: AuthenticatedReq
         return res.status(404).json({ error: 'Not Found', message: 'Document not found' });
       }
       throw error;
+    } finally {
+      done();
     }
 
     return res.status(200).json({ asset: updated });

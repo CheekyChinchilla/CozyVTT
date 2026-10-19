@@ -892,7 +892,9 @@ Editing a text or Markdown document never writes over the file. The new text
 goes to a temporary file in the same folder, which is flushed to disk and then
 renamed over the original (`writeFileAtomically` in
 `backend/src/utils/fileUtils.ts`), so a crash leaves the old text or the new.
-A save that finds the row deleted once it has written removes its file.
+A save that finds the row deleted once it has written removes its file. A
+document's saves take turns in the backend process (a turn queue keyed by the
+asset), so its file and its recorded size always come from the same save.
 
 ### Leftover files
 
