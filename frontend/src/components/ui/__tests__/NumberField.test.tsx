@@ -106,7 +106,10 @@ describe('NumberField', () => {
     fireEvent.change(box(), { target: { value: '' } });
     fireEvent.blur(box());
 
-    expect(onChange).toHaveBeenLastCalledWith(10);
+    // The box shows the fallback; 10 is already the committed value, so there
+    // is no change to report.
+    expect(box().value).toBe('10');
+    expect(onChange).not.toHaveBeenCalled();
   });
 
   it('allows negatives where the range permits', () => {
@@ -152,5 +155,35 @@ describe('NumberField', () => {
     const { rerender } = render(<NumberField value={10} onChange={() => {}} aria-label="score" />);
     rerender(<NumberField value={20} onChange={() => {}} aria-label="score" />);
     expect(box().value).toBe('20');
+  });
+});
+
+// Leaving a box reported its value again even when nothing had changed, so a
+// keyboard user tabbing through a row counted as editing it: a D&D 5e row
+// added and never typed in was then kept and refused for having no name.
+describe('NumberField left unchanged', () => {
+  it('reports nothing when focus passes through', () => {
+    const onChange = vi.fn();
+    render(<NumberField value={5} onChange={onChange} min={0} aria-label="range" />);
+    const box = screen.getByLabelText('range');
+    fireEvent.focus(box);
+    fireEvent.blur(box);
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('still reports a value brought within range', () => {
+    const onChange = vi.fn();
+    render(<NumberField value={0} onChange={onChange} min={1} aria-label="maximum" />);
+    fireEvent.blur(screen.getByLabelText('maximum'));
+    expect(onChange).toHaveBeenCalledWith(1);
+  });
+
+  it('still reports the fallback for an emptied box', () => {
+    const onChange = vi.fn();
+    render(<NumberField value={5} onChange={onChange} fallback={0} aria-label="bonus" />);
+    const box = screen.getByLabelText('bonus');
+    fireEvent.change(box, { target: { value: '' } });
+    fireEvent.blur(box);
+    expect(onChange).toHaveBeenCalledWith(0);
   });
 });

@@ -80,3 +80,18 @@ describe('a new hit die', () => {
     expect((await save()).hitDice).toEqual([expect.objectContaining({ class: 'Wizard', die: 'd6' })]);
   });
 });
+
+describe('a row a keyboard user tabs through', () => {
+  it('is still left out when nothing was typed', async () => {
+    const save = open();
+    tab(/Combat/);
+    add('+ Add Attack');
+    for (const label of ['Attack Bonus', 'Range (ft)']) {
+      const box = screen.getByLabelText(label);
+      fireEvent.focus(box);
+      fireEvent.blur(box);
+    }
+
+    expect((await save()).attacks).toEqual([]);
+  });
+});
