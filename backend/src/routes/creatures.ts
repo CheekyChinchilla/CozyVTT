@@ -20,6 +20,7 @@ import { toJson } from '../utils/prisma-json';
 import { readEnumQuery, readStringQueries } from '../utils/queryEnum';
 import { GameSystem } from '../game-systems';
 import logger from '../utils/logger';
+import { escapeLikePattern } from '../utils/likePattern';
 
 const router = Router({ mergeParams: true });
 
@@ -146,8 +147,8 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
     const where: Prisma.CreatureTemplateWhereInput = { AND: scopes };
 
     if (search) {
-      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
-      where.name = { contains: search, mode: 'insensitive' };
+      // Matched as typed: a % or _ in it is not a wildcard.
+      where.name = { contains: escapeLikePattern(search), mode: 'insensitive' };
     }
     if (source) {
       where.source = source;

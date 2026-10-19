@@ -5479,7 +5479,7 @@ paths:
             format: uuid
         - name: search
           in: query
-          description: Filter by name (case-insensitive partial match)
+          description: Filter by name (case-insensitive partial match; `%` and `_` match only themselves)
           schema:
             type: string
         - name: uploadedBy
@@ -8135,7 +8135,7 @@ paths:
           in: query
           schema:
             type: string
-          description: Filter by name (case-insensitive partial match)
+          description: Filter by name (case-insensitive partial match; `%` and `_` match only themselves)
         - name: source
           in: query
           schema:
@@ -8776,7 +8776,7 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
         - name: search
           in: query
-          description: Filter by name (case-insensitive partial match)
+          description: Filter by name (case-insensitive partial match; `%` and `_` match only themselves)
           schema:
             type: string
         - name: type
@@ -10638,7 +10638,7 @@ paths:
       parameters:
         - name: search
           in: query
-          description: Case-insensitive substring match on the template's name.
+          description: Case-insensitive substring match on the template's name; `%` and `_` match only themselves.
           schema:
             type: string
         - name: gameSystem
