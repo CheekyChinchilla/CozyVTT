@@ -170,7 +170,8 @@ question, and getting it wrong invents numbers the designers never intended.
   as its floor, and when DEX changes in the editor the points above the old
   base stay above the new one. `derivedStats.dodge.value` is a copy kept for
   older readers and follows the skill on save; the sheet shows and rolls the
-  skill. The base is `cocDodgeBase` in `rules/callOfCthulhu7e.ts`, with the
+  skill. Language (Own) works the same way with EDU as its base ("automatically
+  starts as equal to the investigator's EDU"). The base is `cocDodgeBase` in `rules/callOfCthulhu7e.ts`, with the
   sheet's other derived attributes (hit points, magic points, maximum Sanity,
   half and fifth, damage bonus and build, move rate) and the skill bases
   (`COC_SKILL_BASES`, `cocBlankSkills`, from which both the blank template and

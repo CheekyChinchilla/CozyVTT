@@ -14,16 +14,17 @@ import type { CoC7eSkill } from '@/types/game-systems';
 const MAX_SKILL_VALUE = 100;
 
 /**
- * Dodge with its base set for the investigator's DEX.
+ * A skill whose base follows a characteristic, with that base set: Dodge,
+ * at half DEX, and Language (Own), at EDU.
  *
- * `previousBase` is the base before a DEX change made in the editor, so the
+ * `previousBase` is the base before a characteristic change made in the editor, so the
  * points spent above the old base stay spent above the new one. When the sheet
  * is only being opened it is null, and the stored value is kept as it is.
  * Either way the value is never left below the base.
  *
  * Returns the same object when nothing changes.
  */
-export function settleDodge(skill: CoC7eSkill, base: number, previousBase: number | null): CoC7eSkill {
+export function settleSkillBase(skill: CoC7eSkill, base: number, previousBase: number | null): CoC7eSkill {
   const stored = Number.isFinite(skill.currentValue) ? skill.currentValue : base;
   const moved = previousBase === null ? stored : stored + (base - previousBase);
   const currentValue = Math.min(MAX_SKILL_VALUE, Math.max(base, moved));

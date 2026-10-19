@@ -52,7 +52,7 @@ import ListField, { parseLineList, formatLineList } from '../../ui/ListField';
 import { LIMIT_NOTE_CLASS } from './limitNoteClass';
 import { toStoredHexColor, HEX_COLOUR_HINT } from '@/utils/themeColor';
 import { setCoC7eSkillField, withCoC7eSkillList } from './skillEdits';
-import { settleDodge } from './dodge';
+import { settleSkillBase } from './dodge';
 import {
   cocHitPoints,
   cocMagicPoints,
@@ -276,6 +276,8 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
   // here can move Dodge's base without taking away the points spent on it.
   // Null until the sheet has been read once.
   const dodgeDexRef = useRef<number | null>(null);
+  // The same for EDU, which is Language (Own)'s base.
+  const languageEduRef = useRef<number | null>(null);
 
   // Auto-calculate derived stats
   useEffect(() => {
@@ -309,6 +311,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       const previousDex = dodgeDexRef.current;
       dodgeDexRef.current = dex;
       const previousDodgeBase = previousDex === null ? null : cocDodgeBase(previousDex);
+      // Language (Own) "automatically starts as equal to the investigator's
+      // EDU": EDU is its base, as half DEX is Dodge's.
+      const edu = char.EDU?.regular || 0;
+      const previousEdu = languageEduRef.current;
+      languageEduRef.current = edu;
 
       // Max Sanity (99 - Cthulhu Mythos)
       const cthulhuMythos = formData.skills?.cthulhuMythos?.currentValue || 0;
@@ -316,10 +323,15 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
 
       setFormData((prev) => {
         const storedDodge = prev.skills?.dodge;
-        const dodge = storedDodge ? settleDodge(storedDodge, dodgeBase, previousDodgeBase) : undefined;
+        const dodge = storedDodge ? settleSkillBase(storedDodge, dodgeBase, previousDodgeBase) : undefined;
+        const storedLanguage = prev.skills?.languageOwn;
+        const languageOwn = storedLanguage ? settleSkillBase(storedLanguage, edu, previousEdu) : undefined;
+        const skillsChanged = (dodge && dodge !== storedDodge) || (languageOwn && languageOwn !== storedLanguage);
         return {
           ...prev,
-          ...(dodge && dodge !== storedDodge ? { skills: { ...prev.skills, dodge } as CoC7eSkills } : {}),
+          ...(skillsChanged
+            ? { skills: { ...prev.skills, ...(dodge ? { dodge } : {}), ...(languageOwn ? { languageOwn } : {}) } as CoC7eSkills }
+            : {}),
           derivedStats: {
             ...prev.derivedStats,
             hp: {
@@ -362,6 +374,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     formData.characteristics?.STR?.regular,
     formData.characteristics?.DEX?.regular,
     formData.characteristics?.POW?.regular,
+    formData.characteristics?.EDU?.regular,
     formData.age,
     formData.skills?.cthulhuMythos?.currentValue,
   ]);

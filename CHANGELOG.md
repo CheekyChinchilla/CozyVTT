@@ -102,6 +102,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Call of Cthulhu investigator's own language follows EDU.** Language (Own) starts equal to EDU, but changing EDU in the editor left it where it was. Its base now follows EDU, as Dodge's follows half DEX, and points put into it stay above the base.
+
 - **The Call of Cthulhu sheet shows the derived attributes an investigator's characteristics give.** The read-only sheet showed hit points, the major wound threshold, magic points, maximum Sanity, damage bonus, build, move rate and each characteristic's half and fifth as last stored, so an investigator not saved since being made from a template or imported could show numbers its own characteristics do not give. They are now worked out as the editor works them out.
 
 - **A Call of Cthulhu investigator's token picture is checked and named after the investigator.** The editor took any file as the picture, which was then refused when the sheet was saved, and named every upload "Investigator Token". A file that is not a picture, or is over the token size limit, is now refused when it is chosen, as on the other sheets, and the picture is named after the investigator.
