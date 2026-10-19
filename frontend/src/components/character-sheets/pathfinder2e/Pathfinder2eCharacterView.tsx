@@ -27,7 +27,7 @@ import ProficiencyIndicator, {
 import FeatsList from './components/FeatsList';
 import StrikesList from './components/StrikesList';
 import BulkTracker from './components/BulkTracker';
-import { withAdvantage, withDisadvantage } from '../../../utils/characterRolls';
+import { withAdvantage, withDisadvantage, pf2eLoreName } from '../../../utils/characterRolls';
 import { readFeatureEntries } from '../../../utils/featureEntries';
 import { pf2eInitiativeBonus } from '../../../utils/rules/initiative';
 import {
@@ -554,7 +554,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
               {loreSkills.map((lore, index) => {
                 const loreBonus = pf2eSkillTotal(data, lore);
                 const expr = loreBonus >= 0 ? `1d20+${loreBonus}` : `1d20${loreBonus}`;
-                const purpose = `${lore.name} Lore Check`;
+                const purpose = `${pf2eLoreName(lore.name)} Check`;
                 return (
                   <div
                     key={index}

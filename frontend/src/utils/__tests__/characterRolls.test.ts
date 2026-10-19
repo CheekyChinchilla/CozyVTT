@@ -323,3 +323,25 @@ describe('D&D 5e skills and saves with an other bonus', () => {
     expect(rolls.savingThrows.find((s) => s.label.startsWith('Dexterity'))?.expression).toBe('1d20+5');
   });
 });
+
+// The built-in template names a lore "Warfare Lore" and the Core Rulebook
+// writes them so ("Sailing Lore"), but the roll added " Lore" to every name,
+// so it read "Warfare Lore Lore".
+describe('Pathfinder 2e lore names', () => {
+  const lore = (name: string) => ({
+    ...pf2eBase,
+    loreSkills: [{ name, attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }],
+  }) as unknown as CharacterData;
+
+  it('adds Lore to a name without it', () => {
+    const [sailing] = getCharacterRolls('PATHFINDER_2E', lore('Sailing')).skills;
+    expect(sailing.purpose).toBe('Sailing Lore Check');
+    expect(sailing.label).toBe('Sailing Lore +7');
+  });
+
+  it('leaves a name that already ends in Lore as it is', () => {
+    const [warfare] = getCharacterRolls('PATHFINDER_2E', lore('Warfare lore')).skills;
+    expect(warfare.purpose).toBe('Warfare lore Check');
+    expect(warfare.label).toBe('Warfare lore +7');
+  });
+});

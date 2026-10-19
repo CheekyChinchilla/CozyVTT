@@ -303,6 +303,15 @@ const PF2E_SKILL_NAMES: Record<string, string> = {
   thievery:       'Thievery',
 };
 
+/**
+ * A lore skill's name as rolled: "Sailing" as "Sailing Lore", and a name that
+ * already ends in Lore, as the Core Rulebook writes them ("Warfare Lore"), as
+ * it is.
+ */
+export function pf2eLoreName(name: string): string {
+  return /\blore$/i.test(name.trim()) ? name.trim() : `${name.trim()} Lore`;
+}
+
 function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
   const abilities: RollOption[] = [];
   const skills:    RollOption[] = [];
@@ -373,9 +382,9 @@ function extractPf2eRolls(data: PF2eCharacterData): CharacterRolls {
       if (!lore.name) continue;
       const total = pf2eSkillTotal(data, lore);
       skills.push({
-        label:             `${lore.name} Lore ${fmt(total)}`,
+        label:             `${pf2eLoreName(lore.name)} ${fmt(total)}`,
         expression:        `1d20${fmt(total)}`,
-        purpose:           `${lore.name} Lore Check`,
+        purpose:           `${pf2eLoreName(lore.name)} Check`,
         supportsAdvantage: true,
       });
     }

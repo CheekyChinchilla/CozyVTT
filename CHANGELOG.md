@@ -93,6 +93,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **A Pathfinder 2e lore named with "Lore" rolls under its own name.** A lore skill named as the rulebook writes them, such as Warfare Lore from the built-in Fighter, rolled as "Warfare Lore Lore Check". "Lore" is now added only to a name without it.
+
 - **The Pathfinder 2e sheet shows and rolls the saves, Perception and skills its own numbers give.** The read-only sheet, the right-click roll menu and initiative used the totals last stored, so a character the editor had not saved since, such as one made from a template or imported, showed and rolled numbers that did not follow from its ranks, attributes and bonuses. They are now worked out from those, as AC and Class DC already were.
 
 - **A Pathfinder 2e check penalty lowers the skill however it is typed.** The penalty box subtracted what was typed, so a penalty entered as armor prints it, such as -2, raised the skill by 2. The box is now labelled **Check penalty** and takes 0 or below. A skill whose penalty was typed as a negative number goes down by twice that penalty, to what the rules give; one stored as a positive number opens as negative, and a note above the sheet says so.
