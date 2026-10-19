@@ -4803,7 +4803,9 @@ paths:
           caller must already be a member of it (403); otherwise nothing is
           created. The character is added to the caller's membership as well
           as carrying the `campaignId` column, in one transaction, because the
-          campaign roster and the token permission checks read the membership.
+          campaign roster and the token permission checks read the membership;
+          the campaign is then sent `roster.updated` with `action`
+          `character.assigned`, `characterId`, `userId` and `campaignId`.
         - `tokenImageUrl` is optional and nullable; an empty string is stored
           as null. A bare asset id is stored as `/api/assets/tokens/<id>`; any
           other value must be an asset's exact address,
@@ -5105,8 +5107,10 @@ paths:
         - Characters
       summary: Delete character
       description: >-
-        Owner only. Deletes the character row. No event is broadcast, and map
-        tokens placed from the character stay on their maps.
+        Owner only. Deletes the character, takes it off every membership's
+        list of characters, and sends the campaign it was in `roster.updated`
+        with `action` `character.deleted`, `characterId`, `userId` and
+        `campaignId`. Map tokens placed from the character stay on their maps.
       operationId: deleteCharacter
       security:
         - cookieAuth: []
@@ -5161,7 +5165,8 @@ paths:
           `Character.data`).
         - Assigning broadcasts `roster.updated` to the new campaign, with
           `action` set to `character.assigned` and `characterId`, `userId`
-          and `campaignId`. Unassigning a character that had a campaign
+          and `campaignId`, and, for a character coming from another campaign,
+          `character.unassigned` to that one. Unassigning a character that had a campaign
           broadcasts `roster.updated` to that campaign, with `action` set to
           `character.unassigned` and `characterId`, `userId` and `campaignId`.
       operationId: assignCharacterToCampaign
