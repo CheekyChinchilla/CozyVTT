@@ -30,6 +30,8 @@ import {
   pf2eSpellDC,
   pf2eTotalBulk,
   pf2eBulkLimits,
+  pf2eMaxHitPoints,
+  pf2eProficiencyBonus,
 } from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
 import {
@@ -130,6 +132,25 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       if (!spellcasting) return;
       expect(spellcasting.spellAttackBonus.bonus).toBe(pf2eSpellAttack(data));
       expect(spellcasting.spellDC.dc).toBe(pf2eSpellDC(data));
+    });
+
+    it(`${template.name} stores the hit points its ancestry, class, level and Constitution give`, () => {
+      const hp = data.hp as { maximum: number; current: number; ancestryHp: number; classHpPerLevel: number };
+      const con = (data.attributes as { constitution: { modifier: number } }).constitution.modifier;
+      expect(hp.maximum).toBe(pf2eMaxHitPoints(hp.ancestryHp, hp.classHpPerLevel, data.level, con));
+      expect(hp.current).toBe(hp.maximum);
+    });
+
+    // A strike records its attribute, rank and item bonus, as the editor
+    // writes one, and its attack bonus is what they give.
+    it(`${template.name} stores each strike's parts and the attack bonus they give`, () => {
+      type Strike = { name: string; attackBonus?: number; attributeModifier?: string; proficiencyRank?: string; itemBonus?: number };
+      const attributes = data.attributes as Record<string, { modifier: number }>;
+      for (const strike of (data.strikes ?? []) as Strike[]) {
+        expect(strike).toMatchObject({ attributeModifier: expect.any(String), proficiencyRank: expect.any(String), itemBonus: expect.any(Number) });
+        const expected = (attributes[strike.attributeModifier!]?.modifier ?? NaN) + pf2eProficiencyBonus(data.level, strike.proficiencyRank) + strike.itemBonus!;
+        expect({ strike: strike.name, attackBonus: strike.attackBonus }).toEqual({ strike: strike.name, attackBonus: expected });
+      }
     });
 
     it(`${template.name} stores the Bulk its inventory and Strength give`, () => {
