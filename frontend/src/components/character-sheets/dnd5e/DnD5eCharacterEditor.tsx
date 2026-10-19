@@ -1317,7 +1317,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
               aria-label="Character name"
               className={`w-full text-3xl font-bold bg-white/10 border-2 ${
                 errors.characterName ? 'border-red-300' : 'border-white/20'
-              } rounded px-3 py-1 ${headerTextColor} focus:outline-hidden focus:border-white/40`}
+              } rounded px-3 py-1 ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
             />
             {/* Player name is who owns this character, not free text — it is
                 filled from their display name when the character is created
@@ -1350,7 +1350,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label="Race"
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors.race}
-                className={`bg-white/10 border ${errors.race ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
+                className={`bg-white/10 border ${errors.race ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
               />
               <input
                 type="text"
@@ -1360,7 +1360,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 aria-label="Class"
                 maxLength={SHEET_SHORT_TEXT_MAX}
                 aria-invalid={!!errors.class}
-                className={`bg-white/10 border ${errors.class ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} focus:outline-hidden focus:border-white/40`}
+                className={`bg-white/10 border ${errors.class ? 'border-red-300' : 'border-white/20'} rounded-sm px-2 py-0.5 text-sm ${headerTextColor} placeholder-current/50 focus:outline-hidden focus:border-white/40`}
               />
             </div>
           </div>
