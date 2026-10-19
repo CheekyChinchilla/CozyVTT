@@ -7,7 +7,7 @@ import { useState, FormEvent, useEffect, useRef } from 'react';
 import { Loader2, User, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import { Character, GameSystem, Campaign } from '@/types';
-import { GAME_SYSTEM_OPTIONS } from '@/constants/game-systems';
+import { GAME_SYSTEM_OPTIONS, gameSystemName } from '@/constants/game-systems';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import api from '@/services/api';
 import Button from '@/components/ui/Button';
@@ -338,7 +338,7 @@ export default function NewCharacterModal({
                       {availableCampaigns.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
-                          {c.gameSystem && ` (${c.gameSystem})`}
+                          {c.gameSystem && ` (${gameSystemName(c.gameSystem)})`}
                         </option>
                       ))}
                     </select>

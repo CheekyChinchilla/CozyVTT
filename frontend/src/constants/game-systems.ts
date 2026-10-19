@@ -95,6 +95,18 @@ export function getGameSystemLabel(
     : GAME_SYSTEM_LABELS[gameSystem];
 }
 
+/** What a character, template or campaign with no game system is called. */
+export const FLEXIBLE_SYSTEM_LABEL = 'Flexible';
+
+/**
+ * The name to show for a character's or campaign's game system: its label,
+ * or Flexible for none. A code this build does not know is shown as it is.
+ */
+export function gameSystemName(gameSystem: GameSystem | string | null | undefined): string {
+  if (!gameSystem) return FLEXIBLE_SYSTEM_LABEL;
+  return GAME_SYSTEM_LABELS[gameSystem as GameSystem] ?? gameSystem;
+}
+
 /**
  * Get description for a game system
  * @param gameSystem - The game system enum value

@@ -125,6 +125,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **A copied character keeps "(Copy)" in its name when it is saved.** Copying a character named only the new record "(Copy)" and left the sheet with the original's name, so the first save renamed the copy back to the original's name. The copy's sheet now carries the copy's name too.
 
+- **Game systems are named in words everywhere.** The dashboard's character list, **Delete Character**, the campaign list in **Create New Character** and the note in **Assign to Campaign** showed the stored code, such as `DND_5E`. They now show the system's name, such as "Dungeons & Dragons 5th Edition", as the game system lists do, and "Flexible" for a character with none; a character's sheet and a campaign invitation use the same names.
+
 - **You can delete your character while its campaign is being played.** **Delete Character** refused a character in an active or paused campaign and told you to unassign it first, although the server allows the delete. It now deletes it, after a warning that names the campaign and says the character leaves its roster for everyone at the table.
 
 - **Create & Publish as Template publishes the character you made.** It published the starter sheet the dialog began from, so the template carried the starter's name, such as "New Character" or "Brave Fighter", where the character had the name you gave it. The template now has the character's sheet as it was saved, and the game system it was saved with.

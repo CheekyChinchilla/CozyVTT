@@ -9,6 +9,7 @@ import Toast, { useToast } from '@/components/Toast';
 import type { CampaignInvitation, CharacterSummary } from '@/types';
 import { Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface InvitationModalProps {
@@ -90,24 +91,6 @@ export default function InvitationModal({
     }
   };
 
-  // Get game system display name
-  const getSystemName = (gameSystem: string | null) => {
-    switch (gameSystem) {
-      case 'DND_5E':
-        return 'D&D 5th Edition';
-      case 'PATHFINDER_2E':
-        return 'Pathfinder 2nd Edition';
-      case 'SHADOWRUN_6E':
-        return 'Shadowrun 6th Edition';
-      case 'CALL_OF_CTHULHU_7E':
-        return 'Call of Cthulhu 7th Edition';
-      case null:
-        return 'Flexible/Custom';
-      default:
-        return gameSystem;
-    }
-  };
-
   return (
     <>
       <Modal open onClose={onClose} title="Campaign Invitation" icon={Users} size="lg" closeDisabled={processing}>
@@ -129,7 +112,7 @@ export default function InvitationModal({
               <div>
                 <span className="text-warm-gray">Game System:</span>{' '}
                 <span className="font-medium text-stone-gray">
-                  {getSystemName(invitation.campaign?.gameSystem || null)}
+                  {gameSystemName(invitation.campaign?.gameSystem || null)}
                 </span>
               </div>
               {invitation.campaign?.dm && (
@@ -206,7 +189,7 @@ export default function InvitationModal({
                       </p>
                       {character.gameSystem && (
                         <p className="text-xs text-warm-gray">
-                          {getSystemName(character.gameSystem)}
+                          {gameSystemName(character.gameSystem)}
                         </p>
                       )}
                     </div>

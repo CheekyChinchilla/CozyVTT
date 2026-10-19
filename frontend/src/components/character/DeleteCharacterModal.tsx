@@ -8,6 +8,7 @@ import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { CharacterSummary, Campaign } from '@/types';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 
 interface DeleteCharacterModalProps {
   isOpen: boolean;
@@ -134,7 +135,7 @@ export default function DeleteCharacterModal({
                     <div className="flex justify-between">
                       <dt className="text-warm-gray">Game System:</dt>
                       <dd className="text-stone-gray font-medium">
-                        {character.gameSystem || 'Flexible'}
+                        {gameSystemName(character.gameSystem)}
                       </dd>
                     </div>
                     {campaign && (

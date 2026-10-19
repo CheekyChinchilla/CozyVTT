@@ -10,7 +10,8 @@ import { useOptionalWebSocket } from '@/contexts/WebSocketContext';
 import { useTableRoll } from '@/hooks/useTableRoll';
 import { canEditCharacter, canEditCharacterIn, canRollAsCharacter } from '@/services/permissions';
 import { api } from '@/services/api';
-import type { Campaign, Character, GameSystem, CampaignMembership } from '@/types';
+import type { Campaign, Character, CampaignMembership } from '@/types';
+import { gameSystemName } from '@/constants/game-systems';
 
 // Import view components
 import { DnD5eCharacterView } from '../character-sheets/dnd5e/DnD5eCharacterView';
@@ -149,24 +150,6 @@ export default function CharacterSheetViewerModal({
   // the sheet leaves it to the editor.
   const modalRef = useFocusTrap(true, showEditor ? undefined : onClose);
 
-  // Get game system display name
-  const getSystemName = (gameSystem: GameSystem | null) => {
-    switch (gameSystem) {
-      case 'DND_5E':
-        return 'D&D 5th Edition';
-      case 'PATHFINDER_2E':
-        return 'Pathfinder 2nd Edition';
-      case 'SHADOWRUN_6E':
-        return 'Shadowrun 6th Edition';
-      case 'CALL_OF_CTHULHU_7E':
-        return 'Call of Cthulhu 7th Edition';
-      case null:
-        return 'Flexible/Custom';
-      default:
-        return gameSystem;
-    }
-  };
-
   // Handle click-to-roll: rolls at the table, and says so when refused.
   // Named so the panel heads the entry with the character whose sheet this
   // is, not with whoever happens to be reading it.
@@ -226,7 +209,7 @@ export default function CharacterSheetViewerModal({
                 <div className="flex items-center gap-3 text-sm text-warm-gray">
                   <span>Player: {ownerName}</span>
                   <span>•</span>
-                  <span>{getSystemName(character.gameSystem)}</span>
+                  <span>{gameSystemName(character.gameSystem)}</span>
                 </div>
               </div>
             </div>

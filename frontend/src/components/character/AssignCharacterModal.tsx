@@ -10,6 +10,7 @@ import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface AssignCharacterModalProps {
@@ -241,7 +242,7 @@ export default function AssignCharacterModal({
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-3">
                     <p className="text-xs text-stone-gray">
                       <strong className="text-brand-ink">Note:</strong> Only showing campaigns
-                      that use {character.gameSystem}.
+                      that use {gameSystemName(character.gameSystem)}.
                     </p>
                   </div>
                 )}
