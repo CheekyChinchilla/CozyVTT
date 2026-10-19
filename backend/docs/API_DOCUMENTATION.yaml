@@ -6063,9 +6063,12 @@ paths:
             admins or the uploading global asset manager can move a global
             asset out of the library", "Only the asset owner can move personal
             assets" or "Only the asset owner or campaign DM can move this
-            asset"); or a move into a campaign the caller may not upload this
-            type to ("You do not have access to this campaign" or "Only the
-            Dungeon Master can upload campaign assets").
+            asset"); a move to USER by anyone but the asset's uploader or an
+            admin ("Only the asset's uploader can move it to their personal
+            library"), since the asset would land in the uploader's library;
+            or a move into a campaign the caller may not upload this type to
+            ("You do not have access to this campaign" or "Only the Dungeon
+            Master can upload campaign assets").
           content:
             application/json:
               schema:

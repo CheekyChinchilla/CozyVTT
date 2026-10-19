@@ -6,17 +6,22 @@
  * back to this page.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const patchAssetScope = vi.hoisted(() => vi.fn());
+const me = vi.hoisted(() => ({ user: { id: 'u1', platformRole: 'USER', globalAssetManager: false } }));
 import AssetDetailPanel from '../AssetDetailPanel';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
 
 vi.mock('../../../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1', platformRole: 'USER' } }),
+  useAuth: () => me,
 }));
+
+beforeEach(() => {
+  me.user = { id: 'u1', platformRole: 'USER', globalAssetManager: false };
+});
 
 vi.mock('../../../services/campaign.service', () => ({
   default: { getCampaigns: () => Promise.resolve([]) },
@@ -79,9 +84,23 @@ describe('Delete and Move in the panel', () => {
     ({ ...asset, type: AssetType.TOKEN, scope: AssetScope.CAMPAIGN, campaignId: 'c1', ...over }) as unknown as Asset;
 
   it('are offered where the server will allow them, to the campaign\'s DM say', () => {
+    me.user.globalAssetManager = true;
     render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'a-player', canChange: true })} onClose={vi.fn()} onDelete={vi.fn()} />);
     expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument();
     expect(screen.getByText('Move to…')).toBeInTheDocument();
+  });
+
+  // It would put the player's upload in the player's own library, out of the
+  // campaign; the server refuses it.
+  it('offers Personal to the uploader alone', () => {
+    me.user.globalAssetManager = true;
+    const { unmount } = render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'a-player', canChange: true })} onClose={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Global' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Personal' })).not.toBeInTheDocument();
+    unmount();
+
+    render(<AssetDetailPanel asset={campaignArt({ uploadedById: 'u1', canChange: true })} onClose={vi.fn()} onDelete={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Personal' })).toBeInTheDocument();
   });
 
   it('are not offered where the server would refuse them, even to the uploader', () => {

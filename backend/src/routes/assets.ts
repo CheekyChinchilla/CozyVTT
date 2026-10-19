@@ -1382,6 +1382,16 @@ router.patch('/:id/scope', authenticated, async (req: AuthenticatedRequest, res:
         return res.status(403).json({ error: 'Forbidden', message: MOVE_REFUSALS[asset.scope] });
       }
 
+      // A personal asset is its uploader's, so only they move one there. A
+      // campaign's DM moving a player's upload to Personal would put it in
+      // the player's library, out of the campaign and out of the DM's reach.
+      if (scope === 'USER' && asset.uploadedById !== userId) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Only the asset\'s uploader can move it to their personal library',
+        });
+      }
+
       // Moving TO CAMPAIGN: the same question the upload route asks, so a
       // member who could not upload here cannot publish here either. That is
       // the DM, or a player moving token art.

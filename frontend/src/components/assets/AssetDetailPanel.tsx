@@ -93,9 +93,12 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   // DM who needs campaign scope offered to them.
   const dmCampaigns = userCampaigns.filter((c) => isCampaignDm(c, user?.id));
 
-  // Available scopes to move to (exclude current)
+  // Available scopes to move to (exclude current). Personal is the
+  // uploader's library, so only they (or an admin) may move an asset there,
+  // as the server says.
+  const isUploader = user?.id === currentAsset.uploadedById;
   const availableMoveScopes: AssetScope[] = [];
-  if (currentAsset.scope !== AssetScope.USER) availableMoveScopes.push(AssetScope.USER);
+  if (currentAsset.scope !== AssetScope.USER && (isUploader || isAdmin)) availableMoveScopes.push(AssetScope.USER);
   if (currentAsset.scope !== AssetScope.CAMPAIGN && userCampaigns.length > 0)
     availableMoveScopes.push(AssetScope.CAMPAIGN);
   if (currentAsset.scope !== AssetScope.GLOBAL && canUploadGlobal)

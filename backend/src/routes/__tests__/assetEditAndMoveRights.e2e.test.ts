@@ -300,3 +300,44 @@ describe('a move\'s reply', () => {
     expect(res.body.asset).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id, canChange: true });
   });
 });
+
+// A personal asset is its uploader's. A DM's move of a player's campaign
+// asset to Personal put it in the player's personal library, out of the
+// campaign and out of the DM's reach. Only the uploader moves one there now;
+// a DM keeps the other moves the server allowed.
+describe('moving an asset to Personal', () => {
+  async function playerArtAtTable() {
+    const dm = await signedIn('Personal Move DM');
+    const player = await signedIn('Personal Move Player');
+    const table = await createTestCampaign(dm.id);
+    campaignIds.push(table.id);
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: dm.id, campaignId: table.id, role: 'DM', characterIds: [] },
+        { userId: player.id, campaignId: table.id, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+    const art = await prisma.asset.create({
+      data: {
+        type: 'TOKEN', scope: 'CAMPAIGN', campaignId: table.id, uploadedById: player.id, filename: 'p.png', originalName: 'p.png',
+        mimeType: 'image/png', fileSize: 1, filePath: path.join(UPLOAD_DIR, 'p.png'), name: 'Player art', tags: [],
+      },
+    });
+    return { dm, player, table, art };
+  }
+
+  it('is refused to the campaign\'s DM for a player\'s asset, which stays in the campaign', async () => {
+    const { dm, table, art } = await playerArtAtTable();
+    const res = await dm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Only the asset\'s uploader can move it to their personal library');
+    expect(await prisma.asset.findUniqueOrThrow({ where: { id: art.id } })).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id });
+  });
+
+  it('is the uploader\'s to make', async () => {
+    const { player, art } = await playerArtAtTable();
+    const res = await player.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    expect(res.status).toBe(200);
+    expect(res.body.asset).toMatchObject({ scope: 'USER', campaignId: null });
+  });
+});

@@ -484,6 +484,9 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   campaign's DM's and an admin's; a global one an admin's, or its uploader's
   while they keep `globalAssetManager`; a personal one its uploader's and an
   admin's. A campaign asset with no campaign recorded is an admin's alone.
+  A move to `USER` is its uploader's (or an admin's) alone besides: the asset
+  would land in the uploader's personal library, so a DM moving a player's
+  upload there would take it out of the campaign and out of their own reach.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
   and sharing is limited to the DM's own documents and global ones, unless the
   DM is a platform admin, who may share any document. A DM may read a document

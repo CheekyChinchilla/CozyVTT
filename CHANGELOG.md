@@ -71,6 +71,9 @@ There is no new setting, no setting is removed, and there is no database change 
   - *Documents.* A 304 from `GET /api/assets/documents/:id` carries the document's `Content-Security-Policy: default-src 'none'; sandbox` and `X-Content-Type-Options: nosniff`, as the 200 does.
   - *Assets.* `GET /api/assets/:id` decides with the same read rule as the file routes, so a member of a campaign that uses an asset may read its details; a campaign asset whose campaign is gone is no longer shown to anyone signed in. `campaign` is `null` for a reader who is not a member of the asset's campaign.
   - *Assets.* The reply to `PATCH /api/assets/:id/scope` gives the asset's `canChange`, as the asset list does.
+  - *Assets.* `PATCH /api/assets/:id/scope` with `scope: USER` answers 403 `Only the asset's uploader can move it to their personal library` to anyone but the uploader or an admin.
+
+- **Only an asset's uploader can move it to their Personal library.** A campaign's DM could move a player's upload in the campaign's library to **Personal**, which put it in the player's own library, out of the campaign and out of the DM's reach. The DM can still delete such an asset and make the other moves they could. A server admin can still move any asset.
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
