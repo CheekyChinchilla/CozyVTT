@@ -4,6 +4,7 @@ import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
 import { getSpiritVisibility, getSpiritVisibilityAcrossCampaigns } from '../utils/spirit-layer';
 import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
+import { escapeLikePattern } from '../utils/likePattern';
 
 /**
  * Permission Verification Helpers
@@ -601,14 +602,18 @@ export async function assetUsedInUserCampaign(
   });
   if (ambience) return true;
 
-  // Tokens live as JSON on the map, so they cannot be matched by column. Only
-  // the art URL is read, and only once everything cheaper has missed.
-  const maps = await prisma.map.findMany({
-    where: readableMaps,
-    select: { tokens: true },
-  });
-  return maps.some((map) =>
-    readTokens(map.tokens).some((token) => names(token?.imageUrl))
+  // Tokens live as JSON on the map, so they cannot be matched by column, and
+  // this runs only once everything cheaper has missed. The database narrows
+  // to the readable maps whose tokens mention the id at all, as the column
+  // searches above do; only those maps' tokens are read, and each token's art
+  // address is checked as above. Loading every readable map's tokens made
+  // each request for an asset the campaign does not use read all of them.
+  const mentioning = await prisma.$queryRaw<Array<{ tokens: unknown }>>`
+    SELECT tokens FROM "Map"
+    WHERE ("campaignId" = ANY(${dmCampaignIds}::text[]) OR id = ANY(${currentMapIds}::text[]))
+      AND tokens::text LIKE ${`%${escapeLikePattern(assetId)}%`}`;
+  return mentioning.some((map) =>
+    readTokens(map.tokens as Prisma.JsonValue).some((token) => names(token?.imageUrl))
   );
 }
 
