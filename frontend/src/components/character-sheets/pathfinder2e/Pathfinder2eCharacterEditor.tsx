@@ -46,6 +46,8 @@ import { pf2eInitiativeBonus } from '@/utils/rules/initiative';
 import {
   pf2eArmorClass,
   pf2eClassDC,
+  pf2eAttributeName,
+  pf2eProficiencyBonus,
   pf2eSpellAttack,
   pf2eSpellDC,
   pf2eSkillTotal,
@@ -830,6 +832,13 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     }
   };
 
+  /** What a strike's rank, attribute and item bonus give, shown beside its typed bonus. */
+  const strikeFromRank = (strike: { attributeModifier?: string; proficiencyRank?: string; itemBonus?: number }): number => {
+    const attribute = pf2eAttributeName(strike.attributeModifier);
+    const modifier = attribute ? formData.attributes?.[attribute]?.modifier ?? 0 : 0;
+    return modifier + pf2eProficiencyBonus(formData.level, strike.proficiencyRank) + (strike.itemBonus ?? 0);
+  };
+
   const renderProficiencySelector = (path: string, currentRank: ProficiencyRank) => (
     <select
       value={currentRank}
@@ -1322,8 +1331,18 @@ min={0} value={formData.deathAndDying?.doomed} onChange={(v: number) => updateFi
                   <option value="ranged">Ranged</option>
                 </select>
                 {renderProficiencySelector(`strikes.${index}.proficiencyRank`, strike.proficiencyRank as ProficiencyRank)}
-                <NumberField
-value={strike.attackBonus} onChange={(v: number) => updateField(`strikes.${index}.attackBonus`, v)} placeholder="Attack Bonus" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" fallback={0} />
+                <div>
+                  <NumberField
+                    value={strike.attackBonus}
+                    onChange={(v: number) => updateField(`strikes.${index}.attackBonus`, v)}
+                    placeholder="Attack Bonus"
+                    className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    fallback={0}
+                  />
+                  {/* The bonus stays as typed; this says what the rank gives
+                      with the strike's attribute and item bonus, to check it. */}
+                  <p className="mt-0.5 text-xs text-stone-500">Rank, attribute and item give {formatModifier(strikeFromRank(strike))}</p>
+                </div>
                 <input type="text" value={strike.damageRoll} onChange={(e) => updateField(`strikes.${index}.damageRoll`, e.target.value)} placeholder="1d6" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 <input type="text" value={strike.damageType} onChange={(e) => updateField(`strikes.${index}.damageType`, e.target.value)} placeholder="Damage Type" className="px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
                 <input type="number" min="0" value={strike.range || ''} onChange={(e) => updateField(`strikes.${index}.range`, e.target.value === '' ? null : parseInt(e.target.value))} placeholder="Range (ft)" className="px-2 py-1 border border-stone-300 rounded-sm text-sm text-center focus:outline-hidden focus:ring-2 focus:ring-blue-500" />
@@ -1598,6 +1617,7 @@ min={0} max={slots.total || 0} value={slots.expended} onChange={(v: number) => u
                   </button>
                 </div>
                 <input type="text" value={spell.frequency} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.frequency`, e.target.value)} placeholder="Frequency (e.g., at will, 1/day)" className="w-full px-2 py-1 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
+                <textarea value={spell.notes || ''} onChange={(e) => updateField(`spellcasting.innateSpells.${index}.notes`, e.target.value)} placeholder="Notes (e.g., where it comes from)" aria-label={`Notes for innate spell ${index + 1}`} rows={2} className="w-full px-2 py-1 mt-2 border border-stone-300 rounded-sm text-sm focus:outline-hidden focus:ring-2 focus:ring-purple-500" />
               </div>
             ))}
             {(!formData.spellcasting!.innateSpells || formData.spellcasting!.innateSpells.length === 0) && (

@@ -373,7 +373,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
         </div>
         {data.armorClass?.capDex !== null && data.armorClass?.capDex !== undefined && (
           <div className="text-xs text-blue-700 mt-2">
-            DEX Cap: +{data.armorClass.capDex}
+            DEX Cap: {formatModifier(data.armorClass.capDex)}
           </div>
         )}
       </div>
@@ -424,7 +424,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       <div className="bg-linear-to-br/srgb from-green-50 to-green-100 border-2 border-green-300 rounded-lg p-4">
         <h3 className="text-sm font-bold text-green-800 mb-2">Speed</h3>
         <div className="text-3xl font-bold text-green-800">
-          {data.speed?.land || 30} ft.
+          {data.speed?.land ?? 30} ft.
         </div>
         {data.speed?.other && data.speed.other.length > 0 && (
           <div className="text-xs text-green-700 mt-2">
@@ -934,7 +934,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
                     <span className="text-xs text-purple-600">{spell.frequency}</span>
                   </div>
                   {spell.notes && (
-                    <div className="text-xs text-stone-600 mt-1">{spell.notes}</div>
+                    <div className="text-xs text-stone-600 mt-1 whitespace-pre-wrap">{spell.notes}</div>
                   )}
                 </div>
               ))}
@@ -956,25 +956,25 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           {data.personality.traits && (
             <div>
               <h4 className="text-sm font-semibold text-stone-700 mb-1">Personality Traits</h4>
-              <p className="text-sm text-stone-600">{data.personality.traits}</p>
+              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.traits}</p>
             </div>
           )}
           {data.personality.ideals && (
             <div>
               <h4 className="text-sm font-semibold text-stone-700 mb-1">Ideals</h4>
-              <p className="text-sm text-stone-600">{data.personality.ideals}</p>
+              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.ideals}</p>
             </div>
           )}
           {data.personality.bonds && (
             <div>
               <h4 className="text-sm font-semibold text-stone-700 mb-1">Bonds</h4>
-              <p className="text-sm text-stone-600">{data.personality.bonds}</p>
+              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.bonds}</p>
             </div>
           )}
           {data.personality.flaws && (
             <div>
               <h4 className="text-sm font-semibold text-stone-700 mb-1">Flaws</h4>
-              <p className="text-sm text-stone-600">{data.personality.flaws}</p>
+              <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.personality.flaws}</p>
             </div>
           )}
         </div>
@@ -984,7 +984,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {data.backstory && (
         <div className="mb-4">
           <h4 className="text-sm font-semibold text-stone-700 mb-1">Backstory</h4>
-          <p className="text-sm text-stone-600">{data.backstory}</p>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.backstory}</p>
         </div>
       )}
 
@@ -1026,7 +1026,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
           <h4 className="text-sm font-semibold text-stone-700 mb-1">
             {data.alliesAndOrganizations.name}
           </h4>
-          <p className="text-sm text-stone-600">{data.alliesAndOrganizations.description}</p>
+          <p className="text-sm text-stone-600 whitespace-pre-wrap">{data.alliesAndOrganizations.description}</p>
         </div>
       )}
 
@@ -1034,7 +1034,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
       {data.notes && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
           <h4 className="text-sm font-semibold text-amber-800 mb-1">Notes</h4>
-          <p className="text-sm text-stone-700">{data.notes}</p>
+          <p className="text-sm text-stone-700 whitespace-pre-wrap">{data.notes}</p>
         </div>
       )}
     </div>

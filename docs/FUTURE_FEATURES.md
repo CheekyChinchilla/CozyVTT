@@ -269,6 +269,13 @@ _Nothing at present._
   to 500 entries, like every other list on the sheet. Either build it with the
   rest of Pulp, or drop the field.
 
+- **Pathfinder 2e strikes worked out from their parts.** A strike stores its
+  attack bonus as typed, beside a proficiency rank, an attribute and an item
+  bonus that the editor shows only as a hint ("Rank, attribute and item give
+  +7"). Deriving the bonus, as AC and skills are, needs boxes for the
+  attribute and item bonus, which the editor does not edit, and would change
+  every stored strike's bonus, so it waits for its own change.
+
 - **Pathfinder Class DC assumes Intelligence.** When a sheet has no `classDC`
   stored, the editor fills one in with Intelligence as its key attribute, but
   the key attribute depends on the class: Strength for a fighter, Charisma for
