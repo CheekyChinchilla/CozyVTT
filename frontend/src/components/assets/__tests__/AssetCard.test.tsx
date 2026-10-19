@@ -93,3 +93,16 @@ describe('AssetCard Delete', () => {
     expect(screen.queryByRole('button', { name: 'Delete Thing' })).not.toBeInTheDocument();
   });
 });
+
+// With transition-all the card's CSS transition also covered its opacity, so
+// in Firefox each card faded in twice: once by framer-motion, then again as
+// the CSS transition replayed the final opacity it wrote. Hover changes only
+// the shadow, so only the shadow is transitioned.
+describe('AssetCard transitions', () => {
+  it.each(['grid', 'list'] as const)('transitions only the shadow in %s view', (viewMode) => {
+    const { container } = renderCard(asset(AssetType.MAP, 'm.png'), viewMode);
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.className).toMatch(/\btransition-shadow\b/);
+    expect(card.className).not.toMatch(/\btransition-all\b/);
+  });
+});

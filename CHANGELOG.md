@@ -79,6 +79,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Fixed
 
+- **In Firefox, the Asset Library's cards fade in once as it opens.** Each card faded in, vanished and faded in again.
+
 - **An asset you move in the Asset Library takes its new place at once.** It stayed listed where it had been, under its old library, until the page was loaded again.
 
 - **The Asset Library offers Campaign as a place to move an asset only when one of your campaigns can take it.** A player was offered **Campaign** for their own map, with no campaign to choose, since only a campaign's DM can put a map in its library.

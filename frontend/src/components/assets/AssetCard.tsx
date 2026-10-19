@@ -133,7 +133,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-all"
+        className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-shadow"
       >
         <div className="flex items-center gap-4">
           {/* Thumbnail */}
@@ -231,18 +231,15 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   // Grid view
   return (
     <>
-    {/* TODO(ui): `transition-all` here and on the list card above also
-        transitions opacity, so in Firefox each card fades in twice: when
-        framer-motion's fade ends it writes the final opacity on the element,
-        and the 150ms CSS transition replays it from 0. The cards should
-        transition only what hover changes (`transition-shadow`). */}
+    {/* Only the shadow is transitioned, as hover changes only that: a CSS
+        transition on opacity replayed framer-motion's fade in Firefox. */}
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.9 }}
       whileHover={{ y: -4 }}
-      className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all relative group"
+      className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow relative group"
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
