@@ -67,27 +67,26 @@ export const SanityTracker: React.FC<SanityTrackerProps> = ({
           <Brain className="w-5 h-5 text-spirit-ink" />
           <h3 className="text-lg font-bold text-spirit-ink">Sanity Points</h3>
         </div>
-        <div className={`flex items-center space-x-1 ${dangerLevel.text}`}>
-          {dangerLevel.level === 'Breaking' && <Skull className="w-4 h-4" />}
-          {dangerLevel.level === 'Fragile' && <AlertTriangle className="w-4 h-4" />}
-          <span className="text-sm font-semibold">{dangerLevel.level}</span>
+        <div className="flex items-center space-x-3">
+          <span className="text-sm font-bold text-ink">
+            {current} / {maximum}
+          </span>
+          <div className={`flex items-center space-x-1 ${dangerLevel.text}`}>
+            {dangerLevel.level === 'Breaking' && <Skull className="w-4 h-4" />}
+            {dangerLevel.level === 'Fragile' && <AlertTriangle className="w-4 h-4" />}
+            <span className="text-sm font-semibold">{dangerLevel.level}</span>
+          </div>
         </div>
       </div>
 
       {/* Progress Bar */}
-      <div className="relative w-full h-8 bg-ink/10 rounded-full overflow-hidden border border-spirit/30">
-        {/* Fill */}
+      {/* The number is above the bar: no one text colour reads on both the
+          fill and the track in every theme. */}
+      <div className="relative w-full h-4 bg-ink/10 rounded-full overflow-hidden border border-spirit/30">
         <div
           className={`absolute inset-y-0 left-0 ${dangerLevel.color} transition-all duration-300 ease-out`}
           style={{ width: `${percentage}%` }}
         />
-
-        {/* Percentage Text */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="text-sm font-bold text-ink">
-            {current} / {maximum}
-          </span>
-        </div>
       </div>
 
       {/* Stats Grid */}
