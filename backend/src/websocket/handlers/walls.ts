@@ -1,10 +1,9 @@
 // ============================================
 // Wall handlers: wall:add / wall:remove / wall:update / walls:replace /
-// walls:request / dm:editing
+// walls:request
 // ============================================
 
 import { Server } from 'socket.io';
-import { throttle } from '../../utils/throttle';
 import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import { WallSegmentSchema, WallSegmentsArraySchema, DUPLICATE_WALL_ID_MESSAGE } from '../../validators/walls';
@@ -363,21 +362,5 @@ export function registerWallHandlers(io: Server, socket: AuthenticatedSocket): v
     } catch (error) {
       logger.error('walls:request failed', { err: error });
     }
-  });
-
-  /**
-   * dm:editing — DM notifies players they are actively editing the map.
-   * Throttled to once per 500ms; players show a transient indicator.
-   */
-  const emitDmEditing = throttle((mapId: string) => {
-    if (socket.campaignId) {
-      void emitToMapReaders(io, socket.campaignId, mapId, 'dm:editing', { mapId, timestamp: new Date().toISOString() }, socket.id)
-        .catch((err: unknown) => logger.error('dm:editing failed', { err }));
-    }
-  }, 500);
-
-  socket.on('dm:editing', (data: { mapId: string }) => {
-    if (!socket.campaignId || socket.role !== 'DM') return;
-    if (data?.mapId) emitDmEditing(data.mapId);
   });
 }

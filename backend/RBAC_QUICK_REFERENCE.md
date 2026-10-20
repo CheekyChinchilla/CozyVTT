@@ -347,11 +347,10 @@ toggled with `wall:update`, `exploration:reveal` and `initiative.roll`
 (answered with `error`, frames dropped) all refuse
 any map but the current one, even a token the player controls on it. And it
 gates what is broadcast: a map's live wall, light, fog, settings, ping and
-explored-memory-reset events, and the DM's editing notice, go through
-`emitToMapReaders` in `websocket/utils.ts`, which sends them to the whole
-campaign for the current map and to the DM's sockets for any other. A map the
-DM has prepared but not switched to is therefore the DM's alone, tokens left
-visible on it included.
+explored-memory-reset events go through `emitToMapReaders` in
+`websocket/utils.ts`, which sends them to the whole campaign for the current
+map and to the DM's sockets for any other. A map the DM has prepared but not
+switched to is therefore the DM's alone, tokens left visible on it included.
 
 ## Reading an asset: access follows use
 

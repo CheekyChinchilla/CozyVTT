@@ -1,7 +1,7 @@
 /**
  * Every live-table event that is the DM's alone refuses a player and a
- * spectator: they are told no (one event answers nothing at all), nobody else
- * hears of it, and nothing is stored.
+ * spectator: they are told no, nobody else hears of it, and nothing is
+ * stored.
  *
  * The events are those the WebSocket guide's event table marks "DM only".
  * That table is generated from the handlers and checked against them by
@@ -60,7 +60,6 @@ const PAYLOADS: Record<string, () => unknown> = {
   'atmosphere.audio.set': () => ({ assetId: null }),
   'atmosphere.effect.set': () => ({ effect: 'rain' }),
   'dice.clearHistory': () => undefined,
-  'dm:editing': () => ({ mapId }),
   'exploration:reset': () => ({ mapId }),
   'fog:operation': () => ({ mapId, operation: { op: 'reveal_all' } }),
   'initiative.add': () => ({ tokenId: tokenC, mapId }),
@@ -92,7 +91,6 @@ const REACHES_TABLE_AS: Record<string, string> = {
   'atmosphere.audio.set': 'atmosphere.audio.updated',
   'atmosphere.effect.set': 'atmosphere.effect.updated',
   'dice.clearHistory': 'dice.historyCleared',
-  'dm:editing': 'dm:editing',
   'exploration:reset': 'exploration:state',
   'fog:operation': 'fog:cells',
   'initiative.add': 'initiative.state',
@@ -115,9 +113,6 @@ const REACHES_TABLE_AS: Record<string, string> = {
   'wall:remove': 'wall:removed',
   'walls:replace': 'walls:replaced',
 };
-
-/** The one DM-only event that answers a non-DM with nothing at all. */
-const SILENT = new Set(['dm:editing']);
 
 /** What the guide's event table marks "DM only". */
 function dmOnlyInGuide(): string[] {
@@ -209,10 +204,6 @@ describe.each(['PLAYER', 'SPECTATOR'] as const)('a %s', (role) => {
 
     const notRefused: string[] = [];
     for (const [event, payload] of Object.entries(PAYLOADS)) {
-      if (SILENT.has(event)) {
-        sender.emit(event, payload());
-        continue;
-      }
       const told = waitForEvent<{ message: string }>(sender, 'error', 2000).then(() => true, () => false);
       sender.emit(event, payload());
       if (!(await told)) notRefused.push(event);
