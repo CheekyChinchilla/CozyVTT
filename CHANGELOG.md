@@ -141,6 +141,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The warning about a missing or example session secret names the right file.** Outside production the backend warns when `SESSION_SECRET` is unset or a value it would refuse in production, and said to set it in `backend/.env`. The Docker stacks read it from the `.env` in the CozyVTT folder, so a value put in `backend/.env` changed nothing there. The warning now names that `.env` for Docker and `backend/.env` for a backend run without Docker.
 
+- **A second stop while the backend is stopping no longer logs an error.** Pressing Ctrl+C twice, or a service manager sending its stop again, while the backend wrote out its log files printed an error ending in `write after end` in place of its message. The backend's last messages now go to the console once its log files are closed.
+
 - **Stopping CozyVTT no longer waits 10 seconds while a player is connected.** With anyone at a table, `docker compose stop`, `restart` and an upgrade waited the full 10 seconds for the bundled nginx and then forced it to stop, because nginx waited for every live game connection to close first. It now stops at once, and players' browsers reconnect when it is back, as they already did.
 
 - **A restore sent a damaged upload says so.** A restore whose upload arrived cut off, or garbled on its way, answered "An unexpected error occurred". It now says "The upload could not be read. Nothing was changed.", so you know to send the backup again.
