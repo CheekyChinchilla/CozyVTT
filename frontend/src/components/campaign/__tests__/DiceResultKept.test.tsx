@@ -15,6 +15,7 @@ import DiceResult from '../DiceResult';
 import type { DiceRolledEvent, DiceRollDetail } from '@/types';
 
 vi.mock('framer-motion', () => ({
+  useReducedMotionConfig: () => false,
   motion: new Proxy({}, {
     get: () => ({ children, ...rest }: { children?: unknown }) => createElement('div', rest, children as never),
   }),

@@ -22,6 +22,7 @@ import type { DiceRolledEvent } from '@/types';
 // The animation wrapper contributes nothing to what is being checked here, and
 // its props would land on a real DOM node and warn.
 vi.mock('framer-motion', () => ({
+  useReducedMotionConfig: () => false,
   motion: new Proxy({}, {
     get: () => ({ children, ...rest }: { children?: unknown }) =>
       createElement('div', rest, children as never),

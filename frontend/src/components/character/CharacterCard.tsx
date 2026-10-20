@@ -8,6 +8,7 @@ import type { CharacterSummary, Campaign } from '@/types';
 import { User, Calendar, Link2, MoreVertical, Edit, Copy, Trash2, FileDown, Link as LinkIcon } from 'lucide-react';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 
 interface CharacterCardProps {
   character: CharacterSummary;
@@ -35,6 +36,7 @@ function CharacterCardInner({
   onExport,
 }: CharacterCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const menuExit = useMotionExit({ opacity: 0, scale: 0.95, y: -10 });
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -123,7 +125,7 @@ function CharacterCardInner({
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                exit={menuExit}
                 transition={{ duration: 0.15 }}
                 className="absolute right-0 mt-2 w-48 rounded-lg shadow-xl z-50
                            bg-surface-light/95 backdrop-blur-cozy border border-brand/20"

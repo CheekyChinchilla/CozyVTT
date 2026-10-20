@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import {
   Eye,
   Trash2,
@@ -32,6 +33,7 @@ interface AssetCardProps {
  */
 function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const [showActions, setShowActions] = useState(false);
+  const cardExit = useMotionExit({ opacity: 0, scale: 0.9 });
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -136,7 +138,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
         layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9 }}
+        exit={cardExit}
         className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-shadow"
       >
         <div className="flex items-center gap-4">
@@ -237,7 +239,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
       layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
+      exit={cardExit}
       whileHover={{ y: -4 }}
       className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow relative group"
       onMouseEnter={() => setShowActions(true)}

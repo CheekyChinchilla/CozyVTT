@@ -11,6 +11,7 @@ import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import type { ChatMessageBroadcast, DiceRolledEvent } from '@/types';
 
 vi.mock('framer-motion', () => ({
+  useReducedMotionConfig: () => false,
   motion: new Proxy({}, { get: () => (props: Record<string, unknown>) => {
     const { children, ...rest } = props as { children?: unknown } & Record<string, unknown>;
     const plain = Object.fromEntries(Object.entries(rest).filter(([k]) => !/^(initial|animate|exit|transition|layout|whileHover|whileTap)$/.test(k)));

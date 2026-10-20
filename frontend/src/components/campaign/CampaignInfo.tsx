@@ -14,6 +14,7 @@ import InvitePlayerModal from './InvitePlayerModal';
 export default function CampaignInfo() {
   const { campaign, userRole } = useCampaign();
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteKey, setInviteKey] = useState(0);
 
   if (!campaign) {
     return (
@@ -138,7 +139,7 @@ export default function CampaignInfo() {
       {userRole === 'DM' && (
         <div className="pt-2 border-t border-moss-green/20">
           <button
-            onClick={() => setShowInviteModal(true)}
+            onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
             className="flex items-center gap-2 px-3 py-2 w-full rounded-lg bg-moss-green/10 text-brand-ink hover:bg-moss-green/20 transition-colors text-sm font-medium"
           >
             <UserPlus className="w-4 h-4" />
@@ -164,8 +165,11 @@ export default function CampaignInfo() {
       )}
 
       {/* Invite Player Modal */}
-      {showInviteModal && campaign && (
+      {/* Mounted from its first opening on, so it fades out on close. */}
+      {campaign && inviteKey > 0 && (
         <InvitePlayerModal
+          key={inviteKey}
+          open={showInviteModal}
           campaignId={campaign.id}
           onClose={() => setShowInviteModal(false)}
           // The invite dialog says it was sent. Nothing on the campaign

@@ -29,12 +29,18 @@ const SEARCH_DELAY_MS = 300;
 const INVITATION_EXPIRY_DAYS = 14;
 
 interface InvitePlayerModalProps {
+  /**
+   * Whether it is open. A parent keeps it mounted and changes its `key` on
+   * each opening, so it fades out on close and opens with an empty search.
+   */
+  open?: boolean;
   campaignId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export default function InvitePlayerModal({
+  open = true,
   campaignId,
   onClose,
   onSuccess,
@@ -130,7 +136,7 @@ export default function InvitePlayerModal({
 
   return (
     <Modal
-      open
+      open={open}
       onClose={onClose}
       title="Invite Player"
       icon={Mail}

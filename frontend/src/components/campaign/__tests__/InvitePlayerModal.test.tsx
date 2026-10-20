@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import InvitePlayerModal from '../InvitePlayerModal';
 
 vi.mock('@/services/api', () => {
@@ -106,5 +106,16 @@ describe('InvitePlayerModal', () => {
     open();
     fireEvent.change(searchBox(), { target: { value: 'zz' } });
     expect(await screen.findByText(/No one by that name can be invited/)).toBeTruthy();
+  });
+});
+
+// It was mounted only while open, so it vanished on close with no fade.
+describe('closing', () => {
+  it('fades out, staying on screen until it has', async () => {
+    const view = render(<InvitePlayerModal open campaignId="camp-1" onClose={vi.fn()} onSuccess={vi.fn()} />);
+    view.rerender(<InvitePlayerModal open={false} campaignId="camp-1" onClose={vi.fn()} onSuccess={vi.fn()} />);
+
+    expect(screen.getByRole('dialog', { name: 'Invite Player' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Invite Player' })).toBeNull());
   });
 });

@@ -87,6 +87,7 @@ export default function CampaignSettingsModal({
   const [memberToPromote, setMemberToPromote] = useState<CampaignMembership | null>(null);
   const [promotingMemberId, setPromotingMemberId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteKey, setInviteKey] = useState(0);
   // The invitations that still stand, for the DM to see and withdraw.
   const [invitations, setInvitations] = useState<CampaignInvitationSummary[]>([]);
   const [withdrawingId, setWithdrawingId] = useState<string | null>(null);
@@ -558,7 +559,7 @@ export default function CampaignSettingsModal({
                       {isDmViewer && (
                       <Button
                         type="button"
-                        onClick={() => setShowInviteModal(true)}
+                        onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
                         variant="secondary" className="flex items-center gap-2 text-sm"
                       >
                         <UserPlus className="w-4 h-4" />
@@ -798,8 +799,11 @@ export default function CampaignSettingsModal({
       />
 
       {/* Invite player modal */}
-      {showInviteModal && (
+      {/* Mounted from its first opening on, so it fades out on close. */}
+      {inviteKey > 0 && (
         <InvitePlayerModal
+          key={inviteKey}
+          open={showInviteModal}
           campaignId={campaign.id}
           onClose={() => setShowInviteModal(false)}
           // The invite dialog says it was sent. Nothing on the campaign

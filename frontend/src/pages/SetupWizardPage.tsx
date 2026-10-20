@@ -7,6 +7,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { Shield, Settings, CheckCircle, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { setupService } from '@/services/setup.service';
@@ -48,6 +49,7 @@ export default function SetupWizardPage() {
 
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
+  const stepExit = useMotionExit({ opacity: 0, x: -20 });
   const totalSteps = 4;
 
   // Form data
@@ -332,7 +334,7 @@ export default function SetupWizardPage() {
             key={currentStep}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            exit={stepExit}
             transition={{ duration: 0.3 }}
           >
             {renderStep()}

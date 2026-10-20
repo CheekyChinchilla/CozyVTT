@@ -5,6 +5,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import {
   X,
   Plus,
@@ -185,13 +186,14 @@ function MapCard({
 }: MapCardProps) {
   const thumbnailId = extractAssetId(map.imageUrl);
   const isSwitchingToThis = switchingToId === map.id;
+  const cardExit = useMotionExit({ opacity: 0, scale: 0.95 });
 
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      exit={cardExit}
       className={`bg-parchment/50 border rounded-xl overflow-hidden shadow-xs transition-shadow hover:shadow-md ${
         isActive ? 'border-moss-green/60' : 'border-moss-green/20'
       }`}

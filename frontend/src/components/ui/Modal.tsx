@@ -10,6 +10,7 @@
 import { useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { X, type LucideIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
@@ -65,6 +66,7 @@ export default function Modal({
   fitViewport = false,
 }: ModalProps) {
   const titleId = useId();
+  const dialogExit = useMotionExit({ opacity: 0, scale: 0.95, y: 20 });
 
   const handleClose = () => {
     if (!closeDisabled) onClose();
@@ -100,7 +102,7 @@ export default function Modal({
               aria-labelledby={titleId}
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              exit={dialogExit}
               transition={{ duration: 0.2 }}
               className={cn(
                 'w-full p-6 relative rounded-cozy-lg border border-brand/20 shadow-2xl',

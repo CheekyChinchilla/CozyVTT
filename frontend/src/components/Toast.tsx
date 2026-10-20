@@ -6,6 +6,7 @@
 
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -29,6 +30,7 @@ export default function Toast({
   // and not from the last time its page drew: a page that hands over a new
   // function each draw kept restarting it.
   const closeLatest = useRef(onClose);
+  const toastExit = useMotionExit({ opacity: 0, scale: 0.95 });
   useEffect(() => {
     closeLatest.current = onClose;
   });
@@ -78,7 +80,7 @@ export default function Toast({
         <motion.div
           initial={{ opacity: 0, y: -50, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
+          exit={toastExit}
           transition={{ duration: 0.2 }}
           className="fixed top-4 right-4 z-50 max-w-md"
         >
