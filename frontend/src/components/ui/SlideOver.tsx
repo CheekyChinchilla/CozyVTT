@@ -10,7 +10,7 @@
 
 import { createContext, useContext, useId, type HTMLAttributes, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useIsPresent } from 'framer-motion';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { useMotionExit } from '@/utils/motion';
@@ -51,14 +51,6 @@ export default function SlideOver({
   children,
 }: SlideOverProps) {
   const titleId = useId();
-  // Escape closes from inside a field. Leave the field first, as clicking
-  // Close does, so a field that saves when it is left saves its value.
-  const panelRef = useFocusTrap(open, () => {
-    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-    onClose();
-  });
-  const offscreen = side === 'right' ? '100%' : '-100%';
-  const panelExit = useMotionExit({ x: offscreen, opacity: 0 });
 
   // Portal to <body>: ancestors with transform/filter/backdrop-filter create
   // containing blocks that would trap position:fixed children. `propagate`
@@ -79,25 +71,56 @@ export default function SlideOver({
               onClick={onClose}
               aria-hidden="true"
             />
-            <motion.div
-              key="slide-over-panel"
-              ref={panelRef}
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby={titleId}
-              initial={{ x: offscreen, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={panelExit}
-              transition={{ type: 'spring', damping: 30, stiffness: 300, opacity: { duration: 0.2 } }}
-              className={cn('fixed top-0 z-50 h-full w-full', side === 'right' ? 'right-0' : 'left-0', className)}
-            >
+            <SlideOverPanel key="slide-over-panel" onClose={onClose} side={side} className={className} titleId={titleId}>
               {children}
-            </motion.div>
+            </SlideOverPanel>
           </>
         )}
       </AnimatePresence>
     </SlideOverContext.Provider>,
     document.body
+  );
+}
+
+interface SlideOverPanelProps {
+  onClose: () => void;
+  side: 'right' | 'left';
+  className: string | undefined;
+  titleId: string;
+  children: ReactNode;
+}
+
+function SlideOverPanel({ onClose, side, className, titleId, children }: SlideOverPanelProps) {
+  // The panel stays on screen while it slides or fades out, whether it was
+  // closed or a parent AnimatePresence removed it; the trap lets go as the
+  // exit starts, so Escape then reaches what is under it and the panel is
+  // not closed twice. Read here, under the AnimatePresence above: a hook in
+  // SlideOver itself would re-render that AnimatePresence mid-exit, which
+  // draws the exiting panel twice.
+  const isPresent = useIsPresent();
+  // Escape closes from inside a field. Leave the field first, as clicking
+  // Close does, so a field that saves when it is left saves its value.
+  const panelRef = useFocusTrap(isPresent, () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    onClose();
+  });
+  const offscreen = side === 'right' ? '100%' : '-100%';
+  const panelExit = useMotionExit({ x: offscreen, opacity: 0 });
+
+  return (
+    <motion.div
+      ref={panelRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      initial={{ x: offscreen, opacity: 0 }}
+      animate={{ x: 0, opacity: 1 }}
+      exit={panelExit}
+      transition={{ type: 'spring', damping: 30, stiffness: 300, opacity: { duration: 0.2 } }}
+      className={cn('fixed top-0 z-50 h-full w-full', side === 'right' ? 'right-0' : 'left-0', className)}
+    >
+      {children}
+    </motion.div>
   );
 }
 

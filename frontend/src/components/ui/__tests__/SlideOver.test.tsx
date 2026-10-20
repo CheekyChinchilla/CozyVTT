@@ -152,6 +152,33 @@ describe('SlideOver', () => {
     expect(Number(dialog?.style.opacity)).toBeLessThan(1);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
+
+  // While it faded out it still trapped focus, so Escape pressed during the
+  // exit closed it a second time, or closed the window under it.
+  it('lets go of the keyboard as soon as a parent AnimatePresence removes it', async () => {
+    const onClose = vi.fn();
+    const shown = (open: boolean) => (
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence>
+          {open && (
+            <SlideOver key="panel" open onClose={onClose}>
+              <SlideOverTitle>Rules</SlideOverTitle>
+              <button type="button">Roll</button>
+            </SlideOver>
+          )}
+        </AnimatePresence>
+      </MotionConfig>
+    );
+    const view = render(shown(true));
+    await waitForDialogFocus(screen.getByRole('dialog'));
+    view.rerender(shown(false));
+    await act(() => pause(50));
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 // A window opened from a panel (Invite Player from Campaign Settings, Create
