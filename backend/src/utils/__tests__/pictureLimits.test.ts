@@ -70,7 +70,7 @@ describe('a still picture', () => {
 
 describe('a GIF', () => {
   // The image library reads a logical screen over 2,048 pixels as a mistake
-  // and reports the size of the frames instead; a browser draws the screen.
+  // and reports the first frame's size instead; a browser draws the screen.
   it('is measured by its logical screen, however small its frames', async () => {
     expect(await pictureLimitProblem(craftedGif({ width: 20_000, height: 10, frames: 1 }), 'TOKEN')).toBe(
       'This picture is 20,000 pixels wide. A picture can be at most 16,384 pixels on each side.'
@@ -78,7 +78,7 @@ describe('a GIF', () => {
     expect(await pictureLimitProblem(craftedGif({ width: 10, height: 16_385, frames: 2 }), 'TOKEN')).toMatch(/16,385 pixels tall/);
   });
 
-  it('is measured by its frames when they reach past the screen', async () => {
+  it('is measured by its first frame when that reaches past the screen', async () => {
     expect(await pictureLimitProblem(craftedGif({ width: 10, height: 10, frames: 1, frameWidth: 16_385 }), 'TOKEN')).toMatch(/16,385 pixels wide/);
   });
 

@@ -45,8 +45,10 @@ const millions = (n: number) => `${count(Math.ceil(n / 100_000) / 10)} million`;
 
 /**
  * A GIF's logical screen, the canvas a browser draws its frames on. The
- * image library reads a screen wider or taller than 2,048 pixels as a
- * mistake and reports the frames' size instead, so it is read here.
+ * image library reports the screen, or the first frame's right and bottom
+ * edges where they reach past it, but reads a screen wider or taller than
+ * 2,048 pixels as a mistake and reports only the first frame, so the
+ * screen is read here as well.
  */
 async function gifScreen(input: Buffer | string): Promise<{ width: number; height: number }> {
   let head: Buffer;

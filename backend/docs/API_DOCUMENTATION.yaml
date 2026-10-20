@@ -5693,7 +5693,7 @@ paths:
 
         **Picture limits.** A MAP, TOKEN or AVATAR picture may be at most
         16,384 pixels wide and 16,384 pixels tall (a GIF's size is its
-        logical screen, or its frames where they reach past it). An animated
+        logical screen, or its first frame where that reaches past it). An animated
         one, a GIF or WebP of more than one frame, may have at most 1,000
         frames and at most 200,000,000 pixels across all of them (width by
         height by frames) for a MAP, 50,000,000 for a TOKEN or AVATAR. They
