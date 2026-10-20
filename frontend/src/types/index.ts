@@ -1418,9 +1418,6 @@ export interface ChatMessageBroadcast {
 }
 
 // Session Events
-// No fields needed - campaign ID comes from server-side socket.campaignId
-export type SessionStartEvent = Record<string, never>;
-
 export interface SessionStartedBroadcast {
   sessionId: string;
   sessionNumber: number;

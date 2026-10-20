@@ -40,7 +40,6 @@ vi.mock('@/services/socket', () => ({
     connect: vi.fn(),
     disconnect: vi.fn(),
     getSocket: vi.fn().mockReturnValue(null),
-    startHeartbeat: vi.fn(),
   },
 }));
 

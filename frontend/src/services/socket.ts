@@ -17,7 +17,6 @@ import type {
   DoneAck,
   ChatMessageBroadcast,
   ChatSystemBroadcast,
-  SessionStartEvent,
   SessionStartedBroadcast,
   SessionPausedBroadcast,
   VibeUpdateEvent,
@@ -450,29 +449,6 @@ class SocketClient {
   }
 
   // ============================================
-  // State Synchronization
-  // ============================================
-
-  requestSync(lastEventId?: string) {
-    if (!this.socket?.connected) {
-      return;
-    }
-
-    this.socket.emit('sync.request', {
-      lastEventId,
-    });
-  }
-
-  // `never` rather than the `unknown` default: this event has no payload type
-  // declared yet, and `EventCallback<unknown>` would reject a handler that names
-  // its own payload — forcing the next subscriber into a cast. Same
-  // contravariance the registry relies on. Replace with a real payload type when
-  // `sync.state` gains one.
-  onSyncState(callback: EventCallback<never>) {
-    this.addListener('sync.state', callback);
-  }
-
-  // ============================================
   // Token Movement Events
   // ============================================
 
@@ -596,18 +572,6 @@ class SocketClient {
   // ============================================
   // Session Events
   // ============================================
-
-  emitSessionStart(data: SessionStartEvent) {
-    this.socket?.emit('session.start', data);
-  }
-
-  emitSessionPause() {
-    this.socket?.emit('session.pause', {});
-  }
-
-  emitSessionEnd(saveState: boolean = true) {
-    this.socket?.emit('session.end', { saveState });
-  }
 
   onSessionStarted(callback: EventCallback<SessionStartedBroadcast>) {
     this.addListener('session.started', callback);
@@ -776,28 +740,6 @@ class SocketClient {
 
   onMapPinged(callback: EventCallback<MapPingedBroadcast>) {
     this.addListener('map.pinged', callback);
-  }
-
-  // ============================================
-  // Heartbeat
-  // ============================================
-
-  startHeartbeat(interval: number = 30000) {
-    if (!this.socket) return;
-
-    const heartbeatInterval = setInterval(() => {
-      if (this.socket?.connected) {
-        this.socket.emit('ping');
-      } else {
-        clearInterval(heartbeatInterval);
-      }
-    }, interval);
-
-    this.socket.on('pong', () => {
-      // Connection is healthy
-    });
-
-    return () => clearInterval(heartbeatInterval);
   }
 
   // ============================================

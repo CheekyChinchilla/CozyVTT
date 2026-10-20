@@ -83,7 +83,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
   const [joinedEpoch, setJoinedEpoch] = useState(0);
-  const heartbeatCleanupRef = useRef<(() => void) | null>(null);
   const connectedCampaignRef = useRef<string | null>(null);
   const statusRef = useRef<ConnectionStatus>('disconnected');
   const isMountedRef = useRef(true);
@@ -150,10 +149,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     const onRevoked = (revoked: AccessRevoked) => {
       if (!isMountedRef.current) return;
       revokedRef.current = true;
-      if (heartbeatCleanupRef.current) {
-        heartbeatCleanupRef.current();
-        heartbeatCleanupRef.current = null;
-      }
       setStatus('error');
       setError(revoked.message);
     };
@@ -267,9 +262,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
       const socket = socketClient.getSocket();
       if (socket) attachLifecycle(socket);
-
-      const cleanup = socketClient.startHeartbeat(30000); // 30 second interval
-      heartbeatCleanupRef.current = cleanup || null;
     } catch (err) {
       // A socket whose connect failed is often still being retried by
       // socket.io, and its lifecycle is already followed (onCreated), so the
@@ -302,12 +294,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    // Stop heartbeat
-    if (heartbeatCleanupRef.current) {
-      heartbeatCleanupRef.current();
-      heartbeatCleanupRef.current = null;
-    }
-
     socketClient.disconnect();
     setStatus('disconnected');
     setError(null);
@@ -341,10 +327,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         retryTimerRef.current = null;
       }
       failedConnectsRef.current = 0;
-      if (heartbeatCleanupRef.current) {
-        heartbeatCleanupRef.current();
-        heartbeatCleanupRef.current = null;
-      }
 
       socketClient.disconnect();
       setStatus('disconnected'); // Reset status so reconnect can work

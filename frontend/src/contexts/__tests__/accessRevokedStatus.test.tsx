@@ -33,7 +33,6 @@ vi.mock('@/services/socket', () => ({
     getSocket: () => fakeSocket,
     on: (event: string, cb: Handler) => { clientHandlers[event] = cb; },
     off: vi.fn(),
-    startHeartbeat: () => () => {},
   },
 }));
 
