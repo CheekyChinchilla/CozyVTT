@@ -280,7 +280,7 @@ router.put('/settings', async (req, res) => {
   }
   try {
     const {
-      instanceName, timezone, allowRegistration, requireAdminApproval,
+      instanceName, allowRegistration, requireAdminApproval,
       themeId, customThemeColors, fontId,
       customLogoUrl, customFaviconUrl, customMascotUrl,
     } = parsed.data;
@@ -289,9 +289,6 @@ router.put('/settings', async (req, res) => {
 
     if (instanceName !== undefined) {
       updateData.instanceName = sanitizeInput(instanceName).slice(0, 100);
-    }
-    if (timezone !== undefined) {
-      updateData.timezone = sanitizeInput(timezone).slice(0, 50);
     }
     if (allowRegistration !== undefined) {
       updateData.allowRegistration = allowRegistration;

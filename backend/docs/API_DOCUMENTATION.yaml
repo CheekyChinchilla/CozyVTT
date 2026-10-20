@@ -494,11 +494,11 @@ paths:
                     failing setup, which can only be run once.
                 timezone:
                   type: string
-                  default: UTC
+                  deprecated: true
                   description: >-
-                    Stored, and used by nothing; the wizard no longer sends it.
-                    Accepted so an older client is not refused. Treated like
-                    `instanceName`, cut off at 50 characters.
+                    Ignored, and not stored. Nothing used it, and the wizard no
+                    longer sends it; a request that has it is answered as one
+                    without it.
                 allowRegistration:
                   type: boolean
                   default: false
@@ -9849,6 +9849,10 @@ paths:
                         type: string
                       timezone:
                         type: string
+                        deprecated: true
+                        description: >-
+                          `UTC`, or what an earlier version stored. Nothing uses
+                          it, and nothing changes it any more.
                       allowRegistration:
                         type: boolean
                       requireAdminApproval:
@@ -9894,11 +9898,10 @@ paths:
       description: |
         Every field is optional; only the ones present are changed, and fields not
         listed here are ignored. A field of the wrong type answers 400.
-        `instanceName` and `timezone` are trimmed, stripped of `<` and `>`, then cut
-        to their max length rather than rejected for being too long. `instanceName`
-        is the browser tab's title and is used in emails. `timezone` is stored and
-        used by nothing; the Admin Panel no longer offers it, and it is accepted so
-        an older client is not refused.
+        `instanceName` is trimmed, stripped of `<` and `>`, then cut to its max
+        length rather than rejected for being too long; it is the browser tab's
+        title and is used in emails. `timezone` is ignored like any other field
+        not listed: nothing used it, and the Admin Panel no longer offers it.
 
         `themeId` and `fontId` must name one of the app's themes (or `custom`) and
         fonts, the same lists `PUT /api/users/{id}/preferences` accepts.
@@ -9935,7 +9938,8 @@ paths:
                   maxLength: 100
                 timezone:
                   type: string
-                  maxLength: 50
+                  deprecated: true
+                  description: Ignored, and not stored or logged.
                 allowRegistration:
                   type: boolean
                 requireAdminApproval:

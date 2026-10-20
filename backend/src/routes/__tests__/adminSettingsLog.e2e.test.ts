@@ -105,6 +105,24 @@ it('lists several changes together, a switch as yes and no', async () => {
   });
 });
 
+// Nothing used the timezone, so a save that sends one is answered as before
+// and leaves it as it was.
+it('ignores a timezone, storing and logging nothing for it', async () => {
+  const before = (await lines()).length;
+
+  const res = await save({ timezone: 'Europe/London', instanceName: 'Log Test Tavern Two' });
+  expect(res.status).toBe(200);
+
+  expect((await db.systemSettings.findFirstOrThrow({ orderBy: { id: 'asc' } })).timezone).toBe(original.timezone);
+  const written = await lines();
+  expect(written).toHaveLength(before + 1);
+  expect(written[written.length - 1].message).toBe('Updated system settings: instanceName');
+  expect(JSON.stringify(written[written.length - 1].context)).not.toContain('timezone');
+
+  expect((await save({ timezone: 'America/New_York' })).status).toBe(200);
+  expect(await lines()).toHaveLength(before + 1);
+});
+
 it('compares the custom colours by value, not by the order of their keys', async () => {
   const colours = { primary: '#112233', accent: '#445566', background: '#778899', text: '#aabbcc' };
   expect((await save({ themeId: 'custom', customThemeColors: colours })).status).toBe(200);
