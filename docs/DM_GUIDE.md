@@ -135,7 +135,7 @@ Before you can use a map in your campaign, it needs to live in the **Asset Libra
 
 1. Open the **Asset Library** from your dashboard
 2. Click **Upload Asset**
-3. Choose your image file (JPEG, PNG, and WebP work great)
+3. Choose your image file (JPEG, PNG, and WebP work great), at most 16,384 pixels on each side. An animated WebP map has limits on its frames as well (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide)
 4. Set the type to **Map**
 5. Set the scope to **Campaign** (shared with everyone in that campaign, who can browse it in the asset library straight away) or **Personal** (private to you until the players are shown something that uses it)
 6. Give it a descriptive name — you'll thank yourself later when you have twenty maps

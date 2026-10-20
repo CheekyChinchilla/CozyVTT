@@ -431,6 +431,15 @@ The Asset Library is where all your campaign media lives — maps, token images,
 
 A PNG that is animated is refused for now, for every kind of picture.
 
+A map, token or avatar picture can be at most 16,384 pixels wide and 16,384 pixels tall. An animated GIF or WebP also has limits, because every player's browser unpacks every frame of it:
+
+| Limit for an animated picture | Map | Token or avatar |
+|------|-----|-----------------|
+| Frames | 1,000 | 1,000 |
+| Pixels across all its frames (width × height × frames) | 200 million | 50 million |
+
+For example, a token animation of 1,000 × 1,000 pixels can have up to 50 frames. A picture over a limit is refused, and the upload window says which limit and by how much; make it smaller, or give it fewer frames, in an image editor and upload it again. Pictures uploaded before these limits came in are kept as they are.
+
 An Ogg sound file is taken whatever it was recorded in, Opus included. An Ogg file in FLAC or Speex uploaded before version 1.5.2 may not play; upload it again.
 
 Rulebooks and handouts are not here. They have their own **Documents** section, described below, so a PDF never sits among your map thumbnails.

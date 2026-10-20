@@ -5691,6 +5691,15 @@ paths:
         An animated PNG is identified as `image/apng` and refused (`Invalid
         file type`) for every type that takes PNG.
 
+        **Picture limits.** A MAP, TOKEN or AVATAR picture may be at most
+        16,384 pixels wide and 16,384 pixels tall (a GIF's size is its
+        logical screen, or its frames where they reach past it). An animated
+        one, a GIF or WebP of more than one frame, may have at most 1,000
+        frames and at most 200,000,000 pixels across all of them (width by
+        height by frames) for a MAP, 50,000,000 for a TOKEN or AVATAR. They
+        are read from the picture's header, without unpacking a frame, and
+        apply to uploads only: pictures already stored are not checked.
+
         The original filename's extension matters only where the bytes
         cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
@@ -5800,7 +5809,15 @@ paths:
             `campaignId` missing for a CAMPAIGN upload; no file; a file in a
             part not named `file`; content that cannot be identified ("Could
             not determine file type...") or is not accepted for the declared
-            `type` ("Invalid file type..."); a `name` over 200 characters
+            `type` ("Invalid file type..."); a MAP, TOKEN or AVATAR picture
+            over the picture limits above, with the limit in words ("This
+            picture is 20,000 pixels wide. A picture can be at most 16,384
+            pixels on each side.", "This animation has 1,200 frames. An
+            animated picture can have at most 1,000.", "This animation is 400
+            million pixels across its frames. An animated map can be at most
+            200 million.") or whose size cannot be read ("CozyVTT could not
+            read the size of this picture, so it cannot be checked. Save it
+            again in an image editor and try once more."); a `name` over 200 characters
             ("The asset name must be 200 characters or fewer"), a
             `description` over 1,000 ("The asset description must be 1000
             characters or fewer"), more than 50 tags ("An asset can have at

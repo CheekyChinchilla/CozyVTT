@@ -6,6 +6,7 @@ import { AssetType, isAcceptedContent, deleteFile, getFileSizeLimit, storedFileT
 import { UploadRequest } from './upload';
 import logger from '../utils/logger';
 import { isPlainTextFile } from '../utils/textFile';
+import { isPictureAssetType, pictureLimitProblem } from '../utils/pictureLimits';
 
 /** The first bytes of a file, or an empty buffer if it cannot be read. */
 async function leadingBytes(filePath: string, count: number): Promise<Buffer> {
@@ -147,6 +148,18 @@ export async function validateFileType(
         message: `Invalid file type. ${assetType} files must be one of: ${getAllowedExtensionsString(assetType)}`,
       });
       return;
+    }
+
+    // A map, token or avatar picture is held to the picture limits, read
+    // from its header: every frame of an animation is unpacked in each
+    // player's browser.
+    if (isPictureAssetType(assetType)) {
+      const problem = await pictureLimitProblem(filePath, assetType);
+      if (problem) {
+        await deleteFile(filePath);
+        res.status(400).json({ error: 'Validation Error', message: problem });
+        return;
+      }
     }
 
     // The content is known and allowed. Force the stored extension to match it,
