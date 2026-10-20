@@ -31,6 +31,9 @@ import Button from '@/components/ui/Button';
 type ViewMode = 'grid' | 'list';
 type FolderScope = 'all' | 'global' | 'user' | 'campaign';
 
+/** One empty list for every render with no page loaded, so the memos below hold. */
+const NO_ASSETS: Asset[] = [];
+
 /**
  * Asset Library Page
  * Asset Library Refactor — three-scope model, tag filtering, search UX
@@ -75,7 +78,7 @@ export default function AssetLibraryPage() {
   };
   const assetsQuery = useAssetsQuery(assetParams);
 
-  const assets = assetsQuery.data?.assets ?? [];
+  const assets = assetsQuery.data?.assets ?? NO_ASSETS;
   const totalPages = assetsQuery.data?.pagination.totalPages ?? 1;
   const totalCount = assetsQuery.data?.pagination.total ?? 0;
   const loading = assetsQuery.isPending;

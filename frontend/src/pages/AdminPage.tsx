@@ -481,13 +481,15 @@ export default function AdminPage() {
       loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
       if (adminCampaigns.length === 0) loadAdminCampaigns();
     }
-  }, [activeTab]);  
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loads what a tab needs as it is opened, not as its data arrives
+  }, [activeTab]);
 
   // Reload assets when filters/page change
   useEffect(() => {
     if (activeTab !== 'assets') return;
     loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
-  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);  
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reloads the assets when a filter or the page changes; opening the tab loads them above
+  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);
 
   // Reset page when filters change
   useEffect(() => {

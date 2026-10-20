@@ -58,7 +58,7 @@ export default function CharacterEditorPage() {
   const editingFromRef = useRef<Character | null>(null);
   const characterRef = useRef(character);
   characterRef.current = character;
-  const staleSave = useStaleSaveReapply();
+  const { reapply: reapplyStaleSave, dialog: staleSaveDialog } = useStaleSaveReapply();
 
 
   // ============================================
@@ -106,6 +106,7 @@ export default function CharacterEditorPage() {
     };
 
     fetchCharacter();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches once per character and signed-in user
   }, [id, user]);
 
   // ============================================
@@ -169,7 +170,7 @@ export default function CharacterEditorPage() {
           // is, the user's changes are carried onto the newest version, and
           // that is saved once they say so.
           if (!isStaleCharacterSave(err)) throw err;
-          const stored = await staleSave.reapply({
+          const stored = await reapplyStaleSave({
             opened: editingFrom.data,
             edited: data,
             withNewPicture: tokenImageUrl !== undefined,
@@ -235,7 +236,7 @@ export default function CharacterEditorPage() {
         setSaving(false);
       }
     },
-    [character, showToast, queryClient, staleSave.reapply]
+    [character, showToast, queryClient, reapplyStaleSave]
   );
 
   // ============================================
@@ -450,7 +451,7 @@ export default function CharacterEditorPage() {
       </div>
     </div>
 
-    {staleSave.dialog}
+    {staleSaveDialog}
 
     {showSaveAsTemplate && character && (
       <NewCharacterTemplateModal
