@@ -19,6 +19,8 @@
   --color-token-friendly-ink: rgb(var(--rgb-token-friendly-ink));
   --color-token-neutral: rgb(var(--rgb-token-neutral));
   --color-token-neutral-ink: rgb(var(--rgb-token-neutral-ink));
+  --color-token-object: rgb(var(--rgb-token-object));
+  --color-token-object-ink: rgb(var(--rgb-token-object-ink));
   --color-canvas: rgb(var(--rgb-bg-base));
   --color-surface: rgb(var(--rgb-bg-surface));
   --color-surface-light: rgb(var(--rgb-bg-surface-light));
@@ -346,6 +348,8 @@
     --rgb-token-friendly-ink: 21 107 96;
     --rgb-token-neutral: 251 191 36;
     --rgb-token-neutral-ink: 127 91 3;
+    --rgb-token-object: 120 113 108;
+    --rgb-token-object-ink: 89 82 79;
 
     /* The font defaults are in @theme above; applyFont (themes.ts) replaces them. */
   }

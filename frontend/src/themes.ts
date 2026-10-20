@@ -594,7 +594,7 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
     '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, andItsTint(STATE_HUES.info)),
     // The map's token colours (utils/tokenColours.ts), fixed in every theme,
     // each with a readable shade for text in the panels.
-    ...Object.fromEntries((['player', 'hostile', 'friendly', 'neutral'] as const).flatMap((kind) => [
+    ...Object.fromEntries((['player', 'hostile', 'friendly', 'neutral', 'object'] as const).flatMap((kind) => [
       [`--rgb-token-${kind}`, TOKEN_HUES[kind]],
       [`--rgb-token-${kind}-ink`, ensureReadableOnAll(TOKEN_HUES[kind], andItsTint(TOKEN_HUES[kind]))],
     ])),

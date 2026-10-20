@@ -141,6 +141,7 @@ describe('text on tints', () => {
     ['token-hostile-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-hostile']],
     ['token-neutral-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-neutral']],
     ['token-player-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-player']],
+    ['token-object-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-object']],
   ] as const;
 
   describe.each(PRESET_THEMES.map((t) => [t.name, t] as const))('%s', (_name, theme) => {

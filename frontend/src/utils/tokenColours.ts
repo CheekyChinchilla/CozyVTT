@@ -26,6 +26,22 @@ export const HP_HUES = {
 
 export type HpTier = keyof typeof HP_HUES;
 
+/** Temporary HP, laid over the end of the HP bar. */
+export const TEMP_HP_FILL = 'rgba(147, 197, 253, 0.75)';
+
+export type TokenKind = keyof typeof TOKEN_HUES;
+
+/**
+ * Which colour a token is drawn in: a player's blue, otherwise its
+ * disposition's, otherwise the object stone. `type` is the token's kind
+ * ('player', 'npc', 'object'), worked out by the caller where it is missing.
+ */
+export function tokenKind(type: string | null | undefined, disposition: string | null | undefined): TokenKind {
+  if (type === 'player') return 'player';
+  if (disposition === 'hostile' || disposition === 'friendly' || disposition === 'neutral') return disposition;
+  return 'object';
+}
+
 /** The tier of a fraction of HP left, 0 to 1. */
 export function hpTier(fraction: number): HpTier {
   return fraction >= 0.75 ? 'full' : fraction >= 0.5 ? 'good' : fraction >= 0.25 ? 'low' : 'critical';
@@ -44,9 +60,15 @@ export const DISPOSITION_PICKED = {
   hostile: 'border-token-hostile bg-token-hostile/10 text-token-hostile-ink font-semibold',
 } as const;
 
-/** A creature or template with no picture: its first letter on its disposition's colour. */
-export const DISPOSITION_PLACEHOLDER = {
+/** A creature or template with no picture: its first letter on the colour the map draws it in. */
+const PLACEHOLDER: Record<TokenKind, string> = {
+  player: 'bg-token-player text-black',
   friendly: 'bg-token-friendly text-black',
   neutral: 'bg-token-neutral text-black',
   hostile: 'bg-token-hostile text-black',
-} as const;
+  object: 'bg-token-object text-white',
+};
+
+export function tokenPlaceholder(type: string | null | undefined, disposition: string | null | undefined): string {
+  return PLACEHOLDER[tokenKind(type, disposition)];
+}

@@ -6,7 +6,7 @@
  * with the creature's stats copied into the token's statBlock field.
  */
 
-import { DISPOSITION_PICKED, DISPOSITION_PLACEHOLDER } from '@/utils/tokenColours';
+import { DISPOSITION_PICKED, tokenPlaceholder } from '@/utils/tokenColours';
 import { useState, useEffect, useEffectEvent, useCallback, useRef } from 'react';
 import {
   X,
@@ -766,11 +766,7 @@ function CreatureRow({
             />
           ) : (
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-                creature.disposition === 'hostile' ? DISPOSITION_PLACEHOLDER.hostile :
-                creature.disposition === 'friendly' ? DISPOSITION_PLACEHOLDER.friendly :
-                DISPOSITION_PLACEHOLDER.neutral
-              }`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${tokenPlaceholder('npc', creature.disposition)}`}
             >
               {creature.name.charAt(0).toUpperCase()}
             </div>

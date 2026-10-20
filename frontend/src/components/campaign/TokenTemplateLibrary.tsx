@@ -4,7 +4,7 @@
  * Tokens saved here can be reused across maps and copied to other campaigns.
  */
 
-import { DISPOSITION_PLACEHOLDER } from '@/utils/tokenColours';
+import { tokenPlaceholder } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -411,11 +411,7 @@ function TemplateRow({
             className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
           />
         ) : (
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-            template.disposition === 'hostile' ? DISPOSITION_PLACEHOLDER.hostile :
-            template.disposition === 'friendly' ? DISPOSITION_PLACEHOLDER.friendly :
-            DISPOSITION_PLACEHOLDER.neutral
-          }`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${tokenPlaceholder(template.type, template.disposition)}`}>
             {template.name.charAt(0).toUpperCase()}
           </div>
         )}

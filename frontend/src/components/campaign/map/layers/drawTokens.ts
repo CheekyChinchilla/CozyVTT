@@ -6,7 +6,7 @@
 // predicate; animation progress uses the caller-provided `now`.
 // ============================================
 
-import { TOKEN_HUES, HP_HUES, hpTier, hueColour } from '@/utils/tokenColours';
+import { TOKEN_HUES, HP_HUES, TEMP_HP_FILL, hpTier, hueColour, tokenKind } from '@/utils/tokenColours';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType, TokenDisposition } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
@@ -147,13 +147,7 @@ export function placeholderColor(token: Token): string {
   // lands on the neutral stone below by itself; the DM, who holds the real
   // fields, keeps seeing its own colour.
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-  return hueColour(
-    effectiveTypeForColor === TokenType.PLAYER ? TOKEN_HUES.player :
-    token.disposition === TokenDisposition.HOSTILE  ? TOKEN_HUES.hostile :
-    token.disposition === TokenDisposition.FRIENDLY ? TOKEN_HUES.friendly :
-    token.disposition === TokenDisposition.NEUTRAL  ? TOKEN_HUES.neutral :
-                                                      TOKEN_HUES.object
-  );
+  return hueColour(TOKEN_HUES[tokenKind(effectiveTypeForColor, token.disposition)]);
 }
 
 export function drawTokens(
@@ -406,7 +400,7 @@ export function drawTokens(
       // Temp HP overlay (light blue)
       if (hpSource.temp > 0) {
         const tempPct = Math.min(1, hpSource.temp / hpSource.max);
-        ctx.fillStyle = 'rgba(147, 197, 253, 0.75)';
+        ctx.fillStyle = TEMP_HP_FILL;
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(barX + barW * (1 - tempPct), barY, barW * tempPct, barH, 2 / zoom);

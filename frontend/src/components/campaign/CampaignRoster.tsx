@@ -4,7 +4,7 @@
  * Supports real-time updates via WebSocket
  */
 
-import { HP_HUES, hpTier, hueColour } from '@/utils/tokenColours';
+import { HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
 import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -633,8 +633,8 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                     />
                     {hp.temp > 0 && (
                       <div
-                        className="h-full rounded-full bg-info/75 -mt-1.5 ml-auto"
-                        style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%` }}
+                        className="h-full rounded-full -mt-1.5 ml-auto"
+                        style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%`, backgroundColor: TEMP_HP_FILL }}
                       />
                     )}
                   </div>

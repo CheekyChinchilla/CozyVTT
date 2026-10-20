@@ -8,7 +8,7 @@
 // - Visibility + remove quick actions
 // ============================================
 
-import { DISPOSITION_PICKED, HP_HUES, hpTier, hueColour } from '@/utils/tokenColours';
+import { DISPOSITION_PICKED, HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -767,12 +767,12 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                         className="absolute top-0 right-0 h-full rounded-r-full"
                         style={{
                           width: `${Math.min(1, hp.temp / hp.max) * 100}%`,
-                          backgroundColor: 'rgba(147, 197, 253, 0.75)',
+                          backgroundColor: TEMP_HP_FILL,
                         }}
                       />
                     )}
                   </div>
-                  <div className="text-center text-sm font-semibold mt-1" style={{ color: hpColor }}>
+                  <div className="text-center text-sm font-semibold mt-1 text-ink">
                     {hp.current} / {hp.max}
                     {hp.temp > 0 && (
                       <span className="text-info-ink ml-1 text-xs">+{hp.temp} temp</span>

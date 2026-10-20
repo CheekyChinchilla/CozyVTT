@@ -5,6 +5,7 @@
 // Actions: Edit (NPC/Object), Duplicate, Remove
 // ============================================
 
+import { hpTier } from '@/utils/tokenColours';
 import { useState, useCallback } from 'react';
 import {
   ChevronDown,
@@ -48,7 +49,7 @@ function getEffectiveType(token: Token): TokenType {
 function hpLabel(token: Token): string {
   if (!token.hp || token.hp.max === 0) return '';
   const pct = token.hp.current / token.hp.max;
-  const color = pct >= 0.75 ? '🟢' : pct >= 0.50 ? '🟡' : pct >= 0.25 ? '🟠' : '🔴';
+  const color = { full: '🟢', good: '🟡', low: '🟠', critical: '🔴' }[hpTier(pct)];
   return `${color} ${token.hp.current}/${token.hp.max}`;
 }
 
