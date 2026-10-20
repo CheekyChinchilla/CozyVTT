@@ -146,7 +146,14 @@ describe('the images', () => {
 
   it('leave the development tools out of the backend image that runs', () => {
     const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
-    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev$/m);
+    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev(?: && .*)?$/m);
+  });
+
+  it("leave npm's compile cache out of the backend image's /tmp, which the backend_tmp volume copies", () => {
+    // npm writes it as root; on the volume it outlives every rebuild, and
+    // the backend's user can neither use nor remove it.
+    const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
+    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev && rm -rf \/tmp\/node-compile-cache$/m);
   });
 });
 
@@ -325,6 +332,11 @@ describe('the containers', () => {
       expect(chowns.length).toBeGreaterThan(0);
       expect(chowns.filter((line) => !/^\s*if ! chown -R appuser:appgroup \S+ 2>\/dev\/null; then$/.test(line))).toEqual([]);
       for (const folder of ['/app/uploads', '/app/logs', '/app/backups']) expect(rootPhase).toContain(folder);
+    });
+
+    it('removes, as root, the compile cache an older image left on the backend_tmp volume', () => {
+      expect(rootPhase).toMatch(/^ {2}rm -rf \/tmp\/node-compile-cache 2>\/dev\/null \|\| true$/m);
+      expect(rootPhase.indexOf('rm -rf /tmp/node-compile-cache')).toBeLessThan(rootPhase.indexOf('exec su-exec'));
     });
 
     it('says, as the backend user, when it cannot write to the uploads or logs folder', () => {

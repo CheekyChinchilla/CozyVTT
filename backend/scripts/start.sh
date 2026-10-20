@@ -32,6 +32,9 @@ if [ "$(id -u)" = "0" ]; then
   if ! chmod 700 /app/backups 2>/dev/null; then
     echo "⚠️  Could not make the backups folder private (mode 700); its listing may be readable by other accounts." >&2
   fi
+  # The backend_tmp volume was filled from the image when it was made, and
+  # images before 1.5.4 held npm's compile cache there, owned by root.
+  rm -rf /tmp/node-compile-cache 2>/dev/null || true
   exec su-exec appuser "$0" "$@"
 fi
 
