@@ -5,6 +5,7 @@
 
 import { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { useToastStack } from '@/contexts/ToastContext';
 import type { ToastItem } from '@/contexts/ToastContext';
@@ -14,6 +15,7 @@ import type { ToastItem } from '@/contexts/ToastContext';
 // ============================================
 
 function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: string) => void }) {
+  const cardExit = useMotionExit({ opacity: 0, x: 60, scale: 0.9 });
   // Auto-dismiss timer. `onDismiss` is the provider's stable dismissToast, so
   // the timer runs once from when the card appears: a fresh function on each
   // draw restarted every card's timer whenever another message arrived.
@@ -30,7 +32,7 @@ function ToastCard({ toast, onDismiss }: { toast: ToastItem; onDismiss: (id: str
       layout
       initial={{ opacity: 0, x: 60, scale: 0.95 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: 60, scale: 0.9 }}
+      exit={cardExit}
       transition={{ duration: 0.2 }}
     >
       <div

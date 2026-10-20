@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import indexCss from '../../index.css?raw';
 
 /**
  * Exempt:
@@ -75,12 +76,49 @@ describe('themed surfaces use semantic tokens', () => {
   // Text takes the -ink variant, derived per theme to stay readable. No file
   // is exempt.
   it('colours text with the readable -ink variants, never a fill token', () => {
-    const FILL_AS_TEXT = /\btext-(?:danger|success|warning|info|spirit|accent|brand)(?![-\w])/g;
+    // The legacy names are the same fills: warm-amber and sunset-orange the
+    // accent, spirit-purple the spirit, spirit-red the danger, moss-green the
+    // brand.
+    const FILL_AS_TEXT =
+      /\btext-(?:danger|success|warning|info|spirit|accent|brand|warm-amber|sunset-orange|spirit-purple|spirit-red|moss-green)(?![-\w])/g;
     const found = Object.entries(SOURCES)
       .map(([path, source]) => ({ file: path, count: (source.match(FILL_AS_TEXT) ?? []).length }))
       .filter((entry) => entry.count > 0)
       .map((entry) => `${entry.file} (${entry.count})`);
     expect(found).toEqual([]);
+  });
+
+  // A label on a solid brand or danger fill: white fell under 4.5:1 on the
+  // brand in four themes, and on danger in four dark ones. The brand takes
+  // the derived brand-text label, and a white label the danger-fill.
+  it('labels a solid brand, danger or state fill with a label that reads on it', () => {
+    // Plain strings, and lines: a template literal's branches each hold a
+    // fill and its own label, so the template as a whole is not one class list.
+    const STRING = /"([^"]*)"|'([^'\n]*)'/g;
+    // The variant prefixes (`hover:` and the rest) a class is used under.
+    const prefixes = (classes: string, re: RegExp) =>
+      new Set(classes.split(/\s+/).flatMap((c) => { const m = re.exec(c); return m ? [m[1]] : []; }));
+    const BRAND_FILL = /^((?:[\w-]+:)*)bg-(?:brand|moss-green)$/;
+    const DANGER_FILL = /^((?:[\w-]+:)*)bg-(?:danger|spirit-red)$/;
+    // White fails on the spirit, success, warning and info fills in most
+    // themes; they take the soft tint and -ink text instead, as in the sheets.
+    const STATE_FILL = /^((?:[\w-]+:)*)bg-(?:success|warning|info|spirit|spirit-purple)$/;
+    // The accent (warm-amber) takes accent-text, as btn-primary does.
+    const ACCENT_FILL = /^((?:[\w-]+:)*)bg-(?:accent|warm-amber)$/;
+    const WHITE = /^((?:[\w-]+:)*)text-(?:white|paper-white|canvas)$/;
+    const found: string[] = [];
+    for (const [path, source] of Object.entries(SOURCES)) {
+      // Each quoted string, and each line too: an apostrophe in a comment or
+      // in text can pair the quotes wrongly.
+      const pieces = [...[...source.matchAll(STRING)].map((m) => m[1] ?? m[2] ?? ''), ...source.split('\n')];
+      for (const piece of pieces) {
+        const classes = piece.replace(/['"`{}]/g, ' ');
+        const white = prefixes(classes, WHITE);
+        const fills = [...prefixes(classes, BRAND_FILL), ...prefixes(classes, DANGER_FILL), ...prefixes(classes, STATE_FILL), ...prefixes(classes, ACCENT_FILL)];
+        if (fills.some((p) => white.has(p))) found.push(`${path}: ${classes.trim().slice(0, 80)}`);
+      }
+    }
+    expect([...new Set(found)]).toEqual([]);
   });
 
   // Tailwind generates only class names written out in full in the source, so
@@ -99,5 +137,26 @@ describe('themed surfaces use semantic tokens', () => {
     // A growing exemption list means the rule is being worked around rather
     // than followed; make that visible in review.
     expect(EXEMPT.length).toBeLessThanOrEqual(6);
+  });
+});
+
+// The button utilities are CSS, which the scan above does not read. The
+// danger button was red-500 under white (3.8:1 in every theme), and the
+// secondary button wrote its label in the brand fill (2.6:1 in Shadow Realm).
+describe('the button utilities in index.css', () => {
+  const utility = (name: string) =>
+    new RegExp(`@utility ${name} \\{([\\s\\S]*?)\\n\\}`).exec(indexCss)?.[1] ?? '';
+
+  it('fill the danger button from the theme, with a label that reads on it', () => {
+    const danger = utility('btn-danger');
+    expect(danger).toMatch(/\bbg-danger-fill\b/);
+    expect(danger).not.toMatch(/\b(?:bg|ring)-red-\d/);
+  });
+
+  it('write the secondary button in readable brand text, and its hover label on brand', () => {
+    const secondary = utility('btn-secondary');
+    expect(secondary).toMatch(/\btext-brand-ink\b/);
+    expect(secondary).not.toMatch(/\btext-brand(?![-\w])/);
+    expect(secondary).toMatch(/\bhover:text-brand-text\b/);
   });
 });

@@ -96,7 +96,7 @@ export default function DocumentsPage() {
             </button>
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-moss-green/10">
-                <BookOpen className="w-6 h-6 text-moss-green" />
+                <BookOpen className="w-6 h-6 text-brand-ink" />
               </div>
               <div>
                 <h1 className="text-2xl font-semibold text-brand-ink font-heading">Documents</h1>
@@ -141,7 +141,7 @@ export default function DocumentsPage() {
           </p>
         ) : documents.length === 0 ? (
           <div className="glass-panel p-10 text-center">
-            <FileText className="w-10 h-10 mx-auto mb-3 text-moss-green/50" />
+            <FileText className="w-10 h-10 mx-auto mb-3 text-brand-ink/50" />
             <p className="text-sm font-medium text-brand-ink mb-1">No documents yet</p>
             <p className="text-xs text-warm-gray">
               Upload a rulebook or a page of house rules and it will be readable from here and from any
@@ -158,7 +158,7 @@ export default function DocumentsPage() {
                   className="glass-panel p-4 flex items-center gap-4"
                 >
                   <div className="p-2 rounded-lg bg-moss-green/10 shrink-0">
-                    <FileText className="w-6 h-6 text-moss-green" />
+                    <FileText className="w-6 h-6 text-brand-ink" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <button

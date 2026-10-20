@@ -120,4 +120,33 @@ describe('Create & Publish as Template', () => {
     await waitFor(() => expect(createCharacterTemplate).toHaveBeenCalled());
     expect(createCharacterTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: 'Aldra', gameSystem: null, data: stored }));
   });
+
+  // The failure was set as the dialog's error and the dialog then closed, so
+  // nobody saw it until the dialog was next opened, where it greeted a new
+  // character. The page now hears of it with the character, and says so.
+  it('tells the page the template failed, and leaves no error for the next opening', async () => {
+    createCharacterTemplate.mockRejectedValueOnce({ response: { status: 409, data: { message: 'A template with this name already exists' } } });
+    const onSuccess = vi.fn();
+    render(<NewCharacterModal isOpen onClose={vi.fn()} onSuccess={onSuccess} />);
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create & Publish as Template/ }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(onSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'char-1', name: 'Aldra' }),
+      { templateFailed: true, reason: 'A template with this name already exists' },
+    );
+    expect(screen.queryByText(/publishing it as a template failed/)).toBeNull();
+    expect(screen.queryByText('A template with this name already exists')).toBeNull();
+  });
+
+  it('tells the page nothing failed when the template is published', async () => {
+    const onSuccess = vi.fn();
+    render(<NewCharacterModal isOpen onClose={vi.fn()} onSuccess={onSuccess} />);
+    typeName('Aldra');
+    fireEvent.click(screen.getByRole('button', { name: /Create & Publish as Template/ }));
+
+    await waitFor(() => expect(onSuccess).toHaveBeenCalledTimes(1));
+    expect(onSuccess.mock.calls[0][1]).toBeUndefined();
+  });
 });

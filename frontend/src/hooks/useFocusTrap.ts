@@ -5,6 +5,15 @@
 // Traps keyboard focus inside a container when `isOpen` is true.
 // Restores focus to the previously focused element on close.
 // Handles Escape key to close the modal.
+//
+// With one dialog open over another, only the top one acts on a key. Every
+// open trap listens on the document, so each used to act: Escape closed them
+// all, and on Tab the lower one pulled focus to its own first control, which
+// the top one then pulled back to its first, so its other controls could not
+// be reached. A field that should take focus as a dialog opens carries
+// `data-autofocus`, which the trap focuses. React's `autoFocus` moves focus
+// before the trap records where it came from, so focus could not return to
+// the opener, and the trap then moved it to the first control anyway.
 
 import { useEffect, useRef } from 'react';
 
@@ -16,6 +25,9 @@ const FOCUSABLE_SELECTORS = [
   'textarea:not([disabled])',
   '[tabindex]:not([tabindex="-1"])',
 ].join(', ');
+
+/** The open traps, oldest first; only the last acts on a key. */
+const openTraps: symbol[] = [];
 
 /**
  * Traps keyboard focus inside a dialog container.
@@ -37,19 +49,21 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
   useEffect(() => {
     if (!isOpen) return;
 
+    const trap = Symbol('focus trap');
+    openTraps.push(trap);
+
     // Remember the element that had focus before the modal opened
     previousFocusRef.current = document.activeElement as HTMLElement;
 
-    // Focus the first focusable element after the DOM has settled
-    // TODO(ui): this moves focus even when it is already inside the container,
-    // so a field with autoFocus (the Create User email in AdminPage) loses it
-    // to the dialog's first control, usually its Close button. Leave focus
-    // where it is when the container already contains document.activeElement.
+    // Focus the marked field, or else the first focusable element, after the
+    // DOM has settled
     const frame = requestAnimationFrame(() => {
       const container = containerRef.current;
       if (!container) return;
 
-      const first = container.querySelector<HTMLElement>(FOCUSABLE_SELECTORS);
+      const first =
+        container.querySelector<HTMLElement>('[data-autofocus]') ??
+        container.querySelector<HTMLElement>(FOCUSABLE_SELECTORS);
       if (first) {
         first.focus();
       } else {
@@ -60,8 +74,11 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
     });
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape closes the modal
+      if (openTraps[openTraps.length - 1] !== trap) return;
+
+      // Escape closes the modal, and nothing behind it sees the key
       if (e.key === 'Escape') {
+        e.stopPropagation();
         if (onCloseRef.current) {
           e.preventDefault();
           onCloseRef.current();
@@ -104,6 +121,7 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
     return () => {
       cancelAnimationFrame(frame);
       document.removeEventListener('keydown', handleKeyDown);
+      openTraps.splice(openTraps.indexOf(trap), 1);
       // Restore focus to the element that was focused before the modal opened
       previousFocusRef.current?.focus();
     };

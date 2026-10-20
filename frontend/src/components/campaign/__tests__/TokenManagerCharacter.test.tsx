@@ -12,6 +12,7 @@
 
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenType } from '@/types';
@@ -24,6 +25,7 @@ vi.mock('framer-motion', () => {
     return <div {...(plain as Record<string, unknown>)}>{children as never}</div>;
   };
   return {
+    useReducedMotionConfig: () => false,
     motion: new Proxy({}, { get: () => MotionDiv }),
     AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
   };
@@ -64,6 +66,7 @@ beforeEach(() => {
 
 async function choosePlayer() {
   render(<TokenManager isOpen onClose={() => {}} />);
+  await waitForDialogFocus();
   await userEvent.click(screen.getByRole('button', { name: 'Player' }));
 }
 

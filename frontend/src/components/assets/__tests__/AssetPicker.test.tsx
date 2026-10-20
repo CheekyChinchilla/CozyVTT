@@ -17,6 +17,7 @@ vi.mock('framer-motion', () => {
   // One component for every motion element, so nothing remounts on render.
   const MotionDiv = (props: { children?: unknown }) => <div>{props.children as never}</div>;
   return {
+    useReducedMotionConfig: () => false,
     motion: new Proxy({}, { get: () => MotionDiv }),
     AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
   };

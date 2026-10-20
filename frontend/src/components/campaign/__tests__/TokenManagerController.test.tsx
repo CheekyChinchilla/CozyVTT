@@ -8,7 +8,7 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 import { useGameStore } from '@/stores/gameStore';
@@ -20,6 +20,7 @@ vi.mock('framer-motion', () => {
     return <div {...(plain as Record<string, unknown>)}>{children as never}</div>;
   };
   return {
+    useReducedMotionConfig: () => false,
     motion: new Proxy({}, { get: () => MotionDiv }),
     AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
   };
@@ -73,4 +74,16 @@ it.each([
   render(<TokenManager isOpen onClose={() => {}} />);
   expect(row().getByText(chip)).toBeInTheDocument();
   expect(row().queryByText('Player')).not.toBeInTheDocument();
+});
+
+it('is announced by name, and Escape and its Close button close it', async () => {
+  const onClose = vi.fn();
+  render(<TokenManager isOpen onClose={onClose} />);
+  const dialog = screen.getByRole('dialog', { name: 'Token Manager' });
+
+  fireEvent.keyDown(dialog, { key: 'Escape' });
+  expect(onClose).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(onClose).toHaveBeenCalledTimes(2);
 });

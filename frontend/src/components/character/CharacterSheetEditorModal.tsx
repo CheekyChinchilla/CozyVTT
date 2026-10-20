@@ -190,7 +190,7 @@ export default function CharacterSheetEditorModal({
               </p>
               <button
                 onClick={onClose}
-                className="px-6 py-2 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors"
+                className="px-6 py-2 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors"
               >
                 Close
               </button>

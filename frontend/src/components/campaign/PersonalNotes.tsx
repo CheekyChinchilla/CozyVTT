@@ -292,7 +292,7 @@ export default function PersonalNotes() {
       <div className="h-full flex flex-col gap-2">
         {/* Picker */}
         <div className="flex items-center gap-2">
-          <NotebookPen className="w-4 h-4 text-warm-amber shrink-0" />
+          <NotebookPen className="w-4 h-4 text-accent-ink shrink-0" />
           <select
             value={selectedId ?? ''}
             onChange={(e) => { void openNote(e.target.value); }}
@@ -312,7 +312,7 @@ export default function PersonalNotes() {
             onClick={handleCreate}
             title="New note"
             aria-label="New note"
-            className="p-1.5 rounded-cozy border border-warm-amber/40 bg-warm-amber/10 text-warm-amber hover:bg-warm-amber/20 shrink-0"
+            className="p-1.5 rounded-cozy border border-warm-amber/40 bg-warm-amber/10 text-accent-ink hover:bg-warm-amber/15 shrink-0"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -351,7 +351,7 @@ export default function PersonalNotes() {
                 onClick={() => setConfirmDelete(true)}
                 title="Delete note"
                 aria-label="Delete note"
-                className="p-1.5 rounded-cozy border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/20 shrink-0"
+                className="p-1.5 rounded-cozy border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 shrink-0"
               >
                 <Trash2 className="w-4 h-4" />
               </button>

@@ -139,7 +139,7 @@ export default function AssignCharacterModal({
                 {currentCampaign && (
                   <div className="bg-spirit-purple/10 border border-spirit-purple/30 rounded-lg p-4">
                     <p className="text-sm text-stone-gray">
-                      <strong className="text-spirit-purple">Currently assigned to:</strong>{' '}
+                      <strong className="text-spirit-ink">Currently assigned to:</strong>{' '}
                       {currentCampaign.name}
                     </p>
                   </div>
@@ -161,7 +161,7 @@ export default function AssignCharacterModal({
                   ) : compatibleCampaigns.length === 0 ? (
                     <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                       <div className="flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
+                        <AlertCircle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm text-stone-gray">
                             No compatible campaigns found. Create a campaign with the same

@@ -168,7 +168,7 @@ export default function RegisterPage() {
         {/* Error Alert */}
         {error && (
           <div role="alert" className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 
@@ -204,7 +204,7 @@ export default function RegisterPage() {
               aria-describedby={fieldErrors.displayName ? 'displayName-error' : undefined}
             />
             {fieldErrors.displayName && (
-              <p id="displayName-error" role="alert" className="mt-1 text-xs text-spirit-red">
+              <p id="displayName-error" role="alert" className="mt-1 text-xs text-danger-ink">
                 {fieldErrors.displayName}
               </p>
             )}
@@ -237,7 +237,7 @@ export default function RegisterPage() {
               aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
             />
             {fieldErrors.email && (
-              <p id="reg-email-error" role="alert" className="mt-1 text-xs text-spirit-red">{fieldErrors.email}</p>
+              <p id="reg-email-error" role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.email}</p>
             )}
           </div>
 
@@ -273,7 +273,7 @@ export default function RegisterPage() {
               ].filter(Boolean).join(' ') || undefined}
             />
             {fieldErrors.password && (
-              <p id="reg-password-error" role="alert" className="mt-1 text-xs text-spirit-red">
+              <p id="reg-password-error" role="alert" className="mt-1 text-xs text-danger-ink">
                 {fieldErrors.password}
               </p>
             )}
@@ -342,7 +342,7 @@ export default function RegisterPage() {
               disabled={loading}
             />
             {fieldErrors.confirmPassword && (
-              <p className="mt-1 text-xs text-spirit-red">
+              <p className="mt-1 text-xs text-danger-ink">
                 {fieldErrors.confirmPassword}
               </p>
             )}

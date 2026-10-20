@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import type { Campaign } from '@/types';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
@@ -26,6 +26,8 @@ vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: viewer.user }) }));
 vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('@/services/campaign.service', () => ({ default: { updateCampaign, deleteCampaign: vi.fn() } }));
+// Invite Player asks whether the server can send email.
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 
 beforeEach(() => {
   viewer.role = 'DM';
@@ -117,4 +119,53 @@ it('stops the name and description at the server\'s limits', () => {
   expect((screen.getByPlaceholderText('My Campaign') as HTMLInputElement).maxLength).toBe(CAMPAIGN_LIMITS.maxNameLength);
   expect((screen.getByPlaceholderText('Describe your campaign…') as HTMLTextAreaElement).maxLength).toBe(CAMPAIGN_LIMITS.maxDescriptionLength);
   expect(screen.getByText(`11/${CAMPAIGN_LIMITS.maxDescriptionLength}`)).toBeTruthy();
+});
+
+// The panel had no dialog role, no Escape and no focus trap. Escape in a
+// dialog the panel opens closes only that dialog.
+describe('the Campaign Settings panel as a dialog', () => {
+  it('is announced by name, and Escape and its Close button close it', () => {
+    current = campaign();
+    const onClose = vi.fn();
+    render(<CampaignSettingsModal isOpen onClose={onClose} />);
+    const dialog = screen.getByRole('dialog', { name: 'Campaign Settings' });
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes only Invite Player on Escape', async () => {
+    current = campaign();
+    const onClose = vi.fn();
+    render(<CampaignSettingsModal isOpen onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+    fireEvent.click(screen.getByRole('button', { name: /Invite Player/ }));
+    const invite = await screen.findByRole('dialog', { name: 'Invite Player' });
+
+    fireEvent.keyDown(invite, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Invite Player' })).toBeNull());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: 'Campaign Settings' })).toBeInTheDocument();
+  });
+
+  it('closes only the Remove Player confirmation on Escape', async () => {
+    current = {
+      ...campaign(),
+      memberships: [{ userId: 'pia', role: 'PLAYER', user: { displayName: 'Pia' } }],
+    } as unknown as Campaign;
+    const onClose = vi.fn();
+    render(<CampaignSettingsModal isOpen onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Members' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Pia from campaign' }));
+    const confirm = await screen.findByRole('dialog', { name: 'Remove Player' });
+
+    fireEvent.keyDown(confirm, { key: 'Escape' });
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Remove Player' })).toBeNull());
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });

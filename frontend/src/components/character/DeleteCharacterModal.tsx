@@ -80,9 +80,9 @@ export default function DeleteCharacterModal({
                 {isInActiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-warm-amber mb-1">
+                        <h3 className="font-semibold text-accent-ink mb-1">
                           {character.name} is in a campaign being played
                         </h3>
                         <p className="text-sm text-stone-gray">
@@ -99,9 +99,9 @@ export default function DeleteCharacterModal({
                 {isInInactiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-warm-amber mb-1">
+                        <h3 className="font-semibold text-accent-ink mb-1">
                           Character is Assigned to Campaign
                         </h3>
                         <p className="text-sm text-stone-gray">

@@ -130,7 +130,7 @@ export default function SessionSidebar() {
               <span className={active ? undefined : 'sr-only @min-[26rem]:not-sr-only'}>{label}</span>
               {key === 'chat' && unreadChat > 0 && (
                 <span
-                  className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand text-canvas text-[10px] font-bold flex items-center justify-center"
+                  className="min-w-[18px] h-[18px] px-1 rounded-full bg-brand text-brand-text text-[10px] font-bold flex items-center justify-center"
                   aria-label={`${unreadChat} unread messages`}
                 >
                   {unreadChat > 9 ? '9+' : unreadChat}

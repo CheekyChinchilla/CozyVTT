@@ -14,6 +14,7 @@ import { it, expect, vi, beforeAll } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 vi.mock('framer-motion', () => ({
+  useReducedMotionConfig: () => false,
   motion: new Proxy({}, { get: () => (props: Record<string, unknown>) => {
     const { children, ...rest } = props as { children?: unknown } & Record<string, unknown>;
     const plain = Object.fromEntries(Object.entries(rest).filter(([k]) => !/^(initial|animate|exit|transition|layout|whileHover|whileTap)$/.test(k)));

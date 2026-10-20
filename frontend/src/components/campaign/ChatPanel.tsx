@@ -3,7 +3,7 @@
 // Real-time chat with message history and WebSocket integration
 // ============================================
 
-import { useState, useEffect, useLayoutEffect, useRef, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, FormEvent, KeyboardEvent } from 'react';
 import { MessageCircle, Send, Loader, AlertCircle, Eraser, X } from 'lucide-react';
 import { useParams } from 'react-router';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -99,6 +99,18 @@ export default function ChatPanel() {
   /** Where the last page stopped. Minted by the server; passed back untouched. */
   const [cursor, setCursor] = useState<string | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // History read while the log is on screen (Load More, a rejoin) arrives a
+  // page at a time, which the live region would read out in full; it is
+  // quiet until a frame after each read.
+  const [historyReads, setHistoryReads] = useState(0);
+  const quietly = useCallback(async (read: () => Promise<void>) => {
+    setHistoryReads((n) => n + 1);
+    try {
+      await read();
+    } finally {
+      requestAnimationFrame(() => setHistoryReads((n) => n - 1));
+    }
+  }, []);
 
   // Rate limiting state (10 messages per minute = 1 per 6 seconds)
   const [canSend, setCanSend] = useState(true);
@@ -263,13 +275,13 @@ export default function ChatPanel() {
       }
     };
 
-    resync();
+    void quietly(resync);
   });
 
   /**
    * Load more messages (pagination)
    */
-  const loadMoreMessages = async () => {
+  const loadMoreMessages = () => quietly(async () => {
     if (!campaignId || isLoadingMore || !hasMore) return;
 
     try {
@@ -301,7 +313,7 @@ export default function ChatPanel() {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  });
 
   // ============================================
   // WebSocket Integration
@@ -622,7 +634,7 @@ export default function ChatPanel() {
         ref={messagesContainerRef}
         onScroll={handleScroll}
         role="log"
-        aria-live="polite"
+        aria-live={historyReads > 0 ? 'off' : 'polite'}
         aria-label="Chat messages"
         aria-relevant="additions"
         className="flex-1 overflow-y-auto p-4 space-y-3"

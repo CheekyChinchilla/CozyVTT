@@ -16,7 +16,8 @@ vi.mock('@/contexts/CampaignContext', () => ({
   }),
 }));
 vi.mock('../InvitePlayerModal', () => ({
-  default: ({ onSuccess }: { onSuccess: () => void }) => <button onClick={onSuccess}>Send invitation</button>,
+  default: ({ open, onSuccess }: { open: boolean; onSuccess: () => void }) =>
+    open ? <button onClick={onSuccess}>Send invitation</button> : null,
 }));
 
 import CampaignInfo from '../CampaignInfo';

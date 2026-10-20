@@ -118,3 +118,35 @@ describe('AssetCard picture that fails to load', () => {
     expect(container.querySelector('svg.lucide-map-pin')).not.toBeNull();
   });
 });
+
+// The grid card drew View, Download and Delete only once the mouse entered
+// it, so Tab could not reach them and a touch screen showed them only after a
+// tap. They are always there now, shown on hover, while one has keyboard
+// focus, and always on a screen with no hover.
+describe('AssetCard grid actions', () => {
+  it('are reachable by name without hovering the card', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), canChange: true });
+    expect(screen.getByRole('button', { name: 'View Thing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download Thing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Thing' })).toBeInTheDocument();
+  });
+
+  it('are shown on hover, while one has keyboard focus, and on a screen with no hover', () => {
+    renderCard(asset(AssetType.MAP, 'm.png'));
+    const overlay = screen.getByRole('button', { name: 'View Thing' }).parentElement as HTMLElement;
+    const classes = overlay.className.split(/\s+/);
+    expect(classes).toContain('opacity-0');
+    expect(classes).toContain('group-hover:opacity-100');
+    expect(classes).toContain('focus-within:opacity-100');
+    expect(classes).toContain('[@media(hover:none)]:opacity-100');
+    // Hidden, it does not catch a click meant for the card.
+    expect(classes).toContain('pointer-events-none');
+    expect(classes).toContain('group-hover:pointer-events-auto');
+  });
+
+  it('name View and Download in list view too', () => {
+    renderCard(asset(AssetType.MAP, 'm.png'), 'list');
+    expect(screen.getByRole('button', { name: 'View Thing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download Thing' })).toBeInTheDocument();
+  });
+});

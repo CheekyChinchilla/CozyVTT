@@ -51,6 +51,8 @@ Once inside the campaign, click the **Campaign Settings** button (gear icon in t
 
 *Screenshot pending — Campaign settings panel.*
 
+Campaign Settings and the other side panels, the Map Library, Token Manager, Spirit Layer, Atmosphere, the Creature Library, Token Templates and the token editor, close the same way: press **Escape**, click **Close** (the **×** at the top of the panel) or click outside the panel. While one is open, Tab moves only among its controls. A window a panel opens, such as **Invite Player**, closes alone on Escape and leaves the panel open.
+
 ### Inviting Players
 
 To invite a player to your campaign:
@@ -845,6 +847,13 @@ Since values are saved on the token, you can always click a number and correct i
 
 Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances.
 
+To reorder from the keyboard:
+
+1. Press **Tab** until the grip at the left of a combatant's row has the focus (a screen reader calls it **Move** and the combatant's name).
+2. Press the **Up** or **Down** arrow key to move that combatant one place. The focus stays on the grip, so press again to move further; a screen reader says the new place, such as "Goblin moved to 3 of 5".
+
+To change a value from the keyboard, Tab to the number, press **Enter**, type the new value and press **Enter** again (**Escape** leaves it as it was).
+
 Click **Next Turn** to advance to the next combatant in the order.
 
 The active combatant is highlighted in two places, for everyone at the table:
@@ -905,7 +914,7 @@ Maps made before this setting existed have fog on, exactly as they always did.
 
 ### Revealing and Hiding
 
-Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, and drag the bar above them to move the stack anywhere on the map; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
+Open the **Fog of War** panel, one of the DM tool panels stacked at the top right of the map (each starts folded; click its title to open it, or Tab to the title and press Enter or Space, and drag the bar above them to move the stack anywhere on the map; double-click the bar to put it back in the corner. The stack stays on the map when the window or the side panels change its size, and a stack taller than the room left scrolls, stopping above **Preview Player View**), then pick a mode:
 
 - **Reveal** — drag a box over the map to show that area to players
 - **Hide** — drag a box to cover an area back up

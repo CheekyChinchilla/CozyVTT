@@ -1056,7 +1056,7 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={deleting || deleteConfirmText !== 'DELETE' || !deletePassword}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-danger hover:bg-danger text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-danger-fill hover:bg-danger-fill text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {deleting ? 'Deleting...' : 'Delete My Account'}

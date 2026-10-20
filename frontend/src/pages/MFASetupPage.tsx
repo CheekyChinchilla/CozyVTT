@@ -338,7 +338,7 @@ export default function MFASetupPage() {
 
             {/* Warning */}
             <div className="flex items-start gap-3 p-4 rounded-lg bg-warm-amber/10 border border-warm-amber/30">
-              <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
               <p className="text-sm text-stone-gray">
                 <span className="font-semibold">Save these backup codes now.</span> They will not
                 be shown again. Each code can only be used once to access your account if you lose

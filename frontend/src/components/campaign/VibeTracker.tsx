@@ -69,7 +69,7 @@ export default function VibeTracker() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sun className="w-4 h-4 text-warm-amber" />
+            <Sun className="w-4 h-4 text-accent-ink" />
             <h3 className="text-sm font-semibold text-brand-ink">Vibe Tracker</h3>
           </div>
 

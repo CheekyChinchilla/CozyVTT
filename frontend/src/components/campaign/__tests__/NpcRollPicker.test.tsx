@@ -87,3 +87,12 @@ describe('a stat-block roll for a spirit-plane creature', () => {
   });
 });
 
+
+describe('the close button', () => {
+  it('is named Close', () => {
+    const onClose = vi.fn();
+    render(<NpcRollPicker token={token({})} gameSystem="DND_5E" onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

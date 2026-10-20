@@ -521,7 +521,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             {/* eslint-disable-next-line react-hooks/static-components -- getRoleIcon picks one of two lucide icons; no component is made here */}
             <RoleIcon
               className={`w-4 h-4 ${
-                member.role === 'DM' ? 'text-brand-ink' : 'text-spirit-purple'
+                member.role === 'DM' ? 'text-brand-ink' : 'text-spirit-ink'
               }`}
             />
           </div>

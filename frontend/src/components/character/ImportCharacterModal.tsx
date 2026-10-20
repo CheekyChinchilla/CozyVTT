@@ -218,9 +218,9 @@ export default function ImportCharacterModal({
         {/* Error Display */}
         {error && (
           <div className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-spirit-red shrink-0 mt-0.5" />
+            <AlertCircle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-semibold text-spirit-red mb-1">Import Error</h4>
+              <h4 className="font-semibold text-danger-ink mb-1">Import Error</h4>
               <p className="text-sm text-ink">{error}</p>
             </div>
           </div>
@@ -249,9 +249,9 @@ export default function ImportCharacterModal({
             {nameConflict && (
               <div className="bg-sunset-orange/10 border border-sunset-orange/30 rounded-lg p-4">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-5 h-5 text-sunset-orange shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-sunset-orange mb-1">Name Conflict</h4>
+                    <h4 className="font-semibold text-accent-ink mb-1">Name Conflict</h4>
                     <p className="text-sm text-ink">
                       {isTemplate
                         ? `A template named "${previewData.name}" already exists. This one will be named "${importName}" — edit it below if you'd rather use something else.`

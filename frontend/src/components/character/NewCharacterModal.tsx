@@ -13,10 +13,22 @@ import api from '@/services/api';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
 
+/** Set when the character was made and publishing it as a template was not. */
+export interface TemplatePublishFailure {
+  templateFailed: true;
+  /** The server's reason, when it gave one. */
+  reason?: string;
+}
+
 interface NewCharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (character: Character) => void;
+  /**
+   * The character was created. The second argument is set when Create &
+   * Publish as Template made the character and failed to publish it, so the
+   * page can say so once this dialog has closed.
+   */
+  onSuccess: (character: Character, templateFailure?: TemplatePublishFailure) => void;
   /** If provided, character will be assigned to this campaign */
   campaign?: Campaign;
   /** If provided, this game system will be pre-selected and locked */
@@ -219,7 +231,9 @@ export default function NewCharacterModal({
       // sheet as the server stored it, with the name and anything else it
       // filled in, and not the starter sheet sent. Done after the character
       // exists, and failing softly: the character is the thing the user asked
-      // for, so a template error must not lose it.
+      // for, so a template error must not lose it. The dialog closes either
+      // way, so the failure goes to the page to say.
+      let templateFailure: TemplatePublishFailure | undefined;
       if (publishTemplate) {
         try {
           await api.createCharacterTemplate({
@@ -227,13 +241,9 @@ export default function NewCharacterModal({
             gameSystem: response.character.gameSystem ?? null,
             data: response.character.data,
           });
-        } catch {
-          // TODO(ui): this message is set and the dialog then closes, so it
-          // is never seen until the dialog is next opened, where it greets a
-          // new character. Say it after closing, as a toast on the page.
-          setError(
-            'Character created, but publishing it as a template failed. You can retry with "Save as Template" in the editor.'
-          );
+        } catch (templateErr) {
+          const reason = apiErrorMessage(templateErr);
+          templateFailure = reason ? { templateFailed: true, reason } : { templateFailed: true };
         }
       }
 
@@ -244,7 +254,11 @@ export default function NewCharacterModal({
       setSelectedTemplate('blank');
 
       // Notify parent
-      onSuccess(response.character);
+      if (templateFailure) {
+        onSuccess(response.character, templateFailure);
+      } else {
+        onSuccess(response.character);
+      }
 
       // Close modal
       onClose();
@@ -283,7 +297,7 @@ export default function NewCharacterModal({
       {/* Error Alert */}
       {error && (
                 <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4 max-h-60 overflow-y-auto">
-                  <p className="text-sm text-spirit-red font-medium whitespace-pre-wrap font-mono">
+                  <p className="text-sm text-danger-ink font-medium whitespace-pre-wrap font-mono">
                     {error}
                   </p>
                 </div>
@@ -297,7 +311,7 @@ export default function NewCharacterModal({
                     htmlFor="characterName"
                     className="block text-sm font-semibold text-ink mb-2"
                   >
-                    Character Name <span className="text-spirit-red">*</span>
+                    Character Name <span className="text-danger-ink">*</span>
                   </label>
                   <input
                     type="text"
@@ -308,7 +322,7 @@ export default function NewCharacterModal({
                     disabled={loading}
                     maxLength={SHEET_NAME_MAX}
                     className="input-cozy w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                    autoFocus
+                    data-autofocus
                     required
                   />
                   <p className="mt-1 text-xs text-ink-muted">
@@ -417,7 +431,7 @@ export default function NewCharacterModal({
                                 {template.label}
                               </span>
                               {template.value !== 'blank' && (
-                                <Sparkles className="w-4 h-4 text-warm-amber" />
+                                <Sparkles className="w-4 h-4 text-accent-ink" />
                               )}
                             </div>
                             <p className="text-sm text-ink-muted mt-1">

@@ -13,7 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import characterService from '@/services/character.service';
 import { useCampaignsQuery, useCharactersQuery, queryKeys, toCharacterSummary } from '@/hooks/queries';
 import CharacterCard from '@/components/character/CharacterCard';
-import NewCharacterModal from '@/components/character/NewCharacterModal';
+import NewCharacterModal, { type TemplatePublishFailure } from '@/components/character/NewCharacterModal';
 import DeleteCharacterModal from '@/components/character/DeleteCharacterModal';
 import AssignCharacterModal from '@/components/character/AssignCharacterModal';
 import ImportCharacterModal from '@/components/character/ImportCharacterModal';
@@ -62,10 +62,20 @@ export default function CharactersPage() {
     queryClient.setQueryData<CharacterSummary[]>(queryKeys.characters, (prev) => updater(prev ?? []));
   };
 
-  const handleCharacterCreated = (newCharacter: Character) => {
+  const handleCharacterCreated = (newCharacter: Character, templateFailure?: TemplatePublishFailure) => {
     setCharactersData((prev) => [toCharacterSummary(newCharacter), ...prev]);
+    if (templateFailure) {
+      // The dialog has closed, so the page says the half that did not happen.
+      const reason = templateFailure.reason?.trim();
+      let because = '.';
+      if (reason) because = /[.!?]$/.test(reason) ? `: ${reason}` : `: ${reason}.`;
+      showToast(
+        `${newCharacter.name} was created, but it was not published as a template${because} You can retry with "Save as Template" in the editor.`,
+        'warning'
+      );
+      return;
+    }
     showSuccess('Character created successfully!');
-    // Note: For now we just close the modal.
   };
 
   const [viewingCharacter, setViewingCharacter] = useState<Character | null>(null);
@@ -271,7 +281,7 @@ export default function CharactersPage() {
             {/* Error Message */}
             {error && (
               <div className="mb-6 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-                <p className="text-sm text-spirit-red font-medium">{error}</p>
+                <p className="text-sm text-danger-ink font-medium">{error}</p>
               </div>
             )}
 
@@ -335,13 +345,13 @@ export default function CharactersPage() {
                   <p className="text-sm text-warm-gray mt-1">Assigned to Campaigns</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-spirit-purple/5">
-                  <p className="text-3xl font-bold text-spirit-purple">
+                  <p className="text-3xl font-bold text-spirit-ink">
                     {characters.filter((c) => !c.campaignId).length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">Unassigned</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-warm-amber/5">
-                  <p className="text-3xl font-bold text-warm-amber">
+                  <p className="text-3xl font-bold text-accent-ink">
                     {characters.filter((c) => c.gameSystem).length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">With Game System</p>

@@ -260,7 +260,7 @@ src/
 │   └── queryClient.ts  React Query client configuration
 ├── pages/             One file per route (thin; delegates to components, contexts, and query hooks)
 ├── components/
-│   ├── ui/            Shared UI primitives (Button, Modal, Input, Field, Tooltip)
+│   ├── ui/            Shared UI primitives (Button, Modal, SlideOver, Input, Field, Tooltip)
 │   ├── campaign/      Campaign page panels (ChatPanel, DiceRoller, SessionSidebar, MapCanvas, etc.)
 │   │   └── map/       MapCanvas render layers, coordinate conversions, fog and wall selection, vision cache, explored memory, preview selection, the held-token release, and animation/render-loop hooks
 │   │       └── tools/ Each map tool's mouse and key handling: walls, lights, doors, fog boxes, the ruler and AoE template

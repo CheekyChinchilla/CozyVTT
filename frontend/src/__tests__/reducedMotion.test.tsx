@@ -16,9 +16,12 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MotionConfig, motion } from 'framer-motion';
 import indexCss from '../index.css?raw';
+import Modal from '@/components/ui/Modal';
+import ToastContainer from '@/components/common/ToastContainer';
+import { ToastProvider, useToast } from '@/contexts/ToastContext';
 
 // framer-motion reads the setting once, the first time a component asks for
 // it, so it is switched on before anything in this file renders.
@@ -78,5 +81,52 @@ describe('index.css with reduce motion turned on', () => {
 
   it('still shortens CSS animations to a moment, so their end events fire', () => {
     expect(/animation-duration:\s*([^;]+);/.exec(block)?.[1].trim()).toBe('0.001ms !important');
+  });
+});
+
+// framer-motion makes transforms instant under the setting both ways. On the
+// way in that cannot be seen, since the element starts transparent; on the
+// way out the element jumped to its exit transform and then faded there.
+describe('closing with reduce motion turned on', () => {
+  it('fades a dialog where it stands', async () => {
+    const view = render(
+      <MotionConfig reducedMotion="user">
+        <Modal open onClose={() => {}} title="Settings">body</Modal>
+      </MotionConfig>
+    );
+    await waitFor(() => expect(screen.getByRole('dialog').style.opacity).toBe('1'));
+    view.rerender(
+      <MotionConfig reducedMotion="user">
+        <Modal open={false} onClose={() => {}} title="Settings">body</Modal>
+      </MotionConfig>
+    );
+    await act(() => pause(50));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.style.transform).toMatch(/^(none)?$/);
+  });
+
+  it('fades a notification where it stands', async () => {
+    function Show() {
+      const { showToast } = useToast();
+      return <button type="button" onClick={() => showToast('Saved', 'success', 0)}>Show</button>;
+    }
+    render(
+      <MotionConfig reducedMotion="user">
+        <ToastProvider>
+          <Show />
+          <ToastContainer />
+        </ToastProvider>
+      </MotionConfig>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show' }));
+    const card = (await screen.findByText('Saved')).closest('[role="alert"]')?.parentElement as HTMLElement;
+    await waitFor(() => expect(card.style.opacity).toBe('1'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
+    await act(() => pause(50));
+
+    expect(card.isConnected).toBe(true);
+    expect(card.style.transform).toMatch(/^(none)?$/);
   });
 });

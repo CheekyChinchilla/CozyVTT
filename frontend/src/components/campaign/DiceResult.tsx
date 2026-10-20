@@ -210,8 +210,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                             className={`
                               font-mono text-xs px-1 rounded
                               ${!isKept ? 'line-through opacity-40' : ''}
-                              ${isCrit20 ? 'bg-success/20 text-success-ink dark:text-success-ink font-bold' : ''}
-                              ${isCrit1 ? 'bg-danger/20 text-danger-ink dark:text-danger-ink font-bold' : ''}
+                              ${isCrit20 ? 'bg-success/15 text-success-ink dark:text-success-ink font-bold' : ''}
+                              ${isCrit1 ? 'bg-danger/15 text-danger-ink dark:text-danger-ink font-bold' : ''}
                             `}
                           >
                             {r}

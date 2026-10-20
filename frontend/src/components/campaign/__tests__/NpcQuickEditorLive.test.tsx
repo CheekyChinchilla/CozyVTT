@@ -11,7 +11,9 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
+import { useState } from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
@@ -26,6 +28,7 @@ vi.mock('framer-motion', () => {
     return <div {...(plain as Record<string, unknown>)}>{children as never}</div>;
   };
   return {
+    useReducedMotionConfig: () => false,
     motion: new Proxy({}, { get: () => MotionDiv }),
     AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
   };
@@ -64,6 +67,12 @@ beforeEach(() => {
   updateToken.mockImplementation((_c: string, _m: string, _id: string, changes: Partial<Token>) =>
     Promise.resolve({ token: { ...useGameStore.getState().tokens['cultist'], ...changes } }));
   useGameStore.getState().clearGameState();
+});
+
+// The name box had no label; a screen reader read only its value.
+it('labels the token name box', () => {
+  open();
+  expect(screen.getByRole('textbox', { name: 'Token name' })).toHaveValue('Cultist');
 });
 
 it('shows a condition added elsewhere, and keeps it when the DM adds another', async () => {
@@ -105,6 +114,7 @@ it('shows a rename made elsewhere', () => {
 
 it('keeps what the DM is typing over a change made elsewhere, until it is saved', async () => {
   open();
+  await waitForDialogFocus();
   const notes = screen.getByPlaceholderText('Guard post, special abilities, loot…');
   await userEvent.type(notes, 'Carries the key');
   changedElsewhere({ notes: 'Written in another tab' });
@@ -148,4 +158,26 @@ it('keeps what is typed into a new stat block while it is being created', async 
 
   await act(async () => { created(); });
   expect(screen.getByPlaceholderText('30 ft., fly 60 ft.')).toHaveValue('40 ft.');
+});
+
+// A field saves when it is left. Escape closes the editor straight from the
+// field, and the page then removes the editor, which leaves no field behind
+// to be left; so what was typed was lost.
+it('saves what is typed in a field when Escape closes the editor', async () => {
+  function Page() {
+    const [shown, setShown] = useState(true);
+    return shown ? (
+      <NpcQuickEditor token={cultist} campaignId="campaign-1" mapId="map-1" onClose={() => setShown(false)} onTokenUpdate={() => {}} />
+    ) : null;
+  }
+  useGameStore.getState().setTokens([cultist]);
+  render(<Page />);
+  await waitForDialogFocus();
+  const notes = screen.getByPlaceholderText('Guard post, special abilities, loot…');
+  await userEvent.type(notes, 'Carries the key');
+
+  fireEvent.keyDown(notes, { key: 'Escape' });
+
+  expect(screen.queryByRole('dialog')).toBeNull();
+  await waitFor(() => expect(lastSent()).toEqual({ notes: 'Carries the key' }));
 });

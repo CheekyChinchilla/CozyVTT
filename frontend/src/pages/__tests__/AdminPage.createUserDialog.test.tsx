@@ -56,6 +56,16 @@ async function openCreateUser() {
 }
 
 describe('the Create User window', () => {
+  it('opens with the email box focused, and gives focus back to Create User when closed', async () => {
+    await openCreateUser();
+    expect(screen.getByLabelText(/Email/)).toHaveFocus();
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create User' })).toBeNull());
+    expect(screen.getByRole('button', { name: /Create User/ })).toHaveFocus();
+  });
+
   it('is a labelled modal dialog that Escape closes', async () => {
     const dialog = await openCreateUser();
     expect(dialog).toHaveAttribute('aria-modal', 'true');

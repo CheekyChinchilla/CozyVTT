@@ -598,7 +598,7 @@ export default function AssetUploadModal({
                   {tags.map((tag) => (
                     <span
                       key={tag}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-warm-amber/20 text-warm-amber rounded-full text-sm"
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-warm-amber/15 text-accent-ink rounded-full text-sm"
                     >
                       <TagIcon className="w-3 h-3" />
                       {tag}

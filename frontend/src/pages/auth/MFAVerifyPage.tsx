@@ -169,7 +169,7 @@ export default function MFAVerifyPage() {
         {/* Error Alert */}
         {error && (
           <div className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 

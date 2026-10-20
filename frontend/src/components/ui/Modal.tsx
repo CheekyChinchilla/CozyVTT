@@ -10,6 +10,7 @@
 import { useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { X, type LucideIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
@@ -65,13 +66,17 @@ export default function Modal({
   fitViewport = false,
 }: ModalProps) {
   const titleId = useId();
+  const dialogExit = useMotionExit({ opacity: 0, scale: 0.95, y: 20 });
 
   const handleClose = () => {
     if (!closeDisabled) onClose();
   };
 
   const modalRef = useFocusTrap(open, handleClose);
-  const zBackdrop = layer === 'overlay' ? 'z-60' : 'z-40';
+  // The backdrop shares the dialog's layer, so a window opened from a side
+  // panel (z-50, see SlideOver) dims the panel too; it comes later in the
+  // page, so it is drawn over it.
+  const zBackdrop = layer === 'overlay' ? 'z-60' : 'z-50';
   const zDialog = layer === 'overlay' ? 'z-60' : 'z-50';
 
   // Portal to <body>: ancestors with transform/filter/backdrop-filter (e.g.
@@ -92,6 +97,10 @@ export default function Modal({
           />
 
           {/* Dialog */}
+          {/* TODO(ui): this wrapper covers the backdrop, so a click beside the
+              dialog lands here and closeOnBackdrop never closes it. Closing on
+              a click on the wrapper itself would, but it also closes forms
+              with typed input on a stray click: decide which dialogs keep it. */}
           <div className={cn('fixed inset-0 flex items-center justify-center p-4', zDialog)}>
             <motion.div
               ref={modalRef}
@@ -100,7 +109,7 @@ export default function Modal({
               aria-labelledby={titleId}
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              exit={dialogExit}
               transition={{ duration: 0.2 }}
               className={cn(
                 'w-full p-6 relative rounded-cozy-lg border border-brand/20 shadow-2xl',

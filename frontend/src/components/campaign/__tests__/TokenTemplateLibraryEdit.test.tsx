@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { TokenTemplate } from '@/types';
 import { TokenType, TokenDisposition } from '@/types';
@@ -53,6 +54,7 @@ beforeEach(() => {
 async function openEditor(t: TokenTemplate) {
   listReturns(t);
   render(<TokenTemplateLibrary isOpen onClose={() => {}} />);
+  await waitForDialogFocus();
   await userEvent.click(await screen.findByText(t.name));
   await userEvent.click(screen.getByTitle('Edit template'));
 }
@@ -132,6 +134,7 @@ describe('creating a token template', () => {
   it('records hit points with the HP bar hidden from players', async () => {
     listReturns(template({}));
     render(<TokenTemplateLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
     await userEvent.click(await screen.findByRole('button', { name: /New Template/ }));
 
     await userEvent.type(screen.getByPlaceholderText('e.g. Treasure Chest'), 'Orc');
@@ -142,5 +145,22 @@ describe('creating a token template', () => {
     const sent = api.createTokenTemplate.mock.calls[0][1] as Record<string, unknown>;
     expect(sent.hp).toEqual({ current: 15, max: 15, temp: 0 });
     expect(sent.showHpBar).toBe(false);
+  });
+});
+
+describe('the Token Templates panel as a dialog', () => {
+  it('opens from the left, is announced by name, and Escape and its Close button close it', async () => {
+    const onClose = vi.fn();
+    listReturns(template({}));
+    render(<TokenTemplateLibrary isOpen onClose={onClose} />);
+    const dialog = screen.getByRole('dialog', { name: 'Token Templates' });
+    expect(dialog.className).toMatch(/\bleft-0\b/);
+    await waitFor(() => expect(api.listTokenTemplates).toHaveBeenCalled());
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

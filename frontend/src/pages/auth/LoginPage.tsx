@@ -141,7 +141,7 @@ export default function LoginPage() {
         {/* Error Alert */}
         {error && (
           <div role="alert" className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 
@@ -174,7 +174,7 @@ export default function LoginPage() {
               aria-describedby={fieldErrors.email ? 'email-error' : undefined}
             />
             {fieldErrors.email && (
-              <p id="email-error" role="alert" className="mt-1 text-xs text-spirit-red">{fieldErrors.email}</p>
+              <p id="email-error" role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.email}</p>
             )}
           </div>
 
@@ -205,7 +205,7 @@ export default function LoginPage() {
               aria-describedby={fieldErrors.password ? 'password-error' : undefined}
             />
             {fieldErrors.password && (
-              <p id="password-error" role="alert" className="mt-1 text-xs text-spirit-red">{fieldErrors.password}</p>
+              <p id="password-error" role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.password}</p>
             )}
           </div>
 
@@ -217,7 +217,7 @@ export default function LoginPage() {
                 type="checkbox"
                 checked={rememberMe}
                 onChange={(e) => setRememberMe(e.target.checked)}
-                className="h-4 w-4 text-warm-amber focus:ring-warm-amber border-warm-gray/30 rounded-sm"
+                className="h-4 w-4 text-accent-ink focus:ring-warm-amber border-warm-gray/30 rounded-sm"
                 disabled={loading}
               />
               <label

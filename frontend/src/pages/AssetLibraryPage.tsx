@@ -259,7 +259,7 @@ export default function AssetLibraryPage() {
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-lg transition-colors ${
                   viewMode === 'grid'
-                    ? 'bg-moss-green text-white'
+                    ? 'bg-moss-green text-brand-text'
                     : 'bg-paper-white text-stone-gray hover:bg-moss-green/10 border border-moss-green/20'
                 }`}
                 aria-label="Grid view"
@@ -271,7 +271,7 @@ export default function AssetLibraryPage() {
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-lg transition-colors ${
                   viewMode === 'list'
-                    ? 'bg-moss-green text-white'
+                    ? 'bg-moss-green text-brand-text'
                     : 'bg-paper-white text-stone-gray hover:bg-moss-green/10 border border-moss-green/20'
                 }`}
                 aria-label="List view"
@@ -306,7 +306,7 @@ export default function AssetLibraryPage() {
                     onClick={() => toggleTag(tag)}
                     className={`px-2 py-0.5 rounded-full text-xs font-medium border transition-colors ${
                       selectedTags.includes(tag)
-                        ? 'bg-moss-green text-white border-moss-green'
+                        ? 'bg-moss-green text-brand-text border-moss-green'
                         : 'bg-parchment/50 text-stone-gray border-moss-green/20 hover:border-moss-green/50'
                     }`}
                   >
