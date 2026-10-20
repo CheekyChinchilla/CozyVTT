@@ -51,6 +51,7 @@
  * and no more.
  */
 
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -330,6 +331,22 @@ describe('the containers', () => {
       expect(appuserPhase).toMatch(/^for dir in \/app\/uploads \/app\/logs; do$/m);
       expect(appuserPhase).toMatch(/^ {2}if \[ -d "\$dir" \] && \[ ! -w "\$dir" \]; then$/m);
       expect(appuserPhase.indexOf('[ ! -w "$dir" ]')).toBeLessThan(appuserPhase.lastIndexOf('exec "$@"'));
+    });
+
+    it.each([
+      ['names a port', 'postgresql://cozyvtt:secret@database:5433/cozyvtt', '5433'],
+      ['names none', 'postgresql://cozyvtt:secret@database/cozyvtt', '5432'],
+      ['names none and has options', 'postgresql://cozyvtt:secret@database/cozyvtt?schema=public', '5432'],
+    ])('waits for the database on the right port when the address %s', (_label, url, port) => {
+      // Only the lines that read the address, so nothing else in the script runs.
+      const start = script.indexOf('# Parse DATABASE_URL');
+      const parse = script.slice(start, script.indexOf('echo "   Host:', start));
+      expect(parse).toMatch(/DB_PORT=/);
+      const result = spawnSync('bash', ['-c', `${parse}\nprintf '%s' "$DB_PORT"`], {
+        encoding: 'utf8',
+        env: { PATH: process.env.PATH ?? '', DATABASE_URL: url },
+      });
+      expect(result.stdout).toBe(port);
     });
 
     it("runs the project's own Prisma, without npx, which writes to the home folder", () => {

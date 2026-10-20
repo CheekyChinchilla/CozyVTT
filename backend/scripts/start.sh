@@ -60,7 +60,13 @@ echo "🔍 Checking database connection..."
 # Parse DATABASE_URL to extract connection parameters for pg_isready
 # Format: postgresql://user:password@host:port/dbname
 DB_HOST=$(echo "$DATABASE_URL" | sed -E 's|.*@([^:/]+).*|\1|')
-DB_PORT=$(echo "$DATABASE_URL" | sed -E 's|.*:([0-9]+)/.*|\1|')
+# The port is in the host part, between the @ and the first /; an address
+# that names none uses 5432, as backup.sh reads it.
+HOST_PORT="${DATABASE_URL#*://}"
+HOST_PORT="${HOST_PORT%%/*}"
+HOST_PORT="${HOST_PORT##*@}"
+DB_PORT=5432
+if [[ "$HOST_PORT" == *:* ]]; then DB_PORT="${HOST_PORT##*:}"; fi
 DB_USER=$(echo "$DATABASE_URL" | sed -E 's|.*://([^:]+):.*|\1|')
 DB_NAME=$(echo "$DATABASE_URL" | sed -E 's|.*/([^?]+).*|\1|')
 
