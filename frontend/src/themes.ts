@@ -519,11 +519,6 @@ export function hexToRgbChannels(hex: string): string {
   return `${r} ${g} ${b}`;
 }
 
-export function rgbChannelsToHex(channels: string): string {
-  const [r, g, b] = channels.split(' ').map(Number);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
 /**
  * Canonical hues for states the palettes don't define. Each is adapted per
  * theme (see deriveReadableTokens) so a dark theme gets a lighter green rather

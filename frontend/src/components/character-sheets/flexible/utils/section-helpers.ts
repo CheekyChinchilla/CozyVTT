@@ -158,11 +158,3 @@ export const formatModifier = (modifier: number): string => {
   }
   return `${modifier}`;
 };
-
-/**
- * Validate section ID uniqueness
- */
-export const validateUniqueIds = (sections: { id: string }[]): boolean => {
-  const ids = sections.map((s) => s.id);
-  return new Set(ids).size === ids.length;
-};
