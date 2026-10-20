@@ -32,7 +32,6 @@ interface AssetCardProps {
  * Displays a single asset with thumbnail and actions
  */
 function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
-  const [showActions, setShowActions] = useState(false);
   const cardExit = useMotionExit({ opacity: 0, scale: 0.9 });
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -199,16 +198,20 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
           {/* Actions */}
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onView}
               className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
               title="View details"
+              aria-label={`View ${asset.name}`}
             >
               <Eye className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={handleDownload}
               className="p-2 rounded-lg bg-sunset-orange/10 hover:bg-sunset-orange/20 text-sunset-orange transition-colors"
               title="Download"
+              aria-label={`Download ${asset.name}`}
             >
               <Download className="w-5 h-5" />
             </button>
@@ -242,8 +245,6 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
       exit={cardExit}
       whileHover={{ y: -4 }}
       className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow relative group"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
     >
       {/* Thumbnail */}
       <div className="relative w-full h-48 bg-moss-green/10 overflow-hidden">
@@ -273,40 +274,43 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
           {assetScopeLabel(asset.scope)}
         </div>
 
-        {/* Hover Actions */}
-        {showActions && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center gap-3"
+        {/* Actions: shown on hover, while one has keyboard focus, and always on
+            a screen with no hover (touch). Hidden, the overlay lets clicks
+            through to the card. */}
+        <div
+          className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center gap-3 transition-opacity opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto"
+        >
+          <button
+            type="button"
+            onClick={onView}
+            className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
+            title="View details"
+            aria-label={`View ${asset.name}`}
           >
+            <Eye className="w-5 h-5 text-brand-ink" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
+            title="Download"
+            aria-label={`Download ${asset.name}`}
+          >
+            <Download className="w-5 h-5 text-sunset-orange" aria-hidden="true" />
+          </button>
+          {canDelete && (
             <button
-              onClick={onView}
-              className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
-              title="View details"
+              type="button"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="p-3 bg-danger/90 rounded-full hover:bg-danger transition-colors disabled:opacity-50"
+              title="Delete"
+              aria-label={`Delete ${asset.name}`}
             >
-              <Eye className="w-5 h-5 text-brand-ink" />
+              <Trash2 className="w-5 h-5 text-white" aria-hidden="true" />
             </button>
-            <button
-              onClick={handleDownload}
-              className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
-              title="Download"
-            >
-              <Download className="w-5 h-5 text-sunset-orange" />
-            </button>
-            {canDelete && (
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="p-3 bg-danger/90 rounded-full hover:bg-danger transition-colors disabled:opacity-50"
-                title="Delete"
-                aria-label={`Delete ${asset.name}`}
-              >
-                <Trash2 className="w-5 h-5 text-white" />
-              </button>
-            )}
-          </motion.div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Content */}

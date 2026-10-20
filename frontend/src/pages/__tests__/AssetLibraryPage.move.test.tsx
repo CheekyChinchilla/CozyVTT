@@ -69,7 +69,7 @@ it('fetches the library again once the move goes through', async () => {
   );
 
   await userEvent.click(screen.getByRole('button', { name: 'List view' }));
-  await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+  await userEvent.click(await screen.findByRole('button', { name: /^View / }));
   // The panel's Move section, apart from the page's own scope filter.
   const move = within((await screen.findByText('Move to…')).parentElement!);
   await userEvent.click(await move.findByRole('button', { name: 'Campaign' }));
@@ -92,7 +92,7 @@ it('slides the detail panel out when it is closed', async () => {
     </QueryClientProvider>
   );
   await userEvent.click(screen.getByRole('button', { name: 'List view' }));
-  await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+  await userEvent.click(await screen.findByRole('button', { name: /^View / }));
   expect(await screen.findByText('Move to…')).toBeInTheDocument();
 
   await userEvent.click(screen.getByRole('button', { name: 'Close details' }));

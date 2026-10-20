@@ -148,7 +148,7 @@ describe('Asset Library delete', () => {
     api.deleteAsset.mockRejectedValueOnce(inUse);
     renderPage();
     await userEvent.click(screen.getByRole('button', { name: 'List view' }));
-    await userEvent.click(await screen.findByRole('button', { name: 'View details' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^View / }));
     // The panel's own Delete button, not the card's icon.
     const panelDelete = await screen.findByRole('button', { name: 'Delete' });
     await userEvent.click(panelDelete);
