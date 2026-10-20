@@ -282,6 +282,8 @@ class SocketClient {
 
       // Connection error
       this.socket.on('connect_error', (error) => {
+        // Logged whole: socket.io's error carries no request, and its transport
+        // detail is what shows a proxy that does not pass the socket through.
         console.error('[Socket] Connection error:', error);
         clearTimeout(connectionTimeout);
         this.isConnecting = false;
@@ -319,6 +321,7 @@ class SocketClient {
 
       // Error events from server
       this.socket.on('error', (error) => {
+        // The server's own `{ message }`, logged whole.
         console.error('[Socket] Server error event:', error);
         if (isSignInRefusal(error)) this.signInRefused = true;
         if (!this.joined) this.refusedBeforeJoin = true;

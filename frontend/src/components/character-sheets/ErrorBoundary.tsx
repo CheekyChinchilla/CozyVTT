@@ -33,6 +33,7 @@ export class CharacterSheetErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Logged whole: a render error carries no request, and its stack says where.
     console.error('Character sheet error:', error, errorInfo);
   }
 

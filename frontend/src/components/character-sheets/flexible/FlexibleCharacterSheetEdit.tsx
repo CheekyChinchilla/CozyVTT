@@ -16,7 +16,7 @@ import { TextEditor } from './components/sections/TextEditor';
 import { TableEditor } from './components/sections/TableEditor';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import type { CharacterData } from '@/types';
 import Button from '@/components/ui/Button';
 import { FLEXIBLE_MAX_SECTIONS } from '@/constants/sheetLimits';
@@ -122,7 +122,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         try {
           newTokenImageUrl = await uploadTokenPicture(tokenImageFile, character.name, character.campaignId);
         } catch (uploadError: unknown) {
-          console.error('Error uploading token image:', uploadError);
+          console.error('Error uploading token image:', errorSummary(uploadError));
           setTokenError(apiErrorMessage(uploadError) || 'Failed to upload token image');
           setIsSaving(false);
           return;
@@ -144,7 +144,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       if (!changedMeanwhile) onDone?.();
     } catch (error) {
       // Whoever hosts the sheet says why; the sections stay as typed.
-      console.error('Error saving character:', error);
+      console.error('Error saving character:', errorSummary(error));
     } finally {
       setIsSaving(false);
     }

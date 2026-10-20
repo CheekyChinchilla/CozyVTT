@@ -31,7 +31,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo });
-    // Log for developers / future error reporting service
+    // Logged whole for developers: a render error is thrown by the page's own
+    // code and carries no request, and its stack says where.
     console.error('[ErrorBoundary] Uncaught error:', error, errorInfo);
   }
 

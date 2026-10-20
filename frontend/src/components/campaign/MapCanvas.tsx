@@ -89,7 +89,7 @@ import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/character
 import { controlsToken } from '@/utils/tokenOwnership';
 import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -3024,7 +3024,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       const { character } = await api.getCharacter(characterId);
                       setViewingSheet({ character, tokenId });
                     } catch (err) {
-                      console.error('Failed to load character sheet:', err);
+                      console.error('Failed to load character sheet:', errorSummary(err));
                       showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
                     }
                   }}

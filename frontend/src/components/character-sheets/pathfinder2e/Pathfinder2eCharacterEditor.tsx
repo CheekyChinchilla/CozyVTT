@@ -34,7 +34,7 @@ import type {
   PF2eFeats,
   PF2eSpellSlots,
 } from '../../../types/game-systems';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
 import Button from '@/components/ui/Button';
@@ -857,7 +857,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         try {
           newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.characterName || 'Character', character.campaignId);
         } catch (uploadError: unknown) {
-          console.error('Error uploading token image:', uploadError);
+          console.error('Error uploading token image:', errorSummary(uploadError));
           setErrors({ ...errors, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' });
           setIsSaving(false);
           return;
@@ -868,7 +868,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
       await onSave(updatedData, true, newTokenImageUrl);
       markClean();
     } catch (error) {
-      console.error('Error saving character:', error);
+      console.error('Error saving character:', errorSummary(error));
       setErrors({ ...errors, submit: 'Failed to save character. Please try again.' });
     } finally {
       setIsSaving(false);

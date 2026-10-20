@@ -16,7 +16,7 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { useToast } from '@/contexts/ToastContext';
 import type { InvitableUser } from '@/types';
 import { Button, Modal, Field, Input } from '@/components/ui';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '@/constants/inviteSearchLimits';
 
 /** How long typing has to pause before a search goes out. */
@@ -124,7 +124,7 @@ export default function InvitePlayerModal({
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Error sending invitation:', err);
+      console.error('Error sending invitation:', errorSummary(err));
       setError(apiErrorMessage(err) || 'Failed to send invitation');
     } finally {
       setSending(false);

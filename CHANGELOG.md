@@ -142,6 +142,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **A failed save or request no longer copies what it sent into the browser's console.** When saving a character, uploading a token picture, sending an invitation, saving the vibe settings or loading the campaign failed, the page wrote the whole failed request to the browser's developer console, including the sheet or the details sent, where it could end up in a screenshot or a bug report. Only the status and the server's message are written now.
+
 - **A screen reader no longer reads out older chat messages as they load.** The chat announces each new message, and it also read out every message on a page of older ones from **Load More**, and the messages fetched again after a dropped connection. It now stays quiet while it reads them.
 
 - **Three more controls read correctly to a screen reader.** The token editor's name box is labelled **Token name**; the **Walls** and **Lights** titles read with a space before their count; and each token in **Add Combatant** is read once, where its picture repeated the name.

@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useToast } from '@/contexts/ToastContext';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { conditionsOffered } from '@/utils/conditions';
 import { TOKEN_LIMITS } from '@/constants/tokenLimits';
 import { tokenControllerStanding } from '@/utils/tokenCopy';
@@ -188,7 +188,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
       // Say why, or the edit stays in the field looking saved. A token from
       // an earlier release can hold more than the server now accepts (notes
       // past 5,000 characters, a name past 200), and the reason names the field.
-      console.error('NpcQuickEditor: failed to update token', err);
+      console.error('NpcQuickEditor: failed to update token', errorSummary(err));
       showToast(apiErrorMessage(err) || 'Could not save that change to the token', 'error');
       return false;
     }

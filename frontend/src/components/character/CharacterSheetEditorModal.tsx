@@ -18,7 +18,7 @@ import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor
 import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfinder2eCharacterEditor';
 import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
-import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorSummary } from '@/utils/errors';
 import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 import { useStaleSaveReapply } from './StaleSaveDialog';
@@ -99,7 +99,7 @@ export default function CharacterSheetEditorModal({
         onSaved();
       }
     } catch (error) {
-      console.error('Error saving character:', error);
+      console.error('Error saving character:', errorSummary(error));
 
       // Signed out meanwhile: the editor stays open with the changes, and the
       // notice says how to save them.

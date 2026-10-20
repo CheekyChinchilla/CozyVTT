@@ -20,7 +20,7 @@ import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
 import { MessageType } from '@/types';
 import type { Message, ChatMessageBroadcast } from '@/types';
 import Button from '@/components/ui/Button';
-import { errorMessage } from '@/utils/errors';
+import { errorMessage, errorSummary } from '@/utils/errors';
 import type { ChatSystemBroadcast } from '@/types';
 
 /** Messages per page. The server caps this at 100. */
@@ -79,7 +79,7 @@ export default function ChatPanel() {
         );
       }
     } catch (err) {
-      console.error('[ChatPanel] Failed to clear join/leave messages:', err);
+      console.error('[ChatPanel] Failed to clear join/leave messages:', errorSummary(err));
     } finally {
       setClearingJoins(false);
     }
@@ -215,7 +215,7 @@ export default function ChatPanel() {
         // Scroll to bottom after initial load (without smooth)
         setTimeout(() => scrollToBottom(false), 100);
       } catch (err) {
-        console.error('[ChatPanel] Failed to load messages:', err);
+        console.error('[ChatPanel] Failed to load messages:', errorSummary(err));
         setError(errorMessage(err) || 'Failed to load messages');
       } finally {
         setIsLoading(false);
@@ -270,7 +270,7 @@ export default function ChatPanel() {
           setCursor(page.pagination.nextCursor);
         }
       } catch (err) {
-        console.error('[ChatPanel] Failed to resync messages after reconnect:', err);
+        console.error('[ChatPanel] Failed to resync messages after reconnect:', errorSummary(err));
         // Non-fatal — user will still see new messages going forward
       }
     };
@@ -308,7 +308,7 @@ export default function ChatPanel() {
       setHasMore(page.pagination.hasMore);
       setCursor(page.pagination.nextCursor);
     } catch (err) {
-      console.error('[ChatPanel] Failed to load more messages:', err);
+      console.error('[ChatPanel] Failed to load more messages:', errorSummary(err));
       setError(errorMessage(err) || 'Failed to load more messages');
     } finally {
       setIsLoadingMore(false);

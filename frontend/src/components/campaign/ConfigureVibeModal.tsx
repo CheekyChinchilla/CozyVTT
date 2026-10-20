@@ -15,7 +15,7 @@ import Toast, { useToast } from '@/components/Toast';
 import api from '@/services/api';
 import type { Asset, VibePeriod, VibeSettings } from '@/types';
 import { Button, Modal } from '@/components/ui';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import { settableAudioAssets } from '@/utils/audioAssets';
 import { listEveryAsset } from '@/services/assetPages';
@@ -399,7 +399,7 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
       showToast('Vibe periods saved!', 'success');
       setTimeout(onClose, 900);
     } catch (err) {
-      console.error('Failed to save vibe settings:', err);
+      console.error('Failed to save vibe settings:', errorSummary(err));
       showToast(apiErrorMessage(err) || 'Failed to save vibe settings', 'error');
     } finally {
       setIsSaving(false);

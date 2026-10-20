@@ -15,6 +15,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
+import { errorSummary } from '@/utils/errors';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -216,7 +217,7 @@ export default function DiceRoller() {
           return merged.slice(0, 50);
         });
       } catch (err) {
-        console.error('[DiceRoller] Failed to load roll history:', err);
+        console.error('[DiceRoller] Failed to load roll history:', errorSummary(err));
         // Non-fatal — live rolls still arrive over the socket.
       } finally {
         // A frame later, so the history is drawn before the list goes live.

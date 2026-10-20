@@ -29,7 +29,7 @@ import type {
   DnD5eSpellcasting,
   DnD5eSpellSlots,
 } from '../../../types/game-systems';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { DND5E_CONDITIONS } from '@/utils/conditions';
 import { collectSheetFeatures, readFeatureEntriesForEditing } from '@/utils/featureEntries';
 import { useServerConfigQuery } from '@/hooks/queries';
@@ -1020,7 +1020,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         try {
           newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.characterName || 'Character', character.campaignId);
         } catch (uploadError: unknown) {
-          console.error('Error uploading token image:', uploadError);
+          console.error('Error uploading token image:', errorSummary(uploadError));
           setErrors((prev) => ({ ...prev, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' }));
           setIsSaving(false);
           return;
@@ -1031,7 +1031,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       await onSave(updatedData, true, newTokenImageUrl);
       markClean();
     } catch (error) {
-      console.error('Error saving character:', error);
+      console.error('Error saving character:', errorSummary(error));
       setErrors((prev) => ({ ...prev, submit: 'Failed to save character. Please try again.' }));
     } finally {
       setIsSaving(false);

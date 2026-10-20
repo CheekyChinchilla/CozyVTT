@@ -19,6 +19,7 @@ import { api } from '../../services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import { formatFileSize } from '@/utils/format';
+import { errorSummary } from '@/utils/errors';
 
 interface AssetCardProps {
   asset: Asset;
@@ -98,7 +99,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
     try {
       await onDelete(asset);
     } catch (error) {
-      console.error('Error deleting asset:', error);
+      console.error('Error deleting asset:', errorSummary(error));
     } finally {
       setIsDeleting(false);
       setConfirmOpen(false);

@@ -16,7 +16,7 @@ import {
 import { useParams } from 'react-router';
 import type { Socket } from 'socket.io-client';
 import socketClient from '@/services/socket';
-import { errorMessage } from '@/utils/errors';
+import { errorMessage, errorSummary } from '@/utils/errors';
 import { keepSessionAlive, SESSION_KEEPALIVE_MS } from '@/services/sessionKeepAlive';
 import type { AccessRevoked } from '@/types';
 
@@ -387,7 +387,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       setTimeout(() => {
         if (isMountedRef.current) {
           connect(cid).catch((err) => {
-            console.error('[WebSocket] Auto-reconnect on online event failed:', err);
+            console.error('[WebSocket] Auto-reconnect on online event failed:', errorSummary(err));
           });
         }
       }, 300);

@@ -11,7 +11,7 @@ import { GAME_SYSTEM_OPTIONS, gameSystemName } from '@/constants/game-systems';
 import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import api from '@/services/api';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorMessage, errorSummary } from '@/utils/errors';
 
 /** Set when the character was made and publishing it as a template was not. */
 export interface TemplatePublishFailure {
@@ -139,7 +139,7 @@ export default function NewCharacterModal({
       const response = await api.listCampaigns();
       setAvailableCampaigns(response.campaigns);
     } catch (err) {
-      console.error('Failed to fetch campaigns:', err);
+      console.error('Failed to fetch campaigns:', errorSummary(err));
     } finally {
       setLoadingCampaigns(false);
     }

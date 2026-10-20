@@ -20,7 +20,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
 import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast } from '@/types';
 import socketClient from '@/services/socket';
-import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, errorSummary } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
 
 // ============================================
@@ -256,7 +256,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       }
     } catch (err) {
       if (!isNewest()) return;
-      console.error('Failed to load campaign:', err);
+      console.error('Failed to load campaign:', errorSummary(err));
 
       // Handle specific errors
       if (apiErrorStatus(err) === 403) {
@@ -293,7 +293,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       setCampaign((prev) => (prev && prev.id === fresh.id ? fresh : prev));
       setActiveSession(fresh.activeSession ?? null);
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh the campaign:', err);
+      console.error('[CampaignContext] Failed to refresh the campaign:', errorSummary(err));
     }
   }, [campaign?.id, rereadCampaign]);
 
@@ -309,7 +309,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh current map after reconnect:', err);
+      console.error('[CampaignContext] Failed to refresh current map after reconnect:', errorSummary(err));
       // Non-fatal — user will receive future real-time updates normally
     }
   }, [campaign?.id, currentMap?.id]);
@@ -347,7 +347,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       applyCampaignEffects(fresh);
       mapId = fresh.currentMapId ?? null;
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', err);
+      console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', errorSummary(err));
     }
     if (!mapId) return;
     try {
@@ -357,7 +357,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', err);
+      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', errorSummary(err));
     }
   }, [campaign?.id, currentMap?.id, applyCampaignEffects]);
 
@@ -516,7 +516,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
             ? { ...prev, memberships: fresh.memberships, characters: fresh.characters ?? prev.characters }
             : prev));
         })
-        .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', err));
+        .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', errorSummary(err)));
     };
     socketClient.onMemberRoleChanged(handleRoleChanged);
     socketClient.on('authenticated', handleAuthenticated);
