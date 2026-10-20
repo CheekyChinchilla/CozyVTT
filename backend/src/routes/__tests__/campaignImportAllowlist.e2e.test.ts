@@ -18,9 +18,10 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-allowlist-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-// The fixtures here are a format's first bytes and no more. The real
-// file-type does not identify the PNG one, and takes the Ogg one for an Ogg
-// file that is not sound, so this answers as it does for whole files.
+// The fixtures here are a format's first bytes and no more, apart from the
+// PNG, which is whole because a picture's size is read before it is kept.
+// The real file-type takes the Ogg one for an Ogg file that is not sound, so
+// this answers as it does for whole files.
 jest.mock('file-type', () => {
   const sniff = (head: Buffer) => {
     if (head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return { ext: 'png', mime: 'image/png' };
@@ -47,7 +48,10 @@ import { writeZip } from '../../__tests__/helpers/zipFixtures';
 const app = createTestApp();
 
 const BYTES = {
-  png: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(64)]),
+  png: Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082',
+    'hex'
+  ),
   exe: Buffer.concat([Buffer.from('MZ', 'latin1'), Buffer.alloc(64)]),
   tiff: Buffer.concat([Buffer.from('49492a00', 'hex'), Buffer.alloc(64)]),
   pdf: Buffer.from('%PDF-1.7\n%%EOF\n', 'latin1'),

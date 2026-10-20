@@ -24,6 +24,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 #### What you will notice
 
 - **The app needs Firefox 128 or newer.** Chrome and Edge 111 and Safari 16.4 are still enough.
+- **A new map, token or avatar picture has size limits.** At most 16,384 pixels on each side, and for an animated GIF or WebP at most 1,000 frames and 200 million pixels across them for a map, 50 million for a token or an avatar. Pictures already uploaded are kept as they are.
 
 #### What to do afterwards, if it applies to you
 
@@ -121,6 +122,10 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
   - *Backups.* `POST /api/admin/backups/restore` answers a multipart body its parser cannot read (cut off, or with no boundary) with 400 `Upload Error` `The upload could not be read. Nothing was changed.` (it was 500 `An unexpected error occurred`).
   - *Live table: events.* The server no longer passes on `dm:editing`: one sent by the DM is ignored, and no member is sent it.
   - *Instance settings.* `PUT /api/admin/settings` and `POST /api/setup/init` ignore `timezone`, which nothing used: it is no longer stored or named in the activity log, and the answer is the same as without it. `GET /api/admin/settings` still gives the stored value, `UTC` unless an earlier version saved another.
+  - *Assets.* `POST /api/assets/upload` of a MAP, TOKEN or AVATAR picture answers 400 `Validation Error`, keeping nothing, when the picture is more than 16,384 pixels wide or tall (`This picture is 20,000 pixels wide. A picture can be at most 16,384 pixels on each side.`), or a WebP more than 16,383, the most WebP allows (`A WebP picture can be at most 16,383 pixels on each side.`), when it is animated with more than 1,000 frames (`This animation has 1,200 frames. An animated picture can have at most 1,000.`, or for a WebP, whose frames are counted only as far as the limit, `This animation has more than 1,000 frames.` and the same second sentence) or more than 200,000,000 pixels across its frames for a MAP and 50,000,000 for a TOKEN or AVATAR (`This animation is 400 million pixels across its frames. An animated map can be at most 200 million.`, or `An animated token picture` and `An animated avatar`), and when its size cannot be read (`CozyVTT could not read the size of this picture, so it cannot be checked. Save it again in an image editor and try once more.`). A GIF's size is its logical screen, or its first frame where that reaches past it.
+  - *Assets.* `POST /api/assets/upload` checks a file against its type's size limit before reading its content, so a file over that limit answers 400 `File Too Large` whatever it holds, where one also of a type not accepted answered 400 `Validation Error` before.
+  - *Campaign archives.* `POST /api/campaigns/import` leaves out a MAP or TOKEN picture over the same limits, or whose size cannot be read, and lists it in `skipped` with `kind: 'asset'` and the same message as its `reason`.
+  - *Universal VTT.* `POST /api/campaigns/:campaignId/maps/import-uvtt` answers 400 `Validation Error` when the picture inside the file is over the same limits for a MAP, or its size cannot be read, with the message `The picture inside this file cannot be used as a map. ` followed by the upload's, and saves nothing.
 
 - **A server admin moving someone's personal file into a campaign is written to the activity log.** An admin can move any user's personal file into any campaign, or to **Global**, which puts it in front of that table or of everyone, and nothing recorded it. The move now writes a line to **Recent Admin Actions** on the Admin Panel's **Activity** tab, naming the file, its owner's email address and where it went.
 
@@ -141,6 +146,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 - **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB on disk, are left out of the backend install. Nothing changes in how dice roll.
 
 ### Fixed
+
+- **Export as Universal VTT works for a map picture 16,384 pixels on each side.** The export read the picture's size with a limit just below that and answered with an error for such a map; it now exports it.
 
 - **Import Character checks a dropped file against the names in use now.** A file dropped onto **Import Character** was checked against the characters that existed when the window opened, so one with the name of a character made since was not flagged.
 
@@ -579,6 +586,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 - **The dark backdrop behind a character sheet opened from the campaign roster covers the whole window.** A strip along the top of the window was left uncovered.
 
 ### Security
+
+- **A map, token or avatar picture is held to limits that keep an animation from swamping players' browsers.** A GIF token, or an animated WebP map, token or avatar, was accepted however many frames it had, and every player's browser unpacks every frame, so a file of a few megabytes could take gigabytes there. A picture uploaded now may be at most 16,384 pixels wide and 16,384 tall, and an animated one at most 1,000 frames and at most 200 million pixels across all its frames for a map, or 50 million for a token or an avatar (its width, times its height, times its frames). The upload window says which limit a picture is over, a campaign import leaves such a picture out and lists it under **Left out** with the reason, and a Universal VTT map import whose picture is over a limit is refused, saying which. A picture whose size cannot be read is refused too. Pictures already uploaded are not affected.
 
 - **A crafted map in a campaign archive no longer costs the import far more memory than its size.** A map file of 10 MB filled with tiny walls or empty entries holds over a million of them, several times what the largest real map holds, and reading it took a large part of the backend's memory. Such a map is now left out before it is read, and the import says why; real maps are not affected.
 

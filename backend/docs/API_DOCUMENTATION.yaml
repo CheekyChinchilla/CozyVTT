@@ -5691,6 +5691,16 @@ paths:
         An animated PNG is identified as `image/apng` and refused (`Invalid
         file type`) for every type that takes PNG.
 
+        **Picture limits.** A MAP, TOKEN or AVATAR picture may be at most
+        16,384 pixels wide and 16,384 pixels tall (a WebP at most 16,383,
+        the most WebP allows; a GIF's size is its logical screen, or its
+        first frame where that reaches past it). An animated
+        one, a GIF or WebP of more than one frame, may have at most 1,000
+        frames and at most 200,000,000 pixels across all of them (width by
+        height by frames) for a MAP, 50,000,000 for a TOKEN or AVATAR. They
+        are read from the picture's header, without unpacking a frame, and
+        apply to uploads only: pictures already stored are not checked.
+
         The original filename's extension matters only where the bytes
         cannot be identified: an
         AUDIO named `.mp3` that starts with an ID3 tag or an MPEG frame sync,
@@ -5800,7 +5810,19 @@ paths:
             `campaignId` missing for a CAMPAIGN upload; no file; a file in a
             part not named `file`; content that cannot be identified ("Could
             not determine file type...") or is not accepted for the declared
-            `type` ("Invalid file type..."); a `name` over 200 characters
+            `type` ("Invalid file type..."); a MAP, TOKEN or AVATAR picture
+            over the picture limits above, with the limit in words ("This
+            picture is 20,000 pixels wide. A picture can be at most 16,384
+            pixels on each side.", or for a WebP "A WebP picture can be at
+            most 16,383 pixels on each side.", "This animation has 1,200 frames. An
+            animated picture can have at most 1,000.", for a WebP, whose
+            frames are counted only as far as the limit, "This animation has
+            more than 1,000 frames. An animated picture can have at most
+            1,000.", "This animation is 400
+            million pixels across its frames. An animated map can be at most
+            200 million.") or whose size cannot be read ("CozyVTT could not
+            read the size of this picture, so it cannot be checked. Save it
+            again in an image editor and try once more."); a `name` over 200 characters
             ("The asset name must be 200 characters or fewer"), a
             `description` over 1,000 ("The asset description must be 1000
             characters or fewer"), more than 50 tags ("An asset can have at
@@ -5808,7 +5830,8 @@ paths:
             characters or fewer"); or `name`, `description` or `tags` sent
             more than once ("Send the name once, as text.", and so on; this
             answered 500 before). `error` is `File Too Large` when
-            the file exceeds its type's limit. Other multipart problems, such
+            the file exceeds its type's limit, which is checked before its
+            content, so a file over it gets this answer whatever it holds. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
             than 100 text fields, a field name longer than 100 bytes, a field
             value longer than 16 KB, or
@@ -9532,7 +9555,12 @@ paths:
         any codec (Opus included) as `audio/ogg` and `.ogg`; its
         `originalName` is
         kept unless that name's extension is not allowed for the type, when
-        the detected extension replaces it. Any other asset is skipped.
+        the detected extension replaces it. Any other asset is skipped, and
+        so is a picture over the picture limits `POST /api/assets/upload`
+        holds a MAP or TOKEN to (at most 16,384 pixels on a side; animated,
+        at most 1,000 frames and 200,000,000 pixels across them for a MAP,
+        50,000,000 for a TOKEN) or whose size cannot be read, listed in
+        `skipped` with the upload's message as its `reason`.
         A map's picture and spirit layer keep only an asset imported as MAP:
         one naming a TOKEN or AUDIO asset is dropped from the map, the asset
         is still imported, and `warnings` says so (`Map "<name>": left out
@@ -11484,7 +11512,12 @@ paths:
         claims: anything that is not a PNG, JPEG or WebP (a PDF cannot be
         drawn as a map) is refused with 400, as is one over the
         `MAX_MAP_SIZE_MB` limit, which is checked from the length of its base64
-        text before it is decoded. It is saved as a new campaign map asset
+        text before it is decoded, and one over the picture limits
+        `POST /api/assets/upload` holds a MAP to (at most 16,384 pixels on a
+        side; animated, at most 1,000 frames and 200,000,000 pixels across
+        them) or whose size cannot be read, with `The picture inside this
+        file cannot be used as a map. ` followed by the upload's message.
+        Nothing is saved for a refused picture. It is saved as a new campaign map asset
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
         upload does, and a user may run one import at a time: a second sent

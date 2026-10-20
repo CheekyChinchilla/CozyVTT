@@ -37,6 +37,7 @@ import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../uti
 import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { uploadLimiter } from './assets';
 import { openPicture, NotAPictureError } from '../utils/sharpInput';
+import { pictureLimitProblem } from '../utils/pictureLimits';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
@@ -650,6 +651,14 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
           message: `The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`,
         });
       }
+      // The limits on its pixels and frames that an uploaded map has.
+      const pictureProblem = await pictureLimitProblem(parsed.imageBuffer, 'MAP');
+      if (pictureProblem) {
+        return answer(400, {
+          error: 'Validation Error',
+          message: `The picture inside this file cannot be used as a map. ${pictureProblem}`,
+        });
+      }
 
       // ── Save the embedded image as an asset ──────────────────────────────
       signal.throwIfAborted();
@@ -824,10 +833,12 @@ router.get(
 
         // Get image dimensions for pixels_per_grid calculation. A map stored
         // before its picture had to be a map picture can name any file, so the
-        // bytes are identified first, and only a picture is read.
+        // bytes are identified first, and only a picture is read. Only the
+        // header is read, so the image library's pixel limit (16,383 squared)
+        // is off: a map picture may be 16,384 pixels on each side.
         let imageWidthPx: number | undefined;
         try {
-          imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+          imageWidthPx = (await (await openPicture(imageBuffer, { limitInputPixels: false })).metadata()).width;
         } catch (error) {
           if (!(error instanceof NotAPictureError)) throw error;
           return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });

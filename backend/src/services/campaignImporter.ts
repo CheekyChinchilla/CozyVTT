@@ -14,6 +14,8 @@
  * - Malicious files: every asset must be a MAP, TOKEN or AUDIO file whose
  *   bytes are a format the upload route allows for that type, and is stored
  *   under the format and extension its bytes show
+ * - Pictures that unpack to gigabytes in a browser: a map or token picture
+ *   over the picture limits (utils/pictureLimits.ts) is left out
  * - JSON injection: size limits, Zod schema validation, and a limit on how
  *   deeply a data file nests (IMPORT_LIMITS.MAX_JSON_DEPTH), checked on its
  *   text before it is parsed
@@ -69,6 +71,7 @@ import {
 import { getFileSizeLimit, getTempDirectory, isAcceptedContent, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS, uploadsDirectorySetting } from '../utils/fileUtils';
 import { errorMessage } from '../utils/errors';
 import { startsWithMp3Header } from '../middleware/fileValidation';
+import { isPictureAssetType, pictureLimitProblem } from '../utils/pictureLimits';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import logger from '../utils/logger';
 
@@ -561,7 +564,8 @@ function folderFor(type: ImportableAssetType): StagedAsset['typeDir'] {
 /**
  * Unpack every asset the manifest lists into `staging`, identify each by its
  * bytes, and name it after what it is. An asset that is missing, over its
- * type's upload limit, or not a format its type allows is left out.
+ * type's upload limit, not a format its type allows, or a picture over the
+ * picture limits (utils/pictureLimits.ts) is left out.
  */
 async function stageAssets(
   archivePath: string,
@@ -626,6 +630,13 @@ async function stageAssets(
         label(assetInfo.originalName, oldId),
         `Its content is not a format ${ASSET_KIND_WORDS[assetInfo.type]} can be (${ALLOWED_EXTENSIONS[assetInfo.type].join(', ')}).`
       );
+      await fs.promises.rm(unpackedPath, { force: true });
+      continue;
+    }
+    // A picture is held to the limits an upload of its kind is.
+    const tooLarge = isPictureAssetType(assetInfo.type) ? await pictureLimitProblem(unpackedPath, assetInfo.type) : null;
+    if (tooLarge) {
+      report.skip('asset', label(assetInfo.originalName, oldId), tooLarge);
       await fs.promises.rm(unpackedPath, { force: true });
       continue;
     }

@@ -20,6 +20,7 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import { pngHeader } from '../../__tests__/helpers/animatedPictures';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -225,5 +226,17 @@ describe('a Universal VTT export', () => {
     expect(uvtt.image).toBe(bytes.toString('base64'));
     // 40 pixels across a map 10 squares wide.
     expect(uvtt.resolution.pixels_per_grid).toBe(4);
+  });
+
+  // A map picture of 16,384 pixels on each side is allowed, but the export
+  // read its size with the image library's default pixel limit (16,383
+  // squared), which refused it, and answered 500.
+  it('embeds a map picture of the largest size allowed', async () => {
+    const id = await makeAsset('MAP', pngHeader(16_384, 16_384), 'png');
+    const map = await storedMap('Largest', `/api/assets/maps/${id}`);
+    const res = await exportOf(map.id);
+    expect(res.status).toBe(200);
+    // 16,384 pixels across a map 10 squares wide.
+    expect(JSON.parse((res.body as Buffer).toString('utf8')).resolution.pixels_per_grid).toBe(1638);
   });
 });
