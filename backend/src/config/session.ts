@@ -1,6 +1,7 @@
 import session from 'express-session';
 import connectPgSimple from 'connect-pg-simple';
 import { Pool } from 'pg';
+import { databaseConnectionSettings } from './prismaClient';
 import logger from '../utils/logger';
 import { rememberMeMaxAge } from './sessionDurations';
 import { sessionOptions } from './sessionOptions';
@@ -11,15 +12,17 @@ export { rememberMeMaxAge };
 const PgSession = connectPgSimple(session);
 
 // PostgreSQL connection pool for session storage. Exported so a clean
-// shutdown can close it.
-// TODO(accounts): pg ignores `?schema=` in DATABASE_URL, so with a schema
-// other than public this pool reads and writes public.session, while the raw
-// session queries made through Prisma (services/sessionStore.ts, the admin
-// activity route) follow that schema's search_path. Build this pool from
-// databaseConnectionSettings in prismaClient.ts, so both use one schema.
-export const sessionPool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+// shutdown can close it. Built from the settings the app's own connection
+// uses (config/prismaClient.ts): pg ignores `?schema=` in DATABASE_URL, and a
+// pool given the raw address kept sign-ins in public.session while the
+// queries that end them (services/sessionStore.ts) read the named schema. The
+// store names the schema too, and the pool is sized by `connection_limit`.
+const databaseUrl = process.env.DATABASE_URL;
+const { pool: poolSettings, schema: sessionSchema } = databaseUrl
+  ? databaseConnectionSettings(databaseUrl)
+  : { pool: {}, schema: 'public' };
+
+export const sessionPool = new Pool(poolSettings);
 
 // node-postgres emits 'error' on the pool when an idle connection drops, as
 // every one does when PostgreSQL stops or restarts. An 'error' event with no
@@ -61,6 +64,7 @@ export const sessionConfig: session.SessionOptions = {
   ...sessionOptions,
   store: new PgSession({
     pool: sessionPool,
+    schemaName: sessionSchema,
     tableName: 'session',
     createTableIfMissing: true,
   }),

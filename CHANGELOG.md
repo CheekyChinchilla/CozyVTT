@@ -27,6 +27,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **If you serve CozyVTT with your own Nginx** following [Serve with Nginx](docs/DEPLOYMENT.md#5-serve-with-nginx), you can narrow its security policy as the bundled one now is: copy the `map $host $csp_socket_sources` block from the top of the example into the top of your site file, and in your `Content-Security-Policy` line change `connect-src 'self' ws: wss:` to `connect-src 'self' $csp_socket_sources`. Then `sudo nginx -t` and `sudo systemctl reload nginx`. Your current line keeps working if you leave it.
 
+- **If your `DATABASE_URL` names a schema** (it ends in `?schema=` followed by a name other than `public`), everyone is signed out by the upgrade and signs in once more: sign-ins are now kept in that schema. The ones from before stay in a `session` table in the `public` schema, which CozyVTT no longer reads. If nothing else on that database uses a table of that name, you can remove it with `DROP TABLE public.session;`.
+
 ### Added
 
 - **The backend's memory limit is a setting.** It was fixed at 512 MB, so giving the backend more room on a larger server meant an override file. Set `BACKEND_MEMORY_LIMIT` in `.env` (`1G`, `2G`) and run `docker compose up -d`; leave it out and 512 MB applies, as before. It cannot go below 256M. See [Backend memory](docs/DEPLOYMENT.md#backend-memory).
@@ -497,6 +499,8 @@ There is no new setting, no setting is removed, and there is no database change 
 ### Security
 
 - **A crafted map in a campaign archive no longer costs the import far more memory than its size.** A map file of 10 MB filled with tiny walls or empty entries holds over a million of them, several times what the largest real map holds, and reading it took a large part of the backend's memory. Such a map is now left out before it is read, and the import says why; real maps are not affected.
+
+- **On an install whose database address names a schema, a password change or a removed account ends the other sign-ins.** A `DATABASE_URL` ending in `?schema=<name>` kept every sign-in in the database's `public` schema, while changing or resetting a password, changing a role and deleting an account ended the sign-ins in the named schema, where there were none, so the account's other devices stayed signed in. Sign-ins are now kept in the named schema, and the session store opens no more connections than `connection_limit` allows, as the rest of the app does. An address that names no schema works as before.
 
 - **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the host name the app was loaded from, on any port. A reverse proxy of your own should pass the browser's host name on to CozyVTT (`proxy_set_header Host $host;` in Nginx, as the deployment guide shows); where it does not, the live table still works over a slower connection.
 
