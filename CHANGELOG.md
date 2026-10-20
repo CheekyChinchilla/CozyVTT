@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **A screen reader no longer reads out older chat messages as they load.** The chat announces each new message, and it also read out every message on a page of older ones from **Load More**, and the messages fetched again after a dropped connection. It now stays quiet while it reads them.
+
 - **Three more controls read correctly to a screen reader.** The token editor's name box is labelled **Token name**; the **Walls** and **Lights** titles read with a space before their count; and each token in **Add Combatant** is read once, where its picture repeated the name.
 
 - **White text on the app's green, amber and purple buttons is gone where it was hard to read.** The dice panel's **Roll** button, the **Spirit Layer** toggle when it is on, and the amber buttons in the map windows and the Admin Panel had white labels on colours that fall under 4.5:1 in most themes. They now use the soft coloured style of the app's alerts, as the character sheets do. The creature and token template letters keep their colours with a label that reads on each, and the fog panel's flashing button has dark text.
