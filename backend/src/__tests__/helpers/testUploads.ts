@@ -7,6 +7,16 @@
 
 const PREFIX = 'cozyvtt-test-uploads-';
 
+/**
+ * The run a process's uploads folders are named for: the one
+ * jest.globalSetup.ts named, which the workers inherit, or, with none named,
+ * the process's own id. A name shared by every such run would let one remove
+ * another's folders while they were still in use.
+ */
+export function uploadsRun(env: NodeJS.ProcessEnv, pid: number): string {
+  return env.COZYVTT_TEST_RUN ?? String(pid);
+}
+
 /** The start of the name of every uploads folder of run `run`. */
 export function uploadsFolderPrefix(run: string): string {
   return `${PREFIX}${run}-`;

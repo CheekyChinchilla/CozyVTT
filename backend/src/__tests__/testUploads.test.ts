@@ -8,7 +8,7 @@
  */
 
 import { spawnSync } from 'child_process';
-import { processIsAlive, uploadsFoldersToRemove } from './helpers/testUploads';
+import { processIsAlive, uploadsFoldersToRemove, uploadsRun } from './helpers/testUploads';
 
 describe('uploadsFoldersToRemove', () => {
   const alive = new Set([100, 200]);
@@ -39,6 +39,18 @@ describe('uploadsFoldersToRemove', () => {
 
   it('does not take a run whose name starts with this one\'s as this one', () => {
     expect(uploadsFoldersToRemove(['cozyvtt-test-uploads-1000-aB3xYz'], '100', (pid: number) => pid === 1000)).toEqual([]);
+  });
+});
+
+describe('uploadsRun', () => {
+  it('is the run jest.globalSetup.ts named', () => {
+    expect(uploadsRun({ COZYVTT_TEST_RUN: '4242' }, 77)).toBe('4242');
+  });
+
+  // Two runs that both fell back to one shared name would each remove the
+  // other's folders while they were still in use.
+  it('is the process\'s own id when no run was named', () => {
+    expect(uploadsRun({}, 77)).toBe('77');
   });
 });
 
