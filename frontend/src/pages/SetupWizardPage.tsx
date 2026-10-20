@@ -19,6 +19,7 @@ import {
   type PasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
 import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
@@ -571,37 +572,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             <p className="mt-1 text-xs text-danger-ink">{fieldErrors.password}</p>
           )}
 
-          {/* Password Strength Indicator */}
-          {data.password && passwordStrength && (
-            <div className="mt-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-warm-gray">Password Strength:</span>
-                <span
-                  className={`text-xs font-medium ${
-                    passwordStrength.color === 'green'
-                      ? 'text-success-ink'
-                      : passwordStrength.color === 'yellow'
-                      ? 'text-warning-ink'
-                      : 'text-danger-ink'
-                  }`}
-                >
-                  {passwordStrength.label}
-                </span>
-              </div>
-              <div className="w-full bg-warm-gray/20 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full transition-all ${
-                    passwordStrength.color === 'green'
-                      ? 'bg-success'
-                      : passwordStrength.color === 'yellow'
-                      ? 'bg-warning'
-                      : 'bg-danger'
-                  }`}
-                  style={{ width: `${passwordStrength.percent}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
+          <PasswordStrengthIndicator password={data.password} strength={passwordStrength} />
         </div>
 
         {/* Confirm Password */}
