@@ -106,7 +106,7 @@ export default function CharacterEditorPage() {
     };
 
     fetchCharacter();
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches once per character and signed-in user
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches again for a new character or account, a refresh of the account included; checkEditPermission reads the user given here
   }, [id, user]);
 
   // ============================================
