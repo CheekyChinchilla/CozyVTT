@@ -603,6 +603,20 @@ describe('the fog box tools', () => {
     expect(sentOf('fog:operation')).toEqual([{ mapId: 'map-a', operation: { op: 'hide', cells: [21] } }]);
   });
 
+  // The right button pans under the wall and light tools; under a fog box tool
+  // the move went to the box, so the map stayed where it was.
+  it('pans with the right button, sending nothing', () => {
+    fogTool('Fog reveal box');
+
+    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
+    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 2 });
+    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 2 });
+
+    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10, buttons: 0 });
+    expect(readout()).toBe('(0, 19)');
+    expect(sentOf('fog:operation')).toEqual([]);
+  });
+
   it('abandons a box on Escape', () => {
     fogTool('Fog reveal box');
 

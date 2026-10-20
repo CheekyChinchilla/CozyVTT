@@ -296,11 +296,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
   }, []);
 
-  // The fog boxes (map/tools/useFogTool.ts).
-  const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
-    isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, markDirty,
-  });
-
   // Right-mouse button panning while a DM tool is active (left-click is reserved for tools)
   const rightPanActiveRef = useRef(false);
   const { toast, showToast, hideToast } = useToast();
@@ -432,6 +427,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   } = useLightTool({
     isDM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
     socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
+  });
+
+  // The fog boxes (map/tools/useFogTool.ts).
+  const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
+    isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
   });
 
   // ============================================
