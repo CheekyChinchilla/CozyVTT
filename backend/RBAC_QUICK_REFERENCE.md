@@ -18,7 +18,7 @@ router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
 
 ### Import Statement
 ```typescript
-import { authenticated, adminOnly, campaignMember, campaignDM, campaignDMOrPlayer } from '../middleware/compose';
+import { authenticated, adminOnly, campaignMember, campaignDM } from '../middleware/compose';
 import { AuthenticatedRequest } from '../middleware/rbac';
 ```
 
@@ -91,10 +91,9 @@ them. They are cleared when the character enters another campaign, by
 a copy has none.
 
 #### 5. Campaign DM or Player (Excludes Spectators)
-`campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
-today. Where spectators are refused, the handler does it: `dice.roll` (socket)
-through `canRollDice`, token control through `canControlToken`, and doors
-through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
+No route guard refuses spectators alone. Where spectators are refused, the
+handler does it: `dice.roll` (socket) through `canRollDice`, token control
+through `canControlToken`, and doors through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
 and size they send being ignored, on a lit map only a door one of their
 tokens can see, and under manual fog only one beside a square revealed to
@@ -667,7 +666,7 @@ SMTP is configured.
 
 ## Campaign Membership Data
 
-After using `campaignMember`, `campaignDM`, or `campaignDMOrPlayer` middleware:
+After using `campaignMember` or `campaignDM` middleware:
 
 ```typescript
 req.campaignMembership = {
@@ -890,7 +889,7 @@ router.get('/', campaignMember, async (req: Request, res: Response) => {
 **Quick Summary:**
 1. Use `authenticated` for routes requiring login
 2. Use `adminOnly` for admin-only routes
-3. Use `campaignMember`, `campaignDM`, or `campaignDMOrPlayer` for campaign routes
+3. Use `campaignMember` or `campaignDM` for campaign routes
 4. Use the permission helpers in `services/permissions.ts` that routes already call (`canControlToken`, `canReadMap`, `canDeleteCampaign`, …) for rules the guards cannot express, and decide a record's rule from the record itself
 5. Always check permissions server-side, never trust client
 6. Use `AuthenticatedRequest` type for TypeScript autocomplete

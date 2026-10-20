@@ -1,13 +1,13 @@
 /**
  * Auth Middleware — Unit Tests
  *
- * Tests requireAuth, requireAdmin, requireRole, and optionalAuth
+ * Tests requireAuth, requireAdmin and requireRole
  * using mocked Express request/response objects.
  */
 
 import { Request, Response, NextFunction } from 'express';
 import type { SessionData } from 'express-session';
-import { requireAuth, requireAdmin, requireRole, optionalAuth } from './auth';
+import { requireAuth, requireAdmin, requireRole } from './auth';
 
 // ============================================
 // Helpers
@@ -143,24 +143,5 @@ describe('requireRole', () => {
     expect(status).toHaveBeenCalledWith(403);
     expect(json).toHaveBeenCalledWith(expect.objectContaining({ error: 'Forbidden' }));
     expect(mockNext).not.toHaveBeenCalled();
-  });
-});
-
-// ============================================
-// optionalAuth
-// ============================================
-
-describe('optionalAuth', () => {
-  it('always calls next() regardless of session state', () => {
-    const reqNoSession = mockReq() as Request;
-    const { res } = mockRes();
-    optionalAuth(reqNoSession, res as Response, mockNext);
-    expect(mockNext).toHaveBeenCalledTimes(1);
-
-    jest.clearAllMocks();
-
-    const reqWithSession = mockReq({ userId: 'user-123' }) as Request;
-    optionalAuth(reqWithSession, res as Response, mockNext);
-    expect(mockNext).toHaveBeenCalledTimes(1);
   });
 });

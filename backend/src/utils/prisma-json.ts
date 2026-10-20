@@ -29,7 +29,6 @@
 
 import { Prisma } from '@prisma/client';
 import type { Token } from '../websocket/shared';
-import type { FogState, LightSource, WallSegment } from '../types/walls';
 
 // ---------------------------------------------------------------------------
 // Writing
@@ -73,16 +72,6 @@ export function readTokens(value: JsonColumn): Token[] {
   return readArray<Token>(value);
 }
 
-/** Wall and door segments on a map. */
-export function readWallSegments(value: JsonColumn): WallSegment[] {
-  return readArray<WallSegment>(value);
-}
-
-/** Light sources on a map. */
-export function readLights(value: JsonColumn): LightSource[] {
-  return readArray<LightSource>(value);
-}
-
 /**
  * A JSON array column whose elements have no declared shape — map annotations,
  * for instance. Elements come back as `unknown`, so a reader has to check what
@@ -90,19 +79,6 @@ export function readLights(value: JsonColumn): LightSource[] {
  */
 export function readJsonArray(value: JsonColumn): unknown[] {
   return readArray<unknown>(value);
-}
-
-/**
- * Fog of war for a map, or null when none has been drawn.
- *
- * Unlike the others this is an object rather than an array, and `null` is a
- * meaningful value: it means the map has no fog, which is different from fog
- * covering nothing.
- */
-export function readFogState(value: JsonColumn): FogState | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as unknown as FogState)
-    : null;
 }
 
 /**

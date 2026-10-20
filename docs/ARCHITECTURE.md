@@ -99,7 +99,7 @@ src/
 │   │                  and requireCampaignMember, read from the database for the route's
 │   │                  :campaignId, never from the request body
 │   ├── compose.ts     The guards routes actually use, composed: authenticated, adminOnly,
-│   │                  campaignMember, campaignDM, campaignDMOrPlayer
+│   │                  campaignMember, campaignDM
 │   ├── setup.ts       The setup gate: everything but /api/setup and /health is refused
 │   │                  until setup has run; asks the database only until it hears it has
 │   ├── passwordChange.ts  Gates every route until an admin-issued password is replaced
@@ -694,7 +694,7 @@ A session expires after an hour with no requests (`SESSION_MAX_AGE`; "Remember m
 Authorization is enforced at two levels, both by middleware named in the route declaration or mounted on its router:
 
 1. **Platform level** — `requireAdmin`, after `requireAuth`, which checks the role stored in the session. The admin routers mount the pair ahead of every route they hold (`router.use` in `routes/admin.ts`, and on `/orphaned-files` in `routes/adminStorage.ts`); the admin routes of `routes/users.ts` name both, and `GET /api/campaigns/admin/all` uses `adminOnly`, the same pair from `middleware/compose.ts`
-2. **Campaign level** — the guards composed in `middleware/compose.ts` (`campaignMember`, `campaignDMOrPlayer`, `campaignDM`). `loadCampaignMembership` reads the caller's `CampaignMembership` from the database for the `:campaignId` in the route's path, directly or through a router mounted with `mergeParams`, and never for a campaign id in the body; `requireDM`, `requireDMOrPlayer` or `requireCampaignMember` then judge its role. The role comes from that row, never from the request
+2. **Campaign level** — the guards composed in `middleware/compose.ts` (`campaignMember`, `campaignDM`). `loadCampaignMembership` reads the caller's `CampaignMembership` from the database for the `:campaignId` in the route's path, directly or through a router mounted with `mergeParams`, and never for a campaign id in the body; `requireDM` or `requireCampaignMember` then judges its role. The role comes from that row, never from the request
 
 ```typescript
 // Example: a DM-only route. campaignDM is [requireAuth, loadCampaignMembership, requireDM];

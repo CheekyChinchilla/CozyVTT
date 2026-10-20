@@ -357,15 +357,6 @@ export async function authenticateUser(input: LoginInput): Promise<User | null> 
 }
 
 /**
- * Get user by ID (for session deserialization)
- */
-export async function getUserById(id: string): Promise<User | null> {
-  return await prisma.user.findUnique({
-    where: { id },
-  });
-}
-
-/**
  * Sanitize user object for client (remove sensitive fields)
  */
 export function sanitizeUser(user: User) {

@@ -197,28 +197,6 @@ export async function emitToMapReadersAs(
 }
 
 /**
- * Get all sockets in a campaign room
- * @param campaignId - Campaign ID
- * @returns Array of socket IDs
- */
-export async function getSocketsInCampaign(campaignId: string): Promise<string[]> {
-  const io = getSocketInstance();
-  const sockets = await campaignSockets(io, campaignId);
-  return sockets.map((socket) => socket.id);
-}
-
-/**
- * Get campaign member count (connected users)
- * @param campaignId - Campaign ID
- * @returns Number of connected users
- */
-export async function getCampaignMemberCount(campaignId: string): Promise<number> {
-  const io = getSocketInstance();
-  const sockets = await campaignSockets(io, campaignId);
-  return sockets.length;
-}
-
-/**
  * Which users currently have at least one socket in the campaign.
  *
  * Derived from the room membership rather than tracked in a counter, because a

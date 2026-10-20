@@ -221,24 +221,6 @@ export function getFilePath(
 }
 
 /**
- * Get the full file path (directory + filename)
- * @param assetType Type of asset
- * @param scope Scope of asset
- * @param filename Filename
- * @param campaignId Campaign ID (if CAMPAIGN scope)
- * @returns Full file path
- */
-export function getFullFilePath(
-  assetType: AssetType,
-  scope: AssetScope,
-  filename: string,
-  campaignId?: string
-): string {
-  const directory = getFilePath(assetType, scope, campaignId);
-  return path.join(directory, filename);
-}
-
-/**
  * Delete a file from the filesystem
  * @param filePath Relative or absolute file path
  * @returns Promise<boolean> true if deleted, false if file didn't exist

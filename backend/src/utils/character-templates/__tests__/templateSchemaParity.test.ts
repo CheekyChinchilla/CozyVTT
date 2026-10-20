@@ -19,7 +19,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
-import { getTemplatesForGameSystem } from '../index';
+import { builtInTemplates } from '../../../__tests__/helpers/builtInTemplates';
 import {
   pf2eArmorClass,
   pf2eClassDC,
@@ -70,7 +70,7 @@ describe('built-in templates match their schema', () => {
   for (const { system, file, marker } of SYSTEMS) {
     describe(system, () => {
       const declared = schemaKeys(file, marker);
-      const templates = getTemplatesForGameSystem(system);
+      const templates = builtInTemplates(system);
 
       it('has templates to check', () => {
         expect(templates.length).toBeGreaterThan(0);
@@ -106,7 +106,7 @@ describe('built-in templates match their schema', () => {
  * read-only sheet printed the stored number, so those were what a player saw.
  */
 describe('Pathfinder 2e templates agree with the rules maths', () => {
-  for (const template of getTemplatesForGameSystem(GameSystem.PATHFINDER_2E)) {
+  for (const template of builtInTemplates(GameSystem.PATHFINDER_2E)) {
     const data = template.data as Record<string, unknown>;
 
     it(`${template.name} stores the Armor Class its own components give`, () => {
@@ -195,7 +195,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
  * character made from one opens with no other bonus to explain.
  */
 describe('D&D 5e templates agree with the rules maths', () => {
-  for (const template of getTemplatesForGameSystem(GameSystem.DND_5E)) {
+  for (const template of builtInTemplates(GameSystem.DND_5E)) {
     const data = template.data as Record<string, unknown>;
 
     it(`${template.name} stores the skill and save totals its scores give`, () => {
@@ -210,7 +210,7 @@ describe('D&D 5e templates agree with the rules maths', () => {
 // The Call of Cthulhu templates stored a major wound of 1 for 10 hit points,
 // 13 hit points where CON and SIZ give 12, and halves rounded up.
 describe('Call of Cthulhu templates agree with the rules maths', () => {
-  for (const template of getTemplatesForGameSystem(GameSystem.CALL_OF_CTHULHU_7E)) {
+  for (const template of builtInTemplates(GameSystem.CALL_OF_CTHULHU_7E)) {
     const data = template.data as {
       age?: unknown;
       characteristics: Record<string, { regular: number; half: number; fifth: number }>;
@@ -248,7 +248,7 @@ describe('Call of Cthulhu templates agree with the rules maths', () => {
 // The editor fills a sheet stored without skills from the same table, so a
 // blank investigator made either way starts the same.
 it('the blank Call of Cthulhu investigator has the rulebook\'s skill bases', () => {
-  const blank = getTemplatesForGameSystem(GameSystem.CALL_OF_CTHULHU_7E).find((t) => t.name === 'Blank Call of Cthulhu 7e Character');
+  const blank = builtInTemplates(GameSystem.CALL_OF_CTHULHU_7E).find((t) => t.name === 'Blank Call of Cthulhu 7e Character');
   const characteristics = (blank?.data as { characteristics: Record<string, { regular: number }> }).characteristics;
   expect(blank?.data.skills).toEqual(cocBlankSkills(characteristics.DEX.regular, characteristics.EDU.regular));
 });

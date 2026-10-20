@@ -9,7 +9,7 @@
  * the two agree, for every template of every system.
  */
 
-import { getAllTemplates } from '..';
+import { allBuiltInTemplates } from '../../../__tests__/helpers/builtInTemplates';
 import { validateCharacterData } from '../../../validators/game-systems';
 import type { GameSystem } from '../../../game-systems';
 
@@ -28,7 +28,7 @@ function keyPaths(value: unknown, prefix = ''): string[] {
 }
 
 describe('built-in templates survive their schema', () => {
-  const templates = Object.values(getAllTemplates()).flat();
+  const templates = allBuiltInTemplates();
 
   it('has templates to check', () => {
     expect(templates.length).toBeGreaterThan(0);

@@ -488,7 +488,7 @@ export function getMySystemTemplate(templateName?: string): CharacterTemplate {
 }
 ```
 
-Then wire both getters into `backend/src/utils/character-templates/index.ts` — import them, then add a `case GameSystem.MY_SYSTEM:` to **`getTemplatesForGameSystem`** and **`getCharacterTemplate`**, and an entry in the **`getAllTemplates`** object. (`CharacterTemplate` is `{ name, description, gameSystem, data }`.)
+Then wire both getters in: import `getMySystemTemplate` into `backend/src/utils/character-templates/index.ts` and add a `case GameSystem.MY_SYSTEM:` to **`getCharacterTemplate`**, and add `getMySystemTemplates` to the list in `backend/src/__tests__/helpers/builtInTemplates.ts`, which the template tests check every template from (the type check fails until it is there). (`CharacterTemplate` is `{ name, description, gameSystem, data }`.)
 
 ---
 
@@ -788,7 +788,7 @@ The exhaustive `switch`/`Record` types mean a missed backend registration point 
 - [ ] `validators/game-systems/mySystem.schema.ts` — Zod schema + inferred type
 - [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`
 - [ ] `utils/character-templates/mySystem-templates.ts` — templates + `getMySystemTemplates` / `getMySystemTemplate`
-- [ ] `utils/character-templates/index.ts` — cases in `getTemplatesForGameSystem`, `getCharacterTemplate`, and `getAllTemplates`
+- [ ] `utils/character-templates/index.ts` — a case in `getCharacterTemplate`; `__tests__/helpers/builtInTemplates.ts` — `getMySystemTemplates` in its list
 - [ ] Schema (and template) tests written and passing
 
 **Frontend**
