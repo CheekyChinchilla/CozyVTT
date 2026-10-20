@@ -37,6 +37,7 @@ import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../uti
 import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { uploadLimiter } from './assets';
 import { openPicture, NotAPictureError } from '../utils/sharpInput';
+import { pictureLimitProblem } from '../utils/pictureLimits';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
@@ -648,6 +649,14 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
         return answer(400, {
           error: 'Validation Error',
           message: `The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`,
+        });
+      }
+      // The limits on its pixels and frames that an uploaded map has.
+      const pictureProblem = await pictureLimitProblem(parsed.imageBuffer, 'MAP');
+      if (pictureProblem) {
+        return answer(400, {
+          error: 'Validation Error',
+          message: `The picture inside this file cannot be used as a map. ${pictureProblem}`,
         });
       }
 

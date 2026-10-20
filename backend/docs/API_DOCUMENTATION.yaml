@@ -11506,7 +11506,12 @@ paths:
         claims: anything that is not a PNG, JPEG or WebP (a PDF cannot be
         drawn as a map) is refused with 400, as is one over the
         `MAX_MAP_SIZE_MB` limit, which is checked from the length of its base64
-        text before it is decoded. It is saved as a new campaign map asset
+        text before it is decoded, and one over the picture limits
+        `POST /api/assets/upload` holds a MAP to (at most 16,384 pixels on a
+        side; animated, at most 1,000 frames and 200,000,000 pixels across
+        them) or whose size cannot be read, with `The picture inside this
+        file cannot be used as a map. ` followed by the upload's message.
+        Nothing is saved for a refused picture. It is saved as a new campaign map asset
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
         upload does, and a user may run one import at a time: a second sent
