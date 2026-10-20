@@ -1423,9 +1423,12 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
       await execFileAsync('node_modules/.bin/prisma', ['migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
-      // TODO(restore): this return skips step 9, so a restore whose migrations
-      // failed leaves no entry in the admin log although the database was
-      // replaced. It should write the same best-effort entry before answering.
+      // The database was replaced all the same, so the restore is logged as
+      // in step 9 (best-effort: the restored tables may not take the row).
+      await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {
+        safetyBackup,
+        migrationsFailed: true,
+      }).catch(() => {});
       return res.status(500).json({
         error: 'Restore Incomplete',
         message:
