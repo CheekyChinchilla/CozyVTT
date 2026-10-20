@@ -17,7 +17,7 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatMessage from './ChatMessage';
 import JumpToNewest from './JumpToNewest';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
-import { MessageType, PlatformRole } from '@/types';
+import { MessageType } from '@/types';
 import type { Message, ChatMessageBroadcast } from '@/types';
 import Button from '@/components/ui/Button';
 import { errorMessage } from '@/utils/errors';
@@ -333,20 +333,7 @@ export default function ChatPanel() {
         id: data.id,
         campaignId: campaignId!,
         userId: data.userId,
-        user: {
-          id: data.userId,
-          displayName: data.userName,
-          email: '',
-          platformRole: PlatformRole.USER,
-          globalAssetManager: false,
-          templateEditor: false,
-          mfaEnabled: false,
-          avatarUrl: null,
-          bio: null,
-          createdAt: data.timestamp,
-          updatedAt: data.timestamp,
-          lastLoginAt: null,
-        },
+        user: { id: data.userId, displayName: data.userName },
         type: data.type,
         content: data.content,
         metadata: null,
@@ -515,20 +502,7 @@ export default function ChatPanel() {
       id: pendingId(clientId),
       campaignId,
       userId: user.id,
-      user: {
-        id: user.id,
-        displayName: user.displayName,
-        email: user.email,
-        platformRole: user.platformRole,
-        globalAssetManager: user.globalAssetManager,
-        templateEditor: user.templateEditor,
-        mfaEnabled: user.mfaEnabled,
-        avatarUrl: user.avatarUrl,
-        bio: user.bio,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        lastLoginAt: user.lastLoginAt,
-      },
+      user: { id: user.id, displayName: user.displayName },
       type: messageType,
       content,
       metadata: null,
