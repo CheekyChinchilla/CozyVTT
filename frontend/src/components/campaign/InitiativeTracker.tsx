@@ -218,7 +218,9 @@ function CombatantRow({
             aria-describedby={reorderHintId}
             onKeyDown={(e) => {
               if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                // The map nudges selected walls on these keys at the window.
                 e.preventDefault();
+                e.stopPropagation();
                 onMove(entry.tokenId, e.key === 'ArrowUp' ? -1 : 1);
               }
             }}

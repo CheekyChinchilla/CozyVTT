@@ -120,6 +120,22 @@ describe('the tracker from the keyboard', () => {
     expect(useGameStore.getState().combat.combatants.map((c) => c.tokenId)).toEqual(['g', 'h', 'o']);
   });
 
+  // The map listens for the arrow keys on the window to nudge selected walls,
+  // so a move from the grip moved them too.
+  it('keeps the arrow key from reaching the map', () => {
+    seat.role = 'DM';
+    threeReady();
+    render(<InitiativeTracker />);
+    const onWindowKey = vi.fn();
+    window.addEventListener('keydown', onWindowKey);
+    try {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Move Hero' }), { key: 'ArrowDown' });
+    } finally {
+      window.removeEventListener('keydown', onWindowKey);
+    }
+    expect(onWindowKey).not.toHaveBeenCalled();
+  });
+
   it('moves a combatant up, and goes no further than the top', () => {
     seat.role = 'DM';
     threeReady();
