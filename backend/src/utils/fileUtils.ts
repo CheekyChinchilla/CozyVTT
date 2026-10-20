@@ -167,7 +167,7 @@ export function getFilePath(
   scope: AssetScope,
   campaignId?: string
 ): string {
-  const baseDir = process.env.UPLOAD_DIR || 'uploads';
+  const baseDir = uploadsDirectorySetting();
 
   switch (assetType) {
     case 'MAP':
@@ -351,13 +351,27 @@ export function isAcceptedContent(assetType: AssetType, detected: { mime: string
  */
 export const SERVER_BUILT_PATH = { dotfiles: 'allow' } as const;
 
+/** What the environment can say about where uploads go. */
+type UploadsEnv = Record<string, string | undefined>;
+
+/**
+ * The uploads folder as it is set: `UPLOAD_DIR`, or `uploads`, as written.
+ * The file paths stored for uploaded assets begin with it, relative to the
+ * working directory unless UPLOAD_DIR is absolute, so the paths that are
+ * stored are built from this one, unresolved. Read when asked, so a test
+ * that sets UPLOAD_DIR is followed.
+ */
+export function uploadsDirectorySetting(env: UploadsEnv = process.env): string {
+  return env.UPLOAD_DIR || 'uploads';
+}
+
 /**
  * The uploads folder as an absolute path: `UPLOAD_DIR`, or `uploads` in the
  * working directory. Read when asked, so a test that sets UPLOAD_DIR is
  * followed.
  */
-export function getUploadsDirectory(): string {
-  return path.resolve(process.env.UPLOAD_DIR || 'uploads');
+export function getUploadsDirectory(env: UploadsEnv = process.env): string {
+  return path.resolve(uploadsDirectorySetting(env));
 }
 
 /**
@@ -365,8 +379,7 @@ export function getUploadsDirectory(): string {
  * @returns Path to temp directory
  */
 export function getTempDirectory(): string {
-  const baseDir = process.env.UPLOAD_DIR || 'uploads';
-  return path.join(baseDir, 'temp');
+  return path.join(uploadsDirectorySetting(), 'temp');
 }
 
 /**

@@ -66,13 +66,14 @@ import {
   ArchiveRefusedError,
   UnpackedTotal,
 } from '../utils/archive';
-import { getFileSizeLimit, getTempDirectory, isAcceptedContent, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
+import { getFileSizeLimit, getTempDirectory, isAcceptedContent, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS, uploadsDirectorySetting } from '../utils/fileUtils';
 import { errorMessage } from '../utils/errors';
 import { startsWithMp3Header } from '../middleware/fileValidation';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import logger from '../utils/logger';
 
-const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
+// Unresolved: the paths built from it are stored (utils/fileUtils.ts).
+const UPLOADS_BASE = uploadsDirectorySetting();
 
 type ImportableAssetType = (typeof IMPORTABLE_ASSET_TYPES)[number];
 

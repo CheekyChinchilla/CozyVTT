@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import logger from './logger';
+import { getUploadsDirectory } from './fileUtils';
 
 /**
  * Where the admin dashboard writes instance backups.
@@ -15,7 +16,7 @@ import logger from './logger';
 export function resolveBackupDir(
   env: Record<string, string | undefined> = process.env
 ): string {
-  const uploads = path.resolve(env.UPLOAD_DIR || 'uploads');
+  const uploads = getUploadsDirectory(env);
   const backups = path.resolve(env.BACKUP_DIR || 'backups');
   if (isInside(backups, uploads)) {
     throw new Error(
