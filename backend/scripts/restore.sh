@@ -247,6 +247,22 @@ if [[ -n "${DATABASE_URL:-}" ]]; then
   DB_HOST="${HOST_PORT%%:*}"
   DB_PORT=5432
   if [[ "$HOST_PORT" == *:* ]]; then DB_PORT="${HOST_PORT##*:}"; fi
+  # This script backs up and restores the public schema. An address ending in
+  # ?schema=<name> keeps CozyVTT's data in a schema of its own, which the
+  # Admin Dashboard's Create Backup and Restore handle.
+  DB_SCHEMA=public
+  if [[ "$DATABASE_URL" == *\?* ]]; then
+    IFS='&' read -ra DB_OPTIONS <<< "${DATABASE_URL#*\?}"
+    for option in ${DB_OPTIONS[@]+"${DB_OPTIONS[@]}"}; do
+      if [[ "$option" == schema=* ]]; then DB_SCHEMA=$(url_decode "${option#schema=}"); fi
+    done
+  fi
+  if [[ -n "$DB_SCHEMA" && "$DB_SCHEMA" != public ]]; then
+    echo "❌ DATABASE_URL names the database schema \"$DB_SCHEMA\", and this script works"
+    echo "   with the public schema only. Nothing was changed. Use Create Backup and"
+    echo "   Restore in the Admin Dashboard, which keep to the schema DATABASE_URL names."
+    exit 1
+  fi
 else
   DB_USER="${DB_USER:-cozyvtt}"
   DB_PASS="${DB_PASS:-}"

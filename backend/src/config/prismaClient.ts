@@ -10,9 +10,11 @@ import logger from '../utils/logger';
 /**
  * Query parameters a Prisma database address may carry that the pg driver
  * does not understand. `schema` and `connection_limit` are translated below;
- * the rest only tuned Prisma's own connection engine, which is gone.
+ * the rest only tuned Prisma's own connection engine, which is gone. libpq,
+ * which pg_dump and psql connect with, refuses every one of them, so a backup
+ * or restore leaves them out too (utils/pgRestore.ts).
  */
-const PRISMA_ONLY_PARAMETERS = [
+export const PRISMA_ONLY_PARAMETERS: readonly string[] = [
   'schema',
   'connection_limit',
   'pool_timeout',

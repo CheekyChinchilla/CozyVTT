@@ -10578,7 +10578,8 @@ paths:
         second are both kept) to the server's backup directory (`backend/backups/` on the host under Docker, `BACKUP_DIR`
         on an install without Docker), holding `database.sql`, a `pg_dump` of the
         database without its ownership and privilege statements and without the
-        login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
+        login sessions (of the one schema `DATABASE_URL` names with `?schema=`,
+        when it names one), and the `uploads/` tree. Needs `pg_dump` in the backend
         image, which the Docker image provides; answers 500 when it is missing or
         the dump fails. The archive can be fetched with the download route and
         loaded back with the restore route. Refused with 409 while a restore
@@ -11820,7 +11821,9 @@ paths:
         database.sql is
         checked before anything runs: it must be a complete pg_dump of a
         CozyVTT database (pg_dump's closing line present, the User and
-        _prisma_migrations tables created) holding nothing but SQL; a line
+        _prisma_migrations tables created in the schema the instance keeps
+        its data in, and on an instance whose `DATABASE_URL` names a schema,
+        no table in any other) holding nothing but SQL; a line
         that starts with a psql backslash command, a COPY that is not table
         data, or a transaction statement makes the archive invalid. These
         checks are not a sandbox: the SQL runs with the database owner's full
@@ -11829,8 +11832,9 @@ paths:
         trust. A refused archive answers 400 with the reason and changes
         nothing. A database-only backup of the current
         database is then written to the backup list, named in the response as
-        safetyBackup, so the restore can be undone. The public schema is
-        dropped and recreated from the archive in a single transaction that
+        safetyBackup, so the restore can be undone. The instance's schema
+        (`public`, or the one `?schema=` names) is dropped and recreated
+        from the archive, every other schema left alone, in a single transaction that
         stops at the first failed statement, in psql's restricted mode, so an
         archive that cannot be applied in full leaves the existing database
         unchanged and answers 500. The transaction_timeout setting a newer
@@ -11885,8 +11889,11 @@ paths:
             under a name other than `backup`, or a second file, answered `The
             upload could not be read: <reason>. Nothing was changed.`; a file
             that is not a ZIP archive; an archive listing more than 100,000
-            entries or holding an unsafe path; or a ZIP that is not a complete
-            CozyVTT backup. A ZIP without `database.sql` answers `This file
+            entries or holding an unsafe path; a ZIP that is not a complete
+            CozyVTT backup; or a backup of a database schema other than the
+            one the instance keeps its data in (the one `?schema=` in
+            `DATABASE_URL` names, `public` without it), which names both
+            schemas. A ZIP without `database.sql` answers `This file
             does not appear to be a valid CozyVTT backup (database.sql not
             found inside ZIP)`; the other `Invalid Backup` messages give the
             reason and end "Nothing was changed." None of these changes

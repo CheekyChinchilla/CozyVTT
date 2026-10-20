@@ -1310,7 +1310,7 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     const restorePath = path.join(tempDir, 'restore.sql');
     let prepared: PreparedDump;
     try {
-      prepared = await prepareDumpForRestore(sqlPath, restorePath);
+      prepared = await prepareDumpForRestore(sqlPath, restorePath, dbUrl);
     } catch (error) {
       logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
       return res.status(500).json({
