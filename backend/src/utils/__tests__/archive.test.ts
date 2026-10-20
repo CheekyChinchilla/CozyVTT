@@ -329,8 +329,10 @@ describe('reading one entry within limits', () => {
     // stopped part-way, where a claim over it is refused before the file is
     // opened at all.
     claimUnpackedSize(file, 'big.bin', 1000);
-    const entry = (await unzipper.Open.file(file)).files[0];
+    // Counted before the directory is read: unzipper keeps the file open a
+    // moment after it has read it.
     await expectHandlesSeen(file);
+    const entry = (await unzipper.Open.file(file)).files[0];
 
     for (let i = 0; i < 10; i++) {
       const read = readArchiveEntry(file, entry, { maxEntryBytes: MB, total: new UnpackedTotal(100 * MB) });
