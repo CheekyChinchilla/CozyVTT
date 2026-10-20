@@ -124,7 +124,7 @@ export default function DmWallControls({
         <span className="text-xs text-amber-300 font-medium uppercase tracking-wide">
           Walls
           {wallCount > 0 && (
-            <span className="ml-1 text-stone-400 normal-case">({wallCount})</span>
+            <>{' '}<span className="text-stone-400 normal-case">({wallCount})</span></>
           )}
         </span>
         <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>

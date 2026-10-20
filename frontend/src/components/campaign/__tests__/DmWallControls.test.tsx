@@ -28,7 +28,8 @@ it('is a button that says whether the panel is open, and folds it', () => {
       onWallColorChange={vi.fn()}
     />
   );
-  const title = screen.getByRole('button', { name: /^Walls/ });
+  // A space between the word and the count, which read as "Walls(3)".
+  const title = screen.getByRole('button', { name: 'Walls (3)' });
   expect(title).toHaveAttribute('aria-expanded', 'false');
 
   fireEvent.click(title);

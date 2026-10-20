@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Three more controls read correctly to a screen reader.** The token editor's name box is labelled **Token name**; the **Walls** and **Lights** titles read with a space before their count; and each token in **Add Combatant** is read once, where its picture repeated the name.
+
 - **White text on the app's green, amber and purple buttons is gone where it was hard to read.** The dice panel's **Roll** button, the **Spirit Layer** toggle when it is on, and the amber buttons in the map windows and the Admin Panel had white labels on colours that fall under 4.5:1 in most themes. They now use the soft coloured style of the app's alerts, as the character sheets do. The creature and token template letters keep their colours with a label that reads on each, and the fog panel's flashing button has dark text.
 
 - **Amber, purple, red and green text reads clearly in every theme.** About 150 labels, links and icons across the app, such as the campaign card's status and the asset library's buttons, were drawn in the theme's fill colours, which fall under 4.5:1 in some themes. They now use each colour's readable text shade, and their pale backgrounds are a touch lighter where that shade sits on them. On the dark DM tool panels the amber is a fixed light amber, and the player's ruler hint on the map is white.

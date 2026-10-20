@@ -69,6 +69,12 @@ beforeEach(() => {
   useGameStore.getState().clearGameState();
 });
 
+// The name box had no label; a screen reader read only its value.
+it('labels the token name box', () => {
+  open();
+  expect(screen.getByRole('textbox', { name: 'Token name' })).toHaveValue('Cultist');
+});
+
 it('shows a condition added elsewhere, and keeps it when the DM adds another', async () => {
   open();
   changedElsewhere({ conditions: ['Prone'] });

@@ -590,6 +590,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
         <input
           type="text"
           value={name}
+          aria-label="Token name"
           onChange={(e) => setNameDraft(e.target.value)}
           onBlur={handleNameBlur}
           // min-w-0 is load-bearing: a flex child defaults to min-width:auto,

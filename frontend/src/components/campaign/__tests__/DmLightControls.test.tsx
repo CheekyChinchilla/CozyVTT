@@ -111,7 +111,8 @@ describe('the light colour box', () => {
 describe('the Lights title', () => {
   it('is a button that says whether the panel is open, and folds it', () => {
     render(<DmLightControls lightMode={null} onLightModeChange={vi.fn()} lightCount={2} onClearAll={vi.fn()} lightingEnabled />);
-    const title = screen.getByRole('button', { name: /^Lights/ });
+    // A space between the word and the count, which read as "Lights(2)".
+    const title = screen.getByRole('button', { name: 'Lights (2)' });
     expect(title).toHaveAttribute('aria-expanded', 'false');
 
     fireEvent.click(title);

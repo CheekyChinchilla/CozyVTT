@@ -84,6 +84,19 @@ describe('the tracker from the keyboard', () => {
     expect(screen.getByRole('dialog', { name: 'Add Combatant' })).toBeInTheDocument();
   });
 
+  // Each choice held a picture whose alt text repeated the name beside it,
+  // so it was read as "Orc Orc npc".
+  it('names each token in Add Combatant once', () => {
+    seat.role = 'DM';
+    threeReady();
+    useGameStore.getState().setTokens([{ ...token('orc', 'Orc'), imageUrl: '/api/assets/tokens/orc' }]);
+    render(<InitiativeTracker />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Combatant' }));
+
+    expect(within(screen.getByRole('dialog', { name: 'Add Combatant' })).getByRole('button', { name: 'Orc npc' })).toBeInTheDocument();
+  });
+
   it('lets the DM edit a value from a button that says what it holds', () => {
     seat.role = 'DM';
     threeReady();

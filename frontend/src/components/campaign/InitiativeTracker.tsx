@@ -90,7 +90,7 @@ function AddCombatantModal({ open, tokens, combatantIds, onAdd, onClose }: AddCo
               {token.imageUrl ? (
                 <img
                   src={token.imageUrl}
-                  alt={token.name}
+                  alt=""
                   className="w-8 h-8 rounded-full object-cover border border-moss-green/20 shrink-0"
                 />
               ) : (

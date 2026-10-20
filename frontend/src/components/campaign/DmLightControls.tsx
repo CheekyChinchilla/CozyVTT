@@ -194,7 +194,7 @@ export default function DmLightControls({
         <span className="text-xs text-amber-400/70 font-medium uppercase tracking-wide">
           Lights
           {lightCount > 0 && (
-            <span className="ml-1 text-stone-400 normal-case">({lightCount})</span>
+            <>{' '}<span className="text-stone-400 normal-case">({lightCount})</span></>
           )}
         </span>
         <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
