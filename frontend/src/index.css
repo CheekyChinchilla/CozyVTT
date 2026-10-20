@@ -8,6 +8,8 @@
   --color-accent: rgb(var(--rgb-accent));
   --color-accent-hover: rgb(var(--rgb-accent-hover));
   --color-accent-text: rgb(var(--rgb-accent-text));
+  --color-brand-text: rgb(var(--rgb-brand-text));
+  --color-danger-fill: rgb(var(--rgb-danger-fill));
   --color-canvas: rgb(var(--rgb-bg-base));
   --color-surface: rgb(var(--rgb-bg-surface));
   --color-surface-light: rgb(var(--rgb-bg-surface-light));
@@ -180,15 +182,17 @@
 }
 
 @utility btn-secondary {
-  @apply bg-transparent border border-brand text-brand px-4 py-2 rounded-cozy font-medium
-           hover:bg-brand hover:text-white transition-colors duration-200
+  @apply bg-transparent border border-brand text-brand-ink px-4 py-2 rounded-cozy font-medium
+           hover:bg-brand hover:text-brand-text transition-colors duration-200
            focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2;
 }
 
 @utility btn-danger {
-  @apply bg-red-500 text-white px-4 py-2 rounded-cozy font-medium
-           hover:bg-red-600 transition-colors duration-200
-           focus:outline-hidden focus:ring-2 focus:ring-red-500 focus:ring-offset-2;
+  /* danger-fill is the theme's danger colour, darkened where white would not
+     read on it (themes.ts, deriveReadableTokens). */
+  @apply bg-danger-fill text-white px-4 py-2 rounded-cozy font-medium
+           hover:brightness-90 transition-colors duration-200
+           focus:outline-hidden focus:ring-2 focus:ring-danger-fill focus:ring-offset-2;
 }
 
 @utility input-cozy {
@@ -313,6 +317,8 @@
        these defaults match the Cozy Default palette so the app renders
        correctly during the first paint, before a theme is applied. */
     --rgb-brand-ink: 74 93 78;
+    --rgb-brand-text: 255 255 255;
+    --rgb-danger-fill: 192 57 43;
     --rgb-accent-ink: 137 91 43;
     --rgb-spirit-ink: 111 64 207;
     --rgb-danger-ink: 166 49 37;

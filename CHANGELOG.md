@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Labels on green and red buttons read clearly in every theme.** White on the brand colour fell to 2.7:1 in Obsidian Night, and under 4.5:1 in Deep Dungeon, Midnight Court and Desert Sand; red buttons such as **Delete** were the same bright red with white text in every theme, at 3.8:1. The labels on brand-coloured buttons and ticks are now dark grey in those four themes, and red buttons use the theme's own red, deepened where white would not read on it. The outlined secondary button's text is also readable in Desert Sand and Shadow Realm.
+
 - **With reduce motion turned on, windows and notifications fade out where they are.** Closing a window or a notification first jumped it a short way, up to about 60 pixels for a notification, and then faded it. It now only fades, as it does when it opens. **Invite Player** also fades out on close, where it vanished.
 
 - **With one window open over another, Escape and Tab act on the top one only.** Escape closed every open window at once, such as a confirmation and the settings window under it, and Tab could not reach the top window's middle controls. Also, the box a window opens on, such as **Email** in **Create User**, keeps the cursor, and closing the window puts the cursor back on the button that opened it.

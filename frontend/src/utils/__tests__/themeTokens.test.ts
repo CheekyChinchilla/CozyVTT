@@ -13,6 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import indexCss from '../../index.css?raw';
 
 /**
  * Exempt:
@@ -99,5 +100,26 @@ describe('themed surfaces use semantic tokens', () => {
     // A growing exemption list means the rule is being worked around rather
     // than followed; make that visible in review.
     expect(EXEMPT.length).toBeLessThanOrEqual(6);
+  });
+});
+
+// The button utilities are CSS, which the scan above does not read. The
+// danger button was red-500 under white (3.8:1 in every theme), and the
+// secondary button wrote its label in the brand fill (2.6:1 in Shadow Realm).
+describe('the button utilities in index.css', () => {
+  const utility = (name: string) =>
+    new RegExp(`@utility ${name} \\{([\\s\\S]*?)\\n\\}`).exec(indexCss)?.[1] ?? '';
+
+  it('fill the danger button from the theme, with a label that reads on it', () => {
+    const danger = utility('btn-danger');
+    expect(danger).toMatch(/\bbg-danger-fill\b/);
+    expect(danger).not.toMatch(/\b(?:bg|ring)-red-\d/);
+  });
+
+  it('write the secondary button in readable brand text, and its hover label on brand', () => {
+    const secondary = utility('btn-secondary');
+    expect(secondary).toMatch(/\btext-brand-ink\b/);
+    expect(secondary).not.toMatch(/\btext-brand(?![-\w])/);
+    expect(secondary).toMatch(/\bhover:text-brand-text\b/);
   });
 });

@@ -569,6 +569,12 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
     // Label on an accent-filled button. Authored values that already contrast
     // are kept; the rest are nudged until the label is legible.
     '--rgb-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
+    // Label on a brand-filled button or tick: white where it reads, a shade
+    // nudged from white where the brand is too light for it.
+    '--rgb-brand-text': ensureReadableChannels('255 255 255', colors.brand),
+    // The danger button's fill: the theme's danger colour, darkened until a
+    // white label reads on it.
+    '--rgb-danger-fill': ensureReadableChannels(colors.danger, '255 255 255'),
     // brand is a fill in ~290 places (buttons, borders) AND text in ~470.
     // The fill keeps the authored color; text uses this readable shade of it.
     '--rgb-brand-ink': ensureReadableOnAll(colors.brand, andItsTint(colors.brand)),
