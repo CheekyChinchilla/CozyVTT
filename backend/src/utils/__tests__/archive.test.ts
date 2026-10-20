@@ -333,6 +333,9 @@ describe('reading one entry within limits', () => {
     // moment after it has read it.
     await expectHandlesSeen(file);
     const entry = (await unzipper.Open.file(file)).files[0];
+    // Within the limit, so each read opens the file and is stopped while
+    // reading it, never refused before it is opened.
+    expect(entry.uncompressedSize).toBeLessThanOrEqual(MB);
 
     for (let i = 0; i < 10; i++) {
       const read = readArchiveEntry(file, entry, { maxEntryBytes: MB, total: new UnpackedTotal(100 * MB) });
