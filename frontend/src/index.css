@@ -192,7 +192,7 @@
   /* danger-fill is the theme's danger colour, darkened where white would not
      read on it (themes.ts, deriveReadableTokens). */
   @apply bg-danger-fill text-white px-4 py-2 rounded-cozy font-medium
-           hover:brightness-90 transition-colors duration-200
+           hover:brightness-90 transition-[color,background-color,filter] duration-200
            focus:outline-hidden focus:ring-2 focus:ring-danger-fill focus:ring-offset-2;
 }
 

@@ -97,6 +97,10 @@ export default function Modal({
           />
 
           {/* Dialog */}
+          {/* TODO(ui): this wrapper covers the backdrop, so a click beside the
+              dialog lands here and closeOnBackdrop never closes it. Closing on
+              a click on the wrapper itself would, but it also closes forms
+              with typed input on a stray click: decide which dialogs keep it. */}
           <div className={cn('fixed inset-0 flex items-center justify-center p-4', zDialog)}>
             <motion.div
               ref={modalRef}

@@ -95,7 +95,7 @@ export default function ConfirmDialog({
             onClick={onConfirm}
             disabled={isLoading}
             aria-busy={isLoading}
-            className={`px-4 py-2 rounded-cozy font-medium transition-colors duration-200
+            className={`px-4 py-2 rounded-cozy font-medium transition-[color,background-color,filter] duration-200
                         focus:outline-hidden focus:ring-2 focus:ring-offset-2
                         disabled:opacity-50 disabled:cursor-not-allowed
                         flex items-center gap-2 ${confirmClass}`}
