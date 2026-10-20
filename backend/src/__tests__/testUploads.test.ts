@@ -9,7 +9,9 @@
 
 import { spawnSync } from 'child_process';
 import fs from 'fs';
-import { processIsAlive, uploadsFoldersToRemove, uploadsRun } from './helpers/testUploads';
+import os from 'os';
+import path from 'path';
+import { processIsAlive, removeUploadsFolder, uploadsFoldersToRemove, uploadsRun } from './helpers/testUploads';
 
 // A file's uploads folder lasts until the file has ended, its own afterAll
 // hooks included, so one that cleans up after itself finds its files there.
@@ -60,6 +62,27 @@ describe('uploadsRun', () => {
   // other's folders while they were still in use.
   it('is the process\'s own id when no run was named', () => {
     expect(uploadsRun({}, 77)).toBe('77');
+  });
+});
+
+describe('removeUploadsFolder', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  // On Windows a file still held open fails the removal with EBUSY or EPERM,
+  // which `force` does not cover; the end of run sweep tries again.
+  it('tries again a few times, then lets a folder it cannot remove be', () => {
+    const rm = jest.spyOn(fs, 'rmSync').mockImplementation(() => {
+      throw Object.assign(new Error('resource busy or locked'), { code: 'EBUSY' });
+    });
+    expect(() => removeUploadsFolder('/tmp/cozyvtt-test-uploads-1-aB3xYz')).not.toThrow();
+    expect(rm).toHaveBeenCalledWith('/tmp/cozyvtt-test-uploads-1-aB3xYz', { recursive: true, force: true, maxRetries: 3 });
+  });
+
+  it('removes the folder and what is in it', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-remove-check-'));
+    fs.writeFileSync(path.join(dir, 'a.png'), 'x');
+    removeUploadsFolder(dir);
+    expect(fs.existsSync(dir)).toBe(false);
   });
 });
 

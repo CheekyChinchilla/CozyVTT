@@ -5,6 +5,8 @@
  * process id of the jest run that made it (jest.globalSetup.ts).
  */
 
+import fs from 'fs';
+
 const PREFIX = 'cozyvtt-test-uploads-';
 
 /**
@@ -36,6 +38,20 @@ export function uploadsFoldersToRemove(names: string[], run: string, isAlive: (p
     const match = /^cozyvtt-test-uploads-(\d+)-./.exec(name);
     return match !== null && !isAlive(Number(match[1]));
   });
+}
+
+/**
+ * Remove an uploads folder and everything in it. On Windows a file still
+ * held open fails the removal with EBUSY or EPERM, which `force` does not
+ * cover: it is tried a few times, then left for the end of run sweep
+ * (jest.globalTeardown.ts) to try again.
+ */
+export function removeUploadsFolder(dir: string): void {
+  try {
+    fs.rmSync(dir, { recursive: true, force: true, maxRetries: 3 });
+  } catch {
+    // Left for the sweep.
+  }
 }
 
 /**

@@ -11,11 +11,11 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { processIsAlive, uploadsFoldersToRemove, uploadsRun } from './testUploads';
+import { processIsAlive, removeUploadsFolder, uploadsFoldersToRemove, uploadsRun } from './testUploads';
 
 export default async function globalTeardown(): Promise<void> {
   const run = uploadsRun(process.env, process.pid);
   for (const name of uploadsFoldersToRemove(fs.readdirSync(os.tmpdir()), run, processIsAlive)) {
-    fs.rmSync(path.join(os.tmpdir(), name), { recursive: true, force: true });
+    removeUploadsFolder(path.join(os.tmpdir(), name));
   }
 }
