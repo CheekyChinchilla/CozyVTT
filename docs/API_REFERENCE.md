@@ -1625,6 +1625,7 @@ List the instance backups in the backups folder, newest first.
 ### `POST /api/admin/backups` *(Admin only)*
 
 Create a new backup: a ZIP holding a `pg_dump` of the database and every uploaded file.
+When `DATABASE_URL` names a schema (`?schema=<name>`), the dump holds that schema alone.
 Refused with `409` while a restore takes its upload or writes its safety backup, and with
 `503` while the restore replaces the database. Backups are never deleted automatically.
 
@@ -1639,12 +1640,13 @@ Delete a backup file.
 ### `POST /api/admin/backups/restore` *(Admin only)*
 
 Restore the instance from a backup archive. **Destructive: it replaces the whole database**
-and copies the archive's uploaded files over the existing ones. A backup of the database as
+(only the schema `DATABASE_URL` names, when it names one) and copies the archive's uploaded files over the existing ones. A backup of the database as
 it was is written to the backup list first, and the response names it as `safetyBackup`.
 
 One restore runs at a time: a second sent while the first takes its upload or writes that
 backup answers `409`. A refused file answers `400` (not named `.zip`, not a ZIP archive,
-more than 100,000 entries, or not a complete CozyVTT backup) or `413` (over 4 GB, or
+more than 100,000 entries, not a complete CozyVTT backup, a backup of a schema other than
+the one `DATABASE_URL` names, or an upload that could not be read, such as one cut off) or `413` (over 4 GB, or
 unpacking to more than 10 GiB), with the reason. While the database is being replaced,
 live connections are closed and every other API request, a second restore included,
 answers `503` with `Retry-After: 60` until the restore ends.

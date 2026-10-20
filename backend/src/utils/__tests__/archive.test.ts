@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { readdirSync } from 'fs';
+import { readdirSync, readlinkSync } from 'fs';
 import os from 'os';
 import path from 'path';
 import { ZipArchive } from 'archiver';
@@ -85,9 +85,10 @@ describe('isSafeArchivePath', () => {
 describe('extractArchiveSafely', () => {
   it('creates the folder it unpacks into readable by its owner alone', async () => {
     const dest = path.join(root, 'unpacked');
-    const directory = await unzipper.Open.buffer(await zipOf({ 'database.sql': 'SELECT 1;\n', 'uploads/a/b.txt': 'b' }));
+    const file = path.join(root, 'backup.zip');
+    await fs.writeFile(file, await zipOf({ 'database.sql': 'SELECT 1;\n', 'uploads/a/b.txt': 'b' }));
 
-    await extractArchiveSafely(directory, dest, LIMITS);
+    await extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
 
     await expectFileMode(dest, 0o077, 0);
     expect(await fs.readFile(path.join(dest, 'database.sql'), 'utf8')).toBe('SELECT 1;\n');
@@ -97,10 +98,12 @@ describe('extractArchiveSafely', () => {
   it('refuses an archive with more files than allowed, writing nothing', async () => {
     const dest = path.join(root, 'unpacked');
     const many = Object.fromEntries(Array.from({ length: LIMITS.maxFiles + 1 }, (_, i) => [`f${i}.txt`, 'x']));
-    const directory = await unzipper.Open.buffer(await zipOf(many));
+    const file = path.join(root, 'many.zip');
+    await fs.writeFile(file, await zipOf(many));
+    const directory = await unzipper.Open.file(file);
 
-    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/more than the \d+ it may hold/);
-    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toBeInstanceOf(ArchiveRefusedError);
+    await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toThrow(/more than the \d+ it may hold/);
+    await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toBeInstanceOf(ArchiveRefusedError);
     await expect(fs.access(dest)).rejects.toThrow();
   });
 
@@ -108,13 +111,25 @@ describe('extractArchiveSafely', () => {
     const dest = path.join(root, 'unpacked');
     const file = path.join(root, 'big.zip');
     await writeZip(file, [{ name: 'big.bin', data: () => repeatedBytes(4 * MB) }]);
+    // The directory says it is small, so only unpacking it shows otherwise.
+    claimUnpackedSize(file, 'big.bin', 1000);
     const directory = await unzipper.Open.file(file);
 
-    const refusal = extractArchiveSafely(directory, dest, LIMITS);
+    const refusal = extractArchiveSafely(file, directory, dest, LIMITS);
     await expect(refusal).rejects.toThrow(/unpacks to more than the .* a backup may hold/);
     await expect(refusal).rejects.toBeInstanceOf(ArchiveLimitError);
     // Stopped part-way: no more than the limit, and a little of a chunk, reached disk.
     expect((await fs.stat(path.join(dest, 'big.bin'))).size).toBeLessThanOrEqual(LIMITS.maxTotalBytes + 64 * 1024);
+  });
+
+  it('refuses an entry whose directory says it unpacks past the limit before unpacking it', async () => {
+    const dest = path.join(root, 'unpacked');
+    const file = path.join(root, 'big.zip');
+    await writeZip(file, [{ name: 'big.bin', data: () => repeatedBytes(4 * MB) }]);
+
+    const refusal = extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
+    await expect(refusal).rejects.toThrow(/unpacks to more than the .* a backup may hold/);
+    await expect(refusal).rejects.toBeInstanceOf(ArchiveLimitError);
   });
 
   it.each([
@@ -129,8 +144,32 @@ describe('extractArchiveSafely', () => {
     const directory = await unzipper.Open.file(file);
     expect(directory.files.map((f) => f.path)).toContain(crafted);
 
-    await expect(extractArchiveSafely(directory, dest, LIMITS)).rejects.toThrow(/unsafe file path/);
+    await expect(extractArchiveSafely(file, directory, dest, LIMITS)).rejects.toThrow(/unsafe file path/);
     expect(await filesUnder(root)).toEqual(['slip.zip', path.join('unpacked', 'ok.txt')].sort());
+  });
+
+  // A restore refused part-way must not keep the upload open: the deleted
+  // file's disk space stays in use for as long as a handle to it does.
+  (process.platform === 'linux' ? it : it.skip)('closes the archive file when it stops part-way past the limit', async () => {
+    const file = path.join(root, 'big.zip');
+    await writeZip(file, [{ name: 'database.sql', data: () => repeatedBytes(30 * MB, 1), store: true }]);
+    claimUnpackedSize(file, 'database.sql', 1000);
+    const handlesToArchive = () =>
+      readdirSync('/proc/self/fd').filter((fd) => {
+        try {
+          return readlinkSync(`/proc/self/fd/${fd}`) === file;
+        } catch {
+          return false;
+        }
+      }).length;
+
+    for (let i = 0; i < 3; i++) {
+      const dest = path.join(root, `unpacked-${i}`);
+      await expect(extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS)).rejects.toBeInstanceOf(ArchiveLimitError);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(handlesToArchive()).toBe(0);
   });
 
   it('writes a symbolic link entry as an ordinary file, so it cannot be followed out', async () => {
@@ -144,7 +183,7 @@ describe('extractArchiveSafely', () => {
     await archive.finalize();
     await closed;
 
-    await extractArchiveSafely(await unzipper.Open.file(file), dest, LIMITS);
+    await extractArchiveSafely(file, await unzipper.Open.file(file), dest, LIMITS);
 
     const written = await fs.lstat(path.join(dest, 'uploads/link'));
     expect(written.isSymbolicLink()).toBe(false);

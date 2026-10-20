@@ -108,6 +108,27 @@ describeOnPosix('restore.sh', () => {
     expect(args).toEqual(expect.arrayContaining(['-h', 'db.internal', '-p', '5432', '-U', 'cozy+admin', '-d', 'cozyvtt']));
   });
 
+  // The script replaces the public schema. On an install whose DATABASE_URL
+  // names another, that is not CozyVTT's data: it would drop whatever else
+  // the database holds there and load the backup beside the instance's own.
+  it('refuses an address that names another schema, and loads nothing', async () => {
+    const result = spawnSync('bash', [SCRIPT, backup], {
+      cwd: root,
+      encoding: 'utf8',
+      env: {
+        PATH: `${bin}:${process.env.PATH ?? ''}`,
+        DATABASE_URL: 'postgresql://cozyvtt:secret@localhost:5432/cozyvtt?connection_limit=5&schema=cozy',
+        RESTORE_ASSUME_YES: 'yes',
+        TMPDIR: root,
+      },
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain('DATABASE_URL names the database schema "cozy"');
+    expect(result.stdout).toContain('Admin Dashboard');
+    await expect(fs.access(loaded)).rejects.toThrow();
+  });
+
   // The pattern that dropped ownership lines backtracked on a long line: two
   // crafted 100 KB lines took about ten seconds with mawk.
   it('reads a long crafted line in one pass', async () => {

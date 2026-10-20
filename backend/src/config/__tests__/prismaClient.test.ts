@@ -4,7 +4,7 @@
  * The live checks require PostgreSQL at DATABASE_URL.
  */
 
-import { CONNECT_TIMEOUT_MS, createPrismaClient, databaseConnectionSettings } from '../prismaClient';
+import { CONNECT_TIMEOUT_MS, createPrismaClient, databaseConnectionSettings, prismaErrorLevel } from '../prismaClient';
 
 const BASE = 'postgresql://u:p@db.example:5432/cozy';
 
@@ -62,5 +62,25 @@ describe('createPrismaClient', () => {
     } finally {
       await client.$disconnect();
     }
+  });
+});
+
+// A transaction PostgreSQL refuses for overlapping another is run again
+// (utils/serializable.ts), so Prisma's report of each refusal is not an error.
+describe('prismaErrorLevel', () => {
+  it.each([
+    ['a refusal of a raw statement', 'Invalid `prisma.$executeRaw()` invocation:\n\n\nRaw query failed. Code: `40001`. Message: `could not serialize access due to read/write dependencies among transactions`'],
+    ['a deadlock in a raw statement', 'Raw query failed. Code: `40P01`. Message: `deadlock detected`'],
+    ['a refusal of a query Prisma built (P2034)', 'Invalid `tx.user.update()` invocation in\n/app/src/routes/users.ts:94:26\n\nTransaction failed due to a write conflict or a deadlock. Please retry your transaction'],
+  ])('reads %s as debug', (_label, message) => {
+    expect(prismaErrorLevel(message)).toBe('debug');
+  });
+
+  it.each([
+    ['a unique constraint', 'Invalid `prisma.user.create()` invocation:\n\nUnique constraint failed on the fields: (`email`)'],
+    ['a lost connection', "Can't reach database server at `database:5432`"],
+    ['another raw query failure', 'Raw query failed. Code: `42P01`. Message: `relation "Nope" does not exist`'],
+  ])('reads %s as an error', (_label, message) => {
+    expect(prismaErrorLevel(message)).toBe('error');
   });
 });

@@ -1022,12 +1022,10 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.pipe(output);
       archive.file(sqlPath, { name: 'database.sql' });
       if (withUploads) {
-        // Under an "uploads/" prefix, skipping the backups subdir older installs had there
-        // TODO(backups): the folder's own entry is named "backups", with no
-        // slash, so the filter keeps it and every backup holds an empty
-        // uploads/backups/ folder. Leave out entry.name === 'backups' too.
+        // Under an "uploads/" prefix, skipping the backups folder older
+        // installs had there: its own entry is named "backups", with no slash.
         archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
-          return entry.name.startsWith('backups/') ? false : entry;
+          return entry.name === 'backups' || entry.name.startsWith('backups/') ? false : entry;
         });
       }
       archive.finalize();
@@ -1207,7 +1205,13 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
       return res.status(400).json({ error: 'Invalid Backup', message: `The upload could not be read: ${error.message}. Nothing was changed.` });
     }
     const folderError = inBackupsFolder(error);
-    if (!(folderError instanceof BackupFolderUnusable)) return next(error);
+    if (!(folderError instanceof BackupFolderUnusable)) {
+      // The disk failing in some other way is the server's fault; anything
+      // else is the multipart parser refusing a body it cannot read.
+      if (errorCode(error)?.startsWith('E')) return next(error);
+      logger.warn('Restore refused an upload it could not read', { reason: errorMessage(error) });
+      return res.status(400).json({ error: 'Upload Error', message: 'The upload could not be read. Nothing was changed.' });
+    }
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');
     return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was changed.` });
@@ -1269,7 +1273,7 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     // with 400, or 413 for a size limit.
     try {
       const directory = await openArchiveFile(uploadedZip, RESTORE_MAX_FILES);
-      await extractArchiveSafely(directory, tempDir, {
+      await extractArchiveSafely(uploadedZip, directory, tempDir, {
         maxFiles: RESTORE_MAX_FILES,
         maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
       });
@@ -1310,7 +1314,7 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     const restorePath = path.join(tempDir, 'restore.sql');
     let prepared: PreparedDump;
     try {
-      prepared = await prepareDumpForRestore(sqlPath, restorePath);
+      prepared = await prepareDumpForRestore(sqlPath, restorePath, dbUrl);
     } catch (error) {
       logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
       return res.status(500).json({
@@ -1423,9 +1427,12 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
       await execFileAsync('node_modules/.bin/prisma', ['migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
-      // TODO(restore): this return skips step 9, so a restore whose migrations
-      // failed leaves no entry in the admin log although the database was
-      // replaced. It should write the same best-effort entry before answering.
+      // The database was replaced all the same, so the restore is logged as
+      // in step 9 (best-effort: the restored tables may not take the row).
+      await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {
+        safetyBackup,
+        migrationsFailed: true,
+      }).catch(() => {});
       return res.status(500).json({
         error: 'Restore Incomplete',
         message:

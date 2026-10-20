@@ -14,10 +14,14 @@
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import { EventEmitter } from 'events';
+import type { Response } from 'express';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma as appPrisma } from '../../config/database';
 import logger from '../../utils/logger';
+import { getLeftCampaignNotes } from '../leftCampaigns';
+import type { AuthenticatedRequest } from '../../middleware/rbac';
 import {
   prisma,
   createTestUser,
@@ -210,6 +214,39 @@ describe('notes and macros from a campaign the person was removed from', () => {
     } finally {
       jest.restoreAllMocks();
       await prisma.personalNote.deleteMany({ where: { id: { in: made.map((n) => n.id) } } });
+    }
+  });
+
+  it('logs a download the client gave up on part-way as information, and ends it', async () => {
+    // A closed tab or a lost connection is nobody's fault.
+    const errors = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+    const infos = jest.spyOn(logger, 'info').mockImplementation(() => logger);
+    // A response whose client goes away as soon as the first bytes are out.
+    const res = Object.assign(new EventEmitter(), {
+      headersSent: false,
+      destroyed: false,
+      status(this: { statusCode?: number }, code: number) { this.statusCode = code; return this; },
+      setHeader: jest.fn(),
+      write(this: EventEmitter & { headersSent: boolean; destroyed: boolean }) {
+        this.headersSent = true;
+        this.destroyed = true;
+        setImmediate(() => this.emit('close'));
+        return false;
+      },
+      end: jest.fn(),
+      json: jest.fn(),
+      destroy: jest.fn(),
+    });
+    const req = { session: { userId: leaver.user.id }, params: { campaignId } };
+    try {
+      await getLeftCampaignNotes(req as unknown as AuthenticatedRequest, res as unknown as Response);
+      expect(errors).not.toHaveBeenCalled();
+      expect(infos).toHaveBeenCalledWith(expect.stringMatching(/notes .* campaign left .*went away/i), expect.anything());
+      expect(res.end).not.toHaveBeenCalled();
+      expect(res.destroy).toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+      infos.mockRestore();
     }
   });
 

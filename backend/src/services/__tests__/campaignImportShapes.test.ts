@@ -22,7 +22,7 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-shapes-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-import { importCampaign, jsonNestsDeeperThan, jsonListCut } from '../campaignImporter';
+import { importCampaign, jsonNestsDeeperThan, jsonListCut, jsonHoldsMoreValuesThan } from '../campaignImporter';
 import { NpcStatBlockSchema } from '../../validators/statBlock';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, type FixtureEntry } from '../../__tests__/helpers/zipFixtures';
@@ -187,6 +187,33 @@ describe('data nested deeper than an export ever writes', () => {
     await expect(
       importCampaign(await archive({ campaign: { vibeSettings: { periods: [], extra: nested(40) } } }), userId)
     ).rejects.toThrow('campaign.json in the archive nests more than 32 levels deep, far deeper than CozyVTT ever writes. It may be damaged, or not a CozyVTT export.');
+  });
+});
+
+// A map file may unpack to 10 MB. Filled with tiny walls or empty objects it
+// holds over a million values, and parsing it cost several times what the
+// largest map an export writes does (a 500 by 500 fog, 5,000 walls and
+// tokens with full stat blocks up to 10 MB hold about 340,000). Such a map is left out before it is parsed.
+describe('a map holding more values than an export ever writes', () => {
+  it('is left out, with the reason, and the others imported', async () => {
+    const walls = Array.from({ length: 1_000_001 }, () => 0);
+    const result = await importCampaign(
+      await archive({ maps: [map({ name: 'Crowded', wallSegments: walls }), map({ name: 'Plain' })] }),
+      userId
+    );
+
+    expect(result.mapCount).toBe(1);
+    expect(result.skipped).toEqual([{ kind: 'map', name: 'Map 1', reason: 'It holds more than 1,000,000 values, far more than CozyVTT ever writes for one map.' }]);
+  });
+});
+
+describe('jsonHoldsMoreValuesThan', () => {
+  it('counts the values and members outside strings, and stops at the limit', () => {
+    expect(jsonHoldsMoreValuesThan('[1,2,3]', 3)).toBe(false);
+    expect(jsonHoldsMoreValuesThan('[1,2,3,4]', 3)).toBe(true);
+    expect(jsonHoldsMoreValuesThan('{"a":1,"b":[2,3]}', 3)).toBe(false);
+    expect(jsonHoldsMoreValuesThan(JSON.stringify({ note: 'a, b, c, d, e' }), 1)).toBe(false);
+    expect(jsonHoldsMoreValuesThan(JSON.stringify({ note: 'a \\" , , , ,' }), 1)).toBe(false);
   });
 });
 

@@ -164,7 +164,7 @@ docker compose down          # Stop and remove containers (data volume preserved
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
 
-Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it. The bundled nginx stops at once, players connected or not.
 
 **While the Admin Dashboard is making a backup, stopping waits for it.** The backend takes no new requests, lets the backup finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping`. `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back.
 
@@ -830,7 +830,9 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
 
-If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. Leave out `sslmode=no-verify`, which the driver also offers: the Admin Dashboard's **Create Backup** and restore give the same address to `pg_dump` and `psql`, which refuse that value (`invalid sslmode value`), so every backup and restore fails.
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. The driver also offers `sslmode=no-verify`, which encrypts the connection without checking the certificate. The Admin Dashboard's **Create Backup** and **Restore** give `pg_dump` and `psql` `sslmode=require` in its place, which does the same for them. Leave `sslrootcert` out of an address with `no-verify`: given that file, `pg_dump` and `psql` check the certificate against it under `require`, so backups and restores fail where the backend connects.
+
+To keep CozyVTT's tables apart from other software's in a database they share, end `DATABASE_URL` with `?schema=` and a name of its own, such as `?schema=cozyvtt` (join it to another setting with `&`: `?sslmode=verify-full&schema=cozyvtt`). Everything CozyVTT stores goes into that PostgreSQL schema, the sign-ins included. **Create Backup** then backs up that schema alone, and **Restore** replaces that schema alone; see [Database Backups](#database-backups). The backup and restore scripts work with the `public` schema only, and refuse such an address.
 
 ### 4. Run the backend with pm2
 
@@ -1128,6 +1130,26 @@ Then apply it with `docker compose up -d`. Leave it out and the default of 20 ap
 
 Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT` in the same way. A value that is not a whole number above zero is ignored there too, with a warning in the backend log.
 
+### Backend memory
+
+The backend container may use up to 512 MB of memory, and Node gives about half of that to the work in hand at once, such as a campaign archive being read. That is enough for an ordinary instance. On a server with memory to spare, raise it if importing a large campaign fails or the backend restarts during one:
+
+1. Add this line to `.env` (pick a size your server can spare: `1G`, `2G`):
+
+   ```env
+   BACKEND_MEMORY_LIMIT=1G
+   ```
+
+2. Apply it:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   The backend is recreated with the new limit. `docker stats` shows it in the **MEM USAGE / LIMIT** column.
+
+It cannot go below **256M**, the amount reserved for the backend: with a smaller value Docker does not start the backend at all, and `docker compose up -d` says "Minimum memory limit can not be less than memory reservation limit". Leave the line out and the default of 512M applies. A limit set in `docker-compose.override.yml` still takes precedence.
+
 ### Other settings
 
 The rest of what the backend reads from its environment. Every one is optional; leave it out and the default applies. On Docker, set the ones marked **Yes** in `.env` and apply them with `docker compose up -d`. The ones marked **No** are not passed to the backend container, so setting them in `.env` does nothing there; they are for an install without Docker (`backend/.env`).
@@ -1311,7 +1333,9 @@ If the backend is stopped while a restore is running, the uploaded backup it was
 
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
 
-A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database and that schema. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (in each command the `cozyvtt` after `-d` or `DATABASE` is the database, the one after `TO` the user). The second command is needed on PostgreSQL 14, and on a database first created on 14 and upgraded since; on newer ones it does no harm:
+**If your `DATABASE_URL` names a schema** (it ends in `?schema=` and a name, as in [step 3 of the manual install](#3-configure-and-build)), a backup holds that schema alone, and a restore drops and recreates that schema alone: `public` and every other schema in the database are left as they were. The one exception is anything another program built on CozyVTT's tables, such as a view of them, or a foreign key in its own table pointing at one of them: the database removes it along with the schema, so make it again after a restore. A backup restores only onto an instance whose `DATABASE_URL` names the schema it came from; any other is refused with **This file cannot be restored because it is a backup of the database schema "…", and this instance keeps its data in the schema "…"**, and nothing changes. To move such a backup between schemas, set the same `?schema=` on the instance you restore it on. The backup and restore scripts below work with the `public` schema only and stop with a message if `DATABASE_URL` names another; use the dashboard. A file `backup.sh` made on such an install with 1.5.3 or earlier holds the whole database, and neither the dashboard nor the scripts restore it; see [Restoring an older script backup of an install that names a schema](#restoring-an-older-script-backup-of-an-install-that-names-a-schema).
+
+A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema (or the schema `DATABASE_URL` names), which needs the database role to own the database and that schema. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (in each command the `cozyvtt` after `-d` or `DATABASE` is the database, the one after `TO` the user). The second command is needed on PostgreSQL 14, and on a database first created on 14 and upgraded since; on newer ones it does no harm:
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
@@ -1417,6 +1441,41 @@ instance that is already set up: its tables already exist, so the load fails,
 and depending on the options it either changes nothing or leaves a mix of old
 and new rows. `restore.sh` replaces the tables first, loads the backup in one
 step that is undone if any part fails, and empties the login sessions.
+
+### Restoring an older script backup of an install that names a schema
+
+Only for a manual install whose `DATABASE_URL` ends in `?schema=` and a name, and only for a file `backup.sh` made with 1.5.3 or earlier. Those files hold the whole database, every schema in it, so the dashboard refuses them and the scripts stop at the `?schema=` address. Load one into a new, empty database and point CozyVTT at that. Your current database is not touched, so you can go back to it by undoing step 3.
+
+1. Make the empty database, owned by CozyVTT's database user (use your own names if you changed them; the second `cozyvtt` is the user):
+
+   ```bash
+   sudo -u postgres createdb -O cozyvtt cozyvtt_restored
+   ```
+
+   It prints nothing if it worked.
+
+2. Load the backup into it as that user, putting your file name and database password in place of the examples:
+
+   ```bash
+   gunzip -c backups/cozyvtt_20261001_020000.sql.gz \
+     | psql "postgresql://cozyvtt:YOUR_PASSWORD@localhost:5432/cozyvtt_restored" -v ON_ERROR_STOP=1 -q
+   ```
+
+   It prints a short `set_config` table and stops. A line starting `ERROR:` means the load stopped there; drop the database with `sudo -u postgres dropdb cozyvtt_restored` and start again from step 1 once the cause is fixed. Running it as CozyVTT's user keeps everything it creates owned by that user, which the backend needs.
+
+3. In `backend/.env`, change the database name in `DATABASE_URL` (the part after the last `/` and before `?`) to `cozyvtt_restored`. Keep the `?schema=` part as it is.
+
+4. Bring the restored data up to this version and restart the backend the way you run it:
+
+   ```bash
+   cd backend && npx prisma migrate deploy
+   ```
+
+   It ends with `All migrations have been successfully applied` or `No pending migrations to apply`. Everyone signs in again afterwards.
+
+5. Once you have checked your campaigns are there, make a backup from the dashboard. It holds your schema alone and restores as usual.
+
+The new database also holds a copy of whatever other software kept in the old one; CozyVTT ignores it.
 
 ### Automated Daily Backups (cron)
 
@@ -1611,6 +1670,23 @@ cozyvtt-frontend  | 10-listen-on-ipv6-by-default.sh: info: can not modify /etc/n
 ```
 
 If the container keeps running and `docker compose ps` shows the database as `healthy`, there is nothing to fix.
+
+### The backend's log says it cannot write to `/app/uploads` or `/app/logs`
+
+When the backend starts it gives `backend/uploads` and `backend/logs` to its own user. A folder on a NAS, a Windows share (CIFS) or another network or FUSE mount may refuse that; the backend still starts, and `docker compose logs backend` says so:
+
+```
+⚠️  Could not give the uploads folder to the backend user; if uploads fail, check the folder's owner.
+⚠️  The backend user (user ID 100) cannot write to /app/uploads. Give that folder on the host to user ID 100, or let that user write to it.
+```
+
+The first line alone is harmless: the folder already lets the backend write. With the second, uploads (or, for `/app/logs`, the log files) fail until the folder lets that user ID write. On the host, give the folder to it, using the number from the message:
+
+```bash
+sudo chown -R 100 backend/uploads
+```
+
+On a share that ignores owners, set the owner, or write permission for everyone, in the share's own mount options or settings. Then `docker compose restart backend`; the second line no longer appears in its log.
 
 ### The site answers 502 after `docker compose up -d` recreated the backend
 

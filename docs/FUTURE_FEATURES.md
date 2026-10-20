@@ -51,14 +51,6 @@ _Nothing at present._
 
 - `1.5.4` **In the Admin Panel's Create User dialog, the email box loses its focus as the dialog opens,** to the dialog's first control, usually its close button (`hooks/useFocusTrap.ts`).
 
-### Server and deployment
-
-- `1.5.4` **A restore stopped part-way through unpacking keeps a file handle and the uploaded backup's disk space until the backend restarts,** for example a backup refused for unpacking to more than 10 GiB. Stopping an entry's read part-way leaves the file open (`utils/archive.ts`).
-- `1.5.4` **With a player connected, `docker compose stop`, `down`, or an `up` that recreates nginx waits 10 seconds and then stops nginx by force.** nginx waits for live connections to close, and they never close by themselves; players reconnect on their own afterwards (`docker-compose.yml`).
-- `1.5.4` **On an install that still has the `backend/uploads/backups` folder from before 1.5.0, every backup holds an empty `uploads/backups/` folder.** It does no harm (`routes/admin.ts`).
-- `1.5.4` **Backups and restores fail when `DATABASE_URL` carries `?schema=`, `?connection_limit=` or `sslmode=no-verify`,** which the app itself accepts: `pg_dump` and `psql` refuse those settings (`utils/pgRestore.ts`). The addresses the guides and `docker-compose.yml` give carry none of them.
-- `1.5.4` **With a `DATABASE_URL` that names a schema other than `public` (`?schema=`), sign-ins are stored in the `public` schema** while the parts of the app that list or end sign-ins look in the named one (`config/session.ts`).
-
 ---
 
 ## Backlog

@@ -16,6 +16,7 @@ import express from 'express';
 import session from 'express-session';
 import request from 'supertest';
 import type loggerInstance from '../../utils/logger';
+import { sessionSecretWarning } from '../sessionSecret';
 
 type SessionModule = typeof import('../session');
 type Logger = typeof loggerInstance;
@@ -106,7 +107,7 @@ describe('the session secret', () => {
   it('only warns outside production, and uses a development secret', () => {
     const { sessionConfig } = loadWith({ NODE_ENV: 'development', SESSION_SECRET: undefined });
     expect(exit).not.toHaveBeenCalled();
-    expect(logged.warn).toHaveBeenCalledWith(expect.stringContaining('SESSION_SECRET'));
+    expect(logged.warn).toHaveBeenCalledWith(sessionSecretWarning('is not set'));
     expect(sessionConfig.secret).toBe('dev-only-insecure-secret-do-not-use-in-production');
   });
 });

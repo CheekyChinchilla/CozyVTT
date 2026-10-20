@@ -82,6 +82,18 @@ nginx/conf.d/*
 # ---- Runtime / user data ----------------------------------------------------
 uploads/
 backups/
+# A backup copied or downloaded out of backups/ holds every password hash and
+# MFA secret on the instance: dashboard backups (backup-*.zip), an upload a
+# restore was cut short on (restore-temp-*.zip), the script's dumps (*.sql.gz)
+# and pg_dump's own format (*.dump). Plain *.sql is left out: it would hide the
+# migrations in backend/prisma/migrations/.
+backup-*.zip
+restore-temp-*.zip
+*.sql.gz
+*.dump
+# Written by `npm run validate:characters -- --export`: names and sheet data
+# of the instance's characters.
+validation-report.json
 
 # ---- Test artifacts ---------------------------------------------------------
 coverage/
