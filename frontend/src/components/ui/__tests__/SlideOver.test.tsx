@@ -5,6 +5,7 @@ import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AnimatePresence, MotionConfig } from 'framer-motion';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '../SlideOver';
+import Modal from '../Modal';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 
 // framer-motion reads the reduce-motion setting once, the first time a
@@ -150,5 +151,25 @@ describe('SlideOver', () => {
     expect(dialog).not.toBeNull();
     expect(Number(dialog?.style.opacity)).toBeLessThan(1);
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+});
+
+// A window opened from a panel (Invite Player from Campaign Settings, Create
+// Map from the Map Library) dims everything behind it, the panel included.
+// Its backdrop sat a layer below the panel, which stayed at full brightness.
+describe('a window opened from a panel', () => {
+  const layer = (el: Element | null) => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(el?.getAttribute('class') ?? '')?.[1] ?? 0);
+
+  it('draws its backdrop over the panel', () => {
+    render(
+      <>
+        <SlideOver open onClose={() => {}}><SlideOverTitle>Campaign Settings</SlideOverTitle></SlideOver>
+        <Modal open onClose={() => {}} title="Invite Player"><p>invite</p></Modal>
+      </>
+    );
+    const panel = screen.getByText('Campaign Settings').closest('[role="dialog"]');
+    const modalBackdrop = screen.getByRole('dialog', { name: 'Invite Player' }).parentElement?.previousElementSibling ?? null;
+    expect(modalBackdrop?.getAttribute('aria-hidden')).toBe('true');
+    expect(layer(modalBackdrop)).toBeGreaterThanOrEqual(layer(panel));
   });
 });

@@ -73,7 +73,10 @@ export default function Modal({
   };
 
   const modalRef = useFocusTrap(open, handleClose);
-  const zBackdrop = layer === 'overlay' ? 'z-60' : 'z-40';
+  // The backdrop shares the dialog's layer, so a window opened from a side
+  // panel (z-50, see SlideOver) dims the panel too; it comes later in the
+  // page, so it is drawn over it.
+  const zBackdrop = layer === 'overlay' ? 'z-60' : 'z-50';
   const zDialog = layer === 'overlay' ? 'z-60' : 'z-50';
 
   // Portal to <body>: ancestors with transform/filter/backdrop-filter (e.g.
