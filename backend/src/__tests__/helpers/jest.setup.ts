@@ -14,7 +14,17 @@ if (url && !/[?&]connection_limit=/.test(url)) {
   process.env.DATABASE_URL = `${url}${url.includes('?') ? '&' : '?'}connection_limit=5`;
 }
 
-// TODO(cleanup): a test file that sets no UPLOAD_DIR of its own writes into
-// the real backend/uploads (campaignImportGeometry.test.ts and others left
-// about 470 files there over two full runs). Point UPLOAD_DIR at a fresh
-// temporary folder here for every worker, as the files that do set it do.
+/**
+ * Every test file uploads into a temporary folder of its own. One that set no
+ * UPLOAD_DIR wrote into the real backend/uploads, and full runs left hundreds
+ * of files there. A file that sets UPLOAD_DIR itself still decides, since it
+ * does so after this runs; jest.afterEnv.ts removes this folder when the file
+ * ends.
+ */
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+
+const uploads = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-test-uploads-'));
+process.env.UPLOAD_DIR = uploads;
+(globalThis as { __testUploadsFolder?: string }).__testUploadsFolder = uploads;

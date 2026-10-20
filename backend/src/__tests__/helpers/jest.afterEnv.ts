@@ -16,7 +16,15 @@
  * opens a client again, and has to end that afterAll with its own
  * `$disconnect()`.
  */
+import fs from 'fs';
+
 afterAll(async () => {
+  // The uploads folder jest.setup.ts made for this file, whatever is left in
+  // it. A file's own afterAll runs after this one, so it finds its uploads
+  // gone already; the server's file deletes take a missing file as deleted.
+  const uploads = (globalThis as { __testUploadsFolder?: string }).__testUploadsFolder;
+  if (uploads) fs.rmSync(uploads, { recursive: true, force: true });
+
   const cached = (global as unknown as { prisma?: { $disconnect(): Promise<void> } }).prisma;
   if (cached) await cached.$disconnect();
   // The helpers' client, whether or not this file imported it: an unused
