@@ -240,7 +240,13 @@ export async function getLeftCampaignNotes(req: AuthenticatedRequest, res: Respo
     res.end(']}');
     return res;
   } catch (error) {
-    logger.error('Error fetching the notes from a campaign left', { err: error });
+    // A client that closed the tab or lost its connection part-way is
+    // nobody's fault, so it is information. Anything else is an error.
+    if (res.headersSent && (res.destroyed || req.destroyed)) {
+      logger.info('A notes download from a campaign left ended part-way: the client went away', { campaignId: req.params.campaignId });
+    } else {
+      logger.error('Error fetching the notes from a campaign left', { err: error });
+    }
     // Part of the answer is already out: all that is left is to cut it off.
     if (res.headersSent) {
       res.destroy();
