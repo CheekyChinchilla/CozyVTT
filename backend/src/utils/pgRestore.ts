@@ -400,7 +400,10 @@ export function pgConnection(dbUrl: string): { dbname: string; env: Record<strin
   if (changed) parsed.search = kept.length > 0 ? `?${kept.join('&')}` : '';
 
   if (parsed.password) {
-    env.PGPASSWORD = decodeURIComponent(parsed.password);
+    // A `%` that encodes nothing (`pa%ss`) is the password as written: the
+    // app's driver reads it so, and decodeURIComponent would throw, failing
+    // every backup with nothing useful in the log.
+    env.PGPASSWORD = decodedOrAsIs(parsed.password);
     parsed.password = '';
     changed = true;
   }

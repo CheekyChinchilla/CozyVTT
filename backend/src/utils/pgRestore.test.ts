@@ -86,6 +86,14 @@ describe('pgConnection', () => {
     expect(dbname).not.toContain('p%40ss');
   });
 
+  // The app's driver reads such a password as written, so the app ran while
+  // every backup failed with nothing useful in the log.
+  it('gives libpq a password holding a % that encodes nothing as it is written', () => {
+    const { dbname, env } = pgConnection('postgresql://u:pa%ss@h/db');
+    expect(env.PGPASSWORD).toBe('pa%ss');
+    expect(dbname).toBe('postgresql://u@h/db');
+  });
+
   it('keeps the query string, which may carry connection options', () => {
     const { dbname } = pgConnection('postgresql://u:p@h:5432/db?sslmode=require');
     expect(dbname).toBe('postgresql://u@h:5432/db?sslmode=require');
