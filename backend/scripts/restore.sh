@@ -229,6 +229,10 @@ fi
 # decodes it. An address that names no port uses 5432. This block is the same
 # in backup.sh and restore.sh; keepInStep.test.ts fails if they differ.
 url_decode() {
+  # A % that encodes nothing (pa%ss, 100%) leaves the value as written, as
+  # the backend reads it.
+  local stray='%([^0-9A-Fa-f]|.[^0-9A-Fa-f]|.?$)'
+  if [[ "$1" =~ $stray ]]; then printf '%s' "$1"; return; fi
   local s="${1//\\/\\\\}"
   printf '%b' "${s//%/\\x}"
 }

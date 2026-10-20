@@ -99,6 +99,22 @@ describeOnPosix('backup.sh', () => {
     expect(args).toEqual(expect.arrayContaining(['-h', 'db.internal', '-p', '5432', '-U', 'cozy+admin', '-d', 'cozyvtt']));
   });
 
+  // The backend reads a password holding a `%` that encodes nothing as it is
+  // written, and connected, while the script turned `%ss` into other bytes.
+  it.each(['pa%ss', '100%', 'a%4z'])('passes the password %s, whose %% encodes nothing, as it is written', async (written) => {
+    const seen = path.join(root, 'seen.txt');
+    await fs.writeFile(path.join(bin, 'pg_dump'), `#!/bin/sh\nprintf '%s\\n' "$PGPASSWORD" > "${seen}"\necho "-- PostgreSQL database dump complete"\n`, { mode: 0o755 });
+
+    const result = spawnSync('bash', [SCRIPT], {
+      cwd: root,
+      encoding: 'utf8',
+      env: { PATH: `${bin}:${process.env.PATH ?? ''}`, DATABASE_URL: `postgresql://cozyvtt:${written}@db.internal/cozyvtt`, BACKUP_DIR: backups },
+    });
+
+    expect(result.status).toBe(0);
+    expect((await fs.readFile(seen, 'utf8')).trimEnd()).toBe(written);
+  });
+
   // The script dumps the public schema. On an install whose DATABASE_URL names
   // another, that dump holds none of CozyVTT's data and everything else in
   // the database, and the script reported success.

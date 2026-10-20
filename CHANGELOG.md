@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **The backup and restore scripts work with a database password holding a `%` that encodes nothing.** In `DATABASE_URL`, a password such as `pa%ss` or `100%` reached the database changed, so `backup.sh` and `restore.sh` failed to sign in where the backend connected. They now pass such a password as it is written, as the backend does; percent-encoded characters such as `%40` for `@` are decoded as before.
+
 - **A database password with a `%` that is not part of an escape no longer stops every backup.** In an address such as `postgresql://cozyvtt:pa%ss@database/cozyvtt` the app reads the password as written, but **Create Backup** and **Restore** tried to decode it, failed, and reported only that the backup could not be written, with nothing useful in the log. They now read it as the app does.
 
 - **Backups and restores work on an install whose database address carries settings of the app's, and keep to the schema it names.** **Create Backup** and **Restore** handed the whole `DATABASE_URL` to the database tools, which refuse `?schema=`, `?connection_limit=` and `sslmode=no-verify`, so every backup and restore failed there. The tools now get the address without the settings only CozyVTT reads, and `sslmode=require` for `no-verify`, which also encrypts without checking the certificate. On an install whose address names a schema, a backup holds that schema alone and a restore replaces that schema alone, leaving the rest of the database as it was; a backup of another schema is refused, naming both. The backup and restore scripts work with the `public` schema only, and now refuse an address that names another, pointing to the Admin Dashboard.
