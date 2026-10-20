@@ -5,7 +5,7 @@
  */
 
 import { HP_HUES, hpTier, hueColour } from '@/utils/tokenColours';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useCharacterHp } from '@/stores/gameStore';
@@ -77,8 +77,12 @@ export default function CampaignRoster() {
     }
   };
 
-  useEffect(() => {
+  const refetchRoster = useEffectEvent(() => {
     fetchRoster();
+  });
+
+  useEffect(() => {
+    refetchRoster();
   }, [campaign?.id]);
 
   // Listen for roster updates via WebSocket
@@ -87,7 +91,7 @@ export default function CampaignRoster() {
 
     const handleRosterUpdate = () => {
       console.log('Roster updated - refetching...');
-      fetchRoster();
+      refetchRoster();
     };
 
     socket.on('roster.updated', handleRosterUpdate);

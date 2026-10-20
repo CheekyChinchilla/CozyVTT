@@ -100,7 +100,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, showToast]);
+  }, [token, campaignId, mapId, currentMap, showToast, campaign?.memberships]);
 
   const handleToggleVisible = useCallback(async () => {
     try {

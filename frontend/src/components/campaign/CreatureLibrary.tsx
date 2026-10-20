@@ -7,7 +7,7 @@
  */
 
 import { DISPOSITION_PICKED, DISPOSITION_PLACEHOLDER } from '@/utils/tokenColours';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useEffectEvent, useCallback, useRef } from 'react';
 import {
   X,
   Search,
@@ -214,6 +214,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     // matchGameSystem belongs here with the other filters: without it, toggling
     // between this campaign's system and all systems changed the dropdown but
     // never refetched the list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a filter change; typing searches through the debounce below
   }, [isOpen, campaign?.id, sourceFilter, crFilter, matchGameSystem]);
 
   // Debounced search
@@ -225,6 +226,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       fetchCreatures(true);
     }, 300);
     return () => clearTimeout(searchTimeoutRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the search text changes, after a pause in typing
   }, [searchQuery]);
 
   // ── Seed SRD creatures ──
@@ -385,8 +387,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     setOffset(newOffset);
   };
 
+  const loadNextPage = useEffectEvent(() => fetchCreatures(false));
   useEffect(() => {
-    if (offset > 0) fetchCreatures(false);
+    if (offset > 0) loadNextPage();
   }, [offset]);
 
   const hasMore = creatures.length < total;

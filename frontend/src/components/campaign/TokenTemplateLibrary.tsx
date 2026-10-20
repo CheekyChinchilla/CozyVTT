@@ -110,6 +110,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   useEffect(() => {
     if (!isOpen || !campaign) return;
     fetchTemplates();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a type change; typing searches through the debounce below
   }, [isOpen, campaign?.id, typeFilter]);
 
   // Debounced search
@@ -118,6 +119,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => fetchTemplates(), 300);
     return () => clearTimeout(searchTimeoutRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the search text changes, after a pause in typing
   }, [searchQuery]);
 
   // Fetch campaigns user is DM of (for copy-to feature)

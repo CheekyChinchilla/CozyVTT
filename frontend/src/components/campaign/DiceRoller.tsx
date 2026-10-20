@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -227,7 +227,7 @@ export default function DiceRoller() {
 
     loadHistory();
     return () => { cancelled = true; };
-  }, [campaign?.id, userRole, rejoins]);
+  }, [campaign?.id, userRole, rejoins, user?.id]);
 
   // Saved rolls for this campaign. Failure is quiet on purpose: macros are a
   // convenience on top of a dice panel that works without them, and an error
@@ -247,6 +247,10 @@ export default function DiceRoller() {
       cancelled = true;
     };
   }, [campaign?.id]);
+
+  // The role at the moment a roll arrives, which a DM handover can change
+  // while the listener below stays bound.
+  const viewerIsDm = useEffectEvent(() => userRole === 'DM');
 
   useEffect(() => {
     if (!socket) return;
@@ -276,7 +280,7 @@ export default function DiceRoller() {
 
       // Someone else's secret roll is not mine to see. The server does not send
       // them, so reaching this is already wrong; drop it rather than draw it.
-      if (!mayDisplayRoll(data, user?.id, userRole === 'DM')) return;
+      if (!mayDisplayRoll(data, user?.id, viewerIsDm())) return;
       liveDuringRead.current?.add(rollKey(data));
 
       // Newest first in state; the list renders oldest-first, chat style.
@@ -291,7 +295,7 @@ export default function DiceRoller() {
       console.log('[DiceRoller] Cleaning up dice.rolled listener');
       socket.off('dice.rolled', handleDiceRolled);
     };
-  }, [socket, user]);
+  }, [socket, user, clearPendingRoll]);
 
   // DM Audit: Listen for secret rolls by other players
   useEffect(() => {

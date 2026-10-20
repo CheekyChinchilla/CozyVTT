@@ -535,7 +535,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
     setDuplicateWarning(null);
     setShowDuplicateNamePrompt(false);
     setDuplicateName('');
-  }, [token.id]);
+  }, [token.id, dropOwnHp, dropOwnHpBar, dropOwnDisposition, dropOwnConditions, dropOwnController]);
 
   return (
     <>
