@@ -1205,7 +1205,13 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
       return res.status(400).json({ error: 'Invalid Backup', message: `The upload could not be read: ${error.message}. Nothing was changed.` });
     }
     const folderError = inBackupsFolder(error);
-    if (!(folderError instanceof BackupFolderUnusable)) return next(error);
+    if (!(folderError instanceof BackupFolderUnusable)) {
+      // The disk failing in some other way is the server's fault; anything
+      // else is the multipart parser refusing a body it cannot read.
+      if (errorCode(error)?.startsWith('E')) return next(error);
+      logger.warn('Restore refused an upload it could not read', { reason: errorMessage(error) });
+      return res.status(400).json({ error: 'Upload Error', message: 'The upload could not be read. Nothing was changed.' });
+    }
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');
     return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was changed.` });

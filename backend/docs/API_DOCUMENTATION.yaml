@@ -11882,7 +11882,10 @@ paths:
         '400':
           description: >-
             `Bad Request` `No backup file provided` when the request holds no
-            file. Every other refusal is `Invalid Backup`: a filename not
+            file. A multipart body the parser cannot read (cut off, or with
+            no boundary) is `Upload Error` `The upload could not be read.
+            Nothing was changed.`; it answered 500 before 1.5.4. Every other
+            refusal is `Invalid Backup`: a filename not
             ending in `.zip`; a multipart body over the field limits every
             upload route shares (more than 100 text fields, a field name over
             100 bytes, a field value over 16 KB, 16,384 bytes), a file sent
