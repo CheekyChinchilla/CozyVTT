@@ -9549,7 +9549,12 @@ paths:
         any codec (Opus included) as `audio/ogg` and `.ogg`; its
         `originalName` is
         kept unless that name's extension is not allowed for the type, when
-        the detected extension replaces it. Any other asset is skipped.
+        the detected extension replaces it. Any other asset is skipped, and
+        so is a picture over the picture limits `POST /api/assets/upload`
+        holds a MAP or TOKEN to (at most 16,384 pixels on a side; animated,
+        at most 1,000 frames and 200,000,000 pixels across them for a MAP,
+        50,000,000 for a TOKEN) or whose size cannot be read, listed in
+        `skipped` with the upload's message as its `reason`.
         A map's picture and spirit layer keep only an asset imported as MAP:
         one naming a TOKEN or AUDIO asset is dropped from the map, the asset
         is still imported, and `warnings` says so (`Map "<name>": left out
