@@ -133,6 +133,11 @@
  * four sections are the Flexible editor's Attributes, Skills, Inventory and
  * Background section templates. Compared here, ids aside.
  *
+ * The fields of a wall and a light. The schemas decide what is stored; the
+ * comparisons that decide whether a change reaches players read the fields
+ * one by one, and one missing there is a change players are never sent. The
+ * types are declared in each package, and compared here.
+ *
  * The game systems. The database decides them (the GameSystem enum in
  * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
  * declares its own enum, which has to name the same values.
@@ -149,6 +154,7 @@ import { sheetTypeMismatches } from './helpers/sheetTypeParity';
 import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
+import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -805,6 +811,36 @@ describe('the Basic Flexible sheet and the editor\'s section templates', () => {
   it('has the editor\'s Attributes, Skills, Inventory and Background sections', () => {
     const sections = (flexibleBasicTemplate().data as { sections: unknown[] }).sections;
     expect(withoutIds(sections)).toEqual(['attributes', 'skills', 'inventory', 'background'].map(editorSection));
+  });
+});
+
+describe('the fields of a wall and a light', () => {
+  /** The fields a comparison in utils/spirit-layer.ts reads, as `a.<field> === b.<field>`. */
+  function compared(name: string): string[] {
+    const m = new RegExp(`function ${name}\\(a: \\w+, b: \\w+\\): boolean \\{([\\s\\S]*?)\\n\\}`).exec(read('backend/src/utils/spirit-layer.ts'));
+    if (!m) throw new Error(`no ${name} in utils/spirit-layer.ts; update this test with the declaration`);
+    return [...m[1].matchAll(/\ba\.(\w+) === b\.(\w+)/g)].map(([, left, right]) => {
+      expect(left).toBe(right);
+      return left;
+    });
+  }
+
+  it('are all compared when a wall change is judged, as the schema takes them', () => {
+    expect(compared('sameWall').sort()).toEqual(Object.keys(WallSegmentSchema.shape).sort());
+  });
+
+  it('are all compared when a light change is judged, as the schema takes them', () => {
+    expect(compared('sameLight').sort()).toEqual(Object.keys(LightSourceSchema.shape).sort());
+  });
+
+  it.each(['WallSegment', 'FogState', 'LightSource'])('%s has the same fields in the browser and on the server', (name) => {
+    expect(interfaceFields(read('frontend/src/types/walls.ts'), name)).toEqual(interfaceFields(read('backend/src/types/walls.ts'), name));
+  });
+
+  it('take the same wall types in the browser and on the server', () => {
+    const wallType = (rel: string) => /export type WallType = ([^;]+);/.exec(read(rel))?.[1].replace(/\s+/g, ' ').trim();
+    expect(wallType('frontend/src/types/walls.ts')).toBeDefined();
+    expect(wallType('frontend/src/types/walls.ts')).toBe(wallType('backend/src/types/walls.ts'));
   });
 });
 
