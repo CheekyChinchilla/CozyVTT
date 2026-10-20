@@ -26,6 +26,7 @@ const h = vi.hoisted(() => {
   const state = {
     userRole: 'DM' as string,
     currentMap: null as unknown,
+    playerSpiritVisible: false as boolean,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
@@ -81,7 +82,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         campaign,
         updateCampaignSpiritLayer: noop,
         dmViewBothPlanes: false,
-        playerSpiritVisible: false,
+        playerSpiritVisible: h.state.playerSpiritVisible,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
         updateVibe: noop,
@@ -243,7 +244,7 @@ beforeEach(() => {
   h.updateToken.mockReset().mockResolvedValue({});
   h.addToken.mockReset().mockResolvedValue({ token: token('tok-new', 'Aria', 2, 17) });
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'DM', currentMap: mapWith(), playerSpiritVisible: false });
 });
 
 describe('the wall draw tool', () => {
@@ -1224,5 +1225,21 @@ describe('the Global Illumination switch', () => {
 
     expect(await screen.findByText('Too many requests, please slow down')).toBeTruthy();
     expect((screen.getByLabelText('Global illumination') as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+// The badge was a 20% tint over the map, so its words were lost over a
+// light or busy picture.
+describe('the Spirit Realm badge', () => {
+  it('sits on an opaque backing, in its own colours', () => {
+    h.set({ userRole: 'PLAYER', playerSpiritVisible: true });
+    render(<MapCanvas />);
+
+    const words = screen.getByText('Spirit Realm');
+    const tint = words.parentElement as HTMLElement;
+    const backing = tint.parentElement as HTMLElement;
+    expect(backing.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'bg-parchment']));
+    expect(tint.className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-spirit-purple/20', 'border-spirit-purple/40']));
+    expect(words.className.split(/\s+/)).toContain('text-spirit-ink');
   });
 });

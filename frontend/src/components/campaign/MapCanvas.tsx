@@ -2455,9 +2455,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {(previewing
         ? previewedPlane === 'spirit'
         : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-xs animate-pulse-soft">
-          <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
-          <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+        // An opaque backing under the tint, as the zoom panel has, so the
+        // words read over any map.
+        <div className="absolute top-4 right-4 z-10 rounded-cozy bg-parchment animate-pulse-soft">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
+            <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
+            <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+          </div>
         </div>
       )}
 
