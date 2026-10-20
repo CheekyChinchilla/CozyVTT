@@ -103,6 +103,8 @@ describe('themed surfaces use semantic tokens', () => {
     // White fails on the spirit, success, warning and info fills in most
     // themes; they take the soft tint and -ink text instead, as in the sheets.
     const STATE_FILL = /^((?:[\w-]+:)*)bg-(?:success|warning|info|spirit|spirit-purple)$/;
+    // The accent (warm-amber) takes accent-text, as btn-primary does.
+    const ACCENT_FILL = /^((?:[\w-]+:)*)bg-(?:accent|warm-amber)$/;
     const WHITE = /^((?:[\w-]+:)*)text-(?:white|paper-white|canvas)$/;
     const found: string[] = [];
     for (const [path, source] of Object.entries(SOURCES)) {
@@ -112,7 +114,7 @@ describe('themed surfaces use semantic tokens', () => {
       for (const piece of pieces) {
         const classes = piece.replace(/['"`{}]/g, ' ');
         const white = prefixes(classes, WHITE);
-        const fills = [...prefixes(classes, BRAND_FILL), ...prefixes(classes, DANGER_FILL), ...prefixes(classes, STATE_FILL)];
+        const fills = [...prefixes(classes, BRAND_FILL), ...prefixes(classes, DANGER_FILL), ...prefixes(classes, STATE_FILL), ...prefixes(classes, ACCENT_FILL)];
         if (fills.some((p) => white.has(p))) found.push(`${path}: ${classes.trim().slice(0, 80)}`);
       }
     }

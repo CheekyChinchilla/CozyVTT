@@ -635,7 +635,7 @@ export default function InitiativeTracker() {
                       <>
                         <button
                           onClick={handleNext}
-                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold bg-warm-amber text-white rounded-lg hover:bg-warm-amber/90 transition-colors"
+                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold bg-accent text-accent-text rounded-lg hover:bg-accent-hover transition-colors"
                         >
                           <SkipForward className="w-3.5 h-3.5" />
                           Next Turn

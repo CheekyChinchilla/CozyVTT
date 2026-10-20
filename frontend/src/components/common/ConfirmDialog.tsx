@@ -45,7 +45,7 @@ const VARIANT_CONFIG: Record<ConfirmVariant, {
   warning: {
     icon: <AlertCircle className="w-6 h-6 text-accent-ink" aria-hidden="true" />,
     iconBg: 'bg-warm-amber/10',
-    confirmClass: 'bg-warm-amber hover:bg-sunset-orange focus:ring-warm-amber text-white',
+    confirmClass: 'bg-accent hover:bg-accent-hover focus:ring-accent text-accent-text',
   },
   info: {
     icon: <HelpCircle className="w-6 h-6 text-brand-ink" aria-hidden="true" />,
