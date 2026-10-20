@@ -7,49 +7,59 @@
  * email is now checked against a fixed dummy hash, so both paths pay for the
  * hash.
  *
- * Timing tests are noisy, so this compares medians over several attempts and
- * asks only that the unknown-email path take at least half as long as the
- * known-email path: before the fix it took a few milliseconds against tens.
+ * What an attempt costs is the Argon2 check, and that cost is set by the
+ * hash's parameters. So this asks that each path runs the check exactly once,
+ * against hashes made with the same parameters. Comparing times instead
+ * failed now and then on a busy machine.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
 
+import argon2 from 'argon2';
 import { prisma, createTestUser, cleanupUsers, testEmail } from '../../__tests__/helpers/db';
 import { authenticateUser } from '../auth';
 
-jest.setTimeout(120000);
-
 const created: string[] = [];
-
-async function median(times: number, run: () => Promise<unknown>): Promise<number> {
-  const samples: number[] = [];
-  for (let i = 0; i < times; i += 1) {
-    const start = process.hrtime.bigint();
-    await run();
-    samples.push(Number(process.hrtime.bigint() - start) / 1e6);
-  }
-  samples.sort((a, b) => a - b);
-  return samples[Math.floor(samples.length / 2)];
-}
 
 afterAll(async () => {
   await cleanupUsers(created);
   await prisma.$disconnect();
 });
 
-it('takes as long for an email with no account as for a wrong password', async () => {
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+/** `$argon2id$v=19$m=65536,t=3,p=4`: the algorithm, version and costs, without the salt and the hash. */
+function parameters(hash: string): string {
+  return hash.split('$').slice(0, 4).join('$');
+}
+
+/** The hashes Argon2 checked a password against while `run` ran. */
+async function hashesChecked(run: () => Promise<unknown>): Promise<string[]> {
+  const verify = jest.spyOn(argon2, 'verify');
+  try {
+    await run();
+    return verify.mock.calls.map((call) => call[0]);
+  } finally {
+    verify.mockRestore();
+  }
+}
+
+it('checks the password once against a hash of the same cost, whether or not the email has an account', async () => {
   const user = await createTestUser({ displayName: 'Timing' });
   created.push(user.id);
-  const nobody = testEmail('nobody');
 
-  // Warm both paths once, so neither pays a first-call cost in the samples.
-  expect(await authenticateUser({ email: user.email, password: 'wrong-password' })).toBeNull();
-  expect(await authenticateUser({ email: nobody, password: 'wrong-password' })).toBeNull();
+  const known = await hashesChecked(async () => {
+    expect(await authenticateUser({ email: user.email, password: 'wrong-password' })).toBeNull();
+  });
+  const unknown = await hashesChecked(async () => {
+    expect(await authenticateUser({ email: testEmail('nobody'), password: 'wrong-password' })).toBeNull();
+  });
 
-  const known = await median(7, () => authenticateUser({ email: user.email, password: 'wrong-password' }));
-  const unknown = await median(7, () => authenticateUser({ email: nobody, password: 'wrong-password' }));
-
-  // Both run the hash, which is the slow part; the difference left is one
-  // database read either way.
-  expect(unknown).toBeGreaterThan(known * 0.5);
+  expect(known).toEqual([user.passwordHash]);
+  expect(unknown).toHaveLength(1);
+  expect(unknown[0]).not.toBe(user.passwordHash);
+  expect(parameters(unknown[0])).toBe(parameters(user.passwordHash));
+  expect(parameters(user.passwordHash)).toMatch(/^\$argon2id\$v=\d+\$m=\d+,t=\d+,p=\d+$/);
 });
