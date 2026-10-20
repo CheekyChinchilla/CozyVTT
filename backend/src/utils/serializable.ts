@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import logger from './logger';
 
 /**
  * A check and the write it allows, made as one step.
@@ -66,7 +67,12 @@ export async function inSerializableTransaction<T>(
     try {
       return await prisma.$transaction(work, { ...options, isolationLevel: Prisma.TransactionIsolationLevel.Serializable });
     } catch (error) {
-      if (attempt >= SERIALIZABLE_ATTEMPTS || !isSerializationFailure(error)) throw error;
+      if (!isSerializationFailure(error)) throw error;
+      if (attempt >= SERIALIZABLE_ATTEMPTS) {
+        // Each refusal before this was logged at debug, as it was run again.
+        logger.error(`A transaction was refused for overlapping others ${attempt} times in a row; giving up`, { err: error });
+        throw error;
+      }
       // A short, varied pause, so two that collided do not collide again.
       await new Promise((resolve) => setTimeout(resolve, 10 + Math.random() * 40 * attempt));
     }

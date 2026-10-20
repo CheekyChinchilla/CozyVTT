@@ -92,6 +92,22 @@ class MissingDatabaseUrl extends PrismaPg {
 }
 
 /**
+ * PostgreSQL refusing a transaction for overlapping another, as Prisma
+ * reports it: 40001 (a serialization failure) or 40P01 (a deadlock) from a
+ * raw statement, and P2034's message from a query Prisma built.
+ */
+const CONFLICT_REPORT = /Code: `40001`|Code: `40P01`|Transaction failed due to a write conflict or a deadlock/;
+
+/**
+ * The level Prisma's error report `message` is logged at. A conflict is run
+ * again by utils/serializable.ts, which logs if the runs are used up, so each
+ * one is debug; anything else is an error.
+ */
+export function prismaErrorLevel(message: string): 'error' | 'debug' {
+  return CONFLICT_REPORT.test(message) ? 'debug' : 'error';
+}
+
+/**
  * Makes a Prisma client for the database at `url`. Every client in the
  * backend, its scripts and its tests is made here, so each reads its address
  * the same way.
@@ -125,7 +141,7 @@ export function createPrismaClient(url: string | undefined = process.env.DATABAS
       { emit: 'event', level: 'warn' },
     ],
   });
-  client.$on('error', (e) => logger.error('Database error', { target: e.target, detail: e.message }));
+  client.$on('error', (e) => logger.log(prismaErrorLevel(e.message), 'Database error', { target: e.target, detail: e.message }));
   client.$on('warn', (e) => logger.warn('Database warning', { target: e.target, detail: e.message }));
   return client;
 }
