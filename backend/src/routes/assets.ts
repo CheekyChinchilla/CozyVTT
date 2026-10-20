@@ -398,7 +398,7 @@ router.post(
       }
 
       // AVATAR type: always personal scope regardless of what client sends
-      let assetScope = (type === 'AVATAR' ? 'USER' : (scope || 'USER')) as AssetScope;
+      const assetScope = (type === 'AVATAR' ? 'USER' : (scope || 'USER')) as AssetScope;
 
       if (!['GLOBAL', 'USER', 'CAMPAIGN'].includes(assetScope)) {
         // Clean up uploaded file

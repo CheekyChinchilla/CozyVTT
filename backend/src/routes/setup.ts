@@ -1,4 +1,4 @@
-/// <reference path="../types/express.d.ts" />
+import type {} from '../types/express';
 import { Router, Request, Response } from 'express';
 import { setupState } from '../services/systemSettings';
 import { RegistrationError, answeredBusy } from '../services/auth';
