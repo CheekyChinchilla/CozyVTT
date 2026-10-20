@@ -146,7 +146,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Moving a token on a lit map with many walls no longer holds up the server.** With dynamic lighting on, every token move works out what each player can see, and the time that took grew with the square of the number of walls, and the server answers one thing at a time. On a map of 1,000 walls and 8 lights, a move seen by 6 players took about 185 ms of the server's time and one seen by 12 about 345 ms. They now take about 13 and 21 ms, and what each light reaches is worked out again only when a wall or a light changes.
 
-- **The Desktop Required notice is no longer hidden behind an open panel or window.** When the browser window was made narrower than 1024 pixels with a side panel or a window open on the campaign page, the panel or window stayed drawn over the notice. The notice now covers them all.
+- **The Desktop Required notice is no longer hidden behind an open panel or window.** When the browser window was made narrower than 1024 pixels with a side panel or a window open on the campaign page, the panel or window stayed drawn over the notice. The notice now covers them all, and takes the keyboard while it shows, so Tab reaches **Continue anyway** and Escape no longer closes the window hidden under it.
 
 - **The Spirit Realm badge over the map can be read over any map.** A player in the spirit realm sees a **Spirit Realm** badge in the map's top corner. It was a faint tint over the map, so on a light or busy map its words were hard to make out. It now has a solid backing, as the zoom controls do.
 

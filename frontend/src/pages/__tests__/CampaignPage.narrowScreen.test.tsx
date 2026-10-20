@@ -10,7 +10,7 @@
  */
 
 import { it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // The page subscribes to many socket events; each method is a harmless stub.
 const anySocket = vi.hoisted(() => new Proxy({}, { get: () => () => undefined }));
@@ -133,4 +133,31 @@ it('covers every side panel and window, from the top of the page', () => {
   const others = [...document.body.querySelectorAll('[class*="z-"]')].filter((el) => !cover.contains(el));
   expect(others.length).toBeGreaterThan(0);
   for (const el of others) expect(layer(cover)).toBeGreaterThan(layer(el));
+});
+
+// Above a window or side panel, the notice was out of reach of the keyboard:
+// the window's focus trap kept Tab, and Escape closed the window under it.
+it('takes the keyboard while the window is narrow', async () => {
+  const narrow = (query: string): MediaQueryList => ({
+    matches: query.includes('max-width'), media: query, onchange: null,
+    addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+  });
+  vi.stubGlobal('matchMedia', narrow);
+  const onClose = vi.fn();
+  try {
+    render(
+      <>
+        <Modal open onClose={onClose} title="Invite Player"><input aria-label="Search" /></Modal>
+        <CampaignPage />
+      </>
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Desktop Required' });
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
