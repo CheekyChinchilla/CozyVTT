@@ -277,6 +277,14 @@ describe('the containers', () => {
     expect([...listed(nginx, 'tmpfs')].sort()).toEqual(['/etc/nginx/conf.d', '/run', '/tmp']);
   });
 
+  it('stop the proxy with SIGTERM, which a live connection does not hold up', () => {
+    // The image's SIGQUIT waits for every websocket to close, which a
+    // connected player's never does, so `docker compose stop` killed nginx
+    // after 10 s. worker_shutdown_timeout would bound that wait, but it
+    // belongs to nginx's main settings, which nginx/nginx.conf is not.
+    expect(service('docker-compose.yml', 'nginx')).toMatch(/\n {4}stop_signal: SIGTERM\n/);
+  });
+
   it("keep the proxy's request and response files on a volume, out of its memory limit", () => {
     // A 50 MB upload passes through /var/cache/nginx; in memory it would
     // count against the proxy's 64 MB and stop it.

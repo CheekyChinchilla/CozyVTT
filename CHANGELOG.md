@@ -17,7 +17,9 @@ git pull origin main
 docker compose up -d --build
 ```
 
-There is no new setting, no setting is removed, and there is no database change or manual step. The frontend container is rebuilt for the new styles.
+There is no new setting, no setting is removed, and there is no database change or manual step. The frontend container is rebuilt for the new styles. The nginx container is recreated, because `docker-compose.yml` now stops it with a different signal.
+
+If you have edited `docker-compose.yml`, `git pull` stops at it because this release changes it. Set your edits aside and bring them back with `git stash`, `git pull origin main` and `git stash pop`, as described in [Updating after you've edited `docker-compose.yml`](docs/DEPLOYMENT.md#updating-after-youve-edited-docker-composeyml). If you deleted the `nginx` service to use your own proxy, `git stash pop` reports a conflict there, because this release changes that service. Keep it deleted: remove the lines from `<<<<<<< Updated upstream` down to `=======`, both included, and the `>>>>>>> Stashed changes` line below them, then run `git reset` and `git stash drop` as the guide says.
 
 #### What you will notice
 
@@ -138,6 +140,8 @@ There is no new setting, no setting is removed, and there is no database change 
 - **Backups and restores work on an install whose database address carries settings of the app's, and keep to the schema it names.** **Create Backup** and **Restore** handed the whole `DATABASE_URL` to the database tools, which refuse `?schema=`, `?connection_limit=` and `sslmode=no-verify`, so every backup and restore failed there. The tools now get the address without the settings only CozyVTT reads, and `sslmode=require` for `no-verify`, which also encrypts without checking the certificate. On an install whose address names a schema, a backup holds that schema alone and a restore replaces that schema alone, leaving the rest of the database as it was; a backup of another schema is refused, naming both. The backup and restore scripts work with the `public` schema only, and now refuse an address that names another, pointing to the Admin Dashboard.
 
 - **The warning about a missing or example session secret names the right file.** Outside production the backend warns when `SESSION_SECRET` is unset or a value it would refuse in production, and said to set it in `backend/.env`. The Docker stacks read it from the `.env` in the CozyVTT folder, so a value put in `backend/.env` changed nothing there. The warning now names that `.env` for Docker and `backend/.env` for a backend run without Docker.
+
+- **Stopping CozyVTT no longer waits 10 seconds while a player is connected.** With anyone at a table, `docker compose stop`, `restart` and an upgrade waited the full 10 seconds for the bundled nginx and then forced it to stop, because nginx waited for every live game connection to close first. It now stops at once, and players' browsers reconnect when it is back, as they already did.
 
 - **A restore sent a damaged upload says so.** A restore whose upload arrived cut off, or garbled on its way, answered "An unexpected error occurred". It now says "The upload could not be read. Nothing was changed.", so you know to send the backup again.
 

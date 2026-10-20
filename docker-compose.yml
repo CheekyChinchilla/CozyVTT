@@ -224,11 +224,11 @@ services:
     # A test keeps the two in step; move both together.
     image: nginx:1.30-alpine
     container_name: cozyvtt-nginx
-    # TODO(shutdown): with a Socket.io connection open, `docker compose stop`
-    # waits the full 10 s and then kills nginx (exit 137): the image's
-    # SIGQUIT waits for websockets, which never close by themselves. Use
-    # `stop_signal: SIGTERM` or set worker_shutdown_timeout so nginx exits
-    # in about a second and players reconnect as they already do.
+    # The image stops nginx with SIGQUIT, which waits for every live game
+    # connection to close; a connected player's never does, so a stop took
+    # the full 10 seconds and then killed it. SIGTERM ends at once, and
+    # players reconnect when it is back, as they do after any restart.
+    stop_signal: SIGTERM
     logging: *logging
     restart: unless-stopped
     # Nothing in the container can gain privileges through a setuid program.
