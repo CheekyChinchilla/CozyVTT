@@ -833,15 +833,12 @@ router.get(
 
         // Get image dimensions for pixels_per_grid calculation. A map stored
         // before its picture had to be a map picture can name any file, so the
-        // bytes are identified first, and only a picture is read.
-        // TODO(maps): with sharp's default pixel limit (16,383 squared) this
-        // throws for a map picture 16,384 pixels on both sides, which the
-        // picture limits accept, and the export answers 500. Only the header
-        // is read, so it should pass { limitInputPixels: false } as
-        // pictureLimitProblem does.
+        // bytes are identified first, and only a picture is read. Only the
+        // header is read, so the image library's pixel limit (16,383 squared)
+        // is off: a map picture may be 16,384 pixels on each side.
         let imageWidthPx: number | undefined;
         try {
-          imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+          imageWidthPx = (await (await openPicture(imageBuffer, { limitInputPixels: false })).metadata()).width;
         } catch (error) {
           if (!(error instanceof NotAPictureError)) throw error;
           return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });

@@ -147,6 +147,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Export as Universal VTT works for a map picture 16,384 pixels on each side.** The export read the picture's size with a limit just below that and answered with an error for such a map; it now exports it.
+
 - **Import Character checks a dropped file against the names in use now.** A file dropped onto **Import Character** was checked against the characters that existed when the window opened, so one with the name of a character made since was not flagged.
 
 - **A new DM sees the table's secret rolls without reloading.** After the DM's seat was handed over, the new DM's dice panel went on treating them as a player until the page was reloaded, and left out other players' secret rolls arriving in the meantime.
