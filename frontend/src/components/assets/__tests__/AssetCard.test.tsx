@@ -144,6 +144,26 @@ describe('AssetCard grid actions', () => {
     expect(classes).toContain('group-hover:pointer-events-auto');
   });
 
+  // On a touch screen they were always over the whole picture, dimmed and
+  // blurred, so no thumbnail in the library could be seen.
+  it('sit in a strip in a corner on a screen with no hover, leaving the picture clear', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), canChange: true });
+    const overlay = screen.getByRole('button', { name: 'View Thing' }).parentElement as HTMLElement;
+    const classes = overlay.className.split(/\s+/);
+    for (const touch of ['inset-auto', 'bottom-2', 'right-2', 'gap-2', 'bg-transparent', 'backdrop-blur-none']) {
+      expect(classes).toContain(`[@media(hover:none)]:${touch}`);
+    }
+    // With a mouse, hovering or focusing still covers the picture as before.
+    for (const hover of ['inset-0', 'bg-black/50', 'backdrop-blur-xs', 'gap-3']) {
+      expect(classes).toContain(hover);
+    }
+    for (const name of ['View Thing', 'Download Thing', 'Delete Thing']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.className.split(/\s+/)).toContain('[@media(hover:none)]:p-2');
+      expect(button.className.split(/\s+/)).toContain('p-3');
+    }
+  });
+
   it('name View and Download in list view too', () => {
     renderCard(asset(AssetType.MAP, 'm.png'), 'list');
     expect(screen.getByRole('button', { name: 'View Thing' })).toBeInTheDocument();
