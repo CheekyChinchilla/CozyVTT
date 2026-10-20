@@ -2,7 +2,7 @@
  * Flexible Character Sheet
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useEffectEvent, useState } from 'react';
 import { CharacterSheetProps } from './types';
 import type { CharacterData } from '../../types';
 import { FlexibleCharacterSheetView } from './flexible/FlexibleCharacterSheetView';
@@ -13,8 +13,9 @@ export const FlexibleCharacterSheet: React.FC<CharacterSheetProps> = (props) => 
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   // Each time the editor opens, its form is made from the character passed now.
+  const editStarted = useEffectEvent(() => onEditStart?.());
   useEffect(() => {
-    if (currentMode === 'edit') onEditStart?.();
+    if (currentMode === 'edit') editStarted();
   }, [currentMode]);
 
   const handleCancel = () => {

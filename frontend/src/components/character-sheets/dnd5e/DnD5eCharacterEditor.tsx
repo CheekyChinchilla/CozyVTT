@@ -542,6 +542,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the saved colour once, as the editor opens
   }, []);
 
   // Handle custom color change
@@ -632,6 +633,15 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.savingThrows?.charisma?.otherBonus,
   ]);
 
+  // Each skill's proficient and expertise flags and its other bonus, as one
+  // value the effect below can depend on.
+  const skillInputs = (Object.keys(SKILL_ABILITIES) as (keyof DnD5eSkills)[])
+    .map((skill) => {
+      const entry = formData.skills?.[skill];
+      return `${entry?.proficient}|${entry?.expertise}|${entry?.otherBonus}`;
+    })
+    .join(',');
+
   // Auto-calculate skill bonuses when ability scores, proficiency, or expertise change
   useEffect(() => {
     setFormData((prev) => {
@@ -698,13 +708,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     formData.stats?.intelligence?.modifier,
     formData.stats?.wisdom?.modifier,
     formData.stats?.charisma?.modifier,
-    // Explicitly depend on each skill's proficient and expertise flags, and
-    // its other bonus
-    ...(Object.keys(SKILL_ABILITIES) as (keyof DnD5eSkills)[]).flatMap(skill => [
-      formData.skills?.[skill]?.proficient,
-      formData.skills?.[skill]?.expertise,
-      formData.skills?.[skill]?.otherBonus,
-    ]),
+    skillInputs,
   ]);
 
   /**
@@ -775,6 +779,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       ...(needsBonus ? { initiativeBonus: bonus } : {}),
       initiative: total,
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when Dexterity or a bonus listed here changes, not on every edit to the form
   }, [
     formData.stats?.dexterity?.score,
     formData.stats?.dexterity?.modifier,
@@ -804,6 +809,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         spellAttackBonus: attackTotal,
       } as DnD5eSpellcasting,
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [
     formData.proficiencyBonus,
     formData.level,

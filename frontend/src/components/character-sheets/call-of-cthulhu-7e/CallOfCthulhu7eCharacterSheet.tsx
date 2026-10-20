@@ -4,7 +4,7 @@
  * Main component that switches between view and edit modes.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useEffectEvent, useState } from 'react';
 import { CharacterSheetProps } from '../types';
 import type { CharacterData } from '../../../types';
 import { CallOfCthulhu7eCharacterView } from './CallOfCthulhu7eCharacterView';
@@ -18,8 +18,9 @@ export const CallOfCthulhu7eCharacterSheet: React.FC<CharacterSheetProps> = (pro
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   // Each time the editor opens, its form is made from the character passed now.
+  const editStarted = useEffectEvent(() => onEditStart?.());
   useEffect(() => {
-    if (currentMode === 'edit') onEditStart?.();
+    if (currentMode === 'edit') editStarted();
   }, [currentMode]);
 
   // Handle cancel - return to view mode

@@ -448,6 +448,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         }
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reads the saved colour once, as the editor opens
   }, []);
 
   const handleCustomColorChange = (hex: string) => {
@@ -477,6 +478,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (changed) {
       setFormData((prev) => ({ ...prev, attributes: updatedAttributes }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a score changes; its own write of the modifiers must not refire it
   }, [
     formData.attributes?.strength?.score,
     formData.attributes?.dexterity?.score,
@@ -501,6 +503,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (hasChanges) {
       setFormData((prev) => ({ ...prev, savingThrows: updatedSavingThrows }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [formData.level, formData.attributes?.constitution?.modifier, formData.attributes?.dexterity?.modifier, formData.attributes?.wisdom?.modifier, formData.savingThrows?.fortitude?.proficiencyRank, formData.savingThrows?.fortitude?.itemBonus, formData.savingThrows?.reflex?.proficiencyRank, formData.savingThrows?.reflex?.itemBonus, formData.savingThrows?.will?.proficiencyRank, formData.savingThrows?.will?.itemBonus]);
 
   // Auto-calculate perception
@@ -508,6 +511,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (!formData.attributes || !formData.perception || !formData.level) return;
     const bonus = pf2ePerceptionTotal(formData);
     setFormData((prev) => ({ ...prev, perception: { ...prev.perception, bonus } as PF2ePerception }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [formData.level, formData.attributes?.wisdom?.modifier, formData.perception?.proficiencyRank, formData.perception?.itemBonus]);
 
   // Auto-calculate skills
@@ -526,6 +530,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (hasChanges) {
       setFormData((prev) => ({ ...prev, skills: updatedSkills }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [
     formData.level,
     formData.attributes?.strength?.modifier,
@@ -584,6 +589,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     formData.skills?.thievery?.armorPenalty,
   ]);
 
+  // The lore skills' inputs as one value: there are any number of them, so
+  // the effect below cannot list each one's fields.
+  const loreSkillInputs = JSON.stringify(formData.loreSkills?.map((l) => ({ proficiencyRank: l.proficiencyRank, itemBonus: l.itemBonus, attribute: l.attribute })));
+
   // Auto-calculate lore skills
   useEffect(() => {
     if (!formData.attributes || !formData.loreSkills || !formData.level) return;
@@ -598,6 +607,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (hasChanges) {
       setFormData((prev) => ({ ...prev, loreSkills: updatedLoreSkills }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [
     formData.level,
     formData.attributes?.strength?.modifier,
@@ -606,10 +616,9 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     formData.attributes?.intelligence?.modifier,
     formData.attributes?.wisdom?.modifier,
     formData.attributes?.charisma?.modifier,
-    // Can't easily depend on specific lore skill properties since they're dynamic
-    // but the hasChanges check prevents infinite loops
+    // The hasChanges check prevents infinite loops.
     formData.loreSkills?.length,
-    JSON.stringify(formData.loreSkills?.map((l) => ({ proficiencyRank: l.proficiencyRank, itemBonus: l.itemBonus, attribute: l.attribute }))),
+    loreSkillInputs,
   ]);
 
   // Auto-calculate AC
@@ -620,6 +629,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     // its own stored components give 17.
     const total = pf2eArmorClass(formData);
     setFormData((prev) => ({ ...prev, armorClass: { ...prev.armorClass, total } as PF2eArmorClass }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [formData.level, formData.attributes?.dexterity?.modifier, formData.armorClass?.proficiencyRank, formData.armorClass?.itemBonus, formData.armorClass?.capDex]);
 
   /**
@@ -633,21 +643,25 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
    *
    * Guarded by an equality check, like the Class DC effect below, so opening a
    * sheet whose value already agrees does not queue a state change.
+   *
+   * It depends on the computed value itself, rather than a list of the stats
+   * it might come from. The dropdown offers Perception and Stealth, but
+   * `usedStat` is a free string in the schema, so an imported sheet can name
+   * any skill; listing two by hand would leave those characters with a stale
+   * bonus.
    */
+  const initiativeBonus = pf2eInitiativeBonus(formData);
   useEffect(() => {
     if (!formData.initiative) return;
     const bonus = pf2eInitiativeBonus(formData);
     if (formData.initiative.bonus !== bonus) {
       setFormData((prev) => ({ ...prev, initiative: { ...prev.initiative, bonus } as PF2eInitiative }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [
     formData.initiative?.usedStat,
     formData.initiative?.bonus,
-    // The computed value itself, rather than a list of the stats it might come
-    // from. The dropdown offers Perception and Stealth, but `usedStat` is a free
-    // string in the schema, so an imported sheet can name any skill — listing
-    // two by hand would leave those characters with a stale bonus.
-    pf2eInitiativeBonus(formData),
+    initiativeBonus,
   ]);
 
   // Auto-calculate Class DC
@@ -657,6 +671,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     if (formData.classDC.total !== total) {
       setFormData((prev) => ({ ...prev, classDC: { ...prev.classDC, total } as PF2eClassDC }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [
     formData.level,
     formData.attributes?.strength?.modifier,
@@ -688,6 +703,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     const conMod = formData.attributes?.constitution?.modifier ?? 0;
     const maximum = pf2eMaxHitPoints(ancestryHp ?? 0, classHpPerLevel ?? 0, formData.level, conMod);
     setFormData((prev) => ({ ...prev, hp: { ...prev.hp, maximum } as PF2eHitPoints }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [formData.level, formData.hp?.ancestryHp, formData.hp?.classHpPerLevel, formData.attributes?.constitution?.modifier]);
 
   // Spell attack and spell DC, from the shared rules: one spellcasting rank,
@@ -708,6 +724,7 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
         spellDC: { ...prev.spellcasting!.spellDC, dc, proficiencyRank: rank },
       } as PF2eEditorSpellcasting,
     }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value listed here changes, not on every edit to the form
   }, [
     formData.level,
     formData.attributes?.strength?.modifier,
