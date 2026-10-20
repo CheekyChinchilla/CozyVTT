@@ -18,6 +18,7 @@ import { resolveBackupDir } from './utils/backupDir';
 import { setupTokenHint } from './services/setupToken';
 import { backupsInProgress } from './services/backupsInProgress';
 import { personalFilesBeingRemoved } from './services/accountDeletion';
+import { makeDummyPasswordHash } from './services/auth';
 
 // An error nothing caught is written to the log before the process ends.
 onProcessFailure();
@@ -50,6 +51,10 @@ onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInPr
 // A large import or restore streamed through nginx can take longer than
 // Node's default five minutes to arrive; see config/httpServer.ts.
 applyRequestTimeouts(httpServer);
+
+// Started before the server listens, so the first sign-ins for unknown
+// emails find it made or being made; see services/auth.ts.
+void makeDummyPasswordHash();
 
 httpServer.listen(PORT, () => {
   logger.info(`CozyVTT Backend running on port ${PORT}`);

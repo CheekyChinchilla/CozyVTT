@@ -5,6 +5,7 @@ import { prisma } from '../config/database';
 import { User, PlatformRole, type Prisma } from '@prisma/client';
 import { validatePasswordStrength, validateEmail } from '../utils/validation';
 import { parseDisplayName } from '../validators/users';
+import logger from '../utils/logger';
 
 /**
  * Authentication Service
@@ -286,17 +287,40 @@ export async function registerUser(input: RegisterInput): Promise<User> {
  * while a known one went on to the Argon2 check, so the time a sign-in took
  * told which addresses have accounts, though the reply was the same. Checking
  * the given password against this hash makes both paths pay for the hash.
+ *
+ * Made as the server starts (makeDummyPasswordHash). Made on the first
+ * sign-in instead, through the line of hashes, it cost an unknown address a
+ * second turn in that line after every restart, so under load those waited
+ * longer and were answered 503 more often until one had been made.
  */
 let dummyHash: Promise<string> | null = null;
+
+/** Keep `making` as the dummy hash; one that fails is forgotten, to be made again next time. */
+function keepDummyHash(making: Promise<string>): Promise<string> {
+  const kept: Promise<string> = making.catch((error: unknown) => {
+    if (dummyHash === kept) dummyHash = null;
+    throw error;
+  });
+  dummyHash = kept;
+  return kept;
+}
+
 function dummyPasswordHash(): Promise<string> {
-  if (dummyHash === null) {
-    // A hash refused for a busy server is made again next time.
-    dummyHash = hashPassword(crypto.randomBytes(32).toString('hex')).catch((error: unknown) => {
-      dummyHash = null;
-      throw error;
-    });
+  return dummyHash ?? keepDummyHash(hashPassword(crypto.randomBytes(32).toString('hex')));
+}
+
+/**
+ * Make the dummy hash now, for the server's start. Outside the line of
+ * hashes, so nothing waiting there can refuse it, and nothing else is hashing
+ * yet. A failure is logged and does not stop the start: the first sign-in for
+ * an unknown email makes it instead.
+ */
+export async function makeDummyPasswordHash(): Promise<void> {
+  try {
+    await (dummyHash ?? keepDummyHash(argon2.hash(crypto.randomBytes(32).toString('hex'), ARGON2_OPTIONS)));
+  } catch (error) {
+    logger.warn('Could not make the dummy password hash at start; the first sign-in for an unknown email makes it', { err: error });
   }
-  return dummyHash;
 }
 
 /**
