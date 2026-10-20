@@ -269,14 +269,15 @@ socket.on('error', (data) => {
 4. Each campaign left gets 'user.left' and a fresh 'presence.state'. A
    removal from the new campaign made meanwhile ends the join here: the
    socket is sent 'campaign.access.revoked' and no 'authenticated'
-5. Server emits 'authenticated' to client
-6. If the socket was already in this campaign with the same role (a re-join),
+5. The server reads the membership once more: if it is gone the socket is
+   sent 'campaign.access.revoked' (reason 'removed'), leaves the campaign and
+   gets no 'authenticated'; if the role changed, the socket takes the new one
+6. Server emits 'authenticated' to client, with the role from step 5, so a
+   state request sent on hearing it is answered for that role
+7. If the socket was already in this campaign with the same role (a re-join),
    the server sends 'presence.state' to that socket alone; nobody else is
    told. Otherwise it broadcasts 'user.joined' to the other campaign members,
    then 'presence.state' to the whole campaign
-7. The server reads the membership once more: if it is gone the socket is
-   sent 'campaign.access.revoked' (reason 'removed') and leaves the campaign;
-   if the role changed, the socket takes the new one
 ```
 
 ### Permission Checks

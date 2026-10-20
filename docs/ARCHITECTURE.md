@@ -732,8 +732,10 @@ connected sockets in place (`applyRoleToLiveSockets`) and broadcasts
 equivalent: `loadCampaignMembership` reads the membership per request.
 `authenticate` takes the new campaign's room and role with nothing awaited
 after its membership read, so a change made while it tells the old campaign
-finds the socket in the new room, and it reads the membership once more at
-the end and applies what it finds (`settleMembership` in `websocket/events.ts`).
+finds the socket in the new room, and it reads the membership once more and
+applies what it finds (`settleMembership` in `websocket/events.ts`) before it
+sends `authenticated`, so a state request the client makes on hearing it is
+answered with the settled role.
 
 Taking access away works the same way. Removing a member and deleting a
 campaign make the affected sockets leave the room and forget the campaign

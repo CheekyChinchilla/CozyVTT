@@ -161,11 +161,16 @@ export function registerEventHandlers(io: Server): void {
         // Removed meanwhile, and told so: the join is over.
         if (socket.campaignId !== data.campaignId) return;
 
+        // Before the socket is told it has joined: a client asks for the
+        // table's state as soon as it is, and is answered with socket.role.
+        await settleMembership(data.campaignId);
+        if (socket.campaignId !== data.campaignId) return;
+
         // Notify the user they've been authenticated
         socket.emit('authenticated', {
           userId: socket.userId,
           campaignId: data.campaignId,
-          role: result.role,
+          role: socket.role,
           timestamp: new Date().toISOString(),
         });
 
@@ -185,10 +190,8 @@ export function registerEventHandlers(io: Server): void {
 
           await broadcastPresence(data.campaignId);
 
-          logger.info('authenticated', { userId: socket.userId, campaignId: data.campaignId, role: result.role });
+          logger.info('authenticated', { userId: socket.userId, campaignId: data.campaignId, role: socket.role });
         }
-
-        await settleMembership(data.campaignId);
       } catch (error) {
         logger.error('authenticate failed', { err: error });
         socket.emit('error', { message: 'Authentication failed' });

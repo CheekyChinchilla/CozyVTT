@@ -27,6 +27,7 @@ import * as auth from '../auth';
 import type { AuthenticatedSocket } from '../auth';
 import {
   createWsTestServer,
+  expectNoEvent,
   waitForEvent,
   WsTestServer,
 } from '../../__tests__/helpers/websocket-test-server';
@@ -272,6 +273,50 @@ describe('a change while a connection switches campaigns', () => {
     const socket = await switchToB(client);
     expect(socket.campaignId).toBe(campaignB);
     expect(socket.role).toBe('PLAYER');
+    client.disconnect();
+  });
+
+  // The second read ran after `authenticated` was sent, and after the
+  // presence broadcast, so a client asking for state as soon as it was told
+  // it had joined was answered with the role read before the demotion.
+  it('settles the role before saying the connection has joined, so a state request at once is answered with it', async () => {
+    const prepared = await prisma.map.create({
+      data: {
+        campaignId: campaignB, name: 'Prepared', imageUrl: '', baseLayerUrl: '', width: 10, height: 10, gridSize: 50,
+        tokens: [], annotations: [], wallSegments: [{ id: randomUUID(), x1: 0, y1: 0, x2: 5, y2: 0, type: 'wall' }],
+      },
+    });
+    const original = auth.authenticateCampaign;
+    jest.spyOn(auth, 'authenticateCampaign').mockImplementation(async (s, id) => {
+      const result = await original(s, id);
+      // Demoted after the read: the route's live update finds no socket in the room yet.
+      if (id === campaignB) {
+        await prisma.campaignMembership.update({ where: { userId_campaignId: { userId: playerId, campaignId: campaignB } }, data: { role: 'PLAYER' } });
+        await applyRoleToLiveSockets(playerId, campaignB, 'PLAYER');
+      }
+      return result;
+    });
+    // The presence broadcast after joining takes its time, as it can on a busy server.
+    const presence = utils.broadcastPresence;
+    jest.spyOn(utils, 'broadcastPresence').mockImplementation(async (room: string) => {
+      if (room === campaignB) await new Promise((resolve) => setTimeout(resolve, 300));
+      return presence(room);
+    });
+
+    const client = await server.connectClient(playerCookie);
+    const joined = new Promise<{ role: string }>((resolve) => {
+      client.once('authenticated', (data: { role: string }) => {
+        // A prepared map's walls go to the DM alone.
+        client.emit('walls:request', { mapId: prepared.id });
+        resolve(data);
+      });
+    });
+    const noWalls = expectNoEvent(client, 'walls:replaced', 800);
+    client.emit('authenticate', { campaignId: campaignB });
+
+    expect((await joined).role).toBe('PLAYER');
+    await expect(noWalls).resolves.toBeUndefined();
+    expect(serverSocket(client).role).toBe('PLAYER');
     client.disconnect();
   });
 
