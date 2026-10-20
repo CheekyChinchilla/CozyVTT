@@ -390,10 +390,16 @@ const litCache = new WeakMap<object, WeakMap<object, { key: string; lits: Lit[] 
  * lit map. Keyed by everything the reach is worked out from: every wall's
  * type and ends, in order, the map's size, and the light's place and dim
  * radius, so a changed wall or a moved light is worked out again. The
- * LIGHT_REACHES_KEPT used most recently are kept.
+ * LIGHT_REACHES_KEPT used most recently are kept, and fewer when together
+ * they pass LIGHT_REACH_POINTS_KEPT points: a wide light on a map of
+ * thousands of walls reaches tens of thousands of points, at about 80 bytes
+ * a point, so the bound holds the cache near 80 MB. A reach of more points
+ * than that alone is never kept.
  */
 const LIGHT_REACHES_KEPT = 256;
+export const LIGHT_REACH_POINTS_KEPT = 1_000_000;
 const lightReaches = new Map<string, VisibilityPolygon>();
+let lightReachPoints = 0;
 
 /** The walls as far as sight is concerned, in a few bytes. */
 function wallsFingerprint(walls: WallSegment[]): string {
@@ -418,10 +424,14 @@ function lightReach(
     return kept;
   }
   const reach = computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx);
+  if (reach.points.length > LIGHT_REACH_POINTS_KEPT) return reach;
   lightReaches.set(key, reach);
-  if (lightReaches.size > LIGHT_REACHES_KEPT) {
-    const oldest = lightReaches.keys().next().value;
-    if (oldest !== undefined) lightReaches.delete(oldest);
+  lightReachPoints += reach.points.length;
+  while (lightReaches.size > LIGHT_REACHES_KEPT || lightReachPoints > LIGHT_REACH_POINTS_KEPT) {
+    const oldest = lightReaches.entries().next().value;
+    if (oldest === undefined) break;
+    lightReaches.delete(oldest[0]);
+    lightReachPoints -= oldest[1].points.length;
   }
   return reach;
 }

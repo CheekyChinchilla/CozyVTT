@@ -9,7 +9,7 @@
  */
 
 import * as raycasting from '../raycasting';
-import { filterTokensByLighting } from '../spirit-layer';
+import { filterTokensByLighting, LIGHT_REACH_POINTS_KEPT } from '../spirit-layer';
 import type { Token } from '../../websocket/shared';
 import type { WallSegment, LightSource } from '../../types/walls';
 
@@ -103,5 +103,52 @@ describe('a light\'s reach across reads of the map', () => {
     const read = JSON.parse(JSON.stringify({ walls, lights: [light('torch', 1300)] })) as { walls: unknown; lights: unknown };
     filterTokensByLighting(tokens, 'p1', read.walls, SIZE + 1, SIZE, GRID, true, read.lights, false);
     expect(lightsRaycast()).toBe(before + 2);
+  });
+});
+
+describe('what is kept of the lights\' reach', () => {
+  // A light at an x listed in `sizes` reaches a polygon of that many points,
+  // all at the light: it lights nothing, and only its size matters here.
+  const realVisibility = jest.requireActual<typeof raycasting>('../raycasting').computeVisibility;
+  let sizes: Map<number, number>;
+  beforeEach(() => {
+    sizes = new Map();
+    reaches.mockImplementation((viewer, walls, width, height, radius) => {
+      const points = sizes.get(viewer.x);
+      if (radius && points !== undefined) return { points: new Array(points).fill({ x: viewer.x, y: viewer.y }) };
+      return realVisibility(viewer, walls, width, height, radius);
+    });
+  });
+
+  /** How often the light at x had its reach raycast. */
+  const raycastAt = (x: number) => reaches.mock.calls.filter((call) => call[0].x === x && (call[4] ?? 0) > 0).length;
+
+  it('lets the oldest go once the points kept pass the bound', () => {
+    const half = LIGHT_REACH_POINTS_KEPT / 2;
+    sizes.set(501, half).set(502, half).set(503, half);
+    sent([], [light('a', 501)]);
+    sent([], [light('b', 502)]);
+    sent([], [light('a', 501)]);
+    expect(raycastAt(501)).toBe(1);
+    // The third pushes the points kept past the bound, so the oldest used,
+    // the second, is let go and the first stays.
+    sent([], [light('c', 503)]);
+    sent([], [light('a', 501)]);
+    sent([], [light('c', 503)]);
+    expect(raycastAt(501)).toBe(1);
+    expect(raycastAt(503)).toBe(1);
+    sent([], [light('b', 502)]);
+    expect(raycastAt(502)).toBe(2);
+  });
+
+  it('never keeps one reach of more points than the bound', () => {
+    sizes.set(601, 1000).set(602, LIGHT_REACH_POINTS_KEPT + 1);
+    sent([], [light('small', 601)]);
+    sent([], [light('huge', 602)]);
+    sent([], [light('huge', 602)]);
+    expect(raycastAt(602)).toBe(2);
+    // and keeping nothing of it lets nothing else go.
+    sent([], [light('small', 601)]);
+    expect(raycastAt(601)).toBe(1);
   });
 });
