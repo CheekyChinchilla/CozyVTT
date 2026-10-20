@@ -172,7 +172,7 @@ export default function InvitePlayerModal({
               onChange={(e) => setSearch(e.target.value)}
               maxLength={50}
               autoComplete="off"
-              autoFocus
+              data-autofocus
               disabled={sending}
             />
           )}

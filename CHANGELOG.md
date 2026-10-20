@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **With one window open over another, Escape and Tab act on the top one only.** Escape closed every open window at once, such as a confirmation and the settings window under it, and Tab could not reach the top window's middle controls. Also, the box a window opens on, such as **Email** in **Create User**, keeps the cursor, and closing the window puts the cursor back on the button that opened it.
+
 - **Stopping or upgrading CozyVTT during a restore lets the restore finish.** A backup being made from the Admin Dashboard was already let finish, for up to 10 minutes, but a restore was stopped after a few seconds, which could leave it half done with nothing in the log to say so. The backend now waits for a restore the same way, for up to 10 minutes, and `docker compose logs backend` says `A backup is being restored; waiting up to 10 minutes for it to finish before stopping`.
 
 - **The backup and restore scripts work with a database password holding a `%` that encodes nothing.** In `DATABASE_URL`, a password such as `pa%ss` or `100%` reached the database changed, so `backup.sh` and `restore.sh` failed to sign in where the backend connected. They now pass such a password as it is written, as the backend does; percent-encoded characters such as `%40` for `@` are decoded as before.

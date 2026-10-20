@@ -308,7 +308,7 @@ export default function NewCharacterModal({
                     disabled={loading}
                     maxLength={SHEET_NAME_MAX}
                     className="input-cozy w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                    autoFocus
+                    data-autofocus
                     required
                   />
                   <p className="mt-1 text-xs text-ink-muted">

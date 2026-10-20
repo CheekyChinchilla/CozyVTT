@@ -2831,7 +2831,7 @@ export default function AdminPage() {
                 onChange={e => setCreateUserForm(f => ({ ...f, email: e.target.value }))}
                 className="input-cozy w-full"
                 placeholder="user@example.com"
-                autoFocus
+                data-autofocus
               />
             </div>
 

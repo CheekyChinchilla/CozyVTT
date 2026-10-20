@@ -99,7 +99,7 @@ export default function CreateCampaignModal({
               placeholder="The Lost Mines of Phandelver"
               maxLength={CAMPAIGN_LIMITS.maxNameLength}
               disabled={loading}
-              autoFocus
+              data-autofocus
               required
             />
           )}
