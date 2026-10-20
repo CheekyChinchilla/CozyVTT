@@ -141,6 +141,13 @@
  * The game systems. The database decides them (the GameSystem enum in
  * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
  * declares its own enum, which has to name the same values.
+ *
+ * The Universal VTT import's longest wait. An import waits for its turn and
+ * then runs, each up to a limit (services/uvttImportQueue.ts), so the DM is
+ * told why it failed before the bundled nginx gives up on the request and
+ * shows a proxy error instead. Both limits together, and five seconds more,
+ * stay within the proxy_read_timeout of the location in nginx/locations.conf
+ * that serves the import, chosen as nginx chooses it.
  */
 
 import crypto from 'crypto';
@@ -155,6 +162,7 @@ import ts from 'typescript';
 import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
+import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -873,5 +881,78 @@ describe('the account fields a campaign membership and a chat message carry', ()
     const declared = [...pick.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
     expect(selected.length).toBeGreaterThan(0);
     expect(declared).toEqual(selected);
+  });
+});
+
+
+/** A location block of an nginx file: its modifier (`=`, `^~`, `~`, `~*` or none), its path or pattern, and its body. */
+interface NginxLocation { modifier: string; match: string; body: string }
+
+function nginxLocations(conf: string): NginxLocation[] {
+  const text = conf.replace(/#.*$/gm, '');
+  const found: NginxLocation[] = [];
+  const start = /\blocation\s+(=|\^~|~\*|~)?\s*(\S+)\s*\{/g;
+  for (let m = start.exec(text); m; m = start.exec(text)) {
+    let depth = 1;
+    let i = start.lastIndex;
+    for (; i < text.length && depth > 0; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') depth--;
+    }
+    found.push({ modifier: m[1] ?? '', match: m[2], body: text.slice(start.lastIndex, i - 1) });
+    start.lastIndex = i;
+  }
+  return found;
+}
+
+/**
+ * The location nginx serves `uri` from: an exact match; else the longest
+ * prefix if it is marked `^~`; else the first regular expression that
+ * matches, in the order written; else the longest prefix.
+ */
+function nginxLocationFor(conf: string, uri: string): NginxLocation {
+  const locations = nginxLocations(conf);
+  const exact = locations.find((l) => l.modifier === '=' && l.match === uri);
+  if (exact) return exact;
+  const prefixes = locations
+    .filter((l) => (l.modifier === '' || l.modifier === '^~') && uri.startsWith(l.match))
+    .sort((a, b) => b.match.length - a.match.length);
+  if (prefixes[0]?.modifier === '^~') return prefixes[0];
+  const pattern = locations.find((l) => (l.modifier === '~' || l.modifier === '~*') && new RegExp(l.match, l.modifier === '~*' ? 'i' : '').test(uri));
+  if (pattern) return pattern;
+  if (!prefixes[0]) throw new Error(`no location in the file serves ${uri}`);
+  return prefixes[0];
+}
+
+/** A location's proxy_read_timeout in milliseconds; it must set one, so nothing is assumed from elsewhere. */
+function proxyReadTimeoutMs(location: NginxLocation): number {
+  const m = /\bproxy_read_timeout\s+(\d+)(ms|s|m|h)?\s*;/.exec(location.body);
+  if (!m) throw new Error(`location ${location.match} sets no proxy_read_timeout; set one, or teach this test where it comes from`);
+  const unit = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 }[m[2] ?? 's'] ?? 1000;
+  return Number(m[1]) * unit;
+}
+
+describe('the Universal VTT import\'s longest wait', () => {
+  const IMPORT = '/api/campaigns/c1/maps/import-uvtt';
+
+  it('ends at least five seconds before nginx stops waiting for the answer', () => {
+    const location = nginxLocationFor(read('nginx/locations.conf'), IMPORT);
+    expect(UVTT_IMPORT_MAX_WAIT_MS + UVTT_IMPORT_TIME_LIMIT_MS + 5000).toBeLessThanOrEqual(proxyReadTimeoutMs(location));
+  });
+
+  it('is read from the location nginx would choose', () => {
+    const conf = [
+      'location /api/ { proxy_read_timeout 60s; }',
+      'location /api/campaigns/import { proxy_read_timeout 300s; }',
+      'location = /health { proxy_read_timeout 10s; }',
+      '# location /api/campaigns/ { proxy_read_timeout 1s; }',
+    ].join('\n');
+    expect(proxyReadTimeoutMs(nginxLocationFor(conf, IMPORT))).toBe(60_000);
+    expect(proxyReadTimeoutMs(nginxLocationFor(conf, '/api/campaigns/import'))).toBe(300_000);
+    expect(proxyReadTimeoutMs(nginxLocationFor(conf, '/health'))).toBe(10_000);
+    const withPattern = `${conf}\nlocation ~ /maps/import-uvtt$ { proxy_read_timeout 2m; }`;
+    expect(proxyReadTimeoutMs(nginxLocationFor(withPattern, IMPORT))).toBe(120_000);
+    const withPrefixFirst = `${withPattern}\nlocation ^~ /api/campaigns/ { proxy_read_timeout 45s; }`;
+    expect(proxyReadTimeoutMs(nginxLocationFor(withPrefixFirst, IMPORT))).toBe(45_000);
   });
 });
