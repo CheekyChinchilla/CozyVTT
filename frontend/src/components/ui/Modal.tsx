@@ -19,7 +19,10 @@ export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
 export interface ModalProps {
   open: boolean;
-  /** Called on backdrop click, Escape, and the X button. */
+  /**
+   * Called on Escape and the X button. A click beside the window never closes
+   * it, so typed input survives a stray click.
+   */
   onClose: () => void;
   /** Dialog heading — wired to aria-labelledby. */
   title: string;
@@ -28,10 +31,8 @@ export interface ModalProps {
   size?: ModalSize;
   /** Right-aligned action row rendered below the body. */
   footer?: React.ReactNode;
-  /** Disables closing (backdrop/X/Escape) while an operation is in flight. */
+  /** Disables closing (X/Escape) while an operation is in flight. */
   closeDisabled?: boolean;
-  /** Set false for confirm-style dialogs that must not close on backdrop click. */
-  closeOnBackdrop?: boolean;
   /** z-index tier — 'overlay' sits above other modals (confirm-on-modal). */
   layer?: 'base' | 'overlay';
   /**
@@ -60,7 +61,6 @@ export default function Modal({
   size = 'md',
   footer,
   closeDisabled = false,
-  closeOnBackdrop = true,
   layer = 'base',
   children,
   fitViewport = false,
@@ -92,15 +92,10 @@ export default function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className={cn('fixed inset-0 bg-black/50 backdrop-blur-xs', zBackdrop)}
-            onClick={closeOnBackdrop ? handleClose : undefined}
             aria-hidden="true"
           />
 
           {/* Dialog */}
-          {/* TODO(ui): this wrapper covers the backdrop, so a click beside the
-              dialog lands here and closeOnBackdrop never closes it. Closing on
-              a click on the wrapper itself would, but it also closes forms
-              with typed input on a stray click: decide which dialogs keep it. */}
           <div className={cn('fixed inset-0 flex items-center justify-center p-4', zDialog)}>
             <motion.div
               ref={modalRef}

@@ -2737,7 +2737,6 @@ export default function AdminPage() {
         title={createUserMode === 'invite' ? 'Invite User' : 'Create User'}
         icon={createUserMode === 'invite' ? Mail : UserPlus}
         closeDisabled={!!newUserPassword || creatingUser}
-        closeOnBackdrop={!newUserPassword}
       >
         {createUserSuccess ? (
           /* Invited, or created with the details emailed — no password to show */
