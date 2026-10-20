@@ -117,6 +117,48 @@ function backupRunning() {
   return { backups, finish: () => { count = 0; finish(); } };
 }
 
+// A restore stopped part-way rolls the database back, but the uploaded files
+// it was copying may be left half copied and nothing is logged, so a shutdown
+// lets it end first, as it lets a backup.
+describe('a shutdown while a restore is running', () => {
+  it('closes the database only once the restore has ended', async () => {
+    const order: string[] = [];
+    const t = targets(order);
+    const { backups: restores, finish } = backupRunning();
+    const exit = jest.fn();
+    const done = createShutdown({ ...t, restores }, { exit })('SIGTERM');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(t.io.close).toHaveBeenCalledTimes(1);
+    expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+
+    order.push('restore');
+    finish();
+    await done;
+    expect(order).toEqual(['io', 'restore', 'prisma', 'sessionPool']);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  it('waits no longer than a backup may, then closes the rest and exits', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = targets();
+      const { backups: restores } = backupRunning();
+      const exit = jest.fn();
+      const done = createShutdown({ ...t, restores }, { exit, backupWaitMs: 60_000, graceMs: 5000 })('SIGTERM');
+
+      await jest.advanceTimersByTimeAsync(59_999);
+      expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await done;
+      expect(t.prisma.$disconnect).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
 describe('a shutdown while a backup is being written', () => {
   it('stops taking requests at once, and closes the database only once the backup has finished', async () => {
     const order: string[] = [];
