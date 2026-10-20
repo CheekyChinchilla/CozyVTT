@@ -137,15 +137,22 @@ describe('text on tints', () => {
     ['success-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-success']],
     ['warning-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-warning']],
     ['info-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-info']],
+    ['token-friendly-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-friendly']],
+    ['token-hostile-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-hostile']],
+    ['token-neutral-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-neutral']],
+    ['token-player-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-player']],
+    ['token-object-ink', (_c: ThemeColors, d: Record<string, string>) => d['--rgb-token-object']],
   ] as const;
 
   describe.each(PRESET_THEMES.map((t) => [t.name, t] as const))('%s', (_name, theme) => {
     const derived = deriveReadableTokens(theme.colors);
 
-    it.each(STATES.flatMap(([token, fill]) => BACKGROUNDS.map((bg) => [token, bg, fill] as const)))(
-      '%s on its 15%% tint over %s meets AA',
-      (token, bg, fill) => {
-        const back = over(fill(theme.colors, derived), theme.colors[bg], 0.15);
+    // 15% for a chip or panel; 30% for the hovers that deepen one (bg-x/25
+    // and bg-x/30), where the text fell to 3.4 to 4.2:1.
+    it.each(STATES.flatMap(([token, fill]) => BACKGROUNDS.flatMap((bg) => [15, 30].map((pct) => [token, pct, bg, fill] as const))))(
+      '%s on its %i%% tint over %s meets AA',
+      (token, pct, bg, fill) => {
+        const back = over(fill(theme.colors, derived), theme.colors[bg], pct / 100);
         const ratio = contrastRatioChannels(derived[`--rgb-${token}`], back);
         expect(ratio, `${theme.name}: ${token} on ${back} = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_TEXT);
       }

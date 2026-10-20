@@ -66,7 +66,6 @@ export function StaleSaveDialog({
       icon={RefreshCw}
       size="md"
       layer="overlay"
-      closeOnBackdrop={false}
       footer={
         <>
           <Button type="button" variant="secondary" onClick={onKeepEditing}>

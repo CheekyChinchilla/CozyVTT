@@ -14,4 +14,7 @@ export default async function globalSetup(): Promise<void> {
   const url = effectiveDatabaseUrl(process.env, path.resolve(__dirname, '..', '..', '..'));
   const refusal = testDatabaseRefusal(url);
   if (refusal) throw new Error(refusal);
+  // Names this run's temporary uploads folders (jest.setup.ts); the workers
+  // inherit it.
+  process.env.COZYVTT_TEST_RUN = String(process.pid);
 }

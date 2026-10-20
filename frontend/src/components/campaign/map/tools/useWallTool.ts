@@ -40,6 +40,22 @@ interface UseWallToolArgs {
   markDirty: (...layers: MapLayer[]) => void;
 }
 
+/**
+ * Returns the closest point (and parameter t in [0,1]) on a segment to (px, py).
+ */
+function closestPointOnSegment(px: number, py: number, seg: WallSegment): { x: number; y: number; t: number } {
+  const dx = seg.x2 - seg.x1;
+  const dy = seg.y2 - seg.y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return { x: seg.x1, y: seg.y1, t: 0 };
+  const t = Math.max(0, Math.min(1, ((px - seg.x1) * dx + (py - seg.y1) * dy) / lenSq));
+  return { x: seg.x1 + t * dx, y: seg.y1 + t * dy, t };
+}
+
+// Radius (in screen pixels, divided by the zoom) within which a point snaps
+// to an existing endpoint.
+const ENDPOINT_SNAP_RADIUS = 16;
+
 export function useWallTool({
   isDM, currentMap, wallMode, setWallMode, wallSegments,
   pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
@@ -49,8 +65,6 @@ export function useWallTool({
   const [wallType, setWallType] = useState<WallType>('wall');
   const [snapToGrid, setSnapToGrid] = useState(true);
   const [snapToEndpoint, setSnapToEndpoint] = useState(false);
-  // Radius (in map-space pixels) within which a point snaps to an existing endpoint
-  const ENDPOINT_SNAP_RADIUS = 16;
   const [wallInProgress, setWallInProgress] = useState<{ x: number; y: number }[]>([]); // current polyline points
   const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
   const [wallColor, setWallColor] = useState('#f97316'); // default orange
@@ -97,22 +111,10 @@ export function useWallTool({
   } = useWallSelection({ wallSegments, commitWalls });
 
   /**
-   * Returns the closest point (and parameter t in [0,1]) on a segment to (px, py).
-   */
-  const closestPointOnSegment = (px: number, py: number, seg: WallSegment): { x: number; y: number; t: number } => {
-    const dx = seg.x2 - seg.x1;
-    const dy = seg.y2 - seg.y1;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return { x: seg.x1, y: seg.y1, t: 0 };
-    const t = Math.max(0, Math.min(1, ((px - seg.x1) * dx + (py - seg.y1) * dy) / lenSq));
-    return { x: seg.x1 + t * dx, y: seg.y1 + t * dy, t };
-  };
-
-  /**
    * Check if a point lies on any wall segment (within threshold).
    * Returns the segment and the projected point, or null.
    */
-  const findWallAtPoint = (px: number, py: number, threshold: number): { seg: WallSegment; point: { x: number; y: number; t: number } } | null => {
+  const findWallAtPoint = useCallback((px: number, py: number, threshold: number): { seg: WallSegment; point: { x: number; y: number; t: number } } | null => {
     for (const seg of wallSegments) {
       if (seg.type !== 'wall') continue; // only snap to plain walls
       const d = distToSegment(px, py, seg);
@@ -122,7 +124,7 @@ export function useWallTool({
       }
     }
     return null;
-  };
+  }, [wallSegments]);
 
   /**
    * Replace a section of an existing wall with a door/window segment.
@@ -181,7 +183,7 @@ export function useWallTool({
   /**
    * Snap a map-pixel coordinate to the nearest grid intersection if snapToGrid is enabled.
    */
-  const snapPoint = (mapPx: { x: number; y: number }): { x: number; y: number } => {
+  const snapPoint = useCallback((mapPx: { x: number; y: number }): { x: number; y: number } => {
     if (currentMap && snapToGrid) {
       const gs = currentMap.gridSize;
       return {
@@ -203,7 +205,7 @@ export function useWallTool({
       if (best) return best;
     }
     return mapPx;
-  };
+  }, [currentMap, snapToGrid, snapToEndpoint, mapControls.zoom, wallSegments]);
 
   /** Inverse of the canvas's screen-to-map conversion. */
   const mapPxToScreen = (mx: number, my: number) => ({
@@ -250,7 +252,7 @@ export function useWallTool({
     wallErasedIdsRef.current = new Set();
     wallBrushActiveRef.current = false;
     wallBrushPointsRef.current = [];
-  }, [currentMap?.id]);
+  }, [currentMap?.id, setSelectedWallIds, setSelectedEndpoint, setWallMarquee, wallMarqueeRef, wallMoveRef, wallDragEndpointRef]);
 
   // Clear polygon when leaving polygon mode
   useEffect(() => {
@@ -265,11 +267,11 @@ export function useWallTool({
    * back as the undo point, so without this a player's door toggle in the
    * middle of the DM's drag was undone for everyone.
    */
-  const carryIntoDrags = (change: (walls: WallSegment[]) => WallSegment[]) => {
+  const carryIntoDrags = useCallback((change: (walls: WallSegment[]) => WallSegment[]) => {
     if (wallMoveRef.current) wallMoveRef.current.preDragState = change(wallMoveRef.current.preDragState);
     const endpoint = wallDragEndpointRef.current;
     if (endpoint?.preDragState) endpoint.preDragState = change(endpoint.preDragState);
-  };
+  }, [wallMoveRef, wallDragEndpointRef]);
 
   /** Step the walls back one edit, or forward again, and send the result. */
   const undoEdit = () => {

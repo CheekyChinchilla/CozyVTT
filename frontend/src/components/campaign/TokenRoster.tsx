@@ -5,6 +5,7 @@
 // Actions: Edit (NPC/Object), Duplicate, Remove
 // ============================================
 
+import { hpTier } from '@/utils/tokenColours';
 import { useState, useCallback } from 'react';
 import {
   ChevronDown,
@@ -48,7 +49,7 @@ function getEffectiveType(token: Token): TokenType {
 function hpLabel(token: Token): string {
   if (!token.hp || token.hp.max === 0) return '';
   const pct = token.hp.current / token.hp.max;
-  const color = pct >= 0.75 ? '🟢' : pct >= 0.50 ? '🟡' : pct >= 0.25 ? '🟠' : '🔴';
+  const color = { full: '🟢', good: '🟡', low: '🟠', critical: '🔴' }[hpTier(pct)];
   return `${color} ${token.hp.current}/${token.hp.max}`;
 }
 
@@ -65,6 +66,7 @@ interface TokenRowProps {
 
 function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
   const { campaign, currentMap } = useCampaign();
+  const memberships = campaign?.memberships;
   const { showToast } = useToast();
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDuplicating, setIsDuplicating] = useState(false);
@@ -88,7 +90,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
         ...tokenCopyRequest(token, position),
         // A copy starts fresh and belongs to nobody's character; see MapCanvas.
         characterId: null,
-        controlledBy: copyController(token.controlledBy, campaign?.memberships),
+        controlledBy: copyController(token.controlledBy, memberships),
         hp: token.hp ? { current: token.hp.max, max: token.hp.max, temp: 0 } : null,
         conditions: [],
       });
@@ -100,7 +102,7 @@ function TokenRow({ token, campaignId, mapId, onEditToken }: TokenRowProps) {
     } finally {
       setIsDuplicating(false);
     }
-  }, [token, campaignId, mapId, currentMap, showToast]);
+  }, [token, campaignId, mapId, currentMap, showToast, memberships]);
 
   const handleToggleVisible = useCallback(async () => {
     try {

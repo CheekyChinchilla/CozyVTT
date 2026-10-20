@@ -11,6 +11,16 @@
   --color-brand-text: rgb(var(--rgb-brand-text));
   --color-brand-hover: rgb(var(--rgb-brand-hover));
   --color-danger-fill: rgb(var(--rgb-danger-fill));
+  --color-token-player: rgb(var(--rgb-token-player));
+  --color-token-player-ink: rgb(var(--rgb-token-player-ink));
+  --color-token-hostile: rgb(var(--rgb-token-hostile));
+  --color-token-hostile-ink: rgb(var(--rgb-token-hostile-ink));
+  --color-token-friendly: rgb(var(--rgb-token-friendly));
+  --color-token-friendly-ink: rgb(var(--rgb-token-friendly-ink));
+  --color-token-neutral: rgb(var(--rgb-token-neutral));
+  --color-token-neutral-ink: rgb(var(--rgb-token-neutral-ink));
+  --color-token-object: rgb(var(--rgb-token-object));
+  --color-token-object-ink: rgb(var(--rgb-token-object-ink));
   --color-canvas: rgb(var(--rgb-bg-base));
   --color-surface: rgb(var(--rgb-bg-surface));
   --color-surface-light: rgb(var(--rgb-bg-surface-light));
@@ -317,19 +327,29 @@
        Overwritten per theme by applyThemeColors() → deriveReadableTokens();
        these defaults match the Cozy Default palette so the app renders
        correctly during the first paint, before a theme is applied. */
-    --rgb-brand-ink: 74 93 78;
+    --rgb-brand-ink: 64 81 68;
     --rgb-brand-text: 255 255 255;
     --rgb-brand-hover: 65 82 69;
     --rgb-danger-fill: 192 57 43;
-    --rgb-accent-ink: 137 91 43;
-    --rgb-spirit-ink: 111 64 207;
-    --rgb-danger-ink: 166 49 37;
+    --rgb-accent-ink: 129 86 41;
+    --rgb-spirit-ink: 100 50 200;
+    --rgb-danger-ink: 140 41 31;
     --rgb-success: 34 139 68;
-    --rgb-success-ink: 26 107 52;
+    --rgb-success-ink: 23 95 46;
     --rgb-warning: 191 129 20;
-    --rgb-warning-ink: 131 89 14;
+    --rgb-warning-ink: 117 80 13;
     --rgb-info: 37 99 190;
-    --rgb-info-ink: 34 90 173;
+    --rgb-info-ink: 29 76 147;
+    --rgb-token-player: 59 130 246;
+    --rgb-token-player-ink: 9 77 188;
+    --rgb-token-hostile: 239 68 68;
+    --rgb-token-hostile-ink: 166 14 14;
+    --rgb-token-friendly: 45 212 191;
+    --rgb-token-friendly-ink: 21 107 96;
+    --rgb-token-neutral: 251 191 36;
+    --rgb-token-neutral-ink: 127 91 3;
+    --rgb-token-object: 120 113 108;
+    --rgb-token-object-ink: 89 82 79;
 
     /* The font defaults are in @theme above; applyFont (themes.ts) replaces them. */
   }

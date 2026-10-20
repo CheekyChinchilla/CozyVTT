@@ -41,17 +41,9 @@ module.exports = [
         },
       ],
 
-      // The three below are pre-existing violations unrelated to the `any` work
-      // this config was added for. Each needs a code edit, and a code edit in a
-      // lint-configuration commit would break the "emitted JavaScript is
-      // unchanged" guarantee that makes this refactor provably safe. Left off
-      // deliberately, to be ratcheted on their own:
-      //   triple-slash-reference — one express type augmentation in routes/setup.ts
-      //   prefer-const           — one `let` in utils/dice-parser.ts
-      //   no-useless-escape      — two regex escapes in utils/validation.ts
-      '@typescript-eslint/triple-slash-reference': 'off',
-      'prefer-const': 'off',
-      'no-useless-escape': 'off',
+      // triple-slash-reference, prefer-const and no-useless-escape are on, as
+      // the recommended sets have them. The session type augmentation in
+      // types/express.d.ts is brought in with `import type`.
     },
   },
 

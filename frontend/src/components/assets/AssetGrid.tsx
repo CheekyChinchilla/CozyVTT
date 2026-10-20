@@ -11,7 +11,7 @@
 // shell lives one level up instead of behind `showSearch`-style flags.
 // ============================================
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, type ReactNode } from 'react';
 import { assetDirectory } from '@/utils/assetUrl';
 import { Check, Loader2 } from 'lucide-react';
 import { api } from '@/services/api';
@@ -104,6 +104,10 @@ export default function AssetGrid({
   const controlled = providedAssets !== undefined;
   const serverSearch = useDebounce(search.trim(), 300);
 
+  // Callers pass inline closures; read at the answer, they never refetch.
+  const assetsLoaded = useEffectEvent((assets: Asset[]) => onAssetsLoaded?.(assets));
+  const loadFailed = useEffectEvent((error: unknown) => onLoadError?.(error));
+
   useEffect(() => {
     if (controlled) return;
     const fetchId = ++latest.current;
@@ -115,19 +119,17 @@ export default function AssetGrid({
         setFetched(res.assets);
         setPage(1);
         setTotalPages(res.pagination?.totalPages ?? 1);
-        onAssetsLoaded?.(res.assets);
+        assetsLoaded(res.assets);
       })
       .catch((error: unknown) => {
         // Not fatal: the empty state covers it and the upload path still
         // works. The parent says why, where it wants to.
-        if (fetchId === latest.current) onLoadError?.(error);
+        if (fetchId === latest.current) loadFailed(error);
       })
       .finally(() => {
         if (fetchId === latest.current) setLoading(false);
       });
     return () => { latest.current += 1; };
-    // onAssetsLoaded is intentionally omitted: callers pass inline closures,
-    // and re-fetching on every parent render would hammer the endpoint.
   }, [type, limit, controlled, serverSearch]);
 
   // Offered only once the first page of the current search is in (see the

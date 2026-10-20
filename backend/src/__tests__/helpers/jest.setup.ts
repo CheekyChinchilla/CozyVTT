@@ -14,7 +14,21 @@ if (url && !/[?&]connection_limit=/.test(url)) {
   process.env.DATABASE_URL = `${url}${url.includes('?') ? '&' : '?'}connection_limit=5`;
 }
 
-// TODO(cleanup): a test file that sets no UPLOAD_DIR of its own writes into
-// the real backend/uploads (campaignImportGeometry.test.ts and others left
-// about 470 files there over two full runs). Point UPLOAD_DIR at a fresh
-// temporary folder here for every worker, as the files that do set it do.
+/**
+ * Every test file uploads into a temporary folder of its own. One that set no
+ * UPLOAD_DIR wrote into the real backend/uploads, and full runs left hundreds
+ * of files there. A file that sets UPLOAD_DIR itself still decides, since it
+ * does so after this runs; jest.environment.ts removes this folder once the
+ * file has ended.
+ */
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { uploadsFolderPrefix, uploadsRun } from './testUploads';
+
+// Named for the run (jest.globalSetup.ts), so jest.globalTeardown.ts can
+// remove what a file whose tests were all skipped, and so ran no afterAll,
+// left behind.
+const uploads = fs.mkdtempSync(path.join(os.tmpdir(), uploadsFolderPrefix(uploadsRun(process.env, process.pid))));
+process.env.UPLOAD_DIR = uploads;
+(globalThis as { __testUploadsFolder?: string }).__testUploadsFolder = uploads;

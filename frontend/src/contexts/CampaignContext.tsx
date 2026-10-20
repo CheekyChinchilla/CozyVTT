@@ -600,6 +600,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     loadCampaign,
     refreshCampaign,
     refreshCurrentMap,
+    setCurrentMap,
     catchUpAfterReconnect,
     upsertCampaignMap,
     removeCampaignMap,

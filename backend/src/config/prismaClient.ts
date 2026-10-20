@@ -86,7 +86,7 @@ export function databaseConnectionSettings(url: string): DatabaseConnectionSetti
  * touch the database still load.
  */
 class MissingDatabaseUrl extends PrismaPg {
-  async connect(): Promise<never> {
+  override async connect(): Promise<never> {
     throw new Error('DATABASE_URL is not set, so there is no database to connect to.');
   }
 }

@@ -26,10 +26,11 @@ export default [
       // splitting them is later cleanup. rules-of-hooks (error) still applies.
       'react-refresh/only-export-components': 'off',
 
-      // TODO(ratchet): ~40 pre-existing violations. Fixing exhaustive-deps
-      // changes runtime behavior (effects re-firing), so each needs individual
-      // review before the rule is turned on.
-      'react-hooks/exhaustive-deps': 'off',
+      // Every hook lists what it reads. An effect that must fire only on some
+      // of it reads the rest through useEffectEvent, or says why on an
+      // `eslint-disable-next-line react-hooks/exhaustive-deps -- <reason>`
+      // above its list.
+      'react-hooks/exhaustive-deps': 'error',
 
       // Strict typing is a project requirement. This rule sat at 'off' behind a
       // deferred TODO while 326 explicit `any` accumulated across both projects —
@@ -47,11 +48,10 @@ export default [
       ],
 
       // TODO(ratchet): four of the React Compiler rules that came with
-      // eslint-plugin-react-hooks 7, off for the reason exhaustive-deps is.
-      // They ask for code the React Compiler can rewrite, and CozyVTT does
-      // not use the compiler. They find 121 places on React 19
-      // (set-state-in-effect 85, refs 26, immutability 5,
-      // preserve-manual-memoization 5), and each fix changes when an effect
+      // eslint-plugin-react-hooks 7. They ask for code the React Compiler can
+      // rewrite, and CozyVTT does not use the compiler. They find 119 places
+      // on React 19 (set-state-in-effect 78, refs 28, immutability 6,
+      // preserve-manual-memoization 7), and each fix changes when an effect
       // or a render runs, so each needs its own review. They come on one at a
       // time, each in its own branch: immutability and
       // preserve-manual-memoization first, then refs, moving the refs that

@@ -3,6 +3,7 @@
 // DM slide-over panel for adding and managing tokens on the current map
 // ============================================
 
+import { DISPOSITION_PICKED } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Swords,
@@ -570,9 +571,9 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                       onClick={() => setDisposition(d)}
                       className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                         disposition === d
-                          ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
-                          : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
-                          :                    'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
+                          ? color === 'teal'  ? DISPOSITION_PICKED.friendly
+                          : color === 'amber' ? DISPOSITION_PICKED.neutral
+                          :                    DISPOSITION_PICKED.hostile
                           : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                       }`}
                     >

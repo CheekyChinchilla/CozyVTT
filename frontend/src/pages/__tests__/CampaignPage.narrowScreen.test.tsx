@@ -10,7 +10,7 @@
  */
 
 import { it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 
 // The page subscribes to many socket events; each method is a harmless stub.
 const anySocket = vi.hoisted(() => new Proxy({}, { get: () => () => undefined }));
@@ -71,6 +71,8 @@ vi.mock('@/components/campaign/TokenRoster', nothing);
 vi.mock('@/components/campaign/NpcQuickEditor', nothing);
 
 import CampaignPage from '../CampaignPage';
+import Modal from '@/components/ui/Modal';
+import SlideOver, { SlideOverTitle } from '@/components/ui/SlideOver';
 
 const KEY = 'cozyvtt.continueOnNarrowScreen';
 const realStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
@@ -112,4 +114,50 @@ it('opens, and continues for this page, when the browser refuses storage', () =>
   fireEvent.click(screen.getByRole('button', { name: 'Continue anyway' }));
 
   expect(notice()).toBeNull();
+});
+
+// The notice sat at z-50 inside the page, where a side panel or a window
+// opened over another (z-60) could cover it.
+it('covers every side panel and window, from the top of the page', () => {
+  render(
+    <>
+      <CampaignPage />
+      <SlideOver open onClose={() => {}}><SlideOverTitle>Token Manager</SlideOverTitle></SlideOver>
+      <Modal open layer="overlay" onClose={() => {}} title="Invite Player"><p>invite</p></Modal>
+    </>
+  );
+  const layer = (el: Element) => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(el.getAttribute('class') ?? '')?.[1] ?? 0);
+  const cover = notice()!.closest('.fixed') as HTMLElement;
+
+  expect(cover.parentElement).toBe(document.body);
+  const others = [...document.body.querySelectorAll('[class*="z-"]')].filter((el) => !cover.contains(el));
+  expect(others.length).toBeGreaterThan(0);
+  for (const el of others) expect(layer(cover)).toBeGreaterThan(layer(el));
+});
+
+// Above a window or side panel, the notice was out of reach of the keyboard:
+// the window's focus trap kept Tab, and Escape closed the window under it.
+it('takes the keyboard while the window is narrow', async () => {
+  const narrow = (query: string): MediaQueryList => ({
+    matches: query.includes('max-width'), media: query, onchange: null,
+    addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+  });
+  vi.stubGlobal('matchMedia', narrow);
+  const onClose = vi.fn();
+  try {
+    render(
+      <>
+        <Modal open onClose={onClose} title="Invite Player"><input aria-label="Search" /></Modal>
+        <CampaignPage />
+      </>
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Desktop Required' });
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+    expect(dialog).toContainElement(document.activeElement as HTMLElement);
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    expect(onClose).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

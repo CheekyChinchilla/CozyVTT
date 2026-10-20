@@ -8,6 +8,7 @@ import {
   useContext,
   useState,
   useEffect,
+  useEffectEvent,
   useRef,
   ReactNode,
   useCallback,
@@ -314,10 +315,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     await connect(campaignId);
   }, [campaignId, disconnect, connect]);
 
-  // Auto-connect when campaign ID changes
+  // Auto-connect when campaign ID changes. connect is called as an effect
+  // event: as a dependency, its every change would run the cleanup below and
+  // drop the connection.
+  const connectTo = useEffectEvent((id: string) => connect(id));
   useEffect(() => {
     if (campaignId && connectedCampaignRef.current !== campaignId) {
-      connect(campaignId);
+      connectTo(campaignId);
     }
 
     // Cleanup on unmount or campaign change
@@ -338,7 +342,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       // Likewise the join count: the next campaign's first join is not a rejoin.
       setJoinedEpoch(0);
     };
-  }, [campaignId]); // connect is stable - no need in deps (causes premature cleanup)
+  }, [campaignId]);
 
   // Browser network listeners — flip status immediately when the OS reports
   // the network has gone away, and actively trigger reconnection when it

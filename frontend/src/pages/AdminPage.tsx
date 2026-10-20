@@ -481,13 +481,15 @@ export default function AdminPage() {
       loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
       if (adminCampaigns.length === 0) loadAdminCampaigns();
     }
-  }, [activeTab]);  
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loads what a tab needs as it is opened, not as its data arrives
+  }, [activeTab]);
 
   // Reload assets when filters/page change
   useEffect(() => {
     if (activeTab !== 'assets') return;
     loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
-  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);  
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reloads the assets when a filter or the page changes; opening the tab loads them above
+  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -1079,7 +1081,7 @@ export default function AdminPage() {
                   </div>
 
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
-                    <Database className="w-7 h-7 text-teal-500 mb-2" />
+                    <Database className="w-7 h-7 text-token-friendly-ink mb-2" />
                     <p className="text-3xl font-bold text-brand-ink">{stats?.mapCount ?? '\u2014'}</p>
                     <p className="text-xs text-warm-gray mt-1">Maps</p>
                   </div>
@@ -2737,7 +2739,6 @@ export default function AdminPage() {
         title={createUserMode === 'invite' ? 'Invite User' : 'Create User'}
         icon={createUserMode === 'invite' ? Mail : UserPlus}
         closeDisabled={!!newUserPassword || creatingUser}
-        closeOnBackdrop={!newUserPassword}
       >
         {createUserSuccess ? (
           /* Invited, or created with the details emailed — no password to show */

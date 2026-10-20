@@ -15,6 +15,7 @@
  * Authored values that already pass are never modified.
  */
 
+import { TOKEN_HUES } from './utils/tokenColours';
 import { ensureReadableChannels, ensureReadableOnAll, parseRgb, readableTextOn, relativeLuminance } from './utils/color';
 
 export interface ThemeColors {
@@ -553,9 +554,14 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
   const onPaper = [colors.paper];
   const everywhere = [...onPage, ...onPaper];
   // Coloured text also sits on its own colour's tint (a chip or panel at 10
-  // to 15%: the alert and badge classes), and plain text on a wash of the ink
-  // (an inset panel or a hovered row at 5 to 10%).
-  const andItsTint = (fill: string) => [...everywhere, ...everywhere.map((bg) => over(fill, bg, 0.15))];
+  // to 15%: the alert and badge classes, deepened to 25 or 30% on hover), and
+  // plain text on a wash of the ink (an inset panel or a hovered row at 5 to
+  // 10%).
+  const andItsTint = (fill: string) => [
+    ...everywhere,
+    ...everywhere.map((bg) => over(fill, bg, 0.15)),
+    ...everywhere.map((bg) => over(fill, bg, 0.3)),
+  ];
   const andInkWash = [...everywhere, over(colors.ink, colors.paper, 0.1), over(colors.ink, colors.bgSurface, 0.1)];
   const brandText = ensureReadableChannels('255 255 255', colors.brand);
 
@@ -586,6 +592,12 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
     '--rgb-warning-ink': ensureReadableOnAll(STATE_HUES.warning, andItsTint(STATE_HUES.warning)),
     '--rgb-info': STATE_HUES.info,
     '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, andItsTint(STATE_HUES.info)),
+    // The map's token colours (utils/tokenColours.ts), fixed in every theme,
+    // each with a readable shade for text in the panels.
+    ...Object.fromEntries((['player', 'hostile', 'friendly', 'neutral', 'object'] as const).flatMap((kind) => [
+      [`--rgb-token-${kind}`, TOKEN_HUES[kind]],
+      [`--rgb-token-${kind}-ink`, ensureReadableOnAll(TOKEN_HUES[kind], andItsTint(TOKEN_HUES[kind]))],
+    ])),
   };
 }
 

@@ -269,6 +269,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
     if (changed) {
       setFormData((prev) => ({ ...prev, characteristics: updated as CoC7eCharacteristics }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a characteristic's value changes; its own write of the half and fifth columns must not refire it
   }, [
     formData.characteristics?.STR?.regular,
     formData.characteristics?.CON?.regular,
@@ -376,6 +377,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         };
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- recomputes when a value it reads changes; the half and fifth columns written beside them must not refire it
   }, [
     formData.characteristics?.CON?.regular,
     formData.characteristics?.SIZ?.regular,

@@ -6,10 +6,13 @@
 // Right: Chat, dice roller, controls
 // ============================================
 
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useId, lazy, Suspense } from 'react';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router';
+import { createPortal } from 'react-dom';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
@@ -150,6 +153,11 @@ function CampaignPageContent() {
     optionalStorage.setItem(NARROW_SCREEN_KEY, 'yes');
     setContinueOnNarrowScreen(true);
   };
+  // The notice is drawn only below lg (1024 px); while it shows it holds the
+  // keyboard, over any window or side panel open under it.
+  const narrowScreen = useMediaQuery('(max-width: 1023.98px)');
+  const narrowNoticeRef = useFocusTrap(narrowScreen && !continueOnNarrowScreen);
+  const narrowNoticeTitleId = useId();
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -568,11 +576,18 @@ function CampaignPageContent() {
       {/* What the server refuses, shown as a message */}
       <TableRefusals />
 
-      {/* Narrow screen notice */}
-      {!continueOnNarrowScreen && (
-        <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-          <div className="card-cozy max-w-md text-center space-y-4">
-            <h2 className="text-xl font-bold text-brand-ink">
+      {/* Narrow screen notice, on <body> above every panel and window (z-60)
+          so none can cover it; toasts stay above it. */}
+      {!continueOnNarrowScreen && createPortal(
+        <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-80">
+          <div
+            ref={narrowNoticeRef}
+            role={narrowScreen ? 'dialog' : undefined}
+            aria-modal={narrowScreen ? true : undefined}
+            aria-labelledby={narrowNoticeTitleId}
+            className="card-cozy max-w-md text-center space-y-4"
+          >
+            <h2 id={narrowNoticeTitleId} className="text-xl font-bold text-brand-ink">
               Desktop Required
             </h2>
             <p className="text-stone-gray">
@@ -592,7 +607,8 @@ function CampaignPageContent() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

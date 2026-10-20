@@ -1,5 +1,6 @@
+import { createHash } from 'crypto';
 import { prisma } from '../config/database';
-import { computeVisibility, isPointVisible } from './raycasting';
+import { computeVisibility, isPointVisible, type VisibilityPolygon } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
 import { tokenCentre } from './tokenCentre';
 import type { WallSegment, LightSource } from '../types/walls';
@@ -382,6 +383,59 @@ export function filterTokensByLighting(
  */
 const litCache = new WeakMap<object, WeakMap<object, { key: string; lits: Lit[] }>>();
 
+/**
+ * What each light reaches, kept from one read of the map to the next. Every
+ * token move reads the map again, with the same walls and lights as the move
+ * before, and raycasting each light afresh was most of what a move cost on a
+ * lit map. Keyed by everything the reach is worked out from: every wall's
+ * type and ends, in order, the map's size, and the light's place and dim
+ * radius, so a changed wall or a moved light is worked out again. The
+ * LIGHT_REACHES_KEPT used most recently are kept, and fewer when together
+ * they pass LIGHT_REACH_POINTS_KEPT points: a wide light on a map of
+ * thousands of walls reaches tens of thousands of points, at about 80 bytes
+ * a point, so the bound holds the cache near 80 MB. A reach of more points
+ * than that alone is never kept.
+ */
+const LIGHT_REACHES_KEPT = 256;
+export const LIGHT_REACH_POINTS_KEPT = 1_000_000;
+const lightReaches = new Map<string, VisibilityPolygon>();
+let lightReachPoints = 0;
+
+/** The walls as far as sight is concerned, in a few bytes. */
+function wallsFingerprint(walls: WallSegment[]): string {
+  const ends = walls.map((w) => [w.type, w.x1, w.y1, w.x2, w.y2]);
+  return createHash('sha256').update(JSON.stringify(ends)).digest('base64');
+}
+
+function lightReach(
+  light: LightSource,
+  dimRadiusPx: number,
+  wallsKey: string,
+  wallSegs: WallSegment[],
+  mapWidthPx: number,
+  mapHeightPx: number
+): VisibilityPolygon {
+  const key = JSON.stringify([wallsKey, mapWidthPx, mapHeightPx, light.x, light.y, dimRadiusPx]);
+  const kept = lightReaches.get(key);
+  if (kept) {
+    // Most recently used goes last, so the first is the one to let go.
+    lightReaches.delete(key);
+    lightReaches.set(key, kept);
+    return kept;
+  }
+  const reach = computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx);
+  if (reach.points.length > LIGHT_REACH_POINTS_KEPT) return reach;
+  lightReaches.set(key, reach);
+  lightReachPoints += reach.points.length;
+  while (lightReaches.size > LIGHT_REACHES_KEPT || lightReachPoints > LIGHT_REACH_POINTS_KEPT) {
+    const oldest = lightReaches.entries().next().value;
+    if (oldest === undefined) break;
+    lightReaches.delete(oldest[0]);
+    lightReachPoints -= oldest[1].points.length;
+  }
+  return reach;
+}
+
 function litsFor(
   walls: unknown,
   lights: unknown,
@@ -397,12 +451,13 @@ function litsFor(
   if (hit && hit.key === key) return hit.lits;
   // Light positions are already in map-space pixels (Y=0 at top), so no flip
   // is needed.
+  const wallsKey = enabledLights.length > 0 ? wallsFingerprint(wallSegs) : '';
   const lits: Lit[] = enabledLights.map((light) => {
     const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
     return {
       cx: light.x,
       cy: light.y,
-      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
+      reach: lightReach(light, dimRadiusPx, wallsKey, wallSegs, mapWidthPx, mapHeightPx),
       brightPx: (light.brightRadius ?? 0) * gridSize,
       dimPx: dimRadiusPx,
     };

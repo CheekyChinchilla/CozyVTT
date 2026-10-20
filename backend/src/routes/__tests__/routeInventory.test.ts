@@ -26,6 +26,7 @@ const TESTED: Record<string, string> = {
   'GET /health': 'routes/__tests__/auth.e2e.test.ts',
   'GET /api/config': 'routes/__tests__/uploadLimitsConfig.e2e.test.ts',
   'POST /api/auth/register': 'routes/__tests__/registrationApproval.e2e.test.ts',
+  'GET /api/auth/registration-status': 'routes/__tests__/registrationStatus.e2e.test.ts',
   'POST /api/auth/login': 'websocket/__tests__/liveSessionsEnd.integration.test.ts',
   'POST /api/auth/logout': 'websocket/__tests__/liveSessionsEnd.integration.test.ts',
   'GET /api/auth/me': 'websocket/__tests__/liveSessionsEnd.integration.test.ts',
@@ -191,9 +192,7 @@ const TESTED: Record<string, string> = {
 };
 
 /** Routes no test sends a request to yet. Shrink this list; do not grow it. */
-const UNTESTED: string[] = [
-  'GET /api/auth/registration-status',
-];
+const UNTESTED: string[] = [];
 
 const mounted = mountedRoutes(createTestApp()).map(routeKey);
 

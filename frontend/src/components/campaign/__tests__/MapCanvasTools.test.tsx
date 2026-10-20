@@ -26,6 +26,7 @@ const h = vi.hoisted(() => {
   const state = {
     userRole: 'DM' as string,
     currentMap: null as unknown,
+    playerSpiritVisible: false as boolean,
   };
   const handlers = new Map<string, Set<(data: never) => void>>();
   const sent: Array<[string, unknown]> = [];
@@ -81,7 +82,7 @@ vi.mock('@/contexts/CampaignContext', async () => {
         campaign,
         updateCampaignSpiritLayer: noop,
         dmViewBothPlanes: false,
-        playerSpiritVisible: false,
+        playerSpiritVisible: h.state.playerSpiritVisible,
         setPlayerSpiritVisible: noop,
         activeVibeEffect: null,
         updateVibe: noop,
@@ -243,7 +244,7 @@ beforeEach(() => {
   h.updateToken.mockReset().mockResolvedValue({});
   h.addToken.mockReset().mockResolvedValue({ token: token('tok-new', 'Aria', 2, 17) });
   useGameStore.getState().setTokens([]);
-  h.set({ userRole: 'DM', currentMap: mapWith() });
+  h.set({ userRole: 'DM', currentMap: mapWith(), playerSpiritVisible: false });
 });
 
 describe('the wall draw tool', () => {
@@ -550,6 +551,24 @@ describe('the light tools', () => {
     click(px(260, 240));
 
     expect(sentOf('light:add')).toEqual([]);
+  });
+
+  // The keyboard listener is added once and reads the tools at each key
+  // press, so no tool change can leave it reading an older one.
+  it('adds its keyboard listener once, however the tools change', () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const keyListeners = () => added.mock.calls.filter(([type]) => type === 'keydown').length;
+    render(<MapCanvas />);
+    const atMount = keyListeners();
+
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+    press('Escape');
+
+    expect(keyListeners()).toBe(atMount);
+    added.mockRestore();
   });
 });
 
@@ -1206,5 +1225,21 @@ describe('the Global Illumination switch', () => {
 
     expect(await screen.findByText('Too many requests, please slow down')).toBeTruthy();
     expect((screen.getByLabelText('Global illumination') as HTMLInputElement).checked).toBe(true);
+  });
+});
+
+// The badge was a 20% tint over the map, so its words were lost over a
+// light or busy picture.
+describe('the Spirit Realm badge', () => {
+  it('sits on an opaque backing, in its own colours', () => {
+    h.set({ userRole: 'PLAYER', playerSpiritVisible: true });
+    render(<MapCanvas />);
+
+    const words = screen.getByText('Spirit Realm');
+    const tint = words.parentElement as HTMLElement;
+    const backing = tint.parentElement as HTMLElement;
+    expect(backing.className.split(/\s+/)).toEqual(expect.arrayContaining(['absolute', 'bg-parchment']));
+    expect(tint.className.split(/\s+/)).toEqual(expect.arrayContaining(['bg-spirit-purple/20', 'border-spirit-purple/40']));
+    expect(words.className.split(/\s+/)).toContain('text-spirit-ink');
   });
 });

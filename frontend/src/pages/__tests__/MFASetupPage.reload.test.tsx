@@ -73,7 +73,8 @@ describe('leaving with the backup codes on screen', () => {
     fireEvent.click(screen.getByRole('button', { name: /verify & enable/i }));
     await screen.findByText('ABCD-EFGH');
 
-    expect(leavingIsQuestioned()).toBe(true);
+    // The listener is added by an effect that can run after the codes show.
+    await waitFor(() => expect(leavingIsQuestioned()).toBe(true));
 
     fireEvent.click(screen.getByRole('checkbox'));
     expect(leavingIsQuestioned()).toBe(false);

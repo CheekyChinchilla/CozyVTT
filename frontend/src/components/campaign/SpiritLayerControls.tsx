@@ -131,6 +131,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
     setSelectedStyle(styleId);
     setCustomColor(color);
     setCustomEffect(effect);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- follows the saved style; a refetched campaign with the same style keeps the choice being made
   }, [campaign?.spiritLayerStyle]);
 
   // Spirit layer tokens from current map

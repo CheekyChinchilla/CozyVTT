@@ -112,7 +112,8 @@ export default function ImportCharacterModal({
     setIsDragging(false);
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  // Not memoized: it reads the names in use as they are at the drop.
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
 
@@ -120,7 +121,7 @@ export default function ImportCharacterModal({
     if (droppedFile) {
       handleFileSelect(droppedFile);
     }
-  }, []);
+  };
 
   // Handle import
   const handleImport = async () => {

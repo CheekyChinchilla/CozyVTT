@@ -348,7 +348,8 @@ export default function ProfilePage() {
       setDisplayName(user.displayName);
       setBio(user.bio ?? '');
     }
-  }, [user?.id]); // only on user change
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fills the fields once per signed-in user; a refreshed user object must keep what is being typed
+  }, [user?.id]);
 
   // ── Logout ──
   const handleLogout = async () => {

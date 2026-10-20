@@ -72,8 +72,7 @@ export default function NumberField({
     if (asNumber !== value) {
       setText(value == null ? '' : String(value));
     }
-    // Deliberately keyed on `value` only: reacting to `text` here would undo
-    // each keystroke as it is typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on value only: reacting to text here would undo each keystroke as it is typed
   }, [value]);
 
   const resolvedFallback = fallback ?? min ?? 0;

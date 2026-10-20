@@ -6,7 +6,8 @@
  * with the creature's stats copied into the token's statBlock field.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { DISPOSITION_PICKED, tokenPlaceholder } from '@/utils/tokenColours';
+import { useState, useEffect, useEffectEvent, useCallback, useRef } from 'react';
 import {
   X,
   Search,
@@ -213,6 +214,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     // matchGameSystem belongs here with the other filters: without it, toggling
     // between this campaign's system and all systems changed the dropdown but
     // never refetched the list.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a filter change; typing searches through the debounce below
   }, [isOpen, campaign?.id, sourceFilter, crFilter, matchGameSystem]);
 
   // Debounced search
@@ -224,6 +226,7 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
       fetchCreatures(true);
     }, 300);
     return () => clearTimeout(searchTimeoutRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the search text changes, after a pause in typing
   }, [searchQuery]);
 
   // ── Seed SRD creatures ──
@@ -384,8 +387,9 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
     setOffset(newOffset);
   };
 
+  const loadNextPage = useEffectEvent(() => fetchCreatures(false));
   useEffect(() => {
-    if (offset > 0) fetchCreatures(false);
+    if (offset > 0) loadNextPage();
   }, [offset]);
 
   const hasMore = creatures.length < total;
@@ -762,11 +766,7 @@ function CreatureRow({
             />
           ) : (
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-                creature.disposition === 'hostile' ? 'bg-danger-fill text-white' :
-                creature.disposition === 'friendly' ? 'bg-teal-700 text-white' :
-                'bg-warning text-black'
-              }`}
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${tokenPlaceholder('npc', creature.disposition)}`}
             >
               {creature.name.charAt(0).toUpperCase()}
             </div>
@@ -1331,9 +1331,9 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
               onClick={() => setDisposition(d)}
               className={`flex-1 py-1 text-[10px] rounded-cozy border transition-all ${
                 disposition === d
-                  ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
-                  : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
-                  :                     'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
+                  ? color === 'teal'  ? DISPOSITION_PICKED.friendly
+                  : color === 'amber' ? DISPOSITION_PICKED.neutral
+                  :                    DISPOSITION_PICKED.hostile
                   : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
               }`}
             >

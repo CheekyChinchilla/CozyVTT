@@ -4,7 +4,8 @@
  * Supports real-time updates via WebSocket
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore, useCharacterHp } from '@/stores/gameStore';
@@ -76,8 +77,12 @@ export default function CampaignRoster() {
     }
   };
 
-  useEffect(() => {
+  const refetchRoster = useEffectEvent(() => {
     fetchRoster();
+  });
+
+  useEffect(() => {
+    refetchRoster();
   }, [campaign?.id]);
 
   // Listen for roster updates via WebSocket
@@ -86,7 +91,7 @@ export default function CampaignRoster() {
 
     const handleRosterUpdate = () => {
       console.log('Roster updated - refetching...');
-      fetchRoster();
+      refetchRoster();
     };
 
     socket.on('roster.updated', handleRosterUpdate);
@@ -616,22 +621,20 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
               const canAdjust = isDM || (canAdjustOwn && character.userId === currentUserId);
               if (!hp || hp.max === 0) return null;
               const pct = Math.max(0, Math.min(1, hp.current / hp.max));
-              const barColor = pct >= 0.75 ? 'bg-success'
-                            : pct >= 0.50 ? 'bg-lime-500'
-                            : pct >= 0.25 ? 'bg-warning'
-                            :               'bg-danger';
+              // The tiers and colours of the map's HP bars.
+              const barColor = hueColour(HP_HUES[hpTier(pct)]);
               return (
                 <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
                   {/* HP progress bar */}
                   <div className="h-1.5 w-full rounded-full bg-black/20 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-                      style={{ width: `${pct * 100}%` }}
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${pct * 100}%`, backgroundColor: barColor }}
                     />
                     {hp.temp > 0 && (
                       <div
-                        className="h-full rounded-full bg-info/75 -mt-1.5 ml-auto"
-                        style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%` }}
+                        className="h-full rounded-full -mt-1.5 ml-auto"
+                        style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%`, backgroundColor: TEMP_HP_FILL }}
                       />
                     )}
                   </div>

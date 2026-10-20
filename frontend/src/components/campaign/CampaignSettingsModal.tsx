@@ -114,6 +114,7 @@ export default function CampaignSettingsModal({
       setDeleteConfirmName('');
       setActiveTab(isDmViewer ? 'general' : 'members');
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- seeds the form on opening and for another campaign; a refetch of the same one must keep what the DM typed
   }, [isOpen, campaign?.id]);
 
   const loadInvitations = useCallback(async () => {

@@ -3,7 +3,7 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -458,8 +458,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // The map a held token was picked up on, which is where it goes back to if
   // the map changes while it is held.
   const heldOnMapRef = useRef<string | null>(null);
-  useEffect(() => {
+  const releaseHoldOnMapSwitch = useEffectEvent(() => {
     if (draggedToken) cancelHold();
+  });
+  useEffect(() => {
+    releaseHoldOnMapSwitch();
   }, [currentMap?.id]);
 
   // The wall tools, with the wall selection (map/tools/useWallTool.ts).
@@ -469,7 +472,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     wallInProgress, polygonPoints, splitHoverPoint, hoveredWallId, nearEndpoint,
     wallErasedIdsRef, wallBrushPointsRef, WALL_ERASE_RADIUS, POLYGON_CLOSE_RADIUS,
     selectedWallIds, setSelectedWallIds, wallMarquee, wallDragEndpointRef, selectedEndpoint,
-    deleteSelectedWalls, moveSelectedWalls, carryIntoDrags,
+    carryIntoDrags,
   } = useWallTool({
     isDM, currentMap, wallMode, setWallMode, wallSegments,
     pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
@@ -670,9 +673,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     lastFittedMapIdRef.current = currentMap.id;
     mapControls.fitToScreen(canvasSize.width, canvasSize.height);
-  }, [imageLoaded, currentMap?.id]);  
-  // ^ Intentionally not including canvasSize/mapControls — we only want to fire once
-  //   per map load, not on every resize. Users can use the Reset View button to re-fit.
+    // Users can use the Reset View button to fit again.
+    // TODO(play): a picture that loads while the canvas still measures 0x0
+    // never fits, since the size is not a dependency; lastFittedMapIdRef
+    // already limits the fit to once per map, so the size can be added.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapControls is a new object each render; lastFittedMapIdRef keeps the fit to once per map
+  }, [imageLoaded, currentMap?.id]);
 
   // ============================================
   // WebSocket Event Listeners
@@ -729,7 +735,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socket.off('token.moved', handleTokenMoved);
     };
-  }, [socket]); // handler reads/writes via the store, no reactive deps needed
+  }, [socket, setAnimatingTokens]); // handler reads/writes via the store
 
   // ============================================
   // Map Change
@@ -745,7 +751,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     prevPlayerSpiritVisibleRef.current = playerSpiritVisible;
     const t = setTimeout(() => setIsFading(false), 300);
     return () => clearTimeout(t);
-  }, [currentMap?.id]);  
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per map switch; the spirit flag is only read then
+  }, [currentMap?.id]);
 
   // Listen for map.changed events broadcast by the DM.
   //
@@ -790,7 +797,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socket.off('map.changed', handleMapChanged);
     };
-  }, [socket, setCurrentMap]);
+  }, [socket, setCurrentMap, setPlayerSpiritVisible, playEtherealTransition]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -871,7 +878,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
-  }, [currentMap?.id]);  
+    // A change to the same map's walls or lights arrives through the socket;
+    // loading them here again would wipe the DM's undo history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per map switch
+  }, [currentMap?.id]);
 
   // The stored walls and lights are asked for once the campaign is joined,
   // and again after each rejoin, so a change missed while disconnected
@@ -901,11 +911,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const lastExploredReportRef = useRef(0);
   // The remembered cells as a raster, one pixel per grid square, rebuilt only
   // when the set changes; the lighting layer scales it to the map.
+  const exploredWidth = currentMap?.width;
+  const exploredHeight = currentMap?.height;
   const exploredRaster = useMemo<HTMLCanvasElement | null>(() => {
-    if (!currentMap || !exploredCells || exploredCells.size === 0) return null;
+    if (exploredWidth === undefined || exploredHeight === undefined || !exploredCells || exploredCells.size === 0) return null;
     const raster = document.createElement('canvas');
-    raster.width = currentMap.width;
-    raster.height = currentMap.height;
+    raster.width = exploredWidth;
+    raster.height = exploredHeight;
     const rctx = raster.getContext('2d');
     if (!rctx) return null;
     const img = rctx.createImageData(raster.width, raster.height);
@@ -914,11 +926,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
     rctx.putImageData(img, 0, 0);
     return raster;
-  }, [exploredCells, currentMap?.width, currentMap?.height]);
+  }, [exploredCells, exploredWidth, exploredHeight]);
 
   // ============================================
   // Wall & Fog WebSocket Listeners
   // ============================================
+  // These listeners, and the pings' below, read only which map is open.
+  const currentMapId = currentMap?.id;
   useEffect(() => {
     if (!socket) return;
     const socketInstance = socket.getSocket();
@@ -937,7 +951,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
     const handleWallAdded = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       carryIncoming((walls) => walls.some((s) => s.id === data.segment.id)
         ? walls.map((s) => s.id === data.segment.id ? data.segment : s)
         : [...walls, data.segment]);
@@ -945,25 +959,25 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     const handleWallRemoved = (data: { mapId: string; segmentId: string; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       carryIncoming((walls) => walls.filter((s) => s.id !== data.segmentId));
     };
 
     const handleWallUpdated = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       carryIncoming((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
     };
 
     const handleWallsReplaced = (data: { mapId: string; segments: WallSegment[]; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       // The full stored list, from another page, the API or walls:request.
       carryIncoming(() => data.segments);
     };
 
     const handleFogUpdated = (data: { mapId: string; fogState: FogState }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       // Track newly-revealed cells for fade animation
       setFogState((prev) => {
         if (prev) {
@@ -978,7 +992,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     const handleFogCells = (data: { mapId: string; revealedCells: number[] }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setRevealedCells((prev) => {
         const newSet = new Set<number>(data.revealedCells);
         // Animate newly revealed cells
@@ -994,13 +1008,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // multiple tokens in the same macro-task (server re-sync after player
     // move), each call builds on the previous result.
     const handleTokenAppeared = (data: { token: Token; mapId: string }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       useGameStore.getState().revealToken(data.token);
     };
 
     // Dynamic lighting: token left this player's view
     const handleTokenDisappeared = (data: { tokenId: string; mapId: string }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       useGameStore.getState().removeToken(data.tokenId);
     };
 
@@ -1029,24 +1043,24 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // as for walls above.
     const handleLightAdded = (data: { mapId: string; light: LightSource; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources((prev) => prev.some((l) => l.id === data.light.id)
         ? prev.map((l) => l.id === data.light.id ? data.light : l)
         : [...prev, data.light]);
     };
     const handleLightRemoved = (data: { mapId: string; lightId: string; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources((prev) => prev.filter((l) => l.id !== data.lightId));
     };
     const handleLightUpdated = (data: { mapId: string; light: LightSource; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources((prev) => prev.map((l) => l.id === data.light.id ? data.light : l));
     };
     const handleLightsReplaced = (data: { mapId: string; lights: LightSource[]; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources(data.lights);
     };
 
@@ -1076,7 +1090,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMap?.id, joinedEpoch]);
+  }, [socket, currentMapId, joinedEpoch, ownEdits, setCurrentMap, carryWallHistory, carryIntoDrags, revealOpacityRef]);
 
   // ============================================
   // Map pings — receive, name, and expire
@@ -1100,7 +1114,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     const handlePinged = (data: MapPingedBroadcast) => {
       // Ignore pings for a map this client isn't looking at.
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
 
       const id = `${data.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const ping: ActivePing = {
@@ -1126,7 +1140,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socket.off('map.pinged', handlePinged);
       timers.forEach(clearTimeout);
     };
-  }, [socket, currentMap?.id, resolvePingerName]);
+  }, [socket, currentMapId, resolvePingerName]);
 
   // Switching maps drops any pings still in flight on the old one.
   useEffect(() => {
@@ -1136,69 +1150,72 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
   // Keyboard: Escape, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
   // ============================================
+  // The listener is added once and reads the tools as they are at the key
+  // press, so a tool chosen since is the one Escape asks.
+  const onMapKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    // A key typed into a text box, a note or a dialog is left to it: none
+    // of the shortcuts below apply.
+    if (isTypingInto(e.target) || isTypingInto(document.activeElement)) return;
+
+    // ── Tab: ping at the cursor ──────────────────────────────────────
+    // Tab is the keyboard-navigation key and this listener is on `window`,
+    // so it is only safe to claim under strict guards: the pointer must be
+    // over the map, and focus must not be on anything the user could be
+    // navigating from or typing into. Click around the map and Tab pings;
+    // tab to any control and Tab keeps navigating as normal.
+    if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      const at = hoverMapPxRef.current;
+      if (!at || !currentMap) return;
+
+      const el = document.activeElement as HTMLElement | null;
+      const onFormControl =
+        !!el &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
+          el.isContentEditable);
+      if (onFormControl) return;
+
+      e.preventDefault();
+      socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
+      return;
+    }
+
+    if (e.key === 'Escape') {
+      // A held token is put back first: it is the most transient thing.
+      if (draggedToken) {
+        cancelHold();
+        return;
+      }
+      // Each press lets go of one thing, asking the tools in this order. The
+      // measuring tools come last on purpose: the AoE template is not
+      // mutually exclusive with the wall and light tools, so it can sit armed
+      // while a wall is half-drawn. Esc has to cancel the more transient
+      // thing first, or it would quietly close the template instead.
+      for (const tool of [fogTool, wallTool, lightTool, measuring]) {
+        if (tool.escape?.()) return;
+      }
+      return;
+    }
+
+    // Only handle undo/redo for DM with active map
+    if (!isDM || !currentMap) return;
+
+    const isCtrl = e.ctrlKey || e.metaKey;
+
+    if (wallSelectKey(e)) return;
+
+    if (isCtrl && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      wallUndoKey();
+    } else if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      wallRedoKey();
+    }
+  });
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // A key typed into a text box, a note or a dialog is left to it: none
-      // of the shortcuts below apply.
-      if (isTypingInto(e.target) || isTypingInto(document.activeElement)) return;
-
-      // ── Tab: ping at the cursor ──────────────────────────────────────
-      // Tab is the keyboard-navigation key and this listener is on `window`,
-      // so it is only safe to claim under strict guards: the pointer must be
-      // over the map, and focus must not be on anything the user could be
-      // navigating from or typing into. Click around the map and Tab pings;
-      // tab to any control and Tab keeps navigating as normal.
-      if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        const at = hoverMapPxRef.current;
-        if (!at || !currentMap) return;
-
-        const el = document.activeElement as HTMLElement | null;
-        const onFormControl =
-          !!el &&
-          (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
-            el.isContentEditable);
-        if (onFormControl) return;
-
-        e.preventDefault();
-        socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        // A held token is put back first: it is the most transient thing.
-        if (draggedToken) {
-          cancelHold();
-          return;
-        }
-        // Each press lets go of one thing, asking the tools in this order. The
-        // measuring tools come last on purpose: the AoE template is not
-        // mutually exclusive with the wall and light tools, so it can sit armed
-        // while a wall is half-drawn. Esc has to cancel the more transient
-        // thing first, or it would quietly close the template instead.
-        for (const tool of [fogTool, wallTool, lightTool, measuring]) {
-          if (tool.escape?.()) return;
-        }
-        return;
-      }
-
-      // Only handle undo/redo for DM with active map
-      if (!isDM || !currentMap) return;
-
-      const isCtrl = e.ctrlKey || e.metaKey;
-
-      if (wallSelectKey(e)) return;
-
-      if (isCtrl && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        wallUndoKey();
-      } else if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        wallRedoKey();
-      }
-    };
+    const handleKeyDown = (e: KeyboardEvent) => onMapKeyDown(e);
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [wallMode, lightMode, wallInProgress, polygonPoints, showAoE, aoeAnchor, isDM, currentMap, undoWalls, redoWalls, socket, wallSegments, selectedWallIds, deleteSelectedWalls, moveSelectedWalls, draggedToken]);
+  }, []);
 
   // ============================================
   // Canvas Rendering
@@ -1361,7 +1378,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1425,7 +1442,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, isDM, previewControls]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1639,7 +1656,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, campaign?.gameSystem, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1755,7 +1772,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         mapHeight: currentMap.height,
       });
     },
-    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens]
+    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens, previewControls]
   );
 
   const getTokenAtPosition = useCallback(
@@ -2441,9 +2458,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {(previewing
         ? previewedPlane === 'spirit'
         : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-xs animate-pulse-soft">
-          <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
-          <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+        // An opaque backing under the tint, as the zoom panel has, so the
+        // words read over any map.
+        <div className="absolute top-4 right-4 z-10 rounded-cozy bg-parchment animate-pulse-soft">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
+            <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
+            <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+          </div>
         </div>
       )}
 

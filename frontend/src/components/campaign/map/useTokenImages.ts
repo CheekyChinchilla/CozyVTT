@@ -53,6 +53,6 @@ export function useTokenImages(tokens: readonly Token[]): ReadonlyMap<string, HT
       if (entry?.state === 'loaded') images.set(t.id, entry.image);
     }
     return images;
-    // `finished` is what tells this a picture has arrived.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- finished is bumped when a picture arrives; the pictures are in a ref
   }, [tokens, finished]);
 }

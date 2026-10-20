@@ -4,6 +4,7 @@
  * Tokens saved here can be reused across maps and copied to other campaigns.
  */
 
+import { tokenPlaceholder } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -109,6 +110,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   useEffect(() => {
     if (!isOpen || !campaign) return;
     fetchTemplates();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a type change; typing searches through the debounce below
   }, [isOpen, campaign?.id, typeFilter]);
 
   // Debounced search
@@ -117,6 +119,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => fetchTemplates(), 300);
     return () => clearTimeout(searchTimeoutRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the search text changes, after a pause in typing
   }, [searchQuery]);
 
   // Fetch campaigns user is DM of (for copy-to feature)
@@ -391,7 +394,7 @@ function TemplateRow({
   const typeColors: Record<string, string> = {
     object: 'bg-warning/10 text-warning-ink',
     npc: 'bg-danger/10 text-danger-ink',
-    player: 'bg-teal-500/10 text-teal-600',
+    player: 'bg-token-player/10 text-token-player-ink',
   };
 
   return (
@@ -408,11 +411,7 @@ function TemplateRow({
             className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
           />
         ) : (
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-            template.disposition === 'hostile' ? 'bg-danger-fill text-white' :
-            template.disposition === 'friendly' ? 'bg-teal-700 text-white' :
-            'bg-warning text-black'
-          }`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${tokenPlaceholder(template.type, template.disposition)}`}>
             {template.name.charAt(0).toUpperCase()}
           </div>
         )}

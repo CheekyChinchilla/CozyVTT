@@ -27,6 +27,9 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    // A method that replaces one of its base class says so, and one that
+    // says so when the base has no such method is an error.
+    "noImplicitOverride": true,
     "typeRoots": ["./node_modules/@types", "./src/types"],
     // The global types every file sees. Others come in only when imported.
     "types": ["node", "jest"]

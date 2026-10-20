@@ -1,4 +1,4 @@
-/// <reference path="../types/express.d.ts" />
+import type {} from '../types/express';
 import { Router, Request, Response } from 'express';
 import qrcode from 'qrcode';
 import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError, answeredBusy } from '../services/auth';
