@@ -968,8 +968,8 @@
         "<anonymous>",
         "<anonymous>",
         "<anonymous>",
-        "validateFileType",
         "validateFileSize",
+        "validateFileType",
         "<anonymous>"
       ]
     },
