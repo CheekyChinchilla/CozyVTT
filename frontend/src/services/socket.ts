@@ -3,7 +3,7 @@ import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
 import { apiErrorStatus, errorMessage } from '@/utils/errors';
 import type {
-  Map as CampaignMap,
+  CampaignMap,
   TokenMoveStartEvent,
   TokenMoveEvent,
   TokenMoveEndEvent,

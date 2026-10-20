@@ -18,7 +18,7 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast } from '@/types';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
@@ -35,7 +35,7 @@ import { withMemberRole } from '@/utils/campaignRoles';
 interface CampaignContextState {
   // Campaign Data
   campaign: Campaign | null;
-  currentMap: Map | null;
+  currentMap: CampaignMap | null;
 
   // User Role
   userRole: CampaignRole | null;
@@ -71,13 +71,13 @@ interface CampaignContextState {
    * map it captured earlier may have been edited since. The function form
    * never switches maps.
    */
-  setCurrentMap: (map: Map | null | ((current: Map | null) => Map | null)) => void;
+  setCurrentMap: (map: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null)) => void;
   /**
    * Keep `campaign.maps` in step with the Map Library: insert a created or
    * imported map, or replace a renamed one by id. The Move to Map… submenu
    * reads that list, so a map missing from it cannot be a move target.
    */
-  upsertCampaignMap: (map: Map) => void;
+  upsertCampaignMap: (map: CampaignMap) => void;
   /** Drop a deleted map from `campaign.maps`. */
   removeCampaignMap: (mapId: string) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
@@ -163,7 +163,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     shownCampaignId.current = campaign?.id ?? null;
     return () => { shownCampaignId.current = null; };
   }, [campaign?.id]);
-  const [currentMap, setCurrentMapState] = useState<Map | null>(null);
+  const [currentMap, setCurrentMapState] = useState<CampaignMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // DM local view preference — not persisted, resets each session
@@ -397,7 +397,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // switch goes through here, so the id follows the map. The Map Library
   // re-reads campaign.currentMapId each time it opens for its Active badge,
   // which pointed at the map the page loaded with until this kept it current.
-  const setCurrentMap = useCallback((map: Map | null | ((current: Map | null) => Map | null)) => {
+  const setCurrentMap = useCallback((map: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null)) => {
     if (typeof map === 'function') {
       setCurrentMapState(map);
       return;
@@ -411,7 +411,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, []);
 
   // Keep campaign.maps in step with the Map Library (create, rename, import).
-  const upsertCampaignMap = useCallback((map: Map) => {
+  const upsertCampaignMap = useCallback((map: CampaignMap) => {
     setCampaign((prev) => {
       if (!prev) return prev;
       const maps = prev.maps ?? [];

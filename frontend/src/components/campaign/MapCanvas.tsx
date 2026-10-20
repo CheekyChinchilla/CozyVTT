@@ -19,7 +19,7 @@ import type {
   TokenMoveEvent,
   TokenMoveEndEvent,
   TokenMovedEvent,
-  Map as CampaignMap,
+  CampaignMap,
   SpiritLayerToggledBroadcast,
   SpiritLayerTokenToggledBroadcast,
   VibeUpdatedBroadcast,

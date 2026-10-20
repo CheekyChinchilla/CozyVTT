@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { Asset, Map, CreateMapRequest } from '@/types';
+import type { Asset, CampaignMap, CreateMapRequest } from '@/types';
 import { AssetType } from '@/types';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
@@ -19,7 +19,7 @@ interface CreateMapModalProps {
   isOpen: boolean;
   campaignId: string;
   onClose: () => void;
-  onCreated: (map: Map) => void;
+  onCreated: (map: CampaignMap) => void;
 }
 
 // ============================================

@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import type { Map as CampaignMap } from '@/types';
+import type { CampaignMap } from '@/types';
 import type { WallSegment } from '@/types/walls';
 
 

@@ -6,7 +6,7 @@
 // ============================================
 
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
-import type { Map as CampaignMap } from '@/types';
+import type { CampaignMap } from '@/types';
 import type { WallSegment, WallType } from '@/types/walls';
 import type { WallToolMode, DmWallControlsProps } from '@/components/campaign/DmWallControls';
 import { douglasPeucker, edgeSnapPoints } from '@/utils/geometry';

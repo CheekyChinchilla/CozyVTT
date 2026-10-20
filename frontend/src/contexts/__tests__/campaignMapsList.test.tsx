@@ -9,7 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
-import type { Map } from '@/types';
+import type { CampaignMap } from '@/types';
 
 // ── Service mocks (the provider pulls these in transitively) ─────────────────
 
@@ -53,7 +53,7 @@ vi.mock('@/services/auth.service', () => ({
 import { AuthProvider } from '../AuthContext';
 import { CampaignProvider, useCampaign } from '../CampaignContext';
 
-const mapMeta = (id: string, name: string): Map => ({ id, name }) as unknown as Map;
+const mapMeta = (id: string, name: string): CampaignMap => ({ id, name }) as unknown as CampaignMap;
 
 describe('campaign.maps follows the Map Library', () => {
   beforeEach(() => {

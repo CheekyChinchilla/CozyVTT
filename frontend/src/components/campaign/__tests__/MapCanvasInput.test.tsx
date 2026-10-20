@@ -15,7 +15,7 @@
 
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { TokenType, type Map as CampaignMap, type Token } from '@/types';
+import { TokenType, type CampaignMap, type Token } from '@/types';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();

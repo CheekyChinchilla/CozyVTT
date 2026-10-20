@@ -581,7 +581,7 @@ export interface Campaign {
    * full because those endpoints return full objects; do not read the omitted
    * fields off these embedded arrays.
    */
-  maps?: Map[];
+  maps?: CampaignMap[];
   characters?: Character[];
   /** Most recent open (non-ended) session, if any — populated by GET /campaigns/:id */
   activeSession?: { id: string; sessionNumber: number; startedAt: string } | null;
@@ -827,7 +827,7 @@ export type CharacterData =
 // Map & Tokens
 // ============================================
 
-export interface Map {
+export interface CampaignMap {
   id: string;
   campaignId: string;
   name: string;

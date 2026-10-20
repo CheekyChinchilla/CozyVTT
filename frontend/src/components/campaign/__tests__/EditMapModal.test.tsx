@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import type { Asset, Map as CampaignMap, UpdateMapRequest } from '@/types';
+import type { Asset, CampaignMap, UpdateMapRequest } from '@/types';
 
 const getMap = vi.fn();
 const updateMap = vi.fn();

@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { Profiler } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
-import { TokenType, type Map as CampaignMap, type Token } from '@/types';
+import { TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
 
 const h = vi.hoisted(() => {
