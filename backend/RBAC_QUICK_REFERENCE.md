@@ -635,8 +635,9 @@ then on also asks for the current password:
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
 An `ADMIN` account must have MFA on. Its 7-day deadline is counted from the
-latest of the policy start, the account's `createdAt`, its promotion and a
-Reset MFA by another admin; all but `createdAt` are activity-log rows
+latest of the policy start, the account's `createdAt`, its promotion, a
+Reset MFA by another admin and an invitation link setting its password; all
+but `createdAt` are activity-log rows
 (`services/adminMfaPolicy.ts`). Until the deadline nothing is refused, and
 `GET /api/auth/me` and the sign-in reply carry `adminMfaDeadline` for the
 banner. Past it, `middleware/adminMfa.ts` answers 403 with

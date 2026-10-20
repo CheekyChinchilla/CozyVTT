@@ -1762,7 +1762,8 @@ when it sees it.
 An administrator account must use two-factor authentication. One without it has 7 days to set it
 up, given as `adminMfaDeadline` on the `user` that `GET /api/auth/me` and the sign-in replies return
 (`null` for everyone else). The 7 days run from the latest of when the rule started on the instance,
-the account's creation, its promotion to admin, and an administrator's **Reset MFA** on it. Past the
+the account's creation, its promotion to admin, an administrator's **Reset MFA** on it, and an invitation link
+setting its password. Past the
 deadline, every endpoint except `POST /api/auth/mfa/setup`, `POST /api/auth/mfa/verify`,
 `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
 `GET /api/auth/appearance` and `GET /api/config` returns:
