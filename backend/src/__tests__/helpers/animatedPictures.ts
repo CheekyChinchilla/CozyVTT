@@ -12,10 +12,19 @@ import zlib from 'zlib';
 /**
  * A GIF89a whose logical screen is `width` by `height`, holding `frames`
  * frames of `frameWidth` by `frameHeight` pixels (one pixel by default), each
- * with a graphic control extension, at the canvas's top left.
+ * with a graphic control extension, `frameLeft` and `frameTop` pixels from
+ * the canvas's top left (none by default).
  */
-export function craftedGif(options: { width: number; height: number; frames: number; frameWidth?: number; frameHeight?: number }): Buffer {
-  const { width, height, frames, frameWidth = 1, frameHeight = 1 } = options;
+export function craftedGif(options: {
+  width: number;
+  height: number;
+  frames: number;
+  frameWidth?: number;
+  frameHeight?: number;
+  frameLeft?: number;
+  frameTop?: number;
+}): Buffer {
+  const { width, height, frames, frameWidth = 1, frameHeight = 1, frameLeft = 0, frameTop = 0 } = options;
   const screen = Buffer.alloc(7);
   screen.writeUInt16LE(width, 0);
   screen.writeUInt16LE(height, 2);
@@ -24,6 +33,8 @@ export function craftedGif(options: { width: number; height: number; frames: num
   const loop = Buffer.concat([Buffer.from([0x21, 0xff, 0x0b]), Buffer.from('NETSCAPE2.0', 'latin1'), Buffer.from([3, 1, 0, 0, 0])]);
   const control = Buffer.from([0x21, 0xf9, 0x04, 0x00, 0x0a, 0x00, 0x00, 0x00]);
   const descriptor = Buffer.from([0x2c, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  descriptor.writeUInt16LE(frameLeft, 1);
+  descriptor.writeUInt16LE(frameTop, 3);
   descriptor.writeUInt16LE(frameWidth, 5);
   descriptor.writeUInt16LE(frameHeight, 7);
   // LZW with a minimum code size of 2: clear, colour 0, end. A larger frame
@@ -45,7 +56,8 @@ function riffChunk(tag: string, data: Buffer): Buffer {
 /**
  * An animated WebP whose canvas is `width` by `height`, holding `frames`
  * frames of one lossless pixel each. WebP itself allows at most 16,383
- * pixels on a side.
+ * pixels on a side, and with one frame the canvas can be as large as its
+ * header can say.
  */
 export async function craftedAnimatedWebp(options: { width: number; height: number; frames: number }): Promise<Buffer> {
   const { width, height, frames } = options;

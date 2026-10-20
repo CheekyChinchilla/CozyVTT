@@ -61,6 +61,14 @@ describe('a still picture', () => {
     );
   });
 
+  // The image library cannot read a PNG this wide, and a browser may try.
+  it('is refused as too wide however wide its header says it is', async () => {
+    expect(await pictureLimitProblem(pngHeader(2_147_483_647, 1), 'MAP')).toBe(
+      'This picture is 2,147,483,647 pixels wide. A picture can be at most 16,384 pixels on each side.'
+    );
+    expect(await pictureLimitProblem(pngHeader(1, 2_147_483_647), 'MAP')).toMatch(/2,147,483,647 pixels tall/);
+  });
+
   it('is read from a file as well as from bytes', async () => {
     const file = path.join(dir, 'wide.png');
     fs.writeFileSync(file, await plainPng(16_385, 1));
@@ -80,6 +88,14 @@ describe('a GIF', () => {
 
   it('is measured by its first frame when that reaches past the screen', async () => {
     expect(await pictureLimitProblem(craftedGif({ width: 10, height: 10, frames: 1, frameWidth: 16_385 }), 'TOKEN')).toMatch(/16,385 pixels wide/);
+  });
+
+  // The image library reports the first frame's edges, here past the most
+  // pixels it opens by default.
+  it('is refused as too large when its first frame is placed far past the screen', async () => {
+    expect(await pictureLimitProblem(craftedGif({ width: 10, height: 10, frames: 2, frameLeft: 16_380, frameTop: 16_380, frameWidth: 10, frameHeight: 10 }), 'MAP')).toBe(
+      'This picture is 16,390 pixels wide. A picture can be at most 16,384 pixels on each side.'
+    );
   });
 
   it('is accepted with 1,000 frames and refused with 1,001', async () => {
@@ -132,10 +148,27 @@ describe('an animated WebP', () => {
     );
   });
 
-  // The image library cannot read a WebP canvas wider than WebP allows, and
-  // a browser may still try to draw it.
-  it('is refused when its size cannot be read', async () => {
+  // The image library cannot read a WebP canvas larger than WebP allows,
+  // and a browser may still try to draw it, so its header is read.
+  it('is refused as too large when its canvas is past what WebP allows', async () => {
     expect(await pictureLimitProblem(await craftedAnimatedWebp({ width: 20_000, height: 10, frames: 2 }), 'MAP')).toBe(
+      'This picture is 20,000 pixels wide. A WebP picture can be at most 16,383 pixels on each side.'
+    );
+    expect(await pictureLimitProblem(await craftedAnimatedWebp({ width: 16_384, height: 10, frames: 2 }), 'MAP')).toBe(
+      'This picture is 16,384 pixels wide. A WebP picture can be at most 16,383 pixels on each side.'
+    );
+    expect(await pictureLimitProblem(await craftedAnimatedWebp({ width: 10, height: 16_777_216, frames: 1 }), 'TOKEN')).toBe(
+      'This picture is 16,777,216 pixels tall. A WebP picture can be at most 16,383 pixels on each side.'
+    );
+  });
+
+  it('is accepted at 16,383 pixels on each side', async () => {
+    expect(await pictureLimitProblem(await craftedAnimatedWebp({ width: 16_383, height: 16_383, frames: 1 }), 'MAP')).toBeNull();
+  });
+
+  it('is refused when its size cannot be read', async () => {
+    const webp = await craftedAnimatedWebp({ width: 10, height: 10, frames: 2 });
+    expect(await pictureLimitProblem(webp.subarray(0, 40), 'MAP')).toBe(
       'CozyVTT could not read the size of this picture, so it cannot be checked. Save it again in an image editor and try once more.'
     );
   });

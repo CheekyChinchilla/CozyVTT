@@ -106,30 +106,52 @@ async function withReader<T>(input: Buffer | string, use: (readAt: ReadAt, lengt
   }
 }
 
-/** The tag of a WebP animation frame, 'ANMF', as a number. */
+/** The tags of a WebP's extended header and of an animation frame, as numbers. */
+const VP8X = 0x56503858;
 const ANMF = 0x414e4d46;
 
+/** The most pixels a WebP can be on each side. */
+const WEBP_MAX_SIDE = 16_383;
+
+/** What a picture's header says, read without the image library. */
+type Header =
+  | { format: 'png'; width: number; height: number }
+  | { format: 'webp'; canvas: { width: number; height: number } | null; frames: number };
+
 /**
- * How many frames a WebP holds, counting no further than one past the
- * limit, or null when `input` is not a WebP.
+ * The size a PNG or WebP header states, and how many frames a WebP holds,
+ * counting no further than one past the limit; null for any other picture.
  *
- * The image library takes time that grows with the square of a WebP's
- * frames before it reports how many there are (10 seconds for 100,000), on
- * the threads every upload and thumbnail shares, so the frames are counted
- * here first. A WebP is a RIFF file: a 12-byte header, then chunks of an
- * 8-byte header (a tag and a length) and that many bytes, padded to an even
- * length. Each frame of an animation is an ANMF chunk. The walk stops at the
- * end of the file or of the RIFF length, whichever comes first, as the image
- * library does, and every step moves on by at least 8 bytes, so it ends
- * whatever the lengths say.
+ * The image library cannot read a PNG or a WebP canvas over its own size
+ * limits, which a browser may still try to draw, so the size is read here
+ * and such a picture is refused as too large. And it takes time that grows
+ * with the square of a WebP's frames before it reports how many there are
+ * (10 seconds for 100,000), on the threads every upload and thumbnail
+ * shares, so the frames are counted here first.
+ *
+ * A PNG's size is in its first chunk, IHDR. A WebP is a RIFF file: a
+ * 12-byte header, then chunks of an 8-byte header (a tag and a length) and
+ * that many bytes, padded to an even length. An extended WebP's canvas is
+ * in its VP8X chunk, the first, and each frame of an animation is an ANMF
+ * chunk. The walk stops at the end of the file or of the RIFF length,
+ * whichever comes first, as the image library does, and every step moves
+ * on by at least 8 bytes, so it ends whatever the lengths say.
  */
-async function webpFrames(input: Buffer | string): Promise<number | null> {
+async function readHeader(input: Buffer | string): Promise<Header | null> {
   return withReader(input, async (readAt, length) => {
-    const head = await readAt(0, 12);
+    const head = await readAt(0, 30);
+    if (head.length >= 24 && head.readUInt32BE(0) === 0x89504e47 && head.toString('latin1', 12, 16) === 'IHDR') {
+      return { format: 'png', width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
+    }
     if (head.length < 12 || head.toString('latin1', 0, 4) !== 'RIFF' || head.toString('latin1', 8, 12) !== 'WEBP') {
       return null;
     }
     const end = Math.min(length, 8 + head.readUInt32LE(4));
+    let canvas: { width: number; height: number } | null = null;
+    // The canvas is one more than each of two 24-bit numbers, after 4 bytes of flags.
+    if (head.length >= 30 && head.readUInt32BE(12) === VP8X) {
+      canvas = { width: 1 + head.readUIntLE(24, 3), height: 1 + head.readUIntLE(27, 3) };
+    }
     let frames = 0;
     let offset = 12;
     while (offset + 8 <= end && frames <= PICTURE_LIMITS.maxFrames) {
@@ -140,8 +162,16 @@ async function webpFrames(input: Buffer | string): Promise<number | null> {
       const size = chunk.readUInt32LE(4);
       offset += 8 + size + (size % 2);
     }
-    return frames;
+    return { format: 'webp', canvas, frames };
   });
+}
+
+/** What is wrong with a picture `width` by `height` where `what` may be at most `max` on each side, or null. */
+function sideProblem(width: number, height: number, max: number, what: string): string | null {
+  const side = `${what} can be at most ${count(max)} pixels on each side.`;
+  if (width > max) return `This picture is ${count(width)} pixels wide. ${side}`;
+  if (height > max) return `This picture is ${count(height)} pixels tall. ${side}`;
+  return null;
 }
 
 /**
@@ -156,8 +186,16 @@ export async function pictureLimitProblem(input: Buffer | string, type: PictureA
   let height: number;
   let frames: number;
   try {
-    if (((await webpFrames(input)) ?? 0) > PICTURE_LIMITS.maxFrames) {
-      return `This animation has more than ${count(PICTURE_LIMITS.maxFrames)} frames. ${tooManyFrames}`;
+    const header = await readHeader(input);
+    if (header?.format === 'png') {
+      const problem = sideProblem(header.width, header.height, PICTURE_LIMITS.maxSide, 'A picture');
+      if (problem) return problem;
+    } else if (header?.format === 'webp') {
+      const problem = header.canvas && sideProblem(header.canvas.width, header.canvas.height, WEBP_MAX_SIDE, 'A WebP picture');
+      if (problem) return problem;
+      if (header.frames > PICTURE_LIMITS.maxFrames) {
+        return `This animation has more than ${count(PICTURE_LIMITS.maxFrames)} frames. ${tooManyFrames}`;
+      }
     }
     // Without `animated`, the height is one frame's and `pages` counts them.
     // Only the header is read, so the image library's default pixel limit
@@ -176,9 +214,8 @@ export async function pictureLimitProblem(input: Buffer | string, type: PictureA
   }
   if (!(width > 0 && height > 0 && frames > 0)) return UNREADABLE_PICTURE_MESSAGE;
 
-  const side = `A picture can be at most ${count(PICTURE_LIMITS.maxSide)} pixels on each side.`;
-  if (width > PICTURE_LIMITS.maxSide) return `This picture is ${count(width)} pixels wide. ${side}`;
-  if (height > PICTURE_LIMITS.maxSide) return `This picture is ${count(height)} pixels tall. ${side}`;
+  const tooLarge = sideProblem(width, height, PICTURE_LIMITS.maxSide, 'A picture');
+  if (tooLarge) return tooLarge;
   if (frames === 1) return null;
 
   if (frames > PICTURE_LIMITS.maxFrames) {

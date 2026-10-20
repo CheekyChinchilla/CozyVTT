@@ -5692,8 +5692,9 @@ paths:
         file type`) for every type that takes PNG.
 
         **Picture limits.** A MAP, TOKEN or AVATAR picture may be at most
-        16,384 pixels wide and 16,384 pixels tall (a GIF's size is its
-        logical screen, or its first frame where that reaches past it). An animated
+        16,384 pixels wide and 16,384 pixels tall (a WebP at most 16,383,
+        the most WebP allows; a GIF's size is its logical screen, or its
+        first frame where that reaches past it). An animated
         one, a GIF or WebP of more than one frame, may have at most 1,000
         frames and at most 200,000,000 pixels across all of them (width by
         height by frames) for a MAP, 50,000,000 for a TOKEN or AVATAR. They
@@ -5812,7 +5813,8 @@ paths:
             `type` ("Invalid file type..."); a MAP, TOKEN or AVATAR picture
             over the picture limits above, with the limit in words ("This
             picture is 20,000 pixels wide. A picture can be at most 16,384
-            pixels on each side.", "This animation has 1,200 frames. An
+            pixels on each side.", or for a WebP "A WebP picture can be at
+            most 16,383 pixels on each side.", "This animation has 1,200 frames. An
             animated picture can have at most 1,000.", for a WebP, whose
             frames are counted only as far as the limit, "This animation has
             more than 1,000 frames. An animated picture can have at most
