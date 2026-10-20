@@ -142,6 +142,10 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Import Character checks a dropped file against the names in use now.** A file dropped onto **Import Character** was checked against the characters that existed when the window opened, so one with the name of a character made since was not flagged.
+
+- **A new DM sees the table's secret rolls without reloading.** After the DM's seat was handed over, the new DM's dice panel went on treating them as a player until the page was reloaded, and left out other players' secret rolls arriving in the meantime.
+
 - **The panels show a token's disposition and HP in the map's own colours.** The **Friendly**, **Neutral** and **Hostile** buttons in the token editor, Token Manager and Creature Library, the letters on creatures and templates without a picture, and the HP and temporary HP bars in the campaign roster each used colours of their own, close to the map's but not the same; a player or object template's letter was amber in Token Templates, where the map draws it blue or grey, and the list's player badge was teal. They now use the map's colours, with text in a shade that reads in every theme, and the token editor's HP numbers are in the ordinary text colour, which reads on any theme where the green or amber did not.
 
 - **Moving a token on a lit map with many walls no longer holds up the server.** With dynamic lighting on, every token move works out what each player can see, and the time that took grew with the square of the number of walls, and the server answers one thing at a time. On a map of 1,000 walls and 8 lights, a move seen by 6 players took about 185 ms of the server's time and one seen by 12 about 345 ms. They now take about 13 and 21 ms, and what each light reaches is worked out again only when a wall or a light changes.
