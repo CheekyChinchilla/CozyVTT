@@ -7,6 +7,7 @@
  */
 
 import sharp from 'sharp';
+import zlib from 'zlib';
 
 /**
  * A GIF89a whose logical screen is `width` by `height`, holding `frames`
@@ -63,4 +64,32 @@ export async function craftedAnimatedWebp(options: { width: number; height: numb
 /** A still PNG of `width` by `height` pixels, of one colour. */
 export function plainPng(width: number, height: number): Promise<Buffer> {
   return sharp({ create: { width, height, channels: 3, background: '#808080' } }).png({ compressionLevel: 9 }).toBuffer();
+}
+
+function pngChunk(tag: string, data: Buffer): Buffer {
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(tag, 'latin1'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(zlib.crc32(body));
+  return Buffer.concat([length, body, crc]);
+}
+
+/**
+ * A PNG whose header says `width` by `height` pixels of grey, holding far
+ * fewer: what a reader of its header sees, without an image that size being
+ * made. Only its size can be read.
+ */
+export function pngHeader(width: number, height: number): Buffer {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // bits per sample
+  header[9] = 0; // greyscale
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', zlib.deflateSync(Buffer.alloc(10))),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
 }

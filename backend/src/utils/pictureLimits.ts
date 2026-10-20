@@ -158,7 +158,9 @@ export async function pictureLimitProblem(input: Buffer | string, type: PictureA
       return `This animation has more than ${count(PICTURE_LIMITS.maxFrames)} frames. ${tooManyFrames}`;
     }
     // Without `animated`, the height is one frame's and `pages` counts them.
-    const metadata = await (await openPicture(input)).metadata();
+    // Only the header is read, so the image library's default pixel limit
+    // (16,383 squared, below 16,384 on each side) is lifted for it.
+    const metadata = await (await openPicture(input, { limitInputPixels: false })).metadata();
     width = metadata.width ?? 0;
     height = metadata.height ?? 0;
     frames = metadata.pages ?? 1;

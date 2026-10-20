@@ -11,7 +11,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { pictureLimitProblem, PICTURE_LIMITS } from '../pictureLimits';
-import { craftedGif, craftedAnimatedWebp, plainPng } from '../../__tests__/helpers/animatedPictures';
+import { craftedGif, craftedAnimatedWebp, plainPng, pngHeader } from '../../__tests__/helpers/animatedPictures';
 
 let dir: string;
 
@@ -37,6 +37,19 @@ describe('a still picture', () => {
   it('is accepted at 16,384 pixels on a side', async () => {
     expect(await pictureLimitProblem(await plainPng(16_384, 1), 'MAP')).toBeNull();
     expect(await pictureLimitProblem(await plainPng(1, 16_384), 'AVATAR')).toBeNull();
+  });
+
+  // The image library refuses by default to open a picture of more than
+  // 16,383 pixels squared, which these are.
+  it('is accepted at 16,384 pixels on both sides', async () => {
+    expect(await pictureLimitProblem(pngHeader(16_384, 16_384), 'MAP')).toBeNull();
+    expect(await pictureLimitProblem(pngHeader(16_384, 16_383), 'TOKEN')).toBeNull();
+  });
+
+  it('is refused one pixel past 16,384 on a side however large the other', async () => {
+    expect(await pictureLimitProblem(pngHeader(16_384, 16_385), 'MAP')).toBe(
+      'This picture is 16,385 pixels tall. A picture can be at most 16,384 pixels on each side.'
+    );
   });
 
   it('is refused one pixel wider or taller, in words', async () => {
