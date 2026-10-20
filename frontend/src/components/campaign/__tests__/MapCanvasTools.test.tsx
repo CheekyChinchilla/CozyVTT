@@ -551,6 +551,24 @@ describe('the light tools', () => {
 
     expect(sentOf('light:add')).toEqual([]);
   });
+
+  // The keyboard listener is added once and reads the tools at each key
+  // press, so no tool change can leave it reading an older one.
+  it('adds its keyboard listener once, however the tools change', () => {
+    const added = vi.spyOn(window, 'addEventListener');
+    const keyListeners = () => added.mock.calls.filter(([type]) => type === 'keydown').length;
+    render(<MapCanvas />);
+    const atMount = keyListeners();
+
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+    press('Escape');
+
+    expect(keyListeners()).toBe(atMount);
+    added.mockRestore();
+  });
 });
 
 describe('the fog box tools', () => {
