@@ -6,7 +6,7 @@
  * was read out in full. It stays quiet while history is read, and announces
  * new messages.
  */
-import { it, expect, vi } from 'vitest';
+import { it, expect, vi, beforeAll } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('framer-motion', () => ({
@@ -29,6 +29,11 @@ const getMessages = vi.hoisted(() => vi.fn());
 vi.mock('@/services/message.service', () => ({ getMessages }));
 
 import ChatPanel from '../ChatPanel';
+
+// jsdom has no scrolling; the panel scrolls to the newest message.
+beforeAll(() => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollTo', { value: vi.fn(), configurable: true });
+});
 
 const message = (id: string) => ({
   id, campaignId: 'campaign-1', userId: 'them', content: `Message ${id}`, type: 'PLAYER', createdAt: '2026-10-19T10:00:00.000Z',
