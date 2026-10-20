@@ -155,6 +155,9 @@ export default function DiceRoller() {
 
   // Secret roll popup state
   const [secretRollResult, setSecretRollResult] = useState<DiceRolledEvent | null>(null);
+  // The roll list announces new rolls only once the history is in: it
+  // arrives as up to 50 rolls at once, which a live region would read out.
+  const [historyIn, setHistoryIn] = useState(false);
 
   // Rate limit state
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
@@ -188,6 +191,7 @@ export default function DiceRoller() {
     liveDuringRead.current = new Set();
 
     const loadHistory = async () => {
+      setHistoryIn(false);
       try {
         const fetched = await getDiceRolls(campaign.id, 50);
         if (cancelled) return;
@@ -214,6 +218,9 @@ export default function DiceRoller() {
       } catch (err) {
         console.error('[DiceRoller] Failed to load roll history:', err);
         // Non-fatal — live rolls still arrive over the socket.
+      } finally {
+        // A frame later, so the history is drawn before the list goes live.
+        requestAnimationFrame(() => { if (!cancelled) setHistoryIn(true); });
       }
     };
 
@@ -612,7 +619,7 @@ export default function DiceRoller() {
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
         role="log"
-        aria-live="polite"
+        aria-live={historyIn ? 'polite' : 'off'}
         aria-label="Dice rolls"
         aria-relevant="additions"
         className="flex-1 overflow-y-auto p-3 min-h-0"

@@ -83,10 +83,13 @@ describe('DiceRoller labels', () => {
 describe('DiceRoller for a screen reader', () => {
   afterEach(() => { seat.role = 'SPECTATOR'; });
 
-  it('reads the roll list as a log that announces new rolls', () => {
+  // The history arrives as up to 50 rolls at once; a live region in place
+  // before then read every one of them out.
+  it('reads the roll list as a log that announces new rolls once the history is in', async () => {
     render(<DiceRoller />);
     const log = screen.getByRole('log', { name: 'Dice rolls' });
-    expect(log.getAttribute('aria-live')).toBe('polite');
+    expect(log.getAttribute('aria-live')).toBe('off');
+    await waitFor(() => expect(log.getAttribute('aria-live')).toBe('polite'));
   });
 
   it('names the three roll boxes', () => {
