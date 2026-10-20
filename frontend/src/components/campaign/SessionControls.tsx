@@ -163,7 +163,7 @@ export default function SessionControls() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Clock className="w-4 h-4 text-warm-amber" />
+            <Clock className="w-4 h-4 text-accent-ink" />
             <h3 className="text-sm font-semibold text-brand-ink">Session Controls</h3>
           </div>
 

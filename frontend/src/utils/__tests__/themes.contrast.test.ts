@@ -99,6 +99,14 @@ describe('preset theme contrast', () => {
       expect(ratio, `${theme.name}: brand-text (${label}) on brand (${theme.colors.brand}) = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(AA_TEXT);
     });
 
+    // Brand buttons hover to brand-hover, the fill moved away from its label.
+    it('brand button label meets AA on the hovered fill', () => {
+      const label = derived['--rgb-brand-text'];
+      const hovered = derived['--rgb-brand-hover'];
+      const ratio = contrastRatioChannels(label, hovered);
+      expect(ratio, `${theme.name}: brand-text (${label}) on brand-hover (${hovered}) = ${ratio.toFixed(2)}:1`).toBeGreaterThanOrEqual(contrastRatioChannels(label, theme.colors.brand));
+    });
+
     // The danger button was red-500 under white, 3.8:1 in every theme. Its
     // fill is the theme's danger colour, darkened until white reads on it.
     it('danger button fill takes a white label at AA', () => {

@@ -135,13 +135,13 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
   const getTypeIcon = () => {
     switch (currentAsset.type) {
       case AssetType.MAP:
-        return <MapPin className="w-5 h-5 text-warm-amber" />;
+        return <MapPin className="w-5 h-5 text-accent-ink" />;
       case AssetType.TOKEN:
         return <User className="w-5 h-5 text-brand-ink" />;
       case AssetType.AUDIO:
-        return <FileAudio className="w-5 h-5 text-spirit-purple" />;
+        return <FileAudio className="w-5 h-5 text-spirit-ink" />;
       case AssetType.AVATAR:
-        return <User className="w-5 h-5 text-sunset-orange" />;
+        return <User className="w-5 h-5 text-accent-ink" />;
       default:
         return <ImageIcon className="w-5 h-5 text-stone-gray" />;
     }
@@ -267,7 +267,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
               {currentAsset.type === AssetType.AUDIO ? (
                 <div className="flex items-center justify-center h-64">
                   <div className="text-center">
-                    <FileAudio className="w-20 h-20 mx-auto mb-4 text-spirit-purple" />
+                    <FileAudio className="w-20 h-20 mx-auto mb-4 text-spirit-ink" />
                     <audio src={getAssetUrl()} controls className="mx-auto" />
                   </div>
                 </div>
@@ -304,7 +304,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                 {currentAsset.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 px-3 py-1 bg-warm-amber/20 text-warm-amber rounded-full text-sm"
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-warm-amber/15 text-accent-ink rounded-full text-sm"
                   >
                     <TagIcon className="w-3 h-3" />
                     {tag}
@@ -335,7 +335,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                       }}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
                         moveScope === scope
-                          ? 'bg-moss-green text-paper-white border-moss-green'
+                          ? 'bg-moss-green text-brand-text border-moss-green'
                           : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60 hover:bg-moss-green/5'
                       }`}
                     >

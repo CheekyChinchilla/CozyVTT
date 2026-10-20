@@ -78,7 +78,7 @@ export default function SessionToolbar({
                 onClick={() => onOpen(key)}
                 className={cn(
                   openPanels[key] && 'bg-accent/15! text-accent-ink!',
-                  key === 'spirit' && 'text-spirit-purple',
+                  key === 'spirit' && 'text-spirit-ink',
                   key === 'spirit' && spiritLayerEnabled && 'ring-2 ring-spirit-purple/50'
                 )}
               />

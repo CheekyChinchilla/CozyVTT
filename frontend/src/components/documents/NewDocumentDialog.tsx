@@ -135,7 +135,7 @@ export default function NewDocumentDialog({
                 role="radio"
                 aria-checked={format === f}
                 onClick={() => setFormat(f)}
-                className={`px-3 py-2 text-sm ${format === f ? 'bg-moss-green/20 text-brand-ink font-medium' : 'text-ink-secondary hover:bg-surface'}`}
+                className={`px-3 py-2 text-sm ${format === f ? 'bg-moss-green/15 text-brand-ink font-medium' : 'text-ink-secondary hover:bg-surface'}`}
               >
                 {f === 'md' ? 'Markdown' : 'Plain text'}
               </button>

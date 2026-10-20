@@ -297,7 +297,7 @@ export default function NewCharacterModal({
       {/* Error Alert */}
       {error && (
                 <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4 max-h-60 overflow-y-auto">
-                  <p className="text-sm text-spirit-red font-medium whitespace-pre-wrap font-mono">
+                  <p className="text-sm text-danger-ink font-medium whitespace-pre-wrap font-mono">
                     {error}
                   </p>
                 </div>
@@ -311,7 +311,7 @@ export default function NewCharacterModal({
                     htmlFor="characterName"
                     className="block text-sm font-semibold text-ink mb-2"
                   >
-                    Character Name <span className="text-spirit-red">*</span>
+                    Character Name <span className="text-danger-ink">*</span>
                   </label>
                   <input
                     type="text"
@@ -431,7 +431,7 @@ export default function NewCharacterModal({
                                 {template.label}
                               </span>
                               {template.value !== 'blank' && (
-                                <Sparkles className="w-4 h-4 text-warm-amber" />
+                                <Sparkles className="w-4 h-4 text-accent-ink" />
                               )}
                             </div>
                             <p className="text-sm text-ink-muted mt-1">

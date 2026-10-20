@@ -204,7 +204,7 @@ export default function InvitationModal({
             <button
               onClick={handleDecline}
               disabled={processing}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger-ink hover:bg-danger/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <XCircle className="w-4 h-4" />
               Decline
@@ -212,7 +212,7 @@ export default function InvitationModal({
             <button
               onClick={handleAccept}
               disabled={processing}
-              className="flex items-center gap-2 px-6 py-2 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-6 py-2 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check className="w-4 h-4" />
               {processing ? 'Processing...' : 'Accept Invitation'}

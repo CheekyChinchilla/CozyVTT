@@ -23,11 +23,11 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
     const badges = {
       PREPARATION: {
         label: 'Preparation',
-        class: 'bg-warm-amber/20 text-warm-amber border-warm-amber/30',
+        class: 'bg-warm-amber/15 text-accent-ink border-warm-amber/30',
       },
       ACTIVE: {
         label: 'Active',
-        class: 'bg-moss-green/20 text-brand-ink border-moss-green/30',
+        class: 'bg-moss-green/15 text-brand-ink border-moss-green/30',
       },
       PAUSED: {
         label: 'Paused',
@@ -35,7 +35,7 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
       },
       COMPLETED: {
         label: 'Completed',
-        class: 'bg-spirit-purple/20 text-spirit-purple border-spirit-purple/30',
+        class: 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/30',
       },
       ARCHIVED: {
         label: 'Archived',
@@ -56,17 +56,17 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
       DM: {
         label: 'DM',
         icon: Crown,
-        class: 'bg-moss-green/20 text-brand-ink border-moss-green/40',
+        class: 'bg-moss-green/15 text-brand-ink border-moss-green/40',
       },
       PLAYER: {
         label: 'Player',
         icon: Gamepad2,
-        class: 'bg-spirit-purple/20 text-spirit-purple border-spirit-purple/40',
+        class: 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40',
       },
       SPECTATOR: {
         label: 'Spectator',
         icon: Eye,
-        class: 'bg-warm-amber/20 text-warm-amber border-warm-amber/40',
+        class: 'bg-warm-amber/15 text-accent-ink border-warm-amber/40',
       },
     };
 
@@ -125,7 +125,7 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
 
       {/* Campaign Name */}
       <h3 className="text-xl font-semibold text-brand-ink mb-2 pr-20
-                     group-hover:text-spirit-purple transition-colors">
+                     group-hover:text-spirit-ink transition-colors">
         {campaign.name}
       </h3>
 
@@ -157,7 +157,7 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
             still runs the game, naming them twice is noise. */}
         {showOwner && (
           <div className="flex items-center gap-2 text-stone-gray">
-            <KeyRound className="w-4 h-4 text-warm-amber" />
+            <KeyRound className="w-4 h-4 text-accent-ink" />
             <span className="text-warm-gray">Owner:</span>
             <span className="text-stone-gray font-medium">{ownerName}</span>
           </div>
@@ -165,14 +165,14 @@ export default function CampaignCard({ campaign, userRole }: CampaignCardProps) 
 
         {/* Member Count */}
         <div className="flex items-center gap-2 text-stone-gray">
-          <Users className="w-4 h-4 text-spirit-purple" />
+          <Users className="w-4 h-4 text-spirit-ink" />
           <span className="text-warm-gray">Members:</span>
           <span className="text-stone-gray font-medium">{memberCount}</span>
         </div>
 
         {/* Last Played */}
         <div className="flex items-center gap-2 text-stone-gray">
-          <Calendar className="w-4 h-4 text-warm-amber" />
+          <Calendar className="w-4 h-4 text-accent-ink" />
           <span className="text-warm-gray">Last played:</span>
           <span className="text-stone-gray font-medium">{formatDate(campaign.lastPlayedAt)}</span>
         </div>

@@ -763,7 +763,7 @@ function CreatureRow({
           ) : (
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
-                creature.disposition === 'hostile' ? 'bg-danger' :
+                creature.disposition === 'hostile' ? 'bg-danger-fill' :
                 creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
               }`}
             >
@@ -823,7 +823,7 @@ function CreatureRow({
             <button
               onClick={onPlace}
               disabled={isPlacing}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/20 transition-colors font-medium"
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors font-medium"
             >
               {isPlacing ? (
                 <Loader2 className="w-3 h-3 animate-spin" />

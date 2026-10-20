@@ -170,7 +170,7 @@ const LOG_LEVEL_COLORS: Record<string, string> = {
   INFO: 'bg-info/10 text-info-ink',
   WARNING: 'bg-warning/10 text-warning-ink',
   ERROR: 'bg-danger/10 text-danger-ink',
-  CRITICAL: 'bg-danger/20 text-danger-ink font-bold',
+  CRITICAL: 'bg-danger/15 text-danger-ink font-bold',
 };
 
 type Tab = 'dashboard' | 'users' | 'settings' | 'appearance' | 'activity' | 'backups' | 'assets';
@@ -1081,7 +1081,7 @@ export default function AdminPage() {
                   </div>
 
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
-                    <FolderOpen className="w-7 h-7 text-warm-amber mb-2" />
+                    <FolderOpen className="w-7 h-7 text-accent-ink mb-2" />
                     <p className="text-3xl font-bold text-brand-ink">{stats?.campaignCount ?? '\u2014'}</p>
                     <p className="text-xs text-warm-gray mt-1">Campaigns</p>
                     {stats && (
@@ -1130,7 +1130,7 @@ export default function AdminPage() {
                 {stats && stats.assetBreakdown.length > 0 && (
                   <section className="glass-panel overflow-hidden">
                     <div className="px-4 py-3 border-b border-warm-gray/20 flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4 text-warm-amber" />
+                      <FolderOpen className="w-4 h-4 text-accent-ink" />
                       <h3 className="font-semibold text-brand-ink text-sm">Asset Breakdown</h3>
                     </div>
                     <div className="overflow-x-auto">
@@ -1267,7 +1267,7 @@ export default function AdminPage() {
                                 {/* User */}
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-moss-green/20 flex items-center justify-center text-brand-ink font-medium text-xs shrink-0">
+                                    <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center text-brand-ink font-medium text-xs shrink-0">
                                       {u.displayName.charAt(0).toUpperCase()}
                                     </div>
                                     <span className="font-medium text-stone-gray">{u.displayName}</span>
@@ -1299,7 +1299,7 @@ export default function AdminPage() {
                                       title={isSelf ? 'Cannot change your own role' : 'Change role (asks to confirm)'}
                                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                         u.platformRole === PlatformRole.ADMIN
-                                          ? 'bg-moss-green/20 text-brand-ink hover:bg-moss-green/30'
+                                          ? 'bg-moss-green/15 text-brand-ink hover:bg-moss-green/30'
                                           : 'bg-warm-gray/20 text-warm-gray hover:bg-warm-gray/30'
                                       } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                     >
@@ -1314,7 +1314,7 @@ export default function AdminPage() {
                                         title="Can upload and delete global assets"
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                           u.globalAssetManager
-                                            ? 'bg-warm-amber/20 text-warm-amber hover:bg-warm-amber/30'
+                                            ? 'bg-warm-amber/15 text-accent-ink hover:bg-warm-amber/30'
                                             : 'bg-warm-gray/10 text-warm-gray/60 hover:bg-warm-gray/20'
                                         } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                       >
@@ -1333,7 +1333,7 @@ export default function AdminPage() {
                                         title="Can edit and delete anyone's character template"
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                           u.templateEditor
-                                            ? 'bg-spirit-purple/20 text-spirit-purple hover:bg-spirit-purple/30'
+                                            ? 'bg-spirit-purple/15 text-spirit-ink hover:bg-spirit-purple/30'
                                             : 'bg-warm-gray/10 text-warm-gray/60 hover:bg-warm-gray/20'
                                         } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                       >
@@ -1359,7 +1359,7 @@ export default function AdminPage() {
                                   {u.lastLoginAt ? (
                                     formatDate(u.lastLoginAt)
                                   ) : (
-                                    <span className="inline-flex items-center rounded-full bg-warm-amber/15 text-warm-amber px-2 py-0.5 text-[10px] font-medium">
+                                    <span className="inline-flex items-center rounded-full bg-warm-amber/15 text-accent-ink px-2 py-0.5 text-[10px] font-medium">
                                       Never signed in
                                     </span>
                                   )}
@@ -1644,7 +1644,7 @@ export default function AdminPage() {
                                         <button
                                           onClick={handleDeleteUser}
                                           disabled={deleteEmail !== u.email || isDeleting}
-                                          className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-danger-fill text-white hover:bg-danger-fill disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         >
                                           {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                           Delete
@@ -1807,7 +1807,7 @@ export default function AdminPage() {
                                   {thumbUrl ? (
                                     <img src={thumbUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                   ) : asset.type === AssetType.AUDIO ? (
-                                    <FileAudio className="w-5 h-5 text-spirit-purple" />
+                                    <FileAudio className="w-5 h-5 text-spirit-ink" />
                                   ) : asset.type === AssetType.DOCUMENT ? (
                                     <FileText className="w-5 h-5 text-stone-gray/60" />
                                   ) : (
@@ -1827,10 +1827,10 @@ export default function AdminPage() {
                               {/* Type */}
                               <td className="px-3 py-2">
                                 <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-parchment border border-moss-green/20 text-stone-gray">
-                                  {asset.type === AssetType.MAP && <MapPin className="w-3 h-3 text-warm-amber" />}
+                                  {asset.type === AssetType.MAP && <MapPin className="w-3 h-3 text-accent-ink" />}
                                   {asset.type === AssetType.TOKEN && <UserIcon className="w-3 h-3 text-brand-ink" />}
-                                  {asset.type === AssetType.AUDIO && <FileAudio className="w-3 h-3 text-spirit-purple" />}
-                                  {asset.type === AssetType.AVATAR && <UserIcon className="w-3 h-3 text-sunset-orange" />}
+                                  {asset.type === AssetType.AUDIO && <FileAudio className="w-3 h-3 text-spirit-ink" />}
+                                  {asset.type === AssetType.AVATAR && <UserIcon className="w-3 h-3 text-accent-ink" />}
                                   {asset.type === AssetType.DOCUMENT && <FileText className="w-3 h-3 text-stone-gray" />}
                                   {asset.type}
                                 </span>
@@ -1842,7 +1842,7 @@ export default function AdminPage() {
                                     ? 'bg-spirit/10 text-spirit-ink'
                                     : asset.scope === AssetScope.USER
                                       ? 'bg-moss-green/15 text-brand-ink'
-                                      : 'bg-warm-amber/15 text-warm-amber'
+                                      : 'bg-warm-amber/15 text-accent-ink'
                                 }`}>
                                   {asset.scope === AssetScope.GLOBAL && <Globe className="w-3 h-3" />}
                                   {asset.scope === AssetScope.USER && <UserIcon className="w-3 h-3" />}
@@ -1914,7 +1914,7 @@ export default function AdminPage() {
                               <tr className="bg-warm-amber/5 border-b border-warm-gray/10">
                                 <td colSpan={8} className="px-6 py-3">
                                   <div className="flex items-center gap-3 max-w-lg">
-                                    <Users className="w-4 h-4 text-warm-amber shrink-0" />
+                                    <Users className="w-4 h-4 text-accent-ink shrink-0" />
                                     <p className="text-xs text-stone-gray font-medium whitespace-nowrap">Move to campaign:</p>
                                     <select
                                       value={assetScopePicker?.campaignId ?? ''}
@@ -2091,7 +2091,7 @@ export default function AdminPage() {
             {/* ---- SMTP Configuration (read-only) ---- */}
             <section className="glass-panel p-6 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-                <Mail className="w-4 h-4 text-warm-amber" />
+                <Mail className="w-4 h-4 text-accent-ink" />
                 <h3 className="font-semibold text-brand-ink text-sm">SMTP Configuration</h3>
                 <span className="ml-auto text-xs text-warm-gray">Read-only — set via environment variables</span>
               </div>
@@ -2159,7 +2159,7 @@ export default function AdminPage() {
             {/* ---- Upload Size Limits (read-only) ---- */}
             <section className="glass-panel p-6 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-                <FolderOpen className="w-4 h-4 text-warm-amber" />
+                <FolderOpen className="w-4 h-4 text-accent-ink" />
                 <h3 className="font-semibold text-brand-ink text-sm">Upload Size Limits</h3>
                 <span className="ml-auto text-xs text-warm-gray">Read-only — set via environment variables</span>
               </div>
@@ -2207,7 +2207,7 @@ export default function AdminPage() {
             {/* ---- Session Timeouts (read-only) ---- */}
             <section className="glass-panel p-6 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-                <Clock className="w-4 h-4 text-warm-amber" />
+                <Clock className="w-4 h-4 text-accent-ink" />
                 <h3 className="font-semibold text-brand-ink text-sm">Session Timeouts</h3>
                 <span className="ml-auto text-xs text-warm-gray">Read-only — set via environment variables</span>
               </div>
@@ -2455,7 +2455,7 @@ export default function AdminPage() {
                     {/* A full page load: this session went with the old database. */}
                     <a
                       href="/auth/login"
-                      className="inline-block text-xs py-1.5 px-4 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors font-medium"
+                      className="inline-block text-xs py-1.5 px-4 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors font-medium"
                     >
                       Go to Login
                     </a>
@@ -2509,7 +2509,7 @@ export default function AdminPage() {
                       <button
                         onClick={handleRestoreBackup}
                         disabled={restoring}
-                        className="flex items-center gap-2 text-sm py-1.5 px-4 rounded-lg bg-danger text-white hover:bg-danger disabled:opacity-50 transition-colors font-medium"
+                        className="flex items-center gap-2 text-sm py-1.5 px-4 rounded-lg bg-danger-fill text-white hover:bg-danger-fill disabled:opacity-50 transition-colors font-medium"
                       >
                         {restoring
                           ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Restoring…</>
@@ -2594,7 +2594,7 @@ export default function AdminPage() {
                               <td className="px-4 py-2">
                                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                                   u.platformRole === PlatformRole.ADMIN
-                                    ? 'bg-moss-green/20 text-brand-ink'
+                                    ? 'bg-moss-green/15 text-brand-ink'
                                     : 'bg-warm-gray/20 text-warm-gray'
                                 }`}>
                                   {u.platformRole}
@@ -2613,7 +2613,7 @@ export default function AdminPage() {
                 {/* Recent Admin Actions */}
                 <section className="glass-panel overflow-hidden">
                   <div className="px-4 py-3 border-b border-warm-gray/20 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-warm-amber" />
+                    <Clock className="w-4 h-4 text-accent-ink" />
                     <h3 className="font-semibold text-brand-ink text-sm">Recent Admin Actions</h3>
                     <span className="text-xs text-warm-gray ml-auto">last 100</span>
                   </div>
@@ -2684,7 +2684,7 @@ export default function AdminPage() {
                               <td className="px-4 py-2">
                                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                                   u.platformRole === PlatformRole.ADMIN
-                                    ? 'bg-moss-green/20 text-brand-ink'
+                                    ? 'bg-moss-green/15 text-brand-ink'
                                     : 'bg-warm-gray/20 text-warm-gray'
                                 }`}>
                                   {u.platformRole}
@@ -2861,7 +2861,7 @@ export default function AdminPage() {
                     className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
                       createUserForm.platformRole === role
                         ? role === 'ADMIN'
-                          ? 'bg-moss-green text-white border-moss-green'
+                          ? 'bg-moss-green text-brand-text border-moss-green'
                           : 'bg-stone-gray/20 text-stone-gray border-stone-gray/40'
                         : 'border-warm-gray/30 text-warm-gray hover:border-warm-gray/60'
                     }`}

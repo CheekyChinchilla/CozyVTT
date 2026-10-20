@@ -324,7 +324,7 @@ export default function SetupWizardPage() {
         {/* Error Alert */}
         {error && (
           <div className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 
@@ -419,7 +419,7 @@ function Step1Welcome() {
   return (
     <div className="space-y-6 text-center">
       <div className="flex justify-center gap-4">
-        <Shield className="w-12 h-12 text-spirit-purple" />
+        <Shield className="w-12 h-12 text-spirit-ink" />
         <Settings className="w-12 h-12 text-brand-ink" />
       </div>
 
@@ -507,7 +507,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             the server. If you set SETUP_TOKEN in your .env file, enter that value instead.
           </p>
           {fieldErrors.setupToken && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.setupToken}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.setupToken}</p>
           )}
         </div>
 
@@ -528,7 +528,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             maxLength={DISPLAY_NAME_MAX_LENGTH}
           />
           {fieldErrors.displayName && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.displayName}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.displayName}</p>
           )}
         </div>
 
@@ -548,7 +548,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             placeholder="admin@example.com"
           />
           {fieldErrors.email && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.email}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.email}</p>
           )}
         </div>
 
@@ -568,7 +568,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             placeholder="At least 12 characters"
           />
           {fieldErrors.password && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.password}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.password}</p>
           )}
 
           {/* Password Strength Indicator */}
@@ -623,7 +623,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             placeholder="Re-enter your password"
           />
           {fieldErrors.confirmPassword && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.confirmPassword}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.confirmPassword}</p>
           )}
         </div>
       </div>
@@ -676,7 +676,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
             Shown in the browser tab and in the emails the instance sends
           </p>
           {fieldErrors.instanceName && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.instanceName}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.instanceName}</p>
           )}
         </div>
 
@@ -690,7 +690,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
               onChange={(e) =>
                 setData({ ...data, enableRegistration: e.target.checked })
               }
-              className="mt-1 h-4 w-4 text-warm-amber focus:ring-warm-amber border-warm-gray/30 rounded-sm"
+              className="mt-1 h-4 w-4 text-accent-ink focus:ring-warm-amber border-warm-gray/30 rounded-sm"
             />
             <div className="flex-1">
               <label
@@ -703,7 +703,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
                 Allow anyone to create an account on this instance. You can change this
                 later in system settings.
               </p>
-              <p className="mt-2 text-xs text-warm-amber font-medium">
+              <p className="mt-2 text-xs text-accent-ink font-medium">
                 ⚠️ Recommended: Keep this disabled for private instances
               </p>
             </div>
@@ -777,7 +777,7 @@ function Step4Review({ adminData, systemConfig }: Step4Props) {
               <dt className="text-warm-gray">Public Registration:</dt>
               <dd
                 className={`font-medium ${
-                  systemConfig.enableRegistration ? 'text-warm-amber' : 'text-stone-gray'
+                  systemConfig.enableRegistration ? 'text-accent-ink' : 'text-stone-gray'
                 }`}
               >
                 {systemConfig.enableRegistration ? 'Enabled' : 'Disabled'}

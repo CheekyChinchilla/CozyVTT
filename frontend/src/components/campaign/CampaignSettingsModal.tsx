@@ -589,7 +589,7 @@ export default function CampaignSettingsModal({
                         <span
                           className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
                             isDm
-                              ? 'bg-spirit-purple/10 text-spirit-purple border-spirit-purple/20'
+                              ? 'bg-spirit-purple/10 text-spirit-ink border-spirit-purple/20'
                               : membership.role === 'SPECTATOR'
                               ? 'bg-stone-gray/10 text-stone-gray border-stone-gray/20'
                               : 'bg-moss-green/10 text-brand-ink border-moss-green/20'
@@ -613,7 +613,7 @@ export default function CampaignSettingsModal({
                             onClick={() => setMemberToPromote(membership)}
                             disabled={promotingMemberId === membership.userId}
                             title={`Make ${membership.user?.displayName ?? 'this player'} the DM`}
-                            className="p-1.5 rounded-lg text-spirit-purple hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
+                            className="p-1.5 rounded-lg text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
                             aria-label={`Make ${membership.user?.displayName} the Dungeon Master`}
                           >
                             {promotingMemberId === membership.userId ? (

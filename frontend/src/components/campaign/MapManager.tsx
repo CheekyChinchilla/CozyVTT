@@ -82,7 +82,7 @@ function TokenTransferConfirmation({
   return (
     <div className="mt-3 p-3 bg-warm-amber/10 border border-warm-amber/30 rounded-lg space-y-3">
       <div className="flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-warm-amber shrink-0 mt-0.5" />
+        <AlertTriangle className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-medium text-stone-gray">
             Current map has {tokens.length} token{tokens.length !== 1 ? 's' : ''}
@@ -117,7 +117,7 @@ function TokenTransferConfirmation({
             />
             <span className="text-sm text-stone-gray truncate">{token.name}</span>
             {token.layer === 'spirit' && (
-              <span className="text-xs text-spirit-purple bg-spirit-purple/10 px-1 rounded-sm">spirit</span>
+              <span className="text-xs text-spirit-ink bg-spirit-purple/10 px-1 rounded-sm">spirit</span>
             )}
           </label>
         ))}
@@ -219,7 +219,7 @@ function MapCard({
 
         {/* Active badge */}
         {isActive && (
-          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-moss-green text-white text-xs font-semibold rounded-full shadow-sm">
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-moss-green text-brand-text text-xs font-semibold rounded-full shadow-sm">
             <CheckCircle className="w-3 h-3" />
             Active
           </div>
@@ -243,7 +243,7 @@ function MapCard({
             className={`flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
               isActive
                 ? 'bg-moss-green/10 text-brand-ink/50 cursor-not-allowed'
-                : 'bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink'
+                : 'bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink'
             }`}
           >
             {isSwitchingToThis ? (
@@ -258,7 +258,7 @@ function MapCard({
             type="button"
             onClick={() => onEdit(map)}
             title="Edit map"
-            className="p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/20 text-warm-amber transition-colors"
+            className="p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/15 text-accent-ink transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -267,7 +267,7 @@ function MapCard({
             type="button"
             onClick={() => onExport(map)}
             title="Export as .uvtt file"
-            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
+            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -280,7 +280,7 @@ function MapCard({
             className={`p-1.5 rounded-lg transition-colors ${
               isActive
                 ? 'bg-danger/5 text-danger-ink/40 cursor-not-allowed'
-                : 'bg-danger/10 hover:bg-danger/20 text-danger-ink'
+                : 'bg-danger/10 hover:bg-danger/15 text-danger-ink'
             }`}
           >
             <Trash2 className="w-3.5 h-3.5" />

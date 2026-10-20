@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Amber, purple, red and green text reads clearly in every theme.** About 150 labels, links and icons across the app, such as the campaign card's status and the asset library's buttons, were drawn in the theme's fill colours, which fall under 4.5:1 in some themes. They now use each colour's readable text shade, and their pale backgrounds are a touch lighter where that shade sits on them. On the dark DM tool panels the amber is a fixed light amber, and the player's ruler hint on the map is white.
+
 - **Labels on green and red buttons read clearly in every theme.** White on the brand colour fell to 2.7:1 in Obsidian Night, and under 4.5:1 in Deep Dungeon, Midnight Court and Desert Sand; red buttons such as **Delete** were the same bright red with white text in every theme, at 3.8:1. The labels on brand-coloured buttons and ticks are now dark grey in those four themes, and red buttons use the theme's own red, deepened where white would not read on it. The outlined secondary button's text is also readable in Desert Sand and Shadow Realm.
 
 - **When Create & Publish as Template makes the character but not the template, the Characters page says so.** The message was put in the **Create New Character** window just as it closed, so nobody saw it until the window was next opened, where it greeted the next character. The page now shows a warning that the character was created and was not published as a template, with the server's reason when it gave one; **Save as Template** in the editor can publish it again.

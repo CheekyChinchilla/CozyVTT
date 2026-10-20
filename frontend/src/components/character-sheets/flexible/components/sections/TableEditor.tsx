@@ -105,7 +105,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
               <button
                 onClick={addColumn}
                 disabled={columnsFull}
-                className={`p-1 rounded-sm bg-moss-green/10 text-brand-ink hover:bg-moss-green/20 ${ADD_BUTTON_OFF}`}
+                className={`p-1 rounded-sm bg-moss-green/10 text-brand-ink hover:bg-moss-green/15 ${ADD_BUTTON_OFF}`}
                 title="Add column"
               >
                 <Plus className="w-4 h-4" />
@@ -151,7 +151,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
       <button
         onClick={addRow}
         disabled={rowsFull}
-        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
+        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/15 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
       >
         <Plus className="w-4 h-4" />
         Add Row

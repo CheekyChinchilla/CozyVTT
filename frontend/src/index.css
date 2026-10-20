@@ -9,6 +9,7 @@
   --color-accent-hover: rgb(var(--rgb-accent-hover));
   --color-accent-text: rgb(var(--rgb-accent-text));
   --color-brand-text: rgb(var(--rgb-brand-text));
+  --color-brand-hover: rgb(var(--rgb-brand-hover));
   --color-danger-fill: rgb(var(--rgb-danger-fill));
   --color-canvas: rgb(var(--rgb-bg-base));
   --color-surface: rgb(var(--rgb-bg-surface));
@@ -318,6 +319,7 @@
        correctly during the first paint, before a theme is applied. */
     --rgb-brand-ink: 74 93 78;
     --rgb-brand-text: 255 255 255;
+    --rgb-brand-hover: 65 82 69;
     --rgb-danger-fill: 192 57 43;
     --rgb-accent-ink: 137 91 43;
     --rgb-spirit-ink: 111 64 207;

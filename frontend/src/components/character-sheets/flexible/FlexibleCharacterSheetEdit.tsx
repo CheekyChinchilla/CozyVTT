@@ -291,7 +291,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
         <button
           onClick={() => setShowAddMenu(!showAddMenu)}
           disabled={sectionsFull}
-          className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
+          className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/15 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
         >
           <Plus className="w-4 h-4" />
           Add Section

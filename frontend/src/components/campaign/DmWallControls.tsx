@@ -121,7 +121,7 @@ export default function DmWallControls({
           if (next) onCollapse?.();
         }}
       >
-        <span className="text-xs text-warm-amber/70 font-medium uppercase tracking-wide">
+        <span className="text-xs text-amber-300 font-medium uppercase tracking-wide">
           Walls
           {wallCount > 0 && (
             <span className="ml-1 text-stone-400 normal-case">({wallCount})</span>

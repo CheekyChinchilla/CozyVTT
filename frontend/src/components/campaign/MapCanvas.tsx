@@ -2448,8 +2448,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         ? previewedPlane === 'spirit'
         : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
         <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-xs animate-pulse-soft">
-          <Ghost className="w-3.5 h-3.5 text-spirit-purple" />
-          <span className="text-xs font-semibold text-spirit-purple">Spirit Realm</span>
+          <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
+          <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
         </div>
       )}
 
@@ -2529,7 +2529,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 variant="secondary" className="p-2"
                 title={`Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`}
               >
-                <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-purple' : rulerColor === 'black' ? 'text-stone-gray' : 'text-warm-amber'}`} />
+                <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
               </Button>
             )}
 
@@ -2553,7 +2553,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
               title={dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show'}
             >
-              <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-purple' : 'text-stone-gray/40'}`} />
+              <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
             </Button>
           </>
         )}
@@ -2725,7 +2725,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       {/* Ruler hint for players with no token */}
       {showRuler && !isDM && !myToken && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-warm-amber text-xs px-3 py-1.5 rounded-full pointer-events-none">
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
           Place your character token on the map to use the ruler
         </div>
       )}
@@ -2743,7 +2743,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 onClick={() => setAoEConfig((prev) => ({ ...prev, shape }))}
                 className={`text-xs px-2 py-1 rounded border transition-colors capitalize ${
                   aoeConfig.shape === shape
-                    ? 'bg-moss-green/20 border-moss-green/60 text-brand-ink font-medium'
+                    ? 'bg-moss-green/15 border-moss-green/60 text-brand-ink font-medium'
                     : 'border-stone-gray/30 text-stone-gray hover:border-moss-green/40 hover:text-brand-ink'
                 }`}
               >
@@ -2792,7 +2792,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <button
                   key={ft}
                   onClick={() => setAoEConfig((prev) => ({ ...prev, sizeFt: ft }))}
-                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink border border-moss-green/20 transition-colors"
+                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
                 >
                   {ft} ft
                 </button>
@@ -3104,7 +3104,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               {/* Add to Initiative — DM only */}
               {currentMap && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-warm-amber hover:bg-warm-amber/10 transition-colors"
+                  className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
                     setContextMenu(null);
@@ -3223,7 +3223,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 contextMenu.token.layer === TokenLayer.TOKEN ? (
                   <button
                     disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-purple hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
                     onClick={async () => {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
@@ -3271,7 +3271,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               {(campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id).length > 0 && (
                 <div>
                   <button
-                    className="w-full px-4 py-2 text-left text-sm text-warm-amber hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
                     onClick={(e) => {
                       e.stopPropagation();
                       setContextMenuMoveToMapOpen(!contextMenuMoveToMapOpen);

@@ -173,7 +173,7 @@ function CharacterCardInner({
 
                   <button
                     onClick={(e) => handleMenuItemClick(e, () => onDelete(character))}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-red hover:bg-spirit-red/10
+                    className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-spirit-red/10
                              flex items-center gap-2 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -204,7 +204,7 @@ function CharacterCardInner({
           <div className="flex-1 min-w-0 pr-8">
             {/* Character Name */}
             <h3 className="text-xl font-semibold text-brand-ink mb-1 truncate
-                         group-hover:text-spirit-purple transition-colors">
+                         group-hover:text-spirit-ink transition-colors">
               {character.name}
             </h3>
 
@@ -217,8 +217,8 @@ function CharacterCardInner({
         {campaign && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-spirit-purple/10 border border-spirit-purple/30">
             <div className="flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-spirit-purple" />
-              <span className="text-sm font-medium text-spirit-purple">
+              <Link2 className="w-4 h-4 text-spirit-ink" />
+              <span className="text-sm font-medium text-spirit-ink">
                 Assigned to:
               </span>
               <span className="text-sm text-stone-gray truncate">
@@ -243,7 +243,7 @@ function CharacterCardInner({
         <div className="space-y-2 text-sm">
           {/* Last Updated */}
           <div className="flex items-center gap-2 text-stone-gray">
-            <Calendar className="w-4 h-4 text-warm-amber" />
+            <Calendar className="w-4 h-4 text-accent-ink" />
             <span className="text-warm-gray">Updated:</span>
             <span className="text-stone-gray font-medium">{formatDate(character.updatedAt)}</span>
           </div>

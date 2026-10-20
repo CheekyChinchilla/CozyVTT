@@ -76,11 +76,38 @@ describe('themed surfaces use semantic tokens', () => {
   // Text takes the -ink variant, derived per theme to stay readable. No file
   // is exempt.
   it('colours text with the readable -ink variants, never a fill token', () => {
-    const FILL_AS_TEXT = /\btext-(?:danger|success|warning|info|spirit|accent|brand)(?![-\w])/g;
+    // The legacy names are the same fills: warm-amber and sunset-orange the
+    // accent, spirit-purple the spirit, spirit-red the danger, moss-green the
+    // brand.
+    const FILL_AS_TEXT =
+      /\btext-(?:danger|success|warning|info|spirit|accent|brand|warm-amber|sunset-orange|spirit-purple|spirit-red|moss-green)(?![-\w])/g;
     const found = Object.entries(SOURCES)
       .map(([path, source]) => ({ file: path, count: (source.match(FILL_AS_TEXT) ?? []).length }))
       .filter((entry) => entry.count > 0)
       .map((entry) => `${entry.file} (${entry.count})`);
+    expect(found).toEqual([]);
+  });
+
+  // A label on a solid brand or danger fill: white fell under 4.5:1 on the
+  // brand in four themes, and on danger in four dark ones. The brand takes
+  // the derived brand-text label, and a white label the danger-fill.
+  it('labels a solid brand or danger fill with the label derived for it', () => {
+    const STRING = /"([^"]*)"|'([^'\n]*)'|`([^`]*)`/g;
+    // The variant prefixes (`hover:` and the rest) a class is used under.
+    const prefixes = (classes: string, re: RegExp) =>
+      new Set(classes.split(/\s+/).flatMap((c) => { const m = re.exec(c); return m ? [m[1]] : []; }));
+    const BRAND_FILL = /^((?:[\w-]+:)*)bg-(?:brand|moss-green)$/;
+    const DANGER_FILL = /^((?:[\w-]+:)*)bg-(?:danger|spirit-red)$/;
+    const WHITE = /^((?:[\w-]+:)*)text-(?:white|paper-white|canvas)$/;
+    const found: string[] = [];
+    for (const [path, source] of Object.entries(SOURCES)) {
+      for (const m of source.matchAll(STRING)) {
+        const classes = m[1] ?? m[2] ?? m[3] ?? '';
+        const white = prefixes(classes, WHITE);
+        const fills = [...prefixes(classes, BRAND_FILL), ...prefixes(classes, DANGER_FILL)];
+        if (fills.some((p) => white.has(p))) found.push(`${path}: ${classes.trim().slice(0, 80)}`);
+      }
+    }
     expect(found).toEqual([]);
   });
 

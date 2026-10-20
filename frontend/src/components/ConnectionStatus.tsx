@@ -29,7 +29,7 @@ export default function ConnectionStatus() {
   // Connecting state
   if (status === 'connecting') {
     return (
-      <div role="status" className="flex items-center gap-2 text-sm text-warm-amber">
+      <div role="status" className="flex items-center gap-2 text-sm text-accent-ink">
         <div className="relative">
           <Loader2 className="w-4 h-4 animate-spin" />
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-warm-amber animate-pulse" />
@@ -59,7 +59,7 @@ export default function ConnectionStatus() {
       {/* Retry button */}
       <button
         onClick={reconnect}
-        className="text-xs px-2 py-1 rounded-sm bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors"
+        className="text-xs px-2 py-1 rounded-sm bg-danger/10 text-danger-ink hover:bg-danger/15 transition-colors"
         title={error || 'Reconnect to server'}
       >
         Retry

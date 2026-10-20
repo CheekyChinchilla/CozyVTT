@@ -40,17 +40,17 @@ const VARIANT_CONFIG: Record<ConfirmVariant, {
   danger: {
     icon: <AlertTriangle className="w-6 h-6 text-danger-ink" aria-hidden="true" />,
     iconBg: 'bg-danger/10',
-    confirmClass: 'bg-danger hover:bg-danger/85 focus:ring-danger text-white',
+    confirmClass: 'bg-danger-fill hover:brightness-90 focus:ring-danger text-white',
   },
   warning: {
-    icon: <AlertCircle className="w-6 h-6 text-warm-amber" aria-hidden="true" />,
+    icon: <AlertCircle className="w-6 h-6 text-accent-ink" aria-hidden="true" />,
     iconBg: 'bg-warm-amber/10',
     confirmClass: 'bg-warm-amber hover:bg-sunset-orange focus:ring-warm-amber text-white',
   },
   info: {
     icon: <HelpCircle className="w-6 h-6 text-brand-ink" aria-hidden="true" />,
     iconBg: 'bg-brand/10',
-    confirmClass: 'bg-brand hover:bg-brand-dark focus:ring-brand text-white',
+    confirmClass: 'bg-brand hover:bg-brand-hover focus:ring-brand text-brand-text',
   },
 };
 

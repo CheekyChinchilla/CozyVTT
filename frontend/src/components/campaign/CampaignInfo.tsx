@@ -33,11 +33,11 @@ export default function CampaignInfo() {
     const badges = {
       PREPARATION: {
         label: 'Preparation',
-        class: 'bg-warm-amber/20 text-warm-amber border-warm-amber/30',
+        class: 'bg-warm-amber/15 text-accent-ink border-warm-amber/30',
       },
       ACTIVE: {
         label: 'Active',
-        class: 'bg-moss-green/20 text-brand-ink border-moss-green/30',
+        class: 'bg-moss-green/15 text-brand-ink border-moss-green/30',
       },
       PAUSED: {
         label: 'Paused',
@@ -45,7 +45,7 @@ export default function CampaignInfo() {
       },
       COMPLETED: {
         label: 'Completed',
-        class: 'bg-spirit-purple/20 text-spirit-purple border-spirit-purple/30',
+        class: 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/30',
       },
       ARCHIVED: {
         label: 'Archived',
@@ -112,21 +112,21 @@ export default function CampaignInfo() {
             still runs the game, naming them twice is noise. */}
         {showOwner && (
           <div className="flex items-center gap-2 text-stone-gray">
-            <KeyRound className="w-4 h-4 text-warm-amber" />
+            <KeyRound className="w-4 h-4 text-accent-ink" />
             <span className="text-warm-gray">Owner:</span>
             <span className="text-stone-gray font-medium">{ownerName}</span>
           </div>
         )}
 
         <div className="flex items-center gap-2 text-stone-gray">
-          <Users className="w-4 h-4 text-spirit-purple" />
+          <Users className="w-4 h-4 text-spirit-ink" />
           <span className="text-warm-gray">Members:</span>
           <span className="text-stone-gray font-medium">{memberCount}</span>
         </div>
 
         {campaign.lastPlayedAt && (
           <div className="flex items-center gap-2 text-stone-gray">
-            <Calendar className="w-4 h-4 text-warm-amber" />
+            <Calendar className="w-4 h-4 text-accent-ink" />
             <span className="text-warm-gray">Last played:</span>
             <span className="text-stone-gray font-medium">
               {new Date(campaign.lastPlayedAt).toLocaleDateString()}
@@ -140,7 +140,7 @@ export default function CampaignInfo() {
         <div className="pt-2 border-t border-moss-green/20">
           <button
             onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
-            className="flex items-center gap-2 px-3 py-2 w-full rounded-lg bg-moss-green/10 text-brand-ink hover:bg-moss-green/20 transition-colors text-sm font-medium"
+            className="flex items-center gap-2 px-3 py-2 w-full rounded-lg bg-moss-green/10 text-brand-ink hover:bg-moss-green/15 transition-colors text-sm font-medium"
           >
             <UserPlus className="w-4 h-4" />
             Invite Player
@@ -155,8 +155,8 @@ export default function CampaignInfo() {
           <div
             className={`inline-block ml-2 px-2.5 py-1 rounded-full border text-xs font-medium ${
               userRole === 'DM'
-                ? 'bg-moss-green/20 text-brand-ink border-moss-green/40'
-                : 'bg-spirit-purple/20 text-spirit-purple border-spirit-purple/40'
+                ? 'bg-moss-green/15 text-brand-ink border-moss-green/40'
+                : 'bg-spirit-purple/15 text-spirit-ink border-spirit-purple/40'
             }`}
           >
             {userRole}

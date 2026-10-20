@@ -121,7 +121,7 @@ export default function SessionHistory() {
           ) : (
             <ChevronRight className="w-3.5 h-3.5 text-stone-gray" />
           )}
-          <ScrollText className="w-4 h-4 text-warm-amber" />
+          <ScrollText className="w-4 h-4 text-accent-ink" />
           <h3 className="text-sm font-semibold text-brand-ink">Past Sessions</h3>
           {past.length > 0 && (
             <span className="text-xs text-stone-gray">({past.length})</span>
@@ -212,7 +212,7 @@ export default function SessionHistory() {
                         <button
                           onClick={() => void saveNotes(session.id)}
                           disabled={savingNotes}
-                          className="p-1 rounded-sm border border-moss-green/40 bg-moss-green/10 text-moss-green hover:bg-moss-green/20 disabled:opacity-50"
+                          className="p-1 rounded-sm border border-moss-green/40 bg-moss-green/10 text-brand-ink hover:bg-moss-green/15 disabled:opacity-50"
                           title="Save"
                           aria-label="Save notes"
                         >

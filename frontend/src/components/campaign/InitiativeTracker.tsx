@@ -252,7 +252,7 @@ function CombatantRow({
 
       {/* Name + disposition */}
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-medium truncate ${isActive ? 'text-warm-amber' : 'text-brand-ink'}`}>
+        <div className={`text-sm font-medium truncate ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}>
           {name}
         </div>
         {entry.hp && (
@@ -287,7 +287,7 @@ function CombatantRow({
           <button
             ref={valueButtonRef}
             type="button"
-            className={`text-sm font-bold cursor-pointer rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-warm-amber' : 'text-stone-gray'}`}
+            className={`text-sm font-bold cursor-pointer rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-stone-gray'}`}
             onClick={() => setEditing(true)}
             aria-label={`Initiative for ${name}: ${entry.initiative !== null ? entry.initiative : 'none'}. Edit`}
             title="Click to edit initiative value"
@@ -295,7 +295,7 @@ function CombatantRow({
             {entry.initiative !== null ? entry.initiative : '—'}
           </button>
         ) : (
-          <span className={`text-sm font-bold cursor-default ${isActive ? 'text-warm-amber' : 'text-stone-gray'}`}>
+          <span className={`text-sm font-bold cursor-default ${isActive ? 'text-accent-ink' : 'text-stone-gray'}`}>
             {entry.initiative !== null ? entry.initiative : '—'}
           </span>
         )}
@@ -540,7 +540,7 @@ export default function InitiativeTracker() {
             <Swords className="w-4 h-4 text-brand-ink" />
             <span className="font-semibold text-brand-ink text-sm">Initiative Tracker</span>
             {combatState.active && (
-              <span className="text-xs font-bold text-warm-amber bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
+              <span className="text-xs font-bold text-accent-ink bg-warm-amber/10 border border-warm-amber/20 rounded-sm px-1.5 py-0.5">
                 Round {combatState.round}
               </span>
             )}
@@ -563,7 +563,7 @@ export default function InitiativeTracker() {
             {combatState.active && currentCombatant && (
               <div className="flex items-center gap-2 px-3 py-2 bg-warm-amber/10 border border-warm-amber/30 rounded-lg">
                 <div className="w-2 h-2 rounded-full bg-warm-amber animate-pulse shrink-0" />
-                <span className="text-xs font-semibold text-warm-amber truncate">
+                <span className="text-xs font-semibold text-accent-ink truncate">
                   {tokenDisplayName(currentCombatant)}'s turn
                 </span>
               </div>
@@ -624,7 +624,7 @@ export default function InitiativeTracker() {
                     {!combatState.active ? (
                       <button
                         onClick={handleStart}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold bg-moss-green text-white rounded-lg hover:bg-moss-green/90 transition-colors"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 text-xs font-semibold bg-moss-green text-brand-text rounded-lg hover:bg-brand-hover transition-colors"
                       >
                         <Play className="w-3.5 h-3.5" />
                         Start Combat

@@ -281,7 +281,7 @@ export default function CharactersPage() {
             {/* Error Message */}
             {error && (
               <div className="mb-6 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-                <p className="text-sm text-spirit-red font-medium">{error}</p>
+                <p className="text-sm text-danger-ink font-medium">{error}</p>
               </div>
             )}
 
@@ -345,13 +345,13 @@ export default function CharactersPage() {
                   <p className="text-sm text-warm-gray mt-1">Assigned to Campaigns</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-spirit-purple/5">
-                  <p className="text-3xl font-bold text-spirit-purple">
+                  <p className="text-3xl font-bold text-spirit-ink">
                     {characters.filter((c) => !c.campaignId).length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">Unassigned</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-warm-amber/5">
-                  <p className="text-3xl font-bold text-warm-amber">
+                  <p className="text-3xl font-bold text-accent-ink">
                     {characters.filter((c) => c.gameSystem).length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">With Game System</p>

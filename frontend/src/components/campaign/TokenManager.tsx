@@ -721,7 +721,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                   onClick={() => setTokenLayer(TokenLayer.SPIRIT)}
                   className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
                     tokenLayer === TokenLayer.SPIRIT
-                      ? 'border-spirit-purple bg-spirit-purple/10 text-spirit-purple font-semibold'
+                      ? 'border-spirit-purple bg-spirit-purple/10 text-spirit-ink font-semibold'
                       : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
                   }`}
                 >
@@ -833,7 +833,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                           <span
                             className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
                               isSpirit
-                                ? 'bg-spirit-purple/15 text-spirit-purple'
+                                ? 'bg-spirit-purple/15 text-spirit-ink'
                                 : 'bg-moss-green/10 text-brand-ink'
                             }`}
                           >
@@ -845,7 +845,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             </span>
                           )}
                           {controller.kind === 'player' && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-warm-amber/10 text-warm-amber">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-warm-amber/10 text-accent-ink">
                               {controller.name}
                             </span>
                           )}
@@ -903,7 +903,7 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             ) : (
                               <Ghost
                                 className={`w-3.5 h-3.5 ${
-                                  isSpirit ? 'text-spirit-purple' : 'text-stone-gray/30'
+                                  isSpirit ? 'text-spirit-ink' : 'text-stone-gray/30'
                                 }`}
                               />
                             )}
@@ -918,8 +918,8 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
                             }
                             className={`p-1.5 rounded transition-colors ${
                               isShowingMapPicker
-                                ? 'bg-warm-amber/20 text-warm-amber'
-                                : 'hover:bg-warm-amber/10 text-stone-gray/30 hover:text-warm-amber'
+                                ? 'bg-warm-amber/15 text-accent-ink'
+                                : 'hover:bg-warm-amber/10 text-stone-gray/30 hover:text-accent-ink'
                             }`}
                             title="Move to another map"
                           >

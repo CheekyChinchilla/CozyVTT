@@ -158,7 +158,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-spirit-purple/10">
-                    <User className="w-6 h-6 text-spirit-purple" />
+                    <User className="w-6 h-6 text-spirit-ink" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-brand-ink font-heading">
@@ -256,7 +256,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-warm-amber/10">
-                    <FolderOpen className="w-6 h-6 text-warm-amber" />
+                    <FolderOpen className="w-6 h-6 text-accent-ink" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-brand-ink font-heading">
@@ -282,7 +282,7 @@ export default function DashboardPage() {
                            hover:border-moss-green/40 transition-colors cursor-pointer text-center"
                   onClick={() => navigate('/assets')}
                 >
-                  <FolderOpen className="w-8 h-8 mx-auto mb-2 text-warm-amber/60" />
+                  <FolderOpen className="w-8 h-8 mx-auto mb-2 text-accent-ink/60" />
                   <p className="text-sm font-medium text-brand-ink mb-1">
                     Manage Your Assets
                   </p>
@@ -298,7 +298,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="p-2 rounded-lg bg-moss-green/10">
-                    <BookOpen className="w-6 h-6 text-moss-green" />
+                    <BookOpen className="w-6 h-6 text-brand-ink" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-brand-ink font-heading">
@@ -324,7 +324,7 @@ export default function DashboardPage() {
                            hover:border-moss-green/40 transition-colors cursor-pointer text-center"
                   onClick={() => navigate('/documents')}
                 >
-                  <BookOpen className="w-8 h-8 mx-auto mb-2 text-moss-green/60" />
+                  <BookOpen className="w-8 h-8 mx-auto mb-2 text-brand-ink/60" />
                   <p className="text-sm font-medium text-brand-ink mb-1">
                     Read Without Leaving the Table
                   </p>
@@ -527,13 +527,13 @@ export default function DashboardPage() {
                   <p className="text-sm text-warm-gray mt-1">Campaigns as DM</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-spirit-purple/5">
-                  <p className="text-3xl font-bold text-spirit-purple">
+                  <p className="text-3xl font-bold text-spirit-ink">
                     {campaigns.filter(c => getUserRole(c) === CampaignRole.PLAYER).length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">Campaigns as Player</p>
                 </div>
                 <div className="text-center p-4 rounded-lg bg-warm-amber/5">
-                  <p className="text-3xl font-bold text-warm-amber">
+                  <p className="text-3xl font-bold text-accent-ink">
                     {campaigns.filter(c => c.status === 'ACTIVE').length}
                   </p>
                   <p className="text-sm text-warm-gray mt-1">Active Campaigns</p>

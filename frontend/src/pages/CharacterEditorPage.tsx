@@ -322,7 +322,7 @@ export default function CharacterEditorPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
-          <AlertCircle className="w-12 h-12 text-spirit-red mx-auto mb-4" />
+          <AlertCircle className="w-12 h-12 text-danger-ink mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
             Failed to Load Character
           </h2>
@@ -340,7 +340,7 @@ export default function CharacterEditorPage() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
-          <Lock className="w-12 h-12 text-sunset-orange mx-auto mb-4" />
+          <Lock className="w-12 h-12 text-accent-ink mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
             Permission Denied
           </h2>

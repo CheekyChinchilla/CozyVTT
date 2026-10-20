@@ -562,6 +562,7 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
   // (an inset panel or a hovered row at 5 to 10%).
   const andItsTint = (fill: string) => [...everywhere, ...everywhere.map((bg) => over(fill, bg, 0.15))];
   const andInkWash = [...everywhere, over(colors.ink, colors.paper, 0.1), over(colors.ink, colors.bgSurface, 0.1)];
+  const brandText = ensureReadableChannels('255 255 255', colors.brand);
 
   return {
     '--rgb-ink-secondary': ensureReadableOnAll(colors.inkSecondary, andInkWash),
@@ -571,7 +572,10 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
     '--rgb-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
     // Label on a brand-filled button or tick: white where it reads, a shade
     // nudged from white where the brand is too light for it.
-    '--rgb-brand-text': ensureReadableChannels('255 255 255', colors.brand),
+    '--rgb-brand-text': brandText,
+    // The brand button's hover: the fill moved away from its label, darker
+    // under a light label and lighter under a dark one, so it reads as well.
+    '--rgb-brand-hover': over(relativeLuminance(parseRgb(brandText)) > 0.5 ? '0 0 0' : '255 255 255', colors.brand, 0.12),
     // The danger button's fill: the theme's danger colour, darkened until a
     // white label reads on it.
     '--rgb-danger-fill': ensureReadableChannels(colors.danger, '255 255 255'),

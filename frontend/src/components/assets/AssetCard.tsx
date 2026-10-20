@@ -80,15 +80,15 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const getAssetIcon = () => {
     switch (asset.type) {
       case AssetType.MAP:
-        return <MapPin className="w-8 h-8 text-warm-amber" />;
+        return <MapPin className="w-8 h-8 text-accent-ink" />;
       case AssetType.TOKEN:
         return <User className="w-8 h-8 text-brand-ink" />;
       case AssetType.AUDIO:
-        return <FileAudio className="w-8 h-8 text-spirit-purple" />;
+        return <FileAudio className="w-8 h-8 text-spirit-ink" />;
       case AssetType.AVATAR:
-        return <User className="w-8 h-8 text-sunset-orange" />;
+        return <User className="w-8 h-8 text-accent-ink" />;
       case AssetType.DOCUMENT:
-        return <FileText className="w-8 h-8 text-moss-green" />;
+        return <FileText className="w-8 h-8 text-brand-ink" />;
       default:
         return <FileImage className="w-8 h-8 text-stone-gray" />;
     }
@@ -180,7 +180,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 {asset.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/20 text-warm-amber text-xs rounded-md"
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/15 text-accent-ink text-xs rounded-md"
                   >
                     <Tag className="w-3 h-3" />
                     {tag}
@@ -200,7 +200,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             <button
               type="button"
               onClick={onView}
-              className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
+              className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
               title="View details"
               aria-label={`View ${asset.name}`}
             >
@@ -209,7 +209,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             <button
               type="button"
               onClick={handleDownload}
-              className="p-2 rounded-lg bg-sunset-orange/10 hover:bg-sunset-orange/20 text-sunset-orange transition-colors"
+              className="p-2 rounded-lg bg-sunset-orange/10 hover:bg-sunset-orange/15 text-accent-ink transition-colors"
               title="Download"
               aria-label={`Download ${asset.name}`}
             >
@@ -219,7 +219,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="p-2 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger-ink transition-colors disabled:opacity-50"
+                className="p-2 rounded-lg bg-danger/10 hover:bg-danger/15 text-danger-ink transition-colors disabled:opacity-50"
                 title="Delete"
                 aria-label={`Delete ${asset.name}`}
               >
@@ -296,7 +296,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             title="Download"
             aria-label={`Download ${asset.name}`}
           >
-            <Download className="w-5 h-5 text-sunset-orange" aria-hidden="true" />
+            <Download className="w-5 h-5 text-accent-ink" aria-hidden="true" />
           </button>
           {canDelete && (
             <button
@@ -330,7 +330,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             {asset.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/20 text-warm-amber text-xs rounded-md"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/15 text-accent-ink text-xs rounded-md"
               >
                 <Tag className="w-3 h-3" />
                 {tag}

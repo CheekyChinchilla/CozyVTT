@@ -85,7 +85,7 @@ export default function DmFogControls({
           if (next) onCollapse?.();
         }}
       >
-        <span className="text-xs text-warm-amber/70 font-medium uppercase tracking-wide">Fog of War</span>
+        <span className="text-xs text-amber-300 font-medium uppercase tracking-wide">Fog of War</span>
         <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
       </button>
     {!collapsed && (

@@ -249,7 +249,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
         <div className="flex items-center gap-2">
-          <Ghost className="w-5 h-5 text-spirit-purple" />
+          <Ghost className="w-5 h-5 text-spirit-ink" />
           <SlideOverTitle className="text-lg font-bold text-brand-ink">Spirit Layer</SlideOverTitle>
         </div>
         <SlideOverClose className="btn-secondary p-1.5" iconClassName="w-4 h-4" title="Close" />
@@ -287,7 +287,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
               className={`relative flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                 enabled
                   ? 'bg-spirit-purple text-white hover:bg-spirit-purple/80'
-                  : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
+                  : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
               }`}
               title={enabled ? 'Close the veil' : 'Open the veil'}
             >
@@ -316,8 +316,8 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
               onClick={() => setDmViewBothPlanes(!dmViewBothPlanes)}
               className={`flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                 dmViewBothPlanes
-                  ? 'bg-spirit-purple/20 text-spirit-purple hover:bg-spirit-purple/30'
-                  : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-white focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
+                  ? 'bg-spirit-purple/15 text-spirit-ink hover:bg-spirit-purple/30'
+                  : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
               }`}
               title={dmViewBothPlanes ? 'Switch to single-plane view' : 'Switch to dual-plane view'}
             >
@@ -401,7 +401,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                       onClick={() => handleCustomEffectChange(eff.id)}
                       className={`p-2 rounded-cozy border transition-all text-center ${
                         customEffect === eff.id
-                          ? 'border-spirit-purple bg-spirit-purple/10 text-spirit-purple'
+                          ? 'border-spirit-purple bg-spirit-purple/10 text-spirit-ink'
                           : 'border-moss-green/20 hover:border-moss-green/40 bg-parchment/40 text-stone-gray'
                       }`}
                     >
@@ -456,7 +456,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
                         />
                       ) : (
                         <div className="w-8 h-8 rounded-full bg-spirit-purple/20 flex items-center justify-center shrink-0">
-                          <Ghost className="w-4 h-4 text-spirit-purple" />
+                          <Ghost className="w-4 h-4 text-spirit-ink" />
                         </div>
                       )}
                       <div className="min-w-0">

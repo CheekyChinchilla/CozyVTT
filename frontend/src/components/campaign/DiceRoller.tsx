@@ -579,7 +579,7 @@ export default function DiceRoller() {
               className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${
                 showSecretRolls
                   ? 'border-ink-muted/30 bg-paper/50 text-ink hover:bg-paper/70'
-                  : 'border-warm-amber/40 bg-warm-amber/10 text-warm-amber'
+                  : 'border-warm-amber/40 bg-warm-amber/10 text-accent-ink'
               }`}
               title={
                 showSecretRolls
@@ -595,7 +595,7 @@ export default function DiceRoller() {
           {userRole === 'DM' && rolls.length > 0 && (
             <button
               onClick={handleClearHistory}
-              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/20 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/15 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
               title="Clear all roll history"
             >
               <Trash2 className="w-3 h-3" />
@@ -653,7 +653,7 @@ export default function DiceRoller() {
       <div className="shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs">
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
-          <p className="text-xs text-warm-amber text-center mb-2 italic">
+          <p className="text-xs text-accent-ink text-center mb-2 italic">
             Session paused: rolls from this tab stay on your own screen.
           </p>
         )}
@@ -900,7 +900,7 @@ export default function DiceRoller() {
           <button
             type="button"
             onClick={() => setSecretRollResult(null)}
-            className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-xs transition-all"
+            className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-hover text-brand-text font-semibold text-sm shadow-xs transition-all"
           >
             Close
           </button>

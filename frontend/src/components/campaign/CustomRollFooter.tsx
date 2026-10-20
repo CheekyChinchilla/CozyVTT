@@ -54,7 +54,7 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
         />
         <button
           onClick={submit}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/20 transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors"
           title="Roll"
         >
           <Plus className="w-3 h-3" /> Roll

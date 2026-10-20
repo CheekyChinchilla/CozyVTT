@@ -710,7 +710,7 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
                       <button
                         onClick={handleConfirmDuplicate}
                         disabled={isSavingToCreature || !duplicateName.trim()}
-                        className="flex-1 py-1.5 text-[10px] rounded-cozy bg-moss-green/10 border border-moss-green/30 hover:bg-moss-green/20 text-brand-ink transition-colors font-medium disabled:opacity-40"
+                        className="flex-1 py-1.5 text-[10px] rounded-cozy bg-moss-green/10 border border-moss-green/30 hover:bg-moss-green/15 text-brand-ink transition-colors font-medium disabled:opacity-40"
                       >
                         {isSavingToCreature ? (
                           <span className="flex items-center justify-center gap-1">

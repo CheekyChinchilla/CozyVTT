@@ -469,7 +469,7 @@ export default function EditMapModal({
                             onClick={() => setFeetPreset(v)}
                             className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
                               feetPreset === v
-                                ? 'bg-moss-green text-paper-white border-moss-green'
+                                ? 'bg-moss-green text-brand-text border-moss-green'
                                 : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60'
                             }`}
                           >
@@ -481,7 +481,7 @@ export default function EditMapModal({
                           onClick={() => setFeetPreset('custom')}
                           className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
                             feetPreset === 'custom'
-                              ? 'bg-moss-green text-paper-white border-moss-green'
+                              ? 'bg-moss-green text-brand-text border-moss-green'
                               : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60'
                           }`}
                         >

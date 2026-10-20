@@ -42,7 +42,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
   if (isAdmin) {
     return (
       <div className="mt-4 p-4 rounded-lg bg-warm-amber/10 border border-warm-amber/30 flex gap-3">
-        <AlertTriangle className="w-5 h-5 text-warm-amber shrink-0 mt-0.5" />
+        <AlertTriangle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
         <p className="text-sm text-stone-gray">
           Admin accounts are required to keep MFA enabled and cannot disable it.
         </p>
@@ -121,7 +121,7 @@ function DisableForm({ onClose }: { onClose: () => void }) {
         <button
           type="submit"
           disabled={submitting || !password || token.length !== 6}
-          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-danger hover:bg-danger text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-danger-fill hover:bg-danger-fill text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldOff className="w-3.5 h-3.5" />}
           {submitting ? 'Disabling...' : 'Disable MFA'}
@@ -176,7 +176,7 @@ function RegenerateForm({ onClose }: { onClose: () => void }) {
     return (
       <div className="mt-4 space-y-4 border-t border-moss-green/10 pt-4">
         <div className="flex items-center gap-2 p-3 rounded-lg bg-warm-amber/10 border border-warm-amber/30">
-          <AlertTriangle className="w-4 h-4 text-warm-amber shrink-0" />
+          <AlertTriangle className="w-4 h-4 text-accent-ink shrink-0" />
           <p className="text-xs text-stone-gray font-medium">
             Your old codes are now invalid. Save these new codes securely.
           </p>
@@ -281,7 +281,7 @@ export default function MFASection() {
                 'Not enabled'
               )}
               {!isEnabled && isAdmin && (
-                <span className="ml-2 text-warm-amber font-medium">Admin accounts should enable MFA</span>
+                <span className="ml-2 text-accent-ink font-medium">Admin accounts should enable MFA</span>
               )}
             </p>
           </div>
