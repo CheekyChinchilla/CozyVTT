@@ -674,7 +674,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     lastFittedMapIdRef.current = currentMap.id;
     mapControls.fitToScreen(canvasSize.width, canvasSize.height);
     // Users can use the Reset View button to fit again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fits once per map load, not on every resize or zoom
+    // TODO(play): a picture that loads while the canvas still measures 0x0
+    // never fits, since the size is not a dependency; lastFittedMapIdRef
+    // already limits the fit to once per map, so the size can be added.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapControls is a new object each render; lastFittedMapIdRef keeps the fit to once per map
   }, [imageLoaded, currentMap?.id]);
 
   // ============================================
