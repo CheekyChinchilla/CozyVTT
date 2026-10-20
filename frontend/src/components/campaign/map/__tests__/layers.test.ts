@@ -8,6 +8,7 @@
  * cells) without being brittle about styling.
  */
 
+import { TOKEN_HUES, hueColour } from '@/utils/tokenColours';
 import { describe, it, expect } from 'vitest';
 import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
@@ -313,15 +314,15 @@ describe('drawTokens', () => {
     drawTokens(ctx, baseTokenState({ tokens: [veiled], tokenImages: new Map([['v', fakeImage]]), isDM: false }), viewport3x3);
     expect(count(ctx, 'drawImage')).toBe(0);
     expect(ctx.calls.filter((c) => c.method === 'fillText' && c.args[0] === '?')).toHaveLength(1);
-    expect(placeholderColor(veiled)).toBe('#78716c');
+    expect(placeholderColor(veiled)).toBe(hueColour(TOKEN_HUES.object));
   });
 
   it('keeps an obscured token\'s own colour for the DM, who sees it as it is', () => {
     // The grey the table sees comes from the mask (no kind, no disposition),
     // not from the flag, so the DM's lettered circle stays blue for a
     // character and red for a hostile.
-    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.PLAYER }))).toBe('#3b82f6');
-    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.NPC, disposition: TokenDisposition.HOSTILE }))).toBe('#ef4444');
+    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.PLAYER }))).toBe(hueColour(TOKEN_HUES.player));
+    expect(placeholderColor(makeToken('v', { obscured: true, type: TokenType.NPC, disposition: TokenDisposition.HOSTILE }))).toBe(hueColour(TOKEN_HUES.hostile));
   });
 
   it('draws the drag ghost from cached art only when the token has an address', () => {

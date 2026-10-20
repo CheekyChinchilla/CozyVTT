@@ -30,12 +30,12 @@ const HEADER_COLOURS = /\/character-sheets\/[^/]+\/colorPresets\.ts$/;
 
 
 /**
- * Palette families that have a semantic token to use instead. Teal and lime
- * are left out: the DM screens use them to match the map's fixed token
- * colours (friendly tokens are drawn teal).
+ * Palette families that have a semantic token to use instead. The token
+ * colours of the map (dispositions, HP) are the token-* tokens, from
+ * utils/tokenColours.ts.
  */
 const RAW_COLOR =
-  /\b(?:text|bg|border(?:-[trblxyse])?|ring|divide|placeholder|from|via|to|fill|stroke|outline|decoration|accent)-(?:red|rose|pink|fuchsia|green|emerald|amber|yellow|orange|blue|indigo|sky|cyan|purple|violet|stone|gray|slate|zinc|neutral|sepia)-\d{2,3}\b/g;
+  /\b(?:text|bg|border(?:-[trblxyse])?|ring|divide|placeholder|from|via|to|fill|stroke|outline|decoration|accent)-(?:red|rose|pink|fuchsia|green|emerald|lime|teal|amber|yellow|orange|blue|indigo|sky|cyan|purple|violet|stone|gray|slate|zinc|neutral|sepia)-\d{2,3}\b/g;
 
 // Vite inlines every component's source at build time, so the check needs no
 // filesystem access and runs in the same environment as the rest of the suite.
@@ -158,5 +158,21 @@ describe('the button utilities in index.css', () => {
     expect(secondary).toMatch(/\btext-brand-ink\b/);
     expect(secondary).not.toMatch(/\btext-brand(?![-\w])/);
     expect(secondary).toMatch(/\bhover:text-brand-text\b/);
+  });
+});
+
+// The map draws a token's disposition and HP in fixed colours, and the panels
+// that pick a disposition show the same ones. Each hex was written out where
+// it was used (the map held the friendly teal twice); now only
+// tokenColours.ts holds them.
+describe('the token colours', () => {
+  it('are written down once, in utils/tokenColours.ts', () => {
+    // The hexes no other drawing uses (red, green and amber also colour
+    // walls and the ruler).
+    const HEXES = /#(?:2dd4bf|fbbf24|3b82f6|84cc16|78716c)\b/gi;
+    const found = Object.entries(SOURCES)
+      .filter(([path]) => path !== '/src/utils/tokenColours.ts')
+      .flatMap(([path, source]) => (source.match(HEXES) ?? []).map((hex) => `${path}: ${hex}`));
+    expect(found).toEqual([]);
   });
 });

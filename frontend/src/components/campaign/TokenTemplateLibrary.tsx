@@ -4,6 +4,7 @@
  * Tokens saved here can be reused across maps and copied to other campaigns.
  */
 
+import { DISPOSITION_PLACEHOLDER } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -391,7 +392,7 @@ function TemplateRow({
   const typeColors: Record<string, string> = {
     object: 'bg-warning/10 text-warning-ink',
     npc: 'bg-danger/10 text-danger-ink',
-    player: 'bg-teal-500/10 text-teal-600',
+    player: 'bg-token-player/10 text-token-player-ink',
   };
 
   return (
@@ -409,9 +410,9 @@ function TemplateRow({
           />
         ) : (
           <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-            template.disposition === 'hostile' ? 'bg-danger-fill text-white' :
-            template.disposition === 'friendly' ? 'bg-teal-700 text-white' :
-            'bg-warning text-black'
+            template.disposition === 'hostile' ? DISPOSITION_PLACEHOLDER.hostile :
+            template.disposition === 'friendly' ? DISPOSITION_PLACEHOLDER.friendly :
+            DISPOSITION_PLACEHOLDER.neutral
           }`}>
             {template.name.charAt(0).toUpperCase()}
           </div>

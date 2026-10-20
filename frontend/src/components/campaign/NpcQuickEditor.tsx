@@ -8,6 +8,7 @@
 // - Visibility + remove quick actions
 // ============================================
 
+import { DISPOSITION_PICKED, HP_HUES, hpTier, hueColour } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -90,11 +91,9 @@ interface NpcQuickEditorProps {
 // Helpers
 // ============================================
 
+/** The colour of the map's HP bar at this fraction left. */
 function getHpColor(pct: number): string {
-  if (pct >= 0.75) return '#22c55e'; // green
-  if (pct >= 0.5)  return '#84cc16'; // lime
-  if (pct >= 0.25) return '#f59e0b'; // amber
-  return '#ef4444';                   // red
+  return hueColour(HP_HUES[hpTier(pct)]);
 }
 
 function getEffectiveType(token: Token): TokenType {
@@ -959,9 +958,9 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             </h3>
             <div className="flex gap-2">
               {([
-                { d: TokenDisposition.FRIENDLY, label: 'Friendly', activeClass: 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold' },
-                { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  activeClass: 'border-warning/60 bg-warning/10 text-warning-ink font-semibold' },
-                { d: TokenDisposition.HOSTILE,  label: 'Hostile',  activeClass: 'border-danger/60 bg-danger/10 text-danger-ink font-semibold' },
+                { d: TokenDisposition.FRIENDLY, label: 'Friendly', activeClass: DISPOSITION_PICKED.friendly },
+                { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  activeClass: DISPOSITION_PICKED.neutral },
+                { d: TokenDisposition.HOSTILE,  label: 'Hostile',  activeClass: DISPOSITION_PICKED.hostile },
               ] as const).map(({ d, label, activeClass }) => (
                 <button
                   key={d}

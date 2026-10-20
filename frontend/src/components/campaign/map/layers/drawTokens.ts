@@ -6,6 +6,7 @@
 // predicate; animation progress uses the caller-provided `now`.
 // ============================================
 
+import { TOKEN_HUES, HP_HUES, hpTier, hueColour } from '@/utils/tokenColours';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType, TokenDisposition } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
@@ -146,11 +147,13 @@ export function placeholderColor(token: Token): string {
   // lands on the neutral stone below by itself; the DM, who holds the real
   // fields, keeps seeing its own colour.
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-  return effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
-    token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-    token.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-    token.disposition === TokenDisposition.NEUTRAL  ? '#fbbf24' :
-                                                      '#78716c'; // object / default stone
+  return hueColour(
+    effectiveTypeForColor === TokenType.PLAYER ? TOKEN_HUES.player :
+    token.disposition === TokenDisposition.HOSTILE  ? TOKEN_HUES.hostile :
+    token.disposition === TokenDisposition.FRIENDLY ? TOKEN_HUES.friendly :
+    token.disposition === TokenDisposition.NEUTRAL  ? TOKEN_HUES.neutral :
+                                                      TOKEN_HUES.object
+  );
 }
 
 export function drawTokens(
@@ -338,10 +341,11 @@ export function drawTokens(
     // full-art: bottom border stripe
     const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
     if (effectiveType === TokenType.NPC && token.disposition) {
-      const ringColor =
-        token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-        token.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-                                                          '#fbbf24'; // neutral = amber
+      const ringColor = hueColour(
+        token.disposition === TokenDisposition.HOSTILE  ? TOKEN_HUES.hostile :
+        token.disposition === TokenDisposition.FRIENDLY ? TOKEN_HUES.friendly :
+                                                          TOKEN_HUES.neutral
+      );
       if (displayMode === 'full-art') {
         const stripeH = Math.max(3, 3 / zoom);
         ctx.fillStyle = ringColor;
@@ -387,10 +391,7 @@ export function drawTokens(
       ctx.fill();
 
       // HP fill
-      const hpColor = pct >= 0.75 ? '#22c55e'
-                    : pct >= 0.50 ? '#84cc16'
-                    : pct >= 0.25 ? '#f59e0b'
-                    :               '#ef4444';
+      const hpColor = hueColour(HP_HUES[hpTier(pct)]);
       if (pct > 0) {
         ctx.fillStyle = hpColor;
         ctx.beginPath();

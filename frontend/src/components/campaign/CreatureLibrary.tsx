@@ -6,6 +6,7 @@
  * with the creature's stats copied into the token's statBlock field.
  */
 
+import { DISPOSITION_PICKED, DISPOSITION_PLACEHOLDER } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -763,9 +764,9 @@ function CreatureRow({
           ) : (
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
-                creature.disposition === 'hostile' ? 'bg-danger-fill text-white' :
-                creature.disposition === 'friendly' ? 'bg-teal-700 text-white' :
-                'bg-warning text-black'
+                creature.disposition === 'hostile' ? DISPOSITION_PLACEHOLDER.hostile :
+                creature.disposition === 'friendly' ? DISPOSITION_PLACEHOLDER.friendly :
+                DISPOSITION_PLACEHOLDER.neutral
               }`}
             >
               {creature.name.charAt(0).toUpperCase()}
@@ -1331,9 +1332,9 @@ function CreatureForm({ campaignId, gameSystem, editingCreature, onCreated, onEd
               onClick={() => setDisposition(d)}
               className={`flex-1 py-1 text-[10px] rounded-cozy border transition-all ${
                 disposition === d
-                  ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
-                  : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
-                  :                     'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
+                  ? color === 'teal'  ? DISPOSITION_PICKED.friendly
+                  : color === 'amber' ? DISPOSITION_PICKED.neutral
+                  :                    DISPOSITION_PICKED.hostile
                   : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
               }`}
             >

@@ -142,6 +142,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **The panels show a token's disposition and HP in the map's own colours.** The **Friendly**, **Neutral** and **Hostile** buttons in the token editor, Token Manager and Creature Library, the letters on creatures and templates without a picture, and the HP bars in the campaign roster each used colours of their own, close to the map's but not the same; the Token Templates list showed a player template in teal, where the map draws players blue. They now use the map's colours, with text in a shade that reads in every theme.
+
 - **A failed save or request no longer copies what it sent into the browser's console.** When saving a character, uploading a token picture, sending an invitation, saving the vibe settings or loading the campaign failed, the page wrote the whole failed request to the browser's developer console, including the sheet or the details sent, where it could end up in a screenshot or a bug report. Only the status and the server's message are written now.
 
 - **A screen reader no longer reads out older chat messages as they load.** The chat announces each new message, and it also read out every message on a page of older ones from **Load More**, and the messages fetched again after a dropped connection. It now stays quiet while it reads them.

@@ -15,6 +15,7 @@
  * Authored values that already pass are never modified.
  */
 
+import { TOKEN_HUES } from './utils/tokenColours';
 import { ensureReadableChannels, ensureReadableOnAll, parseRgb, readableTextOn, relativeLuminance } from './utils/color';
 
 export interface ThemeColors {
@@ -591,6 +592,12 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
     '--rgb-warning-ink': ensureReadableOnAll(STATE_HUES.warning, andItsTint(STATE_HUES.warning)),
     '--rgb-info': STATE_HUES.info,
     '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, andItsTint(STATE_HUES.info)),
+    // The map's token colours (utils/tokenColours.ts), fixed in every theme,
+    // each with a readable shade for text in the panels.
+    ...Object.fromEntries((['player', 'hostile', 'friendly', 'neutral'] as const).flatMap((kind) => [
+      [`--rgb-token-${kind}`, TOKEN_HUES[kind]],
+      [`--rgb-token-${kind}-ink`, ensureReadableOnAll(TOKEN_HUES[kind], andItsTint(TOKEN_HUES[kind]))],
+    ])),
   };
 }
 

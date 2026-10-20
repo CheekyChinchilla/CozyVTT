@@ -61,7 +61,7 @@ const QUICK_ROLLS = [
   { label: 'd6', expression: '1d6', color: 'bg-success/15 dark:bg-success/30 border-success/50 hover:bg-success/80 dark:hover:bg-success/40' },
   { label: 'd8', expression: '1d8', color: 'bg-spirit/15 dark:bg-spirit/30 border-spirit/50 hover:bg-spirit/80 dark:hover:bg-spirit/40' },
   { label: 'd10', expression: '1d10', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
-  { label: 'd12', expression: '1d12', color: 'bg-teal-100/80 dark:bg-teal-900/30 border-teal-300/50 hover:bg-teal-200/80 dark:hover:bg-teal-900/40' },
+  { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 dark:bg-token-friendly/30 border-token-friendly/50 hover:bg-token-friendly/80 dark:hover:bg-token-friendly/40' },
   { label: 'd20', expression: '1d20', color: 'bg-danger/15 dark:bg-danger/30 border-danger/50 hover:bg-danger/80 dark:hover:bg-danger/40' },
   { label: 'd100', expression: '1d100', color: 'bg-info/15 dark:bg-info/30 border-info/50 hover:bg-info/80 dark:hover:bg-info/40' },
 ];
