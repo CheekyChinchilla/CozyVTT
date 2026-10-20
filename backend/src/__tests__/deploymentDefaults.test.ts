@@ -218,6 +218,24 @@ function backendExecLines(rel: string): string[] {
     .filter((line) => /docker compose exec(?: -[A-Za-z]+(?: \S+)?)* backend\b|docker exec(?: -\S+)* cozyvtt-backend\b/.test(line));
 }
 
+// The backend's memory ceiling was fixed at 512 MB in the compose file, so a
+// server with more memory could not give a large campaign import more room
+// without an override file. It is a setting now, with the old default; below
+// the 256 MB reservation Docker refuses to create the container.
+describe("the backend's memory limit", () => {
+  it('is BACKEND_MEMORY_LIMIT, 512M when unset, above a 256M reservation', () => {
+    const block = service('docker-compose.yml', 'backend');
+    expect(block).toMatch(/limits:\n {10}memory: \$\{BACKEND_MEMORY_LIMIT:-512M\}\n/);
+    expect(block).toMatch(/reservations:\n {10}memory: 256M\n/);
+  });
+
+  it.each(['.env.example', 'docs/DEPLOYMENT.md'])('is described in %s, with its 256M floor', (file) => {
+    const text = read(file);
+    expect(text).toContain('BACKEND_MEMORY_LIMIT');
+    expect(text).toMatch(/256M/);
+  });
+});
+
 describe('the containers', () => {
   it.each(['database', 'backend', 'frontend', 'nginx'])('run %s with no-new-privileges', (name) => {
     expect(service('docker-compose.yml', name)).toMatch(/\n {4}security_opt:\n {6}- no-new-privileges:true\n/);

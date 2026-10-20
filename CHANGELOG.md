@@ -29,6 +29,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Added
 
+- **The backend's memory limit is a setting.** It was fixed at 512 MB, so giving the backend more room on a larger server meant an override file. Set `BACKEND_MEMORY_LIMIT` in `.env` (`1G`, `2G`) and run `docker compose up -d`; leave it out and 512 MB applies, as before. It cannot go below 256M. See [Backend memory](docs/DEPLOYMENT.md#backend-memory).
+
 - **See and clear an account's sign-in lock from the Admin Panel.** Ten wrong passwords in an hour lock an account from every address, and until now an administrator could open it again only by giving it a new password. In **Admin → Users** a locked account now shows **Locked until** and the time the lock ends by itself, and **Clear lock** on its row lets it sign in at once with its usual password, after asking. Wrong two-factor codes for the account (five in fifteen minutes) are cleared with it. Each clear is a line in **Admin → Activity**. See [Logging In](docs/USER_GUIDE.md#logging-in) in the user guide.
 
 - **A Call of Cthulhu investigator's contacts, and notes on Luck and wealth, can be edited.** The read-only sheet listed contacts that the editor had no way to add, change or remove; **Edit** now has a **Contacts** list on the **Possessions** tab, with **Add Contact**, a name, role and notes for each, and a remove button. A note under **Luck Score** and **Wealth notes** under **Assets** are new, and the read-only sheet shows both.

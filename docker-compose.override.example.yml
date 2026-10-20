@@ -69,12 +69,9 @@ services:
 #     ports:
 #       - "127.0.0.1:5432:5432"
 #
-# Give the backend more memory than the default 512M limit:
-#   backend:
-#     deploy:
-#       resources:
-#         limits:
-#           memory: 1G
+# Give the backend more memory than the default 512M limit: set
+# BACKEND_MEMORY_LIMIT=1G in .env instead (docs/DEPLOYMENT.md, "Backend
+# memory"). A limit written here still takes precedence over it.
 #
 # Add an extra environment variable to the backend:
 #   backend:

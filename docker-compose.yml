@@ -108,7 +108,7 @@ services:
     # Its files are read-only too: the backend writes only to the three
     # folders below and to /tmp, where a backup keeps its dump of the database
     # and a restore unpacks the archive. /tmp is the backend_tmp volume: in
-    # memory a dump would count against the 512 MB below. start.sh removes
+    # memory a dump would count against the memory limit below. start.sh removes
     # what a stopped backup or restore left there.
     read_only: true
     depends_on:
@@ -169,11 +169,12 @@ services:
       start_period: 30s
     networks:
       - internal
-    # Resource limits — adjust based on your server capacity
+    # Memory: BACKEND_MEMORY_LIMIT in .env, 512M when unset. Node sizes its
+    # heap to about half of it. It cannot be set below the 256M reserved.
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: ${BACKEND_MEMORY_LIMIT:-512M}
         reservations:
           memory: 256M
 

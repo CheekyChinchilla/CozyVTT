@@ -1128,6 +1128,26 @@ Then apply it with `docker compose up -d`. Leave it out and the default of 20 ap
 
 Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT` in the same way. A value that is not a whole number above zero is ignored there too, with a warning in the backend log.
 
+### Backend memory
+
+The backend container may use up to 512 MB of memory, and Node gives about half of that to the work in hand at once, such as a campaign archive being read. That is enough for an ordinary instance. On a server with memory to spare, raise it if importing a large campaign fails or the backend restarts during one:
+
+1. Add this line to `.env` (pick a size your server can spare: `1G`, `2G`):
+
+   ```env
+   BACKEND_MEMORY_LIMIT=1G
+   ```
+
+2. Apply it:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   The backend is recreated with the new limit. `docker stats` shows it in the **MEM USAGE / LIMIT** column.
+
+It cannot go below **256M**, the amount reserved for the backend: with a smaller value Docker does not start the backend at all, and `docker compose up -d` says "Minimum memory limit can not be less than memory reservation limit". Leave the line out and the default of 512M applies. A limit set in `docker-compose.override.yml` still takes precedence.
+
 ### Other settings
 
 The rest of what the backend reads from its environment. Every one is optional; leave it out and the default applies. On Docker, set the ones marked **Yes** in `.env` and apply them with `docker compose up -d`. The ones marked **No** are not passed to the backend container, so setting them in `.env` does nothing there; they are for an install without Docker (`backend/.env`).
