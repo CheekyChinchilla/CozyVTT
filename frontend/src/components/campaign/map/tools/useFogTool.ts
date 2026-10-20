@@ -4,12 +4,12 @@
 // the button is let go.
 // ============================================
 
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import type { FogState } from '@/types/walls';
 import type { FogToolMode } from '@/components/campaign/DmFogControls';
 import { fogRectFromDrag, fogCellsInRect } from '../fogSelection';
 import type { MapLayer } from '../useRenderLoop';
-import type { MapTool, PointerAt, ToolSocketSource } from './types';
+import type { MapControls, MapTool, PointerAt, ToolSocketSource } from './types';
 
 interface UseFogToolArgs {
   isDM: boolean;
@@ -18,10 +18,13 @@ interface UseFogToolArgs {
   fogState: FogState | null;
   setFogState: Dispatch<SetStateAction<FogState | null>>;
   socket: ToolSocketSource | null | undefined;
+  mapControls: MapControls;
+  /** True while the right button pans the map under a DM tool (MapCanvas starts it). */
+  rightPanActiveRef: RefObject<boolean>;
   markDirty: (...layers: MapLayer[]) => void;
 }
 
-export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket, markDirty }: UseFogToolArgs) {
+export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty }: UseFogToolArgs) {
   // Fog selection drag: anchor is fixed on mousedown, current follows the
   // cursor. Both in map pixels — the fog raster is top-left origin like map
   // pixels, so the box never touches the bottom-left grid convention.
@@ -87,8 +90,13 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
     },
     // Fog selection: track the cursor. Also runs with no button held, so the
     // idle single-cell outline follows the mouse before a drag starts.
-    move({ mapPx }: PointerAt) {
+    move({ e, mapPx }: PointerAt) {
       if (!(fogMode && isDM && fogState)) return false;
+      if (rightPanActiveRef.current) {
+        mapControls.handleDrag(e);
+        markDirty('terrain', 'tokens', 'overlay');
+        return true;
+      }
       setFogDragCurrent(mapPx);
       markDirty('overlay');
       return true;
