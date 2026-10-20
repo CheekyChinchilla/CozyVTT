@@ -100,26 +100,29 @@ describe('reading token templates', () => {
   });
 });
 
-// The writes were always the DM's; nothing checked that a player of the same
-// campaign is turned away from them.
-describe('changing token templates', () => {
-  it('refuses a player an edit, and the template stays as it was', async () => {
-    const res = await player.put(`/api/campaigns/${campaignId}/token-templates/${templateId}`).send({ name: 'Honest Innkeeper', notes: 'nothing to see' });
+// The writes were always the DM's; nothing checked that a player or a
+// spectator of the same campaign is turned away from them.
+describe.each([
+  ['a player', () => player],
+  ['a spectator', () => spectator],
+])('changing token templates as %s', (_who: string, agent: () => ReturnType<typeof request.agent>) => {
+  it('refuses an edit, and the template stays as it was', async () => {
+    const res = await agent().put(`/api/campaigns/${campaignId}/token-templates/${templateId}`).send({ name: 'Honest Innkeeper', notes: 'nothing to see' });
     expect(res.status).toBe(403);
     const stored = await prisma.tokenTemplate.findUnique({ where: { id: templateId } });
     expect(stored?.name).toBe('Traitor Innkeeper');
     expect(stored?.notes).toBe('DM ONLY: secretly the cult leader');
   });
 
-  it('refuses a player a delete, and the template is still there', async () => {
-    const res = await player.delete(`/api/campaigns/${campaignId}/token-templates/${templateId}`);
+  it('refuses a delete, and the template is still there', async () => {
+    const res = await agent().delete(`/api/campaigns/${campaignId}/token-templates/${templateId}`);
     expect(res.status).toBe(403);
     expect(await prisma.tokenTemplate.findUnique({ where: { id: templateId } })).not.toBeNull();
   });
 
-  it('refuses a player saving a token as a template, and none is made', async () => {
-    const res = await player.post(`/api/campaigns/${campaignId}/token-templates/from-token`).send({ name: 'Player Made', type: 'npc' });
+  it('refuses saving a token as a template, and none is made', async () => {
+    const res = await agent().post(`/api/campaigns/${campaignId}/token-templates/from-token`).send({ name: 'Member Made', type: 'npc' });
     expect(res.status).toBe(403);
-    expect(await prisma.tokenTemplate.count({ where: { campaignId, name: 'Player Made' } })).toBe(0);
+    expect(await prisma.tokenTemplate.count({ where: { campaignId, name: 'Member Made' } })).toBe(0);
   });
 });
