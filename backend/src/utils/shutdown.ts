@@ -11,7 +11,9 @@
  * A backup the dashboard is writing when the signal arrives is let finish
  * first, for up to BACKUP_WAIT_MS; docker-compose.yml gives the backend
  * container that long and more before Docker stops it. Stopped part-way, the
- * backup would be lost and have to be made again.
+ * backup would be lost and have to be made again. A restore running then is
+ * let end the same way: stopped part-way, the database rolls back, but the
+ * uploaded files it was copying are left half copied, with nothing logged.
  *
  * The personal files of an account just deleted are removed after the answer
  * has gone out; a shutdown lets that finish too, for up to FILE_WAIT_MS, since
@@ -36,6 +38,8 @@ export interface ShutdownTargets {
   sessionPool: { end(): Promise<void> };
   /** Backups being written, which the shutdown lets finish before it closes the database. */
   backups?: { readonly count: number; finished(): Promise<void> };
+  /** A restore running, which the shutdown lets end before it closes the database. */
+  restores?: { readonly count: number; finished(): Promise<void> };
   /** Files of deleted accounts being removed, which the shutdown lets finish before it closes the database. */
   files?: { readonly count: number; finished(): Promise<void> };
 }
@@ -129,7 +133,8 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
       exit(code);
     };
     const backupRunning = (targets.backups?.count ?? 0) > 0;
-    const allowedMs = graceMs + (backupRunning ? backupWaitMs : 0);
+    const restoreRunning = (targets.restores?.count ?? 0) > 0;
+    const allowedMs = graceMs + (backupRunning || restoreRunning ? backupWaitMs : 0);
     const deadline = setTimeout(() => {
       say('warn', `Shutdown not finished after ${allowedMs / 1000} seconds; exiting anyway`);
       end(1);
@@ -150,15 +155,19 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
       // Closing the server stops new requests, and so new backups, at once;
       // it finishes when the requests in progress have.
       const serverClosed = new Promise<void>((resolve) => void targets.io.close(() => resolve()));
-      if (backupRunning && targets.backups) {
-        say('warn', `A backup is being written; waiting up to ${backupWaitMs / 60_000} minutes for it to finish before stopping`);
+      // A restore writes a backup of the database first, so both may be
+      // running; they share the one wait the container's stop allows.
+      if (backupRunning || restoreRunning) {
+        const work = restoreRunning ? 'A backup is being restored' : 'A backup is being written';
+        say('warn', `${work}; waiting up to ${backupWaitMs / 60_000} minutes for it to finish before stopping`);
         let timer: NodeJS.Timeout | undefined;
         const finished = await Promise.race([
-          targets.backups.finished().then(() => true),
+          Promise.all([targets.backups?.finished(), targets.restores?.finished()]).then(() => true),
           new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), backupWaitMs); }),
         ]);
         clearTimeout(timer);
-        if (finished) say('info', 'The backup has finished');
+        if (finished) say('info', restoreRunning ? 'The restore has finished' : 'The backup has finished');
+        else if (restoreRunning) say('warn', 'The restore did not finish in time; once the backend is back, check the instance and restore the backup again if it is not as the backup was');
         else say('warn', 'The backup did not finish in time and is lost; make it again once the backend is back');
       }
       await step('close the server', () => serverClosed);

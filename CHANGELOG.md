@@ -136,6 +136,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Stopping or upgrading CozyVTT during a restore lets the restore finish.** A backup being made from the Admin Dashboard was already let finish, for up to 10 minutes, but a restore was stopped after a few seconds, which could leave it half done with nothing in the log to say so. The backend now waits for a restore the same way, for up to 10 minutes, and `docker compose logs backend` says `A backup is being restored; waiting up to 10 minutes for it to finish before stopping`.
+
 - **The backup and restore scripts work with a database password holding a `%` that encodes nothing.** In `DATABASE_URL`, a password such as `pa%ss` or `100%` reached the database changed, so `backup.sh` and `restore.sh` failed to sign in where the backend connected. They now pass such a password as it is written, as the backend does; percent-encoded characters such as `%40` for `@` are decoded as before.
 
 - **A database password with a `%` that is not part of an escape no longer stops every backup.** In an address such as `postgresql://cozyvtt:pa%ss@database/cozyvtt` the app reads the password as written, but **Create Backup** and **Restore** tried to decode it, failed, and reported only that the backup could not be written, with nothing useful in the log. They now read it as the app does.
