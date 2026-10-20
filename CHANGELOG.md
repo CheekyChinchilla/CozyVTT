@@ -496,6 +496,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 ### Security
 
+- **A crafted map in a campaign archive no longer costs the import far more memory than its size.** A map file of 10 MB filled with tiny walls or empty entries holds over a million of them, several times what the largest real map holds, and reading it took a large part of the backend's memory. Such a map is now left out before it is read, and the import says why; real maps are not affected.
+
 - **The live table connects only to the instance itself.** The pages' security policy let the browser open a live connection to any site; it now allows only the host name the app was loaded from, on any port. A reverse proxy of your own should pass the browser's host name on to CozyVTT (`proxy_set_header Host $host;` in Nginx, as the deployment guide shows); where it does not, the live table still works over a slower connection.
 
 - **A server admin who runs a campaign can share only their own documents and global ones with it.** A server admin can open every file on the server, and as a DM could share anyone's private document with their table from the campaign's document list, so its players could read it. An admin is now held to the rule every DM is: a document someone else uploaded is refused with **Only the person who uploaded a document can share it with a campaign**. Documents already shared stay shared; **Stop sharing** removes one.

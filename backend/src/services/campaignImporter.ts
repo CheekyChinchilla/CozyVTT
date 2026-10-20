@@ -172,6 +172,9 @@ function parseEntryText(text: string, entry: ArchiveEntry): unknown {
   }
 }
 
+/** Why a map holding more values than an export ever writes is left out. */
+const TOO_MANY_VALUES_REASON = `It holds more than ${IMPORT_LIMITS.MAX_MAP_VALUES.toLocaleString('en-US')} values, far more than CozyVTT ever writes for one map.`;
+
 async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
   return parseEntryText(await readEntryText(archivePath, entry, total), entry);
 }
@@ -212,6 +215,28 @@ export function jsonNestsDeeperThan(text: string, max: number): boolean {
       if (++depth > max) return true;
     } else if (c === 0x7d || c === 0x5d) {
       depth--;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether JSON text holds more than `max` values and members, read without
+ * parsing it: each comma outside a string separates two, so the count stops
+ * as soon as it passes `max`.
+ */
+export function jsonHoldsMoreValuesThan(text: string, max: number): boolean {
+  let separators = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // a backslash escapes the next character
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) {
+      inString = true;
+    } else if (c === 0x2c && ++separators >= max) {
+      return true;
     }
   }
   return false;
@@ -811,14 +836,14 @@ export async function importCampaign(
             }
             let mapRaw: unknown;
             try {
-              // TODO(import): a map file may unpack to 10 MB, and parsing one
-              // that is a list of 200,000 tiny walls took the heap to about
-              // 160 MB before prepareMap kept the first 5,000; at 10 MB that
-              // nears the backend's 268 MB heap on its own. Bound what one map
-              // file costs before it is parsed (count its lists on the text,
-              // as jsonListCut does for the creatures, or a lower size limit
-              // for map files measured against real maps).
-              mapRaw = await readJsonEntry(archivePath, mapEntry, total);
+              // Counted on the text first: 10 MB of tiny walls costs several
+              // times what the largest real map does to parse.
+              const mapText = await readEntryText(archivePath, mapEntry, total);
+              if (jsonHoldsMoreValuesThan(mapText, IMPORT_LIMITS.MAX_MAP_VALUES)) {
+                report.skip('map', `Map ${i + 1}`, TOO_MANY_VALUES_REASON);
+                continue;
+              }
+              mapRaw = parseEntryText(mapText, mapEntry);
             } catch (error) {
               if (!(error instanceof NestedTooDeepError)) throw error;
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);

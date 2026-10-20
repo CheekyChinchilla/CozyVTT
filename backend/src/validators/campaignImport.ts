@@ -33,6 +33,12 @@ export const IMPORT_LIMITS = {
   // How deeply a data file may nest objects and lists. An export reaches
   // six, at a map token's stat block's proficiencies; this is five times that.
   MAX_JSON_DEPTH: 32,
+  // How many values and members one map file may hold, counted on its text
+  // before it is parsed. The largest map an export writes (a 500 by 500 fog,
+  // 1,000 tokens, 5,000 walls) holds about 330,000; 10 MB of tiny walls or
+  // empty objects holds over a million and cost several times as much to
+  // parse.
+  MAX_MAP_VALUES: 1_000_000,
   FORMAT_VERSION: 1,
 } as const;
 
