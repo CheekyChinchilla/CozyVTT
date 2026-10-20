@@ -7,14 +7,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import InitiativeTracker from '../InitiativeTracker';
 import { useGameStore } from '@/stores/gameStore';
 import type { CombatantEntry, Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
 
+const seat = vi.hoisted(() => ({ role: 'PLAYER' }));
+const emitInitiativeReorder = vi.hoisted(() => vi.fn());
+
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: 'PLAYER', currentMap: { id: 'map-1' } }),
+  useCampaign: () => ({ userRole: seat.role, currentMap: { id: 'map-1' } }),
 }));
 
 vi.mock('@/contexts/AuthContext', () => ({
@@ -22,7 +25,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 
 vi.mock('@/contexts/WebSocketContext', () => ({
-  useWebSocket: () => ({ socket: { emit: vi.fn(), on: vi.fn(), off: vi.fn() }, isConnected: true }),
+  useWebSocket: () => ({ socket: { emit: vi.fn(), on: vi.fn(), off: vi.fn(), emitInitiativeReorder }, isConnected: true }),
 }));
 
 const token = (id: string, name: string): Token => ({
@@ -36,6 +39,8 @@ const entry = (tokenId: string, name: string, initiative: number): CombatantEntr
 });
 
 beforeEach(() => {
+  seat.role = 'PLAYER';
+  emitInitiativeReorder.mockReset();
   useGameStore.getState().setTokens([token('v', ''), token('h', 'Hero')]);
 });
 
@@ -60,5 +65,66 @@ describe('the active-turn banner', () => {
     render(<InitiativeTracker />);
 
     expect(screen.getByText("Hero's turn")).toBeInTheDocument();
+  });
+});
+
+describe('the tracker from the keyboard', () => {
+  const threeReady = () => useGameStore.getState().setCombatState({
+    active: false, round: 0, currentTokenId: null,
+    combatants: [entry('h', 'Hero', 18), entry('g', 'Goblin', 12), entry('o', 'Ogre', 6)],
+  });
+
+  it('opens Add Combatant as a dialog named for it', () => {
+    seat.role = 'DM';
+    threeReady();
+    render(<InitiativeTracker />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add Combatant' }));
+
+    expect(screen.getByRole('dialog', { name: 'Add Combatant' })).toBeInTheDocument();
+  });
+
+  it('lets the DM edit a value from a button that says what it holds', () => {
+    seat.role = 'DM';
+    threeReady();
+    render(<InitiativeTracker />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Initiative for Goblin: 12. Edit' }));
+
+    expect(screen.getByRole('spinbutton', { name: 'Initiative for Goblin' })).toHaveValue(12);
+  });
+
+  it('moves a combatant one place down with the arrow key, and says where it went', () => {
+    seat.role = 'DM';
+    threeReady();
+    render(<InitiativeTracker />);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Hero' }), { key: 'ArrowDown' });
+
+    expect(emitInitiativeReorder).toHaveBeenCalledWith({ orderedTokenIds: ['g', 'h', 'o'] });
+    expect(screen.getByRole('status')).toHaveTextContent('Hero moved to 2 of 3');
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move Hero' }));
+    expect(useGameStore.getState().combat.combatants.map((c) => c.tokenId)).toEqual(['g', 'h', 'o']);
+  });
+
+  it('moves a combatant up, and goes no further than the top', () => {
+    seat.role = 'DM';
+    threeReady();
+    render(<InitiativeTracker />);
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Hero' }), { key: 'ArrowUp' });
+    expect(emitInitiativeReorder).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Ogre' }), { key: 'ArrowUp' });
+    expect(emitInitiativeReorder).toHaveBeenCalledWith({ orderedTokenIds: ['h', 'o', 'g'] });
+  });
+
+  it('gives a player no way to reorder, and no button on the values', () => {
+    threeReady();
+    render(<InitiativeTracker />);
+
+    expect(screen.queryByRole('button', { name: /^Move / })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Initiative for / })).toBeNull();
+    expect(within(document.body).getByText('18')).toBeInTheDocument();
   });
 });

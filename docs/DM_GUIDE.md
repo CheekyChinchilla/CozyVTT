@@ -845,6 +845,13 @@ Since values are saved on the token, you can always click a number and correct i
 
 Combatants are sorted by initiative automatically. You can drag and drop to reorder if there are ties or special circumstances.
 
+To reorder from the keyboard:
+
+1. Press **Tab** until the grip at the left of a combatant's row has the focus (a screen reader calls it **Move** and the combatant's name).
+2. Press the **Up** or **Down** arrow key to move that combatant one place. The focus stays on the grip, so press again to move further; a screen reader says the new place, such as "Goblin moved to 3 of 5".
+
+To change a value from the keyboard, Tab to the number, press **Enter**, type the new value and press **Enter** again (**Escape** leaves it as it was).
+
 Click **Next Turn** to advance to the next combatant in the order.
 
 The active combatant is highlighted in two places, for everyone at the table:
