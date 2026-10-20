@@ -10,21 +10,11 @@
 import { useState } from 'react';
 import { Square, Save, Clock, Hash } from 'lucide-react';
 import { Button, Modal } from '@/components/ui';
+import { formatDuration } from '@/utils/format';
 
-// ============================================
-// Duration formatter
-// ============================================
-
-function formatDuration(startedAt: string): string {
-  const start = new Date(startedAt).getTime();
-  const now = Date.now();
-  const diffMs = Math.max(0, now - start);
-  const totalMin = Math.floor(diffMs / 60000);
-  const h = Math.floor(totalMin / 60);
-  const m = totalMin % 60;
-
-  if (h === 0) return `${m} minute${m !== 1 ? 's' : ''}`;
-  return `${h} hour${h !== 1 ? 's' : ''} ${m} minute${m !== 1 ? 's' : ''}`;
+/** How long ago, in milliseconds, the session started. */
+function timeSince(startedAt: string): number {
+  return Date.now() - new Date(startedAt).getTime();
 }
 
 // ============================================
@@ -55,7 +45,7 @@ export default function EndSessionModal({
   const [saveState, setSaveState] = useState(true);
   const [notes, setNotes] = useState('');
 
-  const duration = formatDuration(session.startedAt);
+  const duration = formatDuration(timeSince(session.startedAt), 'words');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

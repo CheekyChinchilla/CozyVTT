@@ -89,6 +89,7 @@ import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
 import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
 import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
+import { formatDuration, formatFileSize, formatRelativeTime, type FileSizeOptions } from '@/utils/format';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -102,12 +103,8 @@ interface AppearanceColors {
 // Helpers
 // ============================================
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
+/** How the Admin Panel writes a size: "512.0 B", "1.5 KB", up to TB. */
+const ADMIN_SIZES: FileSizeOptions = { byteDecimals: 1, largest: 'TB' };
 
 /**
  * Body size a reverse proxy must accept: the largest upload limit plus a few MB
@@ -132,18 +129,6 @@ function formatLockTime(dateStr: string): string {
   return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return '\u2014';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
-
 function formatExpiry(dateStr: string | null): string {
   if (!dateStr) return '\u2014';
   const diff = new Date(dateStr).getTime() - Date.now();
@@ -153,17 +138,6 @@ function formatExpiry(dateStr: string | null): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 48) return `in ${hours}h ${minutes % 60}m`;
   return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-}
-
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
 }
 
 const LOG_LEVEL_COLORS: Record<string, string> = {
@@ -1062,7 +1036,7 @@ export default function AdminPage() {
                     <HardDrive className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
                       <p className="font-semibold">
-                        The disk that holds your uploads is {stats.uploadsDisk.usedPercent}% full ({formatBytes(stats.uploadsDisk.freeBytes)} free).
+                        The disk that holds your uploads is {stats.uploadsDisk.usedPercent}% full ({formatFileSize(stats.uploadsDisk.freeBytes, ADMIN_SIZES)} free).
                       </p>
                       <p className="mt-1">
                         When it fills, uploads fail, and backups and the database stop working too if they are on the same disk.
@@ -1113,12 +1087,12 @@ export default function AdminPage() {
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
                     <Database className="w-7 h-7 text-spirit-ink mb-2" />
                     <p className="text-2xl font-bold text-brand-ink break-all">
-                      {stats ? formatBytes(stats.totalStorageBytes) : '\u2014'}
+                      {stats ? formatFileSize(stats.totalStorageBytes, ADMIN_SIZES) : '\u2014'}
                     </p>
                     <p className="text-xs text-warm-gray mt-1">Storage</p>
                     {stats?.uploadsDisk && (
                       <p className={`text-xs mt-0.5 ${stats.uploadsDisk.warning ? 'text-danger-ink' : 'text-success-ink'}`}>
-                        {formatBytes(stats.uploadsDisk.freeBytes)} free on disk
+                        {formatFileSize(stats.uploadsDisk.freeBytes, ADMIN_SIZES)} free on disk
                       </p>
                     )}
                   </div>
@@ -1147,7 +1121,7 @@ export default function AdminPage() {
                             <tr key={row.type} className="border-b border-warm-gray/10 hover:bg-moss-green/5">
                               <td className="px-4 py-2 font-medium text-stone-gray">{row.type}</td>
                               <td className="px-4 py-2 text-right text-warm-gray">{row.count}</td>
-                              <td className="px-4 py-2 text-right text-warm-gray">{formatBytes(row.sizeBytes)}</td>
+                              <td className="px-4 py-2 text-right text-warm-gray">{formatFileSize(row.sizeBytes, ADMIN_SIZES)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1158,7 +1132,7 @@ export default function AdminPage() {
                               {stats.assetBreakdown.reduce((s, r) => s + r.count, 0)}
                             </td>
                             <td className="px-4 py-2 text-right text-stone-gray">
-                              {formatBytes(stats.totalStorageBytes)}
+                              {formatFileSize(stats.totalStorageBytes, ADMIN_SIZES)}
                             </td>
                           </tr>
                         </tfoot>
@@ -1860,7 +1834,7 @@ export default function AdminPage() {
                               </td>
                               {/* Size */}
                               <td className="px-3 py-2 text-warm-gray text-xs whitespace-nowrap">
-                                {formatBytes(asset.fileSize)}
+                                {formatFileSize(asset.fileSize, ADMIN_SIZES)}
                               </td>
                               {/* Actions */}
                               <td className="px-3 py-2">
@@ -2176,7 +2150,7 @@ export default function AdminPage() {
                       {(Object.entries(serverConfig.uploadLimits) as [string, number][]).map(([type, bytes]) => (
                         <tr key={type} className="border-b border-warm-gray/10 last:border-0">
                           <td className="py-1.5 text-stone-gray font-medium w-24">{type}</td>
-                          <td className="py-1.5 text-warm-gray">{formatBytes(bytes)}</td>
+                          <td className="py-1.5 text-warm-gray">{formatFileSize(bytes, ADMIN_SIZES)}</td>
                           <td className="py-1.5 text-right text-xs text-warm-gray/60">
                             <code className="font-mono">MAX_{type}_SIZE_MB</code>
                           </td>
@@ -2223,7 +2197,7 @@ export default function AdminPage() {
                     <tr className="border-b border-warm-gray/10">
                       <td className="py-1.5 text-stone-gray font-medium">Session timeout</td>
                       <td className="py-1.5 text-warm-gray">
-                        {formatDuration(serverConfig.sessionTimeoutMs)}
+                        {formatDuration(serverConfig.sessionTimeoutMs, 'largest')}
                       </td>
                       <td className="py-1.5 text-right text-xs text-warm-gray/60">
                         <code className="font-mono">SESSION_MAX_AGE</code>
@@ -2232,7 +2206,7 @@ export default function AdminPage() {
                     <tr>
                       <td className="py-1.5 text-stone-gray font-medium">Remember me</td>
                       <td className="py-1.5 text-warm-gray">
-                        {formatDuration(serverConfig.rememberMeTimeoutMs)}
+                        {formatDuration(serverConfig.rememberMeTimeoutMs, 'largest')}
                       </td>
                       <td className="py-1.5 text-right text-xs text-warm-gray/60">
                         <code className="font-mono">REMEMBER_ME_MAX_AGE</code>
@@ -2404,7 +2378,7 @@ export default function AdminPage() {
                       {backups.map(b => (
                         <tr key={b.filename} className="border-b border-warm-gray/10 hover:bg-moss-green/5">
                           <td className="px-4 py-2.5 font-mono text-xs text-stone-gray">{b.filename}</td>
-                          <td className="px-4 py-2.5 text-warm-gray text-xs">{formatBytes(b.sizeBytes)}</td>
+                          <td className="px-4 py-2.5 text-warm-gray text-xs">{formatFileSize(b.sizeBytes, ADMIN_SIZES)}</td>
                           <td className="px-4 py-2.5 text-warm-gray text-xs">{formatRelativeTime(b.createdAt)}</td>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center justify-end gap-1.5">
@@ -2493,7 +2467,7 @@ export default function AdminPage() {
                       </Button>
                       {restoreFile && (
                         <p className="text-xs text-warm-gray mt-1.5 font-mono">
-                          {restoreFile.name} ({formatBytes(restoreFile.size)})
+                          {restoreFile.name} ({formatFileSize(restoreFile.size, ADMIN_SIZES)})
                         </p>
                       )}
                     </div>
@@ -2600,7 +2574,7 @@ export default function AdminPage() {
                                   {u.platformRole}
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-warm-gray text-xs">{formatRelativeTime(u.lastLoginAt)}</td>
+                              <td className="px-4 py-2 text-warm-gray text-xs">{u.lastLoginAt ? formatRelativeTime(u.lastLoginAt) : '\u2014'}</td>
                               <td className="px-4 py-2 text-xs text-warm-gray">{formatExpiry(u.sessionExpiry)}</td>
                             </tr>
                           ))}

@@ -4,10 +4,7 @@ import {
   formatDateTime,
   formatRelativeTime,
   formatFileSize,
-  formatCampaignStatus,
-  formatRoleName,
-  truncate,
-  formatBackupCode,
+  formatDuration,
 } from '../format';
 
 // ============================================
@@ -83,12 +80,31 @@ describe('formatRelativeTime', () => {
     expect(formatRelativeTime(twoDaysAgo)).toBe('2d ago');
   });
 
-  it('returns formatted date for times older than a week', () => {
+  it('counts days on past a week unless told to give the date', () => {
+    expect(formatRelativeTime(new Date('2024-06-01T12:00:00Z'))).toBe('14d ago');
+  });
+
+  it('gives the date from dateAfterDays on', () => {
     const twoWeeksAgo = new Date('2024-06-01T12:00:00Z');
-    const result = formatRelativeTime(twoWeeksAgo);
-    // Falls back to formatDate — should include month and year
-    expect(result).toMatch(/Jun/);
-    expect(result).toMatch(/2024/);
+    expect(formatRelativeTime(twoWeeksAgo, { dateAfterDays: 7 })).toBe('Jun 1, 2024');
+    expect(formatRelativeTime(new Date('2024-06-08T12:00:01Z'), { dateAfterDays: 7 })).toBe('6d ago');
+  });
+
+  it('writes the units out in words, as the chat log does', () => {
+    const options = { words: true, dateAfterDays: 7 };
+    expect(formatRelativeTime(new Date('2024-06-15T11:59:00Z'), options)).toBe('1 minute ago');
+    expect(formatRelativeTime(new Date('2024-06-15T11:30:00Z'), options)).toBe('30 minutes ago');
+    expect(formatRelativeTime(new Date('2024-06-15T11:00:00Z'), options)).toBe('1 hour ago');
+    expect(formatRelativeTime(new Date('2024-06-14T12:00:00Z'), options)).toBe('1 day ago');
+    expect(formatRelativeTime(new Date('2024-06-12T12:00:00Z'), options)).toBe('3 days ago');
+  });
+
+  it('counts from the moment it is given', () => {
+    expect(formatRelativeTime('2024-06-15T11:00:00Z', { now: Date.parse('2024-06-15T11:05:00Z') })).toBe('5m ago');
+  });
+
+  it('calls a time in the future just now', () => {
+    expect(formatRelativeTime('2024-06-15T13:00:00Z')).toBe('just now');
   });
 
   it('accepts a date string', () => {
@@ -120,84 +136,45 @@ describe('formatFileSize', () => {
 
   it('formats gigabytes', () => {
     expect(formatFileSize(1024 * 1024 * 1024)).toBe('1.0 GB');
+    expect(formatFileSize(1024 ** 4)).toBe('1024.0 GB');
+  });
+
+  // Each screen keeps the sizes it always showed.
+  it.each([
+    ['the Admin Panel', { byteDecimals: 1, largest: 'TB' as const }, ['0 B', '512.0 B', '1.5 KB', '1024.0 KB', '2.5 MB', '3.3 GB', '5.0 TB']],
+    ['the Documents page', { kbDecimals: 0, largest: 'MB' as const }, ['0 B', '512 B', '2 KB', '1024 KB', '2.5 MB', '3328.0 MB', '5242880.0 MB']],
+    ['campaign import and asset cards', { largest: 'MB' as const }, ['0 B', '512 B', '1.5 KB', '1024.0 KB', '2.5 MB', '3328.0 MB', '5242880.0 MB']],
+    ['the Atmosphere panel', { smallest: 'KB' as const, kbDecimals: 0, largest: 'MB' as const }, ['0 KB', '1 KB', '2 KB', '1024 KB', '2.5 MB', '3328.0 MB', '5242880.0 MB']],
+    ['the asset details', { decimals: 2, largest: 'MB' as const }, ['0 B', '512 B', '1.50 KB', '1024.00 KB', '2.50 MB', '3328.00 MB', '5242880.00 MB']],
+  ])('writes sizes as %s did', (_screen, options, expected) => {
+    const sizes = [0, 512, 1536, 1024 * 1024 - 1, 2.5 * 1024 * 1024, 3.25 * 1024 ** 3, 5 * 1024 ** 4];
+    expect(sizes.map((bytes) => formatFileSize(bytes, options))).toEqual(expected);
   });
 });
 
 // ============================================
-// formatCampaignStatus
+// formatDuration
 // ============================================
 
-describe('formatCampaignStatus', () => {
-  it('maps known statuses', () => {
-    expect(formatCampaignStatus('PREPARATION')).toBe('In Preparation');
-    expect(formatCampaignStatus('ACTIVE')).toBe('Active');
-    expect(formatCampaignStatus('PAUSED')).toBe('Paused');
-    expect(formatCampaignStatus('COMPLETED')).toBe('Completed');
-    expect(formatCampaignStatus('ARCHIVED')).toBe('Archived');
+describe('formatDuration', () => {
+  const lengths = [0, 29_999, 30_000, 60_000, 90_000, 3_600_000, 3_660_000, 7_290_000, 86_400_000];
+
+  it('gives the largest whole unit, as the Admin Panel shows timeouts', () => {
+    expect(lengths.map((ms) => formatDuration(ms, 'largest'))).toEqual(
+      ['0s', '29s', '30s', '1m', '1m', '1h', '1h', '2h', '1d'],
+    );
   });
 
-  it('returns the raw value for unknown statuses', () => {
-    expect(formatCampaignStatus('UNKNOWN_STATUS')).toBe('UNKNOWN_STATUS');
-  });
-});
-
-// ============================================
-// formatRoleName
-// ============================================
-
-describe('formatRoleName', () => {
-  it('maps known roles', () => {
-    expect(formatRoleName('DM')).toBe('Dungeon Master');
-    expect(formatRoleName('PLAYER')).toBe('Player');
-    expect(formatRoleName('SPECTATOR')).toBe('Spectator');
-    expect(formatRoleName('ADMIN')).toBe('Administrator');
-    expect(formatRoleName('USER')).toBe('User');
+  it('gives hours and minutes to the nearest minute, as the session history does', () => {
+    expect(lengths.map((ms) => formatDuration(ms, 'hoursMinutes'))).toEqual(
+      ['<1m', '<1m', '1m', '1m', '2m', '1h 0m', '1h 1m', '2h 2m', '24h 0m'],
+    );
   });
 
-  it('returns the raw value for unknown roles', () => {
-    expect(formatRoleName('UNKNOWN')).toBe('UNKNOWN');
-  });
-});
-
-// ============================================
-// truncate
-// ============================================
-
-describe('truncate', () => {
-  it('returns the original string when shorter than maxLength', () => {
-    expect(truncate('hello', 10)).toBe('hello');
-  });
-
-  it('returns the original string when equal to maxLength', () => {
-    expect(truncate('hello', 5)).toBe('hello');
-  });
-
-  it('truncates and appends ellipsis when longer than maxLength', () => {
-    expect(truncate('hello world', 8)).toBe('hello...');
-  });
-
-  it('handles truncation at small maxLength', () => {
-    const result = truncate('abcdefghij', 6);
-    expect(result).toBe('abc...');
-    expect(result.length).toBe(6);
-  });
-});
-
-// ============================================
-// formatBackupCode
-// ============================================
-
-describe('formatBackupCode', () => {
-  it('formats an 8-character code with a dash', () => {
-    expect(formatBackupCode('ABCD1234')).toBe('ABCD-1234');
-  });
-
-  it('returns already-formatted codes unchanged', () => {
-    expect(formatBackupCode('ABCD-1234')).toBe('ABCD-1234');
-  });
-
-  it('returns codes of different lengths unchanged', () => {
-    expect(formatBackupCode('ABC123')).toBe('ABC123');
-    expect(formatBackupCode('ABCDE12345')).toBe('ABCDE12345');
+  it('writes whole minutes in words, as ending a session does', () => {
+    expect([-5000, ...lengths].map((ms) => formatDuration(ms, 'words'))).toEqual([
+      '0 minutes', '0 minutes', '0 minutes', '0 minutes', '1 minute', '1 minute',
+      '1 hour 0 minutes', '1 hour 1 minute', '2 hours 1 minute', '24 hours 0 minutes',
+    ]);
   });
 });

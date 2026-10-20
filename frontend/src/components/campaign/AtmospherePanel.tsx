@@ -34,6 +34,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import { formatFileSize } from '@/utils/format';
 import { settableAudioAssets } from '@/utils/audioAssets';
 import { listEveryAsset } from '@/services/assetPages';
 import { currentVibeTrack, stopTarget } from '@/utils/ambientFallback';
@@ -198,12 +199,6 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
         loop: newLoop,
       });
     }
-  };
-
-  // Format bytes for display
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   // ============================================
@@ -433,7 +428,7 @@ export default function AtmospherePanel({ isOpen, onClose }: AtmospherePanelProp
                           {asset.name}
                         </p>
                         <p className="text-xs text-warm-gray">
-                          {formatSize(asset.fileSize)}
+                          {formatFileSize(asset.fileSize, { smallest: 'KB', kbDecimals: 0, largest: 'MB' })}
                           {' · '}
                           {assetScopeLabel(asset.scope)}
                         </p>

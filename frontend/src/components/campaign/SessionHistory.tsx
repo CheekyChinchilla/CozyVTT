@@ -20,6 +20,7 @@ import { ScrollText, ChevronDown, ChevronRight, RefreshCw, Pencil, Check, X } fr
 import { useCampaign } from '@/contexts/CampaignContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { formatDuration } from '@/utils/format';
 import type { SessionSummary } from '@/types';
 
 /** Matches the server's cap on a session recap. */
@@ -40,14 +41,11 @@ function formatDate(iso: string): string {
  * Anything under a minute reads "<1m" rather than "0m" — a session ended by
  * accident right after starting is a real thing, and "0m" looks like a bug.
  */
-function formatDuration(startedAt: string, endedAt: string | null): string | null {
+function sessionLength(startedAt: string, endedAt: string | null): string | null {
   if (!endedAt) return null;
   const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
   if (!Number.isFinite(ms) || ms <= 0) return null;
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 1) return '<1m';
-  const hours = Math.floor(minutes / 60);
-  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+  return formatDuration(ms, 'hoursMinutes');
 }
 
 export default function SessionHistory() {
@@ -151,7 +149,7 @@ export default function SessionHistory() {
           )}
 
           {past.map((session) => {
-            const duration = formatDuration(session.startedAt, session.endedAt);
+            const duration = sessionLength(session.startedAt, session.endedAt);
             return (
               <article
                 key={session.id}
