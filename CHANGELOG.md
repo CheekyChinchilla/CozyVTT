@@ -138,7 +138,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Removed
 
-- **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB, are left out of the backend install. Nothing changes in how dice roll.
+- **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB on disk, are left out of the backend install. Nothing changes in how dice roll.
 
 ### Fixed
 

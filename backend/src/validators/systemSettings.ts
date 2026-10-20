@@ -1,7 +1,8 @@
 /**
  * The body of PUT /api/admin/settings. Every field is optional, and a field
  * left out keeps its stored value. Fields this does not name are ignored,
- * `timezone` among them: it is still stored, but nothing used it.
+ * `timezone` among them: nothing used it, and the column keeps whatever an
+ * older version stored.
  *
  * The theme is painted for every visitor, the sign-in page included, so the
  * theme, font and custom colours are checked against the same lists and

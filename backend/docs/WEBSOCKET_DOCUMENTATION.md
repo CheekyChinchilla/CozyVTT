@@ -421,7 +421,7 @@ push and would otherwise show everyone offline until somebody moved.
 
 ### Heartbeat Events
 
-The web client relies on Socket.io's own heartbeat and does not send `ping`. A script may send it to check that its connection and session still answer.
+The web client relies on Socket.io's own heartbeat and does not send `ping`. A script may send it to check that its connection still answers; the answer does not check the session.
 
 #### `ping`
 **Direction:** Client → Server
