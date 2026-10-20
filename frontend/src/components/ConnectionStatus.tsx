@@ -16,12 +16,12 @@ export default function ConnectionStatus() {
   // Don't show anything when fully connected
   if (status === 'connected') {
     return (
-      <div className="flex items-center gap-2 text-sm text-brand-ink">
+      <div role="status" className="flex items-center gap-2 text-sm text-brand-ink">
         <div className="relative">
           <Wifi className="w-4 h-4" />
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-moss-green" />
         </div>
-        <span className="hidden sm:inline">Connected</span>
+        <span className="sr-only sm:not-sr-only">Connected</span>
       </div>
     );
   }
@@ -29,19 +29,19 @@ export default function ConnectionStatus() {
   // Connecting state
   if (status === 'connecting') {
     return (
-      <div className="flex items-center gap-2 text-sm text-warm-amber">
+      <div role="status" className="flex items-center gap-2 text-sm text-warm-amber">
         <div className="relative">
           <Loader2 className="w-4 h-4 animate-spin" />
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-warm-amber animate-pulse" />
         </div>
-        <span className="hidden sm:inline">Connecting...</span>
+        <span className="sr-only sm:not-sr-only">Connecting...</span>
       </div>
     );
   }
 
   // Disconnected or error state
   return (
-    <div className="flex items-center gap-2">
+    <div role="status" className="flex items-center gap-2">
       <div className="flex items-center gap-2 text-sm text-danger-ink">
         <div className="relative">
           {status === 'error' ? (
@@ -51,7 +51,7 @@ export default function ConnectionStatus() {
           )}
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-danger" />
         </div>
-        <span className="hidden sm:inline">
+        <span className="sr-only sm:not-sr-only">
           {status === 'error' ? 'Connection Error' : 'Disconnected'}
         </span>
       </div>

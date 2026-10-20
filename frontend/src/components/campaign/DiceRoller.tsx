@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, X, Plus } from 'lucide-react';
+import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
@@ -12,6 +12,7 @@ import { rollDice as rollExpression, parseDiceExpression, DiceParserError } from
 import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Modal from '@/components/ui/Modal';
 import DiceMacroManager from './DiceMacroManager';
 import JumpToNewest from './JumpToNewest';
 
@@ -610,6 +611,10 @@ export default function DiceRoller() {
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
+        role="log"
+        aria-live="polite"
+        aria-label="Dice rolls"
+        aria-relevant="additions"
         className="flex-1 overflow-y-auto p-3 min-h-0"
       >
         {rolls.length === 0 ? (
@@ -758,6 +763,7 @@ export default function DiceRoller() {
               onChange={(e) => setExpression(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
+              aria-label="Dice expression"
               // Read-only while a roll is on its way: disabled, it threw keyboard
               // focus to the page after every roll.
               readOnly={isRolling}
@@ -773,6 +779,7 @@ export default function DiceRoller() {
               value={characterName}
               onChange={(e) => setCharacterName(e.target.value)}
               placeholder="Character"
+              aria-label="Character name"
               // The longest name and purpose the server stores with a roll.
               maxLength={200}
               // Read-only while a roll is on its way: disabled, it threw keyboard
@@ -788,6 +795,7 @@ export default function DiceRoller() {
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Purpose"
+              aria-label="Purpose"
               maxLength={300}
               // Read-only while a roll is on its way: disabled, it threw keyboard
               // focus to the page after every roll.
@@ -881,68 +889,35 @@ export default function DiceRoller() {
         )}
       </div>
 
-      {/* Secret Roll Popup Overlay */}
-      <AnimatePresence>
-        {secretRollResult && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 z-50"
+      {/* Secret roll popup: the confirmation that my own secret roll landed */}
+      <Modal
+        open={secretRollResult !== null}
+        onClose={() => setSecretRollResult(null)}
+        title="Secret Roll"
+        icon={EyeOff}
+        size="sm"
+        footer={
+          <button
+            type="button"
             onClick={() => setSecretRollResult(null)}
+            className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-xs transition-all"
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-surface-light rounded-lg border-2 border-brand/50 shadow-2xl max-w-md w-full relative"
-            >
-              {/* Close Button */}
-              <button
-                onClick={() => setSecretRollResult(null)}
-                className="absolute top-2 right-2 p-1 rounded-md bg-surface hover:bg-surface-dark transition-all"
-                title="Close"
-              >
-                <X className="w-4 h-4 text-ink" />
-              </button>
-
-              {/* Header */}
-              <div className="p-4 border-b border-ink/10">
-                <div className="flex items-center gap-2">
-                  <EyeOff className="w-5 h-5 text-brand-ink" />
-                  <h3 className="text-lg font-semibold text-ink">
-                    Secret Roll
-                  </h3>
-                </div>
-                <p className="text-xs text-ink-muted mt-1">
-                  Hidden from other players — your DM can still see it
-                </p>
-              </div>
-
-              {/* Roll Result */}
-              <div className="p-4 bg-paper">
-                <div className="bg-paper rounded-lg p-3 shadow-inner">
-                  <DiceResult
-                    roll={secretRollResult}
-                    isCurrentUser={true}
-                  />
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-3 border-t border-ink/10 bg-surface rounded-b-lg">
-                <button
-                  onClick={() => setSecretRollResult(null)}
-                  className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-xs transition-all"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+            Close
+          </button>
+        }
+      >
+        <p className="text-xs text-ink-muted -mt-4 mb-4">
+          Hidden from other players — your DM can still see it
+        </p>
+        {secretRollResult && (
+          <div className="bg-paper rounded-lg p-3 shadow-inner">
+            <DiceResult
+              roll={secretRollResult}
+              isCurrentUser={true}
+            />
+          </div>
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
     </>
   );
