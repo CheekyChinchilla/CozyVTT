@@ -25,6 +25,9 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 
-const uploads = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-test-uploads-'));
+// Named for the run (jest.globalSetup.ts), so jest.globalTeardown.ts can
+// remove what a file whose tests were all skipped, and so ran no afterAll,
+// left behind.
+const uploads = fs.mkdtempSync(path.join(os.tmpdir(), `cozyvtt-test-uploads-${process.env.COZYVTT_TEST_RUN ?? 'run'}-`));
 process.env.UPLOAD_DIR = uploads;
 (globalThis as { __testUploadsFolder?: string }).__testUploadsFolder = uploads;
