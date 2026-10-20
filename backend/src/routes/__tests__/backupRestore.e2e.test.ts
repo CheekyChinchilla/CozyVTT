@@ -977,6 +977,9 @@ describe('POST /api/admin/backups', () => {
         'uploads/tokens/campaigns/c1/goblin.png': 'a token',
         'uploads/documents/global/.notes.md': 'a name starting with a dot',
       });
+      // Not even the folder itself, which would restore as an empty one.
+      const backupsEntries = zip.files.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
+      expect(backupsEntries).toEqual([]);
     } finally {
       if (made) await fs.rm(made, { force: true });
       await fs.rm(UPLOAD_DIR, { recursive: true, force: true });

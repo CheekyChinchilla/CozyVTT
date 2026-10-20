@@ -137,6 +137,8 @@ There is no new setting, no setting is removed, and there is no database change 
 
 - **The warning about a missing or example session secret names the right file.** Outside production the backend warns when `SESSION_SECRET` is unset or a value it would refuse in production, and said to set it in `backend/.env`. The Docker stacks read it from the `.env` in the CozyVTT folder, so a value put in `backend/.env` changed nothing there. The warning now names that `.env` for Docker and `backend/.env` for a backend run without Docker.
 
+- **A backup no longer holds an empty backups folder among the uploaded files.** On an install that still has the `backend/uploads/backups` folder older releases kept backups in, every backup held an empty `uploads/backups` folder, which a restore then made again. The folder is now left out entirely, as its contents already were.
+
 - **A restore is listed in Admin → Activity when the database update after it fails.** A restore that loaded the backup but could not bring its database up to this version answered **Restore Incomplete** and left no line in the activity log, though the database had been replaced. It is now logged as every other restore is.
 
 - **A backup the restore refuses part-way gives its disk space back at once.** A backup refused while it was being unpacked, such as one that unpacks to more than 10 GiB, stayed open in the backend after it was deleted, so the space it took was not freed until the backend restarted, and each such restore kept another file open. The restore now closes the backup whenever it stops.
