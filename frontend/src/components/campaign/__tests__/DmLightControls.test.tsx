@@ -105,3 +105,19 @@ describe('the light colour box', () => {
     expect(onDefaultsChange).not.toHaveBeenCalled();
   });
 });
+
+// The title that folds the panel was a clickable box, out of reach of Tab and
+// silent about whether the panel was open.
+describe('the Lights title', () => {
+  it('is a button that says whether the panel is open, and folds it', () => {
+    render(<DmLightControls lightMode={null} onLightModeChange={vi.fn()} lightCount={2} onClearAll={vi.fn()} lightingEnabled />);
+    const title = screen.getByRole('button', { name: /^Lights/ });
+    expect(title).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(title);
+
+    expect(title).toHaveAttribute('aria-expanded', 'true');
+    expect(document.getElementById(title.getAttribute('aria-controls') ?? '')).not.toBeNull();
+  });
+});
+

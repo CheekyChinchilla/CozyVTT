@@ -7,7 +7,7 @@
  * nothing that would change what players see.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 export type FogToolMode = 'fog-reveal' | 'fog-hide' | null;
@@ -57,6 +57,7 @@ export default function DmFogControls({
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
+  const bodyId = useId();
 
   const handleRevealAll = () => {
     if (!confirmRevealAll) { setConfirmRevealAll(true); return; }
@@ -73,8 +74,11 @@ export default function DmFogControls({
   return (
     <div className="flex flex-col gap-0 bg-stone-800/90 rounded-lg border border-warm-amber/20 min-w-[160px] overflow-hidden">
       {/* Header with collapse toggle */}
-      <div
-        className="flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-controls={bodyId}
+        className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
         onClick={() => {
           const next = !collapsed;
           setCollapsed(next);
@@ -82,10 +86,10 @@ export default function DmFogControls({
         }}
       >
         <span className="text-xs text-warm-amber/70 font-medium uppercase tracking-wide">Fog of War</span>
-        <span className="text-stone-400 text-xs">{collapsed ? '▶' : '▼'}</span>
-      </div>
+        <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
+      </button>
     {!collapsed && (
-      <div className="flex flex-col gap-2 p-2 pt-1">
+      <div id={bodyId} className="flex flex-col gap-2 p-2 pt-1">
 
       {/* The per-map switch. Off puts an armed tool down first: a reveal box
           dragged with fog off would change nothing players can see. */}
