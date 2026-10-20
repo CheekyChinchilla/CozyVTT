@@ -5813,7 +5813,10 @@ paths:
             over the picture limits above, with the limit in words ("This
             picture is 20,000 pixels wide. A picture can be at most 16,384
             pixels on each side.", "This animation has 1,200 frames. An
-            animated picture can have at most 1,000.", "This animation is 400
+            animated picture can have at most 1,000.", for a WebP, whose
+            frames are counted only as far as the limit, "This animation has
+            more than 1,000 frames. An animated picture can have at most
+            1,000.", "This animation is 400
             million pixels across its frames. An animated map can be at most
             200 million.") or whose size cannot be read ("CozyVTT could not
             read the size of this picture, so it cannot be checked. Save it

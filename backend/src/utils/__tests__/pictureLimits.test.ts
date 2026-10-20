@@ -111,9 +111,11 @@ describe('an animated WebP', () => {
     );
   });
 
-  it('is refused past 1,000 frames', async () => {
+  it('is accepted with 1,000 frames and refused past them', async () => {
+    expect(await pictureLimitProblem(await craftedAnimatedWebp({ width: 4, height: 4, frames: 1_000 }), 'MAP')).toBeNull();
+    // Counting stops at the first frame past the limit.
     expect(await pictureLimitProblem(await craftedAnimatedWebp({ width: 4, height: 4, frames: 1_001 }), 'MAP')).toBe(
-      'This animation has 1,001 frames. An animated picture can have at most 1,000.'
+      'This animation has more than 1,000 frames. An animated picture can have at most 1,000.'
     );
   });
 
@@ -135,5 +137,25 @@ describe('reading the limits', () => {
     const started = Date.now();
     expect(await pictureLimitProblem(gif, 'TOKEN')).toMatch(/100,000 frames/);
     expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  // The image library takes time that grows with the square of a WebP's
+  // frames before it says how many there are: 10 seconds for 100,000, on a
+  // thread every upload shares. The frames are counted from the file first.
+  it('counts a WebP\'s frames without the image library: 100,000 frames are refused at once', async () => {
+    const webp = await craftedAnimatedWebp({ width: 4, height: 4, frames: 100_000 });
+    const started = Date.now();
+    expect(await pictureLimitProblem(webp, 'MAP')).toBe(
+      'This animation has more than 1,000 frames. An animated picture can have at most 1,000.'
+    );
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('counts a WebP\'s frames from a file as well as from bytes', async () => {
+    const file = path.join(dir, 'many-frames.webp');
+    fs.writeFileSync(file, await craftedAnimatedWebp({ width: 4, height: 4, frames: 100_000 }));
+    const started = Date.now();
+    expect(await pictureLimitProblem(file, 'MAP')).toMatch(/more than 1,000 frames/);
+    expect(Date.now() - started).toBeLessThan(500);
   });
 });

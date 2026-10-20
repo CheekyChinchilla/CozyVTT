@@ -94,7 +94,7 @@ describe('a UVTT whose picture is over the limits', () => {
     ['an animated WebP of over 200 million pixels', () => craftedAnimatedWebp({ width: 16_000, height: 125, frames: 101 }),
       'This animation is 202 million pixels across its frames. An animated map can be at most 200 million.'],
     ['an animated WebP of 1,001 frames', () => craftedAnimatedWebp({ width: 4, height: 4, frames: 1_001 }),
-      'This animation has 1,001 frames. An animated picture can have at most 1,000.'],
+      'This animation has more than 1,000 frames. An animated picture can have at most 1,000.'],
     ['a still PNG 16,385 pixels wide', () => plainPng(16_385, 1),
       'This picture is 16,385 pixels wide. A picture can be at most 16,384 pixels on each side.'],
   ])('is refused, and nothing is saved: %s', async (_label, make, problem) => {
