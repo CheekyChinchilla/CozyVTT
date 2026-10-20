@@ -834,6 +834,11 @@ router.get(
         // Get image dimensions for pixels_per_grid calculation. A map stored
         // before its picture had to be a map picture can name any file, so the
         // bytes are identified first, and only a picture is read.
+        // TODO(maps): with sharp's default pixel limit (16,383 squared) this
+        // throws for a map picture 16,384 pixels on both sides, which the
+        // picture limits accept, and the export answers 500. Only the header
+        // is read, so it should pass { limitInputPixels: false } as
+        // pictureLimitProblem does.
         let imageWidthPx: number | undefined;
         try {
           imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;

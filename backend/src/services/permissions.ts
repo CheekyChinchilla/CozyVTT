@@ -625,6 +625,12 @@ export async function canReferenceAsset(
     select: { id: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return true;
+  // TODO(assets): the asset's type is not read here, so a token's picture can
+  // name a MAP asset, and an animated map picture of up to 200 million pixels
+  // across its frames goes on a token, past the 50 million a token picture
+  // may be. A token's picture should name only a TOKEN asset, as
+  // isMapPicture holds a map's picture to a MAP asset, with the address
+  // already stored kept as it is.
   // Never as an administrator: an admin may read any file, but a stored
   // reference opens the asset to everyone at the table, as setting a scene's
   // music does (handlers/atmosphere.ts).
