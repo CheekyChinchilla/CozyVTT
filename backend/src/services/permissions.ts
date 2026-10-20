@@ -15,89 +15,8 @@ import { escapeLikePattern } from '../utils/likePattern';
 /**
  * Check if user is an admin
  */
-export function isAdmin(platformRole: PlatformRole): boolean {
+function isAdmin(platformRole: PlatformRole): boolean {
   return platformRole === 'ADMIN';
-}
-
-/**
- * Check if user is DM of a campaign
- */
-export function isDM(campaignRole: CampaignRole): boolean {
-  return campaignRole === 'DM';
-}
-
-/**
- * Check if user is Player in a campaign
- */
-export function isPlayer(campaignRole: CampaignRole): boolean {
-  return campaignRole === 'PLAYER';
-}
-
-/**
- * Check if user can edit campaign settings
- * Only DM can edit campaign
- */
-export function canEditCampaign(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-// TODO(sheets): nothing calls canEditCharacter, and it disagrees with
-// PUT /api/characters/:id, which decides this itself: it lets any admin edit,
-// it takes the campaign id from its caller instead of the character, and it
-// does not refuse a spectator who owns the character. Delete it, or make it
-// match the route and have the route call it, so the rule is declared once.
-// The same goes for the other helpers here that no route calls (isAdmin,
-// isDM, isPlayer, canEditCampaign, canManageMaps, canToggleSpiritLayer,
-// canChangeVibe, canManageSessions, canInvitePlayers, canDeleteMessages,
-// canExportCampaign): each is a second statement of a rule the routes state
-// in their guards.
-/**
- * Check if user can edit a specific character
- * 
- * - Players can edit own characters
- * - DM can edit any character in campaign
- * - Admin can edit any character
- */
-export async function canEditCharacter(
-  userId: string,
-  characterId: string,
-  campaignId: string,
-  platformRole: PlatformRole
-): Promise<boolean> {
-  // Admins can edit anything
-  if (isAdmin(platformRole)) {
-    return true;
-  }
-
-  // Get character
-  const character = await prisma.character.findUnique({
-    where: { id: characterId },
-  });
-
-  if (!character) {
-    return false;
-  }
-
-  // Owner can always edit their own character
-  if (character.userId === userId) {
-    return true;
-  }
-
-  // Check if user is DM of the campaign
-  const membership = await prisma.campaignMembership.findUnique({
-    where: {
-      userId_campaignId: {
-        userId,
-        campaignId,
-      },
-    },
-  });
-
-  if (membership && isDM(membership.role)) {
-    return true;
-  }
-
-  return false;
 }
 
 /**
@@ -168,67 +87,6 @@ export function canReadMap(
 ): boolean {
   if (role === 'DM') return true;
   return !!currentMapId && mapId === currentMapId;
-}
-
-/**
- * Check if user can manage campaign maps
- * Only DM can manage maps
- */
-export function canManageMaps(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can toggle Spirit Layer
- * Only DM can toggle Spirit Layer
- */
-export function canToggleSpiritLayer(
-  campaignRole: CampaignRole,
-  platformRole: PlatformRole
-): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can change vibe tracker
- * Only DM can change time of day
- */
-export function canChangeVibe(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can manage campaign sessions
- * Only DM can start/pause/end sessions
- */
-export function canManageSessions(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can invite players to campaign
- * Only campaign owner (DM) can invite
- */
-export async function canInvitePlayers(
-  userId: string,
-  campaignId: string,
-  platformRole: PlatformRole
-): Promise<boolean> {
-  // Admins can invite to any campaign
-  if (isAdmin(platformRole)) {
-    return true;
-  }
-
-  // Check if user is the campaign owner
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
-
-  if (!campaign) {
-    return false;
-  }
-
-  return campaign.ownerId === userId;
 }
 
 /**
@@ -324,45 +182,11 @@ export function canToggleDoor(campaignRole: string | undefined): boolean {
 }
 
 /**
- * Check if user can delete chat messages
- * Only DM can delete messages
- */
-export function canDeleteMessages(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can export campaign data
- * Campaign owner (DM) and Admin
- */
-export async function canExportCampaign(
-  userId: string,
-  campaignId: string,
-  platformRole: PlatformRole
-): Promise<boolean> {
-  // Admins can export any campaign
-  if (isAdmin(platformRole)) {
-    return true;
-  }
-
-  // Check if user is the campaign owner
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
-
-  if (!campaign) {
-    return false;
-  }
-
-  return campaign.ownerId === userId;
-}
-
-/**
  * The answer also carries the campaign the asset may be filed under, because
  * `campaignId` is what decides which campaign lists an asset and a caller's own
  * value cannot be trusted for that. Only a CAMPAIGN-scoped asset has one.
  */
-export type ScopeDecision =
+type ScopeDecision =
   | { allowed: true; campaignId: string | null }
   | { allowed: false; status: 400 | 403; message: string };
 
@@ -498,7 +322,7 @@ async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId
  * storing it, and the id it gives must equal `assetId`. Where a query below
  * matches the id as a substring, that only narrows the rows it reads.
  */
-export async function assetUsedInUserCampaign(
+async function assetUsedInUserCampaign(
   assetId: string,
   userId: string,
   uploaderId: string | null
@@ -710,7 +534,7 @@ export async function mayChangeAsset(
 }
 
 /** What mayChangeAsset reads about a user: whether they manage global assets, and their role in each campaign. */
-export interface AssetChangeFacts {
+interface AssetChangeFacts {
   globalAssetManager: boolean;
   roles: ReadonlyMap<string, CampaignRole>;
 }

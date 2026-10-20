@@ -143,11 +143,6 @@ character's own campaign, never from one the caller sends:
 3. Otherwise the owner may edit, and so may the DM of that campaign, but only while the
    owner is still a member (`ownerStillIn`). A platform admin has no right here of their own.
 
-**Do not copy `canEditCharacter` from `services/permissions.ts`.** No route calls it, and it
-disagrees with the route on all three points: it lets any admin edit, it takes the campaign
-id from the caller (so the DM of any campaign of their own could name it and edit any
-character), and it does not refuse a spectator who owns the character.
-
 #### Who may act on a token
 
 ```typescript
