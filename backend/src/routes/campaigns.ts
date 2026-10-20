@@ -58,6 +58,9 @@ const router = Router();
  */
 export const MEMBER_USER_SELECT = { id: true, displayName: true, avatarUrl: true } as const satisfies Prisma.UserSelect;
 
+/** The account fields a chat message carries for its author. */
+export const MESSAGE_USER_SELECT = { id: true, displayName: true } as const satisfies Prisma.UserSelect;
+
 // ── Import file upload ──────────────────────────────────────────────────────
 // A campaign archive is written to disk and read from there, never held in
 // memory: the backend shares a few hundred megabytes between every table, and
@@ -1362,14 +1365,7 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
             }
           : {}),
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-          },
-        },
-      },
+      include: { user: { select: MESSAGE_USER_SELECT } },
       // createdAt alone is not unique — a burst of system messages lands in one
       // millisecond — and paging needs a total order or rows on the boundary are
       // skipped or repeated. The existing [campaignId, createdAt] index carries

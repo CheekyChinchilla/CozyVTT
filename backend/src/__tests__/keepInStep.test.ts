@@ -862,11 +862,14 @@ describe('the game systems', () => {
 // A campaign member's account fields: the routes select them once, and the
 // frontend's member type declares what it may read. The frontend once read an
 // email the server never sent.
-describe('the account fields a campaign membership carries', () => {
-  it('are the same in the routes and the frontend type', () => {
-    const select = /export const MEMBER_USER_SELECT = \{([^}]*)\}/.exec(read('backend/src/routes/campaigns.ts'))?.[1] ?? '';
+describe('the account fields a campaign membership and a chat message carry', () => {
+  it.each([
+    ['MEMBER_USER_SELECT', 'MemberUser'],
+    ['MESSAGE_USER_SELECT', 'MessageUser'],
+  ])('%s in the routes and %s in the frontend name the same fields', (constant, type) => {
+    const select = new RegExp(`export const ${constant} = \\{([^}]*)\\}`).exec(read('backend/src/routes/campaigns.ts'))?.[1] ?? '';
     const selected = [...select.matchAll(/(\w+):\s*true/g)].map((m) => m[1]).sort();
-    const pick = /export type MemberUser = Pick<User, ([^>]*)>/.exec(read('frontend/src/types/index.ts'))?.[1] ?? '';
+    const pick = new RegExp(`export type ${type} = Pick<User, ([^>]*)>`).exec(read('frontend/src/types/index.ts'))?.[1] ?? '';
     const declared = [...pick.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
     expect(selected.length).toBeGreaterThan(0);
     expect(declared).toEqual(selected);
