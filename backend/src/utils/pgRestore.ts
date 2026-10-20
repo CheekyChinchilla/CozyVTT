@@ -369,7 +369,9 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string, db
  * out: `schema` (pg_dump is given the schema as --schema, see buildDumpArgs),
  * `connection_limit` and the rest of PRISMA_ONLY_PARAMETERS. The pg driver's
  * `sslmode=no-verify`, encryption without a certificate check, is libpq's
- * `require`. Every other setting reaches libpq exactly as written.
+ * `require`. Every other setting reaches libpq exactly as written; with an
+ * `sslrootcert` beside it, libpq's `require` checks the certificate against
+ * that file, which DEPLOYMENT.md tells a self-hoster.
  *
  * An address that does not parse is passed on as it is, so an unusual one (a
  * Unix socket) still connects the way it did.
