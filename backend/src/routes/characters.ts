@@ -200,7 +200,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // A sheet in the shape of a version before 1.3.0 has its older fields
     // moved where the sheet reads them first, since validation drops them.
     const dataWithIdentity = applyIdentityToSheet(
-      finalGameSystem as GameSystem | null,
+      finalGameSystem,
       migrateLegacySheetFields(finalGameSystem, data) as Record<string, unknown> | undefined,
       name,
       owner?.displayName ?? ''
@@ -211,21 +211,8 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
 
     // Validate gameSystem if provided
     if (finalGameSystem !== undefined && finalGameSystem !== null) {
-      const validSystems: string[] = [
-        GameSystem.DND_5E,
-        GameSystem.PATHFINDER_2E,
-        GameSystem.SHADOWRUN_6E,
-        GameSystem.CALL_OF_CTHULHU_7E,
-      ];
-      if (!validSystems.includes(finalGameSystem as string)) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `Invalid game system. Must be one of: ${validSystems.join(', ')}`,
-        });
-      }
-
       // Validate character data against schema if gameSystem is specified
-      const validationResult = validateCharacterData(finalGameSystem as GameSystem, dataWithIdentity);
+      const validationResult = validateCharacterData(finalGameSystem, dataWithIdentity);
       if (!validationResult.success) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -265,7 +252,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
     // Keeper's Notes are written only by the Keeper: the DM of the campaign
     // the character is created in. Anyone else's are not stored.
     const keeper = await isKeeperOf(userId, campaignId || null);
-    if (!keeper) sheetData = sheetWithoutKeeperNotes((finalGameSystem as GameSystem | null | undefined) ?? null, sheetData);
+    if (!keeper) sheetData = sheetWithoutKeeperNotes(finalGameSystem ?? null, sheetData);
 
     // Both halves in one transaction. Written separately, a failure between
     // them would produce exactly the state this fixes: a character carrying a
@@ -528,7 +515,7 @@ router.get('/:id/validate', authenticated, async (req: AuthenticatedRequest, res
       ? character.data
       : sheetWithoutKeeperNotes(character.gameSystem, character.data);
     const result = character.gameSystem
-      ? validateCharacterData(character.gameSystem as GameSystem, ownSheet)
+      ? validateCharacterData(character.gameSystem, ownSheet)
       : validateFlexibleSheet(ownSheet);
     if (result.success) {
       return res.status(200).json({ isValid: true });
@@ -636,7 +623,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     let sheetData: unknown = data;
     if (character.gameSystem && data !== undefined) {
       const validationResult = validateCharacterData(
-        character.gameSystem as GameSystem,
+        character.gameSystem,
         migrateLegacySheetFields(character.gameSystem, data)
       );
       if (!validationResult.success) {
@@ -688,7 +675,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // the character was created with. The sheet is the thing the user typed
     // into, so it wins; an explicit `name` in the request still takes priority.
     if (name === undefined && data !== undefined && character.gameSystem) {
-      const sheetName = sheetNameFor(character.gameSystem as GameSystem, sheetData as Record<string, unknown>);
+      const sheetName = sheetNameFor(character.gameSystem, sheetData as Record<string, unknown>);
       if (sheetName && sheetName !== character.name) {
         updateData.name = sheetName;
       }
