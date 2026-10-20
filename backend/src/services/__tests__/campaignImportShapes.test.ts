@@ -192,8 +192,8 @@ describe('data nested deeper than an export ever writes', () => {
 
 // A map file may unpack to 10 MB. Filled with tiny walls or empty objects it
 // holds over a million values, and parsing it cost several times what the
-// largest map an export writes does (a 500 by 500 fog, 1,000 tokens and
-// 5,000 walls hold about 330,000). Such a map is left out before it is parsed.
+// largest map an export writes does (a 500 by 500 fog, 5,000 walls and
+// tokens with full stat blocks up to 10 MB hold about 340,000). Such a map is left out before it is parsed.
 describe('a map holding more values than an export ever writes', () => {
   it('is left out, with the reason, and the others imported', async () => {
     const walls = Array.from({ length: 1_000_001 }, () => 0);

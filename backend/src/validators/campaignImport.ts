@@ -35,9 +35,10 @@ export const IMPORT_LIMITS = {
   MAX_JSON_DEPTH: 32,
   // How many values and members one map file may hold, counted on its text
   // before it is parsed. The largest map an export writes (a 500 by 500 fog,
-  // 1,000 tokens, 5,000 walls) holds about 330,000; 10 MB of tiny walls or
-  // empty objects holds over a million and cost several times as much to
-  // parse.
+  // 5,000 walls, and as many tokens carrying the longest SRD stat block as
+  // fit in the 10 MB a file may hold, about 760) holds about 340,000; 10 MB
+  // of tiny walls or empty objects holds over a million and cost several
+  // times as much to parse.
   MAX_MAP_VALUES: 1_000_000,
   FORMAT_VERSION: 1,
 } as const;
