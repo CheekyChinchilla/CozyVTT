@@ -425,8 +425,10 @@ function CampaignPageContent() {
         </div>
       )}
 
-      {/* Main Content - Three Resizable Panels */}
-      <main className={`flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
+      {/* Main Content - Three Resizable Panels. Relative, so it clips what is
+          absolutely placed inside it too, such as the hidden names of the
+          rail's icon tabs, which otherwise widened a narrow page. */}
+      <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
         <Group
           orientation="horizontal"
           className="h-full w-full"
