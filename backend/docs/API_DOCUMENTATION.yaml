@@ -180,6 +180,10 @@ info:
       and the setup-gate 403, as described above and below.
     - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
+    - **415** `{ error: 'Unsupported Media Type', message }` for a body in a
+      charset or `Content-Encoding` the server cannot read, such as
+      `Content-Type: application/json; charset=foo` (`message`
+      `unsupported charset "FOO"`).
     - **500** `{ error, message }` on an unexpected error, whatever a route
       throws. In production the message does not describe the failure. A
       route that fails after its answer has started, such as a download part
@@ -547,6 +551,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   # ============================================
   # AUTHENTICATION
@@ -563,7 +571,8 @@ paths:
         default), the account is created unapproved and no session is started
         (201 with `pendingApproval: true` and no `user`); otherwise the account
         is approved and signed in on a fresh session. The email is lowercased
-        and has angle brackets removed before it is stored. Should no account
+        before it is stored; one holding `<` or `>` is refused with 400
+        `Invalid email format`. Should no account
         exist at all (setup normally creates the first), the account becomes
         ADMIN, approved and signed in, and the registration and approval
         settings are not consulted. Rate limited to 10 requests per hour per
@@ -634,7 +643,8 @@ paths:
             the email is over 254 or the password over 1,024 characters
             (`message` names the field: `Email is required`, `Password must
             be text`). Otherwise `Registration Failed`, with the reason as
-            `message`: an invalid email, a password that does not meet the
+            `message`: an invalid email (`Invalid email format`, also for
+            one holding `<` or `>`), a password that does not meet the
             strength rule (the unmet rules joined with ", ", with no `errors`
             array), a refused display name, or `Email already registered`.
             The `Validation Error` check runs before the 403; the others
@@ -667,6 +677,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/login:
     post:
@@ -674,7 +686,7 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts, answers and takes as long as a wrong password (it is checked against a dummy hash).
+        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts, answers and takes as long as a wrong password (it is checked against a dummy hash). The `RateLimit-*` headers describe the per-address allowance of 5.
         If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login` within 5 minutes; the session is not signed in until then, and after 5 minutes the pending sign-in ends and the password step starts again. A pending sign-in also ends when the account's password is changed or reset, or its sessions are ended for any other reason.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
@@ -786,6 +798,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/logout:
     post:
@@ -869,7 +883,7 @@ paths:
         - Authentication
       summary: Request password reset
       description: |
-        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
+        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the link to be issued or the email to be sent, so a known address answers as quickly as an unknown one, and a failed send is only logged. A request while the account's link is still being issued counts as one within the 5 minutes below. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
         The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
         For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does, and its used and expired link rows are removed. This happens even when SMTP is not configured and no email is sent.
@@ -944,7 +958,10 @@ paths:
         `mustChangePassword`, forgets the wrong passwords counted against the
         account by the per-account sign-in limit, and ends every login session
         and live WebSocket connection of the account; the request itself does
-        not sign anyone in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        not sign anyone in. An invitation link (one that lasts longer than
+        the hour of a reset link) setting the password of an administrator
+        account nobody has signed in to starts its 7 days to set up two-factor
+        authentication from now, written to the activity log. Rate limited: 5 wrong answers per 15 minutes per address, shared
         with the other credential endpoints, where a link that does not exist,
         has been used or has expired is a wrong answer and a password too weak
         to take is not.
@@ -1005,6 +1022,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/change-password:
     post:
@@ -1081,8 +1100,10 @@ paths:
             passwords, please try again later`, with `Retry-After`), or the
             request waited 15 seconds behind other password checks for the
             account (`Other attempts are still being checked. Please try again
-            in a moment.`, with `Retry-After: 5`; not counted). Nothing was
-            changed.
+            in a moment.`, with `Retry-After: 5`; not counted), or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). Nothing
+            was changed.
           content:
             application/json:
               schema:
@@ -1090,6 +1111,8 @@ paths:
               example:
                 error: Rate Limited
                 message: Too many wrong passwords, please try again later
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   # ============================================
   # MFA
@@ -1165,6 +1188,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/verify:
     post:
@@ -1237,6 +1262,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/verify-login:
     post:
@@ -1318,6 +1345,8 @@ paths:
                 message: Invalid authentication code. Please try again.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/disable:
     post:
@@ -1399,6 +1428,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/backup-codes:
     post:
@@ -1468,6 +1499,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/account:
     delete:
@@ -1484,7 +1517,13 @@ paths:
         `AVATAR`, and any other that nothing names (no map, token, character,
         template, creature or campaign setting) and that no campaign has
         shared. A personal asset something still names, or one shared into a
-        campaign, stays. Their chat messages, dice rolls, campaign assets and
+        campaign, stays. One whose every use (leaving out the user's own
+        characters, which go with them, and counting each campaign it is
+        shared into) is in a single campaign the user was in becomes that
+        campaign's: `scope` `CAMPAIGN` and its `campaignId`, in the deletion's
+        transaction. One used in several campaigns, in a campaign the user
+        was not in, or outside a campaign, stays `USER` and an activity log
+        line names it. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
         null, and documents they shared into a campaign stay shared (the
         share passes to the campaign's DM, or its owner). Character
@@ -1586,8 +1625,10 @@ paths:
             later`, with `Retry-After`), or the request waited 15 seconds
             behind other password checks for the account that were still
             running (`Other attempts are still being checked. Please try again
-            in a moment.`, with `Retry-After: 5`; not counted). The general
-            API limit answers 429 too. Nothing was changed.
+            in a moment.`, with `Retry-After: 5`; not counted), or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). The
+            general API limit answers 429 too. Nothing was changed.
           content:
             application/json:
               schema:
@@ -1597,6 +1638,8 @@ paths:
                 message: Too many wrong passwords, please try again later
         '500':
           $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/registration-status:
     get:
@@ -1694,7 +1737,14 @@ paths:
       tags:
         - Users
       summary: List all users
-      description: Get list of all users, newest account first, including unapproved ones (Admin only)
+      description: >-
+        Get list of all users, newest account first, including unapproved ones
+        (Admin only). Each user also has `signInLockedUntil`: when the
+        account's sign-in lock ends (10 wrong passwords within an hour, or 5
+        wrong sign-in codes within 15 minutes, whichever ends later), or
+        `null` when it is not locked. The locks are kept in memory, so a
+        restart clears them. `DELETE /api/admin/users/{id}/sign-in-lock`
+        clears one.
       operationId: listUsers
       security:
         - cookieAuth: []
@@ -1709,7 +1759,14 @@ paths:
                   users:
                     type: array
                     items:
-                      $ref: '#/components/schemas/User'
+                      allOf:
+                        - $ref: '#/components/schemas/User'
+                        - type: object
+                          properties:
+                            signInLockedUntil:
+                              type: string
+                              format: date-time
+                              nullable: true
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1903,8 +1960,10 @@ paths:
             (`Too many wrong passwords, please try again later`, with
             `Retry-After`), or the request waited 15 seconds behind other
             password checks for the account (`Other attempts are still being
-            checked. Please try again in a moment.`, with `Retry-After: 5`).
-            Nothing was changed.
+            checked. Please try again in a moment.`, with `Retry-After: 5`),
+            or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). Nothing was changed.
           content:
             application/json:
               schema:
@@ -1921,6 +1980,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: Failed to update user
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
     delete:
       tags:
@@ -1963,8 +2024,11 @@ paths:
                       Count of the user's personal-scope assets, taken before
                       deletion. Their avatar and the ones nothing uses or
                       shares are deleted with the account; the rest stay,
-                      owned by no one, readable by admins only. Assets of
-                      other scopes also stay but are not counted.
+                      owned by no one. One used only in a single campaign the
+                      user was in becomes that campaign's, as for `DELETE
+                      /api/auth/account`; the others are readable by admins
+                      only. Assets of other
+                      scopes also stay but are not counted.
         '400':
           description: >-
             The calling admin named their own id. Checked after the admin
@@ -2058,11 +2122,15 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Bad Request
-                message: You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.
+                message: You cannot reset your own password from here. Use Change Password on your profile, which asks for your current password.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/users/{id}/preferences:
     get:
@@ -3614,8 +3682,9 @@ paths:
         sharing cannot be used to grant a table access to a stranger's private
         file from nothing but its id. A document the caller can read but did
         not upload answers 403: being shared into one campaign does not let a
-        member who runs another pass it on. Admins may share anything. An
-        asset that is not a document answers 404. Sharing a document that is
+        member who runs another pass it on. The same holds for an admin: an
+        admin can read every file, and may still share only their own or a
+        global one. An asset that is not a document answers 404. Sharing a document that is
         already shared answers 201 with the existing link, unchanged.
       operationId: linkCampaignDocument
       security:
@@ -5965,6 +6034,9 @@ paths:
         Move an asset between the three scopes (`GLOBAL`, `USER`, `CAMPAIGN`).
         A platform admin may make any move; the rules below are for everyone
         else, and combine when a move touches more than one of their cases.
+        An admin moving another user's `USER` asset to `CAMPAIGN` or `GLOBAL`
+        writes a line to the activity log naming the asset, its owner and
+        where it went.
 
         **Permission matrix (non-admin):**
         | Case | Requirement |
@@ -10211,6 +10283,10 @@ paths:
           description: >-
             `Email is already in use`, including when another request created an
             account with the address after the check (this answered 500 before 1.5.2).
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/admin/users/invite:
     post:
@@ -10293,8 +10369,13 @@ paths:
             account with the address after the check.
         '502':
           description: The invitation email could not be delivered; no account was created
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
         '503':
-          description: SMTP is not configured on this instance
+          description: >-
+            SMTP is not configured on this instance, or the server is too busy
+            to hash a password (the message is then `The server is busy, try
+            again in a moment.`, with a `Retry-After` of 5 seconds)
 
   /api/admin/users/{id}/resend-invite:
     post:
@@ -10343,7 +10424,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Conflict
-                message: This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.
+                message: This account has already signed in, so there is no invitation to resend. Use Send Reset Link to email them a link to set a new password.
         '500':
           description: The invitation email could not be sent
         '503':
@@ -10415,6 +10496,49 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+
+  /api/admin/users/{id}/sign-in-lock:
+    delete:
+      tags: [Admin]
+      summary: Clear an account's sign-in lock
+      description: >-
+        Forgets the account's wrong passwords (10 within an hour lock it for
+        every address) and wrong sign-in codes (5 within 15 minutes), so its
+        next correct password signs in at once. Named by user id, so it says
+        nothing about whether an address has an account. Answers 200 whether
+        or not the account was locked. Written to the admins' activity log as
+        `Cleared the sign-in lock on <email>`, with `targetUserId`. The
+        per-address limits are not changed.
+      operationId: adminClearUserSignInLock
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Sign-in lock cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No account has this id (`User not found`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /api/admin/smtp/test:
     post:
@@ -13515,7 +13639,10 @@ components:
         with JSON `{ error, message }`, where `message` says what was limited
         and when to try again. The sign-in, password, two-factor and
         registration limiters send `error: "Rate Limited"`; the others send
-        `Too Many Requests`.
+        `Too Many Requests`. A route that hashes or checks a password also
+        answers 429 `Too many password checks from your address at once.
+        Please try again in a moment.` with `Retry-After: 2` while the
+        address already has two such requests running (HashingAtOnce).
       headers:
         Retry-After:
           schema: { type: integer }
@@ -13536,6 +13663,42 @@ components:
           example:
             error: Too Many Requests
             message: Upload rate limit reached. Please slow down and try again in a minute.
+
+    HashingAtOnce:
+      description: >-
+        Too Many Requests - The address already has two requests running that
+        hash or check a password, on any of the routes that do. Counted
+        against nothing; try again once one has been answered.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before trying again (2)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Rate Limited
+            message: Too many password checks from your address at once. Please try again in a moment.
+
+    ServerBusy:
+      description: >-
+        Service Unavailable - Too many password hashes or checks are running
+        or waiting (2 run at once, 50 may wait, each for at most 10
+        seconds). Never counted as a wrong password by the sign-in limits.
+        One address may have two such requests running at once, and a third
+        is answered 429 (HashingAtOnce).
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before trying again (5)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Service Unavailable
+            message: The server is busy, try again in a moment.
 
     ServerError:
       description: Internal Server Error - Something went wrong on the server.

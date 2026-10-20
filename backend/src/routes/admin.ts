@@ -25,10 +25,12 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { UpdateSystemSettingsSchema } from '../validators/systemSettings';
 import { parseDisplayName, MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
-import { hashPassword, sanitizeUser } from '../services/auth';
+import { hashPassword, sanitizeUser, answeredBusy } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeAdminLog } from '../services/systemLog';
+import { clearSignInLock } from '../middleware/authLimiters';
+import { hashingPerAddress } from '../middleware/hashingPerAddress';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
@@ -314,10 +316,6 @@ router.put('/settings', async (req, res) => {
     } satisfies Record<string, string | null | undefined>;
     for (const [field, value] of Object.entries(branding)) {
       if (value === undefined) continue;
-      // TODO(accounts): isSameOriginPath accepts a protocol-relative address
-      // such as //other.example/logo.png, which names another server; the
-      // page's img-src 'self' blocks it, so it shows broken. Accept only a path
-      // on this host: refuse a leading // and a backslash too.
       if (typeof value === 'string' && value !== '' && !isSameOriginPath(value)) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -358,7 +356,7 @@ router.put('/settings', async (req, res) => {
 // POST /api/admin/users
 // Creates a new user account with a temporary password.
 // ============================================
-router.post('/users', async (req, res) => {
+router.post('/users', hashingPerAddress, async (req, res) => {
   try {
     const { platformRole } = req.body;
     const fields = newAccountFields(req.body.email, req.body.displayName);
@@ -422,6 +420,7 @@ router.post('/users', async (req, res) => {
       ...(emailSent ? {} : { temporaryPassword }),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error creating user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create user' });
   }
@@ -434,7 +433,7 @@ router.post('/users', async (req, res) => {
 // so there is nothing to hand over manually.
 // ============================================
 
-router.post('/users/invite', async (req, res) => {
+router.post('/users/invite', hashingPerAddress, async (req, res) => {
   try {
     if (!isSmtpConfigured()) {
       return res.status(503).json({
@@ -522,6 +521,7 @@ router.post('/users/invite', async (req, res) => {
       expiresInDays: INVITE_EXPIRY_DAYS,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error inviting user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to invite user' });
   }
@@ -556,7 +556,7 @@ router.post('/users/:id/resend-invite', async (req, res) => {
       // Admin Panel; the message should spell it the same way.
       return res.status(409).json({
         error: 'Conflict',
-        message: 'This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.',
+        message: 'This account has already signed in, so there is no invitation to resend. Use Send Reset Link to email them a link to set a new password.',
       });
     }
 
@@ -631,6 +631,30 @@ router.post('/users/:id/approve', async (req, res) => {
   } catch (error) {
     logger.error('Error approving user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to approve user' });
+  }
+});
+
+// ============================================
+// DELETE /api/admin/users/:id/sign-in-lock
+// Clears an account's sign-in lock: its wrong passwords and wrong codes are
+// forgotten, so the right ones sign in at once. By user id, so it never says
+// whether an address has an account.
+// ============================================
+router.delete('/users/:id/sign-in-lock', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true } });
+    if (!target) {
+      return res.status(404).json({ error: 'Not Found', message: 'User not found' });
+    }
+
+    clearSignInLock(target);
+    await writeAdminLog(req.session.userId!, `Cleared the sign-in lock on ${target.email}`, 'INFO', { targetUserId: target.id });
+
+    return res.json({ message: 'Sign-in lock cleared.' });
+  } catch (error) {
+    logger.error('Error clearing a sign-in lock', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to clear the sign-in lock' });
   }
 });
 

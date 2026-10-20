@@ -231,6 +231,10 @@ class SocketClient {
         path: SOCKET_PATH,
         withCredentials: true,
         transports: ['websocket', 'polling'],
+        // Polling when the WebSocket is refused, as by a proxy that does not
+        // pass the browser's host name, which the page's policy names for it:
+        // a slower table, where without this there was none.
+        tryAllTransports: true,
         reconnection: true,
         reconnectionDelay: this.reconnectDelay,
         reconnectionDelayMax: 30000,       // Cap backoff at 30s

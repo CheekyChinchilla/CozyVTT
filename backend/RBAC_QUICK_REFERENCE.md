@@ -417,7 +417,9 @@ when a DM has linked the document to a campaign the caller belongs to
 the DM first, so a link can only ever grant what the DM could already read,
 and then requires the document to be the DM's own or `GLOBAL`, so a document
 shared into one campaign cannot be passed on by a member who runs another. A
-DM who is a platform admin passes both checks, so may share any document.
+DM who is a platform admin passes the first check for every document and is
+held to the second like anyone else, so may share only their own documents and
+global ones.
 
 Three things this deliberately does **not** do:
 
@@ -483,13 +485,15 @@ Documents are assets of type `DOCUMENT`, so everything above applies, plus:
   document: a campaign's own asset is its uploader's while still a member, the
   campaign's DM's and an admin's; a global one an admin's, or its uploader's
   while they keep `globalAssetManager`; a personal one its uploader's and an
-  admin's. A campaign asset with no campaign recorded is an admin's alone.
+  admin's. An admin moving someone else's personal asset into a campaign or to
+  `GLOBAL` writes an activity log line naming the asset and its owner. A
+  campaign asset with no campaign recorded is an admin's alone.
   A move to `USER` is its uploader's (or an admin's) alone besides: the asset
   would land in the uploader's personal library, so a DM moving a player's
   upload there would take it out of the campaign and out of their own reach.
 - **Sharing and unsharing are the DM's** (`campaignDM` on the link routes),
-  and sharing is limited to the DM's own documents and global ones, unless the
-  DM is a platform admin, who may share any document. A DM may read a document
+  and sharing is limited to the DM's own documents and global ones, for a DM
+  who is a platform admin too. A DM may read a document
   shared with a table they play at; they may not re-share it. Unlinking
   revokes read for the whole campaign at once.
 - **Refusals are `404`, not `403`**, on the serving and edit routes, and on
@@ -512,7 +516,14 @@ Two things to get right when adding a check of this kind:
 
 - **Assets with no uploader.** `uploadedById` is set to null when the uploader's
   account is deleted, and a null uploader grants no one anything through
-  `assetUsedInUserCampaign`. A `USER` asset in that state is movable and
+  `assetUsedInUserCampaign`. So the deletion (`services/accountDeletion.ts`)
+  gives a personal asset whose every use, counting each campaign it is shared
+  into, is in one campaign the account was in to that campaign (`CAMPAIGN`
+  scope), where its members read it by scope. Only the account's own
+  campaigns count: anyone who could read the file could name it in a campaign
+  of theirs. One used in several campaigns, in a campaign the account was not
+  in, or outside a campaign, stays `USER` and is named in the activity log.
+  A `USER` asset in that state is movable and
   deletable by platform admins alone, and readable by them alone, except a
   document still shared into a campaign, which that campaign's members go on
   reading. `GET /api/assets?uploadedBy=none` lists every asset with no
@@ -528,6 +539,15 @@ Two things to get right when adding a check of this kind:
   out. The delete looks each name up in a fresh scan, so a name outside the
   asset folders reaches nothing, and writes what it deleted to the activity
   log.
+- **An account's sign-in lock.** `GET /api/users` (admins only) gives each
+  user `signInLockedUntil`, when the account's lock for wrong passwords
+  (`accountLoginLimiter`) or wrong sign-in codes (`mfaAccountLimiter`, both in
+  `middleware/authLimiters.ts`) ends, or null. `DELETE
+  /api/admin/users/:id/sign-in-lock` forgets both counts and writes an
+  activity log line; it is behind the admin router's `requireAuth` and
+  `requireAdmin` and the two-factor gate. It takes a user id, never an
+  address, so it cannot be used to learn which addresses have accounts; an
+  unknown id answers `404`, a player `403`.
 - **The SRD creature import.** `POST /api/campaigns/:campaignId/creatures/seed`
   fills the creature library every campaign shares and fetches from Open5e on
   every run, so it is guarded by `requireAuth` and a platform admin check in
@@ -615,8 +635,9 @@ then on also asks for the current password:
 | Delete own account | `DELETE /api/auth/account` | `password` |
 
 An `ADMIN` account must have MFA on. Its 7-day deadline is counted from the
-latest of the policy start, the account's `createdAt`, its promotion and a
-Reset MFA by another admin; all but `createdAt` are activity-log rows
+latest of the policy start, the account's `createdAt`, its promotion, a
+Reset MFA by another admin and an invitation link setting its password; all
+but `createdAt` are activity-log rows
 (`services/adminMfaPolicy.ts`). Until the deadline nothing is refused, and
 `GET /api/auth/me` and the sign-in reply carry `adminMfaDeadline` for the
 banner. Past it, `middleware/adminMfa.ts` answers 403 with

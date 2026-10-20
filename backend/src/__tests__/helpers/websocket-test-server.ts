@@ -25,6 +25,7 @@ import request from 'supertest';
 import { io as ioc, Socket as ClientSocket } from 'socket.io-client';
 import { registerEventHandlers } from '../../websocket/events';
 import { setSocketInstance } from '../../websocket/utils';
+import { startSignInSweep } from '../../websocket/signInSweep';
 import { socketAllowRequest } from '../../middleware/originCheck';
 
 export interface WsTestServer {
@@ -47,7 +48,11 @@ export interface WsTestServer {
   close(): Promise<void>;
 }
 
-export async function createWsTestServer(): Promise<WsTestServer> {
+/**
+ * `sweep: false` leaves out the sweep that ends connections whose sign-in has
+ * ended, for a test that runs its own (signInSweep.integration.test.ts).
+ */
+export async function createWsTestServer(options: { sweep?: boolean } = {}): Promise<WsTestServer> {
   const app = express();
   app.use(express.json());
 
@@ -87,6 +92,8 @@ export async function createWsTestServer(): Promise<WsTestServer> {
 
   setSocketInstance(io);
   registerEventHandlers(io);
+  // As production starts it (websocket/index.ts); it stops when the server closes.
+  if (options.sweep !== false) startSignInSweep(io, httpServer);
 
   await new Promise<void>((resolve) => httpServer.listen(0, resolve));
   const port = (httpServer.address() as AddressInfo).port;

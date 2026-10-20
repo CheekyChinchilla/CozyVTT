@@ -10,7 +10,15 @@
  * Their personal files go too: the avatar always, and any other personal
  * upload that nothing uses and no campaign has shared, row and file. A
  * personal file a map, token, template, creature or campaign setting still
- * names stays, owned by no one, like a campaign's files. The rows are
+ * names, or a campaign has shared, stays, owned by no one, like a campaign's
+ * files. A file with no uploader grants nobody reading through its uses, so
+ * one whose every use is in a single campaign the account was in becomes that
+ * campaign's own, in the deletion's transaction. Only the account's own
+ * campaigns can be given a file: anyone who could read it could name it in a
+ * campaign of theirs, and take it that way. One used anywhere else stays
+ * personal, readable by admins alone, and the activity log names it so an
+ * admin can move it. Where each
+ * file is used is read before the transaction (personalUploadUses). The rows are
  * deleted with the account; the files are removed by removePersonalFiles,
  * which the routes start once the account's sessions have ended and the answer
  * is on its way (removePersonalFilesAfterwards), since working out which may
@@ -22,9 +30,10 @@
  * hand the DM seat over or delete the campaign; nothing is changed then.
  */
 
-import type { AssetType } from '@prisma/client';
+import type { AssetType, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
-import { isAssetInUse } from './assetUsage';
+import { findUses, isAssetInUse, type FoundUse } from './assetUsage';
+import { writeSystemLog } from './systemLog';
 import { deleteFile } from '../utils/fileUtils';
 import logger from '../utils/logger';
 import { destroyUserLoginSessions } from './sessionStore';
@@ -50,6 +59,23 @@ export interface PersonalAsset {
 }
 
 /**
+ * A kept personal file left personal, and why: used in a campaign the account
+ * was not in, outside a campaign, or in several of its campaigns.
+ */
+interface LeftPersonal {
+  id: string;
+  name: string;
+  usedIn: 'notTheirs' | 'outside' | 'several';
+}
+
+/** How the activity log says where a file left personal is used. */
+const USED_IN: Record<LeftPersonal['usedIn'], string> = {
+  notTheirs: 'in a campaign the account was not in',
+  outside: 'outside a campaign',
+  several: 'in more than one campaign',
+};
+
+/**
  * `personal` lists the account's personal uploads, for removePersonalFiles
  * to delete the ones nothing uses once the account's sessions have ended.
  */
@@ -59,14 +85,53 @@ export type AccountDeletion =
   | { deleted: false; refused: 'onlyAdmin' };
 
 /**
+ * How long the deletion's transaction may run, and wait for a connection.
+ * Prisma's five seconds is enough for what it does now that the uses are
+ * read beforehand, but the rows that go with an account (characters, notes,
+ * sessions) are not bounded, and a deletion that ran out of time answered
+ * 500 and changed nothing, so the account could not be deleted at all.
+ */
+const DELETION_TIMEOUT_MS = 30_000;
+const DELETION_MAX_WAIT_MS = 10_000;
+
+/** The uses of a personal upload that count at deletion: their own characters go with them. */
+async function usesAtDeletion(assetId: string, userId: string, db?: Prisma.TransactionClient): Promise<FoundUse[]> {
+  return (await findUses(assetId, db)).filter((u) => !(u.kind === 'character' && u.ownerId === userId));
+}
+
+/**
+ * Where each of an account's personal uploads but the avatar is used, read
+ * before the deletion's transaction. findUses takes seven queries a file, one
+ * of them a search through the text of every map's tokens, and run for each
+ * of a few hundred files inside the transaction it went past the
+ * transaction's time limit, so the account could not be deleted. A use added
+ * or removed between this read and the transaction is not seen: the file is
+ * then left personal, or given to a campaign that used it a moment before,
+ * and removePersonalFiles checks again before it deletes anything.
+ */
+async function personalUploadUses(userId: string): Promise<Map<string, FoundUse[]>> {
+  const uploads = await prisma.asset.findMany({
+    where: { uploadedById: userId, scope: 'USER', type: { not: 'AVATAR' } },
+    select: { id: true },
+  });
+  const uses = new Map<string, FoundUse[]>();
+  for (const { id } of uploads) uses.set(id, await usesAtDeletion(id, userId));
+  return uses;
+}
+
+/**
  * Delete an account, unless it is the instance's only admin
  * (services/platformAdmins) or runs a campaign. One serializable transaction
  * (utils/serializable.ts), so an admin removed at the same moment, or a DM
  * seat handed over meanwhile, is seen before anything is written.
  */
 export async function deleteAccount(userId: string): Promise<AccountDeletion> {
-  return inSerializableTransaction(async (tx): Promise<AccountDeletion> => {
-    const account = await tx.user.findUnique({ where: { id: userId }, select: { platformRole: true } });
+  type Inside =
+    | Exclude<AccountDeletion, { deleted: true }>
+    | (Extract<AccountDeletion, { deleted: true }> & { email: string; leftPersonal: LeftPersonal[] });
+  const usesRead = await personalUploadUses(userId);
+  return inSerializableTransaction(async (tx): Promise<Inside> => {
+    const account = await tx.user.findUnique({ where: { id: userId }, select: { platformRole: true, email: true } });
     if (account?.platformRole === 'ADMIN' && (await isOnlyAdmin(userId, tx))) {
       return { deleted: false, refused: 'onlyAdmin' };
     }
@@ -119,13 +184,63 @@ export async function deleteAccount(userId: string): Promise<AccountDeletion> {
     const campaignIds = (await tx.campaignMembership.findMany({ where: { userId }, select: { campaignId: true } }))
       .map((m) => m.campaignId);
     // Their personal uploads, read while the rows still name them.
-    const personal = await tx.asset.findMany({ where: { uploadedById: userId, scope: 'USER' }, select: { id: true, type: true } });
+    const uploads = await tx.asset.findMany({
+      where: { uploadedById: userId, scope: 'USER' },
+      select: { id: true, type: true, name: true },
+    });
+    // A file a campaign uses or has shared is kept. Its uses stop granting
+    // reading once it has no uploader, so one used in a single campaign of
+    // theirs becomes that campaign's. Their own characters go with the
+    // account and do not count. A share counts as a use where it was shared.
+    const theirCampaigns = new Set([...campaignIds, ...owned.map((c) => c.id)]);
+    const links = await tx.campaignDocument.findMany({
+      where: { assetId: { in: uploads.map((u) => u.id) } },
+      select: { assetId: true, campaignId: true },
+    });
+    const personal: PersonalAsset[] = [];
+    const leftPersonal: LeftPersonal[] = [];
+    const moves = new Map<string, string[]>();
+    for (const asset of uploads) {
+      if (asset.type !== 'AVATAR') {
+        // One uploaded since the read is read here.
+        const uses = usesRead.get(asset.id) ?? (await usesAtDeletion(asset.id, userId, tx));
+        const where = new Set<string | null>(uses.map((u) => u.campaignId));
+        for (const link of links) if (link.assetId === asset.id) where.add(link.campaignId);
+        const [only] = where;
+        if (where.size === 1 && only && theirCampaigns.has(only)) {
+          moves.set(only, [...(moves.get(only) ?? []), asset.id]);
+          continue;
+        }
+        if (where.size > 0) {
+          const notTheirs = [...where].some((id) => id !== null && !theirCampaigns.has(id));
+          leftPersonal.push({ id: asset.id, name: asset.name, usedIn: notTheirs ? 'notTheirs' : where.has(null) ? 'outside' : 'several' });
+        }
+      }
+      personal.push({ id: asset.id, type: asset.type });
+    }
+    for (const [campaignId, ids] of moves) {
+      await tx.asset.updateMany({ where: { id: { in: ids } }, data: { scope: 'CAMPAIGN', campaignId } });
+    }
     // Their sign-ins end with the row, in the same transaction: the guards
     // read the session, so a deleted admin's other device would otherwise
     // keep the role until the session expired.
     await destroyUserLoginSessions(userId, undefined, tx);
     await tx.user.delete({ where: { id: userId } });
-    return { deleted: true, campaignIds, personal };
+    return { deleted: true, campaignIds, personal, leftPersonal, email: account?.email ?? '' };
+  }, { timeout: DELETION_TIMEOUT_MS, maxWait: DELETION_MAX_WAIT_MS }).then(async (result) => {
+    if (!result.deleted) return result;
+    // Written once the deletion has committed: a retried transaction would
+    // otherwise write each line again.
+    for (const file of result.leftPersonal) {
+      await writeSystemLog({
+        level: 'WARNING',
+        message: `Kept "${file.name}", a personal file of the deleted account ${result.email}, with no owner: it is used ${
+          USED_IN[file.usedIn]
+        }, so only an admin can see it until it is moved`,
+        context: { assetId: file.id },
+      });
+    }
+    return { deleted: true, campaignIds: result.campaignIds, personal: result.personal };
   });
 }
 
@@ -144,12 +259,6 @@ export async function removePersonalFiles(personal: PersonalAsset[]): Promise<vo
     const doomed: string[] = [];
     for (const asset of personal) {
       if (asset.type !== 'AVATAR') {
-        // TODO(accounts): a personal file kept here because a campaign uses it
-        // can no longer be read by that campaign's members, since a null
-        // uploader grants nothing in assetUsedInUserCampaign, so their maps and
-        // tokens show it as missing. Either move such a file into the campaign
-        // that uses it, or let the use rule accept a file with no uploader.
-        // Both change who may read it, so it waits for a decision.
         if (await isAssetInUse(asset.id)) continue;
         if ((await prisma.campaignDocument.count({ where: { assetId: asset.id } })) > 0) continue;
       }

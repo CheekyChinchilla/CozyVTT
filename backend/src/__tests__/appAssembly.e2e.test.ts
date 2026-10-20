@@ -52,13 +52,15 @@ describe('the security headers', () => {
   // name on HTTPS after seeing this, and the policy has to stay in step with
   // the app page's. Either changes when the headers library or app.ts does.
   it('keep a browser on HTTPS for a year and send the policy app.ts sets', async () => {
-    const res = await request(app).get('/api/config');
+    const res = await request(app).get('/api/config').set('Host', 'table.example:8443');
 
     expect(res.headers['strict-transport-security']).toBe('max-age=31536000; includeSubDomains');
     // The order of the directives carries no meaning to a browser.
     expect(String(res.headers['content-security-policy']).split(';').sort()).toEqual([
       "base-uri 'self'",
-      "connect-src 'self' ws: wss:",
+      // The live table's socket on the page's own host only, named outright:
+      // 'self' alone does not match ws: and wss: in every supported browser.
+      "connect-src 'self' ws://table.example:* wss://table.example:*",
       "default-src 'self'",
       "font-src 'self'",
       "form-action 'self'",
@@ -71,6 +73,16 @@ describe('the security headers', () => {
       "style-src 'self' 'unsafe-inline'",
       'upgrade-insecure-requests',
     ]);
+  });
+});
+
+describe('the live connection in the policy', () => {
+  // The Host header is the client's; one that is not a plain host and port
+  // must not write itself into the policy.
+  it('names no socket host for a Host that is not a plain host and port', async () => {
+    const res = await request(app).get('/api/config').set('Host', "evil.example'*");
+    const connect = String(res.headers['content-security-policy']).split(';').find((d) => d.startsWith('connect-src'));
+    expect(connect?.trim()).toBe("connect-src 'self'");
   });
 });
 

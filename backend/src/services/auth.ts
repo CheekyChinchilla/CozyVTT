@@ -1,9 +1,11 @@
 import argon2 from 'argon2';
 import crypto from 'crypto';
+import type { Response } from 'express';
 import { prisma } from '../config/database';
 import { User, PlatformRole, type Prisma } from '@prisma/client';
-import { validatePasswordStrength, validateEmail, sanitizeInput } from '../utils/validation';
+import { validatePasswordStrength, validateEmail } from '../utils/validation';
 import { parseDisplayName } from '../validators/users';
+import logger from '../utils/logger';
 
 /**
  * Authentication Service
@@ -71,22 +73,128 @@ export interface LoginInput {
 }
 
 /**
+ * How many password hashes or checks run at once. Each takes 64 MB and a
+ * thread of libuv's four, which file reads share, and a correct password is
+ * never counted by the sign-in limits, so a flood of sign-ins with one could
+ * otherwise fill the pool, stall file serving and push the container towards
+ * its memory limit.
+ */
+export const HASH_SLOTS = 2;
+
+/** How many may wait for a turn; one more is told the server is busy. */
+export const HASH_QUEUE_MAX = 50;
+
+/**
+ * How long one may wait for a turn before it is told the server is busy:
+ * inside the 15 seconds the sign-in limits let a request wait, so the busy
+ * answer arrives first.
+ */
+export const HASH_WAIT_MS = 10_000;
+
+/** What a person is told when the server is too busy to check a password. */
+export const SERVER_BUSY_MESSAGE = 'The server is busy, try again in a moment.';
+
+/**
+ * No turn to hash or check a password came: too many waiting, or the wait ran
+ * out. Every route that hashes answers it with 503 (answeredBusy).
+ */
+export class ServerBusyError extends Error {
+  constructor() {
+    super(SERVER_BUSY_MESSAGE);
+    this.name = 'ServerBusyError';
+  }
+}
+
+let hashesRunning = 0;
+const hashWaiting: Array<() => void> = [];
+
+/** A turn to hash, once one is free; ServerBusyError past the queue or the wait. */
+function hashTurn(): Promise<void> {
+  if (hashesRunning < HASH_SLOTS) {
+    hashesRunning += 1;
+    return Promise.resolve();
+  }
+  if (hashWaiting.length >= HASH_QUEUE_MAX) return Promise.reject(new ServerBusyError());
+  return new Promise((resolve, reject) => {
+    const admit = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    const timer = setTimeout(() => {
+      const queued = hashWaiting.indexOf(admit);
+      if (queued !== -1) hashWaiting.splice(queued, 1);
+      reject(new ServerBusyError());
+    }, HASH_WAIT_MS);
+    hashWaiting.push(admit);
+  });
+}
+
+/** Hand the turn to the next waiting, or free it. */
+function endHashTurn(): void {
+  const next = hashWaiting.shift();
+  if (next) next();
+  else hashesRunning -= 1;
+}
+
+async function withHashTurn<T>(work: () => Promise<T>): Promise<T> {
+  await hashTurn();
+  try {
+    return await work();
+  } finally {
+    endHashTurn();
+  }
+}
+
+/**
  * Hash password using Argon2
  * CRITICAL: Passwords must be hashed immediately upon receipt
  */
 export async function hashPassword(password: string): Promise<string> {
-  return await argon2.hash(password, ARGON2_OPTIONS);
+  return withHashTurn(() => argon2.hash(password, ARGON2_OPTIONS));
 }
 
 /**
- * Verify password against hash
+ * Verify password against hash. A hash Argon2 cannot read is false; a busy
+ * server throws ServerBusyError, which must never count as a wrong password.
  */
 export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+  return withHashTurn(() => argon2Matches(hash, password));
+}
+
+async function argon2Matches(hash: string, password: string): Promise<boolean> {
   try {
     return await argon2.verify(hash, password);
   } catch {
     return false;
   }
+}
+
+/**
+ * Which of `hashes` the password matches, checked one after another in a
+ * single turn, or -1 for none. For the backup codes: with a turn for each
+ * hash, a server that became busy partway answered 503 with some of them
+ * checked and no wrong code counted, so guesses went uncounted under load.
+ * Busy before the first check throws ServerBusyError, with nothing checked.
+ */
+export async function firstMatchingHash(hashes: string[], password: string): Promise<number> {
+  return withHashTurn(async () => {
+    for (let i = 0; i < hashes.length; i++) {
+      if (await argon2Matches(hashes[i], password)) return i;
+    }
+    return -1;
+  });
+}
+
+/**
+ * Answer 503 with the busy message when `error` is ServerBusyError, and say
+ * whether it did. Every route that hashes or checks a password asks this
+ * first in its catch.
+ */
+export function answeredBusy(res: Response, error: unknown): boolean {
+  if (!(error instanceof ServerBusyError)) return false;
+  res.setHeader('Retry-After', '5');
+  res.status(503).json({ error: 'Service Unavailable', message: SERVER_BUSY_MESSAGE });
+  return true;
 }
 
 /** A registration checked and hashed, ready to be written. */
@@ -104,7 +212,9 @@ export interface PreparedRegistration {
  * anything that was sent wrongly.
  */
 export async function prepareRegistration(input: RegisterInput): Promise<PreparedRegistration> {
-  if (!validateEmail(input.email)) {
+  // An address holding < or > is refused, as Create User and Invite User
+  // refuse one, so the address stored is the one sign-in looks up.
+  if (!validateEmail(input.email) || /[<>]/.test(input.email)) {
     throw new RegistrationError('Invalid email format');
   }
 
@@ -118,13 +228,8 @@ export async function prepareRegistration(input: RegisterInput): Promise<Prepare
     throw new RegistrationError(parsedName.message);
   }
 
-  // TODO(accounts): the address is stored with its angle brackets removed,
-  // while sign-in looks it up as typed, so `jo<x>@example.com` registers as
-  // `jox@example.com` and cannot sign in with what was typed. Refuse an
-  // address holding < or >, as Create User and Invite User in routes/admin.ts
-  // now do, and store it as checked.
   return {
-    email: sanitizeInput(input.email.toLowerCase()),
+    email: input.email.toLowerCase(),
     displayName: parsedName.name,
     passwordHash: await hashPassword(input.password),
   };
@@ -182,11 +287,40 @@ export async function registerUser(input: RegisterInput): Promise<User> {
  * while a known one went on to the Argon2 check, so the time a sign-in took
  * told which addresses have accounts, though the reply was the same. Checking
  * the given password against this hash makes both paths pay for the hash.
+ *
+ * Made as the server starts (makeDummyPasswordHash). Made on the first
+ * sign-in instead, through the line of hashes, it cost an unknown address a
+ * second turn in that line after every restart, so under load those waited
+ * longer and were answered 503 more often until one had been made.
  */
 let dummyHash: Promise<string> | null = null;
+
+/** Keep `making` as the dummy hash; one that fails is forgotten, to be made again next time. */
+function keepDummyHash(making: Promise<string>): Promise<string> {
+  const kept: Promise<string> = making.catch((error: unknown) => {
+    if (dummyHash === kept) dummyHash = null;
+    throw error;
+  });
+  dummyHash = kept;
+  return kept;
+}
+
 function dummyPasswordHash(): Promise<string> {
-  if (dummyHash === null) dummyHash = hashPassword(crypto.randomBytes(32).toString('hex'));
-  return dummyHash;
+  return dummyHash ?? keepDummyHash(hashPassword(crypto.randomBytes(32).toString('hex')));
+}
+
+/**
+ * Make the dummy hash now, for the server's start. Outside the line of
+ * hashes, so nothing waiting there can refuse it, and nothing else is hashing
+ * yet. A failure is logged and does not stop the start: the first sign-in for
+ * an unknown email makes it instead.
+ */
+export async function makeDummyPasswordHash(): Promise<void> {
+  try {
+    await (dummyHash ?? keepDummyHash(argon2.hash(crypto.randomBytes(32).toString('hex'), ARGON2_OPTIONS)));
+  } catch (error) {
+    logger.warn('Could not make the dummy password hash at start; the first sign-in for an unknown email makes it', { err: error });
+  }
 }
 
 /**

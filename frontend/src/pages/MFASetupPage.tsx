@@ -11,6 +11,7 @@
 import { useState, useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { useAuth } from '@/contexts/AuthContext';
+import ServerUnreachablePanel from '@/components/ServerUnreachablePanel';
 import { Shield, Copy, CheckCircle, AlertTriangle, Loader2, ChevronRight } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
@@ -23,7 +24,7 @@ type CopyState = 'idle' | 'copied' | 'failed';
 
 export default function MFASetupPage() {
   const navigate = useNavigate();
-  const { authenticated, loading, setupMFA, completeMFASetup } = useAuth();
+  const { authenticated, loading, serverUnreachable, retryAuthCheck, setupMFA, completeMFASetup } = useAuth();
 
   // Setup data
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -129,6 +130,7 @@ export default function MFASetupPage() {
   // Wait for the sign-in check a page load starts before deciding: a reload
   // during setup went to the sign-in page, and on to the dashboard, before it
   // had answered.
+  if (loading && serverUnreachable) return <ServerUnreachablePanel onRetry={retryAuthCheck} />;
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20" aria-live="polite">

@@ -19,6 +19,7 @@ import {
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
 import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
 // ============================================
 // Types
@@ -113,12 +114,10 @@ export default function SetupWizardPage() {
     }
 
     // Display name
-    if (!adminData.displayName) {
+    if (adminData.displayName.trim().length < DISPLAY_NAME_MIN_LENGTH) {
       errors.displayName = 'Display name is required';
-    } else if (adminData.displayName.length < 2) {
-      // TODO(accounts): the server accepts names of 1 to 50 characters
-      // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
-      errors.displayName = 'Display name must be at least 2 characters';
+    } else if (adminData.displayName.trim().length > DISPLAY_NAME_MAX_LENGTH) {
+      errors.displayName = `Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer`;
     }
 
     // Email
@@ -524,7 +523,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
               fieldErrors.displayName ? 'border-spirit-red' : ''
             }`}
             placeholder="Your name"
-            maxLength={50}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
           />
           {fieldErrors.displayName && (
             <p className="mt-1 text-xs text-spirit-red">{fieldErrors.displayName}</p>

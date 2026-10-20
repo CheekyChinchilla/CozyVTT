@@ -31,6 +31,7 @@ import {
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
 import { isStrongPassword } from '@/utils/validation';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
 // Legacy localStorage key — superseded by backend-persisted preferences.
 // We delete it on first authenticated load so it doesn't linger on devices.
@@ -375,14 +376,12 @@ export default function ProfilePage() {
 
   const saveProfile = async () => {
     const trimmedName = displayName.trim();
-    // TODO(accounts): the server accepts names of 1 to 50 characters
-    // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
-    if (trimmedName.length < 2) {
-      setProfileError('Display name must be at least 2 characters');
+    if (trimmedName.length < DISPLAY_NAME_MIN_LENGTH) {
+      setProfileError('Display name is required');
       return;
     }
-    if (trimmedName.length > 50) {
-      setProfileError('Display name must be 50 characters or less');
+    if (trimmedName.length > DISPLAY_NAME_MAX_LENGTH) {
+      setProfileError(`Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer`);
       return;
     }
     if (bio.length > 500) {
@@ -738,18 +737,19 @@ export default function ProfilePage() {
             <div className="flex-1 space-y-4">
               {/* Display name */}
               <div>
-                <label className="block text-xs font-medium text-stone-gray mb-1">Display Name</label>
+                <label htmlFor="profile-display-name" className="block text-xs font-medium text-stone-gray mb-1">Display Name</label>
                 {editingProfile ? (
                   <>
                     <input
+                      id="profile-display-name"
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      maxLength={50}
+                      maxLength={DISPLAY_NAME_MAX_LENGTH}
                       className="input-cozy w-full"
                       autoFocus
                     />
-                    <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/50</p>
+                    <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/{DISPLAY_NAME_MAX_LENGTH}</p>
                   </>
                 ) : (
                   <p className="text-brand-ink font-medium">{user?.displayName}</p>

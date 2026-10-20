@@ -10,13 +10,14 @@
  */
 
 import crypto from 'crypto';
-import { hashPassword, verifyPassword } from '../services/auth';
+import { hashPassword, firstMatchingHash } from '../services/auth';
+import { BACKUP_CODE_COUNT } from '../validators/accountLimits';
 
 /** Ambiguous glyphs (I, O, 0, 1) are excluded so a written-down code is legible. */
 const CHARSET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
-/** Ten single-use codes, each formatted `XXXX-XXXX` for readability. */
-export function generateBackupCodes(count = 10): string[] {
+/** Single-use codes, BACKUP_CODE_COUNT of them, each formatted `XXXX-XXXX` for readability. */
+export function generateBackupCodes(count = BACKUP_CODE_COUNT): string[] {
   const codes: string[] = [];
   for (let i = 0; i < count; i++) {
     const bytes = crypto.randomBytes(8);
@@ -32,21 +33,27 @@ export function normalizeBackupCode(code: string): string {
   return code.replace(/[-\s]/g, '').toUpperCase();
 }
 
-/** Hash codes for storage. Normalised first, so verification can be lenient. */
-export function hashBackupCodes(codes: string[]): Promise<string[]> {
-  return Promise.all(codes.map((code) => hashPassword(normalizeBackupCode(code))));
+/**
+ * Hash codes for storage. Normalised first, so verification can be lenient.
+ * One after another, so a request takes one place at a time in the server's
+ * line of hashes (services/auth.ts): ten at once took ten, and two such
+ * requests from one address held a third of the line. Only two hashes run at
+ * once anyway, so this costs little time.
+ */
+export async function hashBackupCodes(codes: string[]): Promise<string[]> {
+  const hashed: string[] = [];
+  for (const code of codes) hashed.push(await hashPassword(normalizeBackupCode(code)));
+  return hashed;
 }
 
 /**
  * Find which stored hash a plaintext code matches, or -1 for none. The caller
  * removes the matched hash so the code cannot be used twice. A stored hash left
  * from the old SHA-256 scheme is not Argon2 and simply never matches, which is
- * the forced regeneration: a user's old codes stop working on upgrade.
+ * the forced regeneration: a user's old codes stop working on upgrade. Every
+ * stored hash is checked in one turn of the server's hashing
+ * (firstMatchingHash), so a busy server cannot stop a check partway.
  */
 export async function verifyBackupCode(plainCode: string, hashedCodes: string[]): Promise<number> {
-  const normalized = normalizeBackupCode(plainCode);
-  for (let i = 0; i < hashedCodes.length; i++) {
-    if (await verifyPassword(hashedCodes[i], normalized)) return i;
-  }
-  return -1;
+  return firstMatchingHash(hashedCodes, normalizeBackupCode(plainCode));
 }

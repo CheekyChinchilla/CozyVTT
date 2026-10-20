@@ -199,7 +199,11 @@ account's two-factor deadline, so a sign-in that ends later (signing out,
 expiry, a password change elsewhere) cannot join a campaign, nor can an
 administrator whose 7 days ran out while the connection was open. A database
 error while the deadline is checked lets the connection through, as the HTTP
-API lets the request through.
+API lets the request through. An open connection is also checked on a timer:
+every minute it is ended once its sign-in is past the 30 days, and every five
+minutes once its sign-in has left the session store, or its administrator
+has run out of days, each with `campaign.access.revoked` (reason `signed-out`)
+and then a disconnect.
 
 While an administrator restores a backup, from the moment the database starts
 being replaced until the restore ends, every open connection is sent
@@ -260,15 +264,20 @@ socket.on('error', (data) => {
      authentication; if it is, the same "Unauthorized" and close
    - The campaign exists ("Campaign not found") and the user is a member of
      it ("You are not a member of this campaign")
-3. The socket leaves every other campaign room it is in; each of those
-   campaigns gets 'user.left' and a fresh 'presence.state'
-4. Server joins socket to campaign room
-5. Server attaches campaignId and role to socket
-6. Server emits 'authenticated' to client
+3. In one step after that check, the socket leaves every other campaign room
+   it is in, joins the campaign room and takes the campaignId and role
+4. Each campaign left gets 'user.left' and a fresh 'presence.state'. A
+   removal from the new campaign made meanwhile ends the join here: the
+   socket is sent 'campaign.access.revoked' and no 'authenticated'
+5. The server reads the membership once more: if it is gone the socket is
+   sent 'campaign.access.revoked' (reason 'removed'), leaves the campaign and
+   gets no 'authenticated'; if the role changed, the socket takes the new one
+6. Server emits 'authenticated' to client, with the role from step 5, so a
+   state request sent on hearing it is answered for that role
 7. If the socket was already in this campaign with the same role (a re-join),
-   the server sends 'presence.state' to that socket alone and stops; nobody
-   else is told. Otherwise it broadcasts 'user.joined' to the other campaign
-   members, then 'presence.state' to the whole campaign
+   the server sends 'presence.state' to that socket alone; nobody else is
+   told. Otherwise it broadcasts 'user.joined' to the other campaign members,
+   then 'presence.state' to the whole campaign
 ```
 
 ### Permission Checks
@@ -339,7 +348,7 @@ For every other event, see the [Event Inventory](#event-inventory).
 
 #### `campaign.access.revoked`
 **Direction:** Server → Client
-**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that expires, reaches its 30 days, or is removed to keep the account at 20 sign-ins sends nothing: the connection stays open until its next `authenticate` is refused
+**When:** This connection may no longer use its campaign: the DM removed the member, the owner deleted the campaign, or the sign-in the connection was opened under ended (signed out, a password changed or reset, two-factor authentication turned on or off from another device, a platform role changed, the account deleted, or the instance restored from a backup). A sign-in that reaches its 30 days is told so within a minute ("Your sign-in has reached its 30-day limit. Sign in again.", or at once when a request of that sign-in is refused for it); one that expires, or is removed to keep the account at 20 sign-ins, within five minutes ("Your sign-in has ended. Sign in again."). Either way the server then closes the connection
 **Payload:**
 ```typescript
 {

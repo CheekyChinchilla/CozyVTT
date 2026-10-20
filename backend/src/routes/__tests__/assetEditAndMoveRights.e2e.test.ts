@@ -367,3 +367,45 @@ describe('moving an asset with no uploader to Personal', () => {
     }
   });
 });
+
+// An admin may move anyone's personal file into any campaign, which puts it
+// in front of that table. The move stays, and the Activity log says whose
+// file went where.
+describe('an admin moving someone else\'s personal file', () => {
+  async function setUp() {
+    const admin = await createTestUser({ displayName: 'Scope Admin', role: 'ADMIN' });
+    userIds.push(admin.id);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').send({ email: admin.email, password: TEST_PASSWORD })).status).toBe(200);
+    const owner = await signedIn('Personal Owner');
+    const ownerEmail = (await prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).email;
+    const table = await createTestCampaign(owner.id, { name: `Somewhere Else ${Date.now()}` });
+    campaignIds.push(table.id);
+    const file = await prisma.asset.create({
+      data: {
+        type: 'MAP', scope: 'USER', uploadedById: owner.id, filename: 'm.png', originalName: 'm.png', mimeType: 'image/png',
+        fileSize: 1, filePath: path.join(UPLOAD_DIR, 'm.png'), name: 'Private Sketch', tags: [],
+      },
+    });
+    return { admin, agent, owner, ownerEmail, table, file };
+  }
+
+  it('is allowed, and writes an Activity line naming the file and its owner', async () => {
+    const { admin, agent, owner, ownerEmail, table, file } = await setUp();
+    const res = await agent.patch(`/api/assets/${file.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+    expect(res.status).toBe(200);
+
+    const lines = await prisma.systemLog.findMany({ where: { userId: admin.id } });
+    expect(lines).toHaveLength(1);
+    expect(lines[0].message).toBe(`Moved the personal file "Private Sketch" of ${ownerEmail} into the campaign "${table.name}"`);
+    expect(lines[0].context).toMatchObject({ targetUserId: owner.id, assetId: file.id, campaignId: table.id, scope: 'CAMPAIGN' });
+  });
+
+  it('writes nothing when the owner moves their own file', async () => {
+    const { owner, table, file } = await setUp();
+    await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId: table.id, role: 'DM', characterIds: [] } });
+    const res = await owner.agent.patch(`/api/assets/${file.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+    expect(res.status).toBe(200);
+    expect(await prisma.systemLog.count({ where: { context: { path: ['assetId'], equals: file.id } } })).toBe(0);
+  });
+});

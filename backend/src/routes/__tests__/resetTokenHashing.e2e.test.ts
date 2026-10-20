@@ -39,6 +39,7 @@ import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, testEmail, TEST_PASSWORD } from '../../__tests__/helpers/db';
+import { resetLinksBeingIssued } from '../auth';
 
 const app = createTestApp();
 const created: string[] = [];
@@ -74,6 +75,8 @@ describe('a reset link asked for from the sign-in page', () => {
     created.push(u.id);
 
     expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
+    // The link is issued after the answer.
+    await resetLinksBeingIssued.finished();
     const token = emailed(sentReset);
     const rows = await stored(u.id);
 
@@ -87,6 +90,8 @@ describe('a reset link asked for from the sign-in page', () => {
     const u = await createTestUser({ displayName: 'Leaked' });
     created.push(u.id);
     expect((await request(app).post('/api/auth/forgot-password').send({ email: u.email })).status).toBe(200);
+    // The link is issued after the answer.
+    await resetLinksBeingIssued.finished();
     const [row] = await stored(u.id);
 
     expect((await resetWith(row.token)).status).toBe(400);

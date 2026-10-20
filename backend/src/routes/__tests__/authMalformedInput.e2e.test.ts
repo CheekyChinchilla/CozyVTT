@@ -101,6 +101,22 @@ describe('register', () => {
     expect(res.status).toBe(400);
     expect(res.body).toEqual({ error: 'Registration Failed', message: 'Invalid email format' });
   });
+
+  // The address was stored with < and > taken out, and sign-in looks it up as
+  // typed, so the account could never be signed in to with what was typed.
+  it('refuses an address holding < or >, and stores nothing', async () => {
+    const stripped = { email: { in: ['jox@example.com', 'jo<x>@example.com'] } };
+    try {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({ email: 'jo<x>@example.com', password: 'AnotherGoodPass42!', displayName: 'Jo' });
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Registration Failed', message: 'Invalid email format' });
+      expect(await prisma.user.count({ where: stripped })).toBe(0);
+    } finally {
+      await prisma.user.deleteMany({ where: stripped });
+    }
+  });
 });
 
 describe.each([

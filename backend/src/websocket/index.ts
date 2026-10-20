@@ -5,6 +5,7 @@ import session from 'express-session';
 import { sessionConfig } from '../config/session';
 import { registerEventHandlers } from './events';
 import { setSocketInstance } from './utils';
+import { startSignInSweep } from './signInSweep';
 import logger from '../utils/logger';
 import { socketAllowRequest } from '../middleware/originCheck';
 
@@ -57,6 +58,9 @@ export function initializeWebSocket(httpServer: HTTPServer): Server {
 
   // Register event handlers
   registerEventHandlers(io);
+
+  // Ends the connections whose sign-in has ended; stops when the server closes.
+  startSignInSweep(io, httpServer);
 
   logger.info('WebSocket server initialized');
   logger.info(`WebSocket CORS origin: ${process.env.CORS_ORIGIN || 'http://localhost:3000'}`);

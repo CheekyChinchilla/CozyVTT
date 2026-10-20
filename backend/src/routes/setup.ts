@@ -1,7 +1,7 @@
 /// <reference path="../types/express.d.ts" />
 import { Router, Request, Response } from 'express';
 import { setupState } from '../services/systemSettings';
-import { RegistrationError } from '../services/auth';
+import { RegistrationError, answeredBusy } from '../services/auth';
 import { clientUser } from './auth';
 import { setUpInstance, SetupAlreadyRunError } from '../services/setup';
 import { setupTokenMatches, setupTokenHint } from '../services/setupToken';
@@ -9,6 +9,7 @@ import { regenerateSession } from '../utils/session';
 import { systemConfigFromSetupBody } from '../utils/setupConfig';
 import { parseBody, RegisterBodySchema } from '../validators/auth';
 import logger from '../utils/logger';
+import { hashingPerAddress } from '../middleware/hashingPerAddress';
 
 const router = Router();
 
@@ -51,7 +52,7 @@ router.get('/status', async (_req: Request, res: Response) => {
  * way to become the instance's administrator, and a fresh instance is often
  * reachable from the internet before its owner opens the wizard.
  */
-router.post('/init', async (req: Request, res: Response) => {
+router.post('/init', hashingPerAddress, async (req: Request, res: Response) => {
   const raw: unknown = req.body;
   const given = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>).setupToken : undefined;
   if (!setupTokenMatches(given)) {
@@ -98,6 +99,7 @@ router.post('/init', async (req: Request, res: Response) => {
       user: await clientUser(user),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     if (error instanceof SetupAlreadyRunError) {
       // Another wizard submitted at the same moment got there first.
       return res.status(400).json({

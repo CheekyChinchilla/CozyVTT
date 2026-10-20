@@ -79,3 +79,16 @@ describe('leaving with the backup codes on screen', () => {
     expect(leavingIsQuestioned()).toBe(false);
   });
 });
+
+// The setup page is outside the routes that wait for the server, so while the
+// sign-in check got no answer it showed a spinner for as long as that lasted.
+describe('while the server does not answer', () => {
+  it('says so and offers to try again, as the other pages do', () => {
+    const retryAuthCheck = vi.fn();
+    auth.mockReturnValue({ authenticated: false, loading: true, serverUnreachable: true, retryAuthCheck, setupMFA, completeMFASetup });
+    renderPage();
+    expect(screen.getByRole('alert')).toHaveTextContent("Can't reach the server");
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+    expect(retryAuthCheck).toHaveBeenCalled();
+  });
+});

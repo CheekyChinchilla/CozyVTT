@@ -344,9 +344,9 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 ### Visitor addresses and sign-in limits
 
-CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment.
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment. Only two passwords from one address are checked at once, though: a third person pressing **Sign In** in the same second is asked to try again in a moment, which counts for nothing.
 
-Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with the **Forgot password?** link, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in; the counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
+Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with the **Forgot password?** link, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in. You can also open it without changing the password: a locked account shows **Locked until** on its row in **Admin → Users**, and **Clear lock** there clears it after asking. The counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
 
 The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. Only a wrong code counts, so people signing in together behind one address are all let through, exactly as with passwords.
 
@@ -392,7 +392,7 @@ After the `cozyvtt-nginx |` label, each line starts with the address CozyVTT saw
 cozyvtt-nginx  | 203.0.113.25 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me HTTP/1.1" 200 ...
 ```
 
-You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address: a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes, and the whole table shares the 300 requests a minute, which a group opening a map with many pictures at once can use up, so the app's requests are refused for the rest of that minute. That happens when:
+You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address: a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes, only two people can sign in at the same moment, and the whole table shares the 300 requests a minute, which a group opening a map with many pictures at once can use up, so the app's requests are refused for the rest of that minute. That happens when:
 
 - **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`, or the range you listed does not hold the address shown. Add its line from the table above, or the range [your server uses](#the-range-for-a-proxy-on-the-same-server).
 - **Docker hands visitors to nginx from its own address** and there is no proxy in front: Docker Desktop and rootless Docker do this for every visitor, and a server reached over IPv6 does it for those visitors. Listing Docker's range would let them choose their address, so put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front instead, set up as above.
@@ -851,6 +851,13 @@ pm2 startup  # Follow the printed instructions to enable autostart
 Create `/etc/nginx/sites-available/cozyvtt`:
 
 ```nginx
+# The live table's address for the page's security policy below: this
+# server's own name, written only when the browser sent a well-formed one.
+map $host $csp_socket_sources {
+    ~^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)$  "ws://$host:* wss://$host:*";
+    default                            "";
+}
+
 server {
     listen 80;
     server_name your-domain.com;
@@ -984,7 +991,7 @@ server {
         # because a location that sets any header of its own loses the ones
         # set in the server block above.
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' $csp_socket_sources; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -1128,7 +1135,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | Setting | Default | What it does | Docker |
 |---|---|---|---|
 | `SESSION_MAX_AGE` | `3600000` (1 hour) | How long a sign-in lasts without a request, in milliseconds | Yes |
-| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds | Yes |
+| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds. A game tab left open is disconnected within a minute of that limit | Yes |
 | `RATE_LIMIT_MAX_REQUESTS` | `300` | Requests per minute to `/api` from one address | Yes |
 | `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |

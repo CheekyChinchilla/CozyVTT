@@ -163,6 +163,142 @@ describe('the personal files of a deleted account', () => {
     await kept(handout);
   });
 
+  // A file with no uploader grants no reading through its uses, so a personal
+  // map kept for one campaign showed as missing to its table. It now becomes
+  // that campaign's own.
+  it('gives a personal map that one campaign uses to that campaign, so its players still see it', async () => {
+    const dm = await member('Files Heir DM');
+    const player = await member('Files Heir Player');
+    const leaver = await member('Files Map Owner');
+    const campaignId = await campaignRunBy(dm.user.id, dm.user.id, [player.user.id, leaver.user.id]);
+    const mapArt = await personalFile(leaver.user.id, 'MAP');
+    const url = `/api/assets/maps/${mapArt.id}`;
+    const map = await prisma.map.create({
+      data: { campaignId, name: 'Inherited Map', imageUrl: url, baseLayerUrl: url, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [] },
+    });
+    await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: map.id } });
+    expect((await player.agent.get(url)).status).toBe(200);
+
+    expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
+
+    await kept(mapArt);
+    expect(await prisma.asset.findUniqueOrThrow({ where: { id: mapArt.id } })).toMatchObject({ scope: 'CAMPAIGN', campaignId });
+    expect((await player.agent.get(url)).status).toBe(200);
+  });
+
+  it('leaves a personal file two campaigns use as it is, and names it in the activity log', async () => {
+    const dm = await member('Files Two Tables DM');
+    const leaver = await member('Files Two Tables Owner');
+    const leaverEmail = leaver.user.email;
+    const first = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id]);
+    const second = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id]);
+    const mapArt = await personalFile(leaver.user.id, 'MAP');
+    const url = `/api/assets/maps/${mapArt.id}`;
+    for (const campaignId of [first, second]) {
+      await prisma.map.create({
+        data: { campaignId, name: 'Shared Map', imageUrl: url, baseLayerUrl: url, width: 10, height: 10, gridSize: 50, tokens: [], annotations: [] },
+      });
+    }
+
+    expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
+
+    await kept(mapArt);
+    expect(await prisma.asset.findUniqueOrThrow({ where: { id: mapArt.id } })).toMatchObject({ scope: 'USER', campaignId: null });
+    const lines = await prisma.systemLog.findMany({ where: { context: { path: ['assetId'], equals: mapArt.id } } });
+    expect(lines).toHaveLength(1);
+    expect(lines[0].message).toBe(
+      `Kept "Personal MAP", a personal file of the deleted account ${leaverEmail}, with no owner: it is used in more than one campaign, so only an admin can see it until it is moved`
+    );
+    expect(lines[0].userId).toBeNull();
+  });
+
+  // Anyone who can read someone's personal file can name it on a map of their
+  // own, and a use only counted where it was. A player who shared a campaign
+  // with the account, where its file was on show, put it on a token in a
+  // campaign of their own, and when the account was deleted that was the only
+  // use counted (the account's own character goes with it), so the file
+  // became that campaign's. Only the campaigns the account was in count now,
+  // and a use anywhere else leaves the file personal.
+  describe('used by someone else in a campaign the account was not in', () => {
+    async function scene(label: string) {
+      const dm = await member(`${label} DM`);
+      const leaver = await member(`${label} Leaver`);
+      const taker = await member(`${label} Taker`);
+      const shared = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id, taker.user.id]);
+      const theirs = await campaignRunBy(taker.user.id, taker.user.id);
+      const theirMap = await prisma.map.create({
+        data: { campaignId: theirs, name: 'Taker Map', imageUrl: '', baseLayerUrl: '', width: 10, height: 10, gridSize: 50, tokens: [], annotations: [] },
+      });
+      return { leaver, taker, shared, theirs, theirMap };
+    }
+
+    /** Not given to the taker's campaign: still personal, with the activity line saying why. */
+    async function takenAndLeftPersonal(fileId: string, leaverEmail: string) {
+      const asset = await prisma.asset.findUniqueOrThrow({ where: { id: fileId } });
+      expect(asset).toMatchObject({ scope: 'USER', campaignId: null, uploadedById: null });
+      const lines = await prisma.systemLog.findMany({ where: { context: { path: ['assetId'], equals: fileId } } });
+      expect(lines.map((l) => l.message)).toEqual([
+        `Kept "${asset.name}", a personal file of the deleted account ${leaverEmail}, with no owner: it is used in a campaign the account was not in, so only an admin can see it until it is moved`,
+      ]);
+    }
+
+    it('through the account\'s own character token', async () => {
+      const { leaver, taker, shared, theirs, theirMap } = await scene('Taken Token');
+      const art = await personalFile(leaver.user.id, 'TOKEN');
+      const url = `/api/assets/tokens/${art.id}`;
+      await prisma.character.create({ data: { userId: leaver.user.id, campaignId: shared, name: 'Shown Hero', data: {}, tokenImageUrl: url } });
+      expect((await taker.agent.get(url)).status).toBe(200);
+      const placed = await taker.agent
+        .post(`/api/campaigns/${theirs}/maps/${theirMap.id}/tokens`)
+        .send({ name: 'Taken', position: { x: 1, y: 1 }, imageUrl: url });
+      expect(placed.status).toBe(201);
+
+      expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+      await personalFilesBeingRemoved.finished();
+
+      await takenAndLeftPersonal(art.id, leaver.user.email);
+      expect((await taker.agent.get(url)).status).not.toBe(200);
+    });
+
+    it('through a document the account shared into a campaign, which counts as a use there', async () => {
+      const { leaver, taker, shared, theirs, theirMap } = await scene('Taken Document');
+      const handout = await personalFile(leaver.user.id, 'DOCUMENT');
+      await prisma.campaignDocument.create({ data: { campaignId: shared, assetId: handout.id, linkedById: leaver.user.id } });
+      const url = `/api/assets/tokens/${handout.id}`;
+      expect((await taker.agent.get(`/api/assets/${handout.id}`)).status).toBe(200);
+      const placed = await taker.agent
+        .post(`/api/campaigns/${theirs}/maps/${theirMap.id}/tokens`)
+        .send({ name: 'Taken', position: { x: 1, y: 1 }, imageUrl: url });
+      expect(placed.status).toBe(201);
+
+      expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+      await personalFilesBeingRemoved.finished();
+
+      await takenAndLeftPersonal(handout.id, leaver.user.email);
+      // Still shared where the account shared it, so that table still reads it.
+      expect((await taker.agent.get(`/api/assets/${handout.id}`)).status).toBe(200);
+    });
+  });
+
+  it('gives a document shared into one of the account\'s campaigns, and used nowhere else, to that campaign', async () => {
+    const dm = await member('Files Handout DM');
+    const leaver = await member('Files Handout Owner');
+    const campaignId = await campaignRunBy(dm.user.id, dm.user.id, [leaver.user.id]);
+    const handout = await personalFile(leaver.user.id, 'DOCUMENT');
+    await prisma.campaignDocument.create({ data: { campaignId, assetId: handout.id, linkedById: leaver.user.id } });
+
+    expect((await leaver.agent.delete('/api/auth/account').send({ password: TEST_PASSWORD })).status).toBe(200);
+    await personalFilesBeingRemoved.finished();
+
+    await kept(handout);
+    expect(await prisma.asset.findUniqueOrThrow({ where: { id: handout.id } })).toMatchObject({ scope: 'CAMPAIGN', campaignId });
+    // Listed once, and the DM can now manage it as the campaign's own.
+    const listed = (await dm.agent.get(`/api/campaigns/${campaignId}/documents`)).body.documents as Array<{ id: string; canEdit: boolean }>;
+    expect(listed.filter((d) => d.id === handout.id).map((d) => d.canEdit)).toEqual([true]);
+  });
+
   it('does the same when an admin deletes the account', async () => {
     const admin = await member('Files Admin', PlatformRole.ADMIN);
     const target = await member('Files Target');

@@ -78,4 +78,27 @@ describe('the Create User window', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create User' })).toBeNull());
   });
+
+  // Over plain HTTP, as on a home network, the browser has no
+  // navigator.clipboard; Copy did nothing there and said nothing.
+  it('copies the temporary password on a page with no navigator.clipboard', async () => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    const execCommand = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    try {
+      await openCreateUser();
+      await userEvent.type(screen.getByLabelText(/Email/), 'new@example.test');
+      const createButtons = screen.getAllByRole('button', { name: 'Create User' });
+      await userEvent.click(createButtons[createButtons.length - 1]);
+      await screen.findByText('ABCD-EFGH-IJKL-MNOP');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+    }
+  });
 });

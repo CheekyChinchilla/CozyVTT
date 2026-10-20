@@ -284,8 +284,25 @@ export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
  * typed event, so the page can tell the person and stop, where a plain
  * `error` was only logged.
  */
-function tellAccessRevoked(socket: CampaignSocket, revoked: AccessRevoked): void {
+function tellAccessRevoked(socket: TellableSocket, revoked: AccessRevoked): void {
   socket.emit('campaign.access.revoked', revoked);
+}
+
+/** A server-side socket, a live one or one `fetchSockets()` handed back. */
+interface TellableSocket {
+  emit(event: 'campaign.access.revoked', revoked: AccessRevoked): unknown;
+  disconnect(close: boolean): unknown;
+}
+
+/**
+ * End one socket whose sign-in has ended, told why and which campaign it was
+ * in. Every helper here that ends a sign-in's sockets, and the sweep
+ * (signInSweep.ts), ends each this way.
+ */
+export function endSignedOutSocket(socket: TellableSocket, message: string): void {
+  const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
+  tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message });
+  socket.disconnect(true);
 }
 
 /**
@@ -311,9 +328,7 @@ export async function endLiveSockets(
       const sid = (socket as unknown as AuthenticatedFields).sessionId;
       if (which.exceptSessionId !== undefined && sid === which.exceptSessionId) continue;
       if (which.onlySessionId !== undefined && sid !== which.onlySessionId) continue;
-      const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
-      tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message: reason });
-      socket.disconnect(true);
+      endSignedOutSocket(socket, reason);
       ended += 1;
     }
     return ended;
@@ -332,9 +347,7 @@ export async function endEveryLiveSocket(reason: string): Promise<number> {
     const io = getSocketInstance();
     let ended = 0;
     for (const socket of await io.fetchSockets()) {
-      const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
-      tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message: reason });
-      socket.disconnect(true);
+      endSignedOutSocket(socket, reason);
       ended += 1;
     }
     return ended;

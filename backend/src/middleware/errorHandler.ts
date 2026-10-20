@@ -8,6 +8,7 @@
  */
 
 import type express from 'express';
+import { STATUS_CODES } from 'http';
 import logger from '../utils/logger';
 
 /**
@@ -23,14 +24,16 @@ export function errorHandler(
   // Body-parser reports an oversized body as 413 and malformed JSON as 400.
   // Reporting those as 500 blamed the server for something the caller could fix
   // and told them nothing useful — a note too large to save looked like a crash.
-  // Only these two are translated, and each to a message written here.
+  // These two are translated, each to a message written here.
   //
-  // Deliberately NOT forwarding `err.message` for anything else: an error from
-  // any library may carry a filesystem path, a connection string or an internal
-  // id, and this handler is reachable by unauthenticated requests. Nor is
-  // `err.status` used as the response code — a library is free to put its own
-  // numbering in that field, and `res.status()` throws on anything that is not a
-  // valid code, from inside the handler that exists to stop things throwing.
+  // Any other error answers 500 without its `err.message`: an error from any
+  // library may carry a filesystem path, a connection string or an internal
+  // id, and this handler is reachable by unauthenticated requests. The one
+  // exception is an http-errors error (body-parser's own, such as its 415 for
+  // a charset it cannot read): one with a 4xx `status` and `expose: true` is a
+  // refusal its library wrote to be shown, and is answered with both. A bare
+  // `status` is not enough, since a library is free to put its own numbering
+  // in that field.
   const fields: object = typeof err === 'object' && err !== null ? err : {};
   const rawStatus = 'status' in fields ? fields.status : undefined;
   const parserType = 'type' in fields ? fields.type : undefined;
@@ -38,17 +41,19 @@ export function errorHandler(
   const stack = 'stack' in fields && typeof fields.stack === 'string' ? fields.stack : undefined;
   const tooLarge = rawStatus === 413 || parserType === 'entity.too.large';
   const notJson = parserType === 'entity.parse.failed';
-  // TODO(accounts): body-parser's own 415s (`charset.unsupported`,
-  // `encoding.unsupported`) fall through to the 500 below. Answer them 415 as
-  // the caller's mistake, like the two cases above.
+  const shown =
+    !tooLarge && !notJson && 'expose' in fields && fields.expose === true &&
+    typeof rawStatus === 'number' && Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus < 500
+      ? rawStatus
+      : undefined;
 
-  if (tooLarge || notJson) {
+  if (tooLarge || notJson || shown !== undefined) {
     // The caller's mistake, not the server's, and never logged with its
     // message: the JSON parser's message quotes the text around the error,
     // which in a sign-in request is the password.
-    logger.warn('Request body refused', {
+    logger.warn(shown === undefined ? 'Request body refused' : 'Request refused', {
       type: typeof parserType === 'string' ? parserType : undefined,
-      status: tooLarge ? 413 : 400,
+      status: tooLarge ? 413 : notJson ? 400 : shown,
       method: req.method,
       path: req.path,
     });
@@ -76,6 +81,11 @@ export function errorHandler(
       error: 'Bad Request',
       message: 'The request body was not valid JSON.',
     });
+    return;
+  }
+
+  if (shown !== undefined) {
+    res.status(shown).json({ error: STATUS_CODES[shown] ?? 'Bad Request', message });
     return;
   }
 

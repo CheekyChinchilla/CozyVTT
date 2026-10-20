@@ -384,6 +384,34 @@ describe('the limits on an upload\'s name, description and tags', () => {
   });
 });
 
+// The server takes display names of 1 to 50 characters; Profile, Sign Up and
+// the setup wizard refused one-letter names it accepts, each with its own
+// numbers, and Sign Up said "less than 50" where 50 passes.
+describe('the display name limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/accountLimits.ts')).toBe(read('backend/src/validators/accountLimits.ts'));
+  });
+
+  it.each(['frontend/src/pages/ProfilePage.tsx', 'frontend/src/pages/auth/RegisterPage.tsx', 'frontend/src/pages/SetupWizardPage.tsx'])(
+    'are what %s uses, with no number of its own',
+    (page) => {
+      const source = read(page);
+      expect(source).toContain("from '@/constants/accountLimits'");
+      expect(source).not.toMatch(/Display name must be (at least|less than|50)|maxLength=\{50\}|\.length\}\/50</);
+    }
+  );
+});
+
+// Profile said "of 10 backup codes left", repeating the server's count.
+describe('the number of two-factor backup codes', () => {
+  it('is the one the server makes, read by the profile', () => {
+    expect(read('backend/src/utils/backupCodes.ts')).toContain('BACKUP_CODE_COUNT');
+    const profile = read('frontend/src/components/profile/MFASection.tsx');
+    expect(profile).toContain("from '@/constants/accountLimits'");
+    expect(profile).not.toMatch(/of \d+ backup codes/);
+  });
+});
+
 describe('the Invite Player search limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/inviteSearchLimits.ts')).toBe(read('backend/src/validators/inviteSearchLimits.ts'));

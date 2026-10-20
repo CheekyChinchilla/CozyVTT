@@ -18,6 +18,7 @@
       "method": "POST",
       "path": "/api/setup/init",
       "handlers": [
+        "hashingPerAddress",
         "<anonymous>"
       ]
     },
@@ -32,6 +33,7 @@
       "method": "POST",
       "path": "/api/auth/register",
       "handlers": [
+        "hashingPerAddress",
         "<anonymous>",
         "<anonymous>"
       ]
@@ -40,6 +42,7 @@
       "method": "POST",
       "path": "/api/auth/login",
       "handlers": [
+        "hashingPerAddress",
         "limiter",
         "limiter",
         "<anonymous>"
@@ -71,6 +74,7 @@
       "method": "POST",
       "path": "/api/auth/reset-password",
       "handlers": [
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -80,6 +84,7 @@
       "path": "/api/auth/change-password",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -89,6 +94,7 @@
       "path": "/api/auth/account",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -98,6 +104,7 @@
       "path": "/api/auth/mfa/setup",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -107,6 +114,7 @@
       "path": "/api/auth/mfa/verify",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "<anonymous>",
         "<anonymous>"
       ]
@@ -115,6 +123,7 @@
       "method": "POST",
       "path": "/api/auth/mfa/verify-login",
       "handlers": [
+        "hashingPerAddress",
         "limiter",
         "limiter",
         "<anonymous>"
@@ -125,6 +134,7 @@
       "path": "/api/auth/mfa/disable",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -134,6 +144,7 @@
       "path": "/api/auth/mfa/backup-codes",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -182,6 +193,7 @@
       "path": "/api/users/:id",
       "handlers": [
         "requireAuth",
+        "hashingPerAddress",
         "limiter",
         "<anonymous>"
       ]
@@ -217,6 +229,7 @@
       "handlers": [
         "requireAuth",
         "requireAdmin",
+        "hashingPerAddress",
         "<anonymous>"
       ]
     },
@@ -261,6 +274,7 @@
       "method": "POST",
       "path": "/api/admin/users",
       "handlers": [
+        "hashingPerAddress",
         "<anonymous>"
       ]
     },
@@ -268,6 +282,7 @@
       "method": "POST",
       "path": "/api/admin/users/invite",
       "handlers": [
+        "hashingPerAddress",
         "<anonymous>"
       ]
     },
@@ -281,6 +296,13 @@
     {
       "method": "POST",
       "path": "/api/admin/users/:id/approve",
+      "handlers": [
+        "<anonymous>"
+      ]
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/users/:id/sign-in-lock",
       "handlers": [
         "<anonymous>"
       ]

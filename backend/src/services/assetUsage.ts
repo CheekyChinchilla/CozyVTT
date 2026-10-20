@@ -43,7 +43,7 @@ export interface AssetUse {
 }
 
 /** A use before the caller's view of it is decided: who owns it, as well as what it is. */
-interface FoundUse extends AssetUse {
+export interface FoundUse extends AssetUse {
   /** The user who owns the record, for the ones a player owns (a character). */
   ownerId: string | null;
   /** Visible to every signed-in user, as a shared character template is. */
@@ -61,14 +61,19 @@ interface MapTokenRow {
   tokens: Prisma.JsonValue;
 }
 
-/** Every record that stores an address naming `assetId`. */
-async function findUses(assetId: string): Promise<FoundUse[]> {
+/**
+ * Every record that stores an address naming `assetId`, read through `db`
+ * (a transaction's client, when the caller decides inside one), with who owns
+ * each: for what a caller is shown (assetUsageFor), and for what becomes of a
+ * deleted account's personal file (services/accountDeletion).
+ */
+export async function findUses(assetId: string, db: Prisma.TransactionClient = prisma): Promise<FoundUse[]> {
   const names = (address: string | null | undefined): boolean => extractAssetId(address) === assetId;
   const mentions = { contains: assetId };
 
   const [maps, mapsWithTokens, characters, characterTemplates, creatures, tokenTemplates, campaigns] =
     await Promise.all([
-      prisma.map.findMany({
+      db.map.findMany({
         where: { OR: [{ imageUrl: mentions }, { baseLayerUrl: mentions }, { spiritLayerUrl: mentions }] },
         select: {
           id: true, name: true, campaignId: true, imageUrl: true, baseLayerUrl: true, spiritLayerUrl: true,
@@ -77,31 +82,31 @@ async function findUses(assetId: string): Promise<FoundUse[]> {
       }),
       // Tokens are JSON on the map, so the search is on the column read as text.
       // The id is a UUID read from the asset row, and is bound as a parameter.
-      prisma.$queryRaw<MapTokenRow[]>`
+      db.$queryRaw<MapTokenRow[]>`
         SELECT m.id, m.name, m."campaignId", c.name AS "campaignName", m.tokens
         FROM "Map" m
         JOIN "Campaign" c ON c.id = m."campaignId"
         WHERE m.tokens::text LIKE ${`%${assetId}%`}
       `,
-      prisma.character.findMany({
+      db.character.findMany({
         where: { tokenImageUrl: mentions },
         select: { name: true, userId: true, campaignId: true, tokenImageUrl: true, campaign: { select: { name: true } } },
       }),
-      prisma.characterTemplate.findMany({
+      db.characterTemplate.findMany({
         where: { tokenImageUrl: mentions },
         select: { name: true, tokenImageUrl: true },
       }),
-      prisma.creatureTemplate.findMany({
+      db.creatureTemplate.findMany({
         where: { imageUrl: mentions },
         select: { name: true, campaignId: true, imageUrl: true, campaign: { select: { name: true } } },
       }),
-      prisma.tokenTemplate.findMany({
+      db.tokenTemplate.findMany({
         where: { imageUrl: mentions },
         select: { name: true, campaignId: true, imageUrl: true, campaign: { select: { name: true } } },
       }),
       // The track a campaign is playing, and the tracks its time-of-day
       // periods play when the DM switches to them, inside its vibe settings.
-      prisma.campaign.findMany({
+      db.campaign.findMany({
         where: {
           OR: [
             { vibeSettings: { path: ['atmosphereAudio', 'assetId'], equals: assetId } },

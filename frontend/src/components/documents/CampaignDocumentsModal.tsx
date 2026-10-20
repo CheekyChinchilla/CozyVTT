@@ -23,7 +23,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAssetDelete } from '@/hooks/useAssetDelete';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
-import { AssetType, AssetScope, PlatformRole, type Asset, type CampaignDocument } from '@/types';
+import { AssetType, AssetScope, type Asset, type CampaignDocument } from '@/types';
 import { listEveryAsset } from '@/services/assetPages';
 
 interface CampaignDocumentsModalProps {
@@ -51,7 +51,6 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
   const [showNew, setShowNew] = useState(false);
 
   const { user } = useAuth();
-  const isAdmin = user?.platformRole === PlatformRole.ADMIN;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,10 +75,11 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
   }, [isOpen, load]);
 
   // The asset list includes documents from other campaigns the DM belongs to
-  // and documents other people uploaded. The server only lets a DM share their
-  // own or a global one, so only those are offered.
+  // and documents other people uploaded, and for an admin everyone's. The
+  // server only lets a DM share their own or a global one, admin or not, so
+  // only those are offered.
   const ownOrGlobal = mine.filter(
-    (a) => isAdmin || a.scope === AssetScope.GLOBAL || a.uploadedById === user?.id
+    (a) => a.scope === AssetScope.GLOBAL || a.uploadedById === user?.id
   );
   const sharedIds = new Set(shared.map((d) => d.id));
   const shareable = ownOrGlobal.filter((a) => !sharedIds.has(a.id));
