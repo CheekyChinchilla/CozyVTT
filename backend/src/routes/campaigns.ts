@@ -50,6 +50,14 @@ import path from 'path';
 import fsp from 'fs/promises';
 const router = Router();
 
+/**
+ * What a campaign member's account carries wherever a membership is sent:
+ * the roster, the campaign fetch, the members list and a role change. Never
+ * the email address: these go to every member, and a DM must not be able to
+ * collect the addresses of the people at their table.
+ */
+export const MEMBER_USER_SELECT = { id: true, displayName: true, avatarUrl: true } as const satisfies Prisma.UserSelect;
+
 // ── Import file upload ──────────────────────────────────────────────────────
 // A campaign archive is written to disk and read from there, never held in
 // memory: the backend shares a few hundred megabytes between every table, and
@@ -168,13 +176,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             },
             memberships: {
               include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    avatarUrl: true,
-                  },
-                },
+                user: { select: MEMBER_USER_SELECT },
               },
             },
           },
@@ -246,13 +248,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       include: {
         memberships: {
           include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-              },
-            },
+            user: { select: MEMBER_USER_SELECT },
           },
         },
       },
@@ -294,13 +290,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
         },
         memberships: {
           include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-              },
-            },
+            user: { select: MEMBER_USER_SELECT },
           },
         },
         // PERFORMANCE: return map/character METADATA only. The full
@@ -411,13 +401,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
     const memberships = await prisma.campaignMembership.findMany({
       where: { campaignId },
       include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
+        user: { select: MEMBER_USER_SELECT },
       },
     });
 
@@ -1101,15 +1085,7 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
         where: { userId_campaignId: { userId, campaignId } },
         data: { role },
         include: {
-          user: {
-            select: {
-              id: true,
-              displayName: true,
-              avatarUrl: true,
-              // SECURITY: never embed `email` — this payload is returned to
-              // DM-role users who shouldn't be able to harvest member emails.
-            },
-          },
+          user: { select: MEMBER_USER_SELECT },
         },
       });
       return { ok: true, updated } as const;
@@ -1240,14 +1216,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     const memberships = await prisma.campaignMembership.findMany({
       where: { campaignId },
       include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            // SECURITY: never embed `email` — same reasoning as the role route.
-          },
-        },
+        user: { select: MEMBER_USER_SELECT },
       },
     });
 
