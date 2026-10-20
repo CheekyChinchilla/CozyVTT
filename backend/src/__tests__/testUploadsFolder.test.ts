@@ -2,7 +2,7 @@
  * A test file that sets no UPLOAD_DIR of its own uploads into a temporary
  * folder of its own, never into the real backend/uploads, where full runs
  * used to leave hundreds of files (helpers/jest.setup.ts makes the folder,
- * helpers/jest.afterEnv.ts removes it).
+ * helpers/jest.environment.ts removes it).
  */
 
 import fs from 'fs';

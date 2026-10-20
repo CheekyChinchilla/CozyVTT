@@ -2,8 +2,8 @@
  * Runs once, after every test file.
  *
  * Removes this run's temporary uploads folders (jest.setup.ts). Each file's
- * own is removed when it ends (jest.afterEnv.ts), but a file whose tests are
- * all skipped runs no afterAll. It also removes those of a run that was
+ * own is removed when it ends (jest.environment.ts), but not when its worker
+ * crashes part-way through it. It also removes those of a run that was
  * killed, whose process is gone, so they do not pile up; another run going
  * on at the same time keeps its own, which carry its own run name.
  */

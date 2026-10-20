@@ -29,7 +29,9 @@ const ESM_ONLY = [
 
 module.exports = {
   preset: 'ts-jest',
-  testEnvironment: 'node',
+  // Node's, removing each file's temporary uploads folder after the file's
+  // last hook; see the file.
+  testEnvironment: '<rootDir>/src/__tests__/helpers/jest.environment.ts',
   roots: ['<rootDir>/src'],
   testMatch: ['**/__tests__/**/*.ts', '**/?(*.)+(spec|test).ts'],
   testPathIgnorePatterns: ['/node_modules/', '/__tests__/helpers/'],

@@ -18,8 +18,8 @@ if (url && !/[?&]connection_limit=/.test(url)) {
  * Every test file uploads into a temporary folder of its own. One that set no
  * UPLOAD_DIR wrote into the real backend/uploads, and full runs left hundreds
  * of files there. A file that sets UPLOAD_DIR itself still decides, since it
- * does so after this runs; jest.afterEnv.ts removes this folder when the file
- * ends.
+ * does so after this runs; jest.environment.ts removes this folder once the
+ * file has ended.
  */
 import fs from 'fs';
 import os from 'os';

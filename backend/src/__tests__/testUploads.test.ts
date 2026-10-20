@@ -8,7 +8,16 @@
  */
 
 import { spawnSync } from 'child_process';
+import fs from 'fs';
 import { processIsAlive, uploadsFoldersToRemove, uploadsRun } from './helpers/testUploads';
+
+// A file's uploads folder lasts until the file has ended, its own afterAll
+// hooks included, so one that cleans up after itself finds its files there.
+const uploads = process.env.UPLOAD_DIR;
+afterAll(() => {
+  expect(uploads).toMatch(/cozyvtt-test-uploads-/);
+  expect(fs.existsSync(uploads as string)).toBe(true);
+});
 
 describe('uploadsFoldersToRemove', () => {
   const alive = new Set([100, 200]);
