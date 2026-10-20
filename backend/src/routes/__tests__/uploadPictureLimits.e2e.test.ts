@@ -20,6 +20,7 @@ process.env.UPLOAD_DIR = UPLOAD_DIR;
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { craftedGif, craftedAnimatedWebp, plainPng } from '../../__tests__/helpers/animatedPictures';
+import * as pictureLimits from '../../utils/pictureLimits';
 
 const app = createTestApp();
 
@@ -110,5 +111,28 @@ describe('an uploaded picture at the limits', () => {
     expect(res.status).toBe(201);
     const row = await prisma.asset.findUniqueOrThrow({ where: { id: res.body.asset.id } });
     expect(fs.existsSync(row.filePath)).toBe(true);
+  });
+});
+
+describe('an uploaded picture over its file size limit', () => {
+  // A token may be 5 MB and an avatar 2 MB, but an upload of any type may be
+  // as large as the largest limit, 50 MB for a map. The picture is not read
+  // for one over its own limit.
+  it.each([
+    ['TOKEN', 'token.png', 'TOKEN files must be smaller than 5MB'],
+    ['AVATAR', 'me.png', 'AVATAR files must be smaller than 2MB'],
+  ])('is refused by its size before the picture is read: %s', async (type, filename, message) => {
+    const read = jest.spyOn(pictureLimits, 'pictureLimitProblem');
+    try {
+      const files = filesOnDisk();
+      const bytes = Buffer.concat([await plainPng(10, 10), Buffer.alloc(6 * 1024 * 1024)]);
+      const res = await upload(type, bytes, filename);
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'File Too Large', message });
+      expect(read).not.toHaveBeenCalled();
+      expect(filesOnDisk()).toEqual(files);
+    } finally {
+      read.mockRestore();
+    }
   });
 });

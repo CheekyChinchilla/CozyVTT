@@ -5828,7 +5828,8 @@ paths:
             characters or fewer"); or `name`, `description` or `tags` sent
             more than once ("Send the name once, as text.", and so on; this
             answered 500 before). `error` is `File Too Large` when
-            the file exceeds its type's limit. Other multipart problems, such
+            the file exceeds its type's limit, which is checked before its
+            content, so a file over it gets this answer whatever it holds. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
             than 100 text fields, a field name longer than 100 bytes, a field
             value longer than 16 KB, or

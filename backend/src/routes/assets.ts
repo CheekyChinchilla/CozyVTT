@@ -465,8 +465,10 @@ router.post(
       });
     }
   },
-  validateFileType,
+  // The size first: an upload of any type may be as large as the largest
+  // type's limit, and the type check reads a picture's header.
   validateFileSize,
+  validateFileType,
   async (req: UploadRequest, res: Response) => {
     // Outside the try, so a failed insert can remove the thumbnail as well.
     let thumbnailPath: string | null = null;
