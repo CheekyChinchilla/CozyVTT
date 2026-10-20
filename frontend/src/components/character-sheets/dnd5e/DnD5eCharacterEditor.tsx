@@ -67,7 +67,7 @@ import {
   customWeaponProperties,
   addCustomWeaponProperty,
 } from '@/utils/weaponProperties';
-import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
+import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText, headerInk } from '@/utils/themeColor';
 import {
   DND5E_ATTACK_DAMAGE_ROLLS_MAX,
   DND5E_CUSTOM_SKILLS_MAX,
@@ -1163,12 +1163,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` }
       : {};
 
-    // Determine text color based on background luminance
-    const headerTextColor = isCustomColor
-      ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black')
-      : (shouldUseWhiteText(selectedColor.hex) ? 'text-white' : 'text-black');
+    // Text and buttons on the header follow its colour.
+    const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
+    const headerTextColor = ink.text;
     // Hints under the token picture, a little softer than the header text.
-    const headerHintColor = headerTextColor === 'text-white' ? 'text-white/90' : 'text-black/80';
+    const headerHintColor = ink.soft;
 
     const headerClasses = isCustomColor
       ? `${headerTextColor} p-6 rounded-t-lg relative`
@@ -1190,7 +1189,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           </button>
           <button
             onClick={onCancel}
-            className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+            className={`px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
           >
             <X className="w-4 h-4" />
             <span>Cancel</span>
@@ -1200,7 +1199,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
         {/* Color Picker Button */}
         <button
           onClick={() => setShowColorPicker(!showColorPicker)}
-          className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+          className={`absolute top-4 right-4 p-2 ${ink.button} rounded-lg transition-colors`}
           title="Change theme color"
         >
           <Palette className="w-5 h-5" />

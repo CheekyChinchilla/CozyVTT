@@ -37,7 +37,9 @@ export function shouldUseWhiteText(hexColor: string): boolean {
 /**
  * The classes for what sits on a read-only sheet's header of this `#rrggbb`
  * colour: its text, softer text, and the translucent fills and borders of its
- * buttons, chips and picture, light on a dark header and dark on a light one.
+ * buttons, chips and picture. The fills under a label move the header away
+ * from the label's colour (darker under white text, lighter under black), so a
+ * label on a button or chip is never harder to read than on the header itself.
  */
 export function headerInk(hexColor: string) {
   const white = shouldUseWhiteText(hexColor);
@@ -45,9 +47,9 @@ export function headerInk(hexColor: string) {
     text: white ? 'text-white' : 'text-black',
     soft: white ? 'text-white/90' : 'text-black/80',
     softer: white ? 'text-white/80' : 'text-black/80',
-    button: white ? 'bg-white/20 hover:bg-white/30' : 'bg-black/10 hover:bg-black/20',
-    chip: white ? 'bg-white/20' : 'bg-black/10',
-    chipFaint: white ? 'bg-white/10' : 'bg-black/5',
+    button: white ? 'bg-black/20 hover:bg-black/30' : 'bg-white/30 hover:bg-white/45',
+    chip: white ? 'bg-black/20' : 'bg-white/30',
+    chipFaint: white ? 'bg-black/10' : 'bg-white/15',
     border: white ? 'border-white/20' : 'border-black/20',
   };
 }

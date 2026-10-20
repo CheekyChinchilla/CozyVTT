@@ -147,6 +147,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **The buttons on a character sheet's header read clearly on every header colour.** **Edit**, **Cancel** and the colour button lightened the header behind white text, so on the Call of Cthulhu **Dark Forest** header **Edit** and **Cancel** fell just short of readable (4.47 to 1, where 4.5 is the bar), and a dark custom colour could do worse. They now darken a dark header and lighten a pale one, so their labels read at least as well as the header's own text, in all three systems.
+
 - **Export as Universal VTT works for a map picture 16,384 pixels on each side.** The export read the picture's size with a limit just below that and answered with an error for such a map; it now exports it.
 
 - **Import Character checks a dropped file against the names in use now.** A file dropped onto **Import Character** was checked against the characters that existed when the window opened, so one with the name of a character made since was not flagged.
