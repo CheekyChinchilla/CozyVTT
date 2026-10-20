@@ -1269,7 +1269,7 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     // with 400, or 413 for a size limit.
     try {
       const directory = await openArchiveFile(uploadedZip, RESTORE_MAX_FILES);
-      await extractArchiveSafely(directory, tempDir, {
+      await extractArchiveSafely(uploadedZip, directory, tempDir, {
         maxFiles: RESTORE_MAX_FILES,
         maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
       });
