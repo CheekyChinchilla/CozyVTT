@@ -259,7 +259,28 @@ export interface User {
   lastLoginAt: string | null;
   mustChangePassword?: boolean;
   isApproved?: boolean;
+  preferences?: UserPreferences | null;
+  /**
+   * For an administrator without two-factor authentication: when it becomes
+   * required, after which the server refuses everything but enrolment. Null
+   * or absent for everyone else.
+   */
+  adminMfaDeadline?: string | null;
+  /** How many MFA backup codes are left; null with MFA off. */
+  mfaBackupCodesRemaining?: number | null;
 }
+
+/** A campaign member's user, as the campaign routes send it. */
+export type MemberUser = Pick<User, 'id' | 'displayName' | 'avatarUrl'>;
+
+/** A chat message's author, as the message routes send it. */
+export type MessageUser = Pick<User, 'id' | 'displayName'>;
+
+/** One of the newest accounts on the Admin Panel's activity tab (GET /api/admin/activity). */
+export type AdminRecentUser = Pick<
+  User,
+  'id' | 'email' | 'displayName' | 'platformRole' | 'mfaEnabled' | 'createdAt' | 'lastLoginAt'
+>;
 
 /**
  * A user as the Admin Panel's user list has them (GET /api/users, admins
@@ -405,7 +426,7 @@ export interface AdminSystemLog {
 }
 
 export interface AdminActivityData {
-  recentUsers: User[];
+  recentUsers: AdminRecentUser[];
   recentSessions: AdminActivitySession[];
   onlineUsers: AdminOnlineUser[];
   recentLogs: AdminSystemLog[];
@@ -560,7 +581,7 @@ export interface Campaign {
    * full because those endpoints return full objects; do not read the omitted
    * fields off these embedded arrays.
    */
-  maps?: Map[];
+  maps?: CampaignMap[];
   characters?: Character[];
   /** Most recent open (non-ended) session, if any — populated by GET /campaigns/:id */
   activeSession?: { id: string; sessionNumber: number; startedAt: string } | null;
@@ -587,7 +608,7 @@ export interface CampaignMembership {
   role: CampaignRole;
   characterIds: string[];
   joinedAt: string;
-  user?: User;
+  user?: MemberUser;
 }
 
 export interface CampaignInvitation {
@@ -806,7 +827,7 @@ export type CharacterData =
 // Map & Tokens
 // ============================================
 
-export interface Map {
+export interface CampaignMap {
   id: string;
   campaignId: string;
   name: string;
@@ -1004,7 +1025,7 @@ export interface Message {
   id: string;
   campaignId: string;
   userId: string | null;
-  user?: User;
+  user?: MessageUser;
   type: MessageType;
   content: string;
   metadata: MessageMetadata | null;
@@ -1397,9 +1418,6 @@ export interface ChatMessageBroadcast {
 }
 
 // Session Events
-// No fields needed - campaign ID comes from server-side socket.campaignId
-export type SessionStartEvent = Record<string, never>;
-
 export interface SessionStartedBroadcast {
   sessionId: string;
   sessionNumber: number;

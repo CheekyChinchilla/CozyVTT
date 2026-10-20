@@ -20,7 +20,6 @@ import {
   loadCampaignMembership,
   requireDM,
   requireDMOrPlayer,
-  requireCampaignRole,
   requireCampaignMember,
   type AuthenticatedRequest,
 } from '../rbac';
@@ -126,7 +125,6 @@ describe('the role checks', () => {
     ['requireDM', requireDM, { DM: true, PLAYER: false, SPECTATOR: false }],
     ['requireDMOrPlayer', requireDMOrPlayer, { DM: true, PLAYER: true, SPECTATOR: false }],
     ['requireCampaignMember', requireCampaignMember, { DM: true, PLAYER: true, SPECTATOR: true }],
-    ['requireCampaignRole(PLAYER)', requireCampaignRole('PLAYER'), { DM: false, PLAYER: true, SPECTATOR: false }],
   ] as const)('%s lets through exactly the roles it names', async (_name, guard, allowed) => {
     for (const role of ['DM', 'PLAYER', 'SPECTATOR'] as const) {
       const answer = await run(guard, { campaignMembership: membership(role) });
@@ -140,7 +138,6 @@ describe('the role checks', () => {
     ['requireDM', requireDM],
     ['requireDMOrPlayer', requireDMOrPlayer],
     ['requireCampaignMember', requireCampaignMember],
-    ['requireCampaignRole(DM)', requireCampaignRole('DM')],
   ] as const)('%s refuses, and never lets through, a request whose membership was not loaded', async (_name, guard) => {
     const answer = await run(guard, {});
     expect(answer.status).toBe(500);

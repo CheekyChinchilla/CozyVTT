@@ -1,5 +1,4 @@
 // CozyVTT Database Schema
-// Source: docs/STATEMENT_OF_WORK.md Section 4.1
 
 // The database address is not set here: the command-line tools read it from
 // prisma.config.ts, and the app's client from DATABASE_URL in
@@ -496,7 +495,7 @@ model Map {
   tokens      Json // Array of token objects with positions
   annotations Json // Array of annotations (drawings, markers)
 
-  // Walls & Fog of War (Phase 1/2 feature)
+  // Walls & Fog of War
   wallSegments    Json    @default("[]") // Array of WallSegment objects
   fogData         Json?                  // FogState object (null = not initialized)
   lightingEnabled Boolean @default(false) // Enable dynamic lighting/raycasting

@@ -362,7 +362,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // the sheet data is only meaningful against the system it was built for.
     let sheetData: unknown;
     if (data.data !== undefined) {
-      const sheet = validateSheet(existing.gameSystem as GameSystem | null, data.data);
+      const sheet = validateSheet(existing.gameSystem, data.data);
       if (!sheet.ok) {
         return res.status(400).json({
           error: 'Validation Error',

@@ -1,7 +1,7 @@
 /**
- * The throttle the live table paces token drags and the DM's editing notice
- * with: the first call at once, then at most one call per wait, the last
- * call of a burst always delivered so a drag ends where the pointer did.
+ * The throttle the live table paces token drags with: the first call at
+ * once, then at most one call per wait, the last call of a burst always
+ * delivered so a drag ends where the pointer did.
  */
 
 import { throttle } from '../throttle';

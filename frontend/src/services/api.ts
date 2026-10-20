@@ -28,7 +28,7 @@ import type {
   UpdateCharacterRequest,
   Asset,
   AssetListResponse,
-  Map,
+  CampaignMap,
   CreateMapRequest,
   UpdateMapRequest,
   CreateTokenRequest,
@@ -1013,22 +1013,22 @@ class ApiClient {
   // Maps & Tokens
   // ============================================
 
-  async listMaps(campaignId: string): Promise<{ maps: Map[] }> {
-    const response = await this.client.get<{ maps: Map[] }>(`/api/campaigns/${campaignId}/maps`);
+  async listMaps(campaignId: string): Promise<{ maps: CampaignMap[] }> {
+    const response = await this.client.get<{ maps: CampaignMap[] }>(`/api/campaigns/${campaignId}/maps`);
     return response.data;
   }
 
-  async createMap(campaignId: string, data: CreateMapRequest): Promise<{ map: Map }> {
+  async createMap(campaignId: string, data: CreateMapRequest): Promise<{ map: CampaignMap }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/maps`, data);
     return response.data;
   }
 
-  async getMap(campaignId: string, mapId: string): Promise<{ map: Map; spiritVisible?: boolean }> {
-    const response = await this.client.get<{ map: Map; spiritVisible?: boolean }>(`/api/campaigns/${campaignId}/maps/${mapId}`);
+  async getMap(campaignId: string, mapId: string): Promise<{ map: CampaignMap; spiritVisible?: boolean }> {
+    const response = await this.client.get<{ map: CampaignMap; spiritVisible?: boolean }>(`/api/campaigns/${campaignId}/maps/${mapId}`);
     return response.data;
   }
 
-  async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<{ map: Map }> {
+  async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<{ map: CampaignMap }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}`, data);
     return response.data;
   }
@@ -1064,7 +1064,7 @@ class ApiClient {
     name?: string,
     gridSize?: number,
     options?: { confirm?: boolean; includeObjectWalls?: boolean },
-  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
+  ): Promise<{ map: CampaignMap; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
     const formData = new FormData();
     formData.append('file', file);
     if (name) formData.append('name', name);

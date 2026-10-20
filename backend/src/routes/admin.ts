@@ -34,7 +34,7 @@ import { hashingPerAddress } from '../middleware/hashingPerAddress';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
-import { SERVER_BUILT_PATH, UPLOAD_LIMITS } from '../utils/fileUtils';
+import { SERVER_BUILT_PATH, UPLOAD_LIMITS, getUploadsDirectory } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
 import {
@@ -55,7 +55,7 @@ import { uploadsDiskUsage } from '../services/uploadsDisk';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
-const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
+const UPLOADS_DIR = getUploadsDirectory();
 // Outside uploads/, which self-hosters are told to sync off-site as media. See utils/backupDir.ts.
 const BACKUP_DIR = resolveBackupDir();
 const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
@@ -280,7 +280,7 @@ router.put('/settings', async (req, res) => {
   }
   try {
     const {
-      instanceName, timezone, allowRegistration, requireAdminApproval,
+      instanceName, allowRegistration, requireAdminApproval,
       themeId, customThemeColors, fontId,
       customLogoUrl, customFaviconUrl, customMascotUrl,
     } = parsed.data;
@@ -289,9 +289,6 @@ router.put('/settings', async (req, res) => {
 
     if (instanceName !== undefined) {
       updateData.instanceName = sanitizeInput(instanceName).slice(0, 100);
-    }
-    if (timezone !== undefined) {
-      updateData.timezone = sanitizeInput(timezone).slice(0, 50);
     }
     if (allowRegistration !== undefined) {
       updateData.allowRegistration = allowRegistration;

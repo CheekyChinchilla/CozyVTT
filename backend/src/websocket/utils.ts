@@ -135,10 +135,10 @@ export function stillInCampaign<T>(sockets: readonly T[], campaignId: string): T
 
 /**
  * Send one of a map's live edits (its walls, lights, fog, settings, pings,
- * the explored-memory reset, the DM's editing notice) to everyone who may
- * read that map (canReadMap): the whole campaign while it is the map on
- * screen, the DM's sockets for any other. A prepared map's layout is the
- * DM's until they switch to it, on the live connection as on its fetch.
+ * the explored-memory reset) to everyone who may read that map
+ * (canReadMap): the whole campaign while it is the map on screen, the DM's
+ * sockets for any other. A prepared map's layout is the DM's until they
+ * switch to it, on the live connection as on its fetch.
  * `exceptSocketId` leaves out the sender where the event is not echoed.
  * Best-effort: a failure is logged and goes no further.
  */
@@ -194,28 +194,6 @@ export async function emitToMapReadersAs(
   } catch (error) {
     logger.warn(`${what} not broadcast; the change stands`, { err: error, mapId });
   }
-}
-
-/**
- * Get all sockets in a campaign room
- * @param campaignId - Campaign ID
- * @returns Array of socket IDs
- */
-export async function getSocketsInCampaign(campaignId: string): Promise<string[]> {
-  const io = getSocketInstance();
-  const sockets = await campaignSockets(io, campaignId);
-  return sockets.map((socket) => socket.id);
-}
-
-/**
- * Get campaign member count (connected users)
- * @param campaignId - Campaign ID
- * @returns Number of connected users
- */
-export async function getCampaignMemberCount(campaignId: string): Promise<number> {
-  const io = getSocketInstance();
-  const sockets = await campaignSockets(io, campaignId);
-  return sockets.length;
 }
 
 /**

@@ -91,11 +91,3 @@ export function requireRole(role: PlatformRole) {
   };
 }
 
-/**
- * Optional authentication — does not block unauthenticated requests.
- * Session data is already available via express-session for routes that
- * choose to use it without enforcing authentication.
- */
-export function optionalAuth(_req: Request, _res: Response, next: NextFunction) {
-  return next();
-}

@@ -30,7 +30,7 @@ import type {
   CoC7eAppearance,
   CoC7eConditions,
 } from '../../../types/game-systems';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { COC7E_CONDITIONS } from '@/utils/conditions';
 
 /**
@@ -476,7 +476,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         try {
           newTokenImageUrl = await uploadTokenPicture(tokenImageFile, formData.investigatorName || 'Investigator', character.campaignId);
         } catch (uploadError: unknown) {
-          console.error('Error uploading token image:', uploadError);
+          console.error('Error uploading token image:', errorSummary(uploadError));
           setErrors((prev) => ({ ...prev, tokenImage: apiErrorMessage(uploadError) || 'Failed to upload token image' }));
           setIsSaving(false);
           return;
@@ -487,7 +487,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       await onSave(updatedData, true, newTokenImageUrl);
       markClean();
     } catch (error) {
-      console.error('Failed to save character:', error);
+      console.error('Failed to save character:', errorSummary(error));
       setErrors((prev) => ({ ...prev, submit: 'Failed to save character. Please try again.' }));
     } finally {
       setIsSaving(false);

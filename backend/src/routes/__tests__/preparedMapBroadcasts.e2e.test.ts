@@ -1,12 +1,11 @@
 /**
  * A map the DM is preparing is theirs alone, and so are its live edits.
  *
- * Walls, lights, fog, pings, the explored-memory reset, the DM's editing
- * notice and the map's settings were broadcast to the whole campaign for any
- * map, so a player's socket was sent the layout of a map it may not fetch.
- * They now go to everyone only for the map the campaign is showing, and to
- * the DM's sockets for any other, over the socket events and the REST routes
- * alike.
+ * Walls, lights, fog, pings, the explored-memory reset and the map's
+ * settings were broadcast to the whole campaign for any map, so a player's
+ * socket was sent the layout of a map it may not fetch. They now go to
+ * everyone only for the map the campaign is showing, and to the DM's sockets
+ * for any other, over the socket events and the REST routes alike.
  *
  * Requires PostgreSQL at DATABASE_URL.
  */
@@ -104,16 +103,4 @@ describe.each(SOURCES)('%s', (_source, event, dmEvent, act) => {
     await act(shownId);
     expect((await heard).mapId).toBe(shownId);
   });
-});
-
-it("keeps the DM's editing notice for a prepared map from players", async () => {
-  const quiet = expectNoEvent(player, 'dm:editing', 800);
-  dm.emit('dm:editing', { mapId: preparedId });
-  await quiet;
-  const heard = waitForEvent<{ mapId: string }>(player, 'dm:editing');
-  // The notice is throttled per socket; a fresh DM socket sends at once.
-  const other = await server.connectAndAuth(await server.loginAs(dmId), campaignId);
-  other.emit('dm:editing', { mapId: shownId });
-  expect((await heard).mapId).toBe(shownId);
-  other.disconnect();
 });

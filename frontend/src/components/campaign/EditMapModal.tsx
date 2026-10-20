@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { Asset, Map, UpdateMapRequest } from '@/types';
+import type { Asset, CampaignMap, UpdateMapRequest } from '@/types';
 import { AssetType } from '@/types';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
@@ -18,10 +18,10 @@ import { extractAssetId } from '@/utils/assetUrl';
 
 interface EditMapModalProps {
   isOpen: boolean;
-  map: Map;
+  map: CampaignMap;
   campaignId: string;
   onClose: () => void;
-  onUpdated: (map: Map) => void;
+  onUpdated: (map: CampaignMap) => void;
 }
 
 // ============================================
@@ -193,7 +193,7 @@ interface OpenedValues {
 }
 
 /** The form's values for a map, with the same defaults the form fills in. */
-function openedValues(map: Map): OpenedValues {
+function openedValues(map: CampaignMap): OpenedValues {
   return {
     name: map.name.trim(),
     imageUrl: extractAssetId(map.imageUrl),

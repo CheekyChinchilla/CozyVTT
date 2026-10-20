@@ -95,9 +95,3 @@ export function getPasswordStrength(password: string): PasswordStrength {
   if (score <= 6) return { score, percent, label: 'Good', color: 'yellow' };
   return { score, percent, label: 'Strong', color: 'green' };
 }
-
-export function validateDiceExpression(expression: string): boolean {
-  // Basic dice notation validation (e.g., 2d6+3, 1d20, 4d6kh3)
-  const diceRegex = /^(\d+)?d(\d+)(kh\d+|kl\d+|dl\d+)?([+\-*/]\d+)*$/i;
-  return diceRegex.test(expression.replace(/\s/g, ''));
-}

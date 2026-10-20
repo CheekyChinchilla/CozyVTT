@@ -26,12 +26,7 @@ import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
 import { AssetType, type Asset } from '@/types';
 import { assetScopeLabel } from '@/utils/assetUrl';
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { formatFileSize } from '@/utils/format';
 
 export default function DocumentsPage() {
   const navigate = useNavigate();
@@ -169,7 +164,7 @@ export default function DocumentsPage() {
                       {doc.name}
                     </button>
                     <p className="text-xs text-warm-gray truncate">
-                      {FORMAT_LABEL[format]} · {formatSize(doc.fileSize)} · {assetScopeLabel(doc.scope)}
+                      {FORMAT_LABEL[format]} · {formatFileSize(doc.fileSize, { kbDecimals: 0, largest: 'MB' })} · {assetScopeLabel(doc.scope)}
                       {doc.description ? ` · ${doc.description}` : ''}
                     </p>
                   </div>

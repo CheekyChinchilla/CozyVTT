@@ -106,15 +106,3 @@ export function gameSystemName(gameSystem: GameSystem | string | null | undefine
   if (!gameSystem) return FLEXIBLE_SYSTEM_LABEL;
   return GAME_SYSTEM_LABELS[gameSystem as GameSystem] ?? gameSystem;
 }
-
-/**
- * Get description for a game system
- * @param gameSystem - The game system enum value
- * @returns The description
- */
-export function getGameSystemDescription(gameSystem: GameSystem | null): string {
-  if (!gameSystem) {
-    return 'Select a game system for this campaign or character.';
-  }
-  return GAME_SYSTEM_DESCRIPTIONS[gameSystem];
-}

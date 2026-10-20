@@ -40,7 +40,6 @@
     "express-session": "^1.19.0",
     "file-type": "^22.2.0",
     "helmet": "^8.3.0",
-    "mathjs": "^15.2.0",
     "multer": "^2.4.0",
     "nodemailer": "^10.1.2",
     "otplib": "^13.5.0",

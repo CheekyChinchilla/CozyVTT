@@ -3,7 +3,7 @@ import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
 import { apiErrorStatus, errorMessage } from '@/utils/errors';
 import type {
-  Map as CampaignMap,
+  CampaignMap,
   TokenMoveStartEvent,
   TokenMoveEvent,
   TokenMoveEndEvent,
@@ -17,7 +17,6 @@ import type {
   DoneAck,
   ChatMessageBroadcast,
   ChatSystemBroadcast,
-  SessionStartEvent,
   SessionStartedBroadcast,
   SessionPausedBroadcast,
   VibeUpdateEvent,
@@ -283,6 +282,8 @@ class SocketClient {
 
       // Connection error
       this.socket.on('connect_error', (error) => {
+        // Logged whole: socket.io's error carries no request, and its transport
+        // detail is what shows a proxy that does not pass the socket through.
         console.error('[Socket] Connection error:', error);
         clearTimeout(connectionTimeout);
         this.isConnecting = false;
@@ -320,6 +321,7 @@ class SocketClient {
 
       // Error events from server
       this.socket.on('error', (error) => {
+        // The server's own `{ message }`, logged whole.
         console.error('[Socket] Server error event:', error);
         if (isSignInRefusal(error)) this.signInRefused = true;
         if (!this.joined) this.refusedBeforeJoin = true;
@@ -450,29 +452,6 @@ class SocketClient {
   }
 
   // ============================================
-  // State Synchronization
-  // ============================================
-
-  requestSync(lastEventId?: string) {
-    if (!this.socket?.connected) {
-      return;
-    }
-
-    this.socket.emit('sync.request', {
-      lastEventId,
-    });
-  }
-
-  // `never` rather than the `unknown` default: this event has no payload type
-  // declared yet, and `EventCallback<unknown>` would reject a handler that names
-  // its own payload — forcing the next subscriber into a cast. Same
-  // contravariance the registry relies on. Replace with a real payload type when
-  // `sync.state` gains one.
-  onSyncState(callback: EventCallback<never>) {
-    this.addListener('sync.state', callback);
-  }
-
-  // ============================================
   // Token Movement Events
   // ============================================
 
@@ -596,18 +575,6 @@ class SocketClient {
   // ============================================
   // Session Events
   // ============================================
-
-  emitSessionStart(data: SessionStartEvent) {
-    this.socket?.emit('session.start', data);
-  }
-
-  emitSessionPause() {
-    this.socket?.emit('session.pause', {});
-  }
-
-  emitSessionEnd(saveState: boolean = true) {
-    this.socket?.emit('session.end', { saveState });
-  }
 
   onSessionStarted(callback: EventCallback<SessionStartedBroadcast>) {
     this.addListener('session.started', callback);
@@ -776,28 +743,6 @@ class SocketClient {
 
   onMapPinged(callback: EventCallback<MapPingedBroadcast>) {
     this.addListener('map.pinged', callback);
-  }
-
-  // ============================================
-  // Heartbeat
-  // ============================================
-
-  startHeartbeat(interval: number = 30000) {
-    if (!this.socket) return;
-
-    const heartbeatInterval = setInterval(() => {
-      if (this.socket?.connected) {
-        this.socket.emit('ping');
-      } else {
-        clearInterval(heartbeatInterval);
-      }
-    }, interval);
-
-    this.socket.on('pong', () => {
-      // Connection is healthy
-    });
-
-    return () => clearInterval(heartbeatInterval);
   }
 
   // ============================================

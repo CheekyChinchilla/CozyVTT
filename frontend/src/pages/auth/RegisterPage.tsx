@@ -13,6 +13,7 @@ import {
   getPasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
 import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
@@ -278,39 +279,7 @@ export default function RegisterPage() {
               </p>
             )}
 
-            {/* Password Strength Indicator */}
-            {password && passwordStrength && (
-              <div id="password-strength" className="mt-2" aria-live="polite">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-warm-gray">
-                    Password Strength:
-                  </span>
-                  <span
-                    className={`text-xs font-medium ${
-                      passwordStrength.color === 'green'
-                        ? 'text-success-ink'
-                        : passwordStrength.color === 'yellow'
-                        ? 'text-warning-ink'
-                        : 'text-danger-ink'
-                    }`}
-                  >
-                    {passwordStrength.label}
-                  </span>
-                </div>
-                <div className="w-full bg-warm-gray/20 rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full transition-all ${
-                      passwordStrength.color === 'green'
-                        ? 'bg-success'
-                        : passwordStrength.color === 'yellow'
-                        ? 'bg-warning'
-                        : 'bg-danger'
-                    }`}
-                    style={{ width: `${passwordStrength.percent}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
+            <PasswordStrengthIndicator id="password-strength" aria-live="polite" password={password} strength={passwordStrength} />
           </div>
 
           {/* Confirm Password Input */}

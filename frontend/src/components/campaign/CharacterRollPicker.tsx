@@ -20,6 +20,7 @@ import {
   type CharacterRolls,
 } from '@/utils/characterRolls';
 import { resolveCharacterInitiative } from '@/utils/rules/initiative';
+import { getModeLabels, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 import CustomRollFooter from './CustomRollFooter';
 
 // ---------------------------------------------------------------------------
@@ -70,8 +71,6 @@ interface CharacterRollPickerProps {
   anchorY: number;
 }
 
-type RollMode = 'normal' | 'advantage' | 'disadvantage';
-
 // ---------------------------------------------------------------------------
 // Category section
 // ---------------------------------------------------------------------------
@@ -104,25 +103,6 @@ const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) 
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Roll-mode selector (Normal / Advantage / Disadvantage)
-// ---------------------------------------------------------------------------
-
-const MODE_LABELS: Record<string, Record<RollMode, string>> = {
-  DND_5E:           { normal: 'Normal', advantage: 'Advantage', disadvantage: 'Disadvantage' },
-  PATHFINDER_2E:    { normal: 'Normal', advantage: 'Fortune',   disadvantage: 'Misfortune' },
-  CALL_OF_CTHULHU_7E: { normal: 'Normal', advantage: 'Normal', disadvantage: 'Normal' },
-};
-
-function getModeLabels(gameSystem: string | null): Record<RollMode, string> {
-  return MODE_LABELS[gameSystem ?? ''] ?? { normal: 'Normal', advantage: 'Advantage', disadvantage: 'Disadvantage' };
-}
-
-// Does this game system support advantage/disadvantage variants?
-function systemSupportsAdvantage(gameSystem: string | null): boolean {
-  return gameSystem === 'DND_5E' || gameSystem === 'PATHFINDER_2E';
-}
 
 // ---------------------------------------------------------------------------
 // Main component

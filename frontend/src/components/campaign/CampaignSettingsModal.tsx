@@ -578,9 +578,6 @@ export default function CampaignSettingsModal({
                               <span className="ml-1.5 text-xs font-normal text-warm-gray">(you)</span>
                             )}
                           </p>
-                          <p className="text-xs text-warm-gray truncate">
-                            {membership.user?.email}
-                          </p>
                         </div>
                       </div>
 

@@ -19,7 +19,7 @@ import type {
   TokenMoveEvent,
   TokenMoveEndEvent,
   TokenMovedEvent,
-  Map as CampaignMap,
+  CampaignMap,
   SpiritLayerToggledBroadcast,
   SpiritLayerTokenToggledBroadcast,
   VibeUpdatedBroadcast,
@@ -89,7 +89,7 @@ import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/character
 import { controlsToken } from '@/utils/tokenOwnership';
 import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -989,10 +989,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       });
     };
 
-    const handleDmEditing = (_data: { mapId: string }) => {
-      // Could show a transient indicator — handled by toolbar; canvas ignores for now
-    };
-
     // Dynamic lighting: token entered this player's view (or moved while
     // visible). Store writes are synchronous, so if token:appeared fires for
     // multiple tokens in the same macro-task (server re-sync after player
@@ -1060,7 +1056,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socketInstance.on('walls:replaced', handleWallsReplaced);
     socketInstance.on('fog:updated', handleFogUpdated);
     socketInstance.on('fog:cells', handleFogCells);
-    socketInstance.on('dm:editing', handleDmEditing);
     socketInstance.on('light:added', handleLightAdded);
     socketInstance.on('light:removed', handleLightRemoved);
     socketInstance.on('light:updated', handleLightUpdated);
@@ -1076,7 +1071,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('walls:replaced', handleWallsReplaced);
       socketInstance.off('fog:updated', handleFogUpdated);
       socketInstance.off('fog:cells', handleFogCells);
-      socketInstance.off('dm:editing', handleDmEditing);
       socketInstance.off('light:added', handleLightAdded);
       socketInstance.off('light:removed', handleLightRemoved);
       socketInstance.off('light:updated', handleLightUpdated);
@@ -3030,7 +3024,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       const { character } = await api.getCharacter(characterId);
                       setViewingSheet({ character, tokenId });
                     } catch (err) {
-                      console.error('Failed to load character sheet:', err);
+                      console.error('Failed to load character sheet:', errorSummary(err));
                       showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
                     }
                   }}

@@ -1,122 +1,27 @@
 // ============================================
 // User & Authentication Types
-// Extracted for AuthContext usage
+// The user and the auth request and response shapes are declared once, in
+// ./index; this file re-exports them beside the AuthContext type.
 // ============================================
 
-import type { PlatformRole, UserPreferences } from './index';
+import type { MFASetupResponse, MFAVerifyResponse, User } from './index';
 
-// Re-export PlatformRole for convenience
 export { PlatformRole } from './index';
-export type { UserPreferences } from './index';
-
-// ============================================
-// User Model
-// ============================================
-
-export interface User {
-  id: string;
-  email: string;
-  displayName: string;
-  platformRole: PlatformRole;
-  globalAssetManager: boolean;
-  /** May edit or delete anyone's character template, not just their own. */
-  templateEditor: boolean;
-  mfaEnabled: boolean;
-  avatarUrl: string | null;
-  bio: string | null;
-  createdAt: string;
-  updatedAt: string;
-  lastLoginAt: string | null;
-  mustChangePassword?: boolean;
-  preferences?: UserPreferences | null;
-  /**
-   * For an administrator without two-factor authentication: when it becomes
-   * required, after which the server refuses everything but enrolment. Null
-   * or absent for everyone else.
-   */
-  adminMfaDeadline?: string | null;
-  /** How many MFA backup codes are left; null with MFA off. */
-  mfaBackupCodesRemaining?: number | null;
-}
-
-// ============================================
-// Authentication Request/Response Types
-// ============================================
-
-export interface LoginRequest {
-  email: string;
-  password: string;
-  rememberMe?: boolean;
-}
-
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  displayName: string;
-}
-
-export interface AuthResponse {
-  message: string;
-  user: User;
-  mustChangePassword?: boolean;
-  pendingApproval?: boolean;
-}
-
-export interface MFARequiredResponse {
-  mfaRequired: true;
-  message: string;
-}
-
-export interface MFASetupResponse {
-  message: string;
-  qrCodeUrl: string;
-  secret: string;
-}
-
-export interface MFAVerifyResponse {
-  message: string;
-  backupCodes: string[];
-}
-
-export interface MFALoginVerifyRequest {
-  token?: string;
-  backupCode?: string;
-}
-
-export interface MFALoginResponse {
-  message: string;
-  user: User;
-  mustChangePassword?: boolean;
-  backupCodeUsed?: boolean;
-  remainingBackupCodes?: number;
-  warning?: string;
-}
-
-export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
-}
-
-export interface ForgotPasswordRequest {
-  email: string;
-}
-
-export interface ResetPasswordRequest {
-  token: string;
-  newPassword: string;
-}
-
-// ============================================
-// Auth State (for AuthContext)
-// ============================================
-
-export interface AuthState {
-  user: User | null;
-  loading: boolean;
-  authenticated: boolean;
-  mfaPending: boolean;
-  mustChangePassword: boolean;
-}
+export type {
+  AuthResponse,
+  ChangePasswordRequest,
+  ForgotPasswordRequest,
+  LoginRequest,
+  MFALoginResponse,
+  MFALoginVerifyRequest,
+  MFARequiredResponse,
+  MFASetupResponse,
+  MFAVerifyResponse,
+  RegisterRequest,
+  ResetPasswordRequest,
+  User,
+  UserPreferences,
+} from './index';
 
 // ============================================
 // Auth Context Type

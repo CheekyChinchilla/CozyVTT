@@ -417,7 +417,8 @@ router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), password
 
 /**
  * GET /api/users/:id/preferences
- * Returns the user's stored preferences blob (theme/font/dice color/etc.).
+ * Returns the user's stored preferences blob: theme, custom theme colours
+ * and font (UserPreferencesSchema).
  * Returns an empty object if the user has not set any preferences yet —
  * frontend layers on top of system defaults.
  *

@@ -17,6 +17,7 @@ import {
 import { buildNpcRolls } from '@/utils/npcRolls';
 import CustomRollFooter from './CustomRollFooter';
 import { tokenPublicName } from '@/utils/tokenDisplayName';
+import { getModeLabels, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 
 // ---------------------------------------------------------------------------
 // Props
@@ -36,29 +37,6 @@ interface NpcRollPickerProps {
   onClose: () => void;
   anchorX: number;
   anchorY: number;
-}
-
-type RollMode = 'normal' | 'advantage' | 'disadvantage';
-
-// ---------------------------------------------------------------------------
-// Mode labels
-// ---------------------------------------------------------------------------
-
-const MODE_LABELS: Record<string, Record<RollMode, string>> = {
-  DND_5E:            { normal: 'Normal', advantage: 'Advantage', disadvantage: 'Disadvantage' },
-  PATHFINDER_2E:     { normal: 'Normal', advantage: 'Fortune',   disadvantage: 'Misfortune' },
-  // Listed for parity with CharacterRollPicker, which has always had it. The
-  // selector is hidden for d100 systems anyway (systemSupportsAdvantage), but
-  // the omission made the two pickers look like they disagreed.
-  CALL_OF_CTHULHU_7E: { normal: 'Normal', advantage: 'Bonus Die', disadvantage: 'Penalty Die' },
-};
-
-function getModeLabels(gameSystem: string | null): Record<RollMode, string> {
-  return MODE_LABELS[gameSystem ?? ''] ?? { normal: 'Normal', advantage: 'Advantage', disadvantage: 'Disadvantage' };
-}
-
-function systemSupportsAdvantage(gameSystem: string | null): boolean {
-  return gameSystem === 'DND_5E' || gameSystem === 'PATHFINDER_2E';
 }
 
 // ---------------------------------------------------------------------------

@@ -22,7 +22,7 @@ import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { Map, Token } from '@/types';
+import type { CampaignMap, Token } from '@/types';
 import CreateMapModal from './CreateMapModal';
 import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
@@ -52,7 +52,7 @@ interface MapManagerProps {
 
 interface TokenTransferProps {
   tokens: Token[];
-  targetMap: Map;
+  targetMap: CampaignMap;
   onConfirm: (selectedTokenIds: string[]) => void;
   onCancel: () => void;
   isSwitching: boolean;
@@ -160,16 +160,16 @@ function TokenTransferConfirmation({
 // ============================================
 
 interface MapCardProps {
-  map: Map;
+  map: CampaignMap;
   isActive: boolean;
   campaignId: string;
-  onSetActive: (map: Map) => void;
-  onEdit: (map: Map) => void;
-  onDelete: (map: Map) => void;
-  onExport: (map: Map) => void;
+  onSetActive: (map: CampaignMap) => void;
+  onEdit: (map: CampaignMap) => void;
+  onDelete: (map: CampaignMap) => void;
+  onExport: (map: CampaignMap) => void;
   switchingToId: string | null;
   tokens: Token[];
-  currentMap: Map | null;
+  currentMap: CampaignMap | null;
 }
 
 function MapCard({
@@ -298,16 +298,16 @@ function MapCard({
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
 
-  const [maps, setMaps] = useState<Map[]>([]);
+  const [maps, setMaps] = useState<CampaignMap[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editingMap, setEditingMap] = useState<Map | null>(null);
+  const [editingMap, setEditingMap] = useState<CampaignMap | null>(null);
 
   // Map switching state
-  const [switchingToMap, setSwitchingToMap] = useState<Map | null>(null);
+  const [switchingToMap, setSwitchingToMap] = useState<CampaignMap | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
 
   // The active map comes straight from the campaign: setCurrentMap keeps
@@ -319,7 +319,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const [currentMapTokens, setCurrentMapTokens] = useState<Token[]>([]);
 
   // Confirm delete
-  const [mapToDelete, setMapToDelete] = useState<Map | null>(null);
+  const [mapToDelete, setMapToDelete] = useState<CampaignMap | null>(null);
 
   // UVTT import
   const uvttInputRef = useRef<HTMLInputElement>(null);
@@ -359,12 +359,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- CRUD handlers ----
 
-  const handleCreated = (map: Map) => {
+  const handleCreated = (map: CampaignMap) => {
     setMaps((prev) => [map, ...prev]);
     upsertCampaignMap(map);
   };
 
-  const handleUpdated = (updated: Map) => {
+  const handleUpdated = (updated: CampaignMap) => {
     setMaps((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     upsertCampaignMap(updated);
     // If the updated map is the current one, refresh context
@@ -373,7 +373,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     }
   };
 
-  const handleExport = async (map: Map) => {
+  const handleExport = async (map: CampaignMap) => {
     if (!campaign?.id) return;
     setError(null);
     try {
@@ -383,7 +383,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     }
   };
 
-  const handleDeleteClick = (map: Map) => {
+  const handleDeleteClick = (map: CampaignMap) => {
     setMapToDelete(map);
   };
 
@@ -454,7 +454,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- Map switching ----
 
-  const handleSetActiveClick = async (map: Map) => {
+  const handleSetActiveClick = async (map: CampaignMap) => {
     if (!campaign?.id || map.id === activeMapId) return;
 
     if (currentMap) {
@@ -495,7 +495,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     setCurrentMapTokens([]);
   };
 
-  const performSwitch = async (targetMap: Map, tokenIdsToTransfer: string[]) => {
+  const performSwitch = async (targetMap: CampaignMap, tokenIdsToTransfer: string[]) => {
     if (!campaign?.id) return;
     setIsSwitching(true);
     setError(null);

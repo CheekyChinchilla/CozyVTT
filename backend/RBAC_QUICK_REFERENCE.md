@@ -18,7 +18,7 @@ router sees it, in this order (see `docs/ARCHITECTURE.md`, Request Flow):
 
 ### Import Statement
 ```typescript
-import { authenticated, adminOnly, campaignMember, campaignDM, campaignDMOrPlayer } from '../middleware/compose';
+import { authenticated, adminOnly, campaignMember, campaignDM } from '../middleware/compose';
 import { AuthenticatedRequest } from '../middleware/rbac';
 ```
 
@@ -91,10 +91,9 @@ them. They are cleared when the character enters another campaign, by
 a copy has none.
 
 #### 5. Campaign DM or Player (Excludes Spectators)
-`campaignDMOrPlayer` is defined in `middleware/compose.ts` and no route uses it
-today. Where spectators are refused, the handler does it: `dice.roll` (socket)
-through `canRollDice`, token control through `canControlToken`, and doors
-through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
+No route guard refuses spectators alone. Where spectators are refused, the
+handler does it: `dice.roll` (socket) through `canRollDice`, token control
+through `canControlToken`, and doors through `canToggleDoor` (`wall:update`: the DM may change any wall; a player
 may open or close an unlocked door and nothing else, the segment's position
 and size they send being ignored, on a lit map only a door one of their
 tokens can see, and under manual fog only one beside a square revealed to
@@ -142,11 +141,6 @@ character's own campaign, never from one the caller sends:
 2. A spectator is refused outright, even for a character they own.
 3. Otherwise the owner may edit, and so may the DM of that campaign, but only while the
    owner is still a member (`ownerStillIn`). A platform admin has no right here of their own.
-
-**Do not copy `canEditCharacter` from `services/permissions.ts`.** No route calls it, and it
-disagrees with the route on all three points: it lets any admin edit, it takes the campaign
-id from the caller (so the DM of any campaign of their own could name it and edit any
-character), and it does not refuse a spectator who owns the character.
 
 #### Who may act on a token
 
@@ -352,11 +346,10 @@ toggled with `wall:update`, `exploration:reveal` and `initiative.roll`
 (answered with `error`, frames dropped) all refuse
 any map but the current one, even a token the player controls on it. And it
 gates what is broadcast: a map's live wall, light, fog, settings, ping and
-explored-memory-reset events, and the DM's editing notice, go through
-`emitToMapReaders` in `websocket/utils.ts`, which sends them to the whole
-campaign for the current map and to the DM's sockets for any other. A map the
-DM has prepared but not switched to is therefore the DM's alone, tokens left
-visible on it included.
+explored-memory-reset events go through `emitToMapReaders` in
+`websocket/utils.ts`, which sends them to the whole campaign for the current
+map and to the DM's sockets for any other. A map the DM has prepared but not
+switched to is therefore the DM's alone, tokens left visible on it included.
 
 ## Reading an asset: access follows use
 
@@ -673,7 +666,7 @@ SMTP is configured.
 
 ## Campaign Membership Data
 
-After using `campaignMember`, `campaignDM`, or `campaignDMOrPlayer` middleware:
+After using `campaignMember` or `campaignDM` middleware:
 
 ```typescript
 req.campaignMembership = {
@@ -896,7 +889,7 @@ router.get('/', campaignMember, async (req: Request, res: Response) => {
 **Quick Summary:**
 1. Use `authenticated` for routes requiring login
 2. Use `adminOnly` for admin-only routes
-3. Use `campaignMember`, `campaignDM`, or `campaignDMOrPlayer` for campaign routes
+3. Use `campaignMember` or `campaignDM` for campaign routes
 4. Use the permission helpers in `services/permissions.ts` that routes already call (`canControlToken`, `canReadMap`, `canDeleteCampaign`, …) for rules the guards cannot express, and decide a record's rule from the record itself
 5. Always check permissions server-side, never trust client
 6. Use `AuthenticatedRequest` type for TypeScript autocomplete

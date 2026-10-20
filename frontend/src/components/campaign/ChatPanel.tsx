@@ -17,10 +17,10 @@ import ConfirmDialog from '@/components/common/ConfirmDialog';
 import ChatMessage from './ChatMessage';
 import JumpToNewest from './JumpToNewest';
 import ChatMessageSkeleton from '@/components/skeletons/ChatMessageSkeleton';
-import { MessageType, PlatformRole } from '@/types';
+import { MessageType } from '@/types';
 import type { Message, ChatMessageBroadcast } from '@/types';
 import Button from '@/components/ui/Button';
-import { errorMessage } from '@/utils/errors';
+import { errorMessage, errorSummary } from '@/utils/errors';
 import type { ChatSystemBroadcast } from '@/types';
 
 /** Messages per page. The server caps this at 100. */
@@ -79,7 +79,7 @@ export default function ChatPanel() {
         );
       }
     } catch (err) {
-      console.error('[ChatPanel] Failed to clear join/leave messages:', err);
+      console.error('[ChatPanel] Failed to clear join/leave messages:', errorSummary(err));
     } finally {
       setClearingJoins(false);
     }
@@ -215,7 +215,7 @@ export default function ChatPanel() {
         // Scroll to bottom after initial load (without smooth)
         setTimeout(() => scrollToBottom(false), 100);
       } catch (err) {
-        console.error('[ChatPanel] Failed to load messages:', err);
+        console.error('[ChatPanel] Failed to load messages:', errorSummary(err));
         setError(errorMessage(err) || 'Failed to load messages');
       } finally {
         setIsLoading(false);
@@ -270,7 +270,7 @@ export default function ChatPanel() {
           setCursor(page.pagination.nextCursor);
         }
       } catch (err) {
-        console.error('[ChatPanel] Failed to resync messages after reconnect:', err);
+        console.error('[ChatPanel] Failed to resync messages after reconnect:', errorSummary(err));
         // Non-fatal — user will still see new messages going forward
       }
     };
@@ -308,7 +308,7 @@ export default function ChatPanel() {
       setHasMore(page.pagination.hasMore);
       setCursor(page.pagination.nextCursor);
     } catch (err) {
-      console.error('[ChatPanel] Failed to load more messages:', err);
+      console.error('[ChatPanel] Failed to load more messages:', errorSummary(err));
       setError(errorMessage(err) || 'Failed to load more messages');
     } finally {
       setIsLoadingMore(false);
@@ -333,20 +333,7 @@ export default function ChatPanel() {
         id: data.id,
         campaignId: campaignId!,
         userId: data.userId,
-        user: {
-          id: data.userId,
-          displayName: data.userName,
-          email: '',
-          platformRole: PlatformRole.USER,
-          globalAssetManager: false,
-          templateEditor: false,
-          mfaEnabled: false,
-          avatarUrl: null,
-          bio: null,
-          createdAt: data.timestamp,
-          updatedAt: data.timestamp,
-          lastLoginAt: null,
-        },
+        user: { id: data.userId, displayName: data.userName },
         type: data.type,
         content: data.content,
         metadata: null,
@@ -515,20 +502,7 @@ export default function ChatPanel() {
       id: pendingId(clientId),
       campaignId,
       userId: user.id,
-      user: {
-        id: user.id,
-        displayName: user.displayName,
-        email: user.email,
-        platformRole: user.platformRole,
-        globalAssetManager: user.globalAssetManager,
-        templateEditor: user.templateEditor,
-        mfaEnabled: user.mfaEnabled,
-        avatarUrl: user.avatarUrl,
-        bio: user.bio,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        lastLoginAt: user.lastLoginAt,
-      },
+      user: { id: user.id, displayName: user.displayName },
       type: messageType,
       content,
       metadata: null,

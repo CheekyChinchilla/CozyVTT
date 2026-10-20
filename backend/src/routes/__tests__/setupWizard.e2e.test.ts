@@ -156,7 +156,8 @@ describe('running setup', () => {
     expect(before).toBeDefined();
 
     const res = await init(
-      { email: 'Admin@Example.com', password: PASSWORD, displayName: 'First Admin', instanceName: 'Tuesday Table', allowRegistration: true },
+      // The wizard once asked for a timezone. Nothing used it, and it is no longer stored.
+      { email: 'Admin@Example.com', password: PASSWORD, displayName: 'First Admin', instanceName: 'Tuesday Table', allowRegistration: true, timezone: 'Europe/London' },
       agent
     );
 
@@ -176,6 +177,7 @@ describe('running setup', () => {
     expect(settings.setupCompleted).toBe(true);
     expect(settings.instanceName).toBe('Tuesday Table');
     expect(settings.allowRegistration).toBe(true);
+    expect(settings.timezone).toBe('UTC');
   });
 
   it('opens the API once it has run', async () => {

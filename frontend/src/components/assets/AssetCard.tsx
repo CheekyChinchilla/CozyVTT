@@ -18,6 +18,8 @@ import { Asset, AssetType, AssetScope } from '../../types';
 import { api } from '../../services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import { formatFileSize } from '@/utils/format';
+import { errorSummary } from '@/utils/errors';
 
 interface AssetCardProps {
   asset: Asset;
@@ -39,13 +41,6 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   // What the asset list says the server will allow: the uploader, the DM of
   // a campaign asset's campaign, or an admin, by the delete route's own rule.
   const canDelete = asset.canChange === true;
-
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   /**
    * Whether this type is shown as a picture. Audio and documents are shown as
@@ -104,7 +99,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
     try {
       await onDelete(asset);
     } catch (error) {
-      console.error('Error deleting asset:', error);
+      console.error('Error deleting asset:', errorSummary(error));
     } finally {
       setIsDeleting(false);
       setConfirmOpen(false);
@@ -172,7 +167,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 )}
                 {assetScopeLabel(asset.scope)}
               </span>
-              <span>{formatFileSize(asset.fileSize)}</span>
+              <span>{formatFileSize(asset.fileSize, { largest: 'MB' })}</span>
               <span>{asset.type}</span>
             </div>
             {asset.tags.length > 0 && (
@@ -321,7 +316,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
 
         <div className="flex items-center justify-between text-sm text-stone-gray mb-3">
           <span className="capitalize">{asset.type.toLowerCase()}</span>
-          <span>{formatFileSize(asset.fileSize)}</span>
+          <span>{formatFileSize(asset.fileSize, { largest: 'MB' })}</span>
         </div>
 
         {/* Tags */}

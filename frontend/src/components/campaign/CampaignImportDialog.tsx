@@ -22,6 +22,7 @@ import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import { apiErrorMessage, apiErrorStatus, errorMessage as thrownMessage } from '@/utils/errors';
 import { readArchiveManifest } from '@/utils/archiveManifest';
+import { formatFileSize } from '@/utils/format';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -146,12 +147,6 @@ export default function CampaignImportDialog({
     }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   // The shared dialog: announced to a screen reader by its title, keeping
   // keyboard focus inside it, and closed by Escape, the backdrop or its X,
   // none of which work while the import runs: the request carries on without
@@ -227,7 +222,7 @@ export default function CampaignImportDialog({
 
             <div className="text-xs text-warm-gray flex items-center justify-between">
               <span>Total tokens: {preview.tokenCount} | Assets: {preview.assetCount}</span>
-              <span>{formatBytes(preview.totalSizeBytes)}</span>
+              <span>{formatFileSize(preview.totalSizeBytes, { largest: 'MB' })}</span>
             </div>
 
             <div className="text-xs text-warm-gray">

@@ -119,6 +119,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
   - *Accounts and requests.* `POST /api/auth/forgot-password` answers before the reset link is written, so the link row may appear a moment after the 200. A request while the account's link is still being written issues nothing, as one within the 5-minute cooldown does.
   - *Backups.* On an instance whose `DATABASE_URL` names a schema (`?schema=<name>`), `POST /api/admin/backups` and the safety backup `POST /api/admin/backups/restore` makes first hold that schema alone, and the restore replaces that schema alone. A restore of a backup whose tables are in another schema answers 400 `Invalid Backup` with `This file cannot be restored because it is a backup of the database schema "<theirs>", and this instance keeps its data in the schema "<ours>". Restore it on an instance whose DATABASE_URL names the schema it came from. Nothing was changed.` An instance with no `?schema=` answers as before.
   - *Backups.* `POST /api/admin/backups/restore` answers a multipart body its parser cannot read (cut off, or with no boundary) with 400 `Upload Error` `The upload could not be read. Nothing was changed.` (it was 500 `An unexpected error occurred`).
+  - *Live table: events.* The server no longer passes on `dm:editing`: one sent by the DM is ignored, and no member is sent it.
+  - *Instance settings.* `PUT /api/admin/settings` and `POST /api/setup/init` ignore `timezone`, which nothing used: it is no longer stored or named in the activity log, and the answer is the same as without it. `GET /api/admin/settings` still gives the stored value, `UTC` unless an earlier version saved another.
 
 - **A server admin moving someone's personal file into a campaign is written to the activity log.** An admin can move any user's personal file into any campaign, or to **Global**, which puts it in front of that table or of everyone, and nothing recorded it. The move now writes a line to **Recent Admin Actions** on the Admin Panel's **Activity** tab, naming the file, its owner's email address and where it went.
 
@@ -134,7 +136,13 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
+### Removed
+
+- **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB on disk, are left out of the backend install. Nothing changes in how dice roll.
+
 ### Fixed
+
+- **A failed save or request no longer copies what it sent into the browser's console.** When saving a character, uploading a token picture, sending an invitation, saving the vibe settings or loading the campaign failed, the page wrote the whole failed request to the browser's developer console, including the sheet or the details sent, where it could end up in a screenshot or a bug report. Only the status and the server's message are written now.
 
 - **A screen reader no longer reads out older chat messages as they load.** The chat announces each new message, and it also read out every message on a page of older ones from **Load More**, and the messages fetched again after a dropped connection. It now stays quiet while it reads them.
 

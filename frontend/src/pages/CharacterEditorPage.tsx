@@ -22,7 +22,7 @@ import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorMessage, errorSummary } from '@/utils/errors';
 import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 import { useStaleSaveReapply } from '@/components/character/StaleSaveDialog';
@@ -93,12 +93,12 @@ export default function CharacterEditorPage() {
             );
             setCampaign(fetchedCampaign);
           } catch (err) {
-            console.warn('Failed to fetch campaign:', err);
+            console.warn('Failed to fetch campaign:', errorSummary(err));
             // Not critical - continue without campaign data
           }
         }
       } catch (err: unknown) {
-        console.error('Failed to fetch character:', err);
+        console.error('Failed to fetch character:', errorSummary(err));
         setError(errorMessage(err) || 'Failed to load character');
       } finally {
         setLoading(false);
@@ -125,7 +125,7 @@ export default function CharacterEditorPage() {
       const camp = await campaignService.getCampaign(char.campaignId);
       return canEditCharacterIn(user, char, camp);
     } catch (err) {
-      console.error('Failed to check campaign permission:', err);
+      console.error('Failed to check campaign permission:', errorSummary(err));
       return char.userId === user.id;
     }
   };
@@ -203,7 +203,7 @@ export default function CharacterEditorPage() {
           showToast('Character saved!', 'success');
         }
       } catch (err: unknown) {
-        console.error('Failed to save character:', err);
+        console.error('Failed to save character:', errorSummary(err));
 
         // Signed out meanwhile: the page has stayed put with the edits, and
         // the notice says how to save them.

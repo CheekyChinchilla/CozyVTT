@@ -23,6 +23,7 @@ import { CharacterSheetErrorBoundary } from '../character-sheets/ErrorBoundary';
 
 // Import editor modal
 import CharacterSheetEditorModal from './CharacterSheetEditorModal';
+import { errorSummary } from '@/utils/errors';
 
 interface CharacterSheetViewerModalProps {
   character: Character;
@@ -103,7 +104,7 @@ export default function CharacterSheetViewerModal({
       api
         .getCharacter(character.id)
         .then(({ character: fresh }) => setCharacter(fresh))
-        .catch((error: unknown) => console.error('Error refreshing character after an HP change:', error));
+        .catch((error: unknown) => console.error('Error refreshing character after an HP change:', errorSummary(error)));
     };
 
     socket.on('character.updated', handleCharacterUpdate);
@@ -137,7 +138,7 @@ export default function CharacterSheetViewerModal({
       setCharacter(updatedCharacter);
       onCharacterChanged?.(updatedCharacter);
     } catch (error) {
-      console.error('Error refreshing character after save:', error);
+      console.error('Error refreshing character after save:', errorSummary(error));
     }
   };
 

@@ -4,13 +4,13 @@
 // ============================================
 
 import api from './api';
-import type { Map, CreateMapRequest, UpdateMapRequest, Token, CreateTokenRequest } from '@/types';
+import type { CampaignMap, CreateMapRequest, UpdateMapRequest, Token, CreateTokenRequest } from '@/types';
 
 class MapService {
   /**
    * Get all maps for a campaign (lightweight list, no tokens)
    */
-  async getMaps(campaignId: string): Promise<Map[]> {
+  async getMaps(campaignId: string): Promise<CampaignMap[]> {
     const response = await api.listMaps(campaignId);
     return response.maps;
   }
@@ -18,7 +18,7 @@ class MapService {
   /**
    * Get a single map with full data (tokens, annotations)
    */
-  async getMap(campaignId: string, mapId: string): Promise<Map> {
+  async getMap(campaignId: string, mapId: string): Promise<CampaignMap> {
     const response = await api.getMap(campaignId, mapId);
     return response.map;
   }
@@ -26,7 +26,7 @@ class MapService {
   /**
    * Create a new map (DM only)
    */
-  async createMap(campaignId: string, data: CreateMapRequest): Promise<Map> {
+  async createMap(campaignId: string, data: CreateMapRequest): Promise<CampaignMap> {
     const response = await api.createMap(campaignId, data);
     return response.map;
   }
@@ -34,7 +34,7 @@ class MapService {
   /**
    * Update map properties (DM only)
    */
-  async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<Map> {
+  async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<CampaignMap> {
     const response = await api.updateMap(campaignId, mapId, data);
     return response.map;
   }
@@ -48,7 +48,7 @@ class MapService {
     name?: string,
     gridSize?: number,
     options?: { confirm?: boolean; includeObjectWalls?: boolean },
-  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
+  ): Promise<{ map: CampaignMap; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
     return api.importUVTT(campaignId, file, name, gridSize, options);
   }
 

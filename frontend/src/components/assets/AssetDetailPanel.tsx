@@ -26,6 +26,7 @@ import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import { formatFileSize } from '@/utils/format';
 
 interface AssetDetailPanelProps {
   asset: Asset;
@@ -107,12 +108,6 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
     availableMoveScopes.push(AssetScope.GLOBAL);
 
   // ---------- Helpers ----------
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
-
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -411,7 +406,7 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
                 <HardDrive className="w-5 h-5 text-stone-gray/60" />
                 <div>
                   <p className="text-sm text-stone-gray/70">File Size</p>
-                  <p className="text-stone-gray font-medium">{formatFileSize(currentAsset.fileSize)}</p>
+                  <p className="text-stone-gray font-medium">{formatFileSize(currentAsset.fileSize, { decimals: 2, largest: 'MB' })}</p>
                 </div>
               </div>
 

@@ -421,6 +421,8 @@ push and would otherwise show everyone offline until somebody moved.
 
 ### Heartbeat Events
 
+The web client relies on Socket.io's own heartbeat and does not send `ping`. A script may send it to check that its connection still answers; the answer does not check the session.
+
 #### `ping`
 **Direction:** Client → Server
 **Purpose:** Check connection health
@@ -776,7 +778,7 @@ Three things decide what a player's map shows, and each has one source of truth.
 | `map.ping` | 10 every ten seconds | dropped silently |
 | The requests a client makes when it opens a map or reconnects (`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`, `presence.request`, `initiative.request_state`) | 5 a second, each; a client sends each once per load | dropped silently |
 
-An `initiative.request_state` while nothing is in the order is answered from memory without any database work. The only events with no ceiling of their own are `ping`, answered to its own socket alone, and `dm:editing`, which the DM sends and which is passed on at most twice a second per socket.
+An `initiative.request_state` while nothing is in the order is answered from memory without any database work. The only event with no ceiling of its own is `ping`, answered to its own socket alone.
 
 **Connections per user.** One user may hold at most 40 sockets open at once, in every campaign together; each campaign page is one, and a connection that dropped without closing counts until its heartbeat times out, up to 85 seconds later. The next one is answered with `error` ("Too many CozyVTT tabs or devices are open on this account at once …") and closed before it can join anything. Every fan-out to a campaign is worked out per socket, so this bounds how far one account can multiply what everyone else's events cost.
 
@@ -790,7 +792,7 @@ An `initiative.request_state` while nothing is in the order is answered from mem
 
 **A secret roll goes to its roller and the DM.** Every roll is stored. One with `secret: true` is sent as `dice.rolled` to the socket that rolled it alone, and as `dice.rolled.secret` (the same roll with `originalRoller` and `isAuditView: true`) to the sockets of every DM other than the roller, so a DM's own secret roll reaches only the tab it was rolled in. Any other roll goes to the whole campaign as `dice.rolled`, the sender included.
 
-**A map a player may read is the campaign's current one.** `walls:request`, `lights:request`, `fog:request_state` and `exploration:request` answer a player or spectator only for the map the campaign is showing (`currentMapId`); for any other map of the campaign they answer nothing, exactly as for a map outside it. The DM is answered for any map of the campaign. Token moves follow the same rule: a drag or drop on any other map reaches the DM's sockets only. Writes do too: a player's `token.move.start`, `token.move.end`, `wall:update` door toggle and `initiative.roll` on a map other than the current one answer `error` ("Map not found"), and their `token.move` frames, `exploration:reveal` reports and `map.ping`s there are dropped without an answer, even for a token they control; a `map.ping` naming a map outside the campaign is dropped for anyone. So do a map's live edits: `wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`, `fog:cells`, `map:settings:updated`, `map.pinged`, `exploration:state` from a reset, and `dm:editing` reach every member for the current map and only the DM's sockets for any other. Some of them also come from the REST map routes, under the same rule: the wall routes send the `wall:*` events and `walls:replaced`, the light routes the `light:*` events and `lights:replaced`, the map update and lighting routes `map:settings:updated`, and the fog operation the fog events. Every path follows the rule, so a map the DM has prepared but not switched to is the DM's alone. `map.change` from the DM is likewise refused (with `error`) for any map but the current one, because `map.changed` puts every client onto the map it carries; moving tokens between maps (`POST .../tokens/move`) sends `map.changed` for whichever of the two maps is current, so no client has to ask.
+**A map a player may read is the campaign's current one.** `walls:request`, `lights:request`, `fog:request_state` and `exploration:request` answer a player or spectator only for the map the campaign is showing (`currentMapId`); for any other map of the campaign they answer nothing, exactly as for a map outside it. The DM is answered for any map of the campaign. Token moves follow the same rule: a drag or drop on any other map reaches the DM's sockets only. Writes do too: a player's `token.move.start`, `token.move.end`, `wall:update` door toggle and `initiative.roll` on a map other than the current one answer `error` ("Map not found"), and their `token.move` frames, `exploration:reveal` reports and `map.ping`s there are dropped without an answer, even for a token they control; a `map.ping` naming a map outside the campaign is dropped for anyone. So do a map's live edits: `wall:added`, `wall:removed`, `wall:updated`, `walls:replaced`, `light:added`, `light:removed`, `light:updated`, `lights:replaced`, `fog:cells`, `map:settings:updated`, `map.pinged` and `exploration:state` from a reset reach every member for the current map and only the DM's sockets for any other. Some of them also come from the REST map routes, under the same rule: the wall routes send the `wall:*` events and `walls:replaced`, the light routes the `light:*` events and `lights:replaced`, the map update and lighting routes `map:settings:updated`, and the fog operation the fog events. Every path follows the rule, so a map the DM has prepared but not switched to is the DM's alone. `map.change` from the DM is likewise refused (with `error`) for any map but the current one, because `map.changed` puts every client onto the map it carries; moving tokens between maps (`POST .../tokens/move`) sends `map.changed` for whichever of the two maps is current, so no client has to ask.
 
 **Manual fog of war** is per map, switched by `Map.fogEnabled`. While it is on, `fog:request_state` answers a DM with `fog:updated` (the full grid) and everyone else with `fog:cells` (their revealed cell indices plus the grid dimensions). A `fog:cells` payload with an empty `revealedCells` means fog is on and nothing is revealed. While fog is off the handlers answer nothing and refuse `fog:operation`; a client that gets no reply draws no fog. A request from a socket that has not yet authenticated is dropped the same silent way, so a client sends `fog:request_state` only after `authenticated`, and again after a reconnect; the web client waits for that. Switching fog on for a map (`PUT /api/campaigns/:campaignId/maps/:id` with `fogEnabled: true`) pushes the map's fog to every member at once, `fog:updated` or `fog:cells` by role, so no client has to ask. The REST fog operation broadcasts through the same code as the socket one, so a reveal reaches the table the same way whichever path made it. Fog is one cell per grid square, and a map with more than 250,000 squares (500 by 500, the largest a map can now be made) is too large for it; only a map stored before that limit can be. For such a map `fog:request_state` and `fog:operation` answer `error` with a message saying to make the map smaller, and nothing is sent or stored.
 
@@ -1228,7 +1230,6 @@ _Who may send it is read from the shared permission predicates each handler call
 | `chat.message` | Any member | User sends chat message. |
 | `dice.clearHistory` | DM only | DM clears dice roll history (DM-only). |
 | `dice.roll` | DM and players | User rolls dice Validates expression, calculates result, saves to database, and broadcasts. |
-| `dm:editing` | DM only | — |
 | `exploration:request` | Any member | what this user has explored on a map. |
 | `exploration:reset` | DM only | DM forgets every player's explored areas on a map. |
 | `exploration:reveal` | Any member | a player's vision covered these cells; remember them (a DM may name another member with userId to record theirs). |
@@ -1282,7 +1283,6 @@ _Who may send it is read from the shared permission predicates each handler call
 | `dice.historyCleared` | `dice.ts` |
 | `dice.rolled` | `dice.ts` |
 | `dice.rolled.secret` | `dice.ts` |
-| `dm:editing` | `walls.ts` |
 | `exploration:state` | `exploration.ts` |
 | `fog:cells` | `fog.ts` |
 | `fog:updated` | `fog.ts` |

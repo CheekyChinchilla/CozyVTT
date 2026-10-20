@@ -152,6 +152,19 @@ describe('POST /api/characters into a campaign', () => {
   });
 });
 
+describe('POST /api/characters with a game system that does not exist', () => {
+  it('answers 400 from the body check, and creates nothing', async () => {
+    const res = await owner.post('/api/characters').send({ name: 'Nobody', gameSystem: 'WARHAMMER_4E', data: {} });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({
+      error: 'Validation Error',
+      message: 'Invalid option: expected one of "DND_5E"|"PATHFINDER_2E"|"SHADOWRUN_6E"|"CALL_OF_CTHULHU_7E"',
+    });
+    expect(await prisma.character.count({ where: { userId: ownerId, name: 'Nobody' } })).toBe(0);
+  });
+});
+
 describe('POST /api/campaigns', () => {
   it('creates the campaign with the caller as its owner and DM', async () => {
     const res = await owner.post('/api/campaigns').send({ name: '  The Sunless Citadel  ', gameSystem: 'DND_5E' });

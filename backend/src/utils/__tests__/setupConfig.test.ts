@@ -2,7 +2,7 @@
  * The setup wizard's system configuration step.
  *
  * The wizard collected an instance name, a timezone and a public-registration
- * choice, validated the name, and showed all three back for confirmation — then
+ * choice, validated the name, and showed all three back for confirmation, then
  * sent none of them. Every instance started with the defaults, so an admin who
  * ticked "enable registration" finished setup with it switched off.
  */
@@ -10,7 +10,7 @@
 import { systemConfigFromSetupBody } from '../setupConfig';
 
 describe('systemConfigFromSetupBody', () => {
-  it('carries the three fields through', () => {
+  it('carries the two fields through, and leaves out a timezone', () => {
     expect(
       systemConfigFromSetupBody({
         email: 'a@b.test',
@@ -21,7 +21,6 @@ describe('systemConfigFromSetupBody', () => {
       })
     ).toEqual({
       instanceName: 'The Cozy Table',
-      timezone: 'Europe/London',
       allowRegistration: true,
     });
   });
@@ -56,11 +55,6 @@ describe('systemConfigFromSetupBody', () => {
   it('caps an over-long instance name at 100 characters', () => {
     const config = systemConfigFromSetupBody({ instanceName: 'x'.repeat(400) });
     expect(config.instanceName).toHaveLength(100);
-  });
-
-  it('caps an over-long timezone at 50 characters', () => {
-    const config = systemConfigFromSetupBody({ timezone: 'y'.repeat(200) });
-    expect(config.timezone).toHaveLength(50);
   });
 
   it('sanitises the instance name the way the admin settings page does', () => {

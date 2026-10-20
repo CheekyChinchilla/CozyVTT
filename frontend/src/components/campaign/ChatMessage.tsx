@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useMinuteClock } from '@/hooks/useMinuteClock';
 import { Bot, Shield } from 'lucide-react';
 import type { Message, MessageType } from '@/types';
+import { formatRelativeTime } from '@/utils/format';
 
 interface ChatMessageProps {
   message: Message;
@@ -20,35 +21,21 @@ interface ChatMessageProps {
 }
 
 /**
- * Format timestamp as relative time (e.g., "2 minutes ago")
+ * How long ago a message was sent ("2 minutes ago"), or the date past a week.
  */
-function formatRelativeTime(timestamp: string, now: number): string {
+function messageAge(timestamp: string, now: number): string {
   // Handle undefined, null, or empty timestamps
   if (!timestamp) {
     return 'unknown time';
   }
 
-  const date = new Date(timestamp);
-
   // Check if date is invalid
-  if (isNaN(date.getTime())) {
+  if (isNaN(new Date(timestamp).getTime())) {
     console.warn('[ChatMessage] Invalid timestamp:', timestamp);
     return 'unknown time';
   }
 
-  const diffMs = now - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
-  const diffHour = Math.floor(diffMin / 60);
-  const diffDay = Math.floor(diffHour / 24);
-
-  if (diffSec < 60) return 'just now';
-  if (diffMin < 60) return `${diffMin} ${diffMin === 1 ? 'minute' : 'minutes'} ago`;
-  if (diffHour < 24) return `${diffHour} ${diffHour === 1 ? 'hour' : 'hours'} ago`;
-  if (diffDay < 7) return `${diffDay} ${diffDay === 1 ? 'day' : 'days'} ago`;
-
-  // If older than a week, show the date
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return formatRelativeTime(timestamp, { now, words: true, dateAfterDays: 7 });
 }
 
 /**
@@ -134,7 +121,7 @@ function ChatMessageInner({ message, isCurrentUser = false, isPending = false, n
           <span className="text-xs text-stone-gray/50 italic">sending…</span>
         ) : (
           <span className="text-xs text-stone-gray/70" title={message.createdAt ? new Date(message.createdAt).toLocaleString() : 'Unknown time'}>
-            {formatRelativeTime(message.createdAt, now)}
+            {messageAge(message.createdAt, now)}
           </span>
         )}
       </div>

@@ -31,7 +31,7 @@ const onCharacterHpUpdated = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
     onCharacterHpUpdated: (...a: unknown[]) => onCharacterHpUpdated(...a), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
-    on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null), startHeartbeat: vi.fn(),
+    on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' } }) }));
