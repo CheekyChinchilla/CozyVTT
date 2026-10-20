@@ -1241,7 +1241,7 @@ _Who may send it is read from the shared permission predicates each handler call
 | `initiative.remove` | DM only | DM removes a token from the combatant list. |
 | `initiative.reorder` | DM only | DM drags combatants into a custom order. |
 | `initiative.request_state` | Any member | Client requests current state on (re)connect. |
-| `initiative.roll` | DM, or the token's player | roll initiative for a token using a dice expression. |
+| `initiative.roll` | DM, or the token's player: once the DM has put it in the order, before the fight starts, once each time it joins the order | roll initiative for a token using a dice expression. |
 | `initiative.set` | DM only | DM manually sets a token's initiative value. |
 | `initiative.start` | DM only | DM begins combat (round 1, first combatant active). |
 | `light:add` | DM only | DM places a single light source. |
@@ -1261,62 +1261,64 @@ _Who may send it is read from the shared permission predicates each handler call
 | `vibe.update` | DM only | DM changes the current vibe period and its audio follows. |
 | `wall:add` | DM only | DM adds a single wall segment. |
 | `wall:remove` | DM only | DM removes a wall segment by id. |
-| `wall:update` | DM; a player may toggle an unlocked door | Update a wall segment; a player may only open or close an unlocked door, and cannot move it. |
+| `wall:update` | DM; a player may toggle an unlocked door (on a lit map, one their tokens see; under manual fog, one beside a square revealed to them) | Update a wall segment; a player may only open or close an unlocked door, and cannot move it. |
 | `walls:replace` | DM only | DM bulk-replaces all wall segments. |
 | `walls:request` | Any member | Any campaign member requests current wall segments on (re)join. |
 
 ### Server → client
 
-| Event | Emitted from |
-| --- | --- |
-| `atmosphere.audio.updated` | `atmosphereAudio.ts` |
-| `atmosphere.effect.updated` | `atmosphere.ts` |
-| `authenticated` | `events.ts` |
-| `campaign.access.revoked` | `utils.ts` |
-| `campaign.dm.transferred` | `campaigns.ts` |
-| `campaign.role.changed` | `campaigns.ts` |
-| `character.hp.updated` | `characters.ts` |
-| `character.updated` | `utils.ts` |
-| `chat.message` | `chat.ts` |
-| `chat.system` | `utils.ts` |
-| `connected` | `events.ts` |
-| `dice.historyCleared` | `dice.ts` |
-| `dice.rolled` | `dice.ts` |
-| `dice.rolled.secret` | `dice.ts` |
-| `exploration:state` | `exploration.ts` |
-| `fog:cells` | `fog.ts` |
-| `fog:updated` | `fog.ts` |
-| `initiative.state` | `initiative.ts` |
-| `invitation.received` | `campaigns.ts` |
-| `light:added` | `lights.ts` |
-| `light:removed` | `lights.ts` |
-| `light:updated` | `lights.ts` |
-| `lights:replaced` | `lights.ts` |
-| `map.changed` | `shared.ts` |
-| `map.pinged` | `pings.ts` |
-| `map:settings:updated` | `maps.ts` |
-| `pong` | `events.ts` |
-| `presence.state` | `events.ts` |
-| `roster.updated` | `utils.ts` |
-| `session.ended` | `campaigns.ts` |
-| `session.paused` | `campaigns.ts` |
-| `session.resumed` | `campaigns.ts` |
-| `session.started` | `campaigns.ts` |
-| `spirit_layer.style_changed` | `spirit.ts` |
-| `spirit_layer.toggled` | `spirit.ts` |
-| `spirit_layer.token.toggled` | `spirit.ts` |
-| `token.move.start` | `tokens.ts` |
-| `token.moved` | `tokens.ts` |
-| `token:appeared` | `tokens.ts` |
-| `token:disappeared` | `tokens.ts` |
-| `user.joined` | `events.ts` |
-| `user.left` | `events.ts` |
-| `vibe.settings.updated` | `vibeSave.ts` |
-| `vibe.updated` | `vibe.ts` |
-| `wall:added` | `walls.ts` |
-| `wall:removed` | `walls.ts` |
-| `wall:updated` | `walls.ts` |
-| `walls:replaced` | `walls.ts` |
+_Sent to: map readers are every member while the map is the one the campaign is showing, and only the DM's sockets for any other map. Members the handler picks are chosen one by one, by what each may be sent. The sender is the socket whose event is being answered, or the one that has just connected; one socket is a single connection a helper is handed, such as one being signed out._
+
+| Event | Sent to | Emitted from |
+| --- | --- | --- |
+| `atmosphere.audio.updated` | The campaign | `atmosphereAudio.ts` |
+| `atmosphere.effect.updated` | The campaign | `atmosphere.ts` |
+| `authenticated` | The sender | `events.ts` |
+| `campaign.access.revoked` | One socket | `utils.ts` |
+| `campaign.dm.transferred` | The campaign | `campaigns.ts` |
+| `campaign.role.changed` | The campaign | `campaigns.ts` |
+| `character.hp.updated` | The campaign | `characters.ts` |
+| `character.updated` | Members the handler picks; the campaign | `utils.ts` |
+| `chat.message` | Members the handler picks | `chat.ts` |
+| `chat.system` | The campaign | `utils.ts` |
+| `connected` | The sender | `events.ts` |
+| `dice.historyCleared` | The campaign | `dice.ts` |
+| `dice.rolled` | Members the handler picks; the campaign; the sender | `dice.ts` |
+| `dice.rolled.secret` | Members the handler picks | `dice.ts` |
+| `exploration:state` | Map readers; members the handler picks; the sender | `exploration.ts` |
+| `fog:cells` | Members the handler picks; the sender | `fog.ts` |
+| `fog:updated` | Members the handler picks; the sender | `fog.ts` |
+| `initiative.state` | Members the handler picks | `initiative.ts` |
+| `invitation.received` | One user's sockets | `campaigns.ts` |
+| `light:added` | Map readers, as their role sees it | `lights.ts` |
+| `light:removed` | Map readers, as their role sees it | `lights.ts` |
+| `light:updated` | Map readers, as their role sees it | `lights.ts` |
+| `lights:replaced` | Map readers, as their role sees it; the sender | `lights.ts` |
+| `map.changed` | Members the handler picks | `shared.ts` |
+| `map.pinged` | Map readers | `pings.ts` |
+| `map:settings:updated` | Map readers | `maps.ts` |
+| `pong` | The sender | `events.ts` |
+| `presence.state` | The campaign; the sender | `events.ts` |
+| `roster.updated` | The campaign | `utils.ts` |
+| `session.ended` | The campaign | `campaigns.ts` |
+| `session.paused` | The campaign | `campaigns.ts` |
+| `session.resumed` | The campaign | `campaigns.ts` |
+| `session.started` | The campaign | `campaigns.ts` |
+| `spirit_layer.style_changed` | The campaign | `spirit.ts` |
+| `spirit_layer.toggled` | The campaign | `spirit.ts` |
+| `spirit_layer.token.toggled` | Members the handler picks | `spirit.ts` |
+| `token.move.start` | Members the handler picks | `tokens.ts` |
+| `token.moved` | Map readers sent the token; members the handler picks | `tokens.ts` |
+| `token:appeared` | Members the handler picks | `tokens.ts` |
+| `token:disappeared` | Members the handler picks | `tokens.ts` |
+| `user.joined` | The campaign but the sender | `events.ts` |
+| `user.left` | The campaign but the sender | `events.ts` |
+| `vibe.settings.updated` | The campaign | `vibeSave.ts` |
+| `vibe.updated` | The campaign | `vibe.ts` |
+| `wall:added` | Map readers, as their role sees it | `walls.ts` |
+| `wall:removed` | Map readers | `walls.ts` |
+| `wall:updated` | Map readers, as their role sees it; the sender | `walls.ts` |
+| `walls:replaced` | Map readers, as their role sees it; the sender | `walls.ts` |
 
 <!-- END GENERATED EVENTS -->
 

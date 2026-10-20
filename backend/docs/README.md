@@ -78,8 +78,8 @@ body. The first row that matches decides the cell:
 | The handler, or a function it calls | Reads |
 |---|---|
 | Turns every non-DM away: an `if` among its own statements (inside a `try` counts; a nested block, an `else` or a callback does not) whose branch ends in a bare `return;`, and whose condition is `socket.role !== 'DM'` alone or as one side of an *or*, or whose refusal says "Only the DM" | DM only |
-| Calls `canToggleDoor` | DM; a player may toggle an unlocked door |
-| Calls `canControlToken` | DM, or the token's player (adding "while the session is live" when it also calls `canMoveTokensNow`) |
+| Calls `canToggleDoor` | DM; a player may toggle an unlocked door (adding which ones: "on a lit map, one their tokens see" when it also calls `.seesPoint(`, "under manual fog, one beside a square revealed to them" when it also calls `doorBesideRevealedFog`) |
+| Calls `canControlToken` | DM, or the token's player (adding "while the session is live" when it also calls `canMoveTokensNow`, and "once the DM has put it in the order", "before the fight starts" and "once each time it joins the order" when it tests `existingIndex === -1`, reads `state.active` and calls `playerHasRolled`) |
 | Tests `character.userId !== socket.userId` | DM, or the character's owner (adding "never a spectator" when it also tests `socket.role === 'SPECTATOR'`) |
 | Calls `canRollDice` | DM and players |
 | None of these | Any member |
@@ -92,6 +92,17 @@ authoritative.
 Comments are blanked before any of this is read, so a gate that is commented
 out changes the row just as deleting it would, and a handler or an emit that
 is commented out is not listed.
+
+The **Sent to** column of the server's events is read from each place the
+event is sent: the helper it goes through (`broadcastToCampaign` the campaign,
+`broadcastToUser` one user's sockets, `emitToMapReaders` and `tellMapReaders`
+map readers, their `As` forms map readers as their role sees it,
+`emitMoveToVisibleSockets` map readers sent the token), or what `.emit(` is
+called on: `socket` inside a `socket.on(` or `io.on(` callback is the sender
+and elsewhere one socket, `socket.to(…)` the campaign but the sender,
+`io.to(…)` one user's sockets when its argument names a `userId` and the
+campaign otherwise, and anything else (a loop's `s` or `r`) members the handler
+picks. An event sent from several places lists each.
 
 The check fails, in every mode, on a handler or emit whose event name is not
 a quoted string, such as a name held in a variable or built in a template:

@@ -294,6 +294,16 @@ def collect():
                 'owner': 'character.userId !== socket.userId' in body,
                 'spectator': "socket.role === 'SPECTATOR'" in body,
                 'paused': 'canMoveTokensNow(' in body,
+                # A player's door toggle: on a lit map only a door their
+                # tokens see, under manual fog only one beside a revealed
+                # square (utils/doorFog.ts).
+                'door_sight': '.seesPoint(' in body,
+                'door_fog': 'doorBesideRevealedFog(' in body,
+                # A player's initiative roll: only for a token in the order,
+                # before the fight starts, once each time it joins.
+                'in_order': 'existingIndex === -1' in body,
+                'before_fight': 'state.active' in body,
+                'once': 'playerHasRolled(' in body,
                 'desc': describe(text, m.start()),
                 'file': os.path.basename(path),
             })
@@ -306,13 +316,85 @@ def collect():
         # tellMapReaders), where the name is the first quoted argument; the
         # per-role forms (emitToMapReadersAs, tellMapReadersAs) take the event
         # they stand for in the same place.
+        # The handlers' own spans, and the connection callback's: `socket`
+        # inside one is the client's own, and anywhere else whichever socket
+        # a helper was handed.
+        handlers = [(h.start(), closing(code, h.end() - 1))
+                    for h in re.finditer(r'\bsocket\.on\(|\bio\.on\(', code)]
         for _call, pattern in CALLS[1:]:
             for m in re.finditer(pattern, plain):
                 name = m.group(2)
                 if name in ('error',):
                     continue
-                outbound.setdefault(name, {'file': os.path.basename(path)})
+                entry = outbound.setdefault(name, {'file': os.path.basename(path), 'to': set()})
+                entry['to'].add(sent_to(plain, m, handlers))
     return inbound, outbound
+
+
+# Who an event sent through each broadcast helper reaches. A map's readers
+# are every member while it is the map on screen, and the DM's sockets for
+# any other (MAP_READERS, below the table).
+HELPER_RECIPIENTS = {
+    'broadcastToCampaign': 'the campaign',
+    'broadcastToUser': "one user's sockets",
+    'emitMoveToVisibleSockets': 'map readers sent the token',
+    'emitToMapReaders': 'map readers',
+    'tellMapReaders': 'map readers',
+    'emitToMapReadersAs': 'map readers, as their role sees it',
+    'tellMapReadersAs': 'map readers, as their role sees it',
+}
+MAP_READERS = ('_Sent to: map readers are every member while the map is the one the campaign '
+               "is showing, and only the DM's sockets for any other map. Members the handler "
+               'picks are chosen one by one, by what each may be sent. The sender is the socket '
+               'whose event is being answered, or the one that has just connected; one socket is '
+               'a single connection a helper is handed, such as one being signed out._')
+
+
+def receiver(plain, i):
+    """The expression `.emit(` at plain[i] is called on: `socket`, `io.to(room)`, `s`."""
+    j = i
+    while j > 0 and plain[j - 1].isspace():
+        j -= 1
+    end = j
+    while j > 0:
+        ch = plain[j - 1]
+        if ch.isalnum() or ch in '_$.!?':
+            j -= 1
+        elif ch == ')':
+            depth = 0
+            k = j - 1
+            while k >= 0:
+                if plain[k] == ')':
+                    depth += 1
+                elif plain[k] == '(':
+                    depth -= 1
+                    if depth == 0:
+                        break
+                k -= 1
+            j = k
+        else:
+            break
+    return re.sub(r'\s+', '', plain[j:end])
+
+
+def sent_to(plain, m, handlers=()):
+    """
+    Who the event sent at match `m` reaches, from the helper it goes through
+    or what `.emit` is called on. `handlers` are the spans of the file's
+    `socket.on(` handlers.
+    """
+    helper = re.match(r'\.?([A-Za-z]+)', m.group(0)).group(1)
+    if helper in HELPER_RECIPIENTS:
+        return HELPER_RECIPIENTS[helper]
+    on = receiver(plain, m.start())
+    if on == 'socket':
+        return 'the sender' if any(start <= m.start() <= end for start, end in handlers) else 'one socket'
+    if on.startswith('socket.to(') or on.startswith('socket.broadcast'):
+        return 'the campaign but the sender'
+    to = re.fullmatch(r'(?:io|getSocketInstance\(\))\.to\((.*)\)', on)
+    if to:
+        return "one user's sockets" if 'userId' in to.group(1) else 'the campaign'
+    return 'members the handler picks'
 
 
 def unreadable():
@@ -345,9 +427,19 @@ def who_may_send(info):
     if info['dm']:
         return 'DM only'
     if info['doors']:
-        return 'DM; a player may toggle an unlocked door'
+        seen = [where for flag, where in (
+            ('door_sight', "on a lit map, one their tokens see"),
+            ('door_fog', 'under manual fog, one beside a square revealed to them'),
+        ) if info[flag]]
+        return 'DM; a player may toggle an unlocked door' + (f" ({'; '.join(seen)})" if seen else '')
     if info['controls']:
-        return "DM, or the token's player while the session is live" if info['paused'] else "DM, or the token's player"
+        base = "DM, or the token's player while the session is live" if info['paused'] else "DM, or the token's player"
+        terms = [term for flag, term in (
+            ('in_order', 'once the DM has put it in the order'),
+            ('before_fight', 'before the fight starts'),
+            ('once', 'once each time it joins the order'),
+        ) if info[flag]]
+        return base + (f": {', '.join(terms)}" if terms else '')
     if info['owner']:
         return "DM, or the character's owner, never a spectator" if info['spectator'] else "DM, or the character's owner"
     if info['players']:
@@ -367,9 +459,11 @@ def table(inbound, outbound):
     for name in sorted(inbound):
         info = inbound[name]
         lines.append(f"| `{name}` | {who_may_send(info)} | {info['desc'] or '—'} |")
-    lines += ['', '### Server → client', '', '| Event | Emitted from |', '| --- | --- |']
+    lines += ['', '### Server → client', '', MAP_READERS, '', '| Event | Sent to | Emitted from |', '| --- | --- | --- |']
     for name in sorted(outbound):
-        lines.append(f"| `{name}` | `{outbound[name]['file']}` |")
+        to = '; '.join(sorted(outbound[name]['to']))
+        to = to[:1].upper() + to[1:]
+        lines.append(f"| `{name}` | {to} | `{outbound[name]['file']}` |")
     return '\n'.join(lines)
 
 
