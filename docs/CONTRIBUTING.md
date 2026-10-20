@@ -46,6 +46,10 @@ If you become a collaborator, here's what the codebase expects:
   packages, so a diff containing one will not lint. Reach for `unknown` and a
   narrowing helper instead — `frontend/src/utils/errors.ts` and
   `backend/src/utils/prisma-json.ts` cover the two common cases
+- **Hook dependencies** — `react-hooks/exhaustive-deps` is an *error* in the
+  frontend: every hook lists what it reads. An effect that must fire on only
+  part of that reads the rest through `useEffectEvent`, or carries
+  `// eslint-disable-next-line react-hooks/exhaustive-deps -- <why>` above its list
 - **Tests** — new features should include tests; bug fixes should include a regression test that fails before the fix. A new HTTP route fails `backend/src/routes/__tests__/routeInventory.test.ts` until it is listed there, with the file of a test that sends a request to it
 - **No new linter warnings** — `npm run lint` must pass cleanly in **both** `backend/` and `frontend/`; both run with `--max-warnings 0`
 - **Run every gate, not a subset** — typecheck, lint, both test suites, the frontend build, and the two documentation checks with their own tests. The full list is in [DEVELOPMENT.md](DEVELOPMENT.md#everything-before-you-call-something-done). CI runs the same commands on every push and pull request into `dev` or `main`, and also checks the advisories in what an instance runs and builds the production images, starting them for the browser smoke tests. A pull request into `main` cannot merge until all five CI jobs pass; a push to `dev` is reported on, not blocked
