@@ -13,7 +13,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import characterService from '@/services/character.service';
 import { useCampaignsQuery, useCharactersQuery, queryKeys, toCharacterSummary } from '@/hooks/queries';
 import CharacterCard from '@/components/character/CharacterCard';
-import NewCharacterModal from '@/components/character/NewCharacterModal';
+import NewCharacterModal, { type TemplatePublishFailure } from '@/components/character/NewCharacterModal';
 import DeleteCharacterModal from '@/components/character/DeleteCharacterModal';
 import AssignCharacterModal from '@/components/character/AssignCharacterModal';
 import ImportCharacterModal from '@/components/character/ImportCharacterModal';
@@ -62,10 +62,20 @@ export default function CharactersPage() {
     queryClient.setQueryData<CharacterSummary[]>(queryKeys.characters, (prev) => updater(prev ?? []));
   };
 
-  const handleCharacterCreated = (newCharacter: Character) => {
+  const handleCharacterCreated = (newCharacter: Character, templateFailure?: TemplatePublishFailure) => {
     setCharactersData((prev) => [toCharacterSummary(newCharacter), ...prev]);
+    if (templateFailure) {
+      // The dialog has closed, so the page says the half that did not happen.
+      const reason = templateFailure.reason?.trim();
+      let because = '.';
+      if (reason) because = /[.!?]$/.test(reason) ? `: ${reason}` : `: ${reason}.`;
+      showToast(
+        `${newCharacter.name} was created, but it was not published as a template${because} You can retry with "Save as Template" in the editor.`,
+        'warning'
+      );
+      return;
+    }
     showSuccess('Character created successfully!');
-    // Note: For now we just close the modal.
   };
 
   const [viewingCharacter, setViewingCharacter] = useState<Character | null>(null);
