@@ -16,7 +16,7 @@ import { CallOfCthulhu7eCharacterView } from '../call-of-cthulhu-7e/CallOfCthulh
 import { dnd5eCharacter } from '../dnd5e/__tests__/dnd5eFixture';
 import { pf2eCharacter } from '../pathfinder2e/__tests__/pf2eFixture';
 import { cocCharacter } from '../call-of-cthulhu-7e/__tests__/cocFixture';
-import { shouldUseWhiteText } from '@/utils/themeColor';
+import { headerInk, shouldUseWhiteText } from '@/utils/themeColor';
 import { parseRgb, readableTextOn, relativeLuminance } from '@/utils/color';
 
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
@@ -43,7 +43,8 @@ describe.each([
     const paleText = [...top.querySelectorAll('[class*="text-white"]')].filter((element) => !element.closest('.bg-black\\/70'));
     expect(paleText).toEqual([]);
     const edit = screen.getByRole('button', { name: /Edit/ });
-    expect(edit.className).toContain('bg-black/10');
+    // The fill under its label is the shared one for a pale header (headerInk).
+    expect(edit.className).toContain(headerInk('#ffffff').button);
     expect(edit.className).not.toContain('text-white');
   });
 

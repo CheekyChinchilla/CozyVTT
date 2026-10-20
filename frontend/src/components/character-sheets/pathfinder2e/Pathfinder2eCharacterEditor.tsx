@@ -59,7 +59,7 @@ import {
   pf2eMaxHitPoints,
 } from '@/utils/rules/pathfinder2e';
 import { readFeatureEntries, readFeatureEntriesForEditing } from '@/utils/featureEntries';
-import { toStoredHexColor, HEX_COLOUR_HINT, shouldUseWhiteText } from '@/utils/themeColor';
+import { toStoredHexColor, HEX_COLOUR_HINT, headerInk } from '@/utils/themeColor';
 import {
   readPf2eSpellSlots,
   readPf2eCantrips,
@@ -916,8 +916,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
 
   const renderHeader = () => {
     const headerStyle = isCustomColor ? { background: `linear-gradient(to right, ${customColorHex}, ${customColorHex}dd)` } : {};
-    const headerTextColor = isCustomColor ? (shouldUseWhiteText(customColorHex) ? 'text-white' : 'text-black') : (shouldUseWhiteText(selectedColor.hex) ? 'text-white' : 'text-black');
-    const headerHintColor = headerTextColor === 'text-white' ? 'text-white/90' : 'text-black/80';
+    // Text and buttons on the header follow its colour.
+    const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
+    const headerTextColor = ink.text;
+    const headerHintColor = ink.soft;
     const headerClasses = isCustomColor ? `${headerTextColor} p-6 rounded-t-lg relative` : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
 
     return (
@@ -937,14 +939,14 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg"
+            className={`px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
           >
             <X className="w-4 h-4" />
             <span>Cancel</span>
           </button>
         </div>
 
-        <button onClick={() => setShowColorPicker(!showColorPicker)} className="absolute top-4 right-4 p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors" title="Change theme color">
+        <button onClick={() => setShowColorPicker(!showColorPicker)} className={`absolute top-4 right-4 p-2 ${ink.button} rounded-lg transition-colors`} title="Change theme color">
           <Palette className="w-5 h-5" />
         </button>
 

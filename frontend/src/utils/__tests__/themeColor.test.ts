@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { shouldUseWhiteText, toStoredHexColor } from '../themeColor';
+import { headerInk, shouldUseWhiteText, toStoredHexColor } from '../themeColor';
+import { AA_TEXT, contrastRatio } from '../color';
 import { THEME_COLOR_PATTERN } from '../styleAllowlists';
 import { COLOR_PRESETS as DND5E } from '@/components/character-sheets/dnd5e/colorPresets';
 import { COLOR_PRESETS as PF2E } from '@/components/character-sheets/pathfinder2e/colorPresets';
@@ -16,6 +17,42 @@ describe('shouldUseWhiteText', () => {
 
   it('reads the colour with or without its #', () => {
     expect(shouldUseWhiteText('1d4ed8')).toBe(shouldUseWhiteText('#1d4ed8'));
+  });
+});
+
+// A button or chip on a sheet header is the header with a translucent white or
+// black laid over it, and its label is the header's text colour. Lightening
+// behind white text took the Call of Cthulhu Dark Forest header's Edit and
+// Cancel to 4.47:1 where its gradient is lightest (green-800, #166534).
+describe('headerInk fills', () => {
+  const rgb = (hex: string): [number, number, number] =>
+    [0, 2, 4].map((at) => parseInt(hex.replace('#', '').slice(at, at + 2), 16)) as [number, number, number];
+  const fills = (classes: string) =>
+    [...classes.matchAll(/bg-(white|black)\/(\d+)/g)].map(([, tone, percent]) => ({ tone: tone === 'white' ? 255 : 0, alpha: Number(percent) / 100 }));
+  const under = (header: [number, number, number], fill: { tone: number; alpha: number }) =>
+    header.map((c) => c * (1 - fill.alpha) + fill.tone * fill.alpha) as [number, number, number];
+  const labelOf = (hex: string) => (headerInk(hex).text === 'text-white' ? [255, 255, 255] : [0, 0, 0]) as [number, number, number];
+
+  const greys = Array.from({ length: 52 }, (_, i) => `#${(i * 5).toString(16).padStart(2, '0').repeat(3)}`);
+  const headers = [...DND5E, ...PF2E, ...COC7E].map((preset) => preset.hex).concat(greys, ['#166534', '#ffeecc', '#d97706', '#7c3aed']);
+
+  it('never take the label below what it reads on the bare header', () => {
+    for (const hex of headers) {
+      const ink = headerInk(hex);
+      const label = labelOf(hex);
+      const bare = contrastRatio(label, rgb(hex));
+      for (const fill of [ink.button, ink.chip, ink.chipFaint].flatMap(fills)) {
+        expect(contrastRatio(label, under(rgb(hex), fill)), `${hex} under ${fill.tone ? 'white' : 'black'}/${fill.alpha}`).toBeGreaterThanOrEqual(bare);
+      }
+    }
+  });
+
+  it('keep the Dark Forest Edit and Cancel labels readable at the light end of its gradient', () => {
+    const forest = COC7E.find((preset) => preset.name === 'Dark Forest')!;
+    const ink = headerInk(forest.hex);
+    for (const fill of fills(ink.button)) {
+      expect(contrastRatio(labelOf(forest.hex), under(rgb('#166534'), fill))).toBeGreaterThanOrEqual(AA_TEXT);
+    }
   });
 });
 
