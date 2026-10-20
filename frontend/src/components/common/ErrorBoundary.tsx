@@ -29,7 +29,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     this.setState({ errorInfo });
     // Logged whole for developers: a render error is thrown by the page's own
     // code and carries no request, and its stack says where.
@@ -44,7 +44,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     this.setState({ hasError: false, error: null, errorInfo: null });
   };
 
-  render() {
+  override render() {
     if (!this.state.hasError) return this.props.children;
 
     if (this.props.fallback) return this.props.fallback;
