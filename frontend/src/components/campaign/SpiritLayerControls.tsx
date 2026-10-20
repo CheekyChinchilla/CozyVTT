@@ -286,7 +286,7 @@ export default function SpiritLayerControls({ isOpen, onClose }: SpiritLayerCont
               disabled={isTogglingLayer}
               className={`relative flex items-center gap-2 px-4 py-2 rounded-cozy font-medium text-sm transition-colors ${
                 enabled
-                  ? 'bg-spirit-purple text-white hover:bg-spirit-purple/80'
+                  ? 'bg-spirit/15 border border-spirit/40 text-spirit-ink hover:bg-spirit/25'
                   : 'bg-transparent border border-brand text-brand-ink hover:bg-brand hover:text-brand-text focus:outline-hidden focus:ring-2 focus:ring-brand focus:ring-offset-2'
               }`}
               title={enabled ? 'Close the veil' : 'Open the veil'}

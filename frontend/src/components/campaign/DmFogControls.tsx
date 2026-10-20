@@ -174,7 +174,7 @@ export default function DmFogControls({
           onClick={handleHideAll}
           className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmHideAll
-              ? 'bg-warning text-white animate-pulse'
+              ? 'bg-warning text-stone-900 animate-pulse'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
           }`}
           title={confirmHideAll ? 'Click again to confirm: hide entire map' : 'Hide all — cover entire map with fog'}
@@ -194,7 +194,7 @@ export default function DmFogControls({
             onClick={handleResetExploration}
             className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
               confirmReset
-                ? 'bg-warning text-white animate-pulse'
+                ? 'bg-warning text-stone-900 animate-pulse'
                 : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
             }`}
             title={confirmReset ? 'Click again to confirm: forget what every player has seen' : 'Reset explored areas: players forget what they have seen of this map'}

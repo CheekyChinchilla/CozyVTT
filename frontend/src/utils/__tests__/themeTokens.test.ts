@@ -91,24 +91,32 @@ describe('themed surfaces use semantic tokens', () => {
   // A label on a solid brand or danger fill: white fell under 4.5:1 on the
   // brand in four themes, and on danger in four dark ones. The brand takes
   // the derived brand-text label, and a white label the danger-fill.
-  it('labels a solid brand or danger fill with the label derived for it', () => {
-    const STRING = /"([^"]*)"|'([^'\n]*)'|`([^`]*)`/g;
+  it('labels a solid brand, danger or state fill with a label that reads on it', () => {
+    // Plain strings, and lines: a template literal's branches each hold a
+    // fill and its own label, so the template as a whole is not one class list.
+    const STRING = /"([^"]*)"|'([^'\n]*)'/g;
     // The variant prefixes (`hover:` and the rest) a class is used under.
     const prefixes = (classes: string, re: RegExp) =>
       new Set(classes.split(/\s+/).flatMap((c) => { const m = re.exec(c); return m ? [m[1]] : []; }));
     const BRAND_FILL = /^((?:[\w-]+:)*)bg-(?:brand|moss-green)$/;
     const DANGER_FILL = /^((?:[\w-]+:)*)bg-(?:danger|spirit-red)$/;
+    // White fails on the spirit, success, warning and info fills in most
+    // themes; they take the soft tint and -ink text instead, as in the sheets.
+    const STATE_FILL = /^((?:[\w-]+:)*)bg-(?:success|warning|info|spirit|spirit-purple)$/;
     const WHITE = /^((?:[\w-]+:)*)text-(?:white|paper-white|canvas)$/;
     const found: string[] = [];
     for (const [path, source] of Object.entries(SOURCES)) {
-      for (const m of source.matchAll(STRING)) {
-        const classes = m[1] ?? m[2] ?? m[3] ?? '';
+      // Each quoted string, and each line too: an apostrophe in a comment or
+      // in text can pair the quotes wrongly.
+      const pieces = [...[...source.matchAll(STRING)].map((m) => m[1] ?? m[2] ?? ''), ...source.split('\n')];
+      for (const piece of pieces) {
+        const classes = piece.replace(/['"`{}]/g, ' ');
         const white = prefixes(classes, WHITE);
-        const fills = [...prefixes(classes, BRAND_FILL), ...prefixes(classes, DANGER_FILL)];
+        const fills = [...prefixes(classes, BRAND_FILL), ...prefixes(classes, DANGER_FILL), ...prefixes(classes, STATE_FILL)];
         if (fills.some((p) => white.has(p))) found.push(`${path}: ${classes.trim().slice(0, 80)}`);
       }
     }
-    expect(found).toEqual([]);
+    expect([...new Set(found)]).toEqual([]);
   });
 
   // Tailwind generates only class names written out in full in the source, so

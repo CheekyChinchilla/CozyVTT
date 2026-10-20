@@ -1494,7 +1494,7 @@ export default function AdminPage() {
                                         <button
                                           onClick={() => handleResetMfa(u.id)}
                                           disabled={isResettingMfa}
-                                          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium bg-warning text-white hover:bg-warning disabled:opacity-50 transition-colors"
+                                          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium bg-warning/15 border border-warning/30 text-warning-ink hover:bg-warning/25 disabled:opacity-50 transition-colors"
                                         >
                                           {isResettingMfa && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                           Confirm Reset

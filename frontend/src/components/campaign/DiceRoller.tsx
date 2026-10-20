@@ -834,7 +834,7 @@ export default function DiceRoller() {
               disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
               className="
                 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
-                bg-success hover:bg-success text-white font-semibold text-xs shadow-xs
+                bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200
                 focus:outline-hidden focus:ring-2 focus:ring-success/50

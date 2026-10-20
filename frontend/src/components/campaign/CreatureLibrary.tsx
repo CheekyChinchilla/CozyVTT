@@ -762,9 +762,10 @@ function CreatureRow({
             />
           ) : (
             <div
-              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white font-bold text-sm ${
-                creature.disposition === 'hostile' ? 'bg-danger-fill' :
-                creature.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${
+                creature.disposition === 'hostile' ? 'bg-danger-fill text-white' :
+                creature.disposition === 'friendly' ? 'bg-teal-700 text-white' :
+                'bg-warning text-black'
               }`}
             >
               {creature.name.charAt(0).toUpperCase()}

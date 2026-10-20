@@ -677,7 +677,7 @@ export default function EditMapModal({
                         <button
                           type="button"
                           onClick={applyDetectedGrid}
-                          className="text-xs px-2 py-1 bg-warning text-white rounded-sm hover:bg-warning transition-colors"
+                          className="text-xs px-2 py-1 bg-warning/15 border border-warning/30 text-warning-ink rounded-sm hover:bg-warning/25 transition-colors"
                         >
                           Apply
                         </button>
