@@ -7,7 +7,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   X,
   Search,
@@ -41,6 +40,7 @@ import { PF2E_ATTRIBUTE_LABELS, readAttributeModifiers } from './npc-stat-blocks
 import { ABILITY_KEYS, CHALLENGE_RATINGS, type AbilityKey } from '@/utils/rules/dnd5e';
 import { GAME_SYSTEM_SHORT_LABELS } from '@/constants/game-systems';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { extractAssetId } from '@/utils/assetUrl';
@@ -392,329 +392,309 @@ export default function CreatureLibrary({ isOpen, onClose }: CreatureLibraryProp
 
   return (
     <>
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="creature-lib-backdrop"
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
+    <SlideOver
+      open={isOpen}
+      onClose={onClose}
+      side="left"
+      backdropClassName="bg-black/40"
+      className="max-w-md bg-paper-white shadow-2xl flex flex-col"
+    >
+      {/* ── Header ── */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
+        <Skull className="w-5 h-5 text-brand-ink shrink-0" />
+        <SlideOverTitle className="flex-1 text-base font-bold text-brand-ink">
+          Creature Library
+        </SlideOverTitle>
+        <span className="text-xs text-stone-gray/60">
+          {total} creature{total !== 1 ? 's' : ''}
+        </span>
+        <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" title="Close" />
+      </div>
+
+      {/* ── Search & Filters ── */}
+      <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
+        {/* Search bar */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-gray/50" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search creatures..."
+            className="input-cozy w-full pl-8 text-sm"
           />
+        </div>
 
-          {/* Panel */}
-          <motion.div
-            key="creature-lib-panel"
-            className="fixed left-0 top-0 h-full z-50 w-full max-w-md bg-paper-white shadow-2xl flex flex-col"
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          >
-            {/* ── Header ── */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <Skull className="w-5 h-5 text-brand-ink shrink-0" />
-              <h2 className="flex-1 text-base font-bold text-brand-ink">
-                Creature Library
-              </h2>
-              <span className="text-xs text-stone-gray/60">
-                {total} creature{total !== 1 ? 's' : ''}
-              </span>
-              <Button onClick={onClose} variant="secondary" className="p-1.5 shrink-0" title="Close">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+        {/* Filter toggle */}
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+        >
+          {showFilters ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+          Filters
+        </button>
 
-            {/* ── Search & Filters ── */}
-            <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
-              {/* Search bar */}
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-gray/50" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search creatures..."
-                  className="input-cozy w-full pl-8 text-sm"
-                />
-              </div>
-
-              {/* Filter toggle */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+        {/* Filter controls */}
+        {showFilters && (
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              <select
+                value={sourceFilter}
+                onChange={(e) => setSourceFilter(e.target.value)}
+                className="input-cozy text-xs flex-1"
               >
-                {showFilters ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                Filters
-              </button>
-
-              {/* Filter controls */}
-              {showFilters && (
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <select
-                      value={sourceFilter}
-                      onChange={(e) => setSourceFilter(e.target.value)}
-                      className="input-cozy text-xs flex-1"
-                    >
-                      {SOURCE_FILTERS.map((f) => (
-                        <option key={f.value} value={f.value}>{f.label}</option>
-                      ))}
-                    </select>
-                    <select
-                      value={crFilter}
-                      onChange={(e) => setCrFilter(e.target.value)}
-                      className="input-cozy text-xs w-20"
-                    >
-                      <option value="">All CR</option>
-                      {CR_OPTIONS.map((cr) => (
-                        <option key={cr} value={cr}>CR {cr}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {/* Only meaningful when the campaign has a system to match. */}
-                  {campaign?.gameSystem && (
-                    <select
-                      aria-label="Game system filter"
-                      value={matchGameSystem ? 'campaign' : 'all'}
-                      onChange={(e) => setMatchGameSystem(e.target.value === 'campaign')}
-                      className="input-cozy text-xs w-full"
-                    >
-                      <option value="campaign">
-                        {GAME_SYSTEM_SHORT_LABELS[campaign.gameSystem]} only (this campaign)
-                      </option>
-                      <option value="all">All game systems</option>
-                    </select>
-                  )}
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowCreateForm(true)}
-                  className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> Create Custom
-                </button>
-                {/* The label names the system it imports: this seeds the D&D 5e
-                    bestiary whatever the campaign's system, which was not
-                    obvious from a bare "Import SRD Creatures". */}
-                {srdCount === 0 && canSeed && (
-                  <button
-                    onClick={handleSeedSrd}
-                    disabled={isSeeding}
-                    className="flex items-center gap-1 text-xs text-info-ink hover:text-info-ink transition-colors"
-                  >
-                    {isSeeding ? (
-                      <><Loader2 className="w-3 h-3 animate-spin" /> Seeding...</>
-                    ) : (
-                      <><BookOpen className="w-3 h-3" /> Import D&amp;D 5e SRD</>
-                    )}
-                  </button>
-                )}
-              </div>
-              {seedResult && (
-                <div className="text-[10px] text-success-ink bg-success/10 rounded-sm px-2 py-1">
-                  {seedResult}
-                </div>
-              )}
+                {SOURCE_FILTERS.map((f) => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
+              </select>
+              <select
+                value={crFilter}
+                onChange={(e) => setCrFilter(e.target.value)}
+                className="input-cozy text-xs w-20"
+              >
+                <option value="">All CR</option>
+                {CR_OPTIONS.map((cr) => (
+                  <option key={cr} value={cr}>CR {cr}</option>
+                ))}
+              </select>
             </div>
-
-            {/* ── Error ── */}
-            {[error, seedError].filter(Boolean).map((message) => (
-              <div key={message} className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
-                {message}
-              </div>
-            ))}
-
-            {/* ── Favorites Section ── */}
-            {favoriteCreatures.length > 0 && (
-              <div className="border-b border-moss-green/20">
-                <button
-                  onClick={() => setShowFavorites(!showFavorites)}
-                  className="w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
-                >
-                  <div className="flex items-center gap-2">
-                    <Star className="w-3.5 h-3.5 text-warning-ink fill-warning" />
-                    <span className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
-                      Favorites
-                    </span>
-                    <span className="text-[10px] text-stone-gray/50">({favoriteCreatures.length})</span>
-                  </div>
-                  {showFavorites ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-stone-gray/40" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-stone-gray/40" />
-                  )}
-                </button>
-                {showFavorites && (
-                  <div className="divide-y divide-moss-green/10 bg-warning/2">
-                    {isLoadingFavorites ? (
-                      <div className="flex items-center gap-2 text-stone-gray text-xs py-3 px-4">
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Loading favorites...
-                      </div>
-                    ) : (
-                      favoriteCreatures.map((creature) => (
-                        <CreatureRow
-                          key={`fav-${creature.id}`}
-                          creature={creature}
-                          isExpanded={expandedId === creature.id}
-                          isPlacing={placingId === creature.id}
-                          isFavorite={true}
-                          gameSystem={campaign?.gameSystem ?? null}
-                          onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
-                          onPlace={() => handlePlace(creature)}
-                          onDuplicate={() => handleDuplicate(creature.id)}
-                          onDelete={() => setCreatureToDelete(creature)}
-                          onToggleFavorite={() => handleToggleFavorite(creature.id)}
-                          onEdit={() => handleEdit(creature)}
-                        />
-                      ))
-                    )}
-                    <p className="text-[9px] text-stone-gray/40 px-4 py-1.5 italic">
-                      Favorites are per campaign
-                    </p>
-                  </div>
-                )}
-              </div>
+            {/* Only meaningful when the campaign has a system to match. */}
+            {campaign?.gameSystem && (
+              <select
+                aria-label="Game system filter"
+                value={matchGameSystem ? 'campaign' : 'all'}
+                onChange={(e) => setMatchGameSystem(e.target.value === 'campaign')}
+                className="input-cozy text-xs w-full"
+              >
+                <option value="campaign">
+                  {GAME_SYSTEM_SHORT_LABELS[campaign.gameSystem]} only (this campaign)
+                </option>
+                <option value="all">All game systems</option>
+              </select>
             )}
+          </div>
+        )}
 
-            {/* ── Creature List ── */}
-            <div className="flex-1 overflow-y-auto">
-              {isLoading && creatures.length === 0 ? (
-                <div className="flex items-center justify-center py-12 text-stone-gray">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Loading creatures...
-                </div>
-              ) : creatures.length === 0 ? (
-                <div className="text-center py-12 px-6">
-                  <Skull className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
-                  <p className="text-sm text-stone-gray/70">
-                    {searchQuery ? 'No creatures match your search.' : 'No creatures in the library yet.'}
-                  </p>
-                  {/* The likeliest reason a non-D&D campaign looks empty: only
-                      D&D 5e ships SRD content, and the library defaults to this
-                      campaign's system. Say so rather than looking broken. */}
-                  {!searchQuery && matchGameSystem && campaign?.gameSystem && (srdCount ?? 0) > 0 && (
-                    <p className="mt-2 text-xs text-stone-gray/60">
-                      Showing {GAME_SYSTEM_SHORT_LABELS[campaign.gameSystem]} creatures only.{' '}
-                      <button
-                        type="button"
-                        onClick={() => { setMatchGameSystem(false); setShowFilters(true); }}
-                        className="underline hover:text-brand-ink"
-                      >
-                        Show all game systems
-                      </button>{' '}
-                      to browse creatures from other systems.
-                    </p>
-                  )}
-                  {!searchQuery && srdCount === 0 && !canSeed && (
-                    <p className="mt-4 text-xs text-stone-gray/60">
-                      The ~320 official D&amp;D 5e SRD creatures have not been imported on this server.
-                      Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
-                    </p>
-                  )}
-                  {!searchQuery && srdCount === 0 && canSeed && (
-                    <div className="mt-4 space-y-2">
-                      <p className="text-xs text-stone-gray/60">
-                        Import ~320 official D&D 5e SRD creatures with full stat blocks, for every campaign on this server.
-                      </p>
-                      <Button
-                        onClick={handleSeedSrd}
-                        disabled={isSeeding}
-                        className="text-xs py-2 px-4"
-                      >
-                        {isSeeding ? (
-                          <><Loader2 className="w-3 h-3 animate-spin inline mr-1" /> Importing from Open5e...</>
-                        ) : (
-                          'Import D&D 5e SRD Creatures'
-                        )}
-                      </Button>
-                      <SrdCredit />
-                    </div>
-                  )}
-                  {!searchQuery && (srdCount === null || srdCount > 0) && (
-                    <p className="text-xs text-stone-gray/50 mt-1">
-                      Try adjusting your filters, or create a custom creature.
-                    </p>
-                  )}
+        {/* Action buttons */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+          >
+            <Plus className="w-3 h-3" /> Create Custom
+          </button>
+          {/* The label names the system it imports: this seeds the D&D 5e
+              bestiary whatever the campaign's system, which was not
+              obvious from a bare "Import SRD Creatures". */}
+          {srdCount === 0 && canSeed && (
+            <button
+              onClick={handleSeedSrd}
+              disabled={isSeeding}
+              className="flex items-center gap-1 text-xs text-info-ink hover:text-info-ink transition-colors"
+            >
+              {isSeeding ? (
+                <><Loader2 className="w-3 h-3 animate-spin" /> Seeding...</>
+              ) : (
+                <><BookOpen className="w-3 h-3" /> Import D&amp;D 5e SRD</>
+              )}
+            </button>
+          )}
+        </div>
+        {seedResult && (
+          <div className="text-[10px] text-success-ink bg-success/10 rounded-sm px-2 py-1">
+            {seedResult}
+          </div>
+        )}
+      </div>
+
+      {/* ── Error ── */}
+      {[error, seedError].filter(Boolean).map((message) => (
+        <div key={message} className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
+          {message}
+        </div>
+      ))}
+
+      {/* ── Favorites Section ── */}
+      {favoriteCreatures.length > 0 && (
+        <div className="border-b border-moss-green/20">
+          <button
+            onClick={() => setShowFavorites(!showFavorites)}
+            className="w-full flex items-center justify-between px-4 py-2 hover:bg-moss-green/5 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Star className="w-3.5 h-3.5 text-warning-ink fill-warning" />
+              <span className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
+                Favorites
+              </span>
+              <span className="text-[10px] text-stone-gray/50">({favoriteCreatures.length})</span>
+            </div>
+            {showFavorites ? (
+              <ChevronDown className="w-3.5 h-3.5 text-stone-gray/40" />
+            ) : (
+              <ChevronRight className="w-3.5 h-3.5 text-stone-gray/40" />
+            )}
+          </button>
+          {showFavorites && (
+            <div className="divide-y divide-moss-green/10 bg-warning/2">
+              {isLoadingFavorites ? (
+                <div className="flex items-center gap-2 text-stone-gray text-xs py-3 px-4">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Loading favorites...
                 </div>
               ) : (
-                <div className="divide-y divide-moss-green/10">
-                  {creatures.map((creature) => (
-                    <CreatureRow
-                      key={creature.id}
-                      creature={creature}
-                      isExpanded={expandedId === creature.id}
-                      isPlacing={placingId === creature.id}
-                      isFavorite={favoriteIds.has(creature.id)}
-                      gameSystem={campaign?.gameSystem ?? null}
-                      onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
-                      onPlace={() => handlePlace(creature)}
-                      onDuplicate={() => handleDuplicate(creature.id)}
-                      onDelete={() => setCreatureToDelete(creature)}
-                      onToggleFavorite={() => handleToggleFavorite(creature.id)}
-                      onEdit={() => handleEdit(creature)}
-                    />
-                  ))}
-
-                  {/* Load more */}
-                  {hasMore && (
-                    <div className="p-4 text-center">
-                      <Button
-                        onClick={handleLoadMore}
-                        disabled={isLoading}
-                        variant="secondary" className="text-xs"
-                      >
-                        {isLoading ? (
-                          <>
-                            <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
-                            Loading...
-                          </>
-                        ) : (
-                          `Load More (${creatures.length} of ${total})`
-                        )}
-                      </Button>
-                    </div>
-                  )}
-                </div>
+                favoriteCreatures.map((creature) => (
+                  <CreatureRow
+                    key={`fav-${creature.id}`}
+                    creature={creature}
+                    isExpanded={expandedId === creature.id}
+                    isPlacing={placingId === creature.id}
+                    isFavorite={true}
+                    gameSystem={campaign?.gameSystem ?? null}
+                    onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
+                    onPlace={() => handlePlace(creature)}
+                    onDuplicate={() => handleDuplicate(creature.id)}
+                    onDelete={() => setCreatureToDelete(creature)}
+                    onToggleFavorite={() => handleToggleFavorite(creature.id)}
+                    onEdit={() => handleEdit(creature)}
+                  />
+                ))
               )}
+              <p className="text-[9px] text-stone-gray/40 px-4 py-1.5 italic">
+                Favorites are per campaign
+              </p>
             </div>
-            {creatures.some((c) => c.source === 'srd') && (
-              <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
-            )}
-
-            {/* ── Create / Edit Custom Form (inline) ── */}
-            {showCreateForm && (
-              // Keyed on the creature being edited so switching directly from
-              // one creature to another remounts the form. handleEdit leaves
-              // showCreateForm true, so without this the form kept the previous
-              // creature's field state and saving wrote those stats onto the
-              // newly selected creature.
-              <CreatureForm
-                key={editingCreature?.id ?? 'new'}
-                campaignId={campaign?.id || ''}
-                gameSystem={campaign?.gameSystem ?? null}
-                editingCreature={editingCreature}
-                onCreated={(creature) => {
-                  setCreatures((prev) => [creature, ...prev]);
-                  setTotal((prev) => prev + 1);
-                  setShowCreateForm(false);
-                  setEditingCreature(null);
-                }}
-                onEdited={handleEdited}
-                onCancel={() => { setShowCreateForm(false); setEditingCreature(null); }}
-              />
-            )}
-          </motion.div>
-        </>
+          )}
+        </div>
       )}
-    </AnimatePresence>
+
+      {/* ── Creature List ── */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading && creatures.length === 0 ? (
+          <div className="flex items-center justify-center py-12 text-stone-gray">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Loading creatures...
+          </div>
+        ) : creatures.length === 0 ? (
+          <div className="text-center py-12 px-6">
+            <Skull className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
+            <p className="text-sm text-stone-gray/70">
+              {searchQuery ? 'No creatures match your search.' : 'No creatures in the library yet.'}
+            </p>
+            {/* The likeliest reason a non-D&D campaign looks empty: only
+                D&D 5e ships SRD content, and the library defaults to this
+                campaign's system. Say so rather than looking broken. */}
+            {!searchQuery && matchGameSystem && campaign?.gameSystem && (srdCount ?? 0) > 0 && (
+              <p className="mt-2 text-xs text-stone-gray/60">
+                Showing {GAME_SYSTEM_SHORT_LABELS[campaign.gameSystem]} creatures only.{' '}
+                <button
+                  type="button"
+                  onClick={() => { setMatchGameSystem(false); setShowFilters(true); }}
+                  className="underline hover:text-brand-ink"
+                >
+                  Show all game systems
+                </button>{' '}
+                to browse creatures from other systems.
+              </p>
+            )}
+            {!searchQuery && srdCount === 0 && !canSeed && (
+              <p className="mt-4 text-xs text-stone-gray/60">
+                The ~320 official D&amp;D 5e SRD creatures have not been imported on this server.
+                Only an administrator can import them, since every campaign shares them. Ask an administrator to import them.
+              </p>
+            )}
+            {!searchQuery && srdCount === 0 && canSeed && (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs text-stone-gray/60">
+                  Import ~320 official D&D 5e SRD creatures with full stat blocks, for every campaign on this server.
+                </p>
+                <Button
+                  onClick={handleSeedSrd}
+                  disabled={isSeeding}
+                  className="text-xs py-2 px-4"
+                >
+                  {isSeeding ? (
+                    <><Loader2 className="w-3 h-3 animate-spin inline mr-1" /> Importing from Open5e...</>
+                  ) : (
+                    'Import D&D 5e SRD Creatures'
+                  )}
+                </Button>
+                <SrdCredit />
+              </div>
+            )}
+            {!searchQuery && (srdCount === null || srdCount > 0) && (
+              <p className="text-xs text-stone-gray/50 mt-1">
+                Try adjusting your filters, or create a custom creature.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="divide-y divide-moss-green/10">
+            {creatures.map((creature) => (
+              <CreatureRow
+                key={creature.id}
+                creature={creature}
+                isExpanded={expandedId === creature.id}
+                isPlacing={placingId === creature.id}
+                isFavorite={favoriteIds.has(creature.id)}
+                gameSystem={campaign?.gameSystem ?? null}
+                onToggle={() => setExpandedId(expandedId === creature.id ? null : creature.id)}
+                onPlace={() => handlePlace(creature)}
+                onDuplicate={() => handleDuplicate(creature.id)}
+                onDelete={() => setCreatureToDelete(creature)}
+                onToggleFavorite={() => handleToggleFavorite(creature.id)}
+                onEdit={() => handleEdit(creature)}
+              />
+            ))}
+
+            {/* Load more */}
+            {hasMore && (
+              <div className="p-4 text-center">
+                <Button
+                  onClick={handleLoadMore}
+                  disabled={isLoading}
+                  variant="secondary" className="text-xs"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+                      Loading...
+                    </>
+                  ) : (
+                    `Load More (${creatures.length} of ${total})`
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      {creatures.some((c) => c.source === 'srd') && (
+        <SrdCredit className="px-4 py-2 border-t border-moss-green/10" />
+      )}
+
+      {/* ── Create / Edit Custom Form (inline) ── */}
+      {showCreateForm && (
+        // Keyed on the creature being edited so switching directly from
+        // one creature to another remounts the form. handleEdit leaves
+        // showCreateForm true, so without this the form kept the previous
+        // creature's field state and saving wrote those stats onto the
+        // newly selected creature.
+        <CreatureForm
+          key={editingCreature?.id ?? 'new'}
+          campaignId={campaign?.id || ''}
+          gameSystem={campaign?.gameSystem ?? null}
+          editingCreature={editingCreature}
+          onCreated={(creature) => {
+            setCreatures((prev) => [creature, ...prev]);
+            setTotal((prev) => prev + 1);
+            setShowCreateForm(false);
+            setEditingCreature(null);
+          }}
+          onEdited={handleEdited}
+          onCancel={() => { setShowCreateForm(false); setEditingCreature(null); }}
+        />
+      )}
+    </SlideOver>
     <ConfirmDialog
       isOpen={creatureToDelete !== null}
       title="Delete creature"

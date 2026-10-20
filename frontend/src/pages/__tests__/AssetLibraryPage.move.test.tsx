@@ -95,7 +95,7 @@ it('slides the detail panel out when it is closed', async () => {
   await userEvent.click(await screen.findByRole('button', { name: /^View / }));
   expect(await screen.findByText('Move to…')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Close details' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Close' }));
 
   // Still on screen as it leaves, then gone.
   expect(screen.getByText('Move to…')).toBeInTheDocument();

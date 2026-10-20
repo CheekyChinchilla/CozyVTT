@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 
 const patchAssetScope = vi.hoisted(() => vi.fn());
 const me = vi.hoisted(() => ({ user: { id: 'u1', platformRole: 'USER', globalAssetManager: false } }));
@@ -161,3 +161,16 @@ describe('a preview that fails to load', () => {
   });
 });
 
+describe('the asset details panel as a dialog', () => {
+  it('is announced by name, and Escape and its Close button close it', async () => {
+    const onClose = vi.fn();
+    render(<AssetDetailPanel asset={asset} onClose={onClose} onDelete={vi.fn()} />);
+    const dialog = screen.getByRole('dialog', { name: 'Rules' });
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});

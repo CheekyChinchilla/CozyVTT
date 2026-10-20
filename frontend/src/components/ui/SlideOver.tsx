@@ -51,7 +51,12 @@ export default function SlideOver({
   children,
 }: SlideOverProps) {
   const titleId = useId();
-  const panelRef = useFocusTrap(open, onClose);
+  // Escape closes from inside a field. Leave the field first, as clicking
+  // Close does, so a field that saves when it is left saves its value.
+  const panelRef = useFocusTrap(open, () => {
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    onClose();
+  });
   const offscreen = side === 'right' ? '100%' : '-100%';
   const panelExit = useMotionExit({ x: offscreen, opacity: 0 });
 

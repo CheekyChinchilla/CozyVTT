@@ -10,7 +10,7 @@
  */
 
 import { it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, act, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('framer-motion', () => {
@@ -85,4 +85,16 @@ it('keeps a veil opened while a style was being saved', async () => {
   rerender(<SpiritLayerControls isOpen onClose={() => {}} />);
   await act(async () => { answer(); });
   expect(updateCampaignSpiritLayer).toHaveBeenLastCalledWith(true, 'shadow');
+});
+
+it('is announced by name, and Escape and its Close button close it', async () => {
+  const onClose = vi.fn();
+  render(<SpiritLayerControls isOpen onClose={onClose} />);
+  const dialog = screen.getByRole('dialog', { name: 'Spirit Layer' });
+
+  fireEvent.keyDown(dialog, { key: 'Escape' });
+  expect(onClose).toHaveBeenCalledTimes(1);
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(onClose).toHaveBeenCalledTimes(2);
 });

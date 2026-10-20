@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
   Settings,
@@ -31,6 +30,7 @@ import InvitePlayerModal from './InvitePlayerModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import type { CampaignMembership, CampaignInvitationSummary } from '@/types';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
@@ -267,500 +267,482 @@ export default function CampaignSettingsModal({
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
-            onClick={onClose}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="absolute right-0 top-0 h-full w-full max-w-xl bg-paper-white shadow-2xl flex flex-col"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* ── Header ── */}
-              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4 shrink-0">
+      <SlideOver
+        open={isOpen}
+        onClose={onClose}
+        className="max-w-xl bg-paper-white shadow-2xl flex flex-col"
+      >
+        {/* ── Header ── */}
+        <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4 shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Settings className="w-6 h-6 text-brand-ink" />
+              <div>
+                <SlideOverTitle className="text-xl font-bold text-brand-ink">Campaign Settings</SlideOverTitle>
+                <p className="text-xs text-stone-gray truncate max-w-[220px]">{campaign.name}</p>
+              </div>
+            </div>
+            <SlideOverClose
+              className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
+              iconClassName="w-5 h-5 text-stone-gray"
+            />
+          </div>
+
+          {/* ── Tabs ── */}
+          <div className="flex gap-1 mt-4">
+            {(
+              [
+                ...(isDmViewer
+                  ? [
+                      { id: 'general', label: 'General' },
+                      { id: 'chat', label: 'Chat' },
+                    ]
+                  : []),
+                { id: 'members', label: 'Members' },
+                // Only Delete Campaign is here, which the server leaves
+                // to the owner or an administrator, whatever their role.
+                ...(mayDelete ? [{ id: 'danger', label: 'Danger Zone' }] : []),
+              ] as { id: SettingsTab; label: string }[]
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
+                  activeTab === tab.id
+                    ? tab.id === 'danger'
+                      ? 'bg-danger/10 text-danger-ink border border-danger/20'
+                      : 'bg-moss-green/15 text-brand-ink border border-moss-green/20'
+                    : 'text-stone-gray hover:bg-warm-gray/10'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Content ── */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+
+          {/* ════ GENERAL TAB ════ */}
+          {activeTab === 'general' && (
+            <div className="space-y-5">
+              <div>
+                <label
+                  htmlFor="cs-name"
+                  className="block text-sm font-semibold text-stone-gray mb-1.5"
+                >
+                  Campaign Name <span className="text-danger-ink">*</span>
+                </label>
+                <input
+                  id="cs-name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  maxLength={CAMPAIGN_LIMITS.maxNameLength}
+                  className="input-cozy w-full"
+                  placeholder="My Campaign"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="cs-description"
+                  className="block text-sm font-semibold text-stone-gray mb-1.5"
+                >
+                  Description <span className="text-warm-gray font-normal">(optional)</span>
+                </label>
+                <textarea
+                  id="cs-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  rows={4}
+                  maxLength={CAMPAIGN_LIMITS.maxDescriptionLength}
+                  className="input-cozy w-full resize-none"
+                  placeholder="Describe your campaign…"
+                />
+                <p className="mt-1 text-xs text-warm-gray text-right">
+                  {description.length}/{CAMPAIGN_LIMITS.maxDescriptionLength}
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  onClick={handleSaveGeneral}
+                  disabled={savingGeneral || !name.trim()}
+                  className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingGeneral ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {/* ── Export ── */}
+              <div className="pt-4 mt-4 border-t border-moss-green/15 space-y-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-stone-gray">
+                  <Download className="w-4 h-4 text-brand-ink" />
+                  Export Campaign
+                </div>
+                <p className="text-xs text-warm-gray">
+                  Download a <span className="font-mono">.cozyvtt</span> archive containing maps, creatures,
+                  token templates, and all associated assets. Character data is not included for privacy.
+                </p>
+
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Settings className="w-6 h-6 text-brand-ink" />
-                    <div>
-                      <h2 className="text-xl font-bold text-brand-ink">Campaign Settings</h2>
-                      <p className="text-xs text-stone-gray truncate max-w-[220px]">{campaign.name}</p>
-                    </div>
+                  <div>
+                    <p className="text-sm text-stone-gray">Include audio assets</p>
+                    <p className="text-xs text-warm-gray">The tracks your atmosphere plays</p>
                   </div>
                   <button
-                    onClick={onClose}
-                    className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-                    aria-label="Close settings"
+                    type="button"
+                    role="switch"
+                    aria-checked={exportIncludeAudio}
+                    onClick={() => setExportIncludeAudio((v) => !v)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
+                      exportIncludeAudio ? 'bg-moss-green' : 'bg-warm-gray/30'
+                    }`}
                   >
-                    <X className="w-5 h-5 text-stone-gray" />
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                        exportIncludeAudio ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
                   </button>
                 </div>
 
-                {/* ── Tabs ── */}
-                <div className="flex gap-1 mt-4">
-                  {(
-                    [
-                      ...(isDmViewer
-                        ? [
-                            { id: 'general', label: 'General' },
-                            { id: 'chat', label: 'Chat' },
-                          ]
-                        : []),
-                      { id: 'members', label: 'Members' },
-                      // Only Delete Campaign is here, which the server leaves
-                      // to the owner or an administrator, whatever their role.
-                      ...(mayDelete ? [{ id: 'danger', label: 'Danger Zone' }] : []),
-                    ] as { id: SettingsTab; label: string }[]
-                  ).map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-                        activeTab === tab.id
-                          ? tab.id === 'danger'
-                            ? 'bg-danger/10 text-danger-ink border border-danger/20'
-                            : 'bg-moss-green/15 text-brand-ink border border-moss-green/20'
-                          : 'text-stone-gray hover:bg-warm-gray/10'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
+                <Button
+                  type="button"
+                  onClick={handleExport}
+                  disabled={exporting}
+                  variant="secondary" className="w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {exporting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Exporting…
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-4 h-4" />
+                      Export Campaign
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* ════ CHAT TAB ════ */}
+          {activeTab === 'chat' && (
+            <div className="space-y-5">
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-moss-green/5 border border-moss-green/15">
+                <MessageCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
+                <p className="text-sm text-stone-gray">
+                  A message cooldown prevents players from sending messages too quickly.
+                  When enabled, each player must wait the configured number of seconds
+                  before sending their next message.
+                </p>
               </div>
 
-              {/* ── Content ── */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Enable toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-stone-gray">Enable message cooldown</p>
+                  <p className="text-xs text-warm-gray mt-0.5">Off by default — players can chat freely</p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={chatCooldownEnabled}
+                  onClick={() => setChatCooldownEnabled((v) => !v)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
+                    chatCooldownEnabled ? 'bg-moss-green' : 'bg-warm-gray/30'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      chatCooldownEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
 
-                {/* ════ GENERAL TAB ════ */}
-                {activeTab === 'general' && (
-                  <div className="space-y-5">
-                    <div>
-                      <label
-                        htmlFor="cs-name"
-                        className="block text-sm font-semibold text-stone-gray mb-1.5"
-                      >
-                        Campaign Name <span className="text-danger-ink">*</span>
-                      </label>
-                      <input
-                        id="cs-name"
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        maxLength={CAMPAIGN_LIMITS.maxNameLength}
-                        className="input-cozy w-full"
-                        placeholder="My Campaign"
-                      />
-                    </div>
+              {/* Cooldown duration */}
+              {chatCooldownEnabled && (
+                <div>
+                  <label
+                    htmlFor="cs-cooldown-seconds"
+                    className="block text-sm font-semibold text-stone-gray mb-1.5"
+                  >
+                    Cooldown duration <span className="font-normal text-warm-gray">(seconds)</span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      id="cs-cooldown-seconds"
+                      type="number"
+                      min={1}
+                      max={300}
+                      value={chatCooldownSeconds}
+                      onChange={(e) => {
+                        const v = Math.max(1, Math.min(300, Number(e.target.value)));
+                        setChatCooldownSeconds(v);
+                      }}
+                      className="input-cozy w-28"
+                    />
+                    <span className="text-sm text-warm-gray">
+                      {chatCooldownSeconds === 1
+                        ? '1 second between messages'
+                        : `${chatCooldownSeconds} seconds between messages`}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-warm-gray">Between 1 and 300 seconds.</p>
+                </div>
+              )}
 
-                    <div>
-                      <label
-                        htmlFor="cs-description"
-                        className="block text-sm font-semibold text-stone-gray mb-1.5"
-                      >
-                        Description <span className="text-warm-gray font-normal">(optional)</span>
-                      </label>
-                      <textarea
-                        id="cs-description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={4}
-                        maxLength={CAMPAIGN_LIMITS.maxDescriptionLength}
-                        className="input-cozy w-full resize-none"
-                        placeholder="Describe your campaign…"
-                      />
-                      <p className="mt-1 text-xs text-warm-gray text-right">
-                        {description.length}/{CAMPAIGN_LIMITS.maxDescriptionLength}
-                      </p>
-                    </div>
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  onClick={handleSaveChat}
+                  disabled={savingChat}
+                  className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {savingChat ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="w-4 h-4" />
+                      Save Changes
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
 
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        onClick={handleSaveGeneral}
-                        disabled={savingGeneral || !name.trim()}
-                        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {savingGeneral ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Saving…
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            Save Changes
-                          </>
-                        )}
-                      </Button>
-                    </div>
+          {/* ════ MEMBERS TAB ════ */}
+          {activeTab === 'members' && (
+            <div className="space-y-4">
+              {/* Invite button */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm text-stone-gray">
+                  <Users className="w-4 h-4" />
+                  <span>{memberships.length} member{memberships.length !== 1 ? 's' : ''}</span>
+                </div>
+                {isDmViewer && (
+                <Button
+                  type="button"
+                  onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
+                  variant="secondary" className="flex items-center gap-2 text-sm"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Invite Player
+                </Button>
+                )}
+              </div>
 
-                    {/* ── Export ── */}
-                    <div className="pt-4 mt-4 border-t border-moss-green/15 space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-semibold text-stone-gray">
-                        <Download className="w-4 h-4 text-brand-ink" />
-                        Export Campaign
-                      </div>
-                      <p className="text-xs text-warm-gray">
-                        Download a <span className="font-mono">.cozyvtt</span> archive containing maps, creatures,
-                        token templates, and all associated assets. Character data is not included for privacy.
-                      </p>
+              {/* Member list */}
+              <div className="space-y-2">
+                {memberships.map((membership) => {
+                  const isSelf = membership.userId === user?.id;
+                  const isDm = membership.role === 'DM';
+                  const isRemoving = removingMemberId === membership.userId;
 
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm text-stone-gray">Include audio assets</p>
-                          <p className="text-xs text-warm-gray">The tracks your atmosphere plays</p>
+                  return (
+                    <div
+                      key={membership.userId}
+                      className="flex items-center justify-between p-3 rounded-lg bg-parchment/50 border border-moss-green/10"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center shrink-0">
+                          <span className="text-sm font-bold text-brand-ink uppercase">
+                            {(membership.user?.displayName ?? '?')[0]}
+                          </span>
                         </div>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={exportIncludeAudio}
-                          onClick={() => setExportIncludeAudio((v) => !v)}
-                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
-                            exportIncludeAudio ? 'bg-moss-green' : 'bg-warm-gray/30'
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-stone-gray truncate">
+                            {membership.user?.displayName ?? 'Unknown'}
+                            {isSelf && (
+                              <span className="ml-1.5 text-xs font-normal text-warm-gray">(you)</span>
+                            )}
+                          </p>
+                          <p className="text-xs text-warm-gray truncate">
+                            {membership.user?.email}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Role badge */}
+                        <span
+                          className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                            isDm
+                              ? 'bg-spirit-purple/10 text-spirit-purple border-spirit-purple/20'
+                              : membership.role === 'SPECTATOR'
+                              ? 'bg-stone-gray/10 text-stone-gray border-stone-gray/20'
+                              : 'bg-moss-green/10 text-brand-ink border-moss-green/20'
                           }`}
                         >
-                          <span
-                            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                              exportIncludeAudio ? 'translate-x-6' : 'translate-x-1'
-                            }`}
-                          />
-                        </button>
-                      </div>
+                          {isDm ? (
+                            <span className="flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3" />
+                              DM
+                            </span>
+                          ) : (
+                            membership.role
+                          )}
+                        </span>
 
-                      <Button
-                        type="button"
-                        onClick={handleExport}
-                        disabled={exporting}
-                        variant="secondary" className="w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {exporting ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Exporting…
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-4 h-4" />
-                            Export Campaign
-                          </>
+                        {/* Hand over the game. Offered on anyone who is
+                            not already the DM, including a spectator. */}
+                        {!isDm && (
+                          <button
+                            type="button"
+                            onClick={() => setMemberToPromote(membership)}
+                            disabled={promotingMemberId === membership.userId}
+                            title={`Make ${membership.user?.displayName ?? 'this player'} the DM`}
+                            className="p-1.5 rounded-lg text-spirit-purple hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
+                            aria-label={`Make ${membership.user?.displayName} the Dungeon Master`}
+                          >
+                            {promotingMemberId === membership.userId ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Crown className="w-4 h-4" />
+                            )}
+                          </button>
                         )}
-                      </Button>
-                    </div>
-                  </div>
-                )}
 
-                {/* ════ CHAT TAB ════ */}
-                {activeTab === 'chat' && (
-                  <div className="space-y-5">
-                    <div className="flex items-start gap-3 p-4 rounded-lg bg-moss-green/5 border border-moss-green/15">
-                      <MessageCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
-                      <p className="text-sm text-stone-gray">
-                        A message cooldown prevents players from sending messages too quickly.
-                        When enabled, each player must wait the configured number of seconds
-                        before sending their next message.
-                      </p>
+                        {/* Remove button — DM and self cannot be removed */}
+                        {isDmViewer && !isDmSelf(membership) && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveMemberClick(membership)}
+                            disabled={isRemoving}
+                            className="p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                            aria-label={`Remove ${membership.user?.displayName} from campaign`}
+                          >
+                            {isRemoving ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <UserMinus className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    {/* Enable toggle */}
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-stone-gray">Enable message cooldown</p>
-                        <p className="text-xs text-warm-gray mt-0.5">Off by default — players can chat freely</p>
+              {/* Invitations that still stand: who has been asked, until when */}
+              {isDmViewer && invitations.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">Invited</h3>
+                  {invitations.map((invitation) => (
+                    <div
+                      key={invitation.id}
+                      className="flex items-center justify-between p-3 rounded-lg bg-parchment/30 border border-dashed border-moss-green/20"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink-black truncate">{invitation.user.displayName}</p>
+                        <p className="text-xs text-stone-gray">
+                          {invitation.expiresAt
+                            ? `Invited, until ${new Date(invitation.expiresAt).toLocaleDateString()}`
+                            : 'Invited'}
+                        </p>
                       </div>
                       <button
                         type="button"
-                        role="switch"
-                        aria-checked={chatCooldownEnabled}
-                        onClick={() => setChatCooldownEnabled((v) => !v)}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
-                          chatCooldownEnabled ? 'bg-moss-green' : 'bg-warm-gray/30'
-                        }`}
+                        onClick={() => handleWithdrawInvitation(invitation)}
+                        disabled={withdrawingId === invitation.id}
+                        className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
+                        aria-label={`Withdraw the invitation to ${invitation.user.displayName}`}
+                        title="Withdraw the invitation"
                       >
-                        <span
-                          className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-                            chatCooldownEnabled ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
+                        {withdrawingId === invitation.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
                       </button>
                     </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-                    {/* Cooldown duration */}
-                    {chatCooldownEnabled && (
-                      <div>
-                        <label
-                          htmlFor="cs-cooldown-seconds"
-                          className="block text-sm font-semibold text-stone-gray mb-1.5"
-                        >
-                          Cooldown duration <span className="font-normal text-warm-gray">(seconds)</span>
-                        </label>
-                        <div className="flex items-center gap-3">
-                          <input
-                            id="cs-cooldown-seconds"
-                            type="number"
-                            min={1}
-                            max={300}
-                            value={chatCooldownSeconds}
-                            onChange={(e) => {
-                              const v = Math.max(1, Math.min(300, Number(e.target.value)));
-                              setChatCooldownSeconds(v);
-                            }}
-                            className="input-cozy w-28"
-                          />
-                          <span className="text-sm text-warm-gray">
-                            {chatCooldownSeconds === 1
-                              ? '1 second between messages'
-                              : `${chatCooldownSeconds} seconds between messages`}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-warm-gray">Between 1 and 300 seconds.</p>
-                      </div>
+          {/* ════ DANGER ZONE TAB ════ */}
+          {activeTab === 'danger' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-lg bg-danger/10 border border-danger/30">
+                <div className="flex items-start gap-3 mb-4">
+                  <AlertTriangle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm font-bold text-danger-ink mb-1">Delete Campaign</h3>
+                    <p className="text-sm text-danger-ink">
+                      Permanently deletes this campaign and all associated maps, tokens, chat
+                      history, and session records. Characters and uploaded assets are{' '}
+                      <strong>not</strong> deleted: characters stay with their owners, and each
+                      uploaded file moves to the personal library of whoever uploaded it.
+                    </p>
+                    <p className="text-sm text-danger-ink mt-2">
+                      This action <strong>cannot be undone</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label
+                      htmlFor="cs-delete-confirm"
+                      className="block text-sm font-semibold text-danger-ink mb-1.5"
+                    >
+                      Type <span className="font-mono bg-danger/10 px-1 rounded-sm">{campaign.name}</span> to confirm:
+                    </label>
+                    <input
+                      id="cs-delete-confirm"
+                      type="text"
+                      value={deleteConfirmName}
+                      onChange={(e) => setDeleteConfirmName(e.target.value)}
+                      className="input-cozy w-full border-danger/30 focus:border-danger/60 focus:ring-danger/20"
+                      placeholder={campaign.name}
+                      autoComplete="off"
+                    />
+                  </div>
+
+                  <Button
+                    type="button"
+                    onClick={() => setShowDeleteConfirm(true)}
+                    disabled={!deleteNameMatches || deletingCampaign}
+                    variant="danger" className="w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {deletingCampaign ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Deleting…
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        Delete Campaign
+                      </>
                     )}
-
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        onClick={handleSaveChat}
-                        disabled={savingChat}
-                        className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {savingChat ? (
-                          <>
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                            Saving…
-                          </>
-                        ) : (
-                          <>
-                            <Save className="w-4 h-4" />
-                            Save Changes
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* ════ MEMBERS TAB ════ */}
-                {activeTab === 'members' && (
-                  <div className="space-y-4">
-                    {/* Invite button */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 text-sm text-stone-gray">
-                        <Users className="w-4 h-4" />
-                        <span>{memberships.length} member{memberships.length !== 1 ? 's' : ''}</span>
-                      </div>
-                      {isDmViewer && (
-                      <Button
-                        type="button"
-                        onClick={() => { setInviteKey((k) => k + 1); setShowInviteModal(true); }}
-                        variant="secondary" className="flex items-center gap-2 text-sm"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                        Invite Player
-                      </Button>
-                      )}
-                    </div>
-
-                    {/* Member list */}
-                    <div className="space-y-2">
-                      {memberships.map((membership) => {
-                        const isSelf = membership.userId === user?.id;
-                        const isDm = membership.role === 'DM';
-                        const isRemoving = removingMemberId === membership.userId;
-
-                        return (
-                          <div
-                            key={membership.userId}
-                            className="flex items-center justify-between p-3 rounded-lg bg-parchment/50 border border-moss-green/10"
-                          >
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center shrink-0">
-                                <span className="text-sm font-bold text-brand-ink uppercase">
-                                  {(membership.user?.displayName ?? '?')[0]}
-                                </span>
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-semibold text-stone-gray truncate">
-                                  {membership.user?.displayName ?? 'Unknown'}
-                                  {isSelf && (
-                                    <span className="ml-1.5 text-xs font-normal text-warm-gray">(you)</span>
-                                  )}
-                                </p>
-                                <p className="text-xs text-warm-gray truncate">
-                                  {membership.user?.email}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              {/* Role badge */}
-                              <span
-                                className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
-                                  isDm
-                                    ? 'bg-spirit-purple/10 text-spirit-purple border-spirit-purple/20'
-                                    : membership.role === 'SPECTATOR'
-                                    ? 'bg-stone-gray/10 text-stone-gray border-stone-gray/20'
-                                    : 'bg-moss-green/10 text-brand-ink border-moss-green/20'
-                                }`}
-                              >
-                                {isDm ? (
-                                  <span className="flex items-center gap-1">
-                                    <ShieldCheck className="w-3 h-3" />
-                                    DM
-                                  </span>
-                                ) : (
-                                  membership.role
-                                )}
-                              </span>
-
-                              {/* Hand over the game. Offered on anyone who is
-                                  not already the DM, including a spectator. */}
-                              {!isDm && (
-                                <button
-                                  type="button"
-                                  onClick={() => setMemberToPromote(membership)}
-                                  disabled={promotingMemberId === membership.userId}
-                                  title={`Make ${membership.user?.displayName ?? 'this player'} the DM`}
-                                  className="p-1.5 rounded-lg text-spirit-purple hover:bg-spirit-purple/10 transition-colors disabled:opacity-40"
-                                  aria-label={`Make ${membership.user?.displayName} the Dungeon Master`}
-                                >
-                                  {promotingMemberId === membership.userId ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <Crown className="w-4 h-4" />
-                                  )}
-                                </button>
-                              )}
-
-                              {/* Remove button — DM and self cannot be removed */}
-                              {isDmViewer && !isDmSelf(membership) && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveMemberClick(membership)}
-                                  disabled={isRemoving}
-                                  className="p-1.5 rounded-lg text-danger-ink hover:text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
-                                  aria-label={`Remove ${membership.user?.displayName} from campaign`}
-                                >
-                                  {isRemoving ? (
-                                    <Loader2 className="w-4 h-4 animate-spin" />
-                                  ) : (
-                                    <UserMinus className="w-4 h-4" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Invitations that still stand: who has been asked, until when */}
-                    {isDmViewer && invitations.length > 0 && (
-                      <div className="space-y-2">
-                        <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">Invited</h3>
-                        {invitations.map((invitation) => (
-                          <div
-                            key={invitation.id}
-                            className="flex items-center justify-between p-3 rounded-lg bg-parchment/30 border border-dashed border-moss-green/20"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-medium text-ink-black truncate">{invitation.user.displayName}</p>
-                              <p className="text-xs text-stone-gray">
-                                {invitation.expiresAt
-                                  ? `Invited, until ${new Date(invitation.expiresAt).toLocaleDateString()}`
-                                  : 'Invited'}
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleWithdrawInvitation(invitation)}
-                              disabled={withdrawingId === invitation.id}
-                              className="p-1.5 rounded-lg text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-40"
-                              aria-label={`Withdraw the invitation to ${invitation.user.displayName}`}
-                              title="Withdraw the invitation"
-                            >
-                              {withdrawingId === invitation.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ════ DANGER ZONE TAB ════ */}
-                {activeTab === 'danger' && (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-lg bg-danger/10 border border-danger/30">
-                      <div className="flex items-start gap-3 mb-4">
-                        <AlertTriangle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
-                        <div>
-                          <h3 className="text-sm font-bold text-danger-ink mb-1">Delete Campaign</h3>
-                          <p className="text-sm text-danger-ink">
-                            Permanently deletes this campaign and all associated maps, tokens, chat
-                            history, and session records. Characters and uploaded assets are{' '}
-                            <strong>not</strong> deleted: characters stay with their owners, and each
-                            uploaded file moves to the personal library of whoever uploaded it.
-                          </p>
-                          <p className="text-sm text-danger-ink mt-2">
-                            This action <strong>cannot be undone</strong>.
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <div>
-                          <label
-                            htmlFor="cs-delete-confirm"
-                            className="block text-sm font-semibold text-danger-ink mb-1.5"
-                          >
-                            Type <span className="font-mono bg-danger/10 px-1 rounded-sm">{campaign.name}</span> to confirm:
-                          </label>
-                          <input
-                            id="cs-delete-confirm"
-                            type="text"
-                            value={deleteConfirmName}
-                            onChange={(e) => setDeleteConfirmName(e.target.value)}
-                            className="input-cozy w-full border-danger/30 focus:border-danger/60 focus:ring-danger/20"
-                            placeholder={campaign.name}
-                            autoComplete="off"
-                          />
-                        </div>
-
-                        <Button
-                          type="button"
-                          onClick={() => setShowDeleteConfirm(true)}
-                          disabled={!deleteNameMatches || deletingCampaign}
-                          variant="danger" className="w-full flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          {deletingCampaign ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              Deleting…
-                            </>
-                          ) : (
-                            <>
-                              <Trash2 className="w-4 h-4" />
-                              Delete Campaign
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  </Button>
+                </div>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </SlideOver>
 
       {/* Remove member confirm dialog */}
       <ConfirmDialog

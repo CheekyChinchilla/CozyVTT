@@ -9,6 +9,7 @@
 
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
@@ -78,6 +79,7 @@ it('asks the server for what is typed in the search box', async () => {
     pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
   }));
   open();
+  await waitForDialogFocus();
   fireEvent.click(screen.getByTitle('Add a token image'));
   expect(await screen.findByAltText('Goblin')).toBeInTheDocument();
 

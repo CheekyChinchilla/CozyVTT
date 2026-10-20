@@ -7,7 +7,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useMotionExit } from '@/utils/motion';
 import {
-  X,
   Plus,
   MapPin,
   Loader2,
@@ -28,6 +27,7 @@ import CreateMapModal from './CreateMapModal';
 import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { extractAssetId } from '@/utils/assetUrl';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
@@ -532,146 +532,129 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
-            onClick={onClose}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="absolute right-0 top-0 h-full w-full max-w-xl bg-paper-white shadow-2xl overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="w-6 h-6 text-brand-ink" />
-                    <div>
-                      <h2 className="text-xl font-bold text-brand-ink">Map Library</h2>
-                      <p className="text-xs text-stone-gray">{campaign.name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => uvttInputRef.current?.click()}
-                      disabled={isImportingUVTT}
-                      variant="secondary" className="flex items-center gap-2 text-sm"
-                      title="Import a .uvtt or .dd2vtt file (Dungeondraft, DunGen, Dungeon Alchemist, etc.)"
-                    >
-                      {isImportingUVTT ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Upload className="w-4 h-4" />
-                      )}
-                      Import UVTT
-                    </Button>
-                    <input
-                      ref={uvttInputRef}
-                      type="file"
-                      accept=".uvtt,.dd2vtt,.df2vtt"
-                      onChange={handleUVTTImport}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => setCreateModalOpen(true)}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create Map
-                    </Button>
-                    <button
-                      onClick={onClose}
-                      className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-stone-gray" />
-                    </button>
-                  </div>
-                </div>
+      <SlideOver
+        open={isOpen}
+        onClose={onClose}
+        className="max-w-xl bg-paper-white shadow-2xl overflow-y-auto"
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MapPin className="w-6 h-6 text-brand-ink" />
+              <div>
+                <SlideOverTitle className="text-xl font-bold text-brand-ink">Map Library</SlideOverTitle>
+                <p className="text-xs text-stone-gray">{campaign.name}</p>
               </div>
-
-              {/* Content */}
-              <div className="p-6">
-                {error && (
-                  <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    {error}
-                  </div>
-                )}
-
-                {importSuccess && (
-                  <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                    {importSuccess}
-                  </div>
-                )}
-
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
-                  </div>
-                ) : maps.length === 0 ? (
-                  <div className="text-center py-16 space-y-3">
-                    <MapPin className="w-14 h-14 mx-auto text-stone-gray/25" />
-                    <p className="text-stone-gray font-medium">No maps yet</p>
-                    <p className="text-sm text-stone-gray/60">
-                      Create your first map to start your adventure.
-                    </p>
-                    <Button
-                      type="button"
-                      onClick={() => setCreateModalOpen(true)}
-                      className="inline-flex items-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create Map
-                    </Button>
-                  </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => uvttInputRef.current?.click()}
+                disabled={isImportingUVTT}
+                variant="secondary" className="flex items-center gap-2 text-sm"
+                title="Import a .uvtt or .dd2vtt file (Dungeondraft, DunGen, Dungeon Alchemist, etc.)"
+              >
+                {isImportingUVTT ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <AnimatePresence>
-                      {maps.map((map) => (
-                        <div key={map.id}>
-                          <MapCard
-                            map={map}
-                            isActive={map.id === activeMapId}
-                            campaignId={campaign.id}
-                            onSetActive={handleSetActiveClick}
-                            onEdit={setEditingMap}
-                            onDelete={handleDeleteClick}
-                            onExport={handleExport}
-                            switchingToId={isSwitching ? switchingToMap?.id ?? null : null}
-                            tokens={currentMapTokens}
-                            currentMap={currentMap}
-                          />
-                          {/* Token transfer confirmation (shown under the target card) */}
-                          {switchingToMap?.id === map.id && (
-                            <TokenTransferConfirmation
-                              tokens={currentMapTokens}
-                              targetMap={map}
-                              onConfirm={handleTransferConfirm}
-                              onCancel={handleTransferCancel}
-                              isSwitching={isSwitching}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
+                  <Upload className="w-4 h-4" />
                 )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                Import UVTT
+              </Button>
+              <input
+                ref={uvttInputRef}
+                type="file"
+                accept=".uvtt,.dd2vtt,.df2vtt"
+                onChange={handleUVTTImport}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="flex items-center gap-2 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Create Map
+              </Button>
+              <SlideOverClose
+                className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
+                iconClassName="w-5 h-5 text-stone-gray"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {error}
+            </div>
+          )}
+
+          {importSuccess && (
+            <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {importSuccess}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
+            </div>
+          ) : maps.length === 0 ? (
+            <div className="text-center py-16 space-y-3">
+              <MapPin className="w-14 h-14 mx-auto text-stone-gray/25" />
+              <p className="text-stone-gray font-medium">No maps yet</p>
+              <p className="text-sm text-stone-gray/60">
+                Create your first map to start your adventure.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="inline-flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create Map
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <AnimatePresence>
+                {maps.map((map) => (
+                  <div key={map.id}>
+                    <MapCard
+                      map={map}
+                      isActive={map.id === activeMapId}
+                      campaignId={campaign.id}
+                      onSetActive={handleSetActiveClick}
+                      onEdit={setEditingMap}
+                      onDelete={handleDeleteClick}
+                      onExport={handleExport}
+                      switchingToId={isSwitching ? switchingToMap?.id ?? null : null}
+                      tokens={currentMapTokens}
+                      currentMap={currentMap}
+                    />
+                    {/* Token transfer confirmation (shown under the target card) */}
+                    {switchingToMap?.id === map.id && (
+                      <TokenTransferConfirmation
+                        tokens={currentMapTokens}
+                        targetMap={map}
+                        onConfirm={handleTransferConfirm}
+                        onCancel={handleTransferCancel}
+                        isSwitching={isSwitching}
+                      />
+                    )}
+                  </div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </SlideOver>
 
       {/* Create Map Modal */}
       <CreateMapModal

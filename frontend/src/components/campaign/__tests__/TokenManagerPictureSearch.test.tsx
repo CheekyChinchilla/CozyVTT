@@ -8,6 +8,7 @@
 
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('framer-motion', () => {
@@ -51,6 +52,7 @@ it('asks the server for what is typed in the search box', async () => {
     pagination: { page: 1, limit: 50, total: 1, totalPages: 1 },
   }));
   render(<TokenManager isOpen onClose={() => {}} />);
+  await waitForDialogFocus();
   expect(await screen.findByAltText('Goblin')).toBeInTheDocument();
 
   await userEvent.type(screen.getByRole('searchbox', { name: 'Search token pictures' }), 'ogre');

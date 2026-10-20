@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react';
 import { campaignsToPlaceAssetIn } from '@/utils/campaignRoles';
-import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import {
-  X,
   Download,
   Trash2,
   Calendar,
@@ -25,6 +23,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import campaignService from '../../services/campaign.service';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { apiErrorMessage } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 
@@ -209,287 +208,273 @@ export default function AssetDetailPanel({ asset, onClose, onDelete, onUpdate }:
         onCancel={() => setConfirmOpen(false)}
       />
       {/* The page mounts this inside AnimatePresence, which plays the exits. */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs"
-        onClick={onClose}
+      <SlideOver
+        open
+        onClose={onClose}
+        className="max-w-2xl bg-paper-white shadow-2xl overflow-y-auto"
       >
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          className="absolute right-0 top-0 h-full w-full max-w-2xl bg-paper-white shadow-2xl overflow-y-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 p-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-2xl font-bold text-brand-ink mb-1 truncate">
-                  {currentAsset.name}
-                </h2>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="flex items-center gap-1 px-2 py-1 bg-parchment/50 border border-moss-green/20 rounded-md text-sm text-stone-gray">
-                    {getTypeIcon()}
-                    {currentAsset.type}
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-1 bg-parchment/50 border border-moss-green/20 rounded-md text-sm text-stone-gray">
-                    {scopeIcon(currentAsset.scope)}
-                    {assetScopeLabel(currentAsset.scope)}
-                  </span>
-                </div>
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 p-6">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <SlideOverTitle className="text-2xl font-bold text-brand-ink mb-1 truncate">
+                {currentAsset.name}
+              </SlideOverTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="flex items-center gap-1 px-2 py-1 bg-parchment/50 border border-moss-green/20 rounded-md text-sm text-stone-gray">
+                  {getTypeIcon()}
+                  {currentAsset.type}
+                </span>
+                <span className="flex items-center gap-1 px-2 py-1 bg-parchment/50 border border-moss-green/20 rounded-md text-sm text-stone-gray">
+                  {scopeIcon(currentAsset.scope)}
+                  {assetScopeLabel(currentAsset.scope)}
+                </span>
               </div>
-              <button
-                onClick={onClose}
-                aria-label="Close details"
-                className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-              >
-                <X className="w-6 h-6 text-stone-gray" />
-              </button>
             </div>
+            <SlideOverClose
+              className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
+              iconClassName="w-6 h-6 text-stone-gray"
+            />
+          </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-3 mt-4">
+          {/* Action Buttons */}
+          <div className="flex items-center gap-3 mt-4">
+            <Button
+              onClick={handleDownload}
+              className="flex-1 flex items-center justify-center gap-2"
+            >
+              <Download className="w-5 h-5" />
+              Download
+            </Button>
+            {canDelete && (
               <Button
-                onClick={handleDownload}
-                className="flex-1 flex items-center justify-center gap-2"
+                onClick={handleDelete}
+                variant="danger" className="flex items-center justify-center gap-2"
               >
-                <Download className="w-5 h-5" />
-                Download
+                <Trash2 className="w-5 h-5" />
+                Delete
               </Button>
-              {canDelete && (
-                <Button
-                  onClick={handleDelete}
-                  variant="danger" className="flex items-center justify-center gap-2"
-                >
-                  <Trash2 className="w-5 h-5" />
-                  Delete
-                </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6">
+          {/* Preview */}
+          <div>
+            <h3 className="text-lg font-semibold text-brand-ink mb-3">Preview</h3>
+            <div className="relative w-full rounded-lg overflow-hidden bg-moss-green/10">
+              {currentAsset.type === AssetType.AUDIO ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <FileAudio className="w-20 h-20 mx-auto mb-4 text-spirit-purple" />
+                    <audio src={getAssetUrl()} controls className="mx-auto" />
+                  </div>
+                </div>
+              ) : previewFailed ? (
+                // In state, as React renders it: the fallback used to
+                // replace React's own nodes here with innerHTML.
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-stone-gray/40">Preview not available</div>
+                </div>
+              ) : (
+                <img
+                  src={getAssetUrl()}
+                  alt={currentAsset.name}
+                  className="w-full h-auto"
+                  onError={() => setPreviewFailed(true)}
+                />
               )}
             </div>
           </div>
 
-          {/* Content */}
-          <div className="p-6 space-y-6">
-            {/* Preview */}
+          {/* Description */}
+          {currentAsset.description && (
             <div>
-              <h3 className="text-lg font-semibold text-brand-ink mb-3">Preview</h3>
-              <div className="relative w-full rounded-lg overflow-hidden bg-moss-green/10">
-                {currentAsset.type === AssetType.AUDIO ? (
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-center">
-                      <FileAudio className="w-20 h-20 mx-auto mb-4 text-spirit-purple" />
-                      <audio src={getAssetUrl()} controls className="mx-auto" />
-                    </div>
+              <h3 className="text-lg font-semibold text-brand-ink mb-3">Description</h3>
+              <p className="text-stone-gray whitespace-pre-wrap">{currentAsset.description}</p>
+            </div>
+          )}
+
+          {/* Tags */}
+          {currentAsset.tags.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-brand-ink mb-3">Tags</h3>
+              <div className="flex items-center gap-2 flex-wrap">
+                {currentAsset.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="inline-flex items-center gap-1 px-3 py-1 bg-warm-amber/20 text-warm-amber rounded-full text-sm"
+                  >
+                    <TagIcon className="w-3 h-3" />
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Move to… */}
+          {canMove && availableMoveScopes.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold text-brand-ink mb-3 flex items-center gap-2">
+                <ArrowRightLeft className="w-5 h-5" />
+                Move to…
+              </h3>
+              <div className="p-4 bg-parchment/50 border border-moss-green/20 rounded-lg space-y-4">
+                {/* Scope selector buttons */}
+                <div className="flex flex-wrap gap-2">
+                  {availableMoveScopes.map((scope) => (
+                    <button
+                      key={scope}
+                      onClick={() => {
+                        setMoveScope(scope);
+                        setMoveCampaignId('');
+                        setMoveError(null);
+                        setMoveSuccess(false);
+                      }}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                        moveScope === scope
+                          ? 'bg-moss-green text-paper-white border-moss-green'
+                          : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60 hover:bg-moss-green/5'
+                      }`}
+                    >
+                      {scopeIcon(scope)}
+                      {assetScopeLabel(scope)}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Campaign picker */}
+                {moveScope === AssetScope.CAMPAIGN && (
+                  <div>
+                    <label className="block text-sm text-stone-gray/70 mb-1">
+                      Select campaign
+                    </label>
+                    <select
+                      value={moveCampaignId}
+                      onChange={(e) => setMoveCampaignId(e.target.value)}
+                      className="w-full px-3 py-2 bg-paper-white border border-moss-green/30 rounded-lg text-stone-gray text-sm focus:outline-hidden focus:border-moss-green"
+                    >
+                      <option value="">— choose a campaign —</option>
+                      {campaignTargets.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
-                ) : previewFailed ? (
-                  // In state, as React renders it: the fallback used to
-                  // replace React's own nodes here with innerHTML.
-                  <div className="flex items-center justify-center h-64">
-                    <div className="text-stone-gray/40">Preview not available</div>
-                  </div>
-                ) : (
-                  <img
-                    src={getAssetUrl()}
-                    alt={currentAsset.name}
-                    className="w-full h-auto"
-                    onError={() => setPreviewFailed(true)}
-                  />
+                )}
+
+                {/* Error / success */}
+                {moveError && (
+                  <p className="text-sm text-danger-ink">{moveError}</p>
+                )}
+                {moveSuccess && (
+                  <p className="flex items-center gap-1 text-sm text-brand-ink">
+                    <Check className="w-4 h-4" />
+                    Asset moved successfully.
+                  </p>
+                )}
+
+                {/* Confirm button */}
+                {moveScope && !moveSuccess && (
+                  <Button
+                    onClick={handleMove}
+                    disabled={moving || (moveScope === AssetScope.CAMPAIGN && !moveCampaignId)}
+                    className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {moving ? (
+                      <Loader className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <ArrowRightLeft className="w-4 h-4" />
+                    )}
+                    {moving ? 'Moving…' : `Move to ${assetScopeLabel(moveScope)}`}
+                  </Button>
                 )}
               </div>
             </div>
+          )}
 
-            {/* Description */}
-            {currentAsset.description && (
-              <div>
-                <h3 className="text-lg font-semibold text-brand-ink mb-3">Description</h3>
-                <p className="text-stone-gray whitespace-pre-wrap">{currentAsset.description}</p>
-              </div>
-            )}
-
-            {/* Tags */}
-            {currentAsset.tags.length > 0 && (
-              <div>
-                <h3 className="text-lg font-semibold text-brand-ink mb-3">Tags</h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {currentAsset.tags.map((tag) => (
-                    <span
-                      key={tag}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-warm-amber/20 text-warm-amber rounded-full text-sm"
-                    >
-                      <TagIcon className="w-3 h-3" />
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Move to… */}
-            {canMove && availableMoveScopes.length > 0 && (
-              <div>
-                <h3 className="text-lg font-semibold text-brand-ink mb-3 flex items-center gap-2">
-                  <ArrowRightLeft className="w-5 h-5" />
-                  Move to…
-                </h3>
-                <div className="p-4 bg-parchment/50 border border-moss-green/20 rounded-lg space-y-4">
-                  {/* Scope selector buttons */}
-                  <div className="flex flex-wrap gap-2">
-                    {availableMoveScopes.map((scope) => (
-                      <button
-                        key={scope}
-                        onClick={() => {
-                          setMoveScope(scope);
-                          setMoveCampaignId('');
-                          setMoveError(null);
-                          setMoveSuccess(false);
-                        }}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                          moveScope === scope
-                            ? 'bg-moss-green text-paper-white border-moss-green'
-                            : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60 hover:bg-moss-green/5'
-                        }`}
-                      >
-                        {scopeIcon(scope)}
-                        {assetScopeLabel(scope)}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Campaign picker */}
-                  {moveScope === AssetScope.CAMPAIGN && (
-                    <div>
-                      <label className="block text-sm text-stone-gray/70 mb-1">
-                        Select campaign
-                      </label>
-                      <select
-                        value={moveCampaignId}
-                        onChange={(e) => setMoveCampaignId(e.target.value)}
-                        className="w-full px-3 py-2 bg-paper-white border border-moss-green/30 rounded-lg text-stone-gray text-sm focus:outline-hidden focus:border-moss-green"
-                      >
-                        <option value="">— choose a campaign —</option>
-                        {campaignTargets.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-
-                  {/* Error / success */}
-                  {moveError && (
-                    <p className="text-sm text-danger-ink">{moveError}</p>
-                  )}
-                  {moveSuccess && (
-                    <p className="flex items-center gap-1 text-sm text-brand-ink">
-                      <Check className="w-4 h-4" />
-                      Asset moved successfully.
-                    </p>
-                  )}
-
-                  {/* Confirm button */}
-                  {moveScope && !moveSuccess && (
-                    <Button
-                      onClick={handleMove}
-                      disabled={moving || (moveScope === AssetScope.CAMPAIGN && !moveCampaignId)}
-                      className="flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {moving ? (
-                        <Loader className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <ArrowRightLeft className="w-4 h-4" />
-                      )}
-                      {moving ? 'Moving…' : `Move to ${assetScopeLabel(moveScope)}`}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Scope is fixed notice for avatars */}
-            {isScopeFixed && (
-              <div className="p-3 bg-warm-amber/10 border border-warm-amber/30 rounded-lg text-sm text-stone-gray">
-                Avatar assets are always stored in your personal library and cannot be moved.
-              </div>
-            )}
-
-            {/* Metadata */}
-            <div>
-              <h3 className="text-lg font-semibold text-brand-ink mb-3">Metadata</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
-                  <HardDrive className="w-5 h-5 text-stone-gray/60" />
-                  <div>
-                    <p className="text-sm text-stone-gray/70">File Size</p>
-                    <p className="text-stone-gray font-medium">{formatFileSize(currentAsset.fileSize)}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
-                  <FileType className="w-5 h-5 text-stone-gray/60" />
-                  <div>
-                    <p className="text-sm text-stone-gray/70">MIME Type</p>
-                    <p className="text-stone-gray font-medium">{currentAsset.mimeType}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
-                  <FileType className="w-5 h-5 text-stone-gray/60" />
-                  <div>
-                    <p className="text-sm text-stone-gray/70">Original Filename</p>
-                    <p className="text-stone-gray font-medium break-all">{currentAsset.originalName}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
-                  <User className="w-5 h-5 text-stone-gray/60" />
-                  <div>
-                    <p className="text-sm text-stone-gray/70">Uploaded By</p>
-                    <p className="text-stone-gray font-medium">
-                      {user?.id === currentAsset.uploadedById ? 'You' : 'Another user'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
-                  <Calendar className="w-5 h-5 text-stone-gray/60" />
-                  <div>
-                    <p className="text-sm text-stone-gray/70">Uploaded On</p>
-                    <p className="text-stone-gray font-medium">{formatDate(currentAsset.createdAt)}</p>
-                  </div>
-                </div>
-              </div>
+          {/* Scope is fixed notice for avatars */}
+          {isScopeFixed && (
+            <div className="p-3 bg-warm-amber/10 border border-warm-amber/30 rounded-lg text-sm text-stone-gray">
+              Avatar assets are always stored in your personal library and cannot be moved.
             </div>
+          )}
 
-            {/* Technical Details */}
-            <div>
-              <h3 className="text-lg font-semibold text-brand-ink mb-3">Technical Details</h3>
-              <div className="p-4 bg-parchment/50 border border-moss-green/20 rounded-lg">
-                <div className="space-y-2 font-mono text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-stone-gray/70">Asset ID:</span>
-                    <span className="text-stone-gray">{currentAsset.id}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-stone-gray/70">Filename:</span>
-                    <span className="text-stone-gray truncate ml-4">{currentAsset.filename}</span>
-                  </div>
-                  {currentAsset.campaignId && (
-                    <div className="flex justify-between">
-                      <span className="text-stone-gray/70">Campaign ID:</span>
-                      <span className="text-stone-gray truncate ml-4">{currentAsset.campaignId}</span>
-                    </div>
-                  )}
+          {/* Metadata */}
+          <div>
+            <h3 className="text-lg font-semibold text-brand-ink mb-3">Metadata</h3>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
+                <HardDrive className="w-5 h-5 text-stone-gray/60" />
+                <div>
+                  <p className="text-sm text-stone-gray/70">File Size</p>
+                  <p className="text-stone-gray font-medium">{formatFileSize(currentAsset.fileSize)}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
+                <FileType className="w-5 h-5 text-stone-gray/60" />
+                <div>
+                  <p className="text-sm text-stone-gray/70">MIME Type</p>
+                  <p className="text-stone-gray font-medium">{currentAsset.mimeType}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
+                <FileType className="w-5 h-5 text-stone-gray/60" />
+                <div>
+                  <p className="text-sm text-stone-gray/70">Original Filename</p>
+                  <p className="text-stone-gray font-medium break-all">{currentAsset.originalName}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
+                <User className="w-5 h-5 text-stone-gray/60" />
+                <div>
+                  <p className="text-sm text-stone-gray/70">Uploaded By</p>
+                  <p className="text-stone-gray font-medium">
+                    {user?.id === currentAsset.uploadedById ? 'You' : 'Another user'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-parchment/50 border border-moss-green/20 rounded-lg">
+                <Calendar className="w-5 h-5 text-stone-gray/60" />
+                <div>
+                  <p className="text-sm text-stone-gray/70">Uploaded On</p>
+                  <p className="text-stone-gray font-medium">{formatDate(currentAsset.createdAt)}</p>
                 </div>
               </div>
             </div>
           </div>
-        </motion.div>
-      </motion.div>
+
+          {/* Technical Details */}
+          <div>
+            <h3 className="text-lg font-semibold text-brand-ink mb-3">Technical Details</h3>
+            <div className="p-4 bg-parchment/50 border border-moss-green/20 rounded-lg">
+              <div className="space-y-2 font-mono text-sm">
+                <div className="flex justify-between">
+                  <span className="text-stone-gray/70">Asset ID:</span>
+                  <span className="text-stone-gray">{currentAsset.id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-stone-gray/70">Filename:</span>
+                  <span className="text-stone-gray truncate ml-4">{currentAsset.filename}</span>
+                </div>
+                {currentAsset.campaignId && (
+                  <div className="flex justify-between">
+                    <span className="text-stone-gray/70">Campaign ID:</span>
+                    <span className="text-stone-gray truncate ml-4">{currentAsset.campaignId}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </SlideOver>
     </>
   );
 }

@@ -85,9 +85,9 @@ afterEach(() => {
 
 /** Open the Map Library, choose a .uvtt file, and wait `ms` for the answer. */
 async function importAndWait(ms: number): Promise<void> {
-  const { container } = render(<MapManager isOpen onClose={() => {}} />);
+  render(<MapManager isOpen onClose={() => {}} />);
   await act(() => vi.advanceTimersByTimeAsync(0));
-  const input = container.querySelector<HTMLInputElement>('input[type="file"]');
+  const input = screen.getByRole('dialog', { name: 'Map Library' }).querySelector<HTMLInputElement>('input[type="file"]');
   if (!input) throw new Error('The Map Library has no file input');
   fireEvent.change(input, { target: { files: [new File(['{}'], 'cave.uvtt')] } });
   await act(() => vi.advanceTimersByTimeAsync(0));

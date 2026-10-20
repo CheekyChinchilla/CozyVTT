@@ -11,6 +11,7 @@
 
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
@@ -84,6 +85,7 @@ it('offers Call of Cthulhu\'s five in a Call of Cthulhu campaign', () => {
 it.each(['PATHFINDER_2E', null])('offers no list, and a box for any condition, in %s', async (system) => {
   campaign.gameSystem = system;
   open();
+  await waitForDialogFocus();
   expect(screen.queryByRole('button', { name: 'Grappled' })).not.toBeInTheDocument();
   const box = screen.getByRole('textbox', { name: 'Add a condition' });
   expect((box as HTMLInputElement).maxLength).toBe(TOKEN_LIMITS.maxConditionLength);
@@ -97,6 +99,7 @@ it.each(['PATHFINDER_2E', null])('offers no list, and a box for any condition, i
 it('adds a typed condition with the Add button too, in any system', async () => {
   campaign.gameSystem = 'DND_5E';
   open();
+  await waitForDialogFocus();
   await userEvent.type(screen.getByRole('textbox', { name: 'Add a condition' }), 'Blessed');
   await userEvent.click(screen.getByRole('button', { name: 'Add condition' }));
   await waitFor(() => expect(sentConditions()).toEqual(['Blessed']));
@@ -105,6 +108,7 @@ it('adds a typed condition with the Add button too, in any system', async () => 
 it('takes the listed spelling of a listed condition, and adds nothing twice', async () => {
   campaign.gameSystem = 'DND_5E';
   open({ ...cultist, conditions: ['Prone'] });
+  await waitForDialogFocus();
   const box = screen.getByRole('textbox', { name: 'Add a condition' });
   await userEvent.type(box, 'grappled{Enter}');
   await waitFor(() => expect(sentConditions()).toEqual(['Prone', 'Grappled']));

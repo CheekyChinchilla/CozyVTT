@@ -12,6 +12,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { CreatureTemplate, NpcStatBlock, TokenTemplate } from '@/types';
 import { TokenType, TokenDisposition } from '@/types';
@@ -78,12 +79,14 @@ const maxLength = (element: HTMLElement) => (element as HTMLInputElement).maxLen
 describe('the Creature Library', () => {
   async function openBat() {
     render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
     await userEvent.click(await screen.findByText('Boss Bat'));
   }
 
   it('says why a new creature was refused', async () => {
     api.createCreature.mockRejectedValue(refusal(TOO_LARGE));
     render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
     await userEvent.click(await screen.findByRole('button', { name: /Create Custom/ }));
     await userEvent.type(screen.getByPlaceholderText('e.g. Goblin Boss'), 'Goblin Boss');
     await userEvent.click(screen.getByRole('button', { name: 'Create Creature' }));
@@ -146,12 +149,14 @@ describe('the Creature Library', () => {
 describe('the Token Templates', () => {
   async function openGoblin() {
     render(<TokenTemplateLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
     await userEvent.click(await screen.findByText('Goblin'));
   }
 
   it('says why a new template was refused', async () => {
     api.createTokenTemplate.mockRejectedValue(refusal(TOO_LARGE));
     render(<TokenTemplateLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
     await userEvent.click(await screen.findByRole('button', { name: /New Template/ }));
     await userEvent.type(screen.getByPlaceholderText('e.g. Treasure Chest'), 'Chest');
     await userEvent.click(screen.getByRole('button', { name: 'Create Template' }));

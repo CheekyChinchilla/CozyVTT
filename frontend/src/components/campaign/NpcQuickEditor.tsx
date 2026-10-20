@@ -9,7 +9,6 @@
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   X,
   Eye,
@@ -34,6 +33,7 @@ import type { Token, UpdateTokenRequest, TokenHp, NpcStatBlock, Asset } from '@/
 import { TokenType, TokenDisposition, AssetType, AssetScope } from '@/types';
 import { StatBlockViewer, StatBlockEditor } from './npc-stat-blocks';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
@@ -540,659 +540,643 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
 
   return (
     <>
-    <AnimatePresence>
-      <>
-        {/* Backdrop */}
-        <motion.div
-          key="npc-editor-backdrop"
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-xs"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
+    <SlideOver
+      open
+      onClose={onClose}
+      backdropClassName="bg-black/40"
+      className="max-w-sm bg-paper-white shadow-2xl overflow-y-auto flex flex-col"
+    >
+      {/* ── Header ── */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
+        {/* Hidden file input for image upload */}
+        <input
+          ref={imageFileRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageUpload}
         />
 
-        {/* Panel */}
-        <motion.div
-          key="npc-editor-panel"
-          className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-paper-white shadow-2xl overflow-y-auto flex flex-col"
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        {/* Token image — clickable to change */}
+        <button
+          onClick={handleOpenImagePicker}
+          className="relative group shrink-0"
+          title={current.imageUrl ? 'Change token image' : 'Add a token image'}
         >
-          {/* ── Header ── */}
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-            {/* Hidden file input for image upload */}
-            <input
-              ref={imageFileRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
+          {current.imageUrl ? (
+            <img
+              src={current.imageUrl}
+              alt={current.name}
+              className="w-14 h-14 rounded-full object-cover border-2 border-moss-green/30"
             />
-
-            {/* Token image — clickable to change */}
-            <button
-              onClick={handleOpenImagePicker}
-              className="relative group shrink-0"
-              title={current.imageUrl ? 'Change token image' : 'Add a token image'}
-            >
-              {current.imageUrl ? (
-                <img
-                  src={current.imageUrl}
-                  alt={current.name}
-                  className="w-14 h-14 rounded-full object-cover border-2 border-moss-green/30"
-                />
-              ) : (
-                // Dashed outline and an upload icon, matching the empty image
-                // slot in TokenTemplateLibrary. This used to be a heart, which
-                // read as "favourite" and gave no hint that the avatar is a
-                // button that opens the image picker.
-                <div className="w-14 h-14 rounded-full bg-stone-gray/10 border border-dashed border-stone-gray/30 flex items-center justify-center">
-                  <Upload className="w-5 h-5 text-stone-gray/50" />
-                </div>
-              )}
-              <div className="absolute inset-0 rounded-full bg-forest-shadow/0 group-hover:bg-forest-shadow/40 transition-colors flex items-center justify-center">
-                <ImageIcon className="w-5 h-5 text-paper-white opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-            </button>
-
-            {/* Editable name */}
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setNameDraft(e.target.value)}
-              onBlur={handleNameBlur}
-              // min-w-0 is load-bearing: a flex child defaults to min-width:auto,
-              // and an <input>'s intrinsic minimum is wide enough that a long
-              // token name pushed the badge and close button off the panel edge.
-              className="flex-1 min-w-0 text-base font-bold text-brand-ink bg-transparent border-b border-transparent hover:border-moss-green/30 focus:border-moss-green focus:outline-hidden px-0"
-            />
-
-            {/* Badge */}
-            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
-              tokenType === TokenType.OBJECT
-                ? 'bg-stone-gray/10 text-stone-gray'
-                : 'bg-moss-green/10 text-brand-ink'
-            }`}>
-              {tokenType === TokenType.OBJECT ? 'Object' : tokenType === TokenType.PLAYER ? 'Player' : 'NPC'}
-            </span>
-
-            {/* Close */}
-            <Button onClick={onClose} variant="secondary" className="p-1.5 shrink-0" title="Close">
-              <X className="w-4 h-4" />
-            </Button>
+          ) : (
+            // Dashed outline and an upload icon, matching the empty image
+            // slot in TokenTemplateLibrary. This used to be a heart, which
+            // read as "favourite" and gave no hint that the avatar is a
+            // button that opens the image picker.
+            <div className="w-14 h-14 rounded-full bg-stone-gray/10 border border-dashed border-stone-gray/30 flex items-center justify-center">
+              <Upload className="w-5 h-5 text-stone-gray/50" />
+            </div>
+          )}
+          <div className="absolute inset-0 rounded-full bg-forest-shadow/0 group-hover:bg-forest-shadow/40 transition-colors flex items-center justify-center">
+            <ImageIcon className="w-5 h-5 text-paper-white opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
+        </button>
 
-          {/* ── Body ── */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-5">
+        {/* The panel's name for a screen reader; the field below edits it */}
+        <SlideOverTitle className="sr-only">{current.name}</SlideOverTitle>
 
-            {/* ── Token Image Picker ── */}
-            {showImagePicker && (
-              <section className="glass-panel p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
-                    Token Image
-                  </h3>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => imageFileRef.current?.click()}
-                      disabled={isUploadingImage}
-                      className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 disabled:opacity-40 transition-colors"
-                    >
-                      {isUploadingImage ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Upload className="w-3 h-3" />
-                      )}
-                      {isUploadingImage ? 'Uploading...' : 'Upload'}
-                    </button>
-                    <span className="text-ink-muted">·</span>
-                    <button
-                      onClick={() => setShowImagePicker(false)}
-                      className="text-[10px] text-stone-gray hover:text-stone-gray/80 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
+        {/* Editable name */}
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setNameDraft(e.target.value)}
+          onBlur={handleNameBlur}
+          // min-w-0 is load-bearing: a flex child defaults to min-width:auto,
+          // and an <input>'s intrinsic minimum is wide enough that a long
+          // token name pushed the badge and close button off the panel edge.
+          className="flex-1 min-w-0 text-base font-bold text-brand-ink bg-transparent border-b border-transparent hover:border-moss-green/30 focus:border-moss-green focus:outline-hidden px-0"
+        />
 
-                <input
-                  type="search"
-                  value={pictureSearch}
-                  onChange={(e) => setPictureSearch(e.target.value)}
-                  aria-label="Search token pictures"
-                  placeholder="Search by name or tag"
-                  className="input-cozy w-full text-xs mb-2"
-                />
-                <AssetGrid
-                  type={AssetType.TOKEN}
-                  search={pictureSearch}
-                  prepend={uploadedPictures}
-                  onLoadError={handlePictureLoadError}
-                  // imageUrl may hold a bare id or a full /api/assets path.
-                  selectedId={extractAssetId(current.imageUrl)}
-                  onSelect={(asset) => (asset ? handleSelectImage(asset.id) : handleClearImage())}
-                  columns={5}
-                  gapClass="gap-1.5"
-                  maxHeightClass="max-h-40"
-                  leadingItem={
-                    <button
-                      type="button"
-                      onClick={handleClearImage}
-                      title="Use colored-letter placeholder"
-                      className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
-                        !current.imageUrl
-                          ? 'border-moss-green ring-1 ring-moss-green/30 bg-ink-muted/25'
-                          : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
-                      }`}
-                    >
-                      <span className="text-sm font-bold text-ink-secondary">?</span>
-                      <span className="absolute bottom-0 text-[7px] text-ink-muted">None</span>
-                    </button>
-                  }
-                />
+        {/* Badge */}
+        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full shrink-0 ${
+          tokenType === TokenType.OBJECT
+            ? 'bg-stone-gray/10 text-stone-gray'
+            : 'bg-moss-green/10 text-brand-ink'
+        }`}>
+          {tokenType === TokenType.OBJECT ? 'Object' : tokenType === TokenType.PLAYER ? 'Player' : 'NPC'}
+        </span>
 
-                {/* Save to creature template option */}
-                {current.creatureTemplateId && current.imageUrl && (
-                  <div className="mt-2 space-y-1.5">
-                    {showDuplicateNamePrompt ? (
-                      <div className="rounded-cozy border border-moss-green/30 bg-parchment/40 p-2.5 space-y-2">
-                        <p className="text-[11px] text-stone-gray">
-                          This is an SRD creature. A custom copy will be created in your campaign library.
-                        </p>
-                        {duplicateWarning && (
-                          <p className="text-[11px] text-warning-ink bg-warning/10 rounded-sm px-2 py-1">
-                            {duplicateWarning}
-                          </p>
-                        )}
-                        <div>
-                          <label className="text-[10px] text-stone-gray block mb-0.5">
-                            Name for the custom creature:
-                          </label>
-                          <input
-                            type="text"
-                            value={duplicateName}
-                            onChange={(e) => setDuplicateName(e.target.value)}
-                            placeholder="e.g. Goblin (Forest Variant)"
-                            className="input-cozy w-full text-xs"
-                            autoFocus
-                          />
-                        </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleConfirmDuplicate}
-                            disabled={isSavingToCreature || !duplicateName.trim()}
-                            className="flex-1 py-1.5 text-[10px] rounded-cozy bg-moss-green/10 border border-moss-green/30 hover:bg-moss-green/20 text-brand-ink transition-colors font-medium disabled:opacity-40"
-                          >
-                            {isSavingToCreature ? (
-                              <span className="flex items-center justify-center gap-1">
-                                <Loader2 className="w-3 h-3 animate-spin" /> Saving...
-                              </span>
-                            ) : (
-                              'Create & Save Image'
-                            )}
-                          </button>
-                          <button
-                            onClick={() => { setShowDuplicateNamePrompt(false); setDuplicateWarning(null); }}
-                            className="px-3 py-1.5 text-[10px] rounded-cozy border border-moss-green/20 hover:bg-moss-green/5 text-stone-gray transition-colors"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
+        {/* Close */}
+        <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" title="Close" />
+      </div>
+
+      {/* ── Body ── */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+        {/* ── Token Image Picker ── */}
+        {showImagePicker && (
+          <section className="glass-panel p-3">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
+                Token Image
+              </h3>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => imageFileRef.current?.click()}
+                  disabled={isUploadingImage}
+                  className="flex items-center gap-1 text-[10px] text-brand-ink hover:text-brand-ink/80 disabled:opacity-40 transition-colors"
+                >
+                  {isUploadingImage ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Upload className="w-3 h-3" />
+                  )}
+                  {isUploadingImage ? 'Uploading...' : 'Upload'}
+                </button>
+                <span className="text-ink-muted">·</span>
+                <button
+                  onClick={() => setShowImagePicker(false)}
+                  className="text-[10px] text-stone-gray hover:text-stone-gray/80 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            <input
+              type="search"
+              value={pictureSearch}
+              onChange={(e) => setPictureSearch(e.target.value)}
+              aria-label="Search token pictures"
+              placeholder="Search by name or tag"
+              className="input-cozy w-full text-xs mb-2"
+            />
+            <AssetGrid
+              type={AssetType.TOKEN}
+              search={pictureSearch}
+              prepend={uploadedPictures}
+              onLoadError={handlePictureLoadError}
+              // imageUrl may hold a bare id or a full /api/assets path.
+              selectedId={extractAssetId(current.imageUrl)}
+              onSelect={(asset) => (asset ? handleSelectImage(asset.id) : handleClearImage())}
+              columns={5}
+              gapClass="gap-1.5"
+              maxHeightClass="max-h-40"
+              leadingItem={
+                <button
+                  type="button"
+                  onClick={handleClearImage}
+                  title="Use colored-letter placeholder"
+                  className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
+                    !current.imageUrl
+                      ? 'border-moss-green ring-1 ring-moss-green/30 bg-ink-muted/25'
+                      : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
+                  }`}
+                >
+                  <span className="text-sm font-bold text-ink-secondary">?</span>
+                  <span className="absolute bottom-0 text-[7px] text-ink-muted">None</span>
+                </button>
+              }
+            />
+
+            {/* Save to creature template option */}
+            {current.creatureTemplateId && current.imageUrl && (
+              <div className="mt-2 space-y-1.5">
+                {showDuplicateNamePrompt ? (
+                  <div className="rounded-cozy border border-moss-green/30 bg-parchment/40 p-2.5 space-y-2">
+                    <p className="text-[11px] text-stone-gray">
+                      This is an SRD creature. A custom copy will be created in your campaign library.
+                    </p>
+                    {duplicateWarning && (
+                      <p className="text-[11px] text-warning-ink bg-warning/10 rounded-sm px-2 py-1">
+                        {duplicateWarning}
+                      </p>
+                    )}
+                    <div>
+                      <label className="text-[10px] text-stone-gray block mb-0.5">
+                        Name for the custom creature:
+                      </label>
+                      <input
+                        type="text"
+                        value={duplicateName}
+                        onChange={(e) => setDuplicateName(e.target.value)}
+                        placeholder="e.g. Goblin (Forest Variant)"
+                        className="input-cozy w-full text-xs"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="flex gap-2">
                       <button
-                        onClick={handleSaveImageToCreature}
-                        disabled={isSavingToCreature}
-                        className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy border border-moss-green/30 hover:bg-moss-green/10 text-brand-ink transition-colors"
+                        onClick={handleConfirmDuplicate}
+                        disabled={isSavingToCreature || !duplicateName.trim()}
+                        className="flex-1 py-1.5 text-[10px] rounded-cozy bg-moss-green/10 border border-moss-green/30 hover:bg-moss-green/20 text-brand-ink transition-colors font-medium disabled:opacity-40"
                       >
                         {isSavingToCreature ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span className="flex items-center justify-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" /> Saving...
+                          </span>
                         ) : (
-                          <Save className="w-3 h-3" />
+                          'Create & Save Image'
                         )}
-                        {isSavingToCreature ? 'Saving...' : 'Save image to creature template'}
                       </button>
-                    )}
+                      <button
+                        onClick={() => { setShowDuplicateNamePrompt(false); setDuplicateWarning(null); }}
+                        className="px-3 py-1.5 text-[10px] rounded-cozy border border-moss-green/20 hover:bg-moss-green/5 text-stone-gray transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                )}
-              </section>
-            )}
-
-            {/* ── HP Section (NPC only) ── */}
-            {isNpc && (
-              <section>
-                <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                  Hit Points
-                </h3>
-                {hp && hp.max > 0 ? (
-                  <>
-                    {/* HP bar */}
-                    <div className="mb-2">
-                      <div className="relative h-4 bg-ink-black/10 rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-200"
-                          style={{ width: `${hpPct * 100}%`, backgroundColor: hpColor }}
-                        />
-                        {hp.temp > 0 && (
-                          <div
-                            className="absolute top-0 right-0 h-full rounded-r-full"
-                            style={{
-                              width: `${Math.min(1, hp.temp / hp.max) * 100}%`,
-                              backgroundColor: 'rgba(147, 197, 253, 0.75)',
-                            }}
-                          />
-                        )}
-                      </div>
-                      <div className="text-center text-sm font-semibold mt-1" style={{ color: hpColor }}>
-                        {hp.current} / {hp.max}
-                        {hp.temp > 0 && (
-                          <span className="text-info-ink ml-1 text-xs">+{hp.temp} temp</span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* HP buttons */}
-                    <div className="flex gap-1 mb-2">
-                      {([-10, -5, -1] as const).map((d) => (
-                        <button
-                          key={d}
-                          onClick={() => adjustHp(d)}
-                          className="flex-1 py-1.5 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors font-medium"
-                        >
-                          {d}
-                        </button>
-                      ))}
-                      {([1, 5, 10] as const).map((d) => (
-                        <button
-                          key={d}
-                          onClick={() => adjustHp(d)}
-                          className="flex-1 py-1.5 text-xs rounded-cozy border border-success/30 hover:bg-success/10 text-success-ink transition-colors font-medium"
-                        >
-                          +{d}
-                        </button>
-                      ))}
-                    </div>
-
-                    {/* Temp HP */}
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-xs text-stone-gray w-16 shrink-0">Temp HP:</span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={hp.temp}
-                        onChange={(e) => setTempHp(parseInt(e.target.value, 10) || 0)}
-                        className="input-cozy input-cozy-number w-20 text-sm text-center"
-                      />
-                    </div>
-
-                    {/* Show HP to players toggle */}
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={showHpBar}
-                        onChange={toggleShowHpBar}
-                        className="rounded-sm"
-                      />
-                      <span className="text-xs text-stone-gray">Show HP bar to players</span>
-                    </label>
-                  </>
                 ) : (
-                  <div className="glass-panel p-3">
-                    <p className="text-sm text-stone-gray/70 italic mb-2">No HP tracking</p>
-                    {enableHpPrompt ? (
-                      <div className="flex gap-2 items-center">
-                        <input
-                          type="number"
-                          min={1}
-                          value={newHpMax}
-                          onChange={(e) => setNewHpMax(e.target.value)}
-                          placeholder="Max HP"
-                          className="input-cozy input-cozy-number text-sm w-24"
-                        />
-                        <Button
-                          onClick={enableHpTracking}
-                          className="text-xs py-1 px-3"
-                        >
-                          Enable
-                        </Button>
-                        <Button
-                          onClick={() => { setEnableHpPrompt(false); setNewHpMax(''); }}
-                          variant="secondary" className="text-xs py-1 px-2"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
+                  <button
+                    onClick={handleSaveImageToCreature}
+                    disabled={isSavingToCreature}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy border border-moss-green/30 hover:bg-moss-green/10 text-brand-ink transition-colors"
+                  >
+                    {isSavingToCreature ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
                     ) : (
-                      <Button
-                        onClick={() => setEnableHpPrompt(true)}
-                        variant="secondary" className="text-xs"
-                      >
-                        Enable HP tracking
-                      </Button>
+                      <Save className="w-3 h-3" />
+                    )}
+                    {isSavingToCreature ? 'Saving...' : 'Save image to creature template'}
+                  </button>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── HP Section (NPC only) ── */}
+        {isNpc && (
+          <section>
+            <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+              Hit Points
+            </h3>
+            {hp && hp.max > 0 ? (
+              <>
+                {/* HP bar */}
+                <div className="mb-2">
+                  <div className="relative h-4 bg-ink-black/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-200"
+                      style={{ width: `${hpPct * 100}%`, backgroundColor: hpColor }}
+                    />
+                    {hp.temp > 0 && (
+                      <div
+                        className="absolute top-0 right-0 h-full rounded-r-full"
+                        style={{
+                          width: `${Math.min(1, hp.temp / hp.max) * 100}%`,
+                          backgroundColor: 'rgba(147, 197, 253, 0.75)',
+                        }}
+                      />
                     )}
                   </div>
-                )}
-              </section>
-            )}
-
-            {/* ── Stat Block (NPC only) ── */}
-            {isNpc && (
-              <section>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
-                    Stat Block
-                  </h3>
-                  {statBlock && (
-                    <div className="flex gap-1">
-                      <button
-                        onClick={() => {
-                          flushStatBlock();
-                          setEditingStatBlock(!editingStatBlock);
-                        }}
-                        className="text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors"
-                      >
-                        {editingStatBlock ? 'View' : 'Edit'}
-                      </button>
-                      <span className="text-ink-muted">·</span>
-                      <button
-                        onClick={handleRemoveStatBlock}
-                        className="text-[10px] text-danger-ink hover:text-danger-ink transition-colors"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )}
+                  <div className="text-center text-sm font-semibold mt-1" style={{ color: hpColor }}>
+                    {hp.current} / {hp.max}
+                    {hp.temp > 0 && (
+                      <span className="text-info-ink ml-1 text-xs">+{hp.temp} temp</span>
+                    )}
+                  </div>
                 </div>
 
-                {statBlock ? (
-                  editingStatBlock ? (
-                    <div
-                      className="glass-panel p-3 max-h-96 overflow-y-auto"
-                      onBlur={(e) => {
-                        // Focus moving between the stat block's own fields is still typing.
-                        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flushStatBlock();
-                      }}
-                    >
-                      <StatBlockEditor
-                        statBlock={statBlock}
-                        onChange={handleStatBlockChange}
-                        gameSystem={campaign?.gameSystem ?? null}
-                      />
-                    </div>
-                  ) : (
-                    <div className="glass-panel p-3 max-h-96 overflow-y-auto">
-                      <StatBlockViewer
-                        statBlock={statBlock}
-                        tokenName={current.name}
-                        gameSystem={campaign?.gameSystem ?? null}
-                      />
-                    </div>
-                  )
-                ) : (
-                  <div className="glass-panel p-3">
-                    {showCreateStatBlock ? (
-                      <div className="flex gap-2 items-center">
-                        <Button
-                          onClick={handleCreateStatBlock}
-                          className="text-xs py-1 px-3"
-                        >
-                          Create Blank
-                        </Button>
-                        <Button
-                          onClick={() => setShowCreateStatBlock(false)}
-                          variant="secondary" className="text-xs py-1 px-2"
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        <p className="text-sm text-stone-gray/70 italic mb-2">No stat block</p>
-                        <Button
-                          onClick={() => setShowCreateStatBlock(true)}
-                          variant="secondary" className="text-xs"
-                        >
-                          Add Stat Block
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </section>
-            )}
-
-            {/* ── Disposition (NPC only) ── */}
-            {isNpc && (
-              <section>
-                <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                  Disposition
-                </h3>
-                <div className="flex gap-2">
-                  {([
-                    { d: TokenDisposition.FRIENDLY, label: 'Friendly', activeClass: 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold' },
-                    { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  activeClass: 'border-warning/60 bg-warning/10 text-warning-ink font-semibold' },
-                    { d: TokenDisposition.HOSTILE,  label: 'Hostile',  activeClass: 'border-danger/60 bg-danger/10 text-danger-ink font-semibold' },
-                  ] as const).map(({ d, label, activeClass }) => (
+                {/* HP buttons */}
+                <div className="flex gap-1 mb-2">
+                  {([-10, -5, -1] as const).map((d) => (
                     <button
                       key={d}
-                      onClick={() => setTokenDisposition(d)}
-                      aria-pressed={disposition === d}
-                      className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
-                        disposition === d
-                          ? activeClass
-                          : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                      }`}
+                      onClick={() => adjustHp(d)}
+                      className="flex-1 py-1.5 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors font-medium"
                     >
-                      {label}
+                      {d}
                     </button>
                   ))}
-                </div>
-              </section>
-            )}
-
-            {/* ── Initiative ── */}
-            <section>
-              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                Initiative <span className="font-normal normal-case opacity-60">(optional)</span>
-              </h3>
-              <input
-                type="number"
-                value={initiative}
-                onChange={(e) => setInitiativeDraft(e.target.value)}
-                onBlur={handleInitiativeBlur}
-                placeholder="e.g. 14"
-                className="input-cozy input-cozy-number w-full text-sm"
-              />
-            </section>
-
-            {/* ── Darkvision (objects do not see) ── */}
-            {tokenType !== TokenType.OBJECT && (
-              <section>
-                <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Sight</h3>
-                <TokenVisionField
-                  value={current.sightRadius ?? 0}
-                  onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
-                  feetPerSquare={currentMap?.feetPerSquare ?? 5}
-                />
-              </section>
-            )}
-
-            {/* ── Conditions ── */}
-            <section>
-              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                Conditions
-              </h3>
-
-              {/* Active conditions */}
-              {conditions.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {conditions.map((c) => (
+                  {([1, 5, 10] as const).map((d) => (
                     <button
-                      key={c}
-                      onClick={() => toggleCondition(c)}
-                      className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-warning/15 border border-warning/30 text-warning-ink hover:bg-danger/10 hover:border-danger/30 hover:text-danger-ink transition-colors"
+                      key={d}
+                      onClick={() => adjustHp(d)}
+                      className="flex-1 py-1.5 text-xs rounded-cozy border border-success/30 hover:bg-success/10 text-success-ink transition-colors font-medium"
                     >
-                      {c} <X className="w-3 h-3" />
+                      +{d}
                     </button>
                   ))}
                 </div>
-              )}
 
-              {/* The game system's conditions */}
-              {offeredConditions.length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-2">
-                  {offeredConditions.map((c) => {
-                    const active = conditions.includes(c);
-                    return (
-                      <button
-                        key={c}
-                        onClick={() => toggleCondition(c)}
-                        className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
-                          active
-                            ? 'border-warning/50 bg-warning/15 text-warning-ink'
-                            : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                        }`}
-                      >
-                        {c}
-                      </button>
-                    );
-                  })}
+                {/* Temp HP */}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xs text-stone-gray w-16 shrink-0">Temp HP:</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={hp.temp}
+                    onChange={(e) => setTempHp(parseInt(e.target.value, 10) || 0)}
+                    className="input-cozy input-cozy-number w-20 text-sm text-center"
+                  />
+                </div>
+
+                {/* Show HP to players toggle */}
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showHpBar}
+                    onChange={toggleShowHpBar}
+                    className="rounded-sm"
+                  />
+                  <span className="text-xs text-stone-gray">Show HP bar to players</span>
+                </label>
+              </>
+            ) : (
+              <div className="glass-panel p-3">
+                <p className="text-sm text-stone-gray/70 italic mb-2">No HP tracking</p>
+                {enableHpPrompt ? (
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="number"
+                      min={1}
+                      value={newHpMax}
+                      onChange={(e) => setNewHpMax(e.target.value)}
+                      placeholder="Max HP"
+                      className="input-cozy input-cozy-number text-sm w-24"
+                    />
+                    <Button
+                      onClick={enableHpTracking}
+                      className="text-xs py-1 px-3"
+                    >
+                      Enable
+                    </Button>
+                    <Button
+                      onClick={() => { setEnableHpPrompt(false); setNewHpMax(''); }}
+                      variant="secondary" className="text-xs py-1 px-2"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => setEnableHpPrompt(true)}
+                    variant="secondary" className="text-xs"
+                  >
+                    Enable HP tracking
+                  </Button>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* ── Stat Block (NPC only) ── */}
+        {isNpc && (
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide">
+                Stat Block
+              </h3>
+              {statBlock && (
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => {
+                      flushStatBlock();
+                      setEditingStatBlock(!editingStatBlock);
+                    }}
+                    className="text-[10px] text-brand-ink hover:text-brand-ink/80 transition-colors"
+                  >
+                    {editingStatBlock ? 'View' : 'Edit'}
+                  </button>
+                  <span className="text-ink-muted">·</span>
+                  <button
+                    onClick={handleRemoveStatBlock}
+                    className="text-[10px] text-danger-ink hover:text-danger-ink transition-colors"
+                  >
+                    Remove
+                  </button>
                 </div>
               )}
+            </div>
 
-              {/* A condition of the DM's own, in any game system */}
-              <form
-                className="flex gap-1.5"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  addCustomCondition();
-                }}
-              >
-                <input
-                  type="text"
-                  value={customCondition}
-                  onChange={(e) => setCustomCondition(e.target.value)}
-                  maxLength={TOKEN_LIMITS.maxConditionLength}
-                  placeholder={offeredConditions.length > 0 ? 'Another condition' : 'A condition, such as Frightened 2'}
-                  aria-label="Add a condition"
-                  className="input-cozy flex-1 min-w-0 text-xs"
-                />
-                <button
-                  type="submit"
-                  disabled={!canAddCondition}
-                  aria-label="Add condition"
-                  className="px-2 py-1 text-xs rounded-cozy border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            {statBlock ? (
+              editingStatBlock ? (
+                <div
+                  className="glass-panel p-3 max-h-96 overflow-y-auto"
+                  onBlur={(e) => {
+                    // Focus moving between the stat block's own fields is still typing.
+                    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) flushStatBlock();
+                  }}
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </form>
-            </section>
-
-            {/* ── DM Notes ── */}
-            <section>
-              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                DM Notes <span className="font-normal normal-case opacity-60">(not shown to players)</span>
-              </h3>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotesDraft(e.target.value)}
-                onBlur={handleNotesBlur}
-                placeholder="Guard post, special abilities, loot…"
-                rows={3}
-                className="input-cozy w-full text-sm resize-none"
-              />
-            </section>
-
-            {/* ── Controlled By ── */}
-            <section>
-              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                Controlled By
-              </h3>
-              <select
-                aria-label="Controlled By"
-                value={controlledBy ?? 'none'}
-                onChange={(e) => handleControllerChange(e.target.value === 'none' ? null : e.target.value)}
-                className="input-cozy w-full text-sm"
-              >
-                <option value="none">Nobody (DM controls)</option>
-                {/* A controller who is no longer a player is shown, so the
-                    box says who the token names, and cannot be picked again. */}
-                {controller.kind === 'not a player' && controlledBy && (
-                  <option value={controlledBy} disabled>
-                    {controller.name ?? 'A former member'} (no longer a player)
-                  </option>
+                  <StatBlockEditor
+                    statBlock={statBlock}
+                    onChange={handleStatBlockChange}
+                    gameSystem={campaign?.gameSystem ?? null}
+                  />
+                </div>
+              ) : (
+                <div className="glass-panel p-3 max-h-96 overflow-y-auto">
+                  <StatBlockViewer
+                    statBlock={statBlock}
+                    tokenName={current.name}
+                    gameSystem={campaign?.gameSystem ?? null}
+                  />
+                </div>
+              )
+            ) : (
+              <div className="glass-panel p-3">
+                {showCreateStatBlock ? (
+                  <div className="flex gap-2 items-center">
+                    <Button
+                      onClick={handleCreateStatBlock}
+                      className="text-xs py-1 px-3"
+                    >
+                      Create Blank
+                    </Button>
+                    <Button
+                      onClick={() => setShowCreateStatBlock(false)}
+                      variant="secondary" className="text-xs py-1 px-2"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm text-stone-gray/70 italic mb-2">No stat block</p>
+                    <Button
+                      onClick={() => setShowCreateStatBlock(true)}
+                      variant="secondary" className="text-xs"
+                    >
+                      Add Stat Block
+                    </Button>
+                  </>
                 )}
-                {(campaign?.memberships ?? [])
-                  .filter((m) => m.role === 'PLAYER')
-                  .map((m) => (
-                    <option key={m.userId} value={m.userId}>
-                      {m.user?.displayName ?? m.userId}
-                    </option>
-                  ))}
-              </select>
-              {controller.kind === 'player' && (
-                <p className="text-[10px] text-stone-gray/60 mt-1">
-                  This player can move the token on the map.
-                </p>
-              )}
-              {controller.kind === 'not a player' && (
-                <p className="text-[10px] text-warning-ink mt-1">
-                  {controller.name ?? 'They'} {controller.name ? 'is' : 'are'} no longer a player here, so they cannot move the token. Choose a player, or Nobody.
-                </p>
-              )}
-            </section>
-
-            {/* ── Quick Actions ── */}
-            <section>
-              <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
-                Quick Actions
-              </h3>
-
-              <div className="flex gap-2">
-                <button
-                  onClick={toggleVisible}
-                  disabled={savingVisibility}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
-                    visible
-                      ? 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
-                      : 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
-                  }`}
-                >
-                  {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                  {visible ? 'Hide from Players' : 'Show to Players'}
-                </button>
-
-                <button
-                  onClick={toggleObscured}
-                  disabled={savingVisibility}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
-                    obscured
-                      ? 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
-                      : 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
-                  }`}
-                >
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  {obscured ? 'Reveal Identity' : 'Obscure Identity'}
-                </button>
-
-                <button
-                  onClick={() => setConfirmingRemove(true)}
-                  disabled={isRemoving}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  {isRemoving ? 'Removing…' : 'Remove'}
-                </button>
               </div>
-            </section>
+            )}
+          </section>
+        )}
 
+        {/* ── Disposition (NPC only) ── */}
+        {isNpc && (
+          <section>
+            <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+              Disposition
+            </h3>
+            <div className="flex gap-2">
+              {([
+                { d: TokenDisposition.FRIENDLY, label: 'Friendly', activeClass: 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold' },
+                { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  activeClass: 'border-warning/60 bg-warning/10 text-warning-ink font-semibold' },
+                { d: TokenDisposition.HOSTILE,  label: 'Hostile',  activeClass: 'border-danger/60 bg-danger/10 text-danger-ink font-semibold' },
+              ] as const).map(({ d, label, activeClass }) => (
+                <button
+                  key={d}
+                  onClick={() => setTokenDisposition(d)}
+                  aria-pressed={disposition === d}
+                  className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
+                    disposition === d
+                      ? activeClass
+                      : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* ── Initiative ── */}
+        <section>
+          <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+            Initiative <span className="font-normal normal-case opacity-60">(optional)</span>
+          </h3>
+          <input
+            type="number"
+            value={initiative}
+            onChange={(e) => setInitiativeDraft(e.target.value)}
+            onBlur={handleInitiativeBlur}
+            placeholder="e.g. 14"
+            className="input-cozy input-cozy-number w-full text-sm"
+          />
+        </section>
+
+        {/* ── Darkvision (objects do not see) ── */}
+        {tokenType !== TokenType.OBJECT && (
+          <section>
+            <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Sight</h3>
+            <TokenVisionField
+              value={current.sightRadius ?? 0}
+              onCommit={(squares) => { void saveUpdate({ sightRadius: squares }); }}
+              feetPerSquare={currentMap?.feetPerSquare ?? 5}
+            />
+          </section>
+        )}
+
+        {/* ── Conditions ── */}
+        <section>
+          <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+            Conditions
+          </h3>
+
+          {/* Active conditions */}
+          {conditions.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {conditions.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => toggleCondition(c)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs rounded-full bg-warning/15 border border-warning/30 text-warning-ink hover:bg-danger/10 hover:border-danger/30 hover:text-danger-ink transition-colors"
+                >
+                  {c} <X className="w-3 h-3" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* The game system's conditions */}
+          {offeredConditions.length > 0 && (
+            <div className="flex flex-wrap gap-1 mb-2">
+              {offeredConditions.map((c) => {
+                const active = conditions.includes(c);
+                return (
+                  <button
+                    key={c}
+                    onClick={() => toggleCondition(c)}
+                    className={`px-2 py-1 text-xs rounded-cozy border transition-all ${
+                      active
+                        ? 'border-warning/50 bg-warning/15 text-warning-ink'
+                        : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                    }`}
+                  >
+                    {c}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* A condition of the DM's own, in any game system */}
+          <form
+            className="flex gap-1.5"
+            onSubmit={(e) => {
+              e.preventDefault();
+              addCustomCondition();
+            }}
+          >
+            <input
+              type="text"
+              value={customCondition}
+              onChange={(e) => setCustomCondition(e.target.value)}
+              maxLength={TOKEN_LIMITS.maxConditionLength}
+              placeholder={offeredConditions.length > 0 ? 'Another condition' : 'A condition, such as Frightened 2'}
+              aria-label="Add a condition"
+              className="input-cozy flex-1 min-w-0 text-xs"
+            />
+            <button
+              type="submit"
+              disabled={!canAddCondition}
+              aria-label="Add condition"
+              className="px-2 py-1 text-xs rounded-cozy border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </form>
+        </section>
+
+        {/* ── DM Notes ── */}
+        <section>
+          <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+            DM Notes <span className="font-normal normal-case opacity-60">(not shown to players)</span>
+          </h3>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotesDraft(e.target.value)}
+            onBlur={handleNotesBlur}
+            placeholder="Guard post, special abilities, loot…"
+            rows={3}
+            className="input-cozy w-full text-sm resize-none"
+          />
+        </section>
+
+        {/* ── Controlled By ── */}
+        <section>
+          <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+            Controlled By
+          </h3>
+          <select
+            aria-label="Controlled By"
+            value={controlledBy ?? 'none'}
+            onChange={(e) => handleControllerChange(e.target.value === 'none' ? null : e.target.value)}
+            className="input-cozy w-full text-sm"
+          >
+            <option value="none">Nobody (DM controls)</option>
+            {/* A controller who is no longer a player is shown, so the
+                box says who the token names, and cannot be picked again. */}
+            {controller.kind === 'not a player' && controlledBy && (
+              <option value={controlledBy} disabled>
+                {controller.name ?? 'A former member'} (no longer a player)
+              </option>
+            )}
+            {(campaign?.memberships ?? [])
+              .filter((m) => m.role === 'PLAYER')
+              .map((m) => (
+                <option key={m.userId} value={m.userId}>
+                  {m.user?.displayName ?? m.userId}
+                </option>
+              ))}
+          </select>
+          {controller.kind === 'player' && (
+            <p className="text-[10px] text-stone-gray/60 mt-1">
+              This player can move the token on the map.
+            </p>
+          )}
+          {controller.kind === 'not a player' && (
+            <p className="text-[10px] text-warning-ink mt-1">
+              {controller.name ?? 'They'} {controller.name ? 'is' : 'are'} no longer a player here, so they cannot move the token. Choose a player, or Nobody.
+            </p>
+          )}
+        </section>
+
+        {/* ── Quick Actions ── */}
+        <section>
+          <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">
+            Quick Actions
+          </h3>
+
+          <div className="flex gap-2">
+            <button
+              onClick={toggleVisible}
+              disabled={savingVisibility}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
+                visible
+                  ? 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
+                  : 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
+              }`}
+            >
+              {visible ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {visible ? 'Hide from Players' : 'Show to Players'}
+            </button>
+
+            <button
+              onClick={toggleObscured}
+              disabled={savingVisibility}
+              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs rounded-cozy border transition-all ${
+                obscured
+                  ? 'border-moss-green/40 bg-moss-green/10 text-brand-ink font-semibold'
+                  : 'border-stone-gray/30 hover:border-stone-gray/50 text-stone-gray'
+              }`}
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              {obscured ? 'Reveal Identity' : 'Obscure Identity'}
+            </button>
+
+            <button
+              onClick={() => setConfirmingRemove(true)}
+              disabled={isRemoving}
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs rounded-cozy border border-danger/30 hover:bg-danger/10 text-danger-ink transition-colors"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              {isRemoving ? 'Removing…' : 'Remove'}
+            </button>
           </div>
-        </motion.div>
-      </>
-    </AnimatePresence>
+        </section>
+
+      </div>
+    </SlideOver>
     <RemoveTokenDialog
       token={confirmingRemove ? token : null}
       isLoading={isRemoving}

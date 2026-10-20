@@ -10,6 +10,7 @@
 
 import { it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType } from '@/types';
@@ -58,6 +59,7 @@ beforeEach(() => {
 it('says why Place on Map was refused', async () => {
   api.addToken.mockRejectedValue(refusal('A map can hold at most 1000 tokens'));
   render(<TokenManager isOpen onClose={() => {}} />);
+  await waitForDialogFocus();
   await userEvent.type(screen.getByPlaceholderText('e.g. Goblin Scout, Party Wizard…'), 'Goblin');
   await userEvent.click(screen.getByRole('button', { name: 'Place on Map' }));
   expect(await screen.findByText('A map can hold at most 1000 tokens')).toBeInTheDocument();
@@ -84,7 +86,8 @@ it('says why removing a token was refused', async () => {
 
 it('says why a picture was refused', async () => {
   api.uploadAsset.mockRejectedValue(refusal('That file is not a PNG, JPEG, WebP or GIF picture'));
-  const { container } = render(<TokenManager isOpen onClose={() => {}} />);
-  await userEvent.upload(container.querySelector('input[type="file"]') as HTMLInputElement, new File(['x'], 'goblin.png', { type: 'image/png' }));
+  render(<TokenManager isOpen onClose={() => {}} />);
+  const panel = screen.getByRole('dialog', { name: 'Token Manager' });
+  await userEvent.upload(panel.querySelector('input[type="file"]') as HTMLInputElement, new File(['x'], 'goblin.png', { type: 'image/png' }));
   expect(await screen.findByText('That file is not a PNG, JPEG, WebP or GIF picture')).toBeInTheDocument();
 });

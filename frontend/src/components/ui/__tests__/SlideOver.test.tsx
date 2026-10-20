@@ -3,7 +3,7 @@
  */
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { MotionConfig } from 'framer-motion';
+import { AnimatePresence, MotionConfig } from 'framer-motion';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '../SlideOver';
 import { waitForDialogFocus } from '@/test/dialogFocus';
 
@@ -64,6 +64,23 @@ describe('SlideOver', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it('leaves the field being edited before Escape closes it', async () => {
+    const order: string[] = [];
+    render(
+      <SlideOver open onClose={() => order.push('close')}>
+        <SlideOverTitle>Notes</SlideOverTitle>
+        <input aria-label="Notes" onBlur={() => order.push('blur')} />
+      </SlideOver>
+    );
+    await waitForDialogFocus(screen.getByRole('dialog'));
+    const field = screen.getByRole('textbox', { name: 'Notes' });
+    field.focus();
+
+    fireEvent.keyDown(field, { key: 'Escape' });
+
+    expect(order).toEqual(['blur', 'close']);
+  });
+
   it('has a Close button that closes it', () => {
     const onClose = vi.fn();
     render(<Panel onClose={onClose} />);
@@ -108,5 +125,30 @@ describe('SlideOver', () => {
 
     const dialog = screen.getByRole('dialog');
     expect(dialog.style.transform).toMatch(/^(none)?$/);
+  });
+
+  // The asset library mounts its details panel inside AnimatePresence and
+  // removes the whole panel to close it.
+  it('fades out when a parent AnimatePresence removes it', async () => {
+    const shown = (open: boolean) => (
+      <MotionConfig reducedMotion="user">
+        <AnimatePresence>
+          {open && (
+            <SlideOver key="panel" open onClose={() => {}}>
+              <SlideOverTitle>Rules</SlideOverTitle>
+            </SlideOver>
+          )}
+        </AnimatePresence>
+      </MotionConfig>
+    );
+    const view = render(shown(true));
+    await waitFor(() => expect(screen.getByRole('dialog').style.opacity).toBe('1'));
+    view.rerender(shown(false));
+    await act(() => pause(50));
+
+    const dialog = screen.queryByRole('dialog');
+    expect(dialog).not.toBeNull();
+    expect(Number(dialog?.style.opacity)).toBeLessThan(1);
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

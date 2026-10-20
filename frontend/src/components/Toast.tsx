@@ -82,7 +82,9 @@ export default function Toast({
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={toastExit}
           transition={{ duration: 0.2 }}
-          className="fixed top-4 right-4 z-50 max-w-md"
+          // Above dialogs and side panels, which render at the end of <body>,
+          // as ToastContainer's notifications are
+          className="fixed top-4 right-4 z-9998 max-w-md"
         >
           <div
             role="alert"

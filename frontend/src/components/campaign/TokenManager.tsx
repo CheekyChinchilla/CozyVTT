@@ -4,10 +4,8 @@
 // ============================================
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   Swords,
-  X,
   Loader2,
   Eye,
   EyeOff,
@@ -27,6 +25,7 @@ import { AssetType, AssetScope, TokenLayer, TokenType, TokenDisposition } from '
 import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { apiErrorMessage } from '@/utils/errors';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
 import RemoveTokenDialog from './RemoveTokenDialog';
@@ -350,658 +349,636 @@ export default function TokenManager({ isOpen, onClose }: TokenManagerProps) {
 
   return (
     <>
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="token-backdrop"
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-xs"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-          />
+    <SlideOver
+      open={isOpen}
+      onClose={onClose}
+      className="max-w-sm bg-paper-white shadow-2xl overflow-y-auto flex flex-col"
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
+        <div className="flex items-center gap-2">
+          <Swords className="w-5 h-5 text-brand-ink" />
+          <SlideOverTitle className="text-lg font-bold text-brand-ink">Token Manager</SlideOverTitle>
+        </div>
+        <SlideOverClose className="btn-secondary p-1.5" iconClassName="w-4 h-4" title="Close" />
+      </div>
 
-          {/* Panel */}
-          <motion.div
-            key="token-panel"
-            className="fixed right-0 top-0 h-full z-50 w-full max-w-sm bg-paper-white shadow-2xl overflow-y-auto flex flex-col"
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-          >
-            {/* Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <div className="flex items-center gap-2">
-                <Swords className="w-5 h-5 text-brand-ink" />
-                <h2 className="text-lg font-bold text-brand-ink">Token Manager</h2>
-              </div>
-              <Button onClick={onClose} variant="secondary" className="p-1.5" title="Close">
-                <X className="w-4 h-4" />
-              </Button>
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-6">
+        {/* Error */}
+        {error && (
+          <div className="px-4 py-3 bg-danger/10 border border-danger/20 text-danger-ink text-sm rounded-cozy">
+            {error}
+          </div>
+        )}
+
+        {/* ── Section 1: Add Token ── */}
+        <section>
+          <h3 className="text-sm font-semibold text-stone-gray uppercase tracking-wide mb-3">
+            Add Token
+          </h3>
+
+          {/* Token Type Selector */}
+          <div className="mb-3">
+            <label className="text-xs text-stone-gray font-medium block mb-1">
+              Token Type
+            </label>
+            <div className="flex gap-2">
+              {([
+                { type: TokenType.PLAYER, label: 'Player' },
+                { type: TokenType.NPC,    label: 'NPC / Creature' },
+                { type: TokenType.OBJECT, label: 'Object' },
+              ] as const).map(({ type, label }) => (
+                <button
+                  key={type}
+                  onClick={() => { setTokenType(type); setPlaceHidden(type === TokenType.OBJECT); }}
+                  className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
+                    tokenType === type
+                      ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
+                      : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
+            {tokenType === TokenType.PLAYER && (
+              <p className="text-[10px] text-stone-gray/60 mt-1">
+                A player token stands for a character: the token opens its sheet and rolls with its numbers. For summoned creatures, use NPC type and assign a player as controller.
+              </p>
+            )}
+          </div>
 
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-6">
-              {/* Error */}
-              {error && (
-                <div className="px-4 py-3 bg-danger/10 border border-danger/20 text-danger-ink text-sm rounded-cozy">
-                  {error}
-                </div>
-              )}
-
-              {/* ── Section 1: Add Token ── */}
-              <section>
-                <h3 className="text-sm font-semibold text-stone-gray uppercase tracking-wide mb-3">
-                  Add Token
-                </h3>
-
-                {/* Token Type Selector */}
-                <div className="mb-3">
-                  <label className="text-xs text-stone-gray font-medium block mb-1">
-                    Token Type
+          {/* The character a Player token stands for */}
+          {tokenType === TokenType.PLAYER && (
+            <div className="mb-3">
+              {characters.length > 0 ? (
+                <>
+                  <label htmlFor="token-manager-character" className="text-xs text-stone-gray font-medium block mb-1">
+                    Character
                   </label>
-                  <div className="flex gap-2">
-                    {([
-                      { type: TokenType.PLAYER, label: 'Player' },
-                      { type: TokenType.NPC,    label: 'NPC / Creature' },
-                      { type: TokenType.OBJECT, label: 'Object' },
-                    ] as const).map(({ type, label }) => (
-                      <button
-                        key={type}
-                        onClick={() => { setTokenType(type); setPlaceHidden(type === TokenType.OBJECT); }}
-                        className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
-                          tokenType === type
-                            ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
-                            : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {tokenType === TokenType.PLAYER && (
-                    <p className="text-[10px] text-stone-gray/60 mt-1">
-                      A player token stands for a character: the token opens its sheet and rolls with its numbers. For summoned creatures, use NPC type and assign a player as controller.
-                    </p>
-                  )}
-                </div>
-
-                {/* The character a Player token stands for */}
-                {tokenType === TokenType.PLAYER && (
-                  <div className="mb-3">
-                    {characters.length > 0 ? (
-                      <>
-                        <label htmlFor="token-manager-character" className="text-xs text-stone-gray font-medium block mb-1">
-                          Character
-                        </label>
-                        <select
-                          id="token-manager-character"
-                          value={characterId}
-                          onChange={(e) => pickCharacter(e.target.value)}
-                          className="input-cozy w-full text-sm"
-                        >
-                          <option value="">No character</option>
-                          {characters.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name} ({ownerName(c.userId)})
-                            </option>
-                          ))}
-                        </select>
-                      </>
-                    ) : (
-                      <p className="text-[10px] text-stone-gray/60">
-                        No characters are in this campaign yet. A player brings one from their Characters page.
-                      </p>
-                    )}
-                  </div>
-                )}
-
-                {/* Asset picker grid */}
-                <div className="mb-3">
-                  {/* Hidden file input for inline upload */}
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs text-stone-gray">Token image <span className="opacity-50">(optional — uses placeholder if empty)</span>:</p>
-                    <button
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isUploading}
-                      title="Upload a new token image"
-                      className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 disabled:opacity-40 transition-colors"
-                    >
-                      {isUploading ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Upload className="w-3 h-3" />
-                      )}
-                      {isUploading ? 'Uploading…' : 'Upload'}
-                    </button>
-                  </div>
-                  {uploadError && (
-                    <p className="text-[11px] text-danger-ink mb-1.5">{uploadError}</p>
-                  )}
-                  <input
-                    type="search"
-                    value={pictureSearch}
-                    onChange={(e) => setPictureSearch(e.target.value)}
-                    aria-label="Search token pictures"
-                    placeholder="Search by name or tag"
-                    className="input-cozy w-full text-sm mb-1.5"
-                  />
-                  <AssetGrid
-                    type={AssetType.TOKEN}
-                    search={pictureSearch}
-                    prepend={uploadedPictures}
-                    onLoadError={() => setError('Failed to load token assets')}
-                    emptyMessage="No token pictures yet. Upload one above, or add some in the Asset Library."
-                    selectedId={selectedAsset?.id ?? null}
-                    onSelect={(asset) => (asset ? handleSelectAsset(asset) : setSelectedAsset(null))}
-                    columns={4}
-                    maxHeightClass="max-h-44"
-                    leadingItem={
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAsset(null)}
-                        title="Use colored-letter placeholder"
-                        className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
-                          !selectedAsset
-                            ? 'border-moss-green ring-2 ring-moss-green/30 bg-ink-muted/25'
-                            : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
-                        }`}
-                      >
-                        <span className="text-lg font-bold text-ink-secondary">?</span>
-                        <span className="absolute bottom-0.5 text-[8px] text-ink-muted">None</span>
-                      </button>
-                    }
-                  />
-                </div>
-
-                {/* Token Name */}
-                <div className="mb-3">
-                  <label className="text-xs text-stone-gray font-medium block mb-1">
-                    Token Name
-                  </label>
-                  <input
-                    type="text"
-                    value={tokenName}
-                    onChange={(e) => setTokenName(e.target.value)}
-                    placeholder="e.g. Goblin Scout, Party Wizard…"
+                  <select
+                    id="token-manager-character"
+                    value={characterId}
+                    onChange={(e) => pickCharacter(e.target.value)}
                     className="input-cozy w-full text-sm"
-                  />
-                </div>
-
-                {/* Display Mode Selector — all token types */}
-                <div className="mb-3">
-                  <label className="text-xs text-stone-gray font-medium block mb-1">
-                    Display Mode
-                  </label>
-                  <div className="flex gap-2">
-                    {([
-                      { mode: 'pog' as TokenDisplayMode,      label: 'Pog',      desc: 'Circular with border' },
-                      { mode: 'top-down' as TokenDisplayMode,  label: 'Top-Down', desc: 'Circular, no border' },
-                      { mode: 'full-art' as TokenDisplayMode,  label: 'Full Art', desc: 'Rectangular with alpha' },
-                    ] as const).map(({ mode, label, desc }) => (
-                      <button
-                        key={mode}
-                        onClick={() => setDisplayMode(mode)}
-                        title={desc}
-                        className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
-                          displayMode === mode
-                            ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
-                            : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                        }`}
-                      >
-                        {label}
-                      </button>
+                  >
+                    <option value="">No character</option>
+                    {characters.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({ownerName(c.userId)})
+                      </option>
                     ))}
-                  </div>
-                  <p className="text-[10px] text-stone-gray/50 mt-1">
-                    {displayMode === 'pog' && 'Classic round token with a colored disposition ring.'}
-                    {displayMode === 'top-down' && 'Circular crop, ideal for overhead/bird\u2019s-eye art.'}
-                    {displayMode === 'full-art' && 'Shows full image including transparency — great for standees and monsters.'}
-                  </p>
-                </div>
+                  </select>
+                </>
+              ) : (
+                <p className="text-[10px] text-stone-gray/60">
+                  No characters are in this campaign yet. A player brings one from their Characters page.
+                </p>
+              )}
+            </div>
+          )}
 
-                {/* NPC-specific fields */}
-                {tokenType === TokenType.NPC && (
-                  <>
-                    {/* Disposition */}
-                    <div className="mb-3">
-                      <label className="text-xs text-stone-gray font-medium block mb-1">
-                        Disposition
-                      </label>
-                      <div className="flex gap-2">
-                        {([
-                          { d: TokenDisposition.FRIENDLY, label: 'Friendly', color: 'teal' },
-                          { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  color: 'amber' },
-                          { d: TokenDisposition.HOSTILE,  label: 'Hostile',  color: 'red' },
-                        ] as const).map(({ d, label, color }) => (
-                          <button
-                            key={d}
-                            onClick={() => setDisposition(d)}
-                            className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
-                              disposition === d
-                                ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
-                                : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
-                                :                    'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
-                                : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+          {/* Asset picker grid */}
+          <div className="mb-3">
+            {/* Hidden file input for inline upload */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-stone-gray">Token image <span className="opacity-50">(optional — uses placeholder if empty)</span>:</p>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+                title="Upload a new token image"
+                className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 disabled:opacity-40 transition-colors"
+              >
+                {isUploading ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <Upload className="w-3 h-3" />
+                )}
+                {isUploading ? 'Uploading…' : 'Upload'}
+              </button>
+            </div>
+            {uploadError && (
+              <p className="text-[11px] text-danger-ink mb-1.5">{uploadError}</p>
+            )}
+            <input
+              type="search"
+              value={pictureSearch}
+              onChange={(e) => setPictureSearch(e.target.value)}
+              aria-label="Search token pictures"
+              placeholder="Search by name or tag"
+              className="input-cozy w-full text-sm mb-1.5"
+            />
+            <AssetGrid
+              type={AssetType.TOKEN}
+              search={pictureSearch}
+              prepend={uploadedPictures}
+              onLoadError={() => setError('Failed to load token assets')}
+              emptyMessage="No token pictures yet. Upload one above, or add some in the Asset Library."
+              selectedId={selectedAsset?.id ?? null}
+              onSelect={(asset) => (asset ? handleSelectAsset(asset) : setSelectedAsset(null))}
+              columns={4}
+              maxHeightClass="max-h-44"
+              leadingItem={
+                <button
+                  type="button"
+                  onClick={() => setSelectedAsset(null)}
+                  title="Use colored-letter placeholder"
+                  className={`relative rounded-cozy overflow-hidden border-2 aspect-square transition-all flex items-center justify-center ${
+                    !selectedAsset
+                      ? 'border-moss-green ring-2 ring-moss-green/30 bg-ink-muted/25'
+                      : 'border-transparent hover:border-moss-green/40 bg-ink-muted/20'
+                  }`}
+                >
+                  <span className="text-lg font-bold text-ink-secondary">?</span>
+                  <span className="absolute bottom-0.5 text-[8px] text-ink-muted">None</span>
+                </button>
+              }
+            />
+          </div>
+
+          {/* Token Name */}
+          <div className="mb-3">
+            <label className="text-xs text-stone-gray font-medium block mb-1">
+              Token Name
+            </label>
+            <input
+              type="text"
+              value={tokenName}
+              onChange={(e) => setTokenName(e.target.value)}
+              placeholder="e.g. Goblin Scout, Party Wizard…"
+              className="input-cozy w-full text-sm"
+            />
+          </div>
+
+          {/* Display Mode Selector — all token types */}
+          <div className="mb-3">
+            <label className="text-xs text-stone-gray font-medium block mb-1">
+              Display Mode
+            </label>
+            <div className="flex gap-2">
+              {([
+                { mode: 'pog' as TokenDisplayMode,      label: 'Pog',      desc: 'Circular with border' },
+                { mode: 'top-down' as TokenDisplayMode,  label: 'Top-Down', desc: 'Circular, no border' },
+                { mode: 'full-art' as TokenDisplayMode,  label: 'Full Art', desc: 'Rectangular with alpha' },
+              ] as const).map(({ mode, label, desc }) => (
+                <button
+                  key={mode}
+                  onClick={() => setDisplayMode(mode)}
+                  title={desc}
+                  className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
+                    displayMode === mode
+                      ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
+                      : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-stone-gray/50 mt-1">
+              {displayMode === 'pog' && 'Classic round token with a colored disposition ring.'}
+              {displayMode === 'top-down' && 'Circular crop, ideal for overhead/bird\u2019s-eye art.'}
+              {displayMode === 'full-art' && 'Shows full image including transparency — great for standees and monsters.'}
+            </p>
+          </div>
+
+          {/* NPC-specific fields */}
+          {tokenType === TokenType.NPC && (
+            <>
+              {/* Disposition */}
+              <div className="mb-3">
+                <label className="text-xs text-stone-gray font-medium block mb-1">
+                  Disposition
+                </label>
+                <div className="flex gap-2">
+                  {([
+                    { d: TokenDisposition.FRIENDLY, label: 'Friendly', color: 'teal' },
+                    { d: TokenDisposition.NEUTRAL,  label: 'Neutral',  color: 'amber' },
+                    { d: TokenDisposition.HOSTILE,  label: 'Hostile',  color: 'red' },
+                  ] as const).map(({ d, label, color }) => (
+                    <button
+                      key={d}
+                      onClick={() => setDisposition(d)}
+                      className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
+                        disposition === d
+                          ? color === 'teal'  ? 'border-teal-500 bg-teal-500/10 text-teal-700 font-semibold'
+                          : color === 'amber' ? 'border-warning/60 bg-warning/10 text-warning-ink font-semibold'
+                          :                    'border-danger/60 bg-danger/10 text-danger-ink font-semibold'
+                          : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* HP Max */}
+              <div className="mb-3">
+                <label className="text-xs text-stone-gray font-medium block mb-1">
+                  HP Max <span className="font-normal opacity-60">(0 = no HP bar)</span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  value={hpMax}
+                  onChange={(e) => setHpMax(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="input-cozy w-full text-sm"
+                />
+                {hpMax > 0 && (
+                  <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showHpBar}
+                      onChange={(e) => setShowHpBar(e.target.checked)}
+                      className="rounded-sm"
+                    />
+                    <span className="text-xs text-stone-gray">Show HP bar to players</span>
+                  </label>
+                )}
+              </div>
+
+              {/* Initiative */}
+              <div className="mb-3">
+                <label className="text-xs text-stone-gray font-medium block mb-1">
+                  Initiative <span className="font-normal opacity-60">(optional)</span>
+                </label>
+                <input
+                  type="number"
+                  value={initiative}
+                  onChange={(e) => setInitiative(e.target.value)}
+                  placeholder="e.g. 14"
+                  className="input-cozy w-full text-sm"
+                />
+              </div>
+
+              {/* DM Notes */}
+              <div className="mb-3">
+                <label className="text-xs text-stone-gray font-medium block mb-1">
+                  DM Notes <span className="font-normal opacity-60">(not shown to players)</span>
+                </label>
+                <textarea
+                  value={tokenNotes}
+                  onChange={(e) => setTokenNotes(e.target.value)}
+                  placeholder="Guard post, key holder…"
+                  rows={2}
+                  className="input-cozy w-full text-sm resize-none"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Hidden on placement — NPCs and objects, the tokens that are secrets */}
+          {dmTokenControls(tokenType).placeHidden && (
+            <div className="mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={placeHidden}
+                  onChange={(e) => setPlaceHidden(e.target.checked)}
+                  className="rounded-sm"
+                />
+                <span className="text-xs text-stone-gray">Hidden from players on placement</span>
+              </label>
+              <p className="text-[10px] text-stone-gray/50 mt-0.5">
+                Reveal later by right-clicking it — useful for a monster waiting in a room, a secret door, a trapped chest.
+              </p>
+            </div>
+          )}
+
+          {/* Object-specific fields */}
+          {tokenType === TokenType.OBJECT && (
+            <>
+              {/* DM Notes */}
+              <div className="mb-3">
+                <label className="text-xs text-stone-gray font-medium block mb-1">
+                  DM Notes <span className="font-normal opacity-60">(not shown to players)</span>
+                </label>
+                <textarea
+                  value={tokenNotes}
+                  onChange={(e) => setTokenNotes(e.target.value)}
+                  placeholder="Locked with iron key…"
+                  rows={2}
+                  className="input-cozy w-full text-sm resize-none"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Size */}
+          <div className="mb-3">
+            <label className="text-xs text-stone-gray font-medium block mb-1">
+              Size (grid cells)
+            </label>
+            <div className="flex gap-2">
+              {SIZE_OPTIONS.map((opt) => {
+                const isSelected = tokenSize.width === opt.value.width;
+                return (
+                  <button
+                    key={opt.label}
+                    onClick={() => setTokenSize(opt.value)}
+                    className={`flex-1 py-1.5 text-center text-xs rounded-cozy border transition-all ${
+                      isSelected
+                        ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
+                        : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                    }`}
+                  >
+                    <span className="block">{opt.label}</span>
+                    <span className="block text-[10px] opacity-60">{opt.sublabel}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Layer (not shown for Object — always placed on material plane) */}
+          {tokenType !== TokenType.OBJECT && (
+            <div className="mb-3">
+              <label className="text-xs text-stone-gray font-medium block mb-1">
+                Place on Layer
+              </label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setTokenLayer(TokenLayer.TOKEN)}
+                  className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
+                    tokenLayer === TokenLayer.TOKEN
+                      ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
+                      : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                  }`}
+                >
+                  Material Plane
+                </button>
+                <button
+                  onClick={() => setTokenLayer(TokenLayer.SPIRIT)}
+                  className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
+                    tokenLayer === TokenLayer.SPIRIT
+                      ? 'border-spirit-purple bg-spirit-purple/10 text-spirit-purple font-semibold'
+                      : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
+                  }`}
+                >
+                  Spirit Realm
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Darkvision (NPC and Player only; objects do not see) */}
+          {tokenType !== TokenType.OBJECT && (
+            <TokenVisionField value={sightRadius} onChange={setSightRadius} feetPerSquare={currentMap?.feetPerSquare ?? 5} />
+          )}
+
+          {/* Assign to player (NPC and Player only) */}
+          {tokenType !== TokenType.OBJECT && players.length > 0 && (
+            <div className="mb-3">
+              <label htmlFor="token-manager-controller" className="text-xs text-stone-gray font-medium block mb-1">
+                Controlled by
+              </label>
+              <select
+                id="token-manager-controller"
+                value={assignTo}
+                onChange={(e) => setAssignTo(e.target.value)}
+                className="input-cozy w-full text-sm"
+              >
+                <option value="none">Nobody (DM controls)</option>
+                {players.map((m) => (
+                  <option key={m.userId} value={m.userId}>
+                    {m.user?.displayName ?? m.userId}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {!currentMap && (
+            <p className="text-xs text-warning-ink mb-2">
+              No map is currently loaded — load a map first.
+            </p>
+          )}
+
+          <Button
+            onClick={handleAddToken}
+            disabled={!canAdd || isAdding}
+            className="w-full flex items-center justify-center gap-2"
+          >
+            {isAdding ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Plus className="w-4 h-4" />
+            )}
+            {isAdding ? 'Placing…' : 'Place on Map'}
+          </Button>
+          <p className="text-[10px] text-stone-gray/50 mt-1.5 text-center">
+            Token is placed at the map center — drag it into position afterwards.
+          </p>
+        </section>
+
+        {/* ── Section 2: Tokens on This Map ── */}
+        <section>
+          <h3 className="text-sm font-semibold text-stone-gray uppercase tracking-wide mb-1">
+            Tokens on Map
+            {tokens.length > 0 && (
+              <span className="ml-2 text-xs font-normal normal-case text-stone-gray/60">
+                ({tokens.length})
+              </span>
+            )}
+          </h3>
+
+          {!currentMap ? (
+            <p className="text-sm text-stone-gray/70 italic">No map loaded.</p>
+          ) : tokens.length === 0 ? (
+            <p className="text-sm text-stone-gray/70 italic">
+              No tokens on this map yet. Add one above.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {tokens.map((token) => {
+                const isSpirit = token.layer === TokenLayer.SPIRIT;
+                const controller = tokenControllerStanding(token.controlledBy, campaign?.memberships);
+                const isTogglingVis = togglingVisibilityId === token.id;
+                const isTogglingLyr = togglingLayerId === token.id;
+                const isDeleting = deletingId === token.id;
+                const isShowingMapPicker = movingTokenId === token.id;
+
+                return (
+                  <div key={token.id} className="glass-panel p-3">
+                    <div className="flex items-center gap-2">
+                      {/* Token avatar */}
+                      {token.imageUrl ? (
+                        <img
+                          src={token.imageUrl}
+                          alt={token.name}
+                          className="w-9 h-9 rounded-full object-cover shrink-0 border border-moss-green/20"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-stone-gray/10 flex items-center justify-center shrink-0">
+                          <Swords className="w-4 h-4 text-stone-gray/30" />
+                        </div>
+                      )}
+
+                      {/* Name + badges */}
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-charcoal truncate">
+                          {token.name}
+                        </p>
+                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                              isSpirit
+                                ? 'bg-spirit-purple/15 text-spirit-purple'
+                                : 'bg-moss-green/10 text-brand-ink'
                             }`}
                           >
-                            {label}
+                            {isSpirit ? 'Spirit' : 'Material'}
+                          </span>
+                          {!token.visible && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-stone-gray/10 text-stone-gray">
+                              Hidden
+                            </span>
+                          )}
+                          {controller.kind === 'player' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-warm-amber/10 text-warm-amber">
+                              {controller.name}
+                            </span>
+                          )}
+                          {controller.kind === 'not a player' && (
+                            <span
+                              className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-stone-gray/10 text-stone-gray"
+                              title="No longer a player in this campaign, so they cannot move this token. Choose who controls it in Edit Token."
+                            >
+                              {controller.name ?? 'Former member'}, not a player
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        {/* Obscure / reveal identity */}
+                        <button
+                          onClick={() => handleToggleObscured(token)}
+                          disabled={isTogglingVis}
+                          className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
+                          title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
+                        >
+                          <HelpCircle className={`w-3.5 h-3.5 ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`} />
+                        </button>
+
+                        {/* Visibility toggle */}
+                        <button
+                          onClick={() => handleToggleVisibility(token)}
+                          disabled={isTogglingVis}
+                          className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
+                          title={token.visible ? 'Hide from players' : 'Show to players'}
+                        >
+                          {isTogglingVis ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
+                          ) : token.visible ? (
+                            <Eye className="w-3.5 h-3.5 text-brand-ink" />
+                          ) : (
+                            <EyeOff className="w-3.5 h-3.5 text-stone-gray/40" />
+                          )}
+                        </button>
+
+                        {/* Spirit layer toggle. An object keeps to the material
+                           plane, as on the map's right-click menu; one already
+                           on the spirit layer is offered only the way back. */}
+                        {(dmTokenControls(token.type).crossPlanes || isSpirit) && (
+                          <button
+                            onClick={() => handleToggleLayer(token)}
+                            disabled={isTogglingLyr}
+                            className="p-1.5 rounded-sm hover:bg-spirit-purple/10 transition-colors"
+                            title={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
+                          >
+                            {isTogglingLyr ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
+                            ) : (
+                              <Ghost
+                                className={`w-3.5 h-3.5 ${
+                                  isSpirit ? 'text-spirit-purple' : 'text-stone-gray/30'
+                                }`}
+                              />
+                            )}
                           </button>
-                        ))}
+                        )}
+
+                        {/* Move to another map */}
+                        {otherMaps.length > 0 && (
+                          <button
+                            onClick={() =>
+                              setMovingTokenId(isShowingMapPicker ? null : token.id)
+                            }
+                            className={`p-1.5 rounded transition-colors ${
+                              isShowingMapPicker
+                                ? 'bg-warm-amber/20 text-warm-amber'
+                                : 'hover:bg-warm-amber/10 text-stone-gray/30 hover:text-warm-amber'
+                            }`}
+                            title="Move to another map"
+                          >
+                            <MapIcon className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+
+                        {/* Delete */}
+                        <button
+                          onClick={() => setTokenToRemove(token)}
+                          disabled={isDeleting}
+                          className="p-1.5 rounded-sm hover:bg-danger/10 transition-colors"
+                          title="Remove from map"
+                          aria-label={`Remove ${token.name} from map`}
+                        >
+                          {isDeleting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
+                          ) : (
+                            <Trash2 className="w-3.5 h-3.5 text-danger-ink/60 hover:text-danger-ink transition-colors" />
+                          )}
+                        </button>
                       </div>
                     </div>
 
-                    {/* HP Max */}
-                    <div className="mb-3">
-                      <label className="text-xs text-stone-gray font-medium block mb-1">
-                        HP Max <span className="font-normal opacity-60">(0 = no HP bar)</span>
-                      </label>
-                      <input
-                        type="number"
-                        min={0}
-                        value={hpMax}
-                        onChange={(e) => setHpMax(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                        className="input-cozy w-full text-sm"
-                      />
-                      {hpMax > 0 && (
-                        <label className="flex items-center gap-2 mt-1.5 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={showHpBar}
-                            onChange={(e) => setShowHpBar(e.target.checked)}
-                            className="rounded-sm"
-                          />
-                          <span className="text-xs text-stone-gray">Show HP bar to players</span>
-                        </label>
-                      )}
-                    </div>
-
-                    {/* Initiative */}
-                    <div className="mb-3">
-                      <label className="text-xs text-stone-gray font-medium block mb-1">
-                        Initiative <span className="font-normal opacity-60">(optional)</span>
-                      </label>
-                      <input
-                        type="number"
-                        value={initiative}
-                        onChange={(e) => setInitiative(e.target.value)}
-                        placeholder="e.g. 14"
-                        className="input-cozy w-full text-sm"
-                      />
-                    </div>
-
-                    {/* DM Notes */}
-                    <div className="mb-3">
-                      <label className="text-xs text-stone-gray font-medium block mb-1">
-                        DM Notes <span className="font-normal opacity-60">(not shown to players)</span>
-                      </label>
-                      <textarea
-                        value={tokenNotes}
-                        onChange={(e) => setTokenNotes(e.target.value)}
-                        placeholder="Guard post, key holder…"
-                        rows={2}
-                        className="input-cozy w-full text-sm resize-none"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {/* Hidden on placement — NPCs and objects, the tokens that are secrets */}
-                {dmTokenControls(tokenType).placeHidden && (
-                  <div className="mb-3">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={placeHidden}
-                        onChange={(e) => setPlaceHidden(e.target.checked)}
-                        className="rounded-sm"
-                      />
-                      <span className="text-xs text-stone-gray">Hidden from players on placement</span>
-                    </label>
-                    <p className="text-[10px] text-stone-gray/50 mt-0.5">
-                      Reveal later by right-clicking it — useful for a monster waiting in a room, a secret door, a trapped chest.
-                    </p>
-                  </div>
-                )}
-
-                {/* Object-specific fields */}
-                {tokenType === TokenType.OBJECT && (
-                  <>
-                    {/* DM Notes */}
-                    <div className="mb-3">
-                      <label className="text-xs text-stone-gray font-medium block mb-1">
-                        DM Notes <span className="font-normal opacity-60">(not shown to players)</span>
-                      </label>
-                      <textarea
-                        value={tokenNotes}
-                        onChange={(e) => setTokenNotes(e.target.value)}
-                        placeholder="Locked with iron key…"
-                        rows={2}
-                        className="input-cozy w-full text-sm resize-none"
-                      />
-                    </div>
-                  </>
-                )}
-
-                {/* Size */}
-                <div className="mb-3">
-                  <label className="text-xs text-stone-gray font-medium block mb-1">
-                    Size (grid cells)
-                  </label>
-                  <div className="flex gap-2">
-                    {SIZE_OPTIONS.map((opt) => {
-                      const isSelected = tokenSize.width === opt.value.width;
-                      return (
-                        <button
-                          key={opt.label}
-                          onClick={() => setTokenSize(opt.value)}
-                          className={`flex-1 py-1.5 text-center text-xs rounded-cozy border transition-all ${
-                            isSelected
-                              ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
-                              : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                          }`}
-                        >
-                          <span className="block">{opt.label}</span>
-                          <span className="block text-[10px] opacity-60">{opt.sublabel}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Layer (not shown for Object — always placed on material plane) */}
-                {tokenType !== TokenType.OBJECT && (
-                  <div className="mb-3">
-                    <label className="text-xs text-stone-gray font-medium block mb-1">
-                      Place on Layer
-                    </label>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setTokenLayer(TokenLayer.TOKEN)}
-                        className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
-                          tokenLayer === TokenLayer.TOKEN
-                            ? 'border-moss-green bg-moss-green/10 text-brand-ink font-semibold'
-                            : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                        }`}
-                      >
-                        Material Plane
-                      </button>
-                      <button
-                        onClick={() => setTokenLayer(TokenLayer.SPIRIT)}
-                        className={`flex-1 py-1.5 text-xs rounded-cozy border transition-all ${
-                          tokenLayer === TokenLayer.SPIRIT
-                            ? 'border-spirit-purple bg-spirit-purple/10 text-spirit-purple font-semibold'
-                            : 'border-moss-green/20 hover:border-moss-green/40 text-stone-gray'
-                        }`}
-                      >
-                        Spirit Realm
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Darkvision (NPC and Player only; objects do not see) */}
-                {tokenType !== TokenType.OBJECT && (
-                  <TokenVisionField value={sightRadius} onChange={setSightRadius} feetPerSquare={currentMap?.feetPerSquare ?? 5} />
-                )}
-
-                {/* Assign to player (NPC and Player only) */}
-                {tokenType !== TokenType.OBJECT && players.length > 0 && (
-                  <div className="mb-3">
-                    <label htmlFor="token-manager-controller" className="text-xs text-stone-gray font-medium block mb-1">
-                      Controlled by
-                    </label>
-                    <select
-                      id="token-manager-controller"
-                      value={assignTo}
-                      onChange={(e) => setAssignTo(e.target.value)}
-                      className="input-cozy w-full text-sm"
-                    >
-                      <option value="none">Nobody (DM controls)</option>
-                      {players.map((m) => (
-                        <option key={m.userId} value={m.userId}>
-                          {m.user?.displayName ?? m.userId}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                {!currentMap && (
-                  <p className="text-xs text-warning-ink mb-2">
-                    No map is currently loaded — load a map first.
-                  </p>
-                )}
-
-                <Button
-                  onClick={handleAddToken}
-                  disabled={!canAdd || isAdding}
-                  className="w-full flex items-center justify-center gap-2"
-                >
-                  {isAdding ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="w-4 h-4" />
-                  )}
-                  {isAdding ? 'Placing…' : 'Place on Map'}
-                </Button>
-                <p className="text-[10px] text-stone-gray/50 mt-1.5 text-center">
-                  Token is placed at the map center — drag it into position afterwards.
-                </p>
-              </section>
-
-              {/* ── Section 2: Tokens on This Map ── */}
-              <section>
-                <h3 className="text-sm font-semibold text-stone-gray uppercase tracking-wide mb-1">
-                  Tokens on Map
-                  {tokens.length > 0 && (
-                    <span className="ml-2 text-xs font-normal normal-case text-stone-gray/60">
-                      ({tokens.length})
-                    </span>
-                  )}
-                </h3>
-
-                {!currentMap ? (
-                  <p className="text-sm text-stone-gray/70 italic">No map loaded.</p>
-                ) : tokens.length === 0 ? (
-                  <p className="text-sm text-stone-gray/70 italic">
-                    No tokens on this map yet. Add one above.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {tokens.map((token) => {
-                      const isSpirit = token.layer === TokenLayer.SPIRIT;
-                      const controller = tokenControllerStanding(token.controlledBy, campaign?.memberships);
-                      const isTogglingVis = togglingVisibilityId === token.id;
-                      const isTogglingLyr = togglingLayerId === token.id;
-                      const isDeleting = deletingId === token.id;
-                      const isShowingMapPicker = movingTokenId === token.id;
-
-                      return (
-                        <div key={token.id} className="glass-panel p-3">
-                          <div className="flex items-center gap-2">
-                            {/* Token avatar */}
-                            {token.imageUrl ? (
-                              <img
-                                src={token.imageUrl}
-                                alt={token.name}
-                                className="w-9 h-9 rounded-full object-cover shrink-0 border border-moss-green/20"
-                              />
-                            ) : (
-                              <div className="w-9 h-9 rounded-full bg-stone-gray/10 flex items-center justify-center shrink-0">
-                                <Swords className="w-4 h-4 text-stone-gray/30" />
-                              </div>
-                            )}
-
-                            {/* Name + badges */}
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium text-charcoal truncate">
-                                {token.name}
-                              </p>
-                              <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                <span
-                                  className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                    isSpirit
-                                      ? 'bg-spirit-purple/15 text-spirit-purple'
-                                      : 'bg-moss-green/10 text-brand-ink'
-                                  }`}
-                                >
-                                  {isSpirit ? 'Spirit' : 'Material'}
-                                </span>
-                                {!token.visible && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-stone-gray/10 text-stone-gray">
-                                    Hidden
-                                  </span>
-                                )}
-                                {controller.kind === 'player' && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-warm-amber/10 text-warm-amber">
-                                    {controller.name}
-                                  </span>
-                                )}
-                                {controller.kind === 'not a player' && (
-                                  <span
-                                    className="text-[10px] px-1.5 py-0.5 rounded-sm font-medium bg-stone-gray/10 text-stone-gray"
-                                    title="No longer a player in this campaign, so they cannot move this token. Choose who controls it in Edit Token."
-                                  >
-                                    {controller.name ?? 'Former member'}, not a player
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-
-                            {/* Action buttons */}
-                            <div className="flex items-center gap-0.5 shrink-0">
-                              {/* Obscure / reveal identity */}
-                              <button
-                                onClick={() => handleToggleObscured(token)}
-                                disabled={isTogglingVis}
-                                className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
-                                title={token.obscured ? 'Reveal identity' : 'Obscure identity'}
-                              >
-                                <HelpCircle className={`w-3.5 h-3.5 ${token.obscured ? 'text-brand-ink' : 'text-stone-gray'}`} />
-                              </button>
-
-                              {/* Visibility toggle */}
-                              <button
-                                onClick={() => handleToggleVisibility(token)}
-                                disabled={isTogglingVis}
-                                className="p-1.5 rounded-sm hover:bg-moss-green/10 transition-colors"
-                                title={token.visible ? 'Hide from players' : 'Show to players'}
-                              >
-                                {isTogglingVis ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
-                                ) : token.visible ? (
-                                  <Eye className="w-3.5 h-3.5 text-brand-ink" />
-                                ) : (
-                                  <EyeOff className="w-3.5 h-3.5 text-stone-gray/40" />
-                                )}
-                              </button>
-
-                              {/* Spirit layer toggle. An object keeps to the material
-                                 plane, as on the map's right-click menu; one already
-                                 on the spirit layer is offered only the way back. */}
-                              {(dmTokenControls(token.type).crossPlanes || isSpirit) && (
-                                <button
-                                  onClick={() => handleToggleLayer(token)}
-                                  disabled={isTogglingLyr}
-                                  className="p-1.5 rounded-sm hover:bg-spirit-purple/10 transition-colors"
-                                  title={isSpirit ? 'Return to Material Plane' : 'Send to Spirit Realm'}
-                                >
-                                  {isTogglingLyr ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
-                                  ) : (
-                                    <Ghost
-                                      className={`w-3.5 h-3.5 ${
-                                        isSpirit ? 'text-spirit-purple' : 'text-stone-gray/30'
-                                      }`}
-                                    />
-                                  )}
-                                </button>
-                              )}
-
-                              {/* Move to another map */}
-                              {otherMaps.length > 0 && (
-                                <button
-                                  onClick={() =>
-                                    setMovingTokenId(isShowingMapPicker ? null : token.id)
-                                  }
-                                  className={`p-1.5 rounded transition-colors ${
-                                    isShowingMapPicker
-                                      ? 'bg-warm-amber/20 text-warm-amber'
-                                      : 'hover:bg-warm-amber/10 text-stone-gray/30 hover:text-warm-amber'
-                                  }`}
-                                  title="Move to another map"
-                                >
-                                  <MapIcon className="w-3.5 h-3.5" />
-                                </button>
-                              )}
-
-                              {/* Delete */}
-                              <button
-                                onClick={() => setTokenToRemove(token)}
-                                disabled={isDeleting}
-                                className="p-1.5 rounded-sm hover:bg-danger/10 transition-colors"
-                                title="Remove from map"
-                                aria-label={`Remove ${token.name} from map`}
-                              >
-                                {isDeleting ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-gray" />
-                                ) : (
-                                  <Trash2 className="w-3.5 h-3.5 text-danger-ink/60 hover:text-danger-ink transition-colors" />
-                                )}
-                              </button>
-                            </div>
+                    {/* Inline map picker for Move to Map */}
+                    {isShowingMapPicker && (
+                      <div className="mt-2 pt-2 border-t border-moss-green/10">
+                        <p className="text-[11px] text-stone-gray mb-1.5">
+                          Move to which map?
+                        </p>
+                        {isMovingTokenMap ? (
+                          <div className="flex items-center gap-2 text-stone-gray text-xs py-1">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            Moving token…
                           </div>
-
-                          {/* Inline map picker for Move to Map */}
-                          {isShowingMapPicker && (
-                            <div className="mt-2 pt-2 border-t border-moss-green/10">
-                              <p className="text-[11px] text-stone-gray mb-1.5">
-                                Move to which map?
-                              </p>
-                              {isMovingTokenMap ? (
-                                <div className="flex items-center gap-2 text-stone-gray text-xs py-1">
-                                  <Loader2 className="w-3 h-3 animate-spin" />
-                                  Moving token…
-                                </div>
-                              ) : (
-                                <div className="space-y-0.5">
-                                  {otherMaps.map((m) => (
-                                    <button
-                                      key={m.id}
-                                      onClick={() => handleMoveToMap(token, m.id)}
-                                      className="w-full text-left px-2 py-1.5 text-xs text-charcoal hover:bg-moss-green/10 rounded-sm flex items-center gap-1.5 transition-colors"
-                                    >
-                                      <ChevronRight className="w-3 h-3 text-stone-gray/40" />
-                                      {m.name}
-                                    </button>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                        ) : (
+                          <div className="space-y-0.5">
+                            {otherMaps.map((m) => (
+                              <button
+                                key={m.id}
+                                onClick={() => handleMoveToMap(token, m.id)}
+                                className="w-full text-left px-2 py-1.5 text-xs text-charcoal hover:bg-moss-green/10 rounded-sm flex items-center gap-1.5 transition-colors"
+                              >
+                                <ChevronRight className="w-3 h-3 text-stone-gray/40" />
+                                {m.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-                )}
-              </section>
+                );
+              })}
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+          )}
+        </section>
+      </div>
+    </SlideOver>
     <RemoveTokenDialog
       token={tokenToRemove}
       onConfirm={() => tokenToRemove && handleDelete(tokenToRemove)}

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import AtmospherePanel from '../AtmospherePanel';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
@@ -137,5 +137,20 @@ describe('AtmospherePanel audio list', () => {
     expect(screen.getByText(/Personal/)).toBeInTheDocument();
     expect(screen.getByText(/Global/)).toBeInTheDocument();
     expect(screen.getByText(/Campaign/)).toBeInTheDocument();
+  });
+});
+
+describe('the Atmosphere panel as a dialog', () => {
+  it('is announced by name, and Escape and its Close button close it', async () => {
+    const onClose = vi.fn();
+    render(<AtmospherePanel isOpen onClose={onClose} />);
+    const dialog = screen.getByRole('dialog', { name: 'Atmosphere' });
+    await waitFor(() => expect(listAssets).toHaveBeenCalled());
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });
