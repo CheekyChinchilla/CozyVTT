@@ -553,9 +553,14 @@ export function deriveReadableTokens(colors: ThemeColors): Record<string, string
   const onPaper = [colors.paper];
   const everywhere = [...onPage, ...onPaper];
   // Coloured text also sits on its own colour's tint (a chip or panel at 10
-  // to 15%: the alert and badge classes), and plain text on a wash of the ink
-  // (an inset panel or a hovered row at 5 to 10%).
-  const andItsTint = (fill: string) => [...everywhere, ...everywhere.map((bg) => over(fill, bg, 0.15))];
+  // to 15%: the alert and badge classes, deepened to 25 or 30% on hover), and
+  // plain text on a wash of the ink (an inset panel or a hovered row at 5 to
+  // 10%).
+  const andItsTint = (fill: string) => [
+    ...everywhere,
+    ...everywhere.map((bg) => over(fill, bg, 0.15)),
+    ...everywhere.map((bg) => over(fill, bg, 0.3)),
+  ];
   const andInkWash = [...everywhere, over(colors.ink, colors.paper, 0.1), over(colors.ink, colors.bgSurface, 0.1)];
   const brandText = ensureReadableChannels('255 255 255', colors.brand);
 
