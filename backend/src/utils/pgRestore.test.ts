@@ -212,6 +212,18 @@ describe('restorePreamble and restoreTrailer', () => {
     expect(restorePreamble('a"b')).toEqual(['DROP SCHEMA "a""b" CASCADE;', 'CREATE SCHEMA "a""b";']);
     expect(restoreTrailer("it's")[0]).toContain("to_regclass('\"it''s\".session')");
   });
+
+  // The trailer is a dollar-quoted block, and a name holding the quote's tag
+  // ($$) ended it early, so the restore failed and rolled back.
+  it('quote the block with a tag the name does not hold', () => {
+    const [statement] = restoreTrailer('a$$b');
+    const tag = /^DO (\$[a-z0-9_]*\$) /.exec(statement)?.[1];
+    expect(tag).toBeDefined();
+    expect(statement.endsWith(` END ${tag};`)).toBe(true);
+    const body = statement.slice(`DO ${tag} `.length, -` ${tag};`.length);
+    expect(body).not.toContain(tag);
+    expect(body).toContain('"a$$b".session');
+  });
 });
 
 describe('isOwnershipStatement', () => {

@@ -70,7 +70,11 @@ export function restorePreamble(schema: string): string[] {
  */
 export function restoreTrailer(schema: string): string[] {
   const table = `${schemaIdentifier(schema)}.session`;
-  return [`DO $$ BEGIN IF to_regclass('${table.replace(/'/g, "''")}') IS NOT NULL THEN DELETE FROM ${table}; END IF; END $$;`];
+  const body = `BEGIN IF to_regclass('${table.replace(/'/g, "''")}') IS NOT NULL THEN DELETE FROM ${table}; END IF; END`;
+  // The block is dollar-quoted, so its tag must not appear in a schema name.
+  let tag = '$$';
+  for (let n = 0; body.includes(tag); n += 1) tag = `$t${n || ''}$`;
+  return [`DO ${tag} ${body} ${tag};`];
 }
 
 /**
