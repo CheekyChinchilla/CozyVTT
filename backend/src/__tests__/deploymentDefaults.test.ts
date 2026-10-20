@@ -315,6 +315,23 @@ describe('the containers', () => {
     /** Where the root phase ends: everything after it runs as appuser. */
     const appuserPhase = script.slice(script.indexOf('\nfi\n', script.indexOf('if [ "$(id -u)" = "0" ]')));
 
+    /** The root phase: everything before appuserPhase. */
+    const rootPhase = script.slice(script.indexOf('if [ "$(id -u)" = "0" ]'), script.length - appuserPhase.length);
+
+    it('still starts when a mounted folder refuses an owner change, as a NAS, CIFS or FUSE mount does', () => {
+      // Under set -e, a bare chown that fails stops the backend before it starts.
+      const chowns = rootPhase.split('\n').filter((line) => !line.trimStart().startsWith('#') && /\bchown\b/.test(line));
+      expect(chowns.length).toBeGreaterThan(0);
+      expect(chowns.filter((line) => !/^\s*if ! chown -R appuser:appgroup \S+ 2>\/dev\/null; then$/.test(line))).toEqual([]);
+      for (const folder of ['/app/uploads', '/app/logs', '/app/backups']) expect(rootPhase).toContain(folder);
+    });
+
+    it('says, as the backend user, when it cannot write to the uploads or logs folder', () => {
+      expect(appuserPhase).toMatch(/^for dir in \/app\/uploads \/app\/logs; do$/m);
+      expect(appuserPhase).toMatch(/^ {2}if \[ -d "\$dir" \] && \[ ! -w "\$dir" \]; then$/m);
+      expect(appuserPhase.indexOf('[ ! -w "$dir" ]')).toBeLessThan(appuserPhase.lastIndexOf('exec "$@"'));
+    });
+
     it("runs the project's own Prisma, without npx, which writes to the home folder", () => {
       expect(lines.filter((line) => /\bnpx\b/.test(line))).toEqual([]);
       expect(script).toMatch(/^if \.\/node_modules\/\.bin\/prisma migrate deploy; then$/m);

@@ -1636,6 +1636,23 @@ cozyvtt-frontend  | 10-listen-on-ipv6-by-default.sh: info: can not modify /etc/n
 
 If the container keeps running and `docker compose ps` shows the database as `healthy`, there is nothing to fix.
 
+### The backend's log says it cannot write to `/app/uploads` or `/app/logs`
+
+When the backend starts it gives `backend/uploads` and `backend/logs` to its own user. A folder on a NAS, a Windows share (CIFS) or another network or FUSE mount may refuse that; the backend still starts, and `docker compose logs backend` says so:
+
+```
+⚠️  Could not give the uploads folder to the backend user; if uploads fail, check the folder's owner.
+⚠️  The backend user (user ID 100) cannot write to /app/uploads. Give that folder on the host to user ID 100, or let that user write to it.
+```
+
+The first line alone is harmless: the folder already lets the backend write. With the second, uploads (or, for `/app/logs`, the log files) fail until the folder lets that user ID write. On the host, give the folder to it, using the number from the message:
+
+```bash
+sudo chown -R 100 backend/uploads
+```
+
+On a share that ignores owners, set the owner, or write permission for everyone, in the share's own mount options or settings. Then `docker compose restart backend`; the second line no longer appears in its log.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:

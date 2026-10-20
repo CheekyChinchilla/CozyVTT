@@ -12,10 +12,15 @@ set -e
 # dashboard writes backups there as appuser.
 if [ "$(id -u)" = "0" ]; then
   mkdir -p /app/uploads /app/logs /app/backups
-  # TODO(upload): on an uploads folder that refuses an owner change (a NAS,
-  # CIFS or FUSE mount), this stops the backend starting under set -e; the
-  # backups folder below has a fallback, and uploads need one too.
-  chown -R appuser:appgroup /app/uploads /app/logs
+  # The uploads and logs folders may be a NAS, CIFS or FUSE mount that
+  # refuses an owner change; that is said, and the backend still starts. It
+  # checks below, as appuser, that it can write to them.
+  if ! chown -R appuser:appgroup /app/uploads 2>/dev/null; then
+    echo "⚠️  Could not give the uploads folder to the backend user; if uploads fail, check the folder's owner." >&2
+  fi
+  if ! chown -R appuser:appgroup /app/logs 2>/dev/null; then
+    echo "⚠️  Could not give the logs folder to the backend user; if no log files appear, check the folder's owner." >&2
+  fi
   # Backups hold every credential on the instance: the directory is the
   # backend user's alone, on the host as in the container. The backups
   # folder may be a NAS or USB mount that refuses an owner or mode change;
@@ -40,6 +45,14 @@ echo "================================================"
 if ! rm -rf /tmp/cozyvtt-db-* /tmp/cozyvtt-restore-* 2>/dev/null; then
   echo "⚠️  Could not remove a leftover backup or restore folder from /tmp; it holds a copy of the database." >&2
 fi
+
+# A folder the backend cannot write to fails every upload, or every log
+# line, later; say so now, with the user ID the folder has to allow.
+for dir in /app/uploads /app/logs; do
+  if [ -d "$dir" ] && [ ! -w "$dir" ]; then
+    echo "⚠️  The backend user (user ID $(id -u)) cannot write to $dir. Give that folder on the host to user ID $(id -u), or let that user write to it." >&2
+  fi
+done
 
 echo ""
 echo "🔍 Checking database connection..."
