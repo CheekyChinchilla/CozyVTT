@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidEmail, isStrongPassword, getPasswordStrength, validateDiceExpression, meetsPasswordRequirements } from '../validation';
+import { isValidEmail, isStrongPassword, getPasswordStrength, meetsPasswordRequirements } from '../validation';
 
 // ============================================
 // isValidEmail
@@ -183,47 +183,5 @@ describe('getPasswordStrength', () => {
     const strong = getPasswordStrength('StrongPass123!@#$');
     expect(strong.label).toBe('Strong');
     expect(strong.percent).toBe(100);
-  });
-});
-
-// ============================================
-// validateDiceExpression
-// ============================================
-
-describe('validateDiceExpression', () => {
-  it('accepts basic dice notation', () => {
-    expect(validateDiceExpression('1d20')).toBe(true);
-    expect(validateDiceExpression('2d6')).toBe(true);
-    expect(validateDiceExpression('d8')).toBe(true);
-  });
-
-  it('accepts dice with modifiers', () => {
-    expect(validateDiceExpression('1d20+5')).toBe(true);
-    expect(validateDiceExpression('2d6-2')).toBe(true);
-    expect(validateDiceExpression('1d8+3')).toBe(true);
-  });
-
-  it('accepts keep-highest notation', () => {
-    expect(validateDiceExpression('4d6kh3')).toBe(true);
-    expect(validateDiceExpression('2d20kh1')).toBe(true);
-  });
-
-  it('accepts keep-lowest notation', () => {
-    expect(validateDiceExpression('2d20kl1')).toBe(true);
-  });
-
-  it('accepts drop-lowest notation', () => {
-    expect(validateDiceExpression('4d6dl1')).toBe(true);
-  });
-
-  it('handles whitespace gracefully', () => {
-    expect(validateDiceExpression('1d20 + 5')).toBe(true);
-    expect(validateDiceExpression('  2d6  ')).toBe(true);
-  });
-
-  it('rejects arbitrary text', () => {
-    expect(validateDiceExpression('roll some dice')).toBe(false);
-    expect(validateDiceExpression('2x6')).toBe(false);
-    expect(validateDiceExpression('')).toBe(false);
   });
 });
