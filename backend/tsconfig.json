@@ -5,8 +5,8 @@
     // CommonJS because package.json has no "type", so the output stays
     // CommonJS, and a package's "exports" (and the types it names there) are
     // read. "node20" also lets this CommonJS code require the ES module
-    // packages archiver, file-type and mathjs, as Node 22.12 and later do;
-    // "node16" refuses them.
+    // packages archiver and file-type, as Node 22.12 and later do; "node16"
+    // refuses them.
     "module": "node20",
     "lib": ["ES2022"],
     "outDir": "./dist",

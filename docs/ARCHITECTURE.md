@@ -165,7 +165,7 @@ src/
 │                      vibe, maps, atmosphere, characters, initiative,
 │                      walls, fog, lights, exploration, pings
 ├── utils/
-│   ├── dice-parser.ts    mathjs-based dice expression evaluator
+│   ├── dice-parser.ts    Dice expression parser and roller (shared, byte-identical with the client)
 │   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
 │   ├── visibilityRule.ts What a viewer makes out of a point (shared, see Vision model)
 │   ├── tokenCentre.ts    The point a token sees from and is seen at (shared)

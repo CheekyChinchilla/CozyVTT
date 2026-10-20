@@ -140,13 +140,6 @@ _Nothing at present._
   candidate, so wait until it is stable with a patch release or two, and move
   to the `prisma-client` generator with it. **Defer** TypeScript 7.
 
-- **Remove the mathjs package.** `1.5.4` The dice parser
-  (`backend/src/utils/dice-parser.ts`) now works out totals itself, with the
-  exact totals in its tests as the specification, and nothing imports mathjs
-  any more. The package is still listed in `backend/package.json` and
-  `THIRD_PARTY_LICENSES.md`, about 18 MB installed with nine packages of its
-  own. **Do** once the maintainer agrees to the dependency change.
-
 - **One dice grammar for both sides.** `1.5.4` The parser is now one file
   kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
   (checked by `visionParity.test.ts`), and the Dice panel checks expressions

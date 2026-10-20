@@ -136,6 +136,10 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **The app now needs Firefox 128, from July 2024, or a newer version.** The tool that builds the app's styles has moved to a new version, Tailwind CSS 4, which uses browser features Firefox added in version 128. Chrome and Edge 111 and Safari 16.4 are still enough. An older Firefox may open the app with parts of it drawn wrongly. Firefox updates itself unless that has been turned off, and Firefox ESR 128 and later are new enough.
 
+### Removed
+
+- **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB, are left out of the backend install. Nothing changes in how dice roll.
+
 ### Fixed
 
 - **A screen reader no longer reads out older chat messages as they load.** The chat announces each new message, and it also read out every message on a page of older ones from **Load More**, and the messages fetched again after a dropped connection. It now stays quiet while it reads them.

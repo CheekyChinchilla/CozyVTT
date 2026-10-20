@@ -322,11 +322,6 @@ helmet 8.x
   License: MIT
   https://github.com/helmetjs/helmet
 
-mathjs 15.x
-  Copyright (c) Jos de Jong
-  License: Apache-2.0
-  https://github.com/josdejong/mathjs
-
 multer 2.x
   Copyright (c) Hage Yaapa & Contributors
   License: MIT
@@ -413,10 +408,9 @@ public-domain dedication, is the licence of postgres, a database driver the
 tool includes, and robust-predicates, a geometry library under Prisma Studio.
 All are installed from npm unmodified. No package is under the GPL or the AGPL.
 
-Four Apache-2.0 packages come with a NOTICE file. The one in mathjs is the
-copyright line for Jos de Jong given above. archiver brings bare-path, through
-tar-stream and bare-fs; its notice names Holepunch Inc (Copyright 2023). The
-Prisma command-line tool brings @prisma/studio-core, whose notice says Prisma
+Three Apache-2.0 packages come with a NOTICE file. archiver brings bare-path,
+through tar-stream and bare-fs; its notice names Holepunch Inc (Copyright
+2023). The Prisma command-line tool brings @prisma/studio-core, whose notice says Prisma
 Studio may be used in production under the Apache License 2.0 as long as
 Prisma's branding is left in place, and @prisma/streams-local, whose notice
 says its xxhash files are copied from hash-wasm (MIT, Copyright (c) 2020 Dani

@@ -851,7 +851,7 @@ The backend compiles with `"module": "node20"` and `"moduleResolution":
 "node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
 every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
 package's `"exports"`, and the code can import the packages published only as
-ES modules (archiver, file-type, mathjs), which Node 22.12 and later load
+ES modules (archiver, file-type), which Node 22.12 and later load
 with `require` (the images run Node 26). `"module": "node16"` refuses those imports. Two things follow:
 
 - **No dynamic `import()` of our own files.** Under these settings an
