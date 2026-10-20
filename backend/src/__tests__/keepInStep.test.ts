@@ -392,6 +392,16 @@ describe('the token centre', () => {
   });
 });
 
+describe('sight on the map', () => {
+  it('is cast by the same file in the browser and on the server', () => {
+    expect(read('frontend/src/utils/raycasting.ts')).toBe(read('backend/src/utils/raycasting.ts'));
+  });
+
+  it('finds walls near a point with the same file in the browser and on the server', () => {
+    expect(read('frontend/src/utils/spatialIndex.ts')).toBe(read('backend/src/utils/spatialIndex.ts'));
+  });
+});
+
 describe('the limits on an upload\'s name, description and tags', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/assetLimits.ts')).toBe(read('backend/src/validators/assetLimits.ts'));

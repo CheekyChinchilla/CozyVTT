@@ -158,6 +158,8 @@ describe('sight through the ray grid gives the polygon testing every wall gives'
     ['600 walls on an odd-sized map', 600, 2513, 1777, 3],
     ['1,000 walls on a wide map', 1000, 6300, 2100, 4],
     ['2,000 walls', 2000, 5950, 3920, 5],
+    // Wider than 8,192 px, so a ray grid cell is wider than 64 px and not a whole number.
+    ['1,500 walls on a map 9,317 px wide', 1500, 9317, 2890, 6],
   ];
 
   it.each(maps)('%s', (_name, count, width, height, seed) => {
