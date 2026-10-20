@@ -10,6 +10,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router';
+import { createPortal } from 'react-dom';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
@@ -568,9 +569,10 @@ function CampaignPageContent() {
       {/* What the server refuses, shown as a message */}
       <TableRefusals />
 
-      {/* Narrow screen notice */}
-      {!continueOnNarrowScreen && (
-        <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+      {/* Narrow screen notice, on <body> above every panel and window (z-60)
+          so none can cover it; toasts stay above it. */}
+      {!continueOnNarrowScreen && createPortal(
+        <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-80">
           <div className="card-cozy max-w-md text-center space-y-4">
             <h2 className="text-xl font-bold text-brand-ink">
               Desktop Required
@@ -592,7 +594,8 @@ function CampaignPageContent() {
               </Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

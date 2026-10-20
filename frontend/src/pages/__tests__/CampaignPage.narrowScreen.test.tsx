@@ -71,6 +71,8 @@ vi.mock('@/components/campaign/TokenRoster', nothing);
 vi.mock('@/components/campaign/NpcQuickEditor', nothing);
 
 import CampaignPage from '../CampaignPage';
+import Modal from '@/components/ui/Modal';
+import SlideOver, { SlideOverTitle } from '@/components/ui/SlideOver';
 
 const KEY = 'cozyvtt.continueOnNarrowScreen';
 const realStorage = Object.getOwnPropertyDescriptor(window, 'localStorage')!;
@@ -112,4 +114,23 @@ it('opens, and continues for this page, when the browser refuses storage', () =>
   fireEvent.click(screen.getByRole('button', { name: 'Continue anyway' }));
 
   expect(notice()).toBeNull();
+});
+
+// The notice sat at z-50 inside the page, where a side panel or a window
+// opened over another (z-60) could cover it.
+it('covers every side panel and window, from the top of the page', () => {
+  render(
+    <>
+      <CampaignPage />
+      <SlideOver open onClose={() => {}}><SlideOverTitle>Token Manager</SlideOverTitle></SlideOver>
+      <Modal open layer="overlay" onClose={() => {}} title="Invite Player"><p>invite</p></Modal>
+    </>
+  );
+  const layer = (el: Element) => Number(/(?:^|\s)z-(\d+)(?:\s|$)/.exec(el.getAttribute('class') ?? '')?.[1] ?? 0);
+  const cover = notice()!.closest('.fixed') as HTMLElement;
+
+  expect(cover.parentElement).toBe(document.body);
+  const others = [...document.body.querySelectorAll('[class*="z-"]')].filter((el) => !cover.contains(el));
+  expect(others.length).toBeGreaterThan(0);
+  for (const el of others) expect(layer(cover)).toBeGreaterThan(layer(el));
 });
