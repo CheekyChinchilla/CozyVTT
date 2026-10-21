@@ -147,6 +147,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Remove from Campaign in the Campaign Roster removes the character.** Right-clicking a character in the roster and choosing **Remove from Campaign** asked to confirm, but pressing **Remove** did nothing: the character stayed in the campaign, with no message. It now leaves the campaign, for a DM removing a player's character and for a player removing their own.
+
 - **The right mouse button pans the map under the Fog of War tools.** With **Reveal** or **Hide** up, a right-button drag left the map where it was, though it pans under the wall and light tools and the DM guide says it does under fog too. It now pans, and reveals or hides nothing.
 
 - **The buttons on a character sheet's header read clearly on every header colour.** **Edit**, **Cancel** and the colour button lightened the header behind white text, so on the Call of Cthulhu **Dark Forest** header **Edit** and **Cancel** fell just short of readable (4.47 to 1, where 4.5 is the bar), and a dark custom colour could do worse. They now darken a dark header and lighten a pale one, so their labels read at least as well as the header's own text, in all three systems.
