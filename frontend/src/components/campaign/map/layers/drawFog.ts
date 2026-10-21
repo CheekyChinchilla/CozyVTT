@@ -28,6 +28,23 @@ export interface FogDrawState {
   revealOpacity: ReadonlyMap<number, number>;
 }
 
+/**
+ * Fill whole fog cells as one shape. Squares filled one by one each leave
+ * their edge part-painted where it falls between screen pixels, and two
+ * part-painted edges side by side let the picture under the fog through as a
+ * hairline: the walls and the grid, which lie on those edges. One path holds
+ * no edge between neighbouring cells.
+ */
+function fillCells(ctx: CanvasRenderingContext2D, cells: readonly number[], cols: number, cellPx: number, style: string): void {
+  if (cells.length === 0) return;
+  ctx.beginPath();
+  for (const idx of cells) {
+    ctx.rect((idx % cols) * cellPx, Math.floor(idx / cols) * cellPx, cellPx, cellPx);
+  }
+  ctx.fillStyle = style;
+  ctx.fill();
+}
+
 export function drawFog(
   ctx: CanvasRenderingContext2D,
   state: FogDrawState,
@@ -37,16 +54,19 @@ export function drawFog(
   if (state.isDM && state.fogState) {
     const { fogCols, fogRows, cellPx, revealed } = state.fogState;
     ctx.save();
-    ctx.fillStyle = 'rgba(15, 12, 25, 0.55)'; // deep dark purple, semi-transparent for DM
+    const hidden: number[] = [];
     for (let row = 0; row < fogRows; row++) {
       for (let col = 0; col < fogCols; col++) {
         const idx = row * fogCols + col;
-        const fade = revealed[idx] ? state.revealOpacity.get(idx) : undefined;
-        if (revealed[idx] && fade === undefined) continue;
-        ctx.fillStyle = fade === undefined ? 'rgba(15, 12, 25, 0.55)' : `rgba(15, 12, 25, ${0.55 * fade})`;
+        if (!revealed[idx]) { hidden.push(idx); continue; }
+        const fade = state.revealOpacity.get(idx);
+        if (fade === undefined) continue;
+        ctx.fillStyle = `rgba(15, 12, 25, ${0.55 * fade})`;
         ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
       }
     }
+    // Deep dark purple, semi-transparent for the DM
+    fillCells(ctx, hidden, fogCols, cellPx, 'rgba(15, 12, 25, 0.55)');
     ctx.restore();
   }
 
@@ -56,16 +76,19 @@ export function drawFog(
     const fogCols = viewport.mapWidth;
     const fogRows = viewport.mapHeight;
     ctx.save();
+    const hidden: number[] = [];
     for (let row = 0; row < fogRows; row++) {
       for (let col = 0; col < fogCols; col++) {
         const idx = row * fogCols + col;
         if (state.exemptCells?.has(idx)) continue;
-        const fade = state.revealedCells.has(idx) ? state.revealOpacity.get(idx) : undefined;
-        if (state.revealedCells.has(idx) && fade === undefined) continue;
-        ctx.fillStyle = fade === undefined ? 'rgba(15, 12, 25, 1)' : `rgba(15, 12, 25, ${fade})`;
+        if (!state.revealedCells.has(idx)) { hidden.push(idx); continue; }
+        const fade = state.revealOpacity.get(idx);
+        if (fade === undefined) continue;
+        ctx.fillStyle = `rgba(15, 12, 25, ${fade})`;
         ctx.fillRect(col * cellPx, row * cellPx, cellPx, cellPx);
       }
     }
+    fillCells(ctx, hidden, fogCols, cellPx, 'rgba(15, 12, 25, 1)');
     ctx.restore();
   }
 }
