@@ -148,6 +148,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Players no longer see walls and doors through the fog of war.** On a map with fog of war and without dynamic lighting, the walls, doors and grid lines under the fog showed through it as faint lines, so a player could make out the layout of rooms not yet revealed. The fog was drawn square by square, and at most zoom levels the edges between squares let a hairline of the map through; it is now drawn in one piece. The DM's see-through fog loses the same faint lines.
+
 - **Save and Cancel can be tapped in a character editor on a phone.** On a screen under about 480 pixels wide, the D&D 5e and Pathfinder 2e editors drew the character's picture and the Experience Points or Level boxes over **Save** and **Cancel**, so a tap on **Save** opened the picture chooser instead. On a phone the two buttons now sit above the picture in all three systems.
 
 - **A chat cooldown the DM turns on during play reaches the players at the table.** Players already at the table kept the settings their page had loaded: their chat box did not count down, and their second quick message came back **Not sent** with the server's reason, until they reloaded. Saved **Campaign Settings** now reach every page at once, the chat cooldown and the campaign's name and description included.

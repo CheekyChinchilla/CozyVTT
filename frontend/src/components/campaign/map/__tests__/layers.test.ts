@@ -29,7 +29,7 @@ import type { FogState, LightSource, WallSegment } from '@/types/walls';
 interface RecordedCall {
   method: string;
   args: unknown[];
-  /** The fillStyle in force when a fillRect was recorded. */
+  /** The fillStyle in force when a fillRect or fill was recorded. */
   fillStyle?: string;
 }
 
@@ -64,7 +64,7 @@ function makeMockCtx(): MockCtx {
     rect: record('rect'),
     roundRect: record('roundRect'),
     stroke: record('stroke'),
-    fill: record('fill'),
+    fill(this: { fillStyle: unknown }, ...args: unknown[]) { calls.push({ method: 'fill', args, fillStyle: String(this.fillStyle) }); },
     clip: record('clip'),
     fillRect(this: { fillStyle: unknown }, ...args: unknown[]) { calls.push({ method: 'fillRect', args, fillStyle: String(this.fillStyle) }); },
     strokeRect: record('strokeRect'),
@@ -163,6 +163,37 @@ describe('drawGrid', () => {
 });
 
 describe('drawFog', () => {
+  // The cells covered by fog: those in the one shape filled for the hidden
+  // cells, and those filled one by one as they fade.
+  const fogged = (ctx: MockCtx) => count(ctx, 'rect') + count(ctx, 'fillRect');
+
+  // Squares filled one by one each leave their edge part-painted where it
+  // falls between screen pixels, and two part-painted edges side by side let
+  // the picture under the fog through: a player saw the walls and the grid,
+  // which lie on those edges, as faint lines. The hidden cells are now one
+  // shape, filled once.
+  it('fills every hidden cell as one shape, so no seam between two cells shows what is under them', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
+    expect(count(ctx, 'fillRect')).toBe(0);
+    expect(count(ctx, 'rect')).toBe(8);
+    const fills = ctx.calls.filter((c) => c.method === 'fill');
+    expect(fills).toHaveLength(1);
+    expect(fills[0].fillStyle).toBe('rgba(15, 12, 25, 1)');
+  });
+
+  it('fills the DM\'s hidden cells as one shape too, so its fog has no lighter lines', () => {
+    const ctx = makeMockCtx();
+    drawFog(ctx, {
+      isDM: true,
+      fogState: { fogCols: 3, fogRows: 3, cellPx: 50, revealed: [true, false, false, false, false, false, false, false, true] },
+      revealedCells: null,
+      revealOpacity: new Map(),
+    }, viewport3x3);
+    expect(count(ctx, 'fillRect')).toBe(0);
+    expect(ctx.calls.filter((c) => c.method === 'fill').map((c) => c.fillStyle)).toEqual(['rgba(15, 12, 25, 0.55)']);
+  });
+
   it('player fog fills only unrevealed cells', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, {
@@ -171,7 +202,7 @@ describe('drawFog', () => {
       revealedCells: new Set([0, 4]), // 2 of 9 cells revealed
       revealOpacity: new Map(),
     }, viewport3x3);
-    expect(count(ctx, 'fillRect')).toBe(7);
+    expect(fogged(ctx)).toBe(7);
   });
 
   it('skips player fog entirely until fog data arrives (revealedCells null)', () => {
@@ -183,9 +214,8 @@ describe('drawFog', () => {
   it('paints a player\'s unrevealed cells fully opaque, so nothing under them shows through', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map() }, viewport3x3);
-    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
-    expect(fills).toHaveLength(8);
-    for (const f of fills) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
+    expect(fogged(ctx)).toBe(8);
+    for (const f of ctx.calls.filter((c) => c.method === 'fill')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
   });
 
   it('keeps the DM\'s fog translucent, so the DM can still work under it', () => {
@@ -196,7 +226,9 @@ describe('drawFog', () => {
       revealedCells: null,
       revealOpacity: new Map(),
     }, viewport3x3);
-    for (const f of ctx.calls.filter((c) => c.method === 'fillRect')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 0.55)');
+    const fills = ctx.calls.filter((c) => c.method === 'fill' || c.method === 'fillRect');
+    expect(fills.length).toBeGreaterThan(0);
+    for (const f of fills) expect(f.fillStyle).toBe('rgba(15, 12, 25, 0.55)');
   });
 
   it('leaves the cells a player\'s own tokens stand on clear, even when unrevealed', () => {
@@ -208,7 +240,7 @@ describe('drawFog', () => {
       exemptCells: new Set([4, 8]),
       revealOpacity: new Map(),
     }, viewport3x3);
-    expect(count(ctx, 'fillRect')).toBe(6);
+    expect(fogged(ctx)).toBe(6);
   });
 
   it('player fog never reads the full fog grid, only the revealed set', () => {
@@ -227,9 +259,8 @@ describe('drawFog', () => {
   it('fades the fog out over a cell a player has just had revealed', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[4, 0.5]]) }, viewport3x3);
-    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
-    expect(fills).toHaveLength(9);
-    expect(fills.filter((f) => f.fillStyle === 'rgba(15, 12, 25, 0.5)')).toHaveLength(1);
+    expect(fogged(ctx)).toBe(9);
+    expect(ctx.calls.filter((f) => f.method === 'fillRect' && f.fillStyle === 'rgba(15, 12, 25, 0.5)')).toHaveLength(1);
   });
 
   it('fades the DM\'s fog out the same way, from its own strength', () => {
@@ -240,15 +271,15 @@ describe('drawFog', () => {
       revealedCells: null,
       revealOpacity: new Map([[0, 0.5]]),
     }, viewport3x3);
-    const fills = ctx.calls.filter((c) => c.method === 'fillRect');
-    expect(fills).toHaveLength(8);
-    expect(fills.filter((f) => f.fillStyle === 'rgba(15, 12, 25, 0.275)')).toHaveLength(1);
+    expect(fogged(ctx)).toBe(8);
+    expect(ctx.calls.filter((f) => f.method === 'fillRect' && f.fillStyle === 'rgba(15, 12, 25, 0.275)')).toHaveLength(1);
   });
 
   it('draws a hidden cell at full strength whatever the fade holds', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[0, 0.5]]) }, viewport3x3);
-    for (const f of ctx.calls.filter((c) => c.method === 'fillRect')) expect(f.fillStyle).toBe('rgba(15, 12, 25, 1)');
+    expect(count(ctx, 'fillRect')).toBe(0);
+    expect(ctx.calls.filter((c) => c.method === 'fill').map((c) => c.fillStyle)).toEqual(['rgba(15, 12, 25, 1)']);
   });
 
   it('DM fog uses the full fog grid, not revealedCells', () => {
@@ -259,7 +290,7 @@ describe('drawFog', () => {
       revealedCells: null,
       revealOpacity: new Map(),
     }, viewport3x3);
-    expect(count(ctx, 'fillRect')).toBe(7);
+    expect(fogged(ctx)).toBe(7);
   });
 });
 
