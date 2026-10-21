@@ -632,7 +632,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         )}
 
         {/* Action Buttons */}
-        <div className="absolute top-4 right-16 flex items-center space-x-2">
+        <div className="flex justify-end items-center space-x-2 mb-4 mr-12 sm:absolute sm:top-4 sm:right-16 sm:mb-0 sm:mr-0">
         {/* Fixed colours: the header is the player's colour, not the theme's. */}
         <button
           type="button"
@@ -652,10 +652,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         </button>
       </div>
 
-      {/* pr-64, matching the other sheets: the absolute Save/Cancel cluster is
-          203px wide and starts 64px in, so it needs more clearance than the
-          pr-48 that was here. */}
-      <div className="flex items-start space-x-4 pr-64">
+      {/* sm:pr-64, matching the other sheets: from sm up the absolute
+          Save/Cancel cluster is 203px wide and starts 64px in, so it needs
+          more clearance than the pr-48 that was here. On a phone the cluster
+          is in the flow above this row instead. */}
+      <div className="flex items-start space-x-4 sm:pr-64">
         {/* Token Image */}
         {allowTokenPicture && (
         <div className="shrink-0 relative">

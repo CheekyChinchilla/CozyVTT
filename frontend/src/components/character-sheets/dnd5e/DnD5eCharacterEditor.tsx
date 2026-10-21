@@ -1176,7 +1176,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     return (
       <div className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
-        <div className="absolute top-4 right-16 flex items-center space-x-2">
+        <div className="flex justify-end items-center space-x-2 mb-4 mr-12 sm:absolute sm:top-4 sm:right-16 sm:mb-0 sm:mr-0">
           {/* Fixed colours: the header is the player's colour, not the theme's. */}
           <button
             type="button"
@@ -1277,10 +1277,11 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           </div>
         )}
 
-      {/* pr-64 reserves the strip the absolutely-positioned Save/Cancel cluster
-          and palette button occupy above. Without it the Experience Points
-          field sits underneath them. */}
-      <div className="flex items-start justify-between pr-64">
+      {/* From sm up, pr-64 reserves the strip the absolutely-positioned
+          Save/Cancel cluster and palette button occupy above. Without it the
+          Experience Points field sits underneath them. On a phone the cluster
+          is in the flow above this row instead, where a tap reaches it. */}
+      <div className="flex items-start justify-between sm:pr-64">
         {/* min-w-0 so this column can shrink. Flex children default to
             min-width:auto, which lets the character-name input push out past
             the reserved padding on a narrow window and back under the
