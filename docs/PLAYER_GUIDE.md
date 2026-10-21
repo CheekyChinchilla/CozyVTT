@@ -239,12 +239,15 @@ homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
 `4d6kh3` for rolling up a new character, an attack the sheet can't describe.
 Rather than retyping those every session, save them: press **Saved** under the
 dice buttons, give the roll a name and an expression, and it becomes a button of
-its own. Click it and it rolls exactly as if you had typed it.
+its own. Click it and it rolls, with its name as the roll's purpose, so the
+**Dice** panel shows "Longsword" and not just `1d20+5`. Whatever is in the
+**Character** box goes with it, as for a typed roll.
 
 If you have just typed something into the expression box, opening **Saved**
 carries it across, so naming it is the only thing left to do.
 
-Saved rolls are **yours alone** — not even your DM can see them — and they stay
+Your list of saved rolls is **yours alone** — not even your DM can see it, only
+the name of one you roll — and saved rolls stay
 with the campaign you made them in, so one table's homebrew doesn't clutter
 another game. You can rename, edit or delete them from the same **Saved** button,
 and you can keep up to 50 per campaign. If an expression can't be rolled, CozyVTT
