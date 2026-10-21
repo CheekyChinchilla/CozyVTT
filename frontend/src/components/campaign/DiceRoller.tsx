@@ -379,7 +379,9 @@ export default function DiceRoller() {
   // Roll Handlers
   // ============================================
 
-  const rollDice = (expr: string) => {
+  /** `named` is a saved roll's name, sent as the roll's purpose in place of the Purpose box. */
+  const rollDice = (expr: string, named?: string) => {
+    const rollPurpose = (named ?? purpose).trim();
     if (isSpectator) {
       setError('Spectators watch the dice; they cannot roll.');
       return;
@@ -391,7 +393,7 @@ export default function DiceRoller() {
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
-      const localResult = rollLocally(expr, user, characterName.trim(), purpose.trim());
+      const localResult = rollLocally(expr, user, characterName.trim(), rollPurpose);
       setRolls((prev) => [localResult, ...prev]);
       clearPendingRoll();
       return;
@@ -425,7 +427,7 @@ export default function DiceRoller() {
       .rollDice({
         expression: expr.trim(),
         characterName: characterName.trim() || undefined,
-        purpose: purpose.trim() || undefined,
+        purpose: rollPurpose || undefined,
         secret: isSecret,
       })
       .then((answer) => {
@@ -450,9 +452,9 @@ export default function DiceRoller() {
     rollDice(expression);
   };
 
-  const handleQuickRoll = (expr: string) => {
+  const handleQuickRoll = (expr: string, named?: string) => {
     setExpression(expr);
-    rollDice(expr);
+    rollDice(expr, named);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -736,7 +738,7 @@ export default function DiceRoller() {
             {macros.map((macro) => (
               <button
                 key={macro.id}
-                onClick={() => handleQuickRoll(macro.expression)}
+                onClick={() => handleQuickRoll(macro.expression, macro.name)}
                 disabled={isRolling}
                 title={`${macro.name} — ${macro.expression}`}
                 className="
