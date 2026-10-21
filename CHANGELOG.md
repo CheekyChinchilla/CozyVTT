@@ -148,6 +148,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 ### Fixed
 
+- **Damage in Edit Token takes a creature's temporary hit points first.** The **−10**, **−5** and **−1** buttons took a creature's damage straight off its hit points and left its temporary hit points as they were. They now come off the temporary hit points first, which go away once spent, as on a character's roster card; healing still restores hit points only.
+
 - **A saved roll shows its name in the dice log.** Clicking a saved roll in the **Dice** tab sent only its dice, so everyone saw "1d20+5" and not "Longsword", unless the **Purpose** box happened to hold something. A saved roll now goes out with its name as the roll's purpose; the **Character** box still names who rolled it.
 
 - **Players no longer see walls and doors through the fog of war.** On a map with fog of war and without dynamic lighting, the walls, doors and grid lines under the fog showed through it as faint lines, so a player could make out the layout of rooms not yet revealed. The fog was drawn square by square, and at most zoom levels the edges between squares let a hairline of the map through; it is now drawn in one piece. The DM's see-through fog loses the same faint lines.
