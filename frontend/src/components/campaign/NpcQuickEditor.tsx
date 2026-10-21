@@ -9,6 +9,7 @@
 // ============================================
 
 import { DISPOSITION_PICKED, HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
+import { applyHitPointChange } from '@/utils/rules/hitPoints';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   X,
@@ -198,8 +199,8 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
   // when the save is refused.
   const adjustHp = useCallback(async (delta: number) => {
     if (!hp) return;
-    const newCurrent = Math.max(0, Math.min(hp.max, hp.current + delta));
-    const newHp = { ...hp, current: newCurrent };
+    // Damage takes temporary hit points first, as a character's does.
+    const newHp = applyHitPointChange(hp, delta);
     const shown = showOwnHp(newHp);
     await saveUpdate({ hp: newHp });
     dropOwnHp(shown);

@@ -260,7 +260,7 @@ Choose the display mode in the Token Manager's **Add Token** section when you pl
 
 Right-click any token on the map and choose **Edit Token**, or click the pencil beside it in the Token Roster, to open the quick editor. It opens for player, NPC and object tokens; the HP, stat block and disposition sections are shown for NPCs. From here you can:
 
-- Update HP (current, max, and temporary)
+- Update HP (current, max, and temporary). The minus buttons are damage and take temporary hit points first, and only what is left comes off the creature's hit points, as on a character's roster card; the plus buttons heal and never add temporary hit points
 - Rename the token
 - View and edit the stat block (for NPC tokens with creature template data). An edit is saved a moment after you stop typing, or straight away when you click out of the stat block, switch it back to **View** or close the editor
 - **Change the token image** — click the token avatar in the editor's header to open the image picker

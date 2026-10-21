@@ -12,6 +12,7 @@ import type { DnD5eCharacterData } from '../../validators/game-systems/dnd5e.sch
 import { withinCeiling } from '../shared';
 import { emitCharacterUpdated } from '../utils';
 import { characterInCampaign } from '../../utils/characterCampaign';
+import { applyHitPointChange } from '../../utils/rules/hitPoints';
 
 /** The largest change of hit points one event may make, either way. */
 const MAX_HP_DELTA = 100_000;
@@ -62,10 +63,11 @@ function applyHpDelta(
       }
       const max = charData.hp.maximum;
       const heldTemp = typeof charData.hp.temporary === 'number' ? Math.max(0, charData.hp.temporary) : 0;
-      const absorbed = delta < 0 ? Math.min(heldTemp, -delta) : 0;
-      const temp = heldTemp - absorbed;
-      const current = Math.max(0, Math.min(max, (typeof charData.hp.current === 'number' ? charData.hp.current : max) + delta + absorbed));
-      const hp = absorbed > 0 ? { ...charData.hp, current, temporary: temp } : { ...charData.hp, current };
+      const { current, temp } = applyHitPointChange(
+        { current: typeof charData.hp.current === 'number' ? charData.hp.current : max, max, temp: heldTemp },
+        delta,
+      );
+      const hp = temp !== heldTemp ? { ...charData.hp, current, temporary: temp } : { ...charData.hp, current };
       return { data: { ...charData, hp }, hp: { current, max, temp } };
     }
     case 'CALL_OF_CTHULHU_7E': {
