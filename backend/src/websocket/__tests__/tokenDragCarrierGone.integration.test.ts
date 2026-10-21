@@ -116,3 +116,40 @@ it('sends a token the DM has since hidden to no player', async () => {
   await new Promise((resolve) => setTimeout(resolve, 500));
   expect(leaked).toEqual([]);
 });
+
+// On a lit map the carrier took the token past a wall, out of another
+// player's sight: that player was told it had gone. Only screens still
+// holding it were told on the disconnect, so it never came back for them,
+// though it stands in their view.
+it('gives the token back to a player it was carried out of sight of', async () => {
+  await prisma.map.update({
+    where: { id: mapId },
+    data: {
+      lightingEnabled: true, globalIllumination: true, lights: [],
+      wallSegments: [{ id: 'split', x1: 500, y1: 0, x2: 500, y2: 1000, type: 'wall' }],
+      tokens: [
+        { id: 'hero', name: 'Hero', imageUrl: '', position: { x: 3, y: 3 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, controlledBy: playerId, rotation: 0, conditions: [], metadata: {} },
+        { id: 'scout', name: 'Scout', imageUrl: '', position: { x: 2, y: 3 }, size: { width: 1, height: 1 }, layer: 'token', visible: true, controlledBy: watcherId, rotation: 0, conditions: [], metadata: {} },
+      ],
+    },
+  });
+  try {
+    const watcher = await server.connectAndAuth(watcherCookie, campaignId);
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+
+    const gone = waitForEvent(watcher, 'token:disappeared');
+    player.emit('token.move.start', { tokenId: 'hero', mapId });
+    player.emit('token.move', { tokenId: 'hero', mapId, x: 15, y: 3 });
+    expect(await gone).toEqual({ tokenId: 'hero', mapId });
+
+    const appeared = waitForEvent<{ token: { id: string; position: { x: number; y: number } } }>(watcher, 'token:appeared', 5000);
+    const back = waitForEvent<Moved>(watcher, 'token.moved', 5000);
+    player.disconnect();
+
+    expect((await appeared).token).toMatchObject({ id: 'hero', position: { x: 3, y: 3 } });
+    expect(await back).toMatchObject({ tokenId: 'hero', x: 3, y: 3 });
+    watcher.disconnect();
+  } finally {
+    await prisma.map.update({ where: { id: mapId }, data: { lightingEnabled: false, globalIllumination: false, wallSegments: [] } });
+  }
+});

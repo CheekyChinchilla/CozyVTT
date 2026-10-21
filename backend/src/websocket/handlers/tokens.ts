@@ -262,7 +262,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         const tokens = readTokens(map.tokens);
         const token = tokens.find((t) => t.id === tokenId);
         if (!token) return;
-        const told = stillInCampaign(await campaignSockets(io, campaignId), campaignId).filter((s) => audience.holding.has(s.id));
+        // Everyone decided for the drag, not only those still holding it: a
+        // frame may have carried it out of someone's sight, and they are
+        // given it back if it stands in their view.
+        const told = stillInCampaign(await campaignSockets(io, campaignId), campaignId).filter((s) => audience.recipients.has(s.id));
         const playerIds = told
           .map((s) => s as unknown as AuthenticatedSocket)
           .filter((a) => a.role !== 'DM' && a.userId)
@@ -271,8 +274,13 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
         const back = { tokenId, mapId: drag.mapId, x: token.position.x, y: token.position.y, movedBy: null };
         for (const s of told) {
           const recipient = frameRecipient(s as unknown as AuthenticatedSocket, map, tokens, tokenId, spiritVisibility);
-          if (recipient?.sees(token)) s.emit('token.moved', back);
-          else s.emit('token:disappeared', { tokenId, mapId: drag.mapId });
+          const holds = audience.holding.has(s.id);
+          if (recipient?.sees(token)) {
+            if (!holds) s.emit('token:appeared', { token: recipient.shown(token), mapId: drag.mapId });
+            s.emit('token.moved', back);
+          } else if (holds) {
+            s.emit('token:disappeared', { tokenId, mapId: drag.mapId });
+          }
         }
       });
     }
