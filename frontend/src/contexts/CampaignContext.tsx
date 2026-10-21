@@ -18,7 +18,7 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast } from '@/types';
+import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast, CampaignSettingsUpdatedBroadcast } from '@/types';
 import socketClient from '@/services/socket';
 import { apiErrorMessage, apiErrorStatus, errorSummary } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
@@ -387,6 +387,20 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       socketClient.off('vibe.settings.updated', handleVibeSettings);
     };
   }, [updateVibeSettings]);
+
+  // The DM saved Campaign Settings. A player at the table takes them without a
+  // reload: the chat box's cooldown, the campaign's name and description.
+  useEffect(() => {
+    const handleSettings = (data: CampaignSettingsUpdatedBroadcast) => {
+      if (shownCampaignId.current !== data?.campaignId) return;
+      const { name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = data;
+      setCampaign((prev) => (prev ? { ...prev, name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds } : null));
+    };
+    socketClient.on('campaign.settings.updated', handleSettings);
+    return () => {
+      socketClient.off('campaign.settings.updated', handleSettings);
+    };
+  }, []);
 
   // Update campaign.status in local state (called by session WebSocket listeners)
   const updateCampaignStatus = useCallback((status: CampaignStatus) => {

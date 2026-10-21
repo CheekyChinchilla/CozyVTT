@@ -69,6 +69,11 @@ Three things people expect on the socket are not there:
   `atmosphere.audio.updated` follows with it if the table was playing the old
   one or nothing; when the vibe ends while its track plays, with none. A track
   the DM put on over the vibe is left playing.
+- **Saving Campaign Settings** is a REST call (`PUT /api/campaigns/{campaignId}`).
+  When it changes the name, description, game system or chat cooldown, every
+  connected member is sent `campaign.settings.updated` with `campaignId`,
+  `name`, `description`, `gameSystem`, `chatCooldownEnabled` and
+  `chatCooldownSeconds` as stored. A refused save sends nothing.
 
 ### Architecture
 
@@ -1277,6 +1282,7 @@ _Sent to: map readers are every member while the map is the one the campaign is 
 | `campaign.access.revoked` | One socket | `utils.ts` |
 | `campaign.dm.transferred` | The campaign | `campaigns.ts` |
 | `campaign.role.changed` | The campaign | `campaigns.ts` |
+| `campaign.settings.updated` | The campaign | `campaigns.ts` |
 | `character.hp.updated` | The campaign | `characters.ts` |
 | `character.updated` | Members the handler picks; the campaign | `utils.ts` |
 | `chat.message` | Members the handler picks | `chat.ts` |

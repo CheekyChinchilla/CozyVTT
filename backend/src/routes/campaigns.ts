@@ -514,6 +514,24 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       ? outcome.campaign
       : { ...outcome.campaign, ...(await saveVibeSettings(campaignId, req.session.userId!, vibeSettings)) };
 
+    // Every member's page shows these, so a player at the table follows them
+    // without a reload: the chat box's cooldown, the campaign's name.
+    // The change is saved either way, so a failed broadcast is only logged.
+    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds].some((value) => value !== undefined)) {
+      try {
+        broadcastToCampaign(campaignId, 'campaign.settings.updated', {
+          campaignId,
+          name: campaign.name,
+          description: campaign.description,
+          gameSystem: campaign.gameSystem,
+          chatCooldownEnabled: campaign.chatCooldownEnabled,
+          chatCooldownSeconds: campaign.chatCooldownSeconds,
+        });
+      } catch (error) {
+        logger.error('Campaign settings saved but not sent to the table', { err: error, campaignId });
+      }
+    }
+
     return res.status(200).json({
       message: 'Campaign updated successfully',
       campaign,
