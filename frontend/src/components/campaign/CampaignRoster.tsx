@@ -45,7 +45,9 @@ export default function CampaignRoster() {
   const [_viewerLoading, setViewerLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; characterId: string; characterUserId: string } | null>(null);
   const [rollPicker, setRollPicker] = useState<{ x: number; y: number; characterId: string } | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  // The character Remove from Campaign asks about. Kept apart from the menu,
+  // which closes as soon as the item is chosen.
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   // Each fetch is numbered and only the newest answer is shown: two
   // refetches can answer out of order.
@@ -241,14 +243,15 @@ export default function CampaignRoster() {
 
   const handleRemoveFromCampaign = () => {
     if (!contextMenu || !campaign) return;
-    setConfirmRemove(true);
+    setConfirmRemove(contextMenu.characterId);
   };
 
   const handleConfirmRemove = async () => {
-    if (!contextMenu || !campaign) return;
-    setConfirmRemove(false);
+    const characterId = confirmRemove;
+    setConfirmRemove(null);
+    if (!characterId || !campaign) return;
     try {
-      await api.assignCharacterToCampaign(contextMenu.characterId, null);
+      await api.assignCharacterToCampaign(characterId, null);
       await fetchRoster();
     } catch (error) {
       console.error('Error removing character from campaign:', errorSummary(error));
@@ -473,13 +476,13 @@ export default function CampaignRoster() {
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
 
       <ConfirmDialog
-        isOpen={confirmRemove}
+        isOpen={confirmRemove !== null}
         title="Remove from Campaign"
         message="Are you sure you want to remove this character from the campaign?"
         confirmLabel="Remove"
         variant="danger"
         onConfirm={handleConfirmRemove}
-        onCancel={() => setConfirmRemove(false)}
+        onCancel={() => setConfirmRemove(null)}
       />
     </>
   );
