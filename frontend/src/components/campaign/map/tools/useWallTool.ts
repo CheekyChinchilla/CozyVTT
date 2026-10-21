@@ -56,6 +56,23 @@ function closestPointOnSegment(px: number, py: number, seg: WallSegment): { x: n
 // to an existing endpoint.
 const ENDPOINT_SNAP_RADIUS = 16;
 
+/** The walls with each target endpoint at `point`. */
+function withEndpointsAt(
+  walls: readonly WallSegment[],
+  targets: Array<{ segId: string; end: 'start' | 'end' }>,
+  point: { x: number; y: number },
+): WallSegment[] {
+  const targetSet = new Set(targets.map((t) => `${t.segId}:${t.end}`));
+  const x = Math.round(point.x);
+  const y = Math.round(point.y);
+  return walls.map((s) => {
+    let seg = s;
+    if (targetSet.has(`${s.id}:start`)) seg = { ...seg, x1: x, y1: y };
+    if (targetSet.has(`${s.id}:end`)) seg = { ...seg, x2: x, y2: y };
+    return seg;
+  });
+}
+
 export function useWallTool({
   isDM, currentMap, wallMode, setWallMode, wallSegments,
   pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
@@ -282,6 +299,10 @@ export function useWallTool({
     const next = redoWalls();
     if (next !== null) sendWalls(next);
   };
+
+  /** The walls with the selection carried by (dx, dy). */
+  const selectionMovedBy = (walls: WallSegment[], dx: number, dy: number) =>
+    walls.map((seg) => (selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg));
 
   const tool: MapTool = {
     down({ e, mapPx, screenX, screenY }: PointerAt) {
@@ -522,16 +543,7 @@ export function useWallTool({
           if (!wallDragEndpointRef.current.hasDragged) { markDirty('overlay'); return true; }
           wallDragEndpointRef.current.point = { x: snapped.x, y: snapped.y };
           const { targets, point } = wallDragEndpointRef.current;
-          const targetSet = new Map(targets.map((t) => [`${t.segId}:${t.end}`, t]));
-          const updated = wallSegments.map((s) => {
-            const startKey = `${s.id}:start`;
-            const endKey = `${s.id}:end`;
-            let seg = s;
-            if (targetSet.has(startKey)) seg = { ...seg, x1: Math.round(point.x), y1: Math.round(point.y) };
-            if (targetSet.has(endKey)) seg = { ...seg, x2: Math.round(point.x), y2: Math.round(point.y) };
-            return seg;
-          });
-          replaceWallHistory(updated);
+          replaceWallHistory(withEndpointsAt(wallSegments, targets, point));
           markDirty('overlay');
           return true;
         }
@@ -546,10 +558,8 @@ export function useWallTool({
           if (!move.hasDragged) { markDirty('overlay'); return true; }
           // Previewed against where the drag began, so the offset never
           // compounds. Changes from others reach preDragState (carryIntoDrags).
-          const preview = move.preDragState.map((seg) =>
-            selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg
-          );
-          replaceWallHistory(preview);
+          move.offset = { dx, dy };
+          replaceWallHistory(selectionMovedBy(move.preDragState, dx, dy));
           markDirty('overlay');
           return true;
         }
@@ -643,10 +653,13 @@ export function useWallTool({
     up() {
       // Commit a move of the selection
       if (wallMoveRef.current) {
-        const { hasDragged, preDragState: preDrag } = wallMoveRef.current;
+        const { hasDragged, preDragState: preDrag, offset } = wallMoveRef.current;
         wallMoveRef.current = null;
         if (hasDragged) {
-          const finalSegments = wallSegments;
+          // Built again from where the drag began: a change from someone else
+          // since the last pointer move reached preDragState, but put its own
+          // unmoved copy on screen.
+          const finalSegments = offset ? selectionMovedBy(preDrag, offset.dx, offset.dy) : wallSegments;
           // Put the pre-drag state back on the stack, then the result, so undo
           // returns the walls where they started.
           replaceWallHistory(preDrag);
@@ -669,11 +682,13 @@ export function useWallTool({
 
       // Commit wall endpoint drag or select endpoint for merge
       if (wallDragEndpointRef.current) {
-        const { hasDragged, preDragState: preDrag, point } = wallDragEndpointRef.current;
+        const { hasDragged, preDragState: preDrag, point, targets } = wallDragEndpointRef.current;
         wallDragEndpointRef.current = null;
         if (hasDragged) {
           if (preDrag) replaceWallHistory(preDrag);
-          commitWalls(wallSegments);
+          // The endpoints set again: a change from someone else since the last
+          // pointer move may have put their wall back as it was.
+          commitWalls(withEndpointsAt(wallSegments, targets, point));
           setSelectedEndpoint(null);
         } else {
           if (preDrag) replaceWallHistory(preDrag);

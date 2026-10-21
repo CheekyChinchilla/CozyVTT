@@ -1157,6 +1157,36 @@ describe("a player's door toggle during the DM's wall drag", () => {
     expect(lastWalls()).toEqual([{ ...WALL_A, y1: 150, y2: 150 }, opened]);
   });
 
+  // The toggle arrived after the DM's last pointer move, and the DM let go
+  // without moving again: the drop took the walls as drawn, where the toggle
+  // had put the door back where it started.
+  it('moves with the selection when it lands after the last move', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, door] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+    drag(px(50, 50), px(650, 550));
+
+    down(px(150, 100));
+    move(px(150, 150));
+    fire('wall:updated', { mapId: 'map-a', segment: opened });
+    up(px(150, 150));
+
+    expect(lastWalls()).toEqual([{ ...WALL_A, y1: 150, y2: 150 }, { ...opened, y1: 550, y2: 550 }]);
+  });
+
+  it('keeps a dragged door endpoint where it was dropped when it lands after the last move', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, door] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    down(px(600, 500));
+    move(px(650, 500));
+    fire('wall:updated', { mapId: 'map-a', segment: opened });
+    up(px(650, 500));
+
+    expect(lastWalls()).toEqual([WALL_A, { ...opened, x2: 650 }]);
+  });
+
   it("survives the undo of an endpoint drag", () => {
     h.set({ currentMap: mapWith({ wallSegments: [WALL_A, door] }) });
     render(<MapCanvas />);
