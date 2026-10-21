@@ -204,10 +204,12 @@ export const WeaponsList: React.FC<WeaponsListProps> = ({
                     )}
                   </td>
 
-                  {/* Damage — click to roll damage separately */}
+                  {/* Damage — click to roll damage separately. A click here never
+                      reaches the row, which rolls the skill, even for damage
+                      that cannot be rolled. */}
                   <td
                     className={`px-3 py-2 text-center ${rollsDamage ? 'cursor-pointer hover:text-danger-ink font-semibold' : ''}`}
-                    onClick={rollsDamage ? (e) => { e.stopPropagation(); onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
+                    onClick={isClickable ? (e) => { e.stopPropagation(); if (rollsDamage) onRoll!(damageRoll, `${weapon.name} Damage`); } : undefined}
                     title={rollsDamage ? `Click to roll damage: ${damageRoll}` : undefined}
                   >
                     {editable ? (

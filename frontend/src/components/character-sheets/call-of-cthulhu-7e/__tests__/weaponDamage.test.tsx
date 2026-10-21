@@ -33,7 +33,9 @@ it('offers no roll for damage the dice cannot read', () => {
   );
   const damage = screen.getByText('1d4+half DB');
   fireEvent.click(damage);
-  expect(onRoll).not.toHaveBeenCalledWith(expect.anything(), 'Rock Damage');
+  // Nothing at all: the click on the damage once fell through to the row,
+  // which rolls the weapon's skill.
+  expect(onRoll).not.toHaveBeenCalled();
   expect(damage.closest('td')).not.toHaveAttribute('title');
 });
 
