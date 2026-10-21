@@ -1461,6 +1461,16 @@ export interface VibeSettingsUpdatedBroadcast {
   timestamp: string;
 }
 
+/** The DM saved Campaign Settings (`campaign.settings.updated`): the fields every member's page shows. */
+export interface CampaignSettingsUpdatedBroadcast {
+  campaignId: string;
+  name: string;
+  description: string | null;
+  gameSystem: GameSystem | null;
+  chatCooldownEnabled: boolean;
+  chatCooldownSeconds: number;
+}
+
 // Atmosphere Events
 export interface AtmosphereEffectSetEvent {
   effect: string | null;

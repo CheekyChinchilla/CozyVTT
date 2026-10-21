@@ -126,6 +126,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
   - *Assets.* `POST /api/assets/upload` checks a file against its type's size limit before reading its content, so a file over that limit answers 400 `File Too Large` whatever it holds, where one also of a type not accepted answered 400 `Validation Error` before.
   - *Campaign archives.* `POST /api/campaigns/import` leaves out a MAP or TOKEN picture over the same limits, or whose size cannot be read, and lists it in `skipped` with `kind: 'asset'` and the same message as its `reason`.
   - *Universal VTT.* `POST /api/campaigns/:campaignId/maps/import-uvtt` answers 400 `Validation Error` when the picture inside the file is over the same limits for a MAP, or its size cannot be read, with the message `The picture inside this file cannot be used as a map. ` followed by the upload's, and saves nothing.
+  - *Live table: events.* `PUT /api/campaigns/:campaignId` that changes the name, description, game system or chat cooldown sends every connected member `campaign.settings.updated` with `campaignId`, `name`, `description`, `gameSystem`, `chatCooldownEnabled` and `chatCooldownSeconds` as stored.
 
 - **A server admin moving someone's personal file into a campaign is written to the activity log.** An admin can move any user's personal file into any campaign, or to **Global**, which puts it in front of that table or of everyone, and nothing recorded it. The move now writes a line to **Recent Admin Actions** on the Admin Panel's **Activity** tab, naming the file, its owner's email address and where it went.
 
@@ -146,6 +147,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 - **The backend no longer installs the mathjs package.** The dice roller works out totals itself, so mathjs and the nine packages it brought with it, about 20 MB on disk, are left out of the backend install. Nothing changes in how dice roll.
 
 ### Fixed
+
+- **A chat cooldown the DM turns on during play reaches the players at the table.** Players already at the table kept the settings their page had loaded: their chat box did not count down, and their second quick message came back **Not sent** with the server's reason, until they reloaded. Saved **Campaign Settings** now reach every page at once, the chat cooldown and the campaign's name and description included.
 
 - **Remove from Campaign in the Campaign Roster removes the character.** Right-clicking a character in the roster and choosing **Remove from Campaign** asked to confirm, but pressing **Remove** did nothing: the character stayed in the campaign, with no message. It now leaves the campaign, for a DM removing a player's character and for a player removing their own.
 
