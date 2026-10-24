@@ -1,5 +1,5 @@
 /**
- * Token pictures, loaded for the map (F357).
+ * Token pictures, loaded for the map.
  *
  * The loader ran on every change to the token list, a move included, loaded
  * the pictures one after another, kept no record of one that failed, so it

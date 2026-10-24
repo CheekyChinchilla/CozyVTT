@@ -120,7 +120,7 @@ function wheel(deltaY: number, at = { x: 200, y: 100 }, deltaMode = 0): WheelEve
 }
 const RECT = { left: 0, top: 0 } as DOMRect;
 
-describe('zooming (F358)', () => {
+describe('zooming', () => {
   // The buttons zoomed about the map's corner, so the middle of the screen
   // slid away; they now zoom about the point they are given.
   it('keeps the point it is given still when a button zooms', () => {

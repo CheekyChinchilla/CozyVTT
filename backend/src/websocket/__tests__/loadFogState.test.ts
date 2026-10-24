@@ -4,7 +4,7 @@
  * A fog grid is one cell per square, counted across and down. A grid-size
  * change keeps the same squares, only drawn larger or smaller, but the
  * stored fog and every player's explored memory were thrown away because the
- * cell size no longer matched (F038). They are kept now, at the new cell
+ * cell size no longer matched. They are kept now, at the new cell
  * size; a change to the width or height, which moves the squares, still
  * starts from a fully hidden grid.
  */

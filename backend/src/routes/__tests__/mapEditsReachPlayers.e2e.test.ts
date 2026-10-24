@@ -1,6 +1,6 @@
 /**
  * A change to the map on screen reaches the table without the DM's page
- * having to send it (F039).
+ * having to send it.
  *
  * Editing the current map's picture, size, grid, scale or name reached
  * players only as far as its lighting and fog flags, and setting a map

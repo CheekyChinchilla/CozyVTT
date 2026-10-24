@@ -219,7 +219,7 @@ describe('squareExitPoint', () => {
 
 // The cone was drawn with its far corners on an arc a cone's length out, so it
 // fell about a tenth short and narrow of a D&D 5e cone, and Pathfinder 2e's
-// cone, a different shape, was drawn the same (F345).
+// cone, a different shape, was drawn the same.
 describe('coneOutline', () => {
   const close = (a: { x: number; y: number }, b: { x: number; y: number }) => {
     expect(a.x).toBeCloseTo(b.x, 6);

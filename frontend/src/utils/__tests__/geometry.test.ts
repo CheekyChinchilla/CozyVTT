@@ -37,7 +37,7 @@ describe('calcGridDistance', () => {
   });
 
   // Diagonals cost one square, then two, of whatever size the map's are; they
-  // were priced at 5 ft whatever the square (F313).
+  // were priced at 5 ft whatever the square.
   it('alternating rule: prices diagonals by the square size too', () => {
     expect(calcGridDistance(2, 2, 10, 'alternating')).toBe(30);
     expect(calcGridDistance(4, 2, 10, 'alternating')).toBe(50);
