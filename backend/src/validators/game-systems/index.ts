@@ -5,6 +5,7 @@
 
 import { z } from 'zod';
 import { GameSystem } from '../../game-systems';
+import { withUnionChecks } from './unionIssues';
 import { getBlankTemplate } from '../../utils/character-templates';
 import {
   dnd5eCharacterDataSchema,
@@ -99,7 +100,7 @@ export function validateCharacterData(
     }
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return { success: false, errors: error };
+      return { success: false, errors: withUnionChecks(error) };
     }
     // Re-throw unexpected errors
     throw error;
@@ -112,7 +113,7 @@ export function validateCharacterData(
  */
 export function validateFlexibleSheet(data: unknown): ValidationResult<FlexibleCharacterData> {
   const result = flexibleCharacterDataSchema.safeParse(data);
-  return result.success ? { success: true, data: result.data } : { success: false, errors: result.error };
+  return result.success ? { success: true, data: result.data } : { success: false, errors: withUnionChecks(result.error) };
 }
 
 /** One problem with a sheet, as a refused save lists it. */
