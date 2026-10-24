@@ -4,7 +4,7 @@ THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
 CozyVTT incorporates third-party software components. The following notices
 are provided for informational purposes and to comply with license requirements.
 
-Last brought in line with the lockfiles: 2026-10-17
+Last brought in line with the lockfiles: 2026-10-20
 
 
 ================================================================================

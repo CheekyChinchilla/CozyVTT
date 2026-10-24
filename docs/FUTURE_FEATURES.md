@@ -28,7 +28,7 @@ _Nothing at present._
 
 ### Character sheets
 
-_Nothing at present._
+- `after 1.5.4` **Call of Cthulhu: an age stored as text shows as a blank number box.** The editor hands the stored text to its number box as it is, so text that is not a number shows nothing (`CallOfCthulhu7eCharacterEditor.tsx`).
 
 ### Tokens
 
@@ -36,7 +36,7 @@ _Nothing at present._
 
 ### Campaigns and assets
 
-_Nothing at present._
+- `after 1.5.4` **A token's picture can name a map's asset,** so an animated map picture of up to 200 million pixels across its frames can go on a token, past the 50 million a token picture may be. A token's picture should name only a token asset, as a map's picture names only a map asset (`services/permissions.ts`).
 
 ### Play and connection
 
@@ -44,6 +44,7 @@ _Nothing at present._
 
 ### Maps
 
+- `after 1.5.4` **A map picture that finishes loading while the canvas still measures 0 by 0 never fits to the view.** The fit runs once per map when the picture loads and does not watch the canvas size (`MapCanvas.tsx`).
 - `after 1.5.4` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 
 ### Accounts
@@ -72,7 +73,7 @@ _Nothing at present._
 - **Admin upload UI for instance branding (logo / favicon / mascot).** The backend already accepts `customLogoUrl` / `customFaviconUrl` / `customMascotUrl` on `SystemSettings`, as paths this instance serves, and `ThemeContext` reads them and dynamically swaps the favicon when set. What's missing is a file-upload form on the Admin → Appearance tab so an instance operator can swap branding at runtime without redeploy. Until then, operators replace the defaults at `frontend/public/default-logo.png` and `frontend/public/default-mascot.png` and rebuild.
 - **Change your email address from the app.** The server accepts a new address on `PUT /api/users/:id`, with the current password when the change is your own, but no screen sends one, so today an address can only be changed through the API.
 - **A per-user storage quota, as an admin setting.** Nothing limits how much one account uploads in total; the upload rate limit slows a script, and the Admin Panel's System Overview warns once the disk holding the uploads is over 80% full. A quota would sum each user's `Asset.fileSize` before accepting an upload, with a limit set in **Admin → Settings**, off by default so no upgrade starts refusing uploads. It needs a column in `SystemSettings` (a migration), the check in the upload, typed-document and UVTT routes and in campaign import, and a clear refusal saying how much space the user has left.
-- **Disable an account (after 1.5.3).** An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
+- **Disable an account.** `after 1.5.4` An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
 
 ### DM tools
 
@@ -127,7 +128,8 @@ _Nothing at present._
   build and test tools: Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30
   and jest-dom 7. **Done** for the backend's web framework: Express 5, with
   express-rate-limit 8 and helmet 8, and for its smaller libraries:
-  connect-pg-simple 10, archiver 8, dotenv 18, file-type 22 and mathjs 15.
+  connect-pg-simple 10, archiver 8, dotenv 18 and file-type 22; mathjs is no
+  longer used, since the dice parser needs no library.
   **Done** for React: React 19.3 with React Router 8.4, and for framer-motion
   14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
   advisories that could not be reached in CozyVTT, a single-page app with no
@@ -142,7 +144,7 @@ _Nothing at present._
   128 where 114 was enough. Dependabot held back major
   versions of npm packages until 1.5.3; since then each comes as a pull
   request of its own, apart from those it names as waiting, and its automatic
-  security pull requests are turned on once 1.5.3 is on `main`.
+  security pull requests have been on since 1.5.3 reached `main`.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
   to the `prisma-client` generator with it. **Defer** TypeScript 7.
@@ -267,7 +269,7 @@ _Nothing at present._
   Intelligence modifier while the read-only view shows a plain 10. Only sheets
   that never set it are affected, and the DM can correct it by hand.
 
-- **`docs/API_REFERENCE.md` covers 84 of the 161 routes.** Deliberate: it is a
+- **`docs/API_REFERENCE.md` covers 84 of the 166 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
   `scripts/spec-coverage.py` enforces the split and prints the current counts:

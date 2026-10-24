@@ -367,7 +367,7 @@ describe('the polygon tool', () => {
 describe('the polygon tool on a page where the map does not start at the corner', () => {
   // In the app the canvas sits beside the sidebar and under the header. The
   // close compared the pointer's page position with the corner's canvas
-  // position, so it never closed anywhere but the page's top-left (F350).
+  // position, so it never closed anywhere but the page's top-left.
   const original = HTMLCanvasElement.prototype.getBoundingClientRect;
   beforeEach(() => {
     HTMLCanvasElement.prototype.getBoundingClientRect = () =>
@@ -763,7 +763,7 @@ describe('the right button', () => {
     expect(screen.queryByText('Remove from Map')).not.toBeInTheDocument();
   });
 
-  // A pan with the right button ended in the token menu (F353).
+  // A pan with the right button ended in the token menu.
   it('opens no token menu while the fog tool is up', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
@@ -943,7 +943,7 @@ describe("a player's right-click on a token", () => {
   // The token menu's box, drawn whether or not anything in it applies.
   const tokenMenu = () => document.querySelector('.glass-panel.fixed');
 
-  it('opens nothing for a creature, where the menu would offer them nothing (F354)', () => {
+  it('opens nothing for a creature, where the menu would offer them nothing', () => {
     h.set({ userRole: 'PLAYER' });
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19), token('tok-crate', 'Crate', 2, 19, { type: TokenType.OBJECT }));
@@ -964,7 +964,7 @@ describe("a player's right-click on a token", () => {
   });
 });
 
-describe('letting go of the mouse outside the map (F352)', () => {
+describe('letting go of the mouse outside the map', () => {
   const releaseOutside = (button = 0) => fireEvent.mouseUp(document.body, { button });
 
   it('finishes an erase stroke', () => {
@@ -1010,7 +1010,7 @@ describe('letting go of the mouse outside the map (F352)', () => {
   });
 });
 
-describe('switching maps (F349)', () => {
+describe('switching maps', () => {
   const mapB = () => ({ ...mapWith({ wallSegments: [seg('b1', 100, 500, 200, 500)] }), id: 'map-b', name: 'Map B' }) as unknown as CampaignMap;
   const switchMap = () => act(() => { h.set({ currentMap: mapB() }); });
 
@@ -1063,7 +1063,7 @@ describe('switching maps (F349)', () => {
   });
 });
 
-describe('Escape with a token held (F349)', () => {
+describe('Escape with a token held', () => {
   it('puts the token back where it was picked up', () => {
     render(<MapCanvas />);
     show(token('tok-goblin', 'Goblin', 0, 19));
@@ -1203,7 +1203,7 @@ describe("a player's door toggle during the DM's wall drag", () => {
   });
 });
 
-describe('the spirit crossing sound (F459)', () => {
+describe('the spirit crossing sound', () => {
   it('closes its audio context when the map goes away', () => {
     const close = vi.fn().mockResolvedValue(undefined);
     class FakeAudioContext {
@@ -1226,7 +1226,7 @@ describe('the spirit crossing sound (F459)', () => {
   });
 });
 
-describe('moving the pointer (F351)', () => {
+describe('moving the pointer', () => {
   // Each move stored the square under the pointer as a new object, so the
   // whole canvas re-rendered for every pixel of movement, and each render
   // put the wheel listener on again.

@@ -255,7 +255,7 @@ describe('drawFog', () => {
   });
 
   // The fade was read only for cells still hidden, while the cells it was
-  // started for were the ones just revealed, so nothing ever faded (F343).
+  // started for were the ones just revealed, so nothing ever faded.
   it('fades the fog out over a cell a player has just had revealed', () => {
     const ctx = makeMockCtx();
     drawFog(ctx, { isDM: false, fogState: null, revealedCells: new Set([4]), revealOpacity: new Map([[4, 0.5]]) }, viewport3x3);

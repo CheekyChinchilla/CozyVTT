@@ -1,5 +1,5 @@
 /**
- * Walls, doors and lights stay on the picture when a map is resized (F038).
+ * Walls, doors and lights stay on the picture when a map is resized.
  *
  * The picture is drawn across the map's width and height in squares at its
  * grid size, and walls and lights are stored in map pixels. Changing the
