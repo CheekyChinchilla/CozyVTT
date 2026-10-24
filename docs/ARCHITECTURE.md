@@ -165,6 +165,8 @@ src/
 │                      vibe, maps, atmosphere, characters, initiative,
 │                      walls, fog, lights, exploration, pings
 ├── utils/
+│   ├── rules/            Game-system rules: dnd5e, pathfinder2e, callOfCthulhu7e, initiative and hitPoints,
+│   │                  each byte-identical with the client's utils/rules/ (held by rules/__tests__)
 │   ├── dice-parser.ts    Dice expression parser and roller (shared, byte-identical with the client)
 │   ├── spirit-layer.ts   Spirit-layer + dynamic-lighting token filtering
 │   ├── visibilityRule.ts What a viewer makes out of a point (shared, see Vision model)
@@ -279,7 +281,8 @@ src/
 ├── hooks/
 │   └── queries/       React Query hooks wrapping the REST services (useCampaignsQuery, useCharactersQuery, useAssetsQuery, …)
 ├── types/             TypeScript type definitions mirroring backend types
-├── utils/             Client-side helpers (validation, formatting)
+├── utils/             Client-side helpers (validation, formatting); utils/rules/ mirrors the
+│                      backend's game-system rules files byte for byte
 ├── assets/fonts/      The bundled typefaces: fonts.css, one @font-face per family and
 │                      character range (and weight, where a family has no variable
 │                      font), and their OFL.txt
@@ -844,7 +847,7 @@ Dynamic lighting asks one question of every point on the map: how well does this
 
 The rule, in order: walls first, always (nothing outside a viewer's line of sight is seen, lit or not); then the map's **Global Illumination** flag (everything in sight is bright); then darkvision and light, which add up the way the mask is composited: bright is 1.0, dim is 0.5, so dim + dim is bright and darkvision in dim light is bright. A viewer's own square is always dim: you know where you stand. Explored memory is never an input: the map image is already in every client, so what to grey in is a rendering concern; token positions are not.
 
-Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts (it holds `vibeAudio.ts`, the rule for which track a vibe period names, in step too), the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
+Three files exist once in each package and must stay byte-identical: `visibilityRule.ts`, `raycasting.ts` (the line-of-sight polygons, with perimeter samples so a capped view is a disc) and `spatialIndex.ts`. So must `tokenMask.ts`, the obscured-token mask the server applies and the DM's preview reuses. `backend/src/utils/__tests__/visionParity.test.ts` fails if any copy drifts (it holds `vibeAudio.ts`, the rule for which track a vibe period names, `doorFog.ts` and `dice-parser.ts` in step too), the same way `characterHp.ts` and `styleAllowlists.ts` are held in step. Both sides take a token's centre from `tokenCentre.ts`, kept identical by `keepInStep.test.ts`: a token covers its height in rows upward from its grid position, so its centre is half that height below its top edge, which a second formula once got wrong for tokens two squares or taller. The rule takes its point-in-polygon test as a parameter, so it depends on neither side's raycaster module.
 
 A fifth shared file, `__fixtures__/vision-scenarios.json`, holds worked scenarios (a torch's rings, a sealed lit room, an open door, two viewers combining, no viewer at all, a Huge token against a wall). The backend suite checks which tokens each scenario sends; the frontend suite checks the tier at each sample point and that a token is seen exactly when it is sent. A scenario the two sides answer differently fails one of them.
 
