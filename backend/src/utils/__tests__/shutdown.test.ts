@@ -371,10 +371,24 @@ setTimeout(() => {
     const shutdown = createShutdown(targets);
     void shutdown('SIGTERM').then(() => shutdown('SIGTERM'));
   } else if (process.argv[2] === 'deadline') {
-    // The server closes on the deadline's own timer tick, just after it has
-    // exited, so the steps after it report while the log files are written.
+    // The server closes as the deadline's exit closes the log, on the
+    // deadline's own timer tick, so the steps after it report while the log
+    // files are written. Until it closes, a timer holds the process open, as
+    // the server's connections would.
+    const logger = require(process.env.LOGGER_MODULE).default;
     const targets = {
-      io: { close: (done) => setTimeout(done, 50) },
+      io: {
+        close: (done) => {
+          const open = setTimeout(() => {}, 10000);
+          const end = logger.end;
+          logger.end = function (...args) {
+            const ended = end.apply(this, args);
+            clearTimeout(open);
+            done();
+            return ended;
+          };
+        },
+      },
       prisma: { $disconnect: async () => { throw new Error('already gone'); } },
       sessionPool: { end: async () => {} },
     };
@@ -401,6 +415,7 @@ setTimeout(() => {
           LOG_LEVEL: 'info',
           TS_NODE_PROJECT: path.join(backend, 'tsconfig.json'),
           SHUTDOWN_MODULE: path.resolve(__dirname, '../shutdown.ts'),
+          LOGGER_MODULE: path.resolve(__dirname, '../logger.ts'),
         },
         stdio: ['ignore', 'pipe', 'pipe'],
       });
