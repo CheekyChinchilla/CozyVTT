@@ -62,6 +62,13 @@ describe('the Flexible editor', () => {
 const many = <T,>(count: number, make: (index: number) => T): T[] => Array.from({ length: count }, (_, index) => make(index));
 const full = (max: number) => screen.getByText(listFullMessage(max));
 
+// A list or table at its limit draws 1,000 rows, which takes a second or two in
+// jsdom and several on a busy CI runner with coverage on; finding a button by
+// its role walks every row as well, so these two find their buttons by text or
+// title and have longer to run.
+const bigList = { timeout: 20_000 };
+const button = (name: RegExp) => screen.getByText(name).closest('button');
+
 describe('the Flexible editor add buttons', () => {
   it('add no section past the most a sheet keeps', () => {
     const sections = many(FLEXIBLE_MAX_SECTIONS, (i) => ({ id: `s${i}`, title: `Notes ${i}`, type: 'text', value: '' }));
@@ -83,26 +90,26 @@ describe('the Flexible editor add buttons', () => {
     expect(full(FLEXIBLE_MAX_FIELDS)).toBeInTheDocument();
   });
 
-  it('add no list entry past the most a list keeps', () => {
+  it('add no list entry past the most a list keeps', bigList, () => {
     const section = { id: 's2', title: 'Kit', type: 'list', items: many(FLEXIBLE_MAX_ROWS, (i) => ({ id: `i${i}`, text: `Item ${i}`, checked: false })) } as ListSection;
     render(<ListEditor section={section} onUpdate={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /Add Item/ })).toBeDisabled();
+    expect(button(/Add Item/)).toBeDisabled();
     expect(full(FLEXIBLE_MAX_ROWS)).toBeInTheDocument();
   });
 
-  it('add no column or row past the most a table keeps', () => {
+  it('add no column or row past the most a table keeps', bigList, () => {
     const columns = many(FLEXIBLE_MAX_COLUMNS, (i) => ({ id: `c${i}`, name: `Col ${i}` }));
     const section = { id: 's4', title: 'Gear', type: 'table', columns, rows: [] } as TableSection;
     const { unmount } = render(<TableEditor section={section} onUpdate={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /Add column/ })).toBeDisabled();
+    expect(screen.getByTitle('Add column')).toBeDisabled();
     expect(full(FLEXIBLE_MAX_COLUMNS)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add Row/ })).toBeEnabled();
+    expect(button(/Add Row/)).toBeEnabled();
     unmount();
 
     const rows = many(FLEXIBLE_MAX_ROWS, (i) => ({ id: `r${i}`, cells: { c1: '' } }));
     render(<TableEditor section={{ ...section, columns: [{ id: 'c1', name: 'Item' }], rows }} onUpdate={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /Add Row/ })).toBeDisabled();
+    expect(button(/Add Row/)).toBeDisabled();
     expect(full(FLEXIBLE_MAX_ROWS)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add column/ })).toBeEnabled();
+    expect(screen.getByTitle('Add column')).toBeEnabled();
   });
 });

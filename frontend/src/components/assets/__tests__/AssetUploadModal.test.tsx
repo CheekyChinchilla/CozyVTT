@@ -231,14 +231,24 @@ describe('upload progress', () => {
 
   it('leaves no timer running after a refused upload', async () => {
     uploadAsset.mockRejectedValue({ response: { status: 413, data: { message: 'The file is larger than 25 MB.' } } });
-    // The test library polls with intervals of its own, and clears them.
+    // The test library polls with intervals of its own, and clears them. jsdom
+    // runs animation frames on an interval of 1000 / 60 ms while any frame is
+    // asked for, which the dialog's opening animation does; on a slow machine it
+    // is still running when the message appears. That one is left out, and a
+    // frame is asked for here so the test meets it on every machine.
+    const frameTimer = 1000 / 60;
     const started = vi.spyOn(window, 'setInterval');
     const cleared = vi.spyOn(window, 'clearInterval');
     try {
       await startUpload();
       expect(await screen.findByText('The file is larger than 25 MB.')).toBeInTheDocument();
+      requestAnimationFrame(() => undefined);
       const clearedIds = new Set(cleared.mock.calls.map(([id]) => id));
-      expect(started.mock.results.map((r) => r.value).filter((id) => !clearedIds.has(id))).toEqual([]);
+      const running = started.mock.calls.flatMap(([, delay], i) => {
+        const id = started.mock.results[i].value;
+        return delay === frameTimer || clearedIds.has(id) ? [] : [delay];
+      });
+      expect(running).toEqual([]);
     } finally {
       started.mockRestore();
       cleared.mockRestore();
