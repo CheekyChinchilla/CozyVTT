@@ -182,3 +182,28 @@ it('saves what is typed in a field when Escape closes the editor', async () => {
   expect(screen.queryByRole('dialog')).toBeNull();
   await waitFor(() => expect(lastSent()).toEqual({ notes: 'Carries the key' }));
 });
+
+// Which way the token faces (#89): whole degrees, a full turn wraps, and a
+// turn made on the map while the editor is open shows in the box.
+it('sets the facing in whole degrees', async () => {
+  open();
+  const box = screen.getByRole('spinbutton', { name: 'Facing in degrees clockwise' });
+  fireEvent.change(box, { target: { value: '90' } });
+  fireEvent.blur(box);
+  await waitFor(() => expect(lastSent()).toEqual({ rotation: 90 }));
+});
+
+it('wraps a facing of a full turn or more', async () => {
+  open();
+  const box = screen.getByRole('spinbutton', { name: 'Facing in degrees clockwise' });
+  fireEvent.change(box, { target: { value: '405' } });
+  fireEvent.keyDown(box, { key: 'Enter' });
+  await waitFor(() => expect(lastSent()).toEqual({ rotation: 45 }));
+  expect(box).toHaveValue(45);
+});
+
+it('shows a turn made on the map while it is open', () => {
+  open();
+  changedElsewhere({ rotation: 135 });
+  expect(screen.getByRole('spinbutton', { name: 'Facing in degrees clockwise' })).toHaveValue(135);
+});

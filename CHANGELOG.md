@@ -58,6 +58,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Open a combatant's sheet and roll for them from the initiative tracker.** ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)) Right-clicking a combatant in the **Initiative** tab offers what right-clicking their token on the map offers about them: **View Character Sheet** for a player's character, and **Roll...** for whoever may roll it, which for the DM includes a creature's rolls from its stat block. Double-clicking a player character's row opens their sheet, and from the keyboard **Enter** on a combatant's name opens the menu. A combatant whose token is on another map offers nothing until the table switches to that map. See [A Combatant's Sheet and Rolls](docs/DM_GUIDE.md#a-combatants-sheet-and-rolls).
 
+- **Tokens can be turned to face any direction.** ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)) Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees; the menu stays open for more turns. The DM can turn any token and type an exact angle in **Facing** in **Edit Token**; a player can turn the tokens they control. The token's picture, or its letter, turns, while its rings, hit point bar and condition badges stay upright. Players who don't control an obscured token see it facing up. See [Turning a Token](docs/DM_GUIDE.md#turning-a-token).
+
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.

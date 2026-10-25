@@ -257,6 +257,8 @@ Each token has:
 
 **Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
 
+**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces. The DM can turn any token, and set an exact angle in **Edit Token**; a player can turn the tokens they control.
+
 *GIF pending — Picking up a token and putting it down across the map.*
 
 ---

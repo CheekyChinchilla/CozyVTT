@@ -267,11 +267,21 @@ Right-click any token on the map and choose **Edit Token**, or click the pencil 
 - **Save the image back to the creature template** — so future placements of that creature reuse the same image
 - **Hide from Players** or **Show to Players**, the same switch as the eye in the roster and as **Hide from Players** / **Reveal to Players** on the right-click menu
 - **Obscure Identity** or **Reveal Identity**, the same switch as on the right-click menu, in the roster and in the Token Manager (see [Obscuring a Token's Identity](#obscuring-a-tokens-identity))
+- Set which way the token faces in **Facing**, in degrees clockwise (see [Turning a Token](#turning-a-token))
 - Apply or remove conditions. A D&D 5e campaign is offered all fifteen D&D 5e conditions, the same set the character sheet uses, and a Call of Cthulhu campaign the sheet's five: Major Wound, Dying, Unconscious, Temporary Insanity and Indefinite Insanity. In every game system you can also type a condition of your own, such as *Frightened 2* or *Blessed*, and press Enter or **+** to add it; it can be up to 60 characters, and a token can carry up to 50 conditions. Typing a listed condition adds the listed one, and one the token already has is not added twice. Click a condition above the list to take it off. Each one shows as a small amber badge above the token — a two-letter code, so **PA**ralyzed, **PO**isoned, **PE**trified and **PR**one stay distinguishable at a glance. Past four, the rest collapse into a grey **+N** badge so the row never grows wider than the token. Anyone can hover a token to read its conditions in full, players included — they can't act around a condition they can't identify
 
 If a change cannot be saved, for example while the connection is down, a message says why. A button or a list goes back to what it was; what you typed into a box (the name, initiative, notes or the stat block) stays there, so you can put it right and save it again. Changes made to the token elsewhere while the editor is open, by you in another tab or by a player on their own token, show as they arrive. **Hide from Players** and **Obscure Identity** change only once the change is saved, and always show the token as your players have it, however it was last changed.
 
 *Screenshot pending — NPC quick editor popup with image picker.*
+
+#### Turning a Token
+
+A token can face any direction, to show which way a creature is looking or a cart is pointing ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)):
+
+- **Right-click the token** and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees. The menu stays open, so press again to keep turning.
+- **For an exact angle,** open **Edit Token** and type it in **Facing**, in degrees clockwise: 0 is the picture as uploaded, 90 a quarter turn to the right. A full turn wraps round, so 405 becomes 45.
+
+The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
 
 #### Changing a Token's Image
 
