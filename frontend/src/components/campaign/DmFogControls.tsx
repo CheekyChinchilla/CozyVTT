@@ -157,6 +157,9 @@ export default function DmFogControls({
 
       {/* Bulk actions */}
       <div className="flex gap-1 pt-1 border-t border-stone-700/50">
+        {/* TODO(ui): the Confirm? state below is white on lime-500, about 2:1;
+            give it dark text (text-stone-900), as Hide all and Reset explored
+            areas have on their amber Confirm? state. */}
         <button
           onClick={handleRevealAll}
           className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
