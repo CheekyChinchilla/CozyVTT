@@ -18,20 +18,20 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@tanstack/react-query": "^5.104.4",
+    "@tanstack/react-query": "^5.104.5",
     "axios": "^1.20.0",
-    "framer-motion": "^14.3.0",
+    "framer-motion": "^14.3.1",
     "lucide-react": "^1.59.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-markdown": "^10.1.0",
-    "react-resizable-panels": "^4.14.6",
+    "react-resizable-panels": "^4.14.8",
     "react-router": "^8.4.0",
     "remark-breaks": "^4.0.0",
     "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.4",
     "use-sync-external-store": "^1.7.0",
-    "zustand": "^5.0.15"
+    "zustand": "^5.0.16"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -54,7 +54,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2",
-    "vite": "^8.3.4",
+    "vite": "^8.3.5",
     "vitest": "^5.0.5"
   },
   "engines": {
