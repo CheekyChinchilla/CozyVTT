@@ -28,8 +28,8 @@
   "author": "CozyVTT Development Team",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@prisma/adapter-pg": "7.10.0",
-    "@prisma/client": "7.10.0",
+    "@prisma/adapter-pg": "7.10.1",
+    "@prisma/client": "7.10.1",
     "archiver": "^8.0.0",
     "argon2": "^0.44.0",
     "connect-pg-simple": "^10.0.0",
@@ -44,7 +44,7 @@
     "nodemailer": "^10.1.2",
     "otplib": "^13.5.0",
     "pg": "^8.23.1",
-    "prisma": "7.10.0",
+    "prisma": "7.10.1",
     "qrcode": "^1.5.4",
     "sharp": "^0.35.5",
     "socket.io": "^4.8.4",
@@ -77,12 +77,6 @@
     "typescript-eslint": "8.71.2"
   },
   "overrides": {
-    "prisma": {
-      "mysql2": "3.24.5"
-    },
-    "@prisma/config": {
-      "deepmerge-ts": "8.0.2"
-    },
     "@istanbuljs/load-nyc-config": {
       "js-yaml": "4.3.2"
     }
