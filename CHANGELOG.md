@@ -56,6 +56,8 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **Jump to newest in the chat and the Dice panel.** While you are scrolled up, neither list pulls you down when something new arrives, and nothing said that anything had. A **Jump to newest** button now appears at the bottom of the list and takes you down to it.
 
+- **Open a combatant's sheet and roll for them from the initiative tracker.** ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)) Right-clicking a combatant in the **Initiative** tab offers what right-clicking their token on the map offers about them: **View Character Sheet** for a player's character, and **Roll...** for whoever may roll it, which for the DM includes a creature's rolls from its stat block. Double-clicking a player character's row opens their sheet, and from the keyboard **Enter** on a combatant's name opens the menu. A combatant whose token is on another map offers nothing until the table switches to that map. See [A Combatant's Sheet and Rolls](docs/DM_GUIDE.md#a-combatants-sheet-and-rolls).
+
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
