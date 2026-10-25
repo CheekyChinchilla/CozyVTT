@@ -31,11 +31,16 @@ const app = createTestApp();
 const stamp = `${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
 const created: string[] = [];
 
-/** A user with MFA on and ten known backup codes, set straight in the table. */
+/**
+ * A user with MFA on and three known backup codes, set straight in the table.
+ * A test spends at most two. Each code is an Argon2 hash to make and one more
+ * check for every code tried against it, so a short list keeps the test well
+ * inside Jest's five seconds on a slow machine.
+ */
 async function withCodes(label: string) {
   const user = await createTestUser({ email: `mfa-race-${label}-${stamp}@test.cozyvtt.local` });
   created.push(user.id);
-  const codes = generateBackupCodes();
+  const codes = generateBackupCodes(3);
   await prisma.user.update({
     where: { id: user.id },
     data: {
@@ -71,9 +76,9 @@ it('lets only one of two simultaneous sign-ins use the same code', async () => {
   expect(results.map((r) => r.status).sort()).toEqual([200, 401]);
 
   const winner = results.find((r) => r.status === 200)!;
-  expect(winner.body.remainingBackupCodes).toBe(9);
+  expect(winner.body.remainingBackupCodes).toBe(2);
   const row = await prisma.user.findUnique({ where: { id: user.id }, select: { mfaBackupCodes: true } });
-  expect(row?.mfaBackupCodes).toHaveLength(9);
+  expect(row?.mfaBackupCodes).toHaveLength(2);
 });
 
 it('spends both codes when two different ones are used at once', async () => {
@@ -87,7 +92,7 @@ it('spends both codes when two different ones are used at once', async () => {
   expect(results.map((r) => r.status)).toEqual([200, 200]);
 
   const row = await prisma.user.findUnique({ where: { id: user.id }, select: { mfaBackupCodes: true } });
-  expect(row?.mfaBackupCodes).toHaveLength(8);
+  expect(row?.mfaBackupCodes).toHaveLength(1);
 
   // Neither can be used again.
   const again = await pending(user.email);
