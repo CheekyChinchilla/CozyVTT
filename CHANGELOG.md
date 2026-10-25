@@ -615,7 +615,7 @@ If you have edited `docker-compose.yml`, `git pull` stops at it because this rel
 
 - **With fog of war on, a player can open or close only a door beside a square revealed to them.** A door wholly under fog could still be toggled, and the answer, or being told it was locked, told the player a door was there where their screen showed nothing. The DM can still open any door.
 
-- **The last security advisory against the tools that build CozyVTT is cleared.** It was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release. Tailwind CSS 4 does not use it. It was only ever in the build tools, never in an instance.
+- **The security advisories against the tools that build and test CozyVTT are cleared.** One was in braces, a file-matching package that Tailwind CSS 3 brought with it and that has no fixed release; Tailwind CSS 4 does not use it. The others were in undici, which the app's test runner uses to stand in for a browser, and in a copy of zod the code checker brings, both updated. None of them was ever in an instance.
 
 ## [1.5.3] - 2026-10-17
 
