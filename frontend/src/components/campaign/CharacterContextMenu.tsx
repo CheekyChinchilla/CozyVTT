@@ -18,6 +18,8 @@ interface CharacterContextMenuProps {
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  /** Put the cursor on the first item: the menu was opened from the keyboard. */
+  autoFocus?: boolean;
 }
 
 export default function CharacterContextMenu({
@@ -25,6 +27,7 @@ export default function CharacterContextMenu({
   y,
   items,
   onClose,
+  autoFocus = false,
 }: CharacterContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
   // Start invisible; adjusted position set after measuring
@@ -41,6 +44,12 @@ export default function CharacterContextMenu({
     setPos({ x: adjustedX, y: adjustedY });
   // eslint-disable-next-line react-hooks/exhaustive-deps -- measured once, as the menu opens at its point
   }, []);
+
+  // Once placed, and so visible: a hidden button cannot take the cursor.
+  const placed = pos !== null;
+  useEffect(() => {
+    if (autoFocus && placed) menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, [autoFocus, placed]);
 
   // Close on click outside
   useEffect(() => {

@@ -8,7 +8,7 @@ import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { canRollAsCharacter } from '@/services/permissions';
+import { campaignHasCharacter as campaignHasTokenCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
 import { useTableRoll } from '@/hooks/useTableRoll';
 import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
@@ -2164,24 +2164,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * ticks (see `useCurrentTurnTokenId`), and the answer is only needed at the
    * moment of a right-click.
    */
-  /**
-   * Whether this viewer may roll a token's character sheet.
-   *
-   * Keyed on who owns the *character*, not on token.controlledBy: the rolls
-   * come from the sheet, and the roster and sheet viewer offer the same menu
-   * with no token in hand. One rule, three callers — see services/permissions.
-   */
-  /** Whether a character is one of this campaign's, as the campaign was loaded. */
-  const campaignHasCharacter = (characterId: string): boolean =>
-    campaign?.characters?.some((c) => c.id === characterId) ?? false;
-
-  const canRollForToken = (token: Token): boolean => {
-    if (!user || !token.characterId) return false;
-    const character = campaign?.characters?.find((c) => c.id === token.characterId);
-    if (!character) return false;
-    const membership = campaign?.memberships?.find((m) => m.userId === user.id);
-    return canRollAsCharacter(user, character, membership);
-  };
+  // The sheet and roll entries, by the same rules as the initiative tracker's
+  // menu (utils/tokenCharacter).
+  const campaignHasCharacter = (characterId: string): boolean => campaignHasTokenCharacter(campaign, characterId);
+  const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
   /**
    * Whether the token menu offers this viewer anything. The DM always has the

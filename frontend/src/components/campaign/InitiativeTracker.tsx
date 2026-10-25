@@ -28,17 +28,28 @@ import {
   Skull,
   User,
   GripVertical,
+  Eye,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTokenListIgnoringMovement, useCombatState, usePeekTokenId, useGameStore } from '@/stores/gameStore';
 import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useToast } from '@/contexts/ToastContext';
+import { useTableRoll } from '@/hooks/useTableRoll';
+import { api } from '@/services/api';
+import { apiErrorMessage } from '@/utils/errors';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
+import CharacterContextMenu from '@/components/campaign/CharacterContextMenu';
+import CharacterRollPicker from '@/components/campaign/CharacterRollPicker';
+import NpcRollPicker from '@/components/campaign/NpcRollPicker';
+import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
 
-import type { CombatantEntry, Token } from '@/types';
-import { tokenDisplayName, tokenPublicName } from '@/utils/tokenDisplayName';
+import type { Character, CombatantEntry, Token } from '@/types';
+import { TokenType } from '@/types';
+import { tokenDisplayName, tokenPublicName, characterRollPublicName } from '@/utils/tokenDisplayName';
 import { controlsToken } from '@/utils/tokenOwnership';
+import { campaignHasCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -148,12 +159,32 @@ interface CombatantRowProps {
   onDragEnd: () => void;
   /** Move this combatant one place up (-1) or down (1). */
   onMove: (tokenId: string, step: -1 | 1) => void;
+  /** Right-clicking the row offers this viewer something: the sheet, rolls, or both. */
+  hasMenu: boolean;
+  /** Double-clicking the row opens the combatant's character sheet. */
+  hasSheet: boolean;
+  /** Open the row's menu at a point; `byKeyboard` puts the cursor in it. */
+  onOpenMenu: (tokenId: string, x: number, y: number, byKeyboard: boolean) => void;
+  onOpenSheet: (tokenId: string) => void;
+}
+
+/**
+ * Where a right-click opens the menu. One from the keyboard (the menu key, or
+ * Shift+F10) has no pointer position, so the menu opens under the element.
+ */
+function menuPoint(e: React.MouseEvent): { x: number; y: number; byKeyboard: boolean } {
+  if (e.clientX === 0 && e.clientY === 0) {
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    return { x: rect.left, y: rect.bottom, byKeyboard: true };
+  }
+  return { x: e.clientX, y: e.clientY, byKeyboard: false };
 }
 
 function CombatantRow({
   entry, isActive, isPeeked, isDM, canRoll, isDragOver, reorderHintId,
   onSetInitiative, onRoll, onRemove,
   onDragStart, onDragOver, onDrop, onDragEnd, onMove,
+  hasMenu, hasSheet, onOpenMenu, onOpenSheet,
 }: CombatantRowProps) {
   const [editing, setEditing] = useState(false);
   const [inputVal, setInputVal] = useState(entry.initiative !== null ? String(entry.initiative) : '');
@@ -196,6 +227,18 @@ function CombatantRow({
       onDragEnd={isDM ? onDragEnd : undefined}
       onMouseEnter={() => useGameStore.getState().setPeekToken(entry.tokenId, 'tracker')}
       onMouseLeave={() => useGameStore.getState().setPeekToken(null, 'tracker')}
+      // With nothing to offer, the browser keeps its own menu.
+      onContextMenu={hasMenu ? (e) => {
+        if ((e.target as Element).closest('input')) return;
+        e.preventDefault();
+        const at = menuPoint(e);
+        onOpenMenu(entry.tokenId, at.x, at.y, at.byKeyboard);
+      } : undefined}
+      // The value, the die, the bin and the grip keep their own clicks.
+      onDoubleClick={hasSheet ? (e) => {
+        if ((e.target as Element).closest('input, button:not([data-combatant-name])')) return;
+        onOpenSheet(entry.tokenId);
+      } : undefined}
       className={`flex items-center gap-2 p-2 rounded-lg transition-colors ${
         isDragOver
           ? 'border-t-2 border-moss-green'
@@ -254,9 +297,28 @@ function CombatantRow({
 
       {/* Name + disposition */}
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-medium truncate ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}>
-          {name}
-        </div>
+        {hasMenu ? (
+          // A button so that the menu opens from the keyboard: Enter or Space
+          // is a click with no mouse button count. A mouse opens it with the
+          // right button, and a single left click does nothing.
+          <button
+            type="button"
+            data-combatant-name={entry.tokenId}
+            title={hasSheet ? 'Double-click to open the sheet, or right-click for the sheet and rolls' : 'Right-click for rolls'}
+            onClick={(e) => {
+              if (e.detail !== 0) return;
+              const rect = e.currentTarget.getBoundingClientRect();
+              onOpenMenu(entry.tokenId, rect.left, rect.bottom, true);
+            }}
+            className={`block max-w-full text-left text-sm font-medium truncate rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}
+          >
+            {name}
+          </button>
+        ) : (
+          <div className={`text-sm font-medium truncate ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}>
+            {name}
+          </div>
+        )}
         {entry.hp && (
           <div className="text-xs text-stone-gray">
             HP {entry.hp.current}/{entry.hp.max}
@@ -336,11 +398,13 @@ function CombatantRow({
 // ---------------------------------------------------------------------------
 
 export default function InitiativeTracker() {
-  const { userRole, currentMap } = useCampaign();
+  const { userRole, currentMap, campaign } = useCampaign();
   const { user } = useAuth();
+  const { showToast } = useToast();
   // Initiative reads token names/ids, not coordinates — skip move re-renders.
   const tokens = useTokenListIgnoringMovement();
   const { socket } = useWebSocket();
+  const tableRoll = useTableRoll(socket);
   // Combat state is mirrored into the game store by useInitiativeSync(), which
   // CampaignPage owns — the map's active-token ring reads the same snapshot,
   // and the subscription no longer dies with this panel.
@@ -364,6 +428,46 @@ export default function InitiativeTracker() {
 
   const isDM = userRole === 'DM';
   const mapId = currentMap?.id ?? null;
+
+  // ── A combatant's sheet and rolls ────────────────────────────────────────
+  //
+  // What the map's right-click menu offers about a token's character, by the
+  // same rules (utils/tokenCharacter), and the DM a creature's rolls. Only for
+  // a token on the map being shown: one on another map is not loaded here.
+
+  const [menu, setMenu] = useState<{ tokenId: string; x: number; y: number; byKeyboard: boolean } | null>(null);
+  const [sheet, setSheet] = useState<{ character: Character; tokenId: string } | null>(null);
+  const [characterRolls, setCharacterRolls] = useState<{ tokenId: string; characterId: string; x: number; y: number } | null>(null);
+  const [creatureRolls, setCreatureRolls] = useState<{ tokenId: string; x: number; y: number } | null>(null);
+  const membership = campaign?.memberships?.find((m) => m.userId === user?.id);
+
+  const tokenOf = (tokenId: string): Token | undefined => tokens.find((t) => t.id === tokenId);
+  const offersSheet = (token: Token | undefined): boolean => !!token && campaignHasCharacter(campaign, token.characterId);
+  const offersCharacterRolls = (token: Token | undefined): boolean => !!token && canRollTokenCharacter(user, campaign, token);
+  // As on the map: a creature's rolls are the DM's, and a token bound to a
+  // character rolls from the sheet whatever its type says.
+  const offersCreatureRolls = (token: Token | undefined): boolean =>
+    !!token && isDM && !token.characterId && (token.type ?? TokenType.NPC) === TokenType.NPC;
+
+  const openSheet = async (tokenId: string) => {
+    const characterId = tokenOf(tokenId)?.characterId;
+    if (!characterId) return;
+    try {
+      const { character } = await api.getCharacter(characterId);
+      setSheet({ character, tokenId });
+    } catch (err) {
+      showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
+    }
+  };
+
+  const closeMenu = () => {
+    const opened = menu;
+    setMenu(null);
+    // From the keyboard, the cursor goes back to the name it came from.
+    if (opened?.byKeyboard) {
+      listRef.current?.querySelector<HTMLElement>(`[data-combatant-name="${CSS.escape(opened.tokenId)}"]`)?.focus();
+    }
+  };
 
   /**
    * Who may roll for a given combatant: the DM for anyone, a player only for a
@@ -593,6 +697,13 @@ export default function InitiativeTracker() {
                     onDrop={handleDrop}
                     onDragEnd={handleDragEnd}
                     onMove={moveCombatant}
+                    hasMenu={(() => {
+                      const token = tokenOf(entry.tokenId);
+                      return offersSheet(token) || offersCharacterRolls(token) || offersCreatureRolls(token);
+                    })()}
+                    hasSheet={offersSheet(tokenOf(entry.tokenId))}
+                    onOpenMenu={(tokenId, x, y, byKeyboard) => setMenu({ tokenId, x, y, byKeyboard })}
+                    onOpenSheet={openSheet}
                   />
                 ))}
               </div>
@@ -680,6 +791,79 @@ export default function InitiativeTracker() {
         onAdd={handleAddToken}
         onClose={() => setShowAddModal(false)}
       />
+
+      {menu && (() => {
+        const token = tokenOf(menu.tokenId);
+        if (!token) return null;
+        const { tokenId, x, y } = menu;
+        return (
+          <CharacterContextMenu
+            x={x}
+            y={y}
+            autoFocus={menu.byKeyboard}
+            items={[
+              {
+                icon: Eye,
+                label: 'View Character Sheet',
+                onClick: () => { void openSheet(tokenId); },
+                visible: offersSheet(token),
+              },
+              {
+                icon: Dices,
+                label: 'Roll...',
+                onClick: () => {
+                  if (offersCharacterRolls(token) && token.characterId) {
+                    setCharacterRolls({ tokenId, characterId: token.characterId, x, y });
+                  } else {
+                    setCreatureRolls({ tokenId, x, y });
+                  }
+                },
+                visible: offersCharacterRolls(token) || offersCreatureRolls(token),
+              },
+            ]}
+            onClose={closeMenu}
+          />
+        );
+      })()}
+
+      {sheet && campaign && membership && (
+        <CharacterSheetViewerModal
+          character={sheet.character}
+          campaignId={campaign.id}
+          membership={membership}
+          // Rolls from it reach the whole table, as from Roll... below.
+          publicName={characterRollPublicName(tokenOf(sheet.tokenId), user?.id)}
+          onClose={() => setSheet(null)}
+        />
+      )}
+
+      {characterRolls && (
+        <CharacterRollPicker
+          characterId={characterRolls.characterId}
+          onSpendHitDie={(index) => socket?.emitHitDiceSpend({ characterId: characterRolls.characterId, index })}
+          anchorX={characterRolls.x}
+          anchorY={characterRolls.y}
+          publicName={characterRollPublicName(tokenOf(characterRolls.tokenId), user?.id)}
+          onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
+          onRollInitiative={canRollFor(characterRolls.tokenId) ? () => handleRollForToken(characterRolls.tokenId) : undefined}
+          onClose={() => setCharacterRolls(null)}
+        />
+      )}
+
+      {creatureRolls && (() => {
+        const token = tokenOf(creatureRolls.tokenId);
+        if (!token) return null;
+        return (
+          <NpcRollPicker
+            token={token}
+            gameSystem={campaign?.gameSystem ?? 'DND_5E'}
+            anchorX={creatureRolls.x}
+            anchorY={creatureRolls.y}
+            onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
+            onClose={() => setCreatureRolls(null)}
+          />
+        );
+      })()}
 
       {/* End combat confirmation */}
       <ConfirmDialog

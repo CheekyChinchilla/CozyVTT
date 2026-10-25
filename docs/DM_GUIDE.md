@@ -874,6 +874,16 @@ Turn order and map don't always line up in your head — especially with a row o
 
 This works for players too, and it's read-only — hovering never selects, moves or changes anything. Like the turn ring, it respects visibility: hovering the row of a hidden or fogged creature lights it up on your screen but not on your players'.
 
+### A Combatant's Sheet and Rolls
+
+You can roll for a combatant, or look something up on their sheet, straight from the tracker, without finding their token on the map ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)):
+
+- **Right-click a combatant's row** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block.
+- **Double-click a player character's row** to open their sheet at once. Double-clicking a creature does nothing.
+- **From the keyboard**, press **Tab** until the combatant's name has the focus and press **Enter** to open the same menu.
+
+This works for combatants on the map you are showing. One whose token is on another map offers nothing until you switch to that map. Players get the same menu: any character's sheet, and rolls for their own character.
+
 ### Pinging a Location
 
 Put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
