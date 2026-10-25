@@ -2684,6 +2684,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
               } catch (err) {
                 setCurrentMap(before);
+                // TODO(ui): the Lights panel's switch reads "Global illumination" and
+                // Edit Map's checkbox "Global Illumination"; settle on one spelling
+                // for both controls and this toast.
                 showToast(apiErrorMessage(err) || 'Could not change Global Illumination', 'error');
               }
             }}
