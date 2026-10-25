@@ -38,6 +38,7 @@ import Button from '@/components/ui/Button';
 import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import AssetGrid from '@/components/assets/AssetGrid';
 import TokenVisionField from './TokenVisionField';
+import TokenRotationField from './TokenRotationField';
 import RemoveTokenDialog from './RemoveTokenDialog';
 import { assetNameFrom } from '@/utils/assetName';
 import { extractAssetId } from '@/utils/assetUrl';
@@ -1006,6 +1007,15 @@ export default function NpcQuickEditor({ token, campaignId, mapId, onClose, onTo
             />
           </section>
         )}
+
+        {/* ── Facing ── */}
+        <section>
+          <h3 className="text-xs font-semibold text-stone-gray uppercase tracking-wide mb-2">Facing</h3>
+          <TokenRotationField
+            value={current.rotation}
+            onCommit={(degrees) => { void saveUpdate({ rotation: degrees }); }}
+          />
+        </section>
 
         {/* ── Conditions ── */}
         <section>

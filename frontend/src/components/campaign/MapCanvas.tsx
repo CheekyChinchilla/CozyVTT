@@ -87,6 +87,7 @@ import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
 import { controlsToken } from '@/utils/tokenOwnership';
+import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
 import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
 import { apiErrorMessage, errorSummary } from '@/utils/errors';
@@ -2170,12 +2171,38 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
   /**
+   * Whether this viewer may turn a token: the DM any token, anyone else a
+   * token they control, as for moving it. The server checks the same.
+   */
+  const canRotateToken = (token: Token): boolean => isDM || controlsToken(token, user?.id, userRole);
+
+  /**
    * Whether the token menu offers this viewer anything. The DM always has the
-   * token actions; anyone else has only the character's sheet and rolls, so a
-   * creature or an object would open an empty box.
+   * token actions; anyone else has the character's sheet and rolls, and
+   * turning a token they control, so a creature or an object they do not
+   * control would open an empty box.
    */
   const tokenMenuHasItems = (token: Token): boolean =>
-    isDM || (!!token.characterId && (campaignHasCharacter(token.characterId) || canRollForToken(token)));
+    canRotateToken(token) || (!!token.characterId && (campaignHasCharacter(token.characterId) || canRollForToken(token)));
+
+  /**
+   * Turn a token one step, shown at once and put back if the server refuses.
+   * Read from the store, so presses in a menu that stays open add up.
+   */
+  const rotateToken = async (tokenId: string, step: number) => {
+    if (!campaign?.id || !currentMap?.id) return;
+    const token = useGameStore.getState().tokens[tokenId];
+    if (!token) return;
+    const before = token.rotation;
+    const rotation = turned(before, step);
+    useGameStore.getState().patchToken(tokenId, { rotation });
+    try {
+      await api.updateToken(campaign.id, currentMap.id, tokenId, { rotation });
+    } catch (err) {
+      useGameStore.getState().patchToken(tokenId, { rotation: before });
+      showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+    }
+  };
 
   const canRollInitiativeFor = (token: Token): boolean => {
     const combat = useGameStore.getState().combat;
@@ -3061,6 +3088,27 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   Roll...
                 </button>
               )}
+            </>
+          )}
+
+          {/* Rotate Left / Right: the DM on any token, a player on a token
+              they control. The menu stays open so presses add up. */}
+          {canRotateToken(contextMenu.token) && (
+            <>
+              <button
+                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                title={`Turn ${ROTATION_STEP} degrees anticlockwise`}
+                onClick={() => { void rotateToken(contextMenu.token.id, -ROTATION_STEP); }}
+              >
+                Rotate Left
+              </button>
+              <button
+                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                title={`Turn ${ROTATION_STEP} degrees clockwise`}
+                onClick={() => { void rotateToken(contextMenu.token.id, ROTATION_STEP); }}
+              >
+                Rotate Right
+              </button>
             </>
           )}
 

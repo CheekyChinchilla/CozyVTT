@@ -14,6 +14,7 @@ import type { TokenAnimation, Viewport } from './types';
 import { gridYToTopPx } from '../coords';
 import { conditionAbbreviation, MAX_CONDITION_BADGES } from '@/utils/conditions';
 import { isTokenDowned, isTokenVisibleTo, visibleTokenHp } from '../tokenHitTest';
+import { facing } from '@/utils/tokenRotation';
 
 /** How much of its opacity a token at zero hit points keeps. */
 export const DOWNED_TOKEN_ALPHA = 0.45;
@@ -142,6 +143,15 @@ export function cachedTokenImage(
   return token.imageUrl ? images.get(token.id) : undefined;
 }
 
+/** Turn what is drawn next to face `rotation` degrees, about a centre point. */
+function turnAboutCentre(ctx: CanvasRenderingContext2D, rotation: number | undefined, centerX: number, centerY: number): void {
+  const degrees = facing(rotation);
+  if (degrees === 0) return;
+  ctx.translate(centerX, centerY);
+  ctx.rotate((degrees * Math.PI) / 180);
+  ctx.translate(-centerX, -centerY);
+}
+
 export function placeholderColor(token: Token): string {
   // An obscured token reaches a player with no kind and no disposition, so it
   // lands on the neutral stone below by itself; the DM, who holds the real
@@ -226,6 +236,11 @@ export function drawTokens(
     if (isTokenDowned(token, state.characterHpCache)) {
       ctx.globalAlpha *= DOWNED_TOKEN_ALPHA;
     }
+    // Which way the token faces: its picture, or its letter, turns about its
+    // centre. The restore below undoes it, so the rings, the hit point bar
+    // and the badges drawn after stay upright. An obscured token reaches a
+    // player facing up (utils/tokenMask).
+    turnAboutCentre(ctx, token.rotation, centerX, centerY);
 
     if (tokenImg) {
       // === DRAW TOKEN IMAGE ===
@@ -541,6 +556,8 @@ export function drawTokens(
 
     ctx.save();
     ctx.globalAlpha = 0.6;
+    // Carried facing the way it faces.
+    turnAboutCentre(ctx, draggedToken.rotation, ghostCX, ghostCY);
 
     if (tokenImg) {
       if (ghostDisplayMode === 'full-art') {

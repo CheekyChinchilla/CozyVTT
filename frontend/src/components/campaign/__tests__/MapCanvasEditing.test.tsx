@@ -31,6 +31,7 @@ const h = vi.hoisted(() => {
   const setPlayerSpiritVisible = vi.fn();
   const deleteToken = vi.fn();
   const getCharacter = vi.fn();
+  const updateToken = vi.fn();
   const raw = {
     on(event: string, fn: (data: never) => void) {
       if (!handlers.has(event)) handlers.set(event, new Set());
@@ -51,6 +52,7 @@ const h = vi.hoisted(() => {
     setPlayerSpiritVisible,
     deleteToken,
     getCharacter,
+    updateToken,
     handlers,
     emitted,
     raw,
@@ -127,7 +129,10 @@ vi.mock('@/services/map.service', () => ({
 vi.mock('@/services/api', () => {
   const client = new Proxy({}, {
     get: (_target, prop: string) =>
-      prop === 'deleteToken' ? h.deleteToken : prop === 'getCharacter' ? h.getCharacter : vi.fn().mockResolvedValue({}),
+      prop === 'deleteToken' ? h.deleteToken
+        : prop === 'getCharacter' ? h.getCharacter
+        : prop === 'updateToken' ? h.updateToken
+        : vi.fn().mockResolvedValue({}),
   });
   return { api: client, default: client };
 });
@@ -179,6 +184,7 @@ beforeEach(() => {
   h.setPlayerSpiritVisible.mockClear();
   h.deleteToken.mockReset().mockResolvedValue({});
   h.getCharacter.mockReset();
+  h.updateToken.mockReset().mockResolvedValue({});
   useGameStore.getState().setTokens([]);
   h.handlers.clear();
   h.set({ userRole: 'DM', joinedEpoch: 1, characters: [], currentMap: mapWith('map-a', [wall('a1', 100), wall('a2', 300)]) });
@@ -589,5 +595,75 @@ describe("the token menu's View Character Sheet", () => {
 
     expect(h.getCharacter).toHaveBeenCalledWith('char-here');
     expect(await screen.findByText('You do not have permission to view this character')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Which way a token faces (#89). Rotate Left and Rotate Right turn it by 45
+ * degrees, for the DM on any token and for a player on a token they control.
+ * The menu stays open, so a few presses turn it further.
+ */
+describe("the token menu's Rotate Left and Rotate Right", () => {
+  const wolf = (extra: Partial<Token> = {}) => ({
+    id: 'tok-w', name: 'Wolf', imageUrl: '', position: { x: 0, y: 19 }, size: { width: 1, height: 1 },
+    layer: 'material', visible: true, type: 'npc', conditions: [], rotation: 0, controlledBy: null, ...extra,
+  } as unknown as Token);
+
+  function openMenuOn(token: Token) {
+    act(() => { useGameStore.getState().setTokens([token]); });
+    const input = document.querySelector('canvas[class*="cursor-"]');
+    if (!input) throw new Error('no input canvas');
+    fireEvent.contextMenu(input, { clientX: 10, clientY: 10 });
+  }
+
+  it('turns the token a step each press, and keeps the menu open', async () => {
+    render(<MapCanvas />);
+    openMenuOn(wolf());
+
+    await act(async () => { fireEvent.click(screen.getByText('Rotate Right')); });
+    await act(async () => { fireEvent.click(screen.getByText('Rotate Right')); });
+
+    expect(h.updateToken).toHaveBeenNthCalledWith(1, 'campaign-1', 'map-a', 'tok-w', { rotation: 45 });
+    expect(h.updateToken).toHaveBeenNthCalledWith(2, 'campaign-1', 'map-a', 'tok-w', { rotation: 90 });
+    expect(useGameStore.getState().tokens['tok-w'].rotation).toBe(90);
+  });
+
+  it('turns left through north', async () => {
+    render(<MapCanvas />);
+    openMenuOn(wolf());
+
+    await act(async () => { fireEvent.click(screen.getByText('Rotate Left')); });
+
+    expect(h.updateToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-w', { rotation: 315 });
+  });
+
+  it('puts the token back and says why when the turn is refused', async () => {
+    h.updateToken.mockRejectedValue(new Error('Network down'));
+    render(<MapCanvas />);
+    openMenuOn(wolf({ rotation: 90 }));
+
+    await act(async () => { fireEvent.click(screen.getByText('Rotate Right')); });
+
+    expect(useGameStore.getState().tokens['tok-w'].rotation).toBe(90);
+    expect(await screen.findByText(/Network down|Could not turn the token/)).toBeInTheDocument();
+  });
+
+  it('is offered to a player on a token they control, with nothing of the DM\'s', async () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    openMenuOn(wolf({ controlledBy: 'dm-user' }));
+
+    expect(screen.getByText('Rotate Right')).toBeInTheDocument();
+    expect(screen.queryByText('Edit Token')).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByText('Rotate Left')); });
+    expect(h.updateToken).toHaveBeenCalledWith('campaign-1', 'map-a', 'tok-w', { rotation: 315 });
+  });
+
+  it('is not offered to a player on a token they do not control', () => {
+    h.set({ userRole: 'PLAYER' });
+    render(<MapCanvas />);
+    openMenuOn(wolf({ controlledBy: 'someone-else' }));
+
+    expect(screen.queryByText('Rotate Right')).not.toBeInTheDocument();
   });
 });
