@@ -31,9 +31,11 @@ RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
 
-# Install only production dependencies
+# Install only production dependencies. npm leaves a compile cache in /tmp,
+# owned by root; the backend_tmp volume would copy it from the image and keep
+# it, where the backend's user can neither use nor remove it.
 COPY package*.json .npmrc ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && rm -rf /tmp/node-compile-cache
 
 # Copy compiled output
 COPY --from=builder /app/dist ./dist

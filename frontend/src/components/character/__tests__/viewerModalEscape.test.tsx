@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'owner', platformRole: 'USER' } }),
 }));

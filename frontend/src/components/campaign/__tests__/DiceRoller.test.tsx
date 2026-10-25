@@ -7,12 +7,18 @@
  * let the server refuse it would have passed every test.
  */
 
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
+import type { DiceRolledEvent } from '@/types';
 
-const emitDiceRoll = vi.fn();
+const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
+const seat = vi.hoisted(() => ({
+  role: 'SPECTATOR',
+  onRolled: null as ((data: never) => void) | null,
+}));
 
 vi.mock('framer-motion', () => ({
+  useReducedMotionConfig: () => false,
   motion: new Proxy({}, { get: () => (props: Record<string, unknown>) => {
     const { children, ...rest } = props as { children?: unknown } & Record<string, unknown>;
     const plain = Object.fromEntries(Object.entries(rest).filter(([k]) => !/^(initial|animate|exit|transition|layout|whileHover|whileTap)$/.test(k)));
@@ -21,7 +27,7 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
 }));
 vi.mock('@/contexts/CampaignContext', () => ({
-  useCampaign: () => ({ userRole: 'SPECTATOR', campaign: { id: 'campaign-1', status: 'ACTIVE', memberships: [], characters: [] } }),
+  useCampaign: () => ({ userRole: seat.role, campaign: { id: 'campaign-1', status: 'ACTIVE', memberships: [], characters: [] } }),
 }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'watcher', displayName: 'Watcher' } }),
@@ -29,8 +35,8 @@ vi.mock('@/contexts/AuthContext', () => ({
 vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({
     socket: {
-      onDiceRolled: vi.fn(), onDiceRolledSecret: vi.fn(), onDiceHistoryCleared: vi.fn(),
-      on: vi.fn(), off: vi.fn(), emitDiceRoll,
+      onDiceRolled: (fn: (data: never) => void) => { seat.onRolled = fn; }, onDiceRolledSecret: vi.fn(), onDiceHistoryCleared: vi.fn(),
+      on: vi.fn(), off: vi.fn(), rollDice,
     },
     status: 'connected',
     reconnectCount: 0,
@@ -59,7 +65,7 @@ describe('DiceRoller for a spectator', () => {
     fireEvent.change(screen.getByPlaceholderText(/2d6\+3/), { target: { value: '1d20' } });
     fireEvent.click(screen.getByRole('button', { name: /^Roll$/ }));
 
-    expect(emitDiceRoll).not.toHaveBeenCalled();
+    expect(rollDice).not.toHaveBeenCalled();
     expect(await screen.findByText(/Spectators watch the dice/)).toBeTruthy();
   });
 });
@@ -71,5 +77,43 @@ describe('DiceRoller labels', () => {
     render(<DiceRoller />);
     expect((screen.getByPlaceholderText('Character') as HTMLInputElement).maxLength).toBe(200);
     expect((screen.getByPlaceholderText('Purpose') as HTMLInputElement).maxLength).toBe(300);
+  });
+});
+
+describe('DiceRoller for a screen reader', () => {
+  afterEach(() => { seat.role = 'SPECTATOR'; });
+
+  // The history arrives as up to 50 rolls at once; a live region in place
+  // before then read every one of them out.
+  it('reads the roll list as a log that announces new rolls once the history is in', async () => {
+    render(<DiceRoller />);
+    const log = screen.getByRole('log', { name: 'Dice rolls' });
+    expect(log.getAttribute('aria-live')).toBe('off');
+    await waitFor(() => expect(log.getAttribute('aria-live')).toBe('polite'));
+  });
+
+  it('names the three roll boxes', () => {
+    render(<DiceRoller />);
+    expect(screen.getByRole('textbox', { name: 'Dice expression' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Character name' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Purpose' })).toBeTruthy();
+  });
+
+  it('shows my own secret roll in a dialog named Secret Roll', async () => {
+    seat.role = 'PLAYER';
+    render(<DiceRoller />);
+    await waitFor(() => expect(seat.onRolled).not.toBeNull());
+    const secret: DiceRolledEvent = {
+      id: 'r-9', userId: 'watcher', userName: 'Watcher', characterName: null, expression: '1d20', result: 17,
+      breakdown: { expression: '1d20', rolls: [{ type: 'dice', notation: '1d20', count: 1, sides: 20, results: [17], total: 17 }], total: 17, formula: '17 = 17' },
+      purpose: 'Sneaking', timestamp: new Date().toISOString(), secret: true,
+    };
+
+    act(() => seat.onRolled!(secret as never));
+
+    const dialog = screen.getByRole('dialog', { name: 'Secret Roll' });
+    expect(within(dialog).getByText('Sneaking')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Close$/ }));
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

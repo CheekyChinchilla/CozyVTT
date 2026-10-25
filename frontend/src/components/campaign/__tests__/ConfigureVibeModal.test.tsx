@@ -97,6 +97,16 @@ describe('ConfigureVibeModal', () => {
     expect(labels.join(' ')).not.toContain('Their Theme');
   });
 
+  // As the Atmosphere panel: one page of the newest tracks, then filtered.
+  it('offers a track from a later page of the library', async () => {
+    listAssets.mockImplementation(async (params: { page?: number }) => (params.page === 2
+      ? { assets: [TABLE], pagination: { page: 2, limit: 100, total: 2, totalPages: 2 } }
+      : { assets: [ELSEWHERE], pagination: { page: 1, limit: 100, total: 2, totalPages: 2 } }));
+    render(<ConfigureVibeModal onClose={vi.fn()} />);
+    const picker = await screen.findByLabelText('Audio track for Day');
+    await waitFor(() => expect(Array.from((picker as HTMLSelectElement).options).map((o) => o.text).join(' ')).toContain('Tavern Noise'));
+  });
+
   it('shows an old free-text note as No audio and saves it as none', async () => {
     mockState.campaign = {
       id: 'c1',
@@ -121,5 +131,14 @@ describe('ConfigureVibeModal', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save Periods' }));
     await waitFor(() => expect(putVibe).toHaveBeenCalled());
     expect(putVibe.mock.calls[0][1].periods[0].audio).toBe(OWN.id);
+  });
+
+  // A rename or delete of the period in force ends the vibe; the DM's page
+  // takes that from the answer, as everyone else's does from the broadcast.
+  it('takes the vibe the save leaves in force', async () => {
+    putVibe.mockResolvedValue({ vibeSettings: { enabled: true, periods: [{ ...day, name: 'Noon' }] }, currentVibe: null });
+    render(<ConfigureVibeModal onClose={vi.fn()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Save Periods' }));
+    await waitFor(() => expect(updateVibeSettings).toHaveBeenCalledWith({ enabled: true, periods: [{ ...day, name: 'Noon' }] }, null));
   });
 });

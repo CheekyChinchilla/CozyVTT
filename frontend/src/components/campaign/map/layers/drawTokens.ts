@@ -6,6 +6,7 @@
 // predicate; animation progress uses the caller-provided `now`.
 // ============================================
 
+import { TOKEN_HUES, HP_HUES, TEMP_HP_FILL, hpTier, hueColour, tokenKind } from '@/utils/tokenColours';
 import type { Token } from '@/types';
 import { TokenLayer, TokenType, TokenDisposition } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
@@ -13,6 +14,7 @@ import type { TokenAnimation, Viewport } from './types';
 import { gridYToTopPx } from '../coords';
 import { conditionAbbreviation, MAX_CONDITION_BADGES } from '@/utils/conditions';
 import { isTokenDowned, isTokenVisibleTo, visibleTokenHp } from '../tokenHitTest';
+import { facing } from '@/utils/tokenRotation';
 
 /** How much of its opacity a token at zero hit points keeps. */
 export const DOWNED_TOKEN_ALPHA = 0.45;
@@ -141,16 +143,21 @@ export function cachedTokenImage(
   return token.imageUrl ? images.get(token.id) : undefined;
 }
 
+/** Turn what is drawn next to face `rotation` degrees, about a centre point. */
+function turnAboutCentre(ctx: CanvasRenderingContext2D, rotation: number | undefined, centerX: number, centerY: number): void {
+  const degrees = facing(rotation);
+  if (degrees === 0) return;
+  ctx.translate(centerX, centerY);
+  ctx.rotate((degrees * Math.PI) / 180);
+  ctx.translate(-centerX, -centerY);
+}
+
 export function placeholderColor(token: Token): string {
   // An obscured token reaches a player with no kind and no disposition, so it
   // lands on the neutral stone below by itself; the DM, who holds the real
   // fields, keeps seeing its own colour.
   const effectiveTypeForColor = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
-  return effectiveTypeForColor === TokenType.PLAYER ? '#3b82f6' :
-    token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-    token.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-    token.disposition === TokenDisposition.NEUTRAL  ? '#fbbf24' :
-                                                      '#78716c'; // object / default stone
+  return hueColour(TOKEN_HUES[tokenKind(effectiveTypeForColor, token.disposition)]);
 }
 
 export function drawTokens(
@@ -229,6 +236,11 @@ export function drawTokens(
     if (isTokenDowned(token, state.characterHpCache)) {
       ctx.globalAlpha *= DOWNED_TOKEN_ALPHA;
     }
+    // Which way the token faces: its picture, or its letter, turns about its
+    // centre. The restore below undoes it, so the rings, the hit point bar
+    // and the badges drawn after stay upright. An obscured token reaches a
+    // player facing up (utils/tokenMask).
+    turnAboutCentre(ctx, token.rotation, centerX, centerY);
 
     if (tokenImg) {
       // === DRAW TOKEN IMAGE ===
@@ -338,10 +350,11 @@ export function drawTokens(
     // full-art: bottom border stripe
     const effectiveType = token.type ?? (token.characterId ? TokenType.PLAYER : TokenType.NPC);
     if (effectiveType === TokenType.NPC && token.disposition) {
-      const ringColor =
-        token.disposition === TokenDisposition.HOSTILE  ? '#ef4444' :
-        token.disposition === TokenDisposition.FRIENDLY ? '#2dd4bf' :
-                                                          '#fbbf24'; // neutral = amber
+      const ringColor = hueColour(
+        token.disposition === TokenDisposition.HOSTILE  ? TOKEN_HUES.hostile :
+        token.disposition === TokenDisposition.FRIENDLY ? TOKEN_HUES.friendly :
+                                                          TOKEN_HUES.neutral
+      );
       if (displayMode === 'full-art') {
         const stripeH = Math.max(3, 3 / zoom);
         ctx.fillStyle = ringColor;
@@ -387,10 +400,7 @@ export function drawTokens(
       ctx.fill();
 
       // HP fill
-      const hpColor = pct >= 0.75 ? '#22c55e'
-                    : pct >= 0.50 ? '#84cc16'
-                    : pct >= 0.25 ? '#f59e0b'
-                    :               '#ef4444';
+      const hpColor = hueColour(HP_HUES[hpTier(pct)]);
       if (pct > 0) {
         ctx.fillStyle = hpColor;
         ctx.beginPath();
@@ -405,7 +415,7 @@ export function drawTokens(
       // Temp HP overlay (light blue)
       if (hpSource.temp > 0) {
         const tempPct = Math.min(1, hpSource.temp / hpSource.max);
-        ctx.fillStyle = 'rgba(147, 197, 253, 0.75)';
+        ctx.fillStyle = TEMP_HP_FILL;
         ctx.beginPath();
         if (ctx.roundRect) {
           ctx.roundRect(barX + barW * (1 - tempPct), barY, barW * tempPct, barH, 2 / zoom);
@@ -546,6 +556,8 @@ export function drawTokens(
 
     ctx.save();
     ctx.globalAlpha = 0.6;
+    // Carried facing the way it faces.
+    turnAboutCentre(ctx, draggedToken.rotation, ghostCX, ghostCY);
 
     if (tokenImg) {
       if (ghostDisplayMode === 'full-art') {

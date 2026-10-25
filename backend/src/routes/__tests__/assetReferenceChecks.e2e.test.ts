@@ -105,7 +105,7 @@ describe('a reference to an asset the DM cannot read', () => {
   it.each(WRITES)('is refused by %s, and the asset stays private', async (_route, write) => {
     const res = await write(`/api/assets/tokens/${privateId}`);
     expect(res.status).toBe(403);
-    expect((await dm.get(`/api/assets/tokens/${privateId}`)).status).toBe(403);
+    expect((await dm.get(`/api/assets/tokens/${privateId}`)).status).toBe(404);
   });
 });
 
@@ -132,7 +132,7 @@ describe('an update naming an asset the DM cannot read', () => {
     const creatureId = creature.body.id ?? creature.body.creature?.id ?? creature.body.template?.id;
     expect((await dm.put(url(`${base}/creatures/${creatureId}`)).send({ imageUrl: privateUrl() })).status).toBe(403);
 
-    expect((await dm.get(privateUrl())).status).toBe(403);
+    expect((await dm.get(privateUrl())).status).toBe(404);
   });
 });
 
@@ -147,7 +147,7 @@ describe('an update that leaves a stored reference as it was', () => {
     const outsider = await createTestUser({ displayName: 'Refs Outsider' });
     outsiderId = outsider.id;
     strandedUrl = `/api/assets/tokens/${await makeAsset(outsiderId, 'stranded')}`;
-    expect((await dm.get(strandedUrl)).status).toBe(403);
+    expect((await dm.get(strandedUrl)).status).toBe(404);
   });
 
   it('goes through for a token template', async () => {
@@ -201,7 +201,7 @@ describe('a copy naming a picture already used in the campaign', () => {
     await prisma.tokenTemplate.create({
       data: { id: theirsId, campaignId, createdById: dmId, name: 'Theirs', imageUrl: usedUrl, type: 'npc', displayMode: 'pog', size: { width: 1, height: 1 } },
     });
-    expect((await dm.get(usedUrl)).status).toBe(403);
+    expect((await dm.get(usedUrl)).status).toBe(404);
   });
 
   it('goes through, even when the picture can no longer be read', async () => {

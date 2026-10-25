@@ -77,8 +77,8 @@ export default function SessionToolbar({
                 aria-label={label}
                 onClick={() => onOpen(key)}
                 className={cn(
-                  openPanels[key] && '!bg-accent/15 !text-accent',
-                  key === 'spirit' && 'text-spirit-purple',
+                  openPanels[key] && 'bg-accent/15! text-accent-ink!',
+                  key === 'spirit' && 'text-spirit-ink',
                   key === 'spirit' && spiritLayerEnabled && 'ring-2 ring-spirit-purple/50'
                 )}
               />

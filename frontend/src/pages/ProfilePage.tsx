@@ -31,6 +31,7 @@ import {
 import Button from '@/components/ui/Button';
 import { apiErrorMessage } from '@/utils/errors';
 import { isStrongPassword } from '@/utils/validation';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
 // Legacy localStorage key — superseded by backend-persisted preferences.
 // We delete it on first authenticated load so it doesn't linger on devices.
@@ -179,7 +180,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-9999 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-soft-cream border border-moss-green/30 rounded-xl shadow-2xl w-full max-w-sm">
@@ -215,7 +216,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
 
           {/* Zoom slider */}
           <div className="flex items-center gap-3">
-            <ZoomOut className="w-4 h-4 text-stone-gray flex-shrink-0" aria-hidden="true" />
+            <ZoomOut className="w-4 h-4 text-stone-gray shrink-0" aria-hidden="true" />
             <label htmlFor="avatar-zoom" className="sr-only">Zoom</label>
             <input
               id="avatar-zoom"
@@ -227,7 +228,7 @@ function AvatarCropModal({ imageSrc, onConfirm, onClose }: AvatarCropModalProps)
               onChange={(e) => handleZoomChange(Number(e.target.value))}
               className="flex-1 accent-moss-green"
             />
-            <ZoomIn className="w-4 h-4 text-stone-gray flex-shrink-0" aria-hidden="true" />
+            <ZoomIn className="w-4 h-4 text-stone-gray shrink-0" aria-hidden="true" />
           </div>
           <p className="text-xs text-warm-gray text-center">
             Saved as 512×512 JPEG. Drag to reposition, slide to zoom.
@@ -347,7 +348,8 @@ export default function ProfilePage() {
       setDisplayName(user.displayName);
       setBio(user.bio ?? '');
     }
-  }, [user?.id]); // only on user change
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fills the fields once per signed-in user; a refreshed user object must keep what is being typed
+  }, [user?.id]);
 
   // ── Logout ──
   const handleLogout = async () => {
@@ -375,14 +377,12 @@ export default function ProfilePage() {
 
   const saveProfile = async () => {
     const trimmedName = displayName.trim();
-    // TODO(accounts): the server accepts names of 1 to 50 characters
-    // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
-    if (trimmedName.length < 2) {
-      setProfileError('Display name must be at least 2 characters');
+    if (trimmedName.length < DISPLAY_NAME_MIN_LENGTH) {
+      setProfileError('Display name is required');
       return;
     }
-    if (trimmedName.length > 50) {
-      setProfileError('Display name must be 50 characters or less');
+    if (trimmedName.length > DISPLAY_NAME_MAX_LENGTH) {
+      setProfileError(`Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer`);
       return;
     }
     if (bio.length > 500) {
@@ -652,7 +652,7 @@ export default function ProfilePage() {
   // ──────────────────────────────────────────
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <header className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-4xl mx-auto px-4 py-5 flex items-center gap-4">
@@ -685,7 +685,7 @@ export default function ProfilePage() {
 
           <div className="flex items-start gap-6">
             {/* Avatar */}
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               <div
                 className="relative group cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
@@ -726,7 +726,7 @@ export default function ProfilePage() {
                   Remove Avatar
                 </button>
               )}
-              {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-[5rem]">{avatarError}</p>}
+              {avatarError && <p className="mt-1 text-xs text-danger-ink max-w-20">{avatarError}</p>}
               {avatarSuccess && (
                 <p className="mt-1 text-xs text-brand-ink flex items-center gap-1">
                   <CheckCircle className="w-3 h-3" /> {avatarSuccess}
@@ -738,18 +738,19 @@ export default function ProfilePage() {
             <div className="flex-1 space-y-4">
               {/* Display name */}
               <div>
-                <label className="block text-xs font-medium text-stone-gray mb-1">Display Name</label>
+                <label htmlFor="profile-display-name" className="block text-xs font-medium text-stone-gray mb-1">Display Name</label>
                 {editingProfile ? (
                   <>
                     <input
+                      id="profile-display-name"
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      maxLength={50}
+                      maxLength={DISPLAY_NAME_MAX_LENGTH}
                       className="input-cozy w-full"
                       autoFocus
                     />
-                    <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/50</p>
+                    <p className="text-xs text-warm-gray/70 mt-0.5 text-right">{displayName.length}/{DISPLAY_NAME_MAX_LENGTH}</p>
                   </>
                 ) : (
                   <p className="text-brand-ink font-medium">{user?.displayName}</p>
@@ -766,7 +767,7 @@ export default function ProfilePage() {
               {/* Role (read-only) */}
               <div>
                 <label className="block text-xs font-medium text-stone-gray mb-1">Platform Role</label>
-                <span className="inline-block px-2 py-0.5 rounded text-xs font-medium bg-moss-green/10 text-brand-ink border border-moss-green/20">
+                <span className="inline-block px-2 py-0.5 rounded-sm text-xs font-medium bg-moss-green/10 text-brand-ink border border-moss-green/20">
                   {user?.platformRole}
                 </span>
               </div>
@@ -983,7 +984,7 @@ export default function ProfilePage() {
               {!deleteConfirmOpen && (
                 <button
                   onClick={() => setDeleteConfirmOpen(true)}
-                  className="ml-4 flex-shrink-0 text-sm py-1.5 px-3 rounded-lg border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors font-medium"
+                  className="ml-4 shrink-0 text-sm py-1.5 px-3 rounded-lg border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors font-medium"
                 >
                   Delete Account
                 </button>
@@ -993,7 +994,7 @@ export default function ProfilePage() {
             {deleteConfirmOpen && (
               <form onSubmit={handleDeleteAccount} className="space-y-3 p-4 rounded-lg bg-danger/10 border border-danger/30">
                 <div className="flex items-start gap-3">
-                  <AlertTriangle className="w-5 h-5 text-danger-ink flex-shrink-0 mt-0.5" />
+                  <AlertTriangle className="w-5 h-5 text-danger-ink shrink-0 mt-0.5" />
                   <div className="text-sm text-danger-ink space-y-1">
                     <p className="font-semibold">This will permanently delete:</p>
                     <ul className="list-disc list-inside text-xs space-y-0.5">
@@ -1015,7 +1016,7 @@ export default function ProfilePage() {
                 </div>
 
                 {deleteError && (
-                  <p className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded p-2">{deleteError}</p>
+                  <p className="text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-sm p-2">{deleteError}</p>
                 )}
 
                 <div>
@@ -1056,7 +1057,7 @@ export default function ProfilePage() {
                   <button
                     type="submit"
                     disabled={deleting || deleteConfirmText !== 'DELETE' || !deletePassword}
-                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-danger hover:bg-danger text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 flex items-center justify-center gap-2 py-2 px-4 rounded-lg bg-danger-fill hover:bg-danger-fill text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {deleting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {deleting ? 'Deleting...' : 'Delete My Account'}

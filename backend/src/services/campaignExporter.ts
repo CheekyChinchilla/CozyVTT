@@ -24,6 +24,7 @@ import { readTokens, readJsonObject } from '../utils/prisma-json';
 import { extractAssetId } from '../utils/asset-urls';
 import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
 import { canReadAsset } from './permissions';
+import { IMPORT_LIMITS } from '../validators/campaignImport';
 
 // ── Exported types ──────────────────────────────────────────────────────────
 
@@ -46,6 +47,15 @@ export interface PreparedExport {
 }
 
 /** The export would make an archive larger than this server takes. */
+/** What a data file of the archive holds, in words. */
+function dataFileLabel(name: string): string {
+  if (name.startsWith('maps/')) return 'map data';
+  if (name.startsWith('creatures/')) return 'creatures';
+  if (name.startsWith('token-templates/')) return 'token templates';
+  if (name.startsWith('assets/')) return 'picture and sound list';
+  return 'settings';
+}
+
 export class ExportTooLargeError extends Error {
   constructor(message: string) {
     super(message);
@@ -243,7 +253,7 @@ export async function prepareCampaignExport(
   const manifest = {
     formatVersion: 1,
     exportedAt: new Date().toISOString(),
-    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.5.3'}`,
+    exportedFrom: `CozyVTT v${process.env.npm_package_version || '1.5.4'}`,
     campaignName: campaign.name,
     gameSystem: campaign.gameSystem || 'NONE',
     mapCount: mapDataArray.length,
@@ -281,9 +291,33 @@ export async function prepareCampaignExport(
   }
   const assetManifestFile = { name: 'assets/asset-manifest.json', content: JSON.stringify(assetManifest, null, 2) };
 
-  // 11. Refuse an archive larger than an import accepts, before sending any of it.
-  const dataBytes = [...dataFiles, assetManifestFile].reduce((sum, f) => sum + Buffer.byteLength(f.content), 0);
+  // 11. Refuse an archive an import would refuse or cut, before sending any
+  // of it: more creatures or token templates than an import takes, more
+  // files than it reads, a data file larger than it reads, or more bytes
+  // than it takes.
+  for (const [count, max, many] of [
+    [creaturesData.length, IMPORT_LIMITS.MAX_CREATURES, 'custom creatures'],
+    [tokenTemplatesData.length, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES, 'token templates'],
+  ] as const) {
+    if (count > max) {
+      throw new ExportTooLargeError(
+        `This campaign has ${count.toLocaleString('en-US')} ${many}, more than the ${max.toLocaleString('en-US')} a campaign archive can carry. Delete some it no longer uses, then export again.`
+      );
+    }
+  }
   const entryCount = dataFiles.length + 1 + assetMap.size;
+  if (entryCount > IMPORT_LIMITS.MAX_FILE_COUNT) {
+    throw new ExportTooLargeError(
+      `This campaign would make an archive of ${entryCount.toLocaleString('en-US')} files (one for each map and each picture or sound file), more than the ${IMPORT_LIMITS.MAX_FILE_COUNT.toLocaleString('en-US')} a campaign archive can hold. Remove maps or pictures the campaign no longer uses, then export again.`
+    );
+  }
+  const oversized = [...dataFiles, assetManifestFile].find((f) => Buffer.byteLength(f.content) > IMPORT_LIMITS.MAX_JSON_SIZE_BYTES);
+  if (oversized) {
+    throw new ExportTooLargeError(
+      `The ${dataFileLabel(oversized.name)} in this campaign's archive would be ${megabytes(Buffer.byteLength(oversized.content))}, more than the ${megabytes(IMPORT_LIMITS.MAX_JSON_SIZE_BYTES)} one part of a campaign archive can hold. Remove some, then export again.`
+    );
+  }
+  const dataBytes = [...dataFiles, assetManifestFile].reduce((sum, f) => sum + Buffer.byteLength(f.content), 0);
   const archiveBytes = totalSizeBytes + dataBytes + entryCount * ZIP_BYTES_PER_ENTRY;
   const limit = await getCampaignArchiveSizeLimit();
   if (archiveBytes > limit) {

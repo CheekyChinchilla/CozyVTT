@@ -136,6 +136,9 @@ describe('a first connect that fails', () => {
     render(<WebSocketProvider><Page /></WebSocketProvider>);
     await act(async () => { current().fire('connect_error', new Error('xhr poll error')); });
     expect(status()).toBe('error');
+    // The badge is a status region, so a screen reader hears the change.
+    const badge = screen.getByRole('status');
+    expect(badge.textContent).toContain('Connection Error');
 
     // socket.io retries the same socket, and this time the server answers.
     await act(async () => { current().io.fire('reconnect_attempt', 1); });
@@ -144,6 +147,8 @@ describe('a first connect that fails', () => {
 
     expect(sockets).toHaveLength(1);
     expect(status()).toBe('connected');
+    expect(screen.getByRole('status')).toBe(badge);
+    expect(badge.textContent).toContain('Connected');
   });
 });
 

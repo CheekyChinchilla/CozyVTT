@@ -23,6 +23,7 @@
     "strictNullChecks": true,
     "strictFunctionTypes": true,
     "noImplicitReturns": true,
+    "noImplicitOverride": true,
 
     /* Path aliases, relative to this file */
     "paths": {

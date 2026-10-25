@@ -101,7 +101,10 @@ beforeAll(async () => {
       { userId: spectatorId, campaignId, role: 'SPECTATOR', characterIds: [] },
     ],
   });
-  [dm, player, spectator] = await Promise.all([login(dmUser.email), login(playerUser.email), login(spectatorUser.email)]);
+  // One at a time: one address may have only two sign-ins checked at once.
+  dm = await login(dmUser.email);
+  player = await login(playerUser.email);
+  spectator = await login(spectatorUser.email);
 });
 
 afterAll(async () => {
@@ -161,7 +164,7 @@ describe("a character's token image", () => {
     const updated = await player.put(`/api/characters/${own.body.character.id}`).send({ tokenImageUrl: url });
     expect(updated.status).toBe(403);
     // And the private asset stays private.
-    expect((await player.get(url)).status).toBe(403);
+    expect((await player.get(url)).status).toBe(404);
   });
 
   // The write check reads the asset id out of the address and asks whether
@@ -181,7 +184,7 @@ describe("a character's token image", () => {
       // Bring it into the campaign the DM shares with the player.
       await prisma.character.update({ where: { id: created.body.character.id }, data: { campaignId } });
     }
-    expect((await player.get(`/api/assets/tokens/${victim}`)).status).toBe(403);
+    expect((await player.get(`/api/assets/tokens/${victim}`)).status).toBe(404);
   });
 
   // The sheet editors send the stored picture back with every save. Once it
@@ -277,8 +280,8 @@ describe('what the asset library tells a member', () => {
     await prisma.campaign.update({ where: { id: campaignId }, data: { spiritLayerEnabled: false, currentMapId: current.id } });
 
     // The prepared map is not sent to a player, so being its base layer opens nothing.
-    expect((await player.get(url)).status).toBe(403);
-    expect((await player.get(`/api/assets/${shared}`)).status).toBe(403);
+    expect((await player.get(url)).status).toBe(404);
+    expect((await player.get(`/api/assets/${shared}`)).status).toBe(404);
 
     // Once that map is the one the campaign shows, the image is openly on the table.
     await prisma.campaign.update({ where: { id: campaignId }, data: { currentMapId: prepared.id } });
@@ -298,8 +301,8 @@ describe('what the asset library tells a member', () => {
 
     const hidden = await player.get(`/api/assets?campaignId=${campaignId}&type=MAP`);
     expect(hidden.body.assets.map((a: { id: string }) => a.id)).not.toContain(spirit);
-    expect((await player.get(`/api/assets/maps/${spirit}`)).status).toBe(403);
-    expect((await player.get(`/api/assets/${spirit}`)).status).toBe(403);
+    expect((await player.get(`/api/assets/maps/${spirit}`)).status).toBe(404);
+    expect((await player.get(`/api/assets/${spirit}`)).status).toBe(404);
     // The DM always has it.
     expect((await dm.get(`/api/assets?campaignId=${campaignId}&type=MAP`)).body.assets.map((a: { id: string }) => a.id)).toContain(spirit);
     expect((await dm.get(`/api/assets/maps/${spirit}`)).status).toBe(200);
@@ -356,8 +359,8 @@ describe("a campaign asset's uploader", () => {
       const left = await login(leftUser.email);
       const art = await makeAsset('MAP', 'CAMPAIGN', leftUser.id, 'departed-campaign-map');
 
-      expect((await left.delete(`/api/assets/${art}`)).status).toBe(403);
-      expect((await left.patch(`/api/assets/${art}/scope`).send({ scope: 'USER' })).status).toBe(403);
+      expect((await left.delete(`/api/assets/${art}`)).status).toBe(404);
+      expect((await left.patch(`/api/assets/${art}/scope`).send({ scope: 'USER' })).status).toBe(404);
       const kept = await prisma.asset.findUnique({ where: { id: art } });
       expect(kept?.scope).toBe('CAMPAIGN');
       expect(fs.existsSync(kept!.filePath)).toBe(true);

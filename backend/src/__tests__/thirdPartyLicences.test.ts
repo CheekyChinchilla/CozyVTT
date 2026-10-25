@@ -53,6 +53,15 @@ function load(project: Project) {
 
 const projects = { frontend: load('frontend'), backend: load('backend') };
 
+/**
+ * Development packages whose own code the frontend build copies into what the
+ * browser loads: Tailwind's base stylesheet (Preflight), Vite's preload helper
+ * and Rolldown's runtime chunk. NOTICES credits them beside the packages an
+ * instance runs.
+ */
+const SHIPPED_BY_THE_BUILD = ['tailwindcss', 'vite', 'rolldown'];
+const shipped = (project: Project, name: string) => project === 'frontend' && SHIPPED_BY_THE_BUILD.includes(name);
+
 /** A version's major line, as NOTICES gives it: "4.x", or "0.35.x" below version 1. */
 const versionLine = (version: string) => {
   const [major, minor] = version.split('.');
@@ -108,11 +117,16 @@ describe.each(['frontend', 'backend'] as const)('THIRD_PARTY_NOTICES.txt, for th
   it('lists only packages the project runs, at the major line and licence its lockfile records', () => {
     const wrong = entries.flatMap(({ name, version, licence }) => {
       const entry = top(name);
-      if (!entry?.version || entry.dev) return [`${name}: not a package this project runs`];
+      if (!entry?.version || (entry.dev && !shipped(project, name))) return [`${name}: not a package this project runs`];
       const expected = `${versionLine(entry.version)} ${licenceOf(`node_modules/${name}`, entry)}`;
       return `${version} ${licence}` === expected ? [] : [`${name}: listed as ${version} ${licence}, the lockfile has ${expected}`];
     });
     expect(wrong).toEqual([]);
+  });
+
+  it('credits the build tools whose code the build copies into the app', () => {
+    const names = entries.map((entry) => entry.name);
+    expect(SHIPPED_BY_THE_BUILD.filter((name) => shipped(project, name) && !names.includes(name))).toEqual([]);
   });
 
   it('names every licence among the packages it runs, and no other', () => {
@@ -138,6 +152,7 @@ describe('THIRD_PARTY_LICENSES.md', () => {
     React: ['frontend', 'react'],
     'React Router': ['frontend', 'react-router'],
     Vite: ['frontend', 'vite'],
+    'Tailwind CSS': ['frontend', 'tailwindcss'],
     Playwright: ['frontend', '@playwright/test'],
     Zustand: ['frontend', 'zustand'],
     'TanStack Query': ['frontend', '@tanstack/react-query'],
@@ -176,14 +191,15 @@ describe('THIRD_PARTY_LICENSES.md', () => {
   });
 
   // A library that only builds or tests CozyVTT never reaches an instance,
-  // so NOTICES, which lists what an instance runs, leaves it out.
+  // so NOTICES, which lists what an instance runs, leaves it out, unless the
+  // build copies its code into the app (SHIPPED_BY_THE_BUILD).
   it('has every library an instance runs in NOTICES too, and leaves the development tools out of it', () => {
     const wrong = rows.flatMap(({ library }) => {
       const row = ROWS[library];
       if (!row) return [];
       const [project, name] = row;
       const listed = sections[project].some((entry) => entry.name === name);
-      const runs = projects[project].dependencies.includes(name);
+      const runs = projects[project].dependencies.includes(name) || shipped(project, name);
       if (runs && !listed) return [`${library}: missing from NOTICES`];
       if (!runs && listed) return [`${library}: a development tool, listed in NOTICES`];
       return [];

@@ -20,7 +20,7 @@
  */
 
 import type { NpcStatBlock } from '@/types';
-import { ABILITY_KEYS, formatModifier, type AbilityKey } from '@/utils/rules/dnd5e';
+import { ABILITY_KEYS, abilityModifier, formatModifier, type AbilityKey } from '@/utils/rules/dnd5e';
 
 /** The three PF2e saving throws, in the order stat blocks print them. */
 export const PF2E_SAVES = [
@@ -74,8 +74,7 @@ export function readAttributeModifiers(statBlock: NpcStatBlock): Record<AbilityK
     if (explicit && typeof explicit[key] === 'number') {
       result[key] = explicit[key];
     } else {
-      const score = statBlock.abilities?.[key] ?? 10;
-      result[key] = Math.floor((score - 10) / 2);
+      result[key] = abilityModifier(statBlock.abilities?.[key] ?? 10);
     }
   }
   return result;

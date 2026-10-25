@@ -18,13 +18,11 @@ import logger from '../utils/logger';
 export const PASSWORD_CHANGE_REQUIRED = 'PASSWORD_CHANGE_REQUIRED';
 
 /**
- * Paths that stay reachable while a password change is pending.
- * Relative to the /api mount point.
+ * Paths that stay reachable while a password change is pending, relative to
+ * the /api mount point. The administrator two-factor gate (adminMfa.ts)
+ * allows these and enrolment besides, built from this list.
  */
-// TODO(accounts): middleware/adminMfa.ts keeps its own copy of these paths and
-// nothing keeps the two in step; build one from the other or add a
-// keepInStep check.
-const ALLOWED_PATHS = new Set([
+export const PASSWORD_GATE_ALLOWED_PATHS: ReadonlySet<string> = new Set([
   '/auth/change-password', // the one thing a gated session may do
   '/auth/logout',
   '/auth/me',
@@ -73,7 +71,7 @@ export async function requirePasswordChanged(
     return next();
   }
 
-  if (ALLOWED_PATHS.has(req.path)) {
+  if (PASSWORD_GATE_ALLOWED_PATHS.has(req.path)) {
     return next();
   }
 

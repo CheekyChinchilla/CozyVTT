@@ -12,20 +12,15 @@ import { Prisma } from '@prisma/client';
 
 import {
   jsonOrNull,
-  readFogState,
   readJsonArray,
   readJsonObject,
-  readLights,
   readTokens,
-  readWallSegments,
   toJson,
 } from './prisma-json';
 
 describe('array columns', () => {
   const readers = [
     ['readTokens', readTokens],
-    ['readWallSegments', readWallSegments],
-    ['readLights', readLights],
     ['readJsonArray', readJsonArray],
   ] as const;
 
@@ -62,24 +57,6 @@ describe('array columns', () => {
     // only works if nothing is cloned here.
     const stored: unknown[] = [{ id: 'a' }];
     expect(readTokens(stored as never)).toBe(stored);
-  });
-});
-
-describe('readFogState', () => {
-  it('returns the stored object', () => {
-    const fog = { cols: 10, rows: 8, revealed: [1, 2, 3] };
-    expect(readFogState(fog as never)).toEqual(fog);
-  });
-
-  // Null is meaningful here — no fog drawn, as distinct from fog covering
-  // nothing — so it must survive rather than becoming an empty object.
-  it('returns null when no fog has been drawn', () => {
-    expect(readFogState(null)).toBeNull();
-    expect(readFogState(undefined)).toBeNull();
-  });
-
-  it('returns null for an array, which is not a fog state', () => {
-    expect(readFogState([] as never)).toBeNull();
   });
 });
 

@@ -38,8 +38,8 @@ export const TableDisplay: React.FC<TableDisplayProps> = ({ section }) => {
           {section.rows.map((row, rowIndex) => (
             <tr
               key={row.id}
-              className={`border-b border-stone-gray/20 hover:bg-parchment/20 transition-colors ${
-                rowIndex % 2 === 0 ? 'bg-parchment/10' : ''
+              className={`border-b border-stone-gray/20 hover:bg-ink/10 transition-colors ${
+                rowIndex % 2 === 0 ? 'bg-ink/5' : ''
               }`}
             >
               {section.columns.map((column) => (

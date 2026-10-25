@@ -15,13 +15,14 @@ type Handler = (payload: unknown) => void;
 const handlers = new Map<string, Handler>();
 const getCharacter = vi.fn();
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({
   useOptionalWebSocket: () => ({
     socket: {
-      emitDiceRoll: vi.fn(),
+      rollDice: vi.fn().mockResolvedValue({ ok: true, id: "r" }),
       emitHitDiceSpend: vi.fn(),
       on: (event: string, handler: Handler) => handlers.set(event, handler),
       off: (event: string) => handlers.delete(event),

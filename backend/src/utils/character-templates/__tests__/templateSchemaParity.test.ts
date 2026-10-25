@@ -19,9 +19,32 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { validateCharacterData } from '../../../validators/game-systems';
 import { GameSystem } from '../../../game-systems';
-import { getTemplatesForGameSystem } from '../index';
-import { pf2eArmorClass, pf2eClassDC, pf2eProficiencyBonus } from '../../rules/pathfinder2e';
+import { builtInTemplates } from '../../../__tests__/helpers/builtInTemplates';
+import {
+  pf2eArmorClass,
+  pf2eClassDC,
+  pf2eSkillTotal,
+  pf2eSaveTotal,
+  pf2ePerceptionTotal,
+  pf2eSpellAttack,
+  pf2eSpellDC,
+  pf2eTotalBulk,
+  pf2eBulkLimits,
+  pf2eMaxHitPoints,
+  pf2eProficiencyBonus,
+} from '../../rules/pathfinder2e';
 import { dnd5eBackfilledSkillOtherBonus, dnd5eBackfilledSaveOtherBonus } from '../../rules/dnd5e';
+import {
+  cocHitPoints,
+  cocMajorWoundThreshold,
+  cocMagicPoints,
+  cocMaxSanity,
+  cocHalfAndFifth,
+  cocDamageBonusAndBuild,
+  cocMoveRate,
+  cocDodgeBase,
+  cocBlankSkills,
+} from '../../rules/callOfCthulhu7e';
 
 /** Top-level keys of a Zod object schema, read from its source. */
 function schemaKeys(file: string, marker: string): Set<string> {
@@ -47,7 +70,7 @@ describe('built-in templates match their schema', () => {
   for (const { system, file, marker } of SYSTEMS) {
     describe(system, () => {
       const declared = schemaKeys(file, marker);
-      const templates = getTemplatesForGameSystem(system);
+      const templates = builtInTemplates(system);
 
       it('has templates to check', () => {
         expect(templates.length).toBeGreaterThan(0);
@@ -83,7 +106,7 @@ describe('built-in templates match their schema', () => {
  * read-only sheet printed the stored number, so those were what a player saw.
  */
 describe('Pathfinder 2e templates agree with the rules maths', () => {
-  for (const template of getTemplatesForGameSystem(GameSystem.PATHFINDER_2E)) {
+  for (const template of builtInTemplates(GameSystem.PATHFINDER_2E)) {
     const data = template.data as Record<string, unknown>;
 
     it(`${template.name} stores the Armor Class its own components give`, () => {
@@ -96,6 +119,46 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
       const stored = (data.classDC as { total?: number } | undefined)?.total;
       if (stored === undefined) return;
       expect(stored).toBe(pf2eClassDC(data));
+    });
+
+    it(`${template.name} stores the saves and Perception its own components give`, () => {
+      const saves = data.savingThrows as Record<'fortitude' | 'reflex' | 'will', { bonus: number }>;
+      for (const save of ['fortitude', 'reflex', 'will'] as const) expect(saves[save].bonus).toBe(pf2eSaveTotal(data, save));
+      expect((data.perception as { bonus: number }).bonus).toBe(pf2ePerceptionTotal(data));
+    });
+
+    it(`${template.name} stores the spell attack and spell DC its own components give`, () => {
+      const spellcasting = data.spellcasting as { spellAttackBonus: { bonus: number }; spellDC: { dc: number } } | undefined;
+      if (!spellcasting) return;
+      expect(spellcasting.spellAttackBonus.bonus).toBe(pf2eSpellAttack(data));
+      expect(spellcasting.spellDC.dc).toBe(pf2eSpellDC(data));
+    });
+
+    it(`${template.name} stores the hit points its ancestry, class, level and Constitution give`, () => {
+      const hp = data.hp as { maximum: number; current: number; ancestryHp: number; classHpPerLevel: number };
+      const con = (data.attributes as { constitution: { modifier: number } }).constitution.modifier;
+      expect(hp.maximum).toBe(pf2eMaxHitPoints(hp.ancestryHp, hp.classHpPerLevel, data.level, con));
+      expect(hp.current).toBe(hp.maximum);
+    });
+
+    // A strike records its attribute, rank and item bonus, as the editor
+    // writes one, and its attack bonus is what they give.
+    it(`${template.name} stores each strike's parts and the attack bonus they give`, () => {
+      type Strike = { name: string; attackBonus?: number; attributeModifier?: string; proficiencyRank?: string; itemBonus?: number };
+      const attributes = data.attributes as Record<string, { modifier: number }>;
+      for (const strike of (data.strikes ?? []) as Strike[]) {
+        expect(strike).toMatchObject({ attributeModifier: expect.any(String), proficiencyRank: expect.any(String), itemBonus: expect.any(Number) });
+        const expected = (attributes[strike.attributeModifier!]?.modifier ?? NaN) + pf2eProficiencyBonus(data.level, strike.proficiencyRank) + strike.itemBonus!;
+        expect({ strike: strike.name, attackBonus: strike.attackBonus }).toEqual({ strike: strike.name, attackBonus: expected });
+      }
+    });
+
+    it(`${template.name} stores the Bulk its inventory and Strength give`, () => {
+      const stored = data.bulk as { current: number; encumbered: number; maximum: number } | undefined;
+      if (stored === undefined) return;
+      const strength = (data.attributes as { strength?: { modifier?: number } } | undefined)?.strength?.modifier ?? 0;
+      const { encumbered, maximum } = pf2eBulkLimits(strength);
+      expect(stored).toEqual({ current: pf2eTotalBulk(data.inventory, data.currency).bulk, encumbered, maximum });
     });
 
     // The editor looks attributes up by their full name and offers the
@@ -116,12 +179,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
 
     it(`${template.name} stores the skill and lore totals its own components give`, () => {
       type Skill = { attribute: string; proficiencyRank: string; itemBonus?: number; armorPenalty?: number; bonus: number };
-      const attributes = data.attributes as Record<string, { modifier: number } | undefined>;
-      const total = (skill: Skill) =>
-        (attributes[skill.attribute]?.modifier ?? 0) +
-        pf2eProficiencyBonus(data.level, skill.proficiencyRank) +
-        (skill.itemBonus ?? 0) -
-        (skill.armorPenalty ?? 0);
+      const total = (skill: Skill) => pf2eSkillTotal(data, skill);
       const skills = [
         ...Object.values(data.skills as Record<string, Skill>),
         ...((data.loreSkills ?? []) as Skill[]),
@@ -137,7 +195,7 @@ describe('Pathfinder 2e templates agree with the rules maths', () => {
  * character made from one opens with no other bonus to explain.
  */
 describe('D&D 5e templates agree with the rules maths', () => {
-  for (const template of getTemplatesForGameSystem(GameSystem.DND_5E)) {
+  for (const template of builtInTemplates(GameSystem.DND_5E)) {
     const data = template.data as Record<string, unknown>;
 
     it(`${template.name} stores the skill and save totals its scores give`, () => {
@@ -147,4 +205,50 @@ describe('D&D 5e templates agree with the rules maths', () => {
       expect(saves.filter((key) => dnd5eBackfilledSaveOtherBonus(data, key) !== null)).toEqual([]);
     });
   }
+});
+
+// The Call of Cthulhu templates stored a major wound of 1 for 10 hit points,
+// 13 hit points where CON and SIZ give 12, and halves rounded up.
+describe('Call of Cthulhu templates agree with the rules maths', () => {
+  for (const template of builtInTemplates(GameSystem.CALL_OF_CTHULHU_7E)) {
+    const data = template.data as {
+      age?: unknown;
+      characteristics: Record<string, { regular: number; half: number; fifth: number }>;
+      derivedStats: {
+        hp: { maximum: number; current: number; majorWoundThreshold: number };
+        magicPoints: { maximum: number };
+        sanity: { maximum: number };
+        damageBonus: string;
+        build: number;
+        moveRate: number;
+      };
+      skills: { cthulhuMythos: { currentValue: number }; dodge: { baseValue: number } };
+    };
+    const c = (key: string) => data.characteristics[key].regular;
+
+    it(`${template.name} stores each characteristic's half and fifth`, () => {
+      for (const [key, entry] of Object.entries(data.characteristics)) {
+        expect({ key, half: entry.half, fifth: entry.fifth }).toEqual({ key, ...cocHalfAndFifth(entry.regular) });
+      }
+    });
+
+    it(`${template.name} stores the derived attributes its characteristics give`, () => {
+      const hp = cocHitPoints(c('CON'), c('SIZ'));
+      const { damageBonus, build } = cocDamageBonusAndBuild(c('STR'), c('SIZ'));
+      expect(data.derivedStats.hp).toMatchObject({ maximum: hp, current: hp, majorWoundThreshold: cocMajorWoundThreshold(hp) });
+      expect(data.derivedStats.magicPoints.maximum).toBe(cocMagicPoints(c('POW')));
+      expect(data.derivedStats.sanity.maximum).toBe(cocMaxSanity(data.skills.cthulhuMythos.currentValue));
+      expect({ damageBonus: data.derivedStats.damageBonus, build: data.derivedStats.build }).toEqual({ damageBonus, build });
+      expect(data.derivedStats.moveRate).toBe(cocMoveRate(c('STR'), c('DEX'), c('SIZ'), Number(data.age) || 30));
+      expect(data.skills.dodge.baseValue).toBe(cocDodgeBase(c('DEX')));
+    });
+  }
+});
+
+// The editor fills a sheet stored without skills from the same table, so a
+// blank investigator made either way starts the same.
+it('the blank Call of Cthulhu investigator has the rulebook\'s skill bases', () => {
+  const blank = builtInTemplates(GameSystem.CALL_OF_CTHULHU_7E).find((t) => t.name === 'Blank Call of Cthulhu 7e Character');
+  const characteristics = (blank?.data as { characteristics: Record<string, { regular: number }> }).characteristics;
+  expect(blank?.data.skills).toEqual(cocBlankSkills(characteristics.DEX.regular, characteristics.EDU.regular));
 });

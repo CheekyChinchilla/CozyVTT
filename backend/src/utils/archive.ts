@@ -48,17 +48,22 @@ function gibibytes(bytes: number): string {
 }
 
 /**
- * Extract every file entry in `directory` beneath `destRoot`, streaming each to
- * disk. Throws ArchiveRefusedError if any entry escapes `destRoot` or the
- * entry count exceeds `maxFiles`, and ArchiveLimitError ('total') if the
- * running decompressed total exceeds `maxTotalBytes`, each with a message for
- * the person who sent the archive.
+ * Extract every file entry in `directory`, the directory of the archive at
+ * `archivePath`, beneath `destRoot`, streaming each to disk. Throws
+ * ArchiveRefusedError if any entry escapes `destRoot`, the entry count exceeds
+ * `maxFiles`, or an entry cannot be read, and ArchiveLimitError ('total') if
+ * the running decompressed total exceeds `maxTotalBytes`, each with a message
+ * for the person who sent the archive.
+ *
+ * Each entry is unpacked with unpackEntry, which closes the archive file
+ * whenever it stops, so a refused archive leaves no handle to it open.
  *
  * Directory entries are created implicitly from each file's parent path.
- * Symlink entries are not honored — unzipper writes file contents only, so an
+ * Symlink entries are not honored: only file contents are written, so an
  * archive cannot plant a symlink and follow it out of `destRoot`.
  */
 export async function extractArchiveSafely(
+  archivePath: string,
   directory: CentralDirectory,
   destRoot: string,
   options: SafeExtractOptions
@@ -71,7 +76,8 @@ export async function extractArchiveSafely(
   }
 
   const resolvedRoot = path.resolve(destRoot);
-  let totalBytes = 0;
+  // One entry may use the whole allowance, so its own limit is the total's.
+  const limits: EntryLimits = { maxEntryBytes: options.maxTotalBytes, total: new UnpackedTotal(options.maxTotalBytes) };
 
   // A backup unpacks its whole database here, so a folder this creates is its
   // user's alone. The files keep the default mode: a restore copies the
@@ -92,24 +98,18 @@ export async function extractArchiveSafely(
 
     await fs.mkdir(path.dirname(destPath), { recursive: true });
 
-    // Count decompressed bytes as they flow so a zip bomb is stopped mid-stream
-    // rather than after the whole (potentially enormous) entry lands on disk.
-    const counter = new Transform({
-      transform(chunk: Buffer, _enc, cb) {
-        totalBytes += chunk.length;
-        if (totalBytes > options.maxTotalBytes) {
-          cb(new ArchiveLimitError(`The archive unpacks to more than the ${gibibytes(options.maxTotalBytes)} a backup may hold.`, 'total'));
-          return;
-        }
-        cb(null, chunk);
-      },
-    });
-
-    // TODO(restore): stopping unzipper's entry stream part-way leaves the
-    // backup file open, so each refused restore keeps a file handle and the
-    // deleted upload's disk space until the process ends. unpackEntry below
-    // does this safely, and the restore should use it.
-    await pipeline(entry.stream(), counter, createWriteStream(destPath));
+    // Decompressed bytes are counted as they flow, so a zip bomb is stopped
+    // part-way and never lands on disk whole.
+    const out = createWriteStream(destPath);
+    try {
+      await unpackEntry(archivePath, entry, limits, out);
+    } catch (error) {
+      out.destroy();
+      if (error instanceof ArchiveLimitError) {
+        throw new ArchiveLimitError(`The archive unpacks to more than the ${gibibytes(options.maxTotalBytes)} a backup may hold.`, 'total');
+      }
+      throw error;
+    }
   }
 }
 
@@ -261,7 +261,7 @@ async function unpackEntry(archivePath: string, entry: ArchiveEntry, limits: Ent
   }
   if (entry.flags & 0x1) {
     destination.destroy();
-    throw new ArchiveRefusedError(`${entry.path} is encrypted, which a campaign archive never is.`);
+    throw new ArchiveRefusedError(`${entry.path} is encrypted, which an archive from this server never is.`);
   }
   if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) {
     destination.destroy();

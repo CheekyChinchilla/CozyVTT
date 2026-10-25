@@ -93,6 +93,20 @@ describe('a prepared map', () => {
     expect(ids(mine.body.maps)).toEqual([preparedId, shownId].sort());
   });
 
+  // Edit Map read the whole map, tokens, walls and fog included, for this one
+  // field. The list carries it for the DM; a player is never sent it here.
+  it('carries the spirit layer picture in the list for the DM alone', async () => {
+    await prisma.map.update({ where: { id: shownId }, data: { spiritLayerUrl: '/api/assets/maps/spirit-picture' } });
+    try {
+      const mine = await dm.get(`/api/campaigns/${campaignId}/maps`);
+      expect(mine.body.maps.find((m: { id: string }) => m.id === shownId).spiritLayerUrl).toBe('/api/assets/maps/spirit-picture');
+      const theirs = await player.get(`/api/campaigns/${campaignId}/maps`);
+      expect(theirs.body.maps[0]).not.toHaveProperty('spiritLayerUrl');
+    } finally {
+      await prisma.map.update({ where: { id: shownId }, data: { spiritLayerUrl: null } });
+    }
+  });
+
   it('is not found for a player, and fetched whole by the DM', async () => {
     expect((await player.get(`/api/campaigns/${campaignId}/maps/${shownId}`)).status).toBe(200);
     const theirs = await player.get(`/api/campaigns/${campaignId}/maps/${preparedId}`);

@@ -76,14 +76,25 @@ it('answers isValid false and names the field for a sheet it does not', async ()
 
 it('will not validate another user\'s character', async () => {
   const id = await createCharacter();
-  expect((await other.get(`/api/characters/${id}/validate`)).status).toBe(403);
+  expect((await other.get(`/api/characters/${id}/validate`)).status).toBe(404);
 });
 
-it('says so when the character has no game system', async () => {
+it('checks a Flexible character against the Flexible sheet layout', async () => {
   const id = await createCharacter();
-  await prisma.character.update({ where: { id }, data: { gameSystem: null } });
-  const res = await owner.get(`/api/characters/${id}/validate`);
-  expect(res.status).toBe(400);
-  expect((res.body as Verdict).isValid).toBe(false);
-  expect((res.body as Verdict).errors?.[0]?.code).toBe('no_game_system');
+  await prisma.character.update({ where: { id }, data: { gameSystem: null, data: toJson({ sections: [] }) } });
+  const fine = await owner.get(`/api/characters/${id}/validate`);
+  expect(fine.status).toBe(200);
+  expect(fine.body as Verdict).toEqual({ isValid: true });
+
+  await prisma.character.update({ where: { id }, data: { data: toJson({ sections: 'none' }) } });
+  const bad = await owner.get(`/api/characters/${id}/validate`);
+  expect(bad.status).toBe(200);
+  const verdict = bad.body as Verdict;
+  expect(verdict.isValid).toBe(false);
+  expect(verdict.errors?.[0]).toMatchObject({ path: 'sections', code: 'invalid_type' });
+
+  await prisma.character.update({ where: { id }, data: { data: toJson('just text') } });
+  const notAnObject = await owner.get(`/api/characters/${id}/validate`);
+  expect(notAnObject.status).toBe(200);
+  expect((notAnObject.body as Verdict).errors?.[0]?.path).toBe('root');
 });

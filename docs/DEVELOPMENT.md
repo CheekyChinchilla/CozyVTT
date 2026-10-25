@@ -40,7 +40,7 @@ cozyvtt/
 ├── backend/               Express API server
 │   ├── src/
 │   │   ├── config/        Configuration loading and validation
-│   │   ├── game-systems/  Game system type definitions
+│   │   ├── game-systems/  The GameSystem enum, re-exported from Prisma
 │   │   ├── middleware/     Auth and role guards, the sign-in and other limiters, upload checks
 │   │   ├── routes/        Express route handlers
 │   │   ├── scripts/       Scripts run by hand: data migrations, checks, the SRD creature seed
@@ -146,10 +146,10 @@ CORS_ORIGIN="http://localhost:3000"
 | `VITE_ALLOWED_HOSTS` | No | — | Comma-separated allowed hostnames for the Vite server |
 | `VITE_PROXY_TARGET` | No | `http://localhost:4000` | Where the Vite dev server sends `/api` and `/socket.io` |
 
-The dev server reads these two from the environment it is started in, not from
-`frontend/.env`: `vite.config.ts` is read before Vite loads a `.env` file. The
-dev stack sets both (`VITE_ALLOWED_HOSTS` from the root `.env`). Outside Docker,
-put them before the command, for example
+The dev server reads these two from the environment it is started in, or else
+from `frontend/.env` (and `frontend/.env.local`); a value in the environment
+wins. The dev stack sets both (`VITE_ALLOWED_HOSTS` from the root `.env`).
+Outside Docker, put them in `frontend/.env` or before the command, for example
 `VITE_ALLOWED_HOSTS=mybox.local npm run dev`.
 
 The app asks its own address for the API and the live connection, and the Vite dev server proxies `/api` and `/socket.io` to the backend, so in development as in production everything is served from one address. Serving the backend from a different address than the page is not supported: the code still reads `VITE_API_URL` and `VITE_SOCKET_URL`, but with them set every picture, sound and PDF document is refused by the page's security policy and the backend's resource policy. What it would take is a backlog entry in [FUTURE_FEATURES.md](./FUTURE_FEATURES.md).
@@ -280,7 +280,7 @@ docker compose -f docker-compose.dev.yml exec --user root backend npm install
 docker compose -f docker-compose.dev.yml exec --user root backend npx prisma generate
 ```
 
-`--user root` is needed because the images install `node_modules` as a different user from the one the process runs as; without it both commands fail with `EACCES: permission denied`. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`. Do the same after pulling a change to either `package.json`, such as the move to Prisma 7 in 1.5.3: without `-V`, `up --build` alone leaves the backend on the packages it had before.
+`--user root` is needed because `npm install` rewrites `package.json` and `package-lock.json` in the project folder, which is your checkout mounted into the container and belongs to your account on the host, not to the container's `appuser`. Without it, `npm install` fails with `EACCES: permission denied, open '/app/package-lock.json'`; `node_modules` itself is `appuser`'s, since both images hand `/app` to it before switching user. Root rewrites the two files in place, so they keep your account as their owner. What an install as root adds to `node_modules` belongs to root, so run `prisma generate`, which writes there too, with `--user root` as well. Rebuilding the image does the same thing more slowly, with `-V` so the new container does not keep the old `node_modules` volume: `docker compose -f docker-compose.dev.yml up --build -V`. Do the same after pulling a change to either `package.json`, such as the move to Prisma 7 in 1.5.3: without `-V`, `up --build` alone leaves the backend on the packages it had before.
 
 ### Security headers are production-only
 
@@ -605,6 +605,19 @@ Some of those deserve a note:
   (`backend/src/validators/inviteSearchLimits.ts`, copied as
   `frontend/src/constants/inviteSearchLimits.ts` for the Invite Player
   dialog) differs between the two or the dialog writes either number itself,
+  when the creature and stat block limits file
+  (`backend/src/validators/statBlockLimits.ts`, copied as
+  `frontend/src/constants/statBlockLimits.ts` for the Creature Library, Token
+  Templates and stat block editor) differs between the two, when the token
+  condition limits file (`backend/src/validators/tokenLimits.ts`, copied as
+  `frontend/src/constants/tokenLimits.ts` for the token editor's condition
+  box) differs between the two, when the campaign limits file
+  (`backend/src/validators/campaignLimits.ts`, copied as
+  `frontend/src/constants/campaignLimits.ts` for the campaign dialogs)
+  differs between the two, when the upload types file
+  (`backend/src/validators/uploadTypes.ts`, copied as
+  `frontend/src/constants/uploadTypes.ts` for the Upload Asset dialog)
+  differs between the two,
   when a flood ceiling in the WebSocket guide's table
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when
@@ -761,8 +774,8 @@ comment, and `.github/dependabot.yml` asks for a weekly pull request into
 the Docker base images. Each major version of an npm package comes as a pull
 request of its own, since it can change behaviour. The packages and versions
 that wait are named under `ignore`, each with a comment giving the reason and
-when to remove the entry: Tailwind CSS 4, TypeScript 7 and TypeScript 6.1
-(until typescript-eslint accepts it) among them, and `@types/node`, which
+when to remove the entry: TypeScript 7 and TypeScript 6.1 (until
+typescript-eslint accepts it) among them, and `@types/node`, which
 moves with the Node major. Node and nginx move to a new
 major or stable line by hand, and PostgreSQL's major version never through
 Dependabot, since its data has to be dumped and restored. A new release
@@ -838,7 +851,7 @@ The backend compiles with `"module": "node20"` and `"moduleResolution":
 "node16"`, Node's own module rules. Its `package.json` has no `"type"`, so
 every file is CommonJS and `dist/` stays CommonJS; the compiler reads each
 package's `"exports"`, and the code can import the packages published only as
-ES modules (archiver, file-type, mathjs), which Node 22.12 and later load
+ES modules (archiver, file-type), which Node 22.12 and later load
 with `require` (the images run Node 26). `"module": "node16"` refuses those imports. Two things follow:
 
 - **No dynamic `import()` of our own files.** Under these settings an

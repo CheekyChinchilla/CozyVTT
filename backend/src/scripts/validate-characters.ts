@@ -160,7 +160,7 @@ export async function validateCharacters(
       continue;
     }
 
-    const gameSystem = character.gameSystem as GameSystem; // Cast Prisma enum to game-systems enum
+    const gameSystem = character.gameSystem;
     const breakdown = (report.systemBreakdown[gameSystem] ??= { total: 0, valid: 0, invalid: 0 });
     breakdown.total++;
 

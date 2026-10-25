@@ -28,83 +28,28 @@ _Nothing at present._
 
 ### Character sheets
 
-- `1.5.4` **D&D 5e: naming the spellcasting ability after raising that score leaves the spell save DC and attack unchanged.** The backfill in `DnD5eCharacterEditor.tsx` reads the DC the editor itself wrote as a hand-typed value and records minus the ability modifier as the other bonus.
-- `1.5.4` **D&D 5e and Call of Cthulhu read-only headers always use light text,** so a pale custom colour such as white makes the name unreadable (`DnD5eCharacterView.tsx`, `CallOfCthulhu7eCharacterView.tsx`).
-- `1.5.4` **The Call of Cthulhu read-only view's palette button changes nothing that lasts.** The colour picked there is never saved (`CallOfCthulhu7eCharacterView.tsx`).
-- `1.5.4` **On the Characters page, sheet stats look rollable but roll nothing.** `CharacterSheetViewerModal.tsx` passes a roll handler even when there is no live connection to roll on.
-- `1.5.4` **Call of Cthulhu: Firearms, Other Language and Science rows do not roll from the sheet,** and the last two print their language or specialization twice (`components/SkillsList.tsx`).
-- `1.5.4` **Pathfinder 2e: a sheet whose AC, Class DC or Spell DC works out under 10 cannot be saved.** `pathfinder2e.schema.ts` requires at least 10 for all three, and an untrained rank with a negative modifier goes below it.
-- `1.5.4` **D&D 5e: rows added with "+ Add" block saving until they are named.** Attack, item and spell rows start with an empty name and hit-dice rows with an empty class, which `dnd5e.schema.ts` refuses.
-- `1.5.4` **The Call of Cthulhu read-only view shows a stray "0"** when Cthulhu Mythos is 0 and the spell list is empty (`CallOfCthulhu7eCharacterView.tsx`).
-- `1.5.4` **Pathfinder 2e: a template feat's text cannot be edited.** The templates write a feat's text to `notes`, which the view shows, while the editor edits only `description`.
-- `1.5.4` **Call of Cthulhu: an investigator with POW 100 cannot be saved.** Starting and current Sanity default to POW, and the schema caps Sanity at 99 (`CallOfCthulhu7eCharacterEditor.tsx`).
-- `1.5.4` **Pathfinder 2e: bulk typed as a number counts as nothing.** The inventory's Bulk box stores a string, and `calculateTotalBulk` and `BulkTracker` count only numbers and "L".
-- `1.5.4` **Call of Cthulhu: clearing a skill's box to retype it sets the skill to 0 first.** The box stores 0 the moment it is empty, the problem the sheets' `NumberField` already solves (`components/SkillsList.tsx`).
-- `1.5.4` **A DM viewing a player's character sheet sees "Unknown Player" as its owner.** The viewer asks for the owner's account, which only the owner and an admin may read (`CharacterSheetViewerModal.tsx`).
-- `1.5.4` **A template sheet's token picker uploads a picture the template cannot use.** The upload becomes the user's own asset and a template's picture has to be a global one, so the sheet saves without it and says so, leaving an upload the template never uses (`CharacterTemplateEditorModal.tsx`).
+- `after 1.5.4` **Call of Cthulhu: an age stored as text shows as a blank number box.** The editor hands the stored text to its number box as it is, so text that is not a number shows nothing (`CallOfCthulhu7eCharacterEditor.tsx`).
 
 ### Tokens
 
-- `1.5.4` **The Token Manager offers Send to Spirit Realm for objects,** which the map's right-click menu keeps on the material plane (`TokenManager.tsx`).
-- `1.5.4` **The Token Manager shows a "Player" chip on a token whose controller is no longer a player** (`TokenManager.tsx`).
-- `1.5.4` **Edit Token's Controlled By list has no entry for a spectator or former member still named on a token,** yet its hint still says "This player can move the token on the map." (`NpcQuickEditor.tsx`).
-- `1.5.4` **Copying a token template to another campaign shows nothing on success and only "Failed to copy template" on refusal** (`TokenTemplateLibrary.tsx`).
-- `1.5.4` **A refused Place on Map in the Token Manager says only "Failed to add token to map",** without the server's reason (`TokenManager.tsx`).
-- `1.5.4` **Right-click Hide, Obscure and Spirit Realm moves fail silently.** Their errors go only to the browser console (`MapCanvas.tsx`).
-- `1.5.4` **The DM's spirit-token toggle reads "Hiding spirit tokens (click to show)" while they are shown** (`MapCanvas.tsx`).
-- `1.5.4` **The REST token routes do not broadcast their changes.** Creating, updating or deleting a token through `routes/maps.ts` sends open pages nothing about the token, only the initiative order when there is one. Only a move between maps sends the map, so a change made by an API client stays unseen until the next broadcast or a reload.
+_Nothing at present._
 
 ### Campaigns and assets
 
-- `1.5.4` **Clearing a campaign's description does not save.** The settings panel sends `undefined` for an empty box, so the server keeps the old text (`CampaignSettingsModal.tsx`).
-- `1.5.4` **A DM who is neither the owner nor an admin is offered Delete Campaign,** which the server refuses (`CampaignSettingsModal.tsx`).
-- `1.5.4` **A refused asset move shows only "Forbidden".** `AssetDetailPanel.tsx` reads the reply's short `error` label instead of its `message`.
-- `1.5.4` **Vibe settings are validated two ways, and the campaign name and description boxes stop short of the server's limits.** `PUT /api/campaigns/:id/vibe` checks with `validateVibeSettings` and `PUT /api/campaigns/:id` with `VibeSettingsSchema`, which disagree; the settings panel caps the name and description at 100 and 1000 characters against the server's 200 and 5000.
-- `1.5.4` **The dashboard shows a new invitation only after Refresh.** The page has no socket to hear `invitation.received`, and its query does not refetch on focus (`DashboardPage.tsx`).
-- `1.5.4` **An invitation names the campaign's owner as "DM:",** which is wrong after a handover (`routes/invitations.ts`, `DashboardPage.tsx`, `InvitationModal.tsx`).
-- `1.5.4` **The asset library offers Delete and Move by a rule of its own.** It offers both only to an asset's uploader or an admin, though the server also lets a campaign's DM do both on the campaign's assets, and refuses a global asset's uploader who no longer has Global Assets (`AssetDetailPanel.tsx`, `AssetCard.tsx`). The asset list already tells the page whether the server will take each change (`canChange`), as the Documents page uses it.
-- `1.5.4` **The Creature Library's rows put a button inside a button,** which React warns about in the console and screen readers announce oddly (`CreatureRow` in `CreatureLibrary.tsx`).
-- `1.5.4` **Deleting a favourite creature leaves its row under the Creature Library's Favorites** until the library is reopened, whichever list it was deleted from. The delete removes it from the main list only (`CreatureLibrary.tsx`).
-- `1.5.4` **The Creature Library and Token Templates forms say only "Failed to create creature" or "Failed to update creature" (or the same for a template) when the server refuses a stat block over 64 KB.** The server's reply says it is too large, and the token quick editor shows that; these two forms do not (`CreatureLibrary.tsx`, `TokenTemplateLibrary.tsx`).
-- `1.5.4` **A campaign with more than 50 maps, 200 custom creatures, 500 token templates or 500 pictures and sound files exports but cannot be imported again.** The import refuses the whole archive over those counts, and the export does not check them (`services/campaignExporter.ts`, `validators/campaignImport.ts`).
-- `1.5.4` **A file whose name has accented or other non-ASCII letters is stored and downloads with a garbled name.** The upload reads the name's UTF-8 bytes as latin1 (`routes/assets.ts`).
-- `1.5.4` **The asset library's search box filters only the page of results on screen,** not the whole library (`AssetLibraryPage.tsx`).
-- `1.5.4` **In Chrome, the document reader shows a blocked page for a PDF.** Chrome's PDF viewer does not run in the reader's sandboxed frame; opening the file directly works (`DocumentReader.tsx`).
-- `1.5.4` **In Firefox, asset cards fade in twice as the library opens,** because their hover transition also covers their opacity (`AssetCard.tsx`).
-- `1.5.4` **The asset detail panel closes with no animation,** as it sits outside the wrapper that plays exit animations (`AssetLibraryPage.tsx`).
-- `1.5.4` **At phone width the campaign page scrolls sideways behind its "Desktop Required" notice** (`CampaignPage.tsx`).
-- `1.5.4` **In Firefox, the Upload Asset dialog refuses Ogg and WAV audio files** with "Invalid file type". Firefox names them `application/ogg` and `audio/x-wav`, which the dialog's own list does not include; the server would take them. Upload them from another browser, or as MP3 (`AssetUploadModal.tsx`).
+- `after 1.5.4` **A token's picture can name a map's asset,** so an animated map picture of up to 200 million pixels across its frames can go on a token, past the 50 million a token picture may be. A token's picture should name only a token asset, as a map's picture names only a map asset (`services/permissions.ts`).
 
 ### Play and connection
 
-- `1.5.4` **A chat message sent while the connection is dropping is lost and stays "sending…".** It is emitted with no acknowledgement, and the server refuses one that arrives before the socket rejoins (`ChatPanel.tsx`).
-- `1.5.4` **Initiative rolls vanish from the dice log on reload.** `handlers/initiative.ts` broadcasts the entry but never stores it.
-- `1.5.4` **Suspected: a member offline when the DM clears the dice history keeps the old rolls until they reload.** The catch-up in `DiceRoller.tsx` only adds rolls.
-- `1.5.4` **A player rolling initiative for their own obscured token sees it logged as "Unknown creature",** unlike a roll from their sheet (`handlers/initiative.ts`).
-- `1.5.4` **Starting a session through the API while one is paused leaves the paused one open for good.** `POST /api/campaigns/:id/sessions` refuses only while a session is active, so the paused session never gets an end time. The app offers Start only when no session is running or paused.
-- `1.5.4` **Ending a session with `saveState: false` throws away the state saved when it was paused** (`routes/campaigns.ts`).
-- `1.5.4` **Saving Campaign Settings reloads the whole live table,** every token picture included, and reopens the settings on General. Several saves in a minute can reach the 300 requests a minute limit, after which token pictures fail to load until it passes (`CampaignContext.tsx`).
-- `1.5.4` **Pop-up messages that arrive one after another all leave together,** when the newest one's time is up (`ToastContainer.tsx`).
-- `1.5.4` **A dice formula that divides by zero, such as `5/0`, fails with "Failed to roll dice"** where it should be refused as an invalid expression (`utils/dice-parser.ts`).
+_Nothing at present._
 
 ### Maps
 
-- `1.5.4` **Preview Player View gets stuck if lighting and fog are both turned off while previewing.** The button that ends it only renders while one of them is on (`MapCanvas.tsx`).
-- `1.5.4` **The light tool still places, selects and drags lights during a preview,** where the light markers are hidden (`MapCanvas.tsx`).
-- `1.5.4` **A player's door toggle made while the DM is moving selected walls is undone for everyone.** The move's preview starts again from the walls as they were when it began, and the drop sends that list, so a change that arrived during the move is lost. Dragging a wall's end keeps the change, but Undo after it puts the old door back (`MapCanvas.tsx`).
-- `1.5.4` **At the zoom that fits the map to the screen, clicking a token's square next to a door toggles the door for everyone** instead of picking up or placing the token (`MapCanvas.tsx`).
+- `after 1.5.4` **A map picture that finishes loading while the canvas still measures 0 by 0 never fits to the view.** The fit runs once per map when the picture loads and does not watch the canvas size (`MapCanvas.tsx`).
+- `after 1.5.4` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 
 ### Accounts
 
-- `1.5.4` **In the Admin Panel's Create User dialog, the email box loses its focus as the dialog opens,** to the dialog's first control, usually its close button (`hooks/useFocusTrap.ts`).
-
-### Server and deployment
-
-- `1.5.4` **A restore stopped part-way through unpacking keeps a file handle and the uploaded backup's disk space until the backend restarts,** for example a backup refused for unpacking to more than 10 GiB. Stopping an entry's read part-way leaves the file open (`utils/archive.ts`).
-- `1.5.4` **With a player connected, `docker compose stop`, `down`, or an `up` that recreates nginx waits 10 seconds and then stops nginx by force.** nginx waits for live connections to close, and they never close by themselves; players reconnect on their own afterwards (`docker-compose.yml`).
-- `1.5.4` **On an install that still has the `backend/uploads/backups` folder from before 1.5.0, every backup holds an empty `uploads/backups/` folder.** It does no harm (`routes/admin.ts`).
-- `1.5.4` **Backups and restores fail when `DATABASE_URL` carries `?schema=`, `?connection_limit=` or `sslmode=no-verify`,** which the app itself accepts: `pg_dump` and `psql` refuse those settings (`utils/pgRestore.ts`). The addresses the guides and `docker-compose.yml` give carry none of them.
-- `1.5.4` **With a `DATABASE_URL` that names a schema other than `public` (`?schema=`), sign-ins are stored in the `public` schema** while the parts of the app that list or end sign-ins look in the named one (`config/session.ts`).
+_Nothing at present._
 
 ---
 
@@ -112,22 +57,30 @@ _Nothing at present._
 
 ### User-facing
 
-- `1.5.4` **Animated maps and tokens.** Review, and add if it can be done safely. Today a token can be a GIF, and a WebP map or token is accepted whether or not it is animated, but the map canvas draws its picture only when the map layer repaints (on a pan, a zoom or a change of map), so an animated map does not play. An animated PNG is refused everywhere: the upload's content check names it `image/apng`, which no asset type lists. An animated picture carries no script, unlike SVG, so the guards that matter stay as they are: the content check, the image library limited to its PNG, JPEG, WebP and GIF readers (`utils/sharpInput.ts`), and the page's security policy. What an animation adds is size: every frame is decoded by the server when it makes a thumbnail and by every player's browser, so a file of a few megabytes can unpack to gigabytes. Needs: limits on the width, height, frame count and total pixels of an animated upload, read from the image library's metadata before anything else, with the thumbnail made from the first frame; then, for maps, a canvas that repaints the map layer on each frame without redrawing tokens, walls and fog, and a way to pause animation for players who ask for less motion.
+- **A saved roll that remembers who rolls it.** Since 1.5.4 a saved roll in the **Dice** tab goes out with its name as the roll's purpose, but the **Character** box is still whatever was typed there last, so a DM who saves a roll for a creature or NPC retypes the name each time. A saved roll could keep a character name of its own (and, if wanted, a purpose separate from its button label), used when the box is empty. It needs new columns on `DiceMacro` (a migration), the macro routes and their limits, and the **Saved** editor.
+- **Show how far a carried token has moved.** While a token is picked up, show the distance from the square it left to where it would be put down, in squares and in the system's units, in the lower left of the map where the pointer's grid coordinates show today. Use the ruler's distance rule, so the two never disagree.
+- `after 1.5.4` **Animated maps and tokens.** A token can be a GIF, and a WebP map or token is accepted whether or not it is animated, but on the map both stay on their first frame: in tests in Chrome 153 and Firefox 156 a canvas drew only the first frame of an animated GIF, WebP or PNG, however often it repainted, so playing one needs the browser's frame decoder (`ImageDecoder`, in Chrome and in Firefox from about 133, not in Safari) drawing each frame into the map layer, with a still picture where it is missing. An animated picture carries no script, so the guards that matter stay as they are: the content check, the image library limited to its PNG, JPEG, WebP and GIF readers (`utils/sharpInput.ts`), and the page's security policy. Since 1.5.4 an upload or import of a map, token or avatar is refused over 16,384 pixels on a side, and an animation over 1,000 frames or over 200 million pixels across its frames for a map (50 million for a token or avatar), read from the picture's header before anything is unpacked (`utils/pictureLimits.ts`). Needs: a map-layer playback hook (current frame and one ahead, frame durations, loop count, closing every frame), paused under reduced motion, in a hidden tab and by a per-viewer Pause button; a decision on tokens, whose layer would repaint at the frame rate; and, before accepting animated PNG (refused today as `image/apng`), a frame count read from its `acTL` chunk, since the image library does not report an APNG's frames and it would pass the limits unchecked. Large animated maps cost every player a lot (a 4,096-pixel frame took over 150 ms to decode in a test), so the guides would advise modest sizes. Best done with the map layer rework for screen resolution in the drawing and mobile work. Today, animated token pictures also play forever in the Token Roster, the Token Manager and the token hover card, whatever the reduced-motion setting.
+- **A campaign page for phones and tablets** ([#31](https://github.com/CheekyChinchilla/CozyVTT/issues/31)). Below 1024 pixels the page now offers **Continue anyway** (1.5.4), but keeps its three-column desktop layout. A real small-screen layout also needs the chat list to hold and draw fewer messages: today it keeps every message loaded in a long session in memory and draws them all, which a phone's memory feels first. Window the list, or keep the newest few hundred and let **Load More** fetch older ones again. **Do** after 1.5.4.
 - **Sound effects.** Dice-roll and notification audio. Needs: a small library of royalty-free sounds bundled in `frontend/public/sounds/`, a `useSound()` hook, and an opt-in toggle on the profile page. The toggle was removed on 2026-04-27 because no audio existed; restore it together with this feature.
 - **Browser notifications.** Desktop alerts when it's a player's turn (initiative tracker), or when chat activity happens while the tab is backgrounded. Needs: `Notification.requestPermission()` flow, a per-user opt-in toggle, server-side hooks for turn change + chat broadcast events. Removed alongside sound effects on 2026-04-27.
 - **Per-user default dice color.** Surface a color in the dice picker so a player's rolls visually stand apart in the dice panel. Needs: pass the color into the dice log (`DiceRoller.tsx` and `DiceResult.tsx`) and the socket roll payload metadata, then re-add the color picker on the profile page. Removed on 2026-04-27 pending the renderer wiring.
-- **Bulk character export as a ZIP.** The app exports one character at a time, with **Export as JSON** on the Characters page. `downloadMultipleCharactersZIP` in `frontend/src/utils/character-export.ts` was written for a bulk export, but nothing calls it, and it downloads each character as a separate file. Building it needs a way to pick several characters, a fetch of each one's sheet (the Characters page loads only summaries), and a ZIP library such as JSZip, which is a new dependency.
-- **Merge the hardcoded starter templates into the character template library.** `backend/src/utils/character-templates/` holds two presets per system, a blank sheet and one example character, as source constants served by `GET /api/characters/templates/:gameSystem/:templateName`, and the New Character dialog lists them a second time (`NewCharacterModal.tsx`), while user-published templates live in the database. Two systems for one idea. Folding the presets in as seeded, admin-owned rows would leave one browsable list and one endpoint. `getTemplatesForGameSystem` and `getAllTemplates` in that directory have no callers, and `getBlankTemplate` there and `getBlankCharacterTemplate` in `validators/game-systems/index.ts` are called only by tests.
+- **Bulk character export as a ZIP.** The app exports one character at a time, with **Export as JSON** on the Characters page. A bulk export needs a way to pick several characters, a fetch of each one's sheet (the Characters page loads only summaries), and a ZIP library such as JSZip, which is a new dependency.
+- **Merge the hardcoded starter templates into the character template library.** `backend/src/utils/character-templates/` holds two presets per system, a blank sheet and one example character, as source constants served by `GET /api/characters/templates/:gameSystem/:templateName`, and the New Character dialog lists them a second time (`NewCharacterModal.tsx`), while user-published templates live in the database. Two systems for one idea. Folding the presets in as seeded, admin-owned rows would leave one browsable list and one endpoint. `getBlankTemplate` in that directory is called only through `getBlankCharacterTemplate` in `validators/game-systems/index.ts`, which only tests call.
 - **Shadowrun 6E character sheet.** The backend (types, validation, templates) is complete, but the frontend sheet is still a placeholder and the system is hidden from the creation dropdown until it's finished. See `docs/GAME_SYSTEMS.md`.
 - **NPC chatbot / asset generation (AI).** No code yet. The `@anthropic-ai/sdk` dependency was removed before v1.0.0 launch (it was installed but unused, and shipping it left an open `npm audit` finding). When this feature work begins, re-add the current major of the SDK and introduce `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` env vars at the same time so they enter the codebase together and never sit around as dead config.
+- **Show PDFs inside CozyVTT in every browser.** The document reader shows a PDF in the browser's own viewer, in a frame sandboxed without `allow-same-origin`, which keeps the session cookie away from anything the viewer runs. Only Firefox on a computer shows a PDF there. Chrome and Edge block their viewer in such a frame, Safari leaves it blank, and phones do not show a PDF inside a page at all, so since 1.5.4 the reader offers those browsers **Open this PDF in a new tab** in place of the frame (`pdfShowsInFrame` in `DocumentReader.tsx`). Needs: a viewer that renders pages itself inside the sandbox, such as PDF.js (a new dependency), measured against the Content-Security-Policy and checked in each browser, before the frame is relaxed in any way.
 - **EPUB and other document formats in the library.** #39 asked for "PDF and standard e-reader formats"; the library shipped with PDF, plain text and Markdown, which a browser can show on its own. EPUB cannot: it is a zip of XHTML that needs a reader library (`epub.js` or similar), and every one of them renders the book's own HTML inside an iframe through `blob:` URLs, which means loosening the Content-Security-Policy the whole instance runs under, and trusting a third party to sanitise a file an anonymous user uploaded. That is the one genuinely risky part of the original request, and it is separable, so it waits. **Revisit if** people ask for it with real books in hand; the answer will hinge on finding a reader that renders into a sandboxed frame without `allow-same-origin`, and on measuring what the CSP change exposes.
 - **Admin upload UI for instance branding (logo / favicon / mascot).** The backend already accepts `customLogoUrl` / `customFaviconUrl` / `customMascotUrl` on `SystemSettings`, as paths this instance serves, and `ThemeContext` reads them and dynamically swaps the favicon when set. What's missing is a file-upload form on the Admin → Appearance tab so an instance operator can swap branding at runtime without redeploy. Until then, operators replace the defaults at `frontend/public/default-logo.png` and `frontend/public/default-mascot.png` and rebuild.
 - **Change your email address from the app.** The server accepts a new address on `PUT /api/users/:id`, with the current password when the change is your own, but no screen sends one, so today an address can only be changed through the API.
 - **A per-user storage quota, as an admin setting.** Nothing limits how much one account uploads in total; the upload rate limit slows a script, and the Admin Panel's System Overview warns once the disk holding the uploads is over 80% full. A quota would sum each user's `Asset.fileSize` before accepting an upload, with a limit set in **Admin → Settings**, off by default so no upgrade starts refusing uploads. It needs a column in `SystemSettings` (a migration), the check in the upload, typed-document and UVTT routes and in campaign import, and a clear refusal saying how much space the user has left.
-- **Clear a sign-in lock from the Admin Panel (planned for 1.5.4).** Ten wrong passwords in an hour lock an account from every address. The lock lifts by itself once the oldest of them is an hour old, or at once when the password changes. Today an administrator can clear it only by setting a temporary password, which makes someone who simply mistyped choose a new one. A button on **Admin → Users** would show that an account is locked, and until when, and clear the count, with a line in **Admin → Activity**. The count is kept in the backend's memory (`middleware/failureLimiter.ts`), so this needs no database change.
-- **Disable an account (after 1.5.3).** An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
+- **Disable an account.** `after 1.5.4` An administrator can approve an account but cannot suspend one; the choices today are deleting it, which removes its characters and notes, or resetting its password. A disabled account would keep its data and could not sign in until an administrator enables it again. A password reset would not undo it, and the automatic sign-in lock would stay a separate thing that clears itself. It needs a field on the account (a migration); the check at every way in (password sign-in, the two-factor step, existing sessions, live table connections, password reset and invitations); disabling to end the account's sessions and live connections at once; the rule that keeps an instance from losing its last administrator; a message shown only after the right password, so no one can test which accounts exist; a reset request that answers as usual and sends nothing; a decision about campaigns a disabled account runs as DM; and a line in **Admin → Activity**.
 
 ### DM tools
+
+- **A light a token carries.** A torch, a lantern or a *Light* cantrip moves with whoever holds it, but every light today is placed on the map at a fixed point (`LightSource`, in map pixels), and a token has only its own darkvision (`sightRadius`). A token would carry a light of its own, with bright and dim radius, colour and on/off as a map light has, drawn at its centre and following it as it moves, kept with the token when it is saved as a template or creature. The server decides what players see by the lights (`filterTokensByLighting` in `backend/src/utils/spirit-layer.ts`, and the line-of-sight cache for lights), so a carried light has to count there too, and to move with the token when it is put down; while it is carried, the light stays where the token stands, as sight does.
+- **Offer common spell and class effects beside the conditions.** The token editor's D&D 5e list is exactly the rules' fifteen conditions (`DND5E_CONDITIONS` in `frontend/src/utils/conditions.ts`), and stays so. Effects a table tracks the same way, such as Hexed, Hunter's Mark, Blessed, Baned, Concentrating, Raging, Hasted, Slowed and Dodging, can only be typed in today, and show as their first two letters. A separate **Effects** group under the conditions would offer them, each with its own two-letter badge kept unique beside the conditions' (the badge test already checks that), and a typed effect of your own would still work. Check each against the rules for its name and what it is.
+- **Prepare a map without showing it to players.** During play the DM can edit walls, lights, fog and tokens only on the map at the table: the map canvas shows the campaign's current map, and opening another from the **Map Library** moves every player onto it. **Edit Map** changes a map's name, picture and grid without switching, but not what is drawn on it. A DM-only way to open any map on the DM's own screen while the players stay where they are, with a clear sign that it is not the table's map and a way back, needs the DM's canvas to follow a map the DM picks rather than the campaign's current one, and the edits made there to reach no player.
+- **Give temporary hit points from the right-click menu.** Temporary hit points can be set on a character's sheet and on a creature in **Edit Token**, but not from the map or the roster. A **Temporary HP...** item on a token's right-click menu and on a roster character's would ask for a number and set it. A second grant follows each system's rules (in D&D 5e temporary hit points do not add together); check the rulebooks before building it, and leave the item out of systems without temporary hit points.
 
 - **Change a member's role from the app.** The spectator role exists, and the server has a route for changing a member's role, but nothing in the app calls it: every invitation makes a player, so the only way to make someone a spectator today is a direct API call. A role picker on the **Members** tab of Campaign Settings would close that gap.
 - **Show that a hidden-HP creature is down.** Players are sent a creature's hit points only when its HP bar is on, so a creature at 0 HP with its bar off still looks standing to them and blocks its square. A separate "down" flag the server could send without the numbers would let the body fade and be stood on.
@@ -175,7 +128,8 @@ _Nothing at present._
   build and test tools: Vite 8 with @vitejs/plugin-react 6, Vitest 5, jsdom 30
   and jest-dom 7. **Done** for the backend's web framework: Express 5, with
   express-rate-limit 8 and helmet 8, and for its smaller libraries:
-  connect-pg-simple 10, archiver 8, dotenv 18, file-type 22 and mathjs 15.
+  connect-pg-simple 10, archiver 8, dotenv 18 and file-type 22; mathjs is no
+  longer used, since the dice parser needs no library.
   **Done** for React: React 19.3 with React Router 8.4, and for framer-motion
   14, lucide-react 1 and react-markdown 10. React Router 6 had two moderate
   advisories that could not be reached in CozyVTT, a single-page app with no
@@ -185,44 +139,24 @@ _Nothing at present._
   against the backend's developer tools: an npm override gives the coverage
   tool js-yaml 4 in place of the js-yaml 3 it asks for, and Node's own watch
   mode restarts the development server in place of nodemon. **Done** for
-  TypeScript: 6.0 in both packages. **Done** for the advisory against Tailwind
-  CSS 3's selector parser: an npm override gives it the fixed release, and the
-  built stylesheets are byte for byte the same. Dependabot held back major
+  TypeScript: 6.0 in both packages. **Done** for Tailwind CSS: version 4,
+  which leaves no advisory against the app's build tools and needs Firefox
+  128 where 114 was enough. Dependabot held back major
   versions of npm packages until 1.5.3; since then each comes as a pull
   request of its own, apart from those it names as waiting, and its automatic
-  security pull requests are turned on once 1.5.3 is on `main`.
+  security pull requests have been on since 1.5.3 reached `main`.
   **Do** Prisma 8 next in the data layer: it is a rewrite and still a release
   candidate, so wait until it is stable with a patch release or two, and move
-  to the `prisma-client` generator with it. **Do** Tailwind CSS 4 in 1.5.4,
-  before that release's bug fixes, with every page compared before and after
-  in each theme: it renames or changes the meaning of many classes the app
-  uses, raises Firefox's minimum from 114 to 128, and clears the one advisory
-  left against the app's build tools, in the file-matching package braces,
-  which Tailwind CSS 3 brings with it and which has no fixed release.
-  **Defer** TypeScript 7.
+  to the `prisma-client` generator with it. **Defer** TypeScript 7.
 
-- **Replace mathjs in the dice parser with a small evaluator.** mathjs moved
-  from 12.4.3 to 15.2.0 in 1.5.3, so it is current again, but the dice parser
-  (`backend/src/utils/dice-parser.ts`) uses it only to add, subtract,
-  multiply and divide numbers it has built itself, so no typed text reaches
-  it, yet it is about 18 MB installed and brings nine packages of its own.
-  Every major version of it is one more upgrade to check. Replacing it means
-  writing and testing an evaluator for those four operators; the exact totals
-  in the dice parser's tests are its specification. **Do** as a separate
-  small project, not tied to a release, and before the dice grammar lets
-  anything other than numbers and those operators through.
-
-- **One dice grammar for both sides.** The server owns the real parser
-  (`backend/src/utils/dice-parser.ts`); the frontend has two character-set checks,
-  `utils/diceExpression.ts` and a private one inside `DiceRoller`, which accept
-  things the server refuses, such as `2d6+` and `dddd`. That is survivable for a
-  roll about to be sent, because the server answers immediately and the person is
-  still looking at the box, and saved macros close the dangerous half by
-  validating server-side before anything is stored. But three implementations of
-  one grammar is two too many. The fix is extracting the parser into something
-  both sides import, which today means introducing a shared package where none
-  exists, and that is why it has not been done yet. **Revisit** when a second thing
-  needs shared logic, or if the checks disagree in a way a user notices.
+- **One dice grammar for both sides.** `after 1.5.4` The parser is now one file
+  kept byte for byte in `backend/src/utils/` and `frontend/src/utils/`
+  (checked by `visionParity.test.ts`), and the Dice panel checks expressions
+  and rolls a paused table's dice with it. One character-set check is left,
+  `frontend/src/utils/diceExpression.ts`, which decides whether a value on a
+  character sheet is offered as a roll and accepts things the parser refuses,
+  such as `2d6+` and `dddd`. **Do** by having it call the parser, after checking
+  what each sheet's rolls send through it.
 
 - **Two backend suites still stub `file-type`.** The backend tests load the
   real library (`backend/jest.config.js` compiles it to CommonJS), and
@@ -292,8 +226,9 @@ _Nothing at present._
   Pathfinder 2e, Call of Cthulhu) draws its own header: the Save and Cancel
   cluster, the palette button, the colour presets and the name and token
   picture fields, with no shared component between them. The Flexible editor
-  repeats Save, Cancel and the token picture, and each editor and its view
-  declare their own `COLOR_PRESETS`. 1.2.2 fixed three separate
+  repeats Save, Cancel and the token picture. (The colour presets are shared:
+  each system's view and editor read one `colorPresets.ts`, and the header
+  text colour comes from `utils/themeColor.ts`.) 1.2.2 fixed three separate
   duplicate-control bugs that all had the same shape, a page or modal drawing
   Save, Cancel or Edit that the sheet already draws, plus an overlap that had
   to be corrected in three files where one should have done. The rule that
@@ -320,11 +255,12 @@ _Nothing at present._
   to 500 entries, like every other list on the sheet. Either build it with the
   rest of Pulp, or drop the field.
 
-- **A D&D 5e sheet shows its Player Name only in the editor.** The server fills
-  `playerName` from the owner's display name when the character is made, and
-  the editor shows it without letting it be changed. The read-only view
-  (`DnD5eCharacterView.tsx`) does not show it, while the Pathfinder 2e and
-  Call of Cthulhu views do.
+- **Pathfinder 2e strikes worked out from their parts.** A strike stores its
+  attack bonus as typed, beside a proficiency rank, an attribute and an item
+  bonus that the editor shows only as a hint ("Rank, attribute and item give
+  +7"). Deriving the bonus, as AC and skills are, needs boxes for the
+  attribute and item bonus, which the editor does not edit, and would change
+  every stored strike's bonus, so it waits for its own change.
 
 - **Pathfinder Class DC assumes Intelligence.** When a sheet has no `classDC`
   stored, the editor fills one in with Intelligence as its key attribute, but
@@ -333,7 +269,7 @@ _Nothing at present._
   Intelligence modifier while the read-only view shows a plain 10. Only sheets
   that never set it are affected, and the DM can correct it by hand.
 
-- **`docs/API_REFERENCE.md` covers 84 of the 161 routes.** Deliberate: it is a
+- **`docs/API_REFERENCE.md` covers 84 of the 166 routes.** Deliberate: it is a
   hand-written guide to the endpoints people ask about, and
   `backend/docs/API_DOCUMENTATION.yaml` is the complete list.
   `scripts/spec-coverage.py` enforces the split and prints the current counts:

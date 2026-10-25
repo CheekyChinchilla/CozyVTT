@@ -164,7 +164,7 @@ describe('moving a campaign asset with no campaign recorded', () => {
     });
 
     const res = await stranger.agent.patch(`/api/assets/${orphan.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: theirs.id });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(404);
     expect((await prisma.asset.findUniqueOrThrow({ where: { id: orphan.id } })).campaignId).toBeNull();
   });
 });
@@ -276,5 +276,136 @@ describe('the asset list', () => {
     expect((await writer.agent.delete(`/api/assets/${global}`)).status).toBe(403);
     expect((await player.agent.delete(`/api/assets/${handout}`)).status).toBe(403);
     expect((await dm.agent.put(`/api/assets/documents/${handout}/content`).send({ content: '# Revised' })).status).toBe(200);
+  });
+});
+
+// The Asset Library offers Delete and Move from canChange, which the list
+// sends; the move's reply carries it too, so the panel stays right afterwards.
+describe('a move\'s reply', () => {
+  it('says whether the mover may still change the asset where it now is', async () => {
+    const dm = await signedIn('Move Reply DM');
+    const table = await createTestCampaign(dm.id);
+    campaignIds.push(table.id);
+    await prisma.campaignMembership.create({ data: { userId: dm.id, campaignId: table.id, role: 'DM', characterIds: [] } });
+    const art = await prisma.asset.create({
+      data: {
+        type: 'TOKEN', scope: 'USER', uploadedById: dm.id, filename: 'art.png', originalName: 'art.png', mimeType: 'image/png',
+        fileSize: 1, filePath: path.join(UPLOAD_DIR, 'art.png'), name: 'Art', tags: [],
+      },
+    });
+
+    const res = await dm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+
+    expect(res.status).toBe(200);
+    expect(res.body.asset).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id, canChange: true });
+  });
+});
+
+// A personal asset is its uploader's. A DM's move of a player's campaign
+// asset to Personal put it in the player's personal library, out of the
+// campaign and out of the DM's reach. Only the uploader moves one there now;
+// a DM keeps the other moves the server allowed.
+describe('moving an asset to Personal', () => {
+  async function playerArtAtTable() {
+    const dm = await signedIn('Personal Move DM');
+    const player = await signedIn('Personal Move Player');
+    const table = await createTestCampaign(dm.id);
+    campaignIds.push(table.id);
+    await prisma.campaignMembership.createMany({
+      data: [
+        { userId: dm.id, campaignId: table.id, role: 'DM', characterIds: [] },
+        { userId: player.id, campaignId: table.id, role: 'PLAYER', characterIds: [] },
+      ],
+    });
+    const art = await prisma.asset.create({
+      data: {
+        type: 'TOKEN', scope: 'CAMPAIGN', campaignId: table.id, uploadedById: player.id, filename: 'p.png', originalName: 'p.png',
+        mimeType: 'image/png', fileSize: 1, filePath: path.join(UPLOAD_DIR, 'p.png'), name: 'Player art', tags: [],
+      },
+    });
+    return { dm, player, table, art };
+  }
+
+  it('is refused to the campaign\'s DM for a player\'s asset, which stays in the campaign', async () => {
+    const { dm, table, art } = await playerArtAtTable();
+    const res = await dm.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    expect(res.status).toBe(403);
+    expect(res.body.message).toBe('Only the asset\'s uploader can move it to their personal library');
+    expect(await prisma.asset.findUniqueOrThrow({ where: { id: art.id } })).toMatchObject({ scope: 'CAMPAIGN', campaignId: table.id });
+  });
+
+  it('is the uploader\'s to make', async () => {
+    const { player, art } = await playerArtAtTable();
+    const res = await player.agent.patch(`/api/assets/${art.id}/scope`).send({ scope: 'USER' });
+    expect(res.status).toBe(200);
+    expect(res.body.asset).toMatchObject({ scope: 'USER', campaignId: null });
+  });
+});
+
+// Personal is an uploader's own library. An asset whose uploader's account
+// was deleted has none, and moved there it would be nobody's: readable by
+// admins alone, so every map using it would break for its table.
+describe('moving an asset with no uploader to Personal', () => {
+  it('is refused, even to an admin, and the asset stays where it is', async () => {
+    const admin = await createTestUser({ displayName: 'Move Admin', role: 'ADMIN' });
+    userIds.push(admin.id);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').send({ email: admin.email, password: TEST_PASSWORD })).status).toBe(200);
+    const orphan = await prisma.asset.create({
+      data: {
+        type: 'MAP', scope: 'GLOBAL', uploadedById: null, filename: 'o.png', originalName: 'o.png', mimeType: 'image/png',
+        fileSize: 1, filePath: path.join(UPLOAD_DIR, 'o.png'), name: 'Left by a deleted account', tags: [],
+      },
+    });
+    try {
+      const res = await agent.patch(`/api/assets/${orphan.id}/scope`).send({ scope: 'USER' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('This asset has no uploader, so it has no personal library to go to');
+      expect((await prisma.asset.findUniqueOrThrow({ where: { id: orphan.id } })).scope).toBe('GLOBAL');
+    } finally {
+      await prisma.asset.delete({ where: { id: orphan.id } });
+    }
+  });
+});
+
+// An admin may move anyone's personal file into any campaign, which puts it
+// in front of that table. The move stays, and the Activity log says whose
+// file went where.
+describe('an admin moving someone else\'s personal file', () => {
+  async function setUp() {
+    const admin = await createTestUser({ displayName: 'Scope Admin', role: 'ADMIN' });
+    userIds.push(admin.id);
+    const agent = request.agent(app);
+    expect((await agent.post('/api/auth/login').send({ email: admin.email, password: TEST_PASSWORD })).status).toBe(200);
+    const owner = await signedIn('Personal Owner');
+    const ownerEmail = (await prisma.user.findUniqueOrThrow({ where: { id: owner.id } })).email;
+    const table = await createTestCampaign(owner.id, { name: `Somewhere Else ${Date.now()}` });
+    campaignIds.push(table.id);
+    const file = await prisma.asset.create({
+      data: {
+        type: 'MAP', scope: 'USER', uploadedById: owner.id, filename: 'm.png', originalName: 'm.png', mimeType: 'image/png',
+        fileSize: 1, filePath: path.join(UPLOAD_DIR, 'm.png'), name: 'Private Sketch', tags: [],
+      },
+    });
+    return { admin, agent, owner, ownerEmail, table, file };
+  }
+
+  it('is allowed, and writes an Activity line naming the file and its owner', async () => {
+    const { admin, agent, owner, ownerEmail, table, file } = await setUp();
+    const res = await agent.patch(`/api/assets/${file.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+    expect(res.status).toBe(200);
+
+    const lines = await prisma.systemLog.findMany({ where: { userId: admin.id } });
+    expect(lines).toHaveLength(1);
+    expect(lines[0].message).toBe(`Moved the personal file "Private Sketch" of ${ownerEmail} into the campaign "${table.name}"`);
+    expect(lines[0].context).toMatchObject({ targetUserId: owner.id, assetId: file.id, campaignId: table.id, scope: 'CAMPAIGN' });
+  });
+
+  it('writes nothing when the owner moves their own file', async () => {
+    const { owner, table, file } = await setUp();
+    await prisma.campaignMembership.create({ data: { userId: owner.id, campaignId: table.id, role: 'DM', characterIds: [] } });
+    const res = await owner.agent.patch(`/api/assets/${file.id}/scope`).send({ scope: 'CAMPAIGN', campaignId: table.id });
+    expect(res.status).toBe(200);
+    expect(await prisma.systemLog.count({ where: { context: { path: ['assetId'], equals: file.id } } })).toBe(0);
   });
 });

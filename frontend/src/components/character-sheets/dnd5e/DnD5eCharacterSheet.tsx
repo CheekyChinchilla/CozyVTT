@@ -4,7 +4,7 @@
  * Main component that switches between view and edit modes.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useEffectEvent, useState } from 'react';
 import { CharacterSheetProps } from '../types';
 import type { CharacterData } from '../../../types';
 import { DnD5eCharacterView } from './DnD5eCharacterView';
@@ -14,12 +14,13 @@ import { DnD5eCharacterEditor } from './DnD5eCharacterEditor';
  * DnD5eCharacterSheet - Mode switcher for D&D 5e character sheet
  */
 export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
-  const { mode, character, onSave, onDirtyChange, onEditStart } = props;
+  const { mode, character, onSave, onDirtyChange, onEditStart, allowTokenPicture } = props;
   const [currentMode, setCurrentMode] = useState<'view' | 'edit'>(mode);
 
   // Each time the editor opens, its form is made from the character passed now.
+  const editStarted = useEffectEvent(() => onEditStart?.());
   useEffect(() => {
-    if (currentMode === 'edit') onEditStart?.();
+    if (currentMode === 'edit') editStarted();
   }, [currentMode]);
 
   // Handle cancel - return to view mode
@@ -47,6 +48,7 @@ export const DnD5eCharacterSheet: React.FC<CharacterSheetProps> = (props) => {
         onCancel={handleCancel}
         onDirtyChange={onDirtyChange}
         onDone={() => setCurrentMode('view')}
+        allowTokenPicture={allowTokenPicture}
       />
     );
   }

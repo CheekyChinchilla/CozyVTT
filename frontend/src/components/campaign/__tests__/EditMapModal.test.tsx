@@ -1,16 +1,17 @@
 /**
  * Edit Map keeps the map's spirit layer picture unless the DM changes it.
  *
- * The dialog is opened from the Map Library's list, whose maps carry no
- * spirit layer picture. It filled its picker from that, showed no picture,
- * and sent `spiritLayerUrl: null` with every save, so changing only a map's
- * name removed its spirit layer. It now reads the whole map to show the
- * picture, and sends only what the DM changed.
+ * The dialog is opened from the Map Library's list. When that list carried
+ * no spirit layer picture, the dialog showed none and sent
+ * `spiritLayerUrl: null` with every save, so changing only a map's name
+ * removed its spirit layer. It sends only what the DM changed; and since the
+ * DM's list carries the picture, it shows it without reading the whole map,
+ * tokens, walls and fog included, for that one field.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import type { Asset, Map as CampaignMap, UpdateMapRequest } from '@/types';
+import type { Asset, CampaignMap, UpdateMapRequest } from '@/types';
 
 const getMap = vi.fn();
 const updateMap = vi.fn();
@@ -21,7 +22,7 @@ vi.mock('@/services/map.service', () => ({
   },
 }));
 vi.mock('@/services/api', () => {
-  const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}` };
+  const client = { getAssetUrl: (id: string) => `/api/assets/maps/${id}`, getAssetThumbnailUrl: (id: string) => `/api/assets/maps/${id}/thumbnail` };
   return { api: client, default: client };
 });
 vi.mock('@/utils/detectMapGrid', () => ({ detectMapGrid: vi.fn().mockResolvedValue(null) }));
@@ -42,7 +43,7 @@ import EditMapModal from '../EditMapModal';
 
 const SPIRIT = 'Spirit Layer Image (optional)';
 
-/** A map as the Map Library's list returns it: no spirit layer field at all. */
+/** A map as the Map Library's list returns it to the DM. */
 const listed = {
   id: 'map-1',
   name: 'The Sunken Crown',
@@ -56,14 +57,15 @@ const listed = {
   fogEnabled: true,
   globalIllumination: false,
   explorationEnabled: true,
+  spiritLayerUrl: '/api/assets/maps/spirit-asset',
 } as unknown as CampaignMap;
 
-const full = { ...listed, spiritLayerUrl: '/api/assets/maps/spirit-asset', tokens: [] } as unknown as CampaignMap;
+const full = { ...listed, tokens: [] } as unknown as CampaignMap;
 
-function open() {
+function open(map: CampaignMap = listed) {
   const onUpdated = vi.fn();
   const onClose = vi.fn();
-  render(<EditMapModal isOpen map={listed} campaignId="campaign-1" onClose={onClose} onUpdated={onUpdated} />);
+  render(<EditMapModal isOpen map={map} campaignId="campaign-1" onClose={onClose} onUpdated={onUpdated} />);
   return { onUpdated, onClose };
 }
 
@@ -78,10 +80,10 @@ beforeEach(() => {
 });
 
 describe('Edit Map and the spirit layer', () => {
-  it('shows the stored spirit layer picture of a map opened from the list', async () => {
+  it('shows the stored spirit layer picture of a map opened from the list, without reading the whole map', async () => {
     open();
     expect(await screen.findByText(`${SPIRIT}: spirit-asset`)).toBeInTheDocument();
-    expect(getMap).toHaveBeenCalledWith('campaign-1', 'map-1');
+    expect(getMap).not.toHaveBeenCalled();
   });
 
   it('leaves the spirit layer out of a save that only renames the map', async () => {
@@ -94,9 +96,9 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).toEqual({ name: 'The Drowned Crown' });
   });
 
-  it('leaves it out even when the whole map could not be read', async () => {
-    getMap.mockRejectedValue(new Error('offline'));
-    open();
+  it('leaves it out for a map listed without the picture, as an older list was', async () => {
+    const { spiritLayerUrl: _dropped, ...older } = listed as unknown as Record<string, unknown>;
+    open(older as unknown as CampaignMap);
     fireEvent.change(screen.getByPlaceholderText('Map name...'), { target: { value: 'Renamed' } });
     fireEvent.click(screen.getByText('Save Changes'));
 
@@ -114,15 +116,12 @@ describe('Edit Map and the spirit layer', () => {
     expect(sent()).toEqual({ spiritLayerUrl: null });
   });
 
-  it('keeps a picture the DM picked before the whole map arrived', async () => {
-    let answer: (m: CampaignMap) => void = () => undefined;
-    getMap.mockReturnValue(new Promise<CampaignMap>((resolve) => { answer = resolve; }));
+  it('sends the picture the DM picks', async () => {
     open();
+    await screen.findByText(`${SPIRIT}: spirit-asset`);
     fireEvent.click(screen.getByText(`Pick ${SPIRIT}`));
-    answer(full);
-
-    await waitFor(() => expect(getMap).toHaveBeenCalled());
     fireEvent.click(screen.getByText('Save Changes'));
+
     await waitFor(() => expect(updateMap).toHaveBeenCalled());
     expect(sent()).toEqual({ spiritLayerUrl: 'picked-asset' });
   });

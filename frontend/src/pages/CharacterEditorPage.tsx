@@ -22,7 +22,7 @@ import campaignService from '@/services/campaign.service';
 import { CharacterSheetRouter } from '@/components/character-sheets/CharacterSheetRouter';
 import type { Character, Campaign } from '@/types';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorMessage, errorSummary } from '@/utils/errors';
 import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 import { useStaleSaveReapply } from '@/components/character/StaleSaveDialog';
@@ -58,7 +58,7 @@ export default function CharacterEditorPage() {
   const editingFromRef = useRef<Character | null>(null);
   const characterRef = useRef(character);
   characterRef.current = character;
-  const staleSave = useStaleSaveReapply();
+  const { reapply: reapplyStaleSave, dialog: staleSaveDialog } = useStaleSaveReapply();
 
 
   // ============================================
@@ -93,12 +93,12 @@ export default function CharacterEditorPage() {
             );
             setCampaign(fetchedCampaign);
           } catch (err) {
-            console.warn('Failed to fetch campaign:', err);
+            console.warn('Failed to fetch campaign:', errorSummary(err));
             // Not critical - continue without campaign data
           }
         }
       } catch (err: unknown) {
-        console.error('Failed to fetch character:', err);
+        console.error('Failed to fetch character:', errorSummary(err));
         setError(errorMessage(err) || 'Failed to load character');
       } finally {
         setLoading(false);
@@ -106,6 +106,7 @@ export default function CharacterEditorPage() {
     };
 
     fetchCharacter();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches again for a new character or account, a refresh of the account included; checkEditPermission reads the user given here
   }, [id, user]);
 
   // ============================================
@@ -125,7 +126,7 @@ export default function CharacterEditorPage() {
       const camp = await campaignService.getCampaign(char.campaignId);
       return canEditCharacterIn(user, char, camp);
     } catch (err) {
-      console.error('Failed to check campaign permission:', err);
+      console.error('Failed to check campaign permission:', errorSummary(err));
       return char.userId === user.id;
     }
   };
@@ -169,7 +170,7 @@ export default function CharacterEditorPage() {
           // is, the user's changes are carried onto the newest version, and
           // that is saved once they say so.
           if (!isStaleCharacterSave(err)) throw err;
-          const stored = await staleSave.reapply({
+          const stored = await reapplyStaleSave({
             opened: editingFrom.data,
             edited: data,
             withNewPicture: tokenImageUrl !== undefined,
@@ -203,7 +204,7 @@ export default function CharacterEditorPage() {
           showToast('Character saved!', 'success');
         }
       } catch (err: unknown) {
-        console.error('Failed to save character:', err);
+        console.error('Failed to save character:', errorSummary(err));
 
         // Signed out meanwhile: the page has stayed put with the edits, and
         // the notice says how to save them.
@@ -235,7 +236,7 @@ export default function CharacterEditorPage() {
         setSaving(false);
       }
     },
-    [character, showToast, queryClient, staleSave.reapply]
+    [character, showToast, queryClient, reapplyStaleSave]
   );
 
   // ============================================
@@ -311,7 +312,7 @@ export default function CharacterEditorPage() {
   // Loading state — full-page skeleton
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <CharacterSheetSkeleton />
       </div>
     );
@@ -320,9 +321,9 @@ export default function CharacterEditorPage() {
   // Error state
   if (error || !character) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
-          <AlertCircle className="w-12 h-12 text-spirit-red mx-auto mb-4" />
+          <AlertCircle className="w-12 h-12 text-danger-ink mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
             Failed to Load Character
           </h2>
@@ -338,9 +339,9 @@ export default function CharacterEditorPage() {
   // Permission denied state
   if (permissionError) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 p-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 p-4">
         <div className="glass-panel p-8 max-w-md w-full text-center">
-          <Lock className="w-12 h-12 text-sunset-orange mx-auto mb-4" />
+          <Lock className="w-12 h-12 text-accent-ink mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-brand-ink mb-2">
             Permission Denied
           </h2>
@@ -366,7 +367,7 @@ export default function CharacterEditorPage() {
       onConfirm={() => navigate('/characters')}
       onCancel={() => setConfirmLeave(false)}
     />
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header */}
       <div className="glass-panel m-4 p-4">
         <div className="flex items-center justify-between gap-4">
@@ -450,7 +451,7 @@ export default function CharacterEditorPage() {
       </div>
     </div>
 
-    {staleSave.dialog}
+    {staleSaveDialog}
 
     {showSaveAsTemplate && character && (
       <NewCharacterTemplateModal

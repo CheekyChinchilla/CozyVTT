@@ -11,7 +11,9 @@
  * A backup the dashboard is writing when the signal arrives is let finish
  * first, for up to BACKUP_WAIT_MS; docker-compose.yml gives the backend
  * container that long and more before Docker stops it. Stopped part-way, the
- * backup would be lost and have to be made again.
+ * backup would be lost and have to be made again. A restore running then is
+ * let end the same way: stopped part-way, the database rolls back, but the
+ * uploaded files it was copying are left half copied, with nothing logged.
  *
  * The personal files of an account just deleted are removed after the answer
  * has gone out; a shutdown lets that finish too, for up to FILE_WAIT_MS, since
@@ -36,6 +38,8 @@ export interface ShutdownTargets {
   sessionPool: { end(): Promise<void> };
   /** Backups being written, which the shutdown lets finish before it closes the database. */
   backups?: { readonly count: number; finished(): Promise<void> };
+  /** A restore running, which the shutdown lets end before it closes the database. */
+  restores?: { readonly count: number; finished(): Promise<void> };
   /** Files of deleted accounts being removed, which the shutdown lets finish before it closes the database. */
   files?: { readonly count: number; finished(): Promise<void> };
 }
@@ -79,6 +83,22 @@ const LOG_FLUSH_MS = 1_000;
  */
 let logClosed = false;
 
+/**
+ * A line for the log, or for the console once the log is closed: a second
+ * signal, or a step that finishes after the deadline has exited, arrives
+ * while the log files are being written.
+ */
+function say(level: 'info' | 'warn' | 'error', message: string, meta?: Record<string, unknown>): void {
+  if (!logClosed) {
+    if (meta === undefined) logger[level](message);
+    else logger[level](message, meta);
+    return;
+  }
+  const write = level === 'info' ? console.log : console.error;
+  if (meta === undefined) write(message);
+  else write(message, meta);
+}
+
 function exitAfterLogs(code: number): void {
   const files = logger.transports.filter((t) => t instanceof winston.transports.File);
   const written = files.map((t) => new Promise<void>((resolve) => t.once('finish', () => resolve())));
@@ -101,15 +121,10 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
 
   return (signal) => {
     if (running) {
-      // TODO(shutdown): once exitAfterLogs has closed the logger, this line
-      // (a second signal while the log files are written) and the lines after
-      // the deadline's exit throw "write after end", which onProcessFailure
-      // then reports on the console in their place. Right: write them to the
-      // console once logClosed is set.
-      logger.info(`${signal} received while already shutting down`);
+      say('info', `${signal} received while already shutting down`);
       return running;
     }
-    logger.info(`${signal} received; shutting down`);
+    say('info', `${signal} received; shutting down`);
 
     let ended = false;
     const end = (code: number) => {
@@ -118,9 +133,10 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
       exit(code);
     };
     const backupRunning = (targets.backups?.count ?? 0) > 0;
-    const allowedMs = graceMs + (backupRunning ? backupWaitMs : 0);
+    const restoreRunning = (targets.restores?.count ?? 0) > 0;
+    const allowedMs = graceMs + (backupRunning || restoreRunning ? backupWaitMs : 0);
     const deadline = setTimeout(() => {
-      logger.warn(`Shutdown not finished after ${allowedMs / 1000} seconds; exiting anyway`);
+      say('warn', `Shutdown not finished after ${allowedMs / 1000} seconds; exiting anyway`);
       end(1);
     }, allowedMs);
     deadline.unref();
@@ -131,7 +147,7 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
         await run();
       } catch (err) {
         failed = true;
-        logger.error(`Shutdown could not ${what}`, { err });
+        say('error', `Shutdown could not ${what}`, { err });
       }
     };
 
@@ -139,16 +155,20 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
       // Closing the server stops new requests, and so new backups, at once;
       // it finishes when the requests in progress have.
       const serverClosed = new Promise<void>((resolve) => void targets.io.close(() => resolve()));
-      if (backupRunning && targets.backups) {
-        logger.warn(`A backup is being written; waiting up to ${backupWaitMs / 60_000} minutes for it to finish before stopping`);
+      // A restore writes a backup of the database first, so both may be
+      // running; they share the one wait the container's stop allows.
+      if (backupRunning || restoreRunning) {
+        const work = restoreRunning ? 'A backup is being restored' : 'A backup is being written';
+        say('warn', `${work}; waiting up to ${backupWaitMs / 60_000} minutes for it to finish before stopping`);
         let timer: NodeJS.Timeout | undefined;
         const finished = await Promise.race([
-          targets.backups.finished().then(() => true),
+          Promise.all([targets.backups?.finished(), targets.restores?.finished()]).then(() => true),
           new Promise<false>((resolve) => { timer = setTimeout(() => resolve(false), backupWaitMs); }),
         ]);
         clearTimeout(timer);
-        if (finished) logger.info('The backup has finished');
-        else logger.warn('The backup did not finish in time and is lost; make it again once the backend is back');
+        if (finished) say('info', restoreRunning ? 'The restore has finished' : 'The backup has finished');
+        else if (restoreRunning) say('warn', 'The restore did not finish in time; once the backend is back, check the instance and restore the backup again if it is not as the backup was');
+        else say('warn', 'The backup did not finish in time and is lost; make it again once the backend is back');
       }
       await step('close the server', () => serverClosed);
       if (targets.files && targets.files.count > 0) {
@@ -159,13 +179,13 @@ export function createShutdown(targets: ShutdownTargets, options: ShutdownOption
         ]);
         clearTimeout(timer);
         if (!finished) {
-          logger.warn(`The files of a deleted account were still being removed after ${fileWaitMs / 1000} seconds; the ones not reached stay as assets with no owner, which an administrator can delete`);
+          say('warn', `The files of a deleted account were still being removed after ${fileWaitMs / 1000} seconds; the ones not reached stay as assets with no owner, which an administrator can delete`);
         }
       }
       await step('disconnect from the database', () => targets.prisma.$disconnect());
       await step('close the session store', () => targets.sessionPool.end());
       clearTimeout(deadline);
-      logger.info('Shutdown complete');
+      say('info', 'Shutdown complete');
       end(failed ? 1 : 0);
     })();
     return running;

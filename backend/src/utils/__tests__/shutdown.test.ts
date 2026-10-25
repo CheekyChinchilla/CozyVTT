@@ -117,6 +117,48 @@ function backupRunning() {
   return { backups, finish: () => { count = 0; finish(); } };
 }
 
+// A restore stopped part-way rolls the database back, but the uploaded files
+// it was copying may be left half copied and nothing is logged, so a shutdown
+// lets it end first, as it lets a backup.
+describe('a shutdown while a restore is running', () => {
+  it('closes the database only once the restore has ended', async () => {
+    const order: string[] = [];
+    const t = targets(order);
+    const { backups: restores, finish } = backupRunning();
+    const exit = jest.fn();
+    const done = createShutdown({ ...t, restores }, { exit })('SIGTERM');
+
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(t.io.close).toHaveBeenCalledTimes(1);
+    expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+
+    order.push('restore');
+    finish();
+    await done;
+    expect(order).toEqual(['io', 'restore', 'prisma', 'sessionPool']);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  it('waits no longer than a backup may, then closes the rest and exits', async () => {
+    jest.useFakeTimers();
+    try {
+      const t = targets();
+      const { backups: restores } = backupRunning();
+      const exit = jest.fn();
+      const done = createShutdown({ ...t, restores }, { exit, backupWaitMs: 60_000, graceMs: 5000 })('SIGTERM');
+
+      await jest.advanceTimersByTimeAsync(59_999);
+      expect(t.prisma.$disconnect).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await done;
+      expect(t.prisma.$disconnect).toHaveBeenCalledTimes(1);
+      expect(exit).toHaveBeenCalledWith(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});
+
 describe('a shutdown while a backup is being written', () => {
   it('stops taking requests at once, and closes the database only once the backup has finished', async () => {
     const order: string[] = [];
@@ -313,7 +355,7 @@ describe('an error nothing caught', () => {
  * the second it takes to write out the log files and exit.
  */
 describe('an error nothing caught, while the backend is stopping', () => {
-  interface Ended { code: number | null; stderr: string; errorLog: string }
+  interface Ended { code: number | null; stdout: string; stderr: string; errorLog: string; combinedLog: string }
 
   const child = `
 const { onProcessFailure, createShutdown } = require(process.env.SHUTDOWN_MODULE);
@@ -323,6 +365,20 @@ setTimeout(() => {
     void Promise.reject(new Error('the first, rejected'));
     void Promise.reject(new Error('the second, rejected'));
     process.nextTick(() => { throw new Error('the third, thrown'); });
+  } else if (process.argv[2] === 'twice') {
+    // A second signal while the first shutdown writes out the log files.
+    const targets = { io: { close: (done) => done() }, prisma: { $disconnect: async () => {} }, sessionPool: { end: async () => {} } };
+    const shutdown = createShutdown(targets);
+    void shutdown('SIGTERM').then(() => shutdown('SIGTERM'));
+  } else if (process.argv[2] === 'deadline') {
+    // The server closes on the deadline's own timer tick, just after it has
+    // exited, so the steps after it report while the log files are written.
+    const targets = {
+      io: { close: (done) => setTimeout(done, 50) },
+      prisma: { $disconnect: async () => { throw new Error('already gone'); } },
+      sessionPool: { end: async () => {} },
+    };
+    void createShutdown(targets, { graceMs: 50 })('SIGTERM');
   } else {
     const targets = { io: { close: (done) => done() }, prisma: { $disconnect: async () => {} }, sessionPool: { end: async () => {} } };
     void createShutdown(targets)('SIGTERM').then(() => process.nextTick(() => { throw new Error('thrown after the shutdown'); }));
@@ -331,13 +387,13 @@ setTimeout(() => {
 `;
 
   /** Runs the scenario in a folder of its own, where production writes logs/. */
-  function run(scenario: 'several' | 'after a shutdown'): Promise<Ended> {
+  function run(scenario: 'several' | 'after a shutdown' | 'twice' | 'deadline'): Promise<Ended> {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-fatal-'));
     const script = path.join(dir, 'fail.js');
     fs.writeFileSync(script, child);
     const backend = path.resolve(__dirname, '../../..');
     return new Promise<Ended>((resolve, reject) => {
-      const proc = spawn(process.execPath, ['-r', require.resolve('ts-node/register/transpile-only'), script, scenario === 'several' ? 'several' : 'shutdown'], {
+      const proc = spawn(process.execPath, ['-r', require.resolve('ts-node/register/transpile-only'), script, scenario === 'after a shutdown' ? 'shutdown' : scenario], {
         cwd: dir,
         env: {
           ...process.env,
@@ -346,9 +402,11 @@ setTimeout(() => {
           TS_NODE_PROJECT: path.join(backend, 'tsconfig.json'),
           SHUTDOWN_MODULE: path.resolve(__dirname, '../shutdown.ts'),
         },
-        stdio: ['ignore', 'ignore', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe'],
       });
+      let stdout = '';
       let stderr = '';
+      proc.stdout.on('data', (chunk: Buffer) => { stdout += chunk.toString(); });
       proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
       const giveUp = setTimeout(() => {
         proc.kill('SIGKILL');
@@ -358,8 +416,10 @@ setTimeout(() => {
         clearTimeout(giveUp);
         const logFile = path.join(dir, 'logs', 'error.log');
         const errorLog = fs.existsSync(logFile) ? fs.readFileSync(logFile, 'utf8') : '';
+        const combinedFile = path.join(dir, 'logs', 'combined.log');
+        const combinedLog = fs.existsSync(combinedFile) ? fs.readFileSync(combinedFile, 'utf8') : '';
         fs.rmSync(dir, { recursive: true, force: true });
-        resolve({ code, stderr, errorLog });
+        resolve({ code, stdout, stderr, errorLog, combinedLog });
       });
     });
   }
@@ -385,5 +445,25 @@ setTimeout(() => {
     expect(ended.code).toBe(0);
     expect(ended.stderr).toContain('Uncaught exception while stopping');
     expect(ended.stderr).toContain('thrown after the shutdown');
+  }, 30000);
+
+  it('writes a second signal that arrives while the log files are written to the console', async () => {
+    const ended = await run('twice');
+
+    expect(ended.stderr).not.toContain('write after end');
+    expect(ended.stderr).not.toContain('while stopping');
+    expect(ended.stdout).toContain('SIGTERM received while already shutting down');
+    expect(ended.code).toBe(0);
+  }, 30000);
+
+  it('writes what the shutdown reports after its deadline has exited to the console', async () => {
+    const ended = await run('deadline');
+
+    expect(ended.stderr).not.toContain('write after end');
+    expect(ended.stderr).not.toContain('while stopping');
+    expect(ended.code).toBe(1);
+    expect(ended.combinedLog).toContain('Shutdown not finished after 0.05 seconds; exiting anyway');
+    expect(ended.stderr).toContain('Shutdown could not disconnect from the database');
+    expect(ended.stdout).toContain('Shutdown complete');
   }, 30000);
 });

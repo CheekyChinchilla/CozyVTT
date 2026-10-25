@@ -34,8 +34,12 @@ export const UpdateCharacterTemplateSchema = z
     description: z.string().trim().max(2000).nullish(),
     data: z.any().optional(),
     tokenImageUrl: z.string().max(500).nullish(),
+    // The template's `updatedAt` as the caller loaded it. When sent, the save
+    // is refused with 409 if the template has changed since; left out, the
+    // save goes ahead whatever happened in between.
+    updatedAt: z.iso.datetime({ message: 'updatedAt must be the ISO timestamp the template was loaded with' }).optional(),
   })
-  .refine((obj) => Object.keys(obj).length > 0, {
+  .refine((obj) => Object.keys(obj).some((key) => key !== 'updatedAt'), {
     message: 'At least one field must be provided',
   });
 

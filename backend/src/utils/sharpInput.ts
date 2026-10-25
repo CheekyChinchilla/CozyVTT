@@ -19,7 +19,7 @@
 
 import { promises as fs } from 'fs';
 import sharp from 'sharp';
-import type { Sharp } from 'sharp';
+import type { Sharp, SharpOptions } from 'sharp';
 import { fileTypeFromBuffer, fileTypeFromFile } from 'file-type';
 
 /**
@@ -79,8 +79,11 @@ async function leadingBytes(input: Buffer | string): Promise<string> {
  * sharp, so a large picture is not held in memory whole for this. Pass a
  * path only for a file nothing rewrites, such as an upload just written: a
  * typed document's text can be replaced between the two reads.
+ *
+ * `options` go to sharp as they are; without them, sharp refuses a picture
+ * of more than 16,383 pixels squared.
  */
-export async function openPicture(input: Buffer | string): Promise<Sharp> {
+export async function openPicture(input: Buffer | string, options?: SharpOptions): Promise<Sharp> {
   const detected = typeof input === 'string' ? await fileTypeFromFile(input) : await fileTypeFromBuffer(input);
   if (!detected || !SHARP_INPUT_TYPES.includes(detected.mime)) {
     throw new NotAPictureError(detected?.mime);
@@ -88,5 +91,5 @@ export async function openPicture(input: Buffer | string): Promise<Sharp> {
   if (detected.mime === 'image/gif' && !['GIF87a', 'GIF89a'].includes(await leadingBytes(input))) {
     throw new NotAPictureError('image/gif without a GIF87a or GIF89a header');
   }
-  return sharp(input);
+  return sharp(input, options);
 }

@@ -22,6 +22,18 @@ const FADE_DURATION_MS = 1500; // 1.5-second crossfade
 
 // Smoothly interpolate audio.volume from current to target over FADE_DURATION_MS.
 // Calls onDone when complete (or immediately if already at target).
+/**
+ * Stop and empty the player. Setting `src` to an empty string makes the
+ * browser try to play the page itself (Firefox logs "Invalid URI. Load of
+ * media resource failed"); removing the attribute and loading again leaves
+ * it with nothing.
+ */
+function unloadAudio(audio: HTMLAudioElement): void {
+  audio.pause();
+  audio.removeAttribute('src');
+  audio.load();
+}
+
 function fadeTo(
   audio: HTMLAudioElement,
   targetVolume: number,
@@ -90,10 +102,7 @@ export default function AtmospherePlayer() {
     audio.volume = 0;
     audioRef.current = audio;
 
-    return () => {
-      audio.pause();
-      audio.src = '';
-    };
+    return () => unloadAudio(audio);
   }, []);
 
   // ============================================
@@ -193,8 +202,7 @@ export default function AtmospherePlayer() {
       // Stop — fade out then clear src
       fadeTo(audio, 0, () => {
         if (signal.cancelled) return;
-        audio.pause();
-        audio.src = '';
+        unloadAudio(audio);
       }, signal);
       return;
     }

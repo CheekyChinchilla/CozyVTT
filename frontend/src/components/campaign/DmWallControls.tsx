@@ -6,7 +6,7 @@
  * and inline type picker for selected segments.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { WallType } from '@/types/walls';
 
 export type WallToolMode = 'wall-draw' | 'wall-select' | 'wall-split' | 'wall-erase' | 'wall-polygon' | 'wall-brush' | null;
@@ -20,7 +20,7 @@ export const WALL_PRESET_COLORS = [
   { label: 'Green', value: '#4ade80' },
 ];
 
-interface DmWallControlsProps {
+export interface DmWallControlsProps {
   wallMode: WallToolMode;
   onWallModeChange: (mode: WallToolMode) => void;
   onCollapse?: () => void;
@@ -95,6 +95,7 @@ export default function DmWallControls({
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
+  const bodyId = useId();
 
   const handleClearAll = () => {
     if (!confirmClear) { setConfirmClear(true); return; }
@@ -109,25 +110,28 @@ export default function DmWallControls({
   return (
     <div className="flex flex-col gap-0 bg-stone-800/90 rounded-lg border border-warm-amber/20 min-w-[200px] overflow-hidden">
       {/* Header with collapse toggle */}
-      <div
-        className="flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-controls={bodyId}
+        className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
         onClick={() => {
           const next = !collapsed;
           setCollapsed(next);
           if (next) onCollapse?.();
         }}
       >
-        <span className="text-xs text-warm-amber/70 font-medium uppercase tracking-wide">
+        <span className="text-xs text-amber-300 font-medium uppercase tracking-wide">
           Walls
           {wallCount > 0 && (
-            <span className="ml-1 text-stone-400 normal-case">({wallCount})</span>
+            <>{' '}<span className="text-stone-400 normal-case">({wallCount})</span></>
           )}
         </span>
-        <span className="text-stone-400 text-xs">{collapsed ? '▶' : '▼'}</span>
-      </div>
+        <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
+      </button>
 
       {!collapsed && (
-        <div className="flex flex-col gap-2 p-2 pt-1">
+        <div id={bodyId} className="flex flex-col gap-2 p-2 pt-1">
           {/* Mode buttons: Draw / Select / Split / Erase */}
           <div className="grid grid-cols-2 gap-1">
             <button
@@ -249,7 +253,7 @@ export default function DmWallControls({
               </div>
               <button
                 onClick={onDeleteSelected}
-                className="w-full px-2 py-1 mt-0.5 rounded text-xs font-medium bg-red-700/30 text-red-400 border border-red-500/40 hover:bg-red-700/50 transition-colors"
+                className="w-full px-2 py-1 mt-0.5 rounded-sm text-xs font-medium bg-red-700/30 text-red-400 border border-red-500/40 hover:bg-red-700/50 transition-colors"
                 aria-label="Delete selected wall segment"
               >
                 Delete segment
@@ -263,7 +267,7 @@ export default function DmWallControls({
               <span className="text-xs text-sky-300 px-1">Selected point</span>
               <button
                 onClick={onMergeEndpoint}
-                className="w-full px-2 py-1 rounded text-xs font-medium bg-sky-700/30 text-sky-300 border border-sky-500/40 hover:bg-sky-700/50 transition-colors"
+                className="w-full px-2 py-1 rounded-sm text-xs font-medium bg-sky-700/30 text-sky-300 border border-sky-500/40 hover:bg-sky-700/50 transition-colors"
                 aria-label="Merge wall segments at this point"
               >
                 Merge point
@@ -301,7 +305,7 @@ export default function DmWallControls({
               <button
                 onClick={onUndo}
                 disabled={!canUndo}
-                className="flex-1 px-2 py-1 rounded text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 px-2 py-1 rounded-sm text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Undo last wall change (Ctrl+Z)"
                 aria-label="Undo wall edit"
               >
@@ -310,7 +314,7 @@ export default function DmWallControls({
               <button
                 onClick={onRedo}
                 disabled={!canRedo}
-                className="flex-1 px-2 py-1 rounded text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex-1 px-2 py-1 rounded-sm text-xs font-medium bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-stone-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Redo wall change (Ctrl+Y)"
                 aria-label="Redo wall edit"
               >
@@ -340,7 +344,7 @@ export default function DmWallControls({
                 type="color"
                 value={wallColor}
                 onChange={(e) => onWallColorChange(e.target.value)}
-                className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
+                className="w-5 h-5 rounded-sm cursor-pointer border-0 bg-transparent p-0"
                 title="Custom wall color"
                 aria-label="Custom wall color picker"
               />

@@ -368,7 +368,7 @@ export function drawRuler(
   ctx.restore();
 }
 
-import { cubeRect, snapToSquareCentre, squareExitPoint, squaresFor } from '../aoeGeometry';
+import { cubeRect, snapToSquareCentre, squareExitPoint, squaresFor, coneOutline, type ConeRule } from '../aoeGeometry';
 
 export type AoEShape = 'sphere' | 'cylinder' | 'cone' | 'line' | 'cube';
 
@@ -414,6 +414,8 @@ export interface AoEOverlayState {
   /** True while Alt is held, so the un-pinned preview matches what a click does. */
   hoverExact: boolean;
   feetPerSquare: number;
+  /** The campaign's game system's cone (aoeGeometry.ts). */
+  coneRule: ConeRule;
 }
 
 /** AoE template: sphere/cylinder/cone/line/cube with a size label. */
@@ -494,13 +496,16 @@ export function drawAoEOverlay(
       break;
 
     case 'cone': {
-      const halfAngle = Math.atan2(1, 2);
-      const left = angle - halfAngle;
-      const right = angle + halfAngle;
-      ctx.moveTo(ox, oy);
-      ctx.lineTo(ox + Math.cos(left) * sizeInPx, oy + Math.sin(left) * sizeInPx);
-      ctx.lineTo(ox + Math.cos(angle) * sizeInPx, oy + Math.sin(angle) * sizeInPx);
-      ctx.lineTo(ox + Math.cos(right) * sizeInPx, oy + Math.sin(right) * sizeInPx);
+      const outline = coneOutline({ x: ox, y: oy }, angle, sizeInPx, state.coneRule);
+      if (outline.kind === 'sector') {
+        ctx.moveTo(outline.centre.x, outline.centre.y);
+        ctx.arc(outline.centre.x, outline.centre.y, outline.radius, outline.from, outline.to);
+      } else {
+        const [a, b, c] = outline.points;
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.lineTo(c.x, c.y);
+      }
       ctx.closePath();
       break;
     }

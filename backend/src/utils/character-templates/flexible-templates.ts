@@ -26,9 +26,14 @@ export const flexibleBlankTemplate: FlexibleCharacterTemplate = {
 };
 
 /**
- * Basic flexible character template with common sections
+ * Basic flexible character template with common sections. A function, so each
+ * sheet made from it gets section and field ids of its own.
+ *
+ * Its four sections are the editor's Attributes, Skills, Inventory and
+ * Background section templates (frontend .../flexible/utils/section-templates.ts);
+ * keepInStep.test.ts fails when they disagree.
  */
-export const flexibleBasicTemplate: FlexibleCharacterTemplate = {
+export const flexibleBasicTemplate = (): FlexibleCharacterTemplate => ({
   name: 'Basic Flexible Character',
   description: 'Basic template with Attributes, Skills, Inventory, and Background sections',
   gameSystem: null,
@@ -67,12 +72,12 @@ export const flexibleBasicTemplate: FlexibleCharacterTemplate = {
       },
     ],
   },
-};
+});
 
 /**
- * All flexible templates
+ * All flexible templates, each built afresh when asked for.
  */
-export const FLEXIBLE_TEMPLATES: Record<string, FlexibleCharacterTemplate> = {
-  blank: flexibleBlankTemplate,
+export const FLEXIBLE_TEMPLATES: Record<string, () => FlexibleCharacterTemplate> = {
+  blank: () => structuredClone(flexibleBlankTemplate),
   basic: flexibleBasicTemplate,
 };

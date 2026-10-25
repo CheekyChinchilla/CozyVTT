@@ -4,8 +4,8 @@
 // A character joins a campaign of its own game system: a character with a
 // system only a campaign with the same one, and a Flexible character (no
 // system) only a Flexible campaign. The server applies it when a character
-// is assigned to a campaign and when an invitation is accepted with
-// characters; the browser uses it to decide which it offers.
+// is created in or assigned to a campaign and when an invitation is
+// accepted with characters; the browser uses it to decide which it offers.
 //
 // This file is byte-identical in backend/src/utils and frontend/src/utils; a
 // backend test fails if the two copies drift.

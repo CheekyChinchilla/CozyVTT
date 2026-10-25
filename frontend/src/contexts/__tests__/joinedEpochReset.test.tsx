@@ -27,7 +27,6 @@ vi.mock('@/services/socket', () => ({
     getSocket: () => ({ connected: true, on: vi.fn(), disconnect: vi.fn(), io: { on: vi.fn() } }),
     on: (event: string, cb: Handler) => { clientHandlers[event] = cb; },
     off: vi.fn(),
-    startHeartbeat: () => () => {},
   },
 }));
 

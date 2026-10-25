@@ -58,13 +58,16 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
    */
   const detail = Array.isArray(breakdown?.rolls) ? breakdown.rolls : [];
 
-  // Determine if critical success or fail (for d20 rolls)
-  const isCriticalSuccess = detail.some(
-    (r) => r.notation === '1d20' && r.results?.includes(20)
-  );
-  const isCriticalFail = detail.some(
-    (r) => r.notation === '1d20' && r.results?.includes(1)
-  );
+  // A critical is a single d20 kept, however it was written: `1d20`, `d20`,
+  // advantage (`2d20kh1`) or disadvantage (`2d20kl1`). Looking only for a
+  // group written `1d20` missed the commonest of them.
+  const keptD20 = detail
+    .filter((r) => r.type === 'dice' && r.sides === 20)
+    .map((r) => r.kept ?? r.results ?? [])
+    .filter((kept) => kept.length === 1)
+    .map((kept) => kept[0]);
+  const isCriticalSuccess = keptD20.includes(20);
+  const isCriticalFail = keptD20.includes(1);
 
   // Color scheme based on result type
   const getResultColor = () => {
@@ -112,7 +115,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       <div className="flex items-start justify-between mb-2">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <User className="w-4 h-4 flex-shrink-0 text-ink-secondary" />
+            <User className="w-4 h-4 shrink-0 text-ink-secondary" />
             <span className="font-medium text-sm text-ink truncate">
               {subject}
               {/* Every secret roll in the list is labelled, whoever is looking.
@@ -125,7 +128,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                   you are reading as DM is somebody else's. */}
               {secret && (
                 <span
-                  className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded"
+                  className="ml-2 text-xs bg-ink/10 text-ink-muted px-2 py-0.5 rounded-sm"
                   title={
                     isCurrentUser
                       ? 'Hidden from the other players — your DM can still see it'
@@ -145,13 +148,13 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
 
           {purpose && (
             <div className="flex items-center gap-1 text-xs text-ink-secondary">
-              <Target className="w-3 h-3 flex-shrink-0" />
+              <Target className="w-3 h-3 shrink-0" />
               <span className="truncate">{purpose}</span>
             </div>
           )}
         </div>
 
-        <span className="text-xs text-ink-muted ml-2 flex-shrink-0">
+        <span className="text-xs text-ink-muted ml-2 shrink-0">
           {formatTimestamp(timestamp)}
         </span>
       </div>
@@ -178,7 +181,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       </div>
 
       {/* Breakdown */}
-      <div className="mt-2 pt-2 border-t border-current/10">
+      <div className="mt-2 pt-2 border-t">
         <div className="text-xs text-ink-secondary space-y-1">
           {/* Formula */}
           {breakdown?.formula && (
@@ -189,15 +192,15 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
           )}
 
           {/* Individual dice rolls */}
-          <div className="flex flex-wrap gap-2 mt-2">
+          <div className="flex flex-wrap gap-2">
             {detail.map((roll, idx) => (
               <div key={idx} className="flex items-center gap-1">
                 {roll.type === 'dice' && roll.notation && (
-                  <div className="inline-flex items-center gap-1 bg-ink/5 px-2 py-1 rounded">
+                  <div className="inline-flex items-center gap-1 bg-ink/5 px-2 py-1 rounded-sm">
                     <span className="font-mono text-xs opacity-80">{roll.notation}:</span>
                     <div className="flex gap-1">
                       {roll.results?.map((r, rIdx) => {
-                        const isKept = roll.kept ? roll.kept.includes(r) : true;
+                        const isKept = keptMarks(roll)[rIdx];
                         const isCrit20 = r === 20 && roll.sides === 20;
                         const isCrit1 = r === 1 && roll.sides === 20;
 
@@ -207,8 +210,8 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                             className={`
                               font-mono text-xs px-1 rounded
                               ${!isKept ? 'line-through opacity-40' : ''}
-                              ${isCrit20 ? 'bg-success/20 text-success-ink dark:text-success-ink font-bold' : ''}
-                              ${isCrit1 ? 'bg-danger/20 text-danger-ink dark:text-danger-ink font-bold' : ''}
+                              ${isCrit20 ? 'bg-success/15 text-success-ink dark:text-success-ink font-bold' : ''}
+                              ${isCrit1 ? 'bg-danger/15 text-danger-ink dark:text-danger-ink font-bold' : ''}
                             `}
                           >
                             {r}
@@ -225,7 +228,7 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
                 )}
 
                 {roll.type === 'modifier' && roll.value !== undefined && (
-                  <div className="inline-flex items-center gap-1 bg-warm-amber/10 px-2 py-1 rounded">
+                  <div className="inline-flex items-center gap-1 bg-warm-amber/10 px-2 py-1 rounded-sm">
                     <span className="font-mono text-xs opacity-80">
                       {roll.value >= 0 ? '+' : ''}{roll.value}
                     </span>
@@ -255,4 +258,22 @@ export default function DiceResult({ roll, isCurrentUser, rollerIsDM }: DiceResu
       )}
     </motion.div>
   );
+}
+
+/**
+ * Which of a group's dice it kept, by position. Counted, not looked up by
+ * value: with equal values, as [14, 14] keeping one, looking each up marked
+ * every one kept and struck none through.
+ */
+function keptMarks(roll: { results?: number[]; kept?: number[] }): boolean[] {
+  const results = roll.results ?? [];
+  if (!roll.kept) return results.map(() => true);
+  const left = new Map<number, number>();
+  for (const value of roll.kept) left.set(value, (left.get(value) ?? 0) + 1);
+  return results.map((value) => {
+    const remaining = left.get(value) ?? 0;
+    if (remaining === 0) return false;
+    left.set(value, remaining - 1);
+    return true;
+  });
 }

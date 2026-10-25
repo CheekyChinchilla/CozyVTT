@@ -108,7 +108,7 @@ export default function CharacterTemplatesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       <div className="bg-moss-green/10 border-b border-moss-green/20">
         <div className="max-w-7xl mx-auto px-6 py-6">
           <div className="flex items-center justify-between">
@@ -239,7 +239,7 @@ export default function CharacterTemplatesPage() {
                 className="bg-parchment/50 border border-moss-green/20 rounded-xl p-4 shadow-md hover:shadow-xl transition-shadow flex flex-col"
               >
                 <div className="flex items-start gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-lg bg-moss-green/10 border border-moss-green/30 flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="w-12 h-12 rounded-lg bg-moss-green/10 border border-moss-green/30 flex items-center justify-center overflow-hidden shrink-0">
                     {template.tokenImageUrl ? (
                       <img
                         src={template.tokenImageUrl}

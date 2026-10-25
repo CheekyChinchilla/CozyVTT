@@ -135,10 +135,10 @@ export function stillInCampaign<T>(sockets: readonly T[], campaignId: string): T
 
 /**
  * Send one of a map's live edits (its walls, lights, fog, settings, pings,
- * the explored-memory reset, the DM's editing notice) to everyone who may
- * read that map (canReadMap): the whole campaign while it is the map on
- * screen, the DM's sockets for any other. A prepared map's layout is the
- * DM's until they switch to it, on the live connection as on its fetch.
+ * the explored-memory reset) to everyone who may read that map
+ * (canReadMap): the whole campaign while it is the map on screen, the DM's
+ * sockets for any other. A prepared map's layout is the DM's until they
+ * switch to it, on the live connection as on its fetch.
  * `exceptSocketId` leaves out the sender where the event is not echoed.
  * Best-effort: a failure is logged and goes no further.
  */
@@ -194,28 +194,6 @@ export async function emitToMapReadersAs(
   } catch (error) {
     logger.warn(`${what} not broadcast; the change stands`, { err: error, mapId });
   }
-}
-
-/**
- * Get all sockets in a campaign room
- * @param campaignId - Campaign ID
- * @returns Array of socket IDs
- */
-export async function getSocketsInCampaign(campaignId: string): Promise<string[]> {
-  const io = getSocketInstance();
-  const sockets = await campaignSockets(io, campaignId);
-  return sockets.map((socket) => socket.id);
-}
-
-/**
- * Get campaign member count (connected users)
- * @param campaignId - Campaign ID
- * @returns Number of connected users
- */
-export async function getCampaignMemberCount(campaignId: string): Promise<number> {
-  const io = getSocketInstance();
-  const sockets = await campaignSockets(io, campaignId);
-  return sockets.length;
 }
 
 /**
@@ -284,8 +262,25 @@ export const CAMPAIGN_DELETED_MESSAGE = 'This campaign was deleted.';
  * typed event, so the page can tell the person and stop, where a plain
  * `error` was only logged.
  */
-function tellAccessRevoked(socket: CampaignSocket, revoked: AccessRevoked): void {
+function tellAccessRevoked(socket: TellableSocket, revoked: AccessRevoked): void {
   socket.emit('campaign.access.revoked', revoked);
+}
+
+/** A server-side socket, a live one or one `fetchSockets()` handed back. */
+interface TellableSocket {
+  emit(event: 'campaign.access.revoked', revoked: AccessRevoked): unknown;
+  disconnect(close: boolean): unknown;
+}
+
+/**
+ * End one socket whose sign-in has ended, told why and which campaign it was
+ * in. Every helper here that ends a sign-in's sockets, and the sweep
+ * (signInSweep.ts), ends each this way.
+ */
+export function endSignedOutSocket(socket: TellableSocket, message: string): void {
+  const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
+  tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message });
+  socket.disconnect(true);
 }
 
 /**
@@ -311,9 +306,7 @@ export async function endLiveSockets(
       const sid = (socket as unknown as AuthenticatedFields).sessionId;
       if (which.exceptSessionId !== undefined && sid === which.exceptSessionId) continue;
       if (which.onlySessionId !== undefined && sid !== which.onlySessionId) continue;
-      const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
-      tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message: reason });
-      socket.disconnect(true);
+      endSignedOutSocket(socket, reason);
       ended += 1;
     }
     return ended;
@@ -332,9 +325,7 @@ export async function endEveryLiveSocket(reason: string): Promise<number> {
     const io = getSocketInstance();
     let ended = 0;
     for (const socket of await io.fetchSockets()) {
-      const campaignId = (socket as unknown as AuthenticatedFields).campaignId ?? null;
-      tellAccessRevoked(socket, { campaignId, reason: 'signed-out', message: reason });
-      socket.disconnect(true);
+      endSignedOutSocket(socket, reason);
       ended += 1;
     }
     return ended;

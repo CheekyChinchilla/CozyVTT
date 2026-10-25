@@ -17,7 +17,13 @@ import { authenticated } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { GameSystem } from '../game-systems';
 import { readEnumQuery } from '../utils/queryEnum';
-import { validateCharacterData, validateFlexibleSheet, sheetIssues } from '../validators/game-systems';
+import {
+  validateCharacterData,
+  validateFlexibleSheet,
+  sheetIssues,
+  sheetWithoutPlayerName,
+} from '../validators/game-systems';
+import { sheetWithoutKeeperNotes } from '../utils/keeperNotes';
 import { migrateLegacySheetFields } from '../utils/sheetFieldMigrations';
 import {
   CreateCharacterTemplateSchema,
@@ -27,6 +33,7 @@ import { extractAssetId, isExactAssetAddress, normalizeAssetUrl } from '../utils
 import { toJson } from '../utils/prisma-json';
 import { holdOwnerCreates } from '../utils/ownerLimit';
 import logger from '../utils/logger';
+import { escapeLikePattern } from '../utils/likePattern';
 
 const router = Router();
 
@@ -132,6 +139,15 @@ async function resolveTemplateImage(
 }
 
 /**
+ * A template as it is sent: without the player's name and the Keeper's Notes,
+ * which one published before they were left out may still hold.
+ */
+function servedTemplate<T extends { gameSystem: GameSystem | null; data: unknown }>(template: T): T {
+  const { gameSystem } = template;
+  return { ...template, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, template.data)) };
+}
+
+/**
  * Validate sheet data against its game system, mirroring how characters are
  * checked, and return the sheet to store: the schema's parsed output, so a key
  * the sheet does not declare never reaches the database. A Flexible template
@@ -142,6 +158,10 @@ async function resolveTemplateImage(
  * characters, so a sheet still carrying that version's fields has them moved
  * where the sheet reads them first, as a character's are. Validation would
  * otherwise drop their content.
+ *
+ * Every user can read a template, so it never keeps the Keeper's Notes, which
+ * are the Keeper's alone, or the player's name, which is the character
+ * owner's: whoever saves one, a template editor included, both are left out.
  */
 function validateSheet(
   gameSystem: GameSystem | null | undefined,
@@ -158,7 +178,9 @@ function validateSheet(
   }
 
   const result = validateCharacterData(gameSystem, migrateLegacySheetFields(gameSystem, data || {}));
-  if (result.success) return { ok: true, data: result.data };
+  if (result.success) {
+    return { ok: true, data: sheetWithoutPlayerName(gameSystem, sheetWithoutKeeperNotes(gameSystem, result.data)) };
+  }
 
   return {
     ok: false,
@@ -193,8 +215,8 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const where: Record<string, unknown> = {};
 
     if (search && typeof search === 'string') {
-      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
-      where.name = { contains: search, mode: 'insensitive' };
+      // Matched as typed: a % or _ in it is not a wildcard.
+      where.name = { contains: escapeLikePattern(search), mode: 'insensitive' };
     }
     if (gameSystem !== undefined) {
       where.gameSystem = gameSystem === 'flexible' ? null : gameSystem;
@@ -238,7 +260,7 @@ router.get('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       return res.status(404).json({ error: 'Not Found', message: 'Character template not found' });
     }
 
-    return res.json(template);
+    return res.json(servedTemplate(template));
   } catch (error) {
     logger.error('Error getting character template', { err: error });
     return res
@@ -340,7 +362,7 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
     // the sheet data is only meaningful against the system it was built for.
     let sheetData: unknown;
     if (data.data !== undefined) {
-      const sheet = validateSheet(existing.gameSystem as GameSystem | null, data.data);
+      const sheet = validateSheet(existing.gameSystem, data.data);
       if (!sheet.ok) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -360,18 +382,35 @@ router.put('/:id', authenticated, async (req: AuthenticatedRequest, res: Respons
       imageUrl = image.url;
     }
 
-    const updated = await prisma.characterTemplate.update({
-      where: { id: req.params.id },
-      data: {
-        ...(data.name !== undefined && { name: data.name }),
-        ...(data.description !== undefined && { description: data.description ?? null }),
-        ...(sheetData !== undefined && { data: toJson(sheetData) }),
-        ...(imageUrl !== undefined && { tokenImageUrl: imageUrl }),
-      },
-      include: { createdBy: { select: AUTHOR_SELECT } },
-    });
+    const changes = {
+      ...(data.name !== undefined && { name: data.name }),
+      ...(data.description !== undefined && { description: data.description ?? null }),
+      ...(sheetData !== undefined && { data: toJson(sheetData) }),
+      ...(imageUrl !== undefined && { tokenImageUrl: imageUrl }),
+    };
+    const include = { createdBy: { select: AUTHOR_SELECT } } as const;
 
-    return res.json(updated);
+    if (data.updatedAt !== undefined) {
+      // Saved only if the template is still the version the caller loaded,
+      // checked in the write itself so that of two saves made from one
+      // version only the first goes through. Without it, the later of two
+      // people editing a template put back everything the earlier one saved.
+      const { count } = await prisma.characterTemplate.updateMany({
+        where: { id: req.params.id, updatedAt: new Date(data.updatedAt) },
+        data: changes,
+      });
+      if (count === 0) {
+        return res.status(409).json({
+          error: 'Conflict',
+          code: 'TEMPLATE_CHANGED',
+          message: 'This template was changed after you loaded it. Load it again and make your change on the new version.',
+        });
+      }
+      return res.json(servedTemplate(await prisma.characterTemplate.findUniqueOrThrow({ where: { id: req.params.id }, include })));
+    }
+
+    const updated = await prisma.characterTemplate.update({ where: { id: req.params.id }, data: changes, include });
+    return res.json(servedTemplate(updated));
   } catch (error) {
     logger.error('Error updating character template', { err: error });
     return res

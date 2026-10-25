@@ -29,6 +29,9 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
       id: true,
       name: true,
       description: true,
+      // How the document is shown: the server serves it by this name's
+      // extension, set from what the file's bytes are.
+      filename: true,
       originalName: true,
       mimeType: true,
       fileSize: true,
@@ -104,7 +107,9 @@ router.get('/:campaignId/documents', campaignMember, async (req: AuthenticatedRe
  * its id. And reading is not enough: the document must be the DM's own, or
  * global. A document shared into a campaign is readable by its members, and a
  * member who runs another campaign could otherwise pass it on to a table the
- * uploader never chose.
+ * uploader never chose. That holds for an admin too: an admin can read every
+ * file, so an admin who runs a table could otherwise hand anyone's private
+ * document to it.
  */
 router.post('/:campaignId/documents', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -136,10 +141,10 @@ router.post('/:campaignId/documents', campaignDM, async (req: AuthenticatedReque
     }
     // 403 here, not 404: the caller can already read this one, so the id is no
     // secret from them, and the refusal should say what would be allowed.
-    if (asset.scope !== 'GLOBAL' && asset.uploadedById !== userId && !isAdmin) {
+    if (asset.scope !== 'GLOBAL' && asset.uploadedById !== userId) {
       return res.status(403).json({
         error: 'Forbidden',
-        message: 'Only the person who uploaded a document, or an admin, can share it with a campaign',
+        message: 'Only the person who uploaded a document can share it with a campaign',
       });
     }
 

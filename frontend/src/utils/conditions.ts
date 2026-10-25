@@ -14,6 +14,9 @@
  * reminder: hovering a token names its conditions in full.
  */
 
+import { GameSystem } from '@/types/gameSystem';
+import type { CoC7eConditions } from '@/types/game-systems/callOfCthulhu7e';
+
 /**
  * The fifteen conditions of D&D 5e, in the order the rules list them.
  *
@@ -48,8 +51,39 @@ export const DND5E_CONDITIONS: readonly string[] = [
 ];
 
 /**
- * Two-letter codes, one per 5e condition. Every value here is unique; a test
- * enforces that, since a collision would quietly bring back the original bug.
+ * The five conditions a Call of Cthulhu 7e sheet tracks, in the order the
+ * rulebook introduces them: the three that follow from hit points, then the
+ * two from Sanity. The investigator sheet ticks them by `key`; the token
+ * editor offers them by `label`.
+ */
+export const COC7E_CONDITIONS: readonly { key: keyof CoC7eConditions; label: string }[] = [
+  { key: 'majorWound', label: 'Major Wound' },
+  { key: 'dying', label: 'Dying' },
+  { key: 'unconscious', label: 'Unconscious' },
+  { key: 'temporaryInsanity', label: 'Temporary Insanity' },
+  { key: 'indefiniteInsanity', label: 'Indefinite Insanity' },
+];
+
+/**
+ * The conditions the token editor lists for a campaign's game system. Only
+ * D&D 5e and Call of Cthulhu have a list here; in every system the DM can
+ * also type a condition of their own.
+ */
+export function conditionsOffered(gameSystem: GameSystem | null): readonly string[] {
+  switch (gameSystem) {
+    case GameSystem.DND_5E:
+      return DND5E_CONDITIONS;
+    case GameSystem.CALL_OF_CTHULHU_7E:
+      return COC7E_CONDITIONS.map((condition) => condition.label);
+    default:
+      return [];
+  }
+}
+
+/**
+ * Two-letter codes, one per listed condition (D&D 5e and Call of Cthulhu,
+ * which share Unconscious). Every value here is unique; a test enforces that,
+ * since a collision would quietly bring back the original bug.
  */
 export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
   blinded: 'BL',
@@ -67,6 +101,10 @@ export const CONDITION_ABBREVIATIONS: Readonly<Record<string, string>> = {
   restrained: 'RE',
   stunned: 'ST',
   unconscious: 'UN',
+  'major wound': 'MW',
+  dying: 'DY',
+  'temporary insanity': 'TI',
+  'indefinite insanity': 'II',
 };
 
 /**

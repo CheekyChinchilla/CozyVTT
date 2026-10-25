@@ -3,13 +3,14 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { canRollAsCharacter } from '@/services/permissions';
-import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative } from '@/stores/gameStore';
+import { campaignHasCharacter as campaignHasTokenCharacter, canRollTokenCharacter } from '@/utils/tokenCharacter';
+import { useTableRoll } from '@/hooks/useTableRoll';
+import { useGameStore, useTokenList, useCurrentTurnTokenId, useMapPeekTokenId, useTokenInitiative, useCharacterHp } from '@/stores/gameStore';
 import { useMapControls } from '@/hooks/useMapControls';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type {
@@ -18,17 +19,15 @@ import type {
   TokenMoveEvent,
   TokenMoveEndEvent,
   TokenMovedEvent,
-  Map as CampaignMap,
+  CampaignMap,
   SpiritLayerToggledBroadcast,
   SpiritLayerTokenToggledBroadcast,
   VibeUpdatedBroadcast,
   Character,
   MapPingedBroadcast,
 } from '@/types';
-import { TokenLayer, TokenType } from '@/types';
+import { GameSystem, TokenLayer, TokenType } from '@/types';
 import type { WallSegment, FogState, WallType, LightSource } from '@/types/walls';
-import { douglasPeucker, edgeSnapPoints } from '@/utils/geometry';
-import { randomId } from '@/utils/uuid';
 import {
   drawMapImage,
   drawSpiritLayer,
@@ -50,16 +49,20 @@ import {
   drawPings,
   PING_DURATION_MS,
   type ActivePing,
-  type AoEAnchor,
+  type AoEShape,
   type Viewport,
 } from './map/layers';
 import { createVisionCache } from './map/vision';
 import { pickTokenAt, pickMovableTokenAt, blockingTokensAt, visibleTokenHp } from './map/tokenHitTest';
 import { cachedTokenImage, placeholderColor } from './map/layers/drawTokens';
-import { fogRectFromDrag, fogCellsInRect, revealedSetFromFogState } from './map/fogSelection';
+import { revealedSetFromFogState } from './map/fogSelection';
 import { exploredCellsFromCoverage, diffNew } from './map/exploration';
-import { rectFromDrag, segmentsInRect } from './map/mapSelection';
-import { useWallSelection } from './map/useWallSelection';
+import { useFogTool } from './map/tools/useFogTool';
+import { useLightTool } from './map/tools/useLightTool';
+import { useMeasureTools } from './map/tools/useMeasureTools';
+import { useDoorTool } from './map/tools/useDoorTool';
+import { useWallTool } from './map/tools/useWallTool';
+import type { MapTool, PointerAt } from './map/tools/types';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
@@ -69,8 +72,7 @@ import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
 import { releaseHeldToken } from './map/tokenHold';
-import { offeredDoorAt, type DoorViewer } from './map/doorAccess';
-import { distToSegment, translateWallSegments, gridSquaresToPx } from './map/mapGeometry';
+import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
 import { createOwnEdits } from './map/ownEdits';
@@ -84,10 +86,11 @@ const EMPTY_REVEALED: ReadonlySet<number> & Set<number> = new Set<number>();
 import { useTokenAnimation, useFogRevealAnimation, useCanvasTicker, pulsePhaseAt } from './map/useMapAnimations';
 import { playerColor } from '@/utils/playerColor';
 import { characterTokenRequest, readCharacterTokenDrag } from '@/utils/characterTokenDrag';
-import { controlsToken } from '@/utils/tokenControl';
-import { dmTokenControls } from '@/utils/tokenControls';
+import { controlsToken } from '@/utils/tokenOwnership';
+import { ROTATION_STEP, turned } from '@/utils/tokenRotation';
+import { dmTokenControls } from '@/utils/dmTokenMenu';
 import { tokenCopyRequest, clampTokenPosition, copyController } from '@/utils/tokenCopy';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { useRenderLoop, type MapLayer } from './map/useRenderLoop';
 import api from '@/services/api';
 import CharacterSheetViewerModal from '@/components/character/CharacterSheetViewerModal';
@@ -99,13 +102,14 @@ import { setTokenFlag } from '@/utils/tokenFlags';
 import AtmosphereOverlay from '@/components/campaign/AtmosphereOverlay';
 import DmFogControls, { type FogToolMode } from '@/components/campaign/DmFogControls';
 import DmWallControls, { type WallToolMode } from '@/components/campaign/DmWallControls';
-import DmLightControls, { type LightToolMode, type LightPlacementDefaults } from '@/components/campaign/DmLightControls';
+import DmLightControls, { type LightToolMode } from '@/components/campaign/DmLightControls';
 import DmToolPanelContainer from '@/components/campaign/DmToolPanelContainer';
 import { useWallHistory } from '@/hooks/useWallHistory';
 import Toast, { useToast } from '@/components/Toast';
 import Button from '@/components/ui/Button';
 import '@/styles/spirit-effects.css';
 import { mapImageState } from './map/mapImageState';
+import { useTokenImages } from './map/useTokenImages';
 
 /** Returns the accent color for the spirit layer style string. Used for spirit token ring. */
 function getSpiritAccentColor(style: string | null | undefined): string {
@@ -117,20 +121,19 @@ function getSpiritAccentColor(style: string | null | undefined): string {
   return '#9370DB'; // wispy default = spirit-purple
 }
 
-type AoEShape = 'sphere' | 'cylinder' | 'cone' | 'line' | 'cube';
-
-interface AoEConfig {
-  shape: AoEShape;
-  sizeFt: number;
-  widthFt?: number; // line only, default 5
-}
+/** The DM's editing tool, from the wall, fog or light panel. */
+type DmTool =
+  | { kind: 'wall'; mode: NonNullable<WallToolMode> }
+  | { kind: 'fog'; mode: NonNullable<FogToolMode> }
+  | { kind: 'light'; mode: NonNullable<LightToolMode> };
 
 interface MapCanvasProps {
   onEditToken?: (token: Token) => void;
 }
 
 export default function MapCanvas({ onEditToken }: MapCanvasProps) {
-  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect, characterHpCache } = useCampaign();
+  const { currentMap, setCurrentMap, userRole, campaign, updateCampaignSpiritLayer, dmViewBothPlanes, playerSpiritVisible, setPlayerSpiritVisible, activeVibeEffect, updateVibe, activeAtmosphereEffect } = useCampaign();
+  const characterHpCache = useCharacterHp();
   // Live token state comes from the game store, not the campaign context —
   // socket handlers write there directly (outside React), and this
   // subscription is what re-renders the canvas per token change.
@@ -148,6 +151,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // state watches it, because a request sent before the campaign is joined is
   // dropped unanswered.
   const { socket, joinedEpoch } = useWebSocket();
+  const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const isDM = userRole === 'DM';
   // Three stacked canvases. `canvasRef` is the TOP canvas — it
@@ -161,8 +165,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; CSS-transformed during pan
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
-  // Lazily-created AudioContext for spirit layer transition sound
+  // Lazily-created AudioContext for spirit layer transition sound, closed
+  // with the map so a map opened again does not leave the old one running.
   const audioCtxRef = useRef<AudioContext | null>(null);
+  useEffect(() => () => {
+    void audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+  }, []);
 
   // State
   const [showGrid, setShowGrid] = useState(true);
@@ -180,7 +189,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [spiritLayerOpacity, setSpiritLayerOpacity] = useState(1);
 
   // Token state
-  const [tokenImages, setTokenImages] = useState<Map<string, HTMLImageElement>>(new Map());
+  // Token pictures by token id, as they load (map/useTokenImages.ts).
+  const tokenImages = useTokenImages(tokens);
   const [draggedToken, setDraggedToken] = useState<Token | null>(null);
   const [dragOffset, setDragOffset] = useState<{ x: number; y: number } | null>(null);
   const [hoverToken, setHoverToken] = useState<Token | null>(null);
@@ -223,33 +233,19 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // DM-only: toggle whether spirit-layer tokens are drawn on canvas
   const [dmShowSpiritTokens, setDmShowSpiritTokens] = useState(true);
 
-  // Ruler tool
-  const [showRuler, setShowRuler] = useState(false);
-  const [rulerOrigin, setRulerOrigin] = useState<{ x: number; y: number } | null>(null);
-  const [rulerColor, setRulerColor] = useState<'amber' | 'purple' | 'black'>('amber');
-
-  // AoE tool
-  const [showAoE, setShowAoE] = useState(false);
-  const [aoeConfig, setAoEConfig] = useState<AoEConfig>({ shape: 'sphere', sizeFt: 20 });
-  // Held in map pixels, not grid coords, so an Alt-placed anchor can sit
-  // part-way into a square. Once set it is a fixed pivot — aiming a cone or
-  // line must never move it.
-  const [aoeAnchor, setAoEAnchor] = useState<AoEAnchor | null>(null);
-  // Whether Alt is down, read off each mousemove so the un-pinned preview shows
-  // what a click would actually place. Taking it from the event rather than
-  // keydown/keyup means it self-corrects if the window loses focus mid-press.
-  const aoeAltHeldRef = useRef(false);
-  // What a pinned template aims at. Unlike hoverMapPxRef this is *not* cleared
-  // when the cursor leaves the canvas: the AoE panel sits over the map, so
-  // aiming towards it would otherwise swing the template back to pointing right
-  // the moment the cursor crossed onto the panel.
-  const aoeAimRef = useRef<{ x: number; y: number } | null>(null);
-
   // Latest-ref to the per-layer draw dispatcher — assigned right after the
   // draw callbacks are defined below. The render loop and the animation hooks
   // call the newest closure through it.
   const drawLayerRef = useRef<(layer: MapLayer) => void>(() => {});
   const { markDirty } = useRenderLoop(drawLayerRef);
+
+  // The ruler and the AoE template (map/tools/useMeasureTools.ts).
+  const {
+    tool: measuring, track: trackMeasure,
+    showRuler, showAoE, handleToggleRuler, handleToggleAoE, putRulerAway,
+    rulerOrigin, rulerColor, setRulerColor,
+    aoeConfig, setAoEConfig, aoeAnchor, setAoEAnchor, aoeAltHeldRef, aoeAimRef,
+  } = useMeasureTools({ isDM, markDirty });
 
   // Walls & Fog of War state — wall segments use undo/redo history hook
   const { walls: wallSegments, push: pushWallHistory, replace: replaceWallHistory, reset: resetWallHistory, carry: carryWallHistory, undo: undoWalls, redo: redoWalls, canUndo: canUndoWalls, canRedo: canRedoWalls } = useWallHistory([]);
@@ -261,9 +257,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // null = fog data not received yet (show everything); Set = fog active (show only revealed cells).
   const [revealedCells, setRevealedCells] = useState<Set<number> | null>(null);
   // Fog reveal animation: per-cell opacity (1 = just revealed, 0 = fully faded in)
-  const revealOpacityRef = useFogRevealAnimation(() => { markDirty('terrain'); markDirty('overlay'); }, fogState, revealedCells);
+  // Fog reveal fade. The DM's fog is drawn on the terrain layer and anyone
+  // else's, a preview included, on the overlay, so each frame repaints that.
+  const revealOpacityRef = useFogRevealAnimation(
+    () => markDirty(isDM && !previewing ? 'terrain' : 'overlay'),
+    fogState,
+    revealedCells
+  );
 
-  // Tokens this viewer controls, by the server's definition (utils/tokenControl.ts).
+  // Tokens this viewer controls, by the server's definition (utils/tokenOwnership.ts).
   const isOwnToken = useCallback((t: Token): boolean => controlsToken(t, user?.id, userRole), [user?.id, userRole]);
 
   // Whether manual fog applies on this map. Absent on an older payload means
@@ -278,35 +280,25 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   );
   const effectiveFogState = fogEnabled ? fogState : null;
 
-  // Cache invalidation flag for the wall layer.
-  const wallCacheValidRef = useRef(false);
+  // The DM's editing tool: one wall, fog or light mode at a time. Each
+  // setter below sets its own kind, or clears the tool only when it is of its
+  // kind, so putting one panel's tool away leaves another panel's alone.
+  const [dmTool, setDmTool] = useState<DmTool | null>(null);
+  const wallMode: WallToolMode = dmTool?.kind === 'wall' ? dmTool.mode : null;
+  const fogMode: FogToolMode = dmTool?.kind === 'fog' ? dmTool.mode : null;
+  const lightMode: LightToolMode = dmTool?.kind === 'light' ? dmTool.mode : null;
+  const setWallMode = useCallback((mode: WallToolMode) => {
+    setDmTool((prev) => (mode ? { kind: 'wall', mode } : prev?.kind === 'wall' ? null : prev));
+  }, []);
+  const setFogMode = useCallback((mode: FogToolMode) => {
+    setDmTool((prev) => (mode ? { kind: 'fog', mode } : prev?.kind === 'fog' ? null : prev));
+  }, []);
+  const setLightMode = useCallback((mode: LightToolMode) => {
+    setDmTool((prev) => (mode ? { kind: 'light', mode } : prev?.kind === 'light' ? null : prev));
+  }, []);
 
-  // Wall tool state (DM only)
-  const [wallMode, setWallMode] = useState<WallToolMode>(null);
-  const [wallType, setWallType] = useState<import('@/types/walls').WallType>('wall');
-  const [snapToGrid, setSnapToGrid] = useState(true);
-  const [snapToEndpoint, setSnapToEndpoint] = useState(false);
-  // Radius (in map-space pixels) within which a point snaps to an existing endpoint
-  const ENDPOINT_SNAP_RADIUS = 16;
-  const [wallInProgress, setWallInProgress] = useState<{ x: number; y: number }[]>([]); // current polyline points
-  const [hoveredWallId, setHoveredWallId] = useState<string | null>(null);
-  const [hoveredDoorId, setHoveredDoorId] = useState<string | null>(null); // for pointer cursor in pan mode
-  const [wallColor, setWallColor] = useState('#f97316'); // default orange
-  const [splitHoverPoint, setSplitHoverPoint] = useState<{ x: number; y: number; wallId: string } | null>(null);
-  const wallEraseBrushActiveRef = useRef(false);
-  const wallErasedIdsRef = useRef<Set<string>>(new Set());
-  // Polygon drawing mode state
-  const [polygonPoints, setPolygonPoints] = useState<{ x: number; y: number }[]>([]);
-  /** Screen-space radius within which clicking the first polygon point closes the shape. */
-  const POLYGON_CLOSE_RADIUS = 14;
-  // Right-mouse button panning while a wall tool is active (left-click is reserved for tools)
+  // Right-mouse button panning while a DM tool is active (left-click is reserved for tools)
   const rightPanActiveRef = useRef(false);
-  const WALL_ERASE_RADIUS = 24; // map-space pixels
-  // Brush wall-painting mode state
-  const [brushSize, setBrushSize] = useState(20);
-  const wallBrushActiveRef = useRef(false);
-  const wallBrushPointsRef = useRef<Array<{ x: number; y: number }>>([]);
-  const [nearEndpoint, setNearEndpoint] = useState(false);
   const { toast, showToast, hideToast } = useToast();
   /** DM "Preview player view" toggle — when true, DM sees lighting as players do. */
   const [dmPreviewPlayerView, setDmPreviewPlayerView] = useState(false);
@@ -364,21 +356,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [lightSources, setLightSources] = useState<LightSource[]>([]);
   const lightSourcesRef = useRef<LightSource[]>([]);
   useEffect(() => { lightSourcesRef.current = lightSources; }, [lightSources]);
-  const [lightMode, setLightMode] = useState<LightToolMode>(null);
-  const [selectedLightId, setSelectedLightId] = useState<string | null>(null);
-  const [lightPlacementDefaults, setLightPlacementDefaults] = useState<LightPlacementDefaults>({
-    brightRadius: 4, dimRadius: 8, color: '#ffcc66',
-  });
-  // Drag-to-move state for lights in select mode
-  const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
-
-  // Fog selection tool state (DM only)
-  const [fogMode, setFogMode] = useState<FogToolMode>(null);
-  // Fog selection drag: anchor is fixed on mousedown, current follows the
-  // cursor. Both in map pixels — the fog raster is top-left origin like map
-  // pixels, so the box never touches the bottom-left grid convention.
-  const fogDragAnchorRef = useRef<{ x: number; y: number } | null>(null);
-  const [fogDragCurrent, setFogDragCurrent] = useState<{ x: number; y: number } | null>(null);
 
   // Always-current wall segments ref — socket handlers registered with [socket, currentMap?.id]
   // deps would otherwise close over stale wallSegments from registration time.
@@ -442,6 +419,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     maxZoom: 3,
   });
 
+  // The light tools (map/tools/useLightTool.ts).
+  const {
+    tool: lightTool,
+    selectedLightId, setSelectedLightId,
+    lightPlacementDefaults, setLightPlacementDefaults,
+    draggingLightRef,
+  } = useLightTool({
+    isDM, previewing, mapId: currentMap?.id, lightMode, setLightMode, lightSources, setLightSources, lightSourcesRef,
+    socket, ownEdits, mapControls, rightPanActiveRef, markDirty,
+  });
+
+  // The fog boxes (map/tools/useFogTool.ts).
+  const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
+    isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
+  });
+
   // ============================================
   // Helper Functions
   // ============================================
@@ -458,202 +451,34 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // showing the last cursor position until the token next moves.
   const cancelHold = () => {
     if (draggedToken && currentMap && canEmit()) {
-      socket!.emitTokenMove(releaseHeldToken(draggedToken, currentMap.id));
+      socket!.emitTokenMove(releaseHeldToken(draggedToken, heldOnMapRef.current ?? currentMap.id));
     }
     setDraggedToken(null);
     setDragOffset(null);
   };
+  // The map a held token was picked up on, which is where it goes back to if
+  // the map changes while it is held.
+  const heldOnMapRef = useRef<string | null>(null);
+  const releaseHoldOnMapSwitch = useEffectEvent(() => {
+    if (draggedToken) cancelHold();
+  });
+  useEffect(() => {
+    releaseHoldOnMapSwitch();
+  }, [currentMap?.id]);
 
-  /**
-   * Send the whole wall list to everyone and add it to the undo stack.
-   *
-   * Bulk edits all go out this way: one message that replaces the array, which
-   * is what the server validates and what "clear all" has always used.
-   */
-  const commitWalls = useCallback((next: WallSegment[]) => {
-    pushWallHistory(next);
-    wallCacheValidRef.current = false;
-    const socketInstance = socket?.getSocket();
-    if (socketInstance && currentMap) {
-      socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
-    }
-  }, [pushWallHistory, socket, currentMap]);
-
+  // The wall tools, with the wall selection (map/tools/useWallTool.ts).
   const {
-    selectedWallIds, setSelectedWallIds,
-    wallMarquee, setWallMarquee, wallMarqueeRef,
-    wallMoveRef,
-    wallDragEndpointRef,
-    selectedEndpoint, setSelectedEndpoint,
-    moveSelectedWalls, deleteSelectedWalls, selectedSegmentType,
-  } = useWallSelection({ wallSegments, commitWalls });
-  // TODO(maintainability): the wall pointer and keyboard handlers further down
-  // belong in useWallSelection too. They still read a dozen MapCanvas closures
-  // (viewport, tool mode, the socket), so they stay here until those are lifted.
-
-  /**
-   * Returns the closest point (and parameter t in [0,1]) on a segment to (px, py).
-   */
-  const closestPointOnSegment = (px: number, py: number, seg: WallSegment): { x: number; y: number; t: number } => {
-    const dx = seg.x2 - seg.x1;
-    const dy = seg.y2 - seg.y1;
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return { x: seg.x1, y: seg.y1, t: 0 };
-    const t = Math.max(0, Math.min(1, ((px - seg.x1) * dx + (py - seg.y1) * dy) / lenSq));
-    return { x: seg.x1 + t * dx, y: seg.y1 + t * dy, t };
-  };
-
-  /**
-   * Check if a point lies on any wall segment (within threshold).
-   * Returns the segment and the projected point, or null.
-   */
-  const findWallAtPoint = (px: number, py: number, threshold: number): { seg: WallSegment; point: { x: number; y: number; t: number } } | null => {
-    for (const seg of wallSegments) {
-      if (seg.type !== 'wall') continue; // only snap to plain walls
-      const d = distToSegment(px, py, seg);
-      if (d <= threshold) {
-        const cp = closestPointOnSegment(px, py, seg);
-        return { seg, point: cp };
-      }
-    }
-    return null;
-  };
-
-  /**
-   * Replace a section of an existing wall with a door/window segment.
-   * Given two points on the same wall, splits the wall into up to 3 pieces:
-   *   wallA (original type) | newSeg (door/window) | wallB (original type)
-   * If a point is near an endpoint of the wall, that stub is omitted.
-   * Returns the new segments to add and the wall IDs to remove, or null if not applicable.
-   */
-  const buildWallReplace = (
-    pt1: { x: number; y: number; t: number },
-    pt2: { x: number; y: number; t: number },
-    wall: WallSegment,
-    newType: WallType,
-  ): { remove: string[]; add: WallSegment[] } | null => {
-    // Ensure t1 < t2 along the wall
-    const [tA, tB] = pt1.t < pt2.t ? [pt1, pt2] : [pt2, pt1];
-
-    const MIN_STUB = 5; // minimum stub length in px to keep (otherwise merge into door endpoint)
-    const wallLen = Math.hypot(wall.x2 - wall.x1, wall.y2 - wall.y1);
-
-    const result: WallSegment[] = [];
-
-    // Stub A: from wall start to door start
-    const stubALen = tA.t * wallLen;
-    if (stubALen >= MIN_STUB) {
-      result.push({
-        id: randomId(),
-        x1: wall.x1, y1: wall.y1,
-        x2: Math.round(tA.x), y2: Math.round(tA.y),
-        type: wall.type,
-      });
-    }
-
-    // The door/window segment itself
-    result.push({
-      id: randomId(),
-      x1: Math.round(tA.x), y1: Math.round(tA.y),
-      x2: Math.round(tB.x), y2: Math.round(tB.y),
-      type: newType,
-    });
-
-    // Stub B: from door end to wall end
-    const stubBLen = (1 - tB.t) * wallLen;
-    if (stubBLen >= MIN_STUB) {
-      result.push({
-        id: randomId(),
-        x1: Math.round(tB.x), y1: Math.round(tB.y),
-        x2: wall.x2, y2: wall.y2,
-        type: wall.type,
-      });
-    }
-
-    return { remove: [wall.id], add: result };
-  };
-
-  /**
-   * Snap a map-pixel coordinate to the nearest grid intersection if snapToGrid is enabled.
-   */
-  const snapPoint = (mapPx: { x: number; y: number }): { x: number; y: number } => {
-    if (currentMap && snapToGrid) {
-      const gs = currentMap.gridSize;
-      return {
-        x: Math.round(mapPx.x / gs) * gs,
-        y: Math.round(mapPx.y / gs) * gs,
-      };
-    }
-    if (snapToEndpoint) {
-      // Find the nearest existing segment endpoint within the snap radius.
-      const r = ENDPOINT_SNAP_RADIUS / mapControls.zoom;
-      let bestDist = r;
-      let best: { x: number; y: number } | null = null;
-      for (const seg of wallSegments) {
-        for (const pt of [{ x: seg.x1, y: seg.y1 }, { x: seg.x2, y: seg.y2 }]) {
-          const d = Math.hypot(pt.x - mapPx.x, pt.y - mapPx.y);
-          if (d < bestDist) { bestDist = d; best = pt; }
-        }
-      }
-      if (best) return best;
-    }
-    return mapPx;
-  };
-
-  /**
-   * Apply a set of fog cells: optimistic local update plus one server op.
-   *
-   * A rectangle drag produces exactly one call here, which is why the old
-   * pending-cells buffer and its 80ms flush interval are gone — those existed
-   * only to batch the continuous stream a brush stroke produced.
-   */
-  const applyFogCells = useCallback((cells: number[]) => {
-    if (!currentMap || !fogMode || cells.length === 0) return;
-
-    const reveal = fogMode === 'fog-reveal';
-    const operation = { op: reveal ? 'reveal' : 'hide', cells } as const;
-
-    setFogState((prev) => {
-      if (!prev) return prev;
-      const revealed = [...prev.revealed];
-      for (const idx of cells) {
-        if (idx >= 0 && idx < revealed.length) revealed[idx] = reveal;
-      }
-      return { ...prev, revealed };
-    });
-
-    socket?.getSocket()?.emit('fog:operation', { mapId: currentMap.id, operation });
-  }, [currentMap, fogMode, socket]);
-
-  /** Finish a fog drag: compute the snapped rectangle once and apply it. */
-  const commitFogDrag = useCallback((endX: number, endY: number) => {
-    const anchor = fogDragAnchorRef.current;
-    fogDragAnchorRef.current = null;
-    setFogDragCurrent(null);
-    if (!anchor || !fogState) return;
-
-    const rect = fogRectFromDrag(fogState, anchor.x, anchor.y, endX, endY);
-    if (!rect) return; // Entirely off the map
-    applyFogCells(fogCellsInRect(fogState, rect));
-  }, [fogState, applyFogCells]);
-
-  /** Abandon a drag without changing anything (Escape, right-click, map change). */
-  const cancelFogDrag = useCallback(() => {
-    fogDragAnchorRef.current = null;
-    setFogDragCurrent(null);
-  }, []);
-
-  // Helper: change a door's type and broadcast.
-  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
-    if (!currentMap) return;
-    const updated = { ...door, type: newType };
-    // Opening or closing a door is not an undoable edit: carried into the
-    // whole history, so undo never closes a door again.
-    carryWallHistory((walls) => walls.map(s => s.id === door.id ? updated : s));
-    wallCacheValidRef.current = false;
-    socket?.getSocket()?.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
-    setDoorContextMenu(null);
-  }, [currentMap, socket, carryWallHistory, ownEdits]);
+    tool: wallTool, selectKey: wallSelectKey, undoKey: wallUndoKey, redoKey: wallRedoKey, panel: wallPanel,
+    wallType, wallColor, snapToGrid, brushSize, snapPoint, findWallAtPoint,
+    wallInProgress, polygonPoints, splitHoverPoint, hoveredWallId, nearEndpoint,
+    wallErasedIdsRef, wallBrushPointsRef, WALL_ERASE_RADIUS, POLYGON_CLOSE_RADIUS,
+    selectedWallIds, setSelectedWallIds, wallMarquee, wallDragEndpointRef, selectedEndpoint,
+    carryIntoDrags,
+  } = useWallTool({
+    isDM, currentMap, wallMode, setWallMode, wallSegments,
+    pushWallHistory, replaceWallHistory, undoWalls, redoWalls, canUndoWalls, canRedoWalls,
+    socket, ownEdits, mapControls, rightPanActiveRef, mapImage, markDirty,
+  });
 
   // Player's own token on the current map — used as ruler origin for non-DM users
   const myToken = useMemo(() => {
@@ -664,59 +489,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Effective ruler origin: players use their token position, DM uses clicked point
   const effectiveRulerOrigin = isDM ? rulerOrigin : (myToken ? myToken.position : null);
 
-  // Ruler and AoE are mutually exclusive — turning either on closes the other
-  // and drops its placement, so two templates can never share the map.
-  const handleToggleRuler = useCallback(() => {
-    setShowRuler((prev) => {
-      if (prev) {
-        setRulerOrigin(null);
-      } else {
-        setShowAoE(false);
-        setAoEAnchor(null);
-      }
-      return !prev;
-    });
-  }, []);
-
-  const handleToggleAoE = useCallback(() => {
-    setShowAoE((prev) => {
-      if (prev) {
-        setAoEAnchor(null);
-      } else {
-        setShowRuler(false);
-        setRulerOrigin(null);
-      }
-      return !prev;
-    });
-  }, []);
-
-  // Alt switches the AoE tool to free placement, so the preview has to follow
-  // the key, not just the mouse. Reading it off mousemove alone left a
-  // stationary cursor showing the opposite of what a click would place.
-  // Mousemove still refreshes it as a backstop, which is what recovers the flag
-  // if a keyup is missed — Alt focuses the menu bar in some browsers, and the
-  // window can lose focus mid-press.
-  useEffect(() => {
-    if (!showAoE) return;
-    const sync = (e: KeyboardEvent) => {
-      if (aoeAltHeldRef.current === e.altKey) return;
-      aoeAltHeldRef.current = e.altKey;
-      markDirty('overlay');
-    };
-    const clear = () => {
-      if (!aoeAltHeldRef.current) return;
-      aoeAltHeldRef.current = false;
-      markDirty('overlay');
-    };
-    window.addEventListener('keydown', sync);
-    window.addEventListener('keyup', sync);
-    window.addEventListener('blur', clear);
-    return () => {
-      window.removeEventListener('keydown', sync);
-      window.removeEventListener('keyup', sync);
-      window.removeEventListener('blur', clear);
-    };
-  }, [showAoE, markDirty]);
 
   /**
    * Play a brief ethereal audio cue when the spirit layer is toggled.
@@ -902,65 +674,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     lastFittedMapIdRef.current = currentMap.id;
     mapControls.fitToScreen(canvasSize.width, canvasSize.height);
-  }, [imageLoaded, currentMap?.id]);  
-  // ^ Intentionally not including canvasSize/mapControls — we only want to fire once
-  //   per map load, not on every resize. Users can use the Reset View button to re-fit.
-
-  // ============================================
-  // Token Image Loading
-  // ============================================
-
-  /**
-   * Load token images when tokens change
-   */
-  useEffect(() => {
-    console.log('[MapCanvas] Tokens changed:', tokens.length, 'tokens');
-
-    const loadTokenImages = async () => {
-      const newTokenImages = new Map<string, HTMLImageElement>();
-
-      for (const token of tokens) {
-        console.log('[MapCanvas] Processing token:', token.name, 'imageUrl:', token.imageUrl);
-        if (!token.imageUrl) continue;
-
-        // Reuse the cached element only when it was loaded from the SAME url.
-        // Keying on token id alone meant a token whose image was changed kept
-        // rendering the old picture until the page was reloaded — for every
-        // client, since they all cache the same way.
-        // getAttribute('src') returns the literal value set below, not the
-        // resolved absolute URL the .src property would give.
-        const cached = tokenImages.get(token.id);
-        if (cached && cached.getAttribute('src') === token.imageUrl) {
-          newTokenImages.set(token.id, cached);
-          continue;
-        }
-
-        // Load new image
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-
-        await new Promise<void>((resolve) => {
-          img.onload = () => {
-            console.log('[MapCanvas] ✅ Token image loaded:', token.name);
-            newTokenImages.set(token.id, img);
-            resolve();
-          };
-          img.onerror = (error) => {
-            console.error(`[MapCanvas] ❌ Failed to load token image for ${token.name}:`, error);
-            console.error(`[MapCanvas] Image URL was:`, img.src);
-            resolve(); // Don't block on errors
-          };
-          // Use imageUrl directly - backend now returns full paths
-          console.log('[MapCanvas] Loading token image from:', token.imageUrl);
-          img.src = token.imageUrl;
-        });
-      }
-
-      setTokenImages(newTokenImages);
-    };
-
-    loadTokenImages();
-  }, [tokens]);
+    // Users can use the Reset View button to fit again.
+    // TODO(play): a picture that loads while the canvas still measures 0x0
+    // never fits, since the size is not a dependency; lastFittedMapIdRef
+    // already limits the fit to once per map, so the size can be added.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mapControls is a new object each render; lastFittedMapIdRef keeps the fit to once per map
+  }, [imageLoaded, currentMap?.id]);
 
   // ============================================
   // WebSocket Event Listeners
@@ -1017,7 +736,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socket.off('token.moved', handleTokenMoved);
     };
-  }, [socket]); // handler reads/writes via the store, no reactive deps needed
+  }, [socket, setAnimatingTokens]); // handler reads/writes via the store
 
   // ============================================
   // Map Change
@@ -1033,7 +752,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     prevPlayerSpiritVisibleRef.current = playerSpiritVisible;
     const t = setTimeout(() => setIsFading(false), 300);
     return () => clearTimeout(t);
-  }, [currentMap?.id]);  
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- runs once per map switch; the spirit flag is only read then
+  }, [currentMap?.id]);
 
   // Listen for map.changed events broadcast by the DM.
   //
@@ -1078,7 +798,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     return () => {
       socket.off('map.changed', handleMapChanged);
     };
-  }, [socket, setCurrentMap]);
+  }, [socket, setCurrentMap, setPlayerSpiritVisible, playEtherealTransition]);
 
   // ============================================
   // Spirit Layer WebSocket Listeners
@@ -1155,12 +875,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     resetWallHistory((currentMap.wallSegments as WallSegment[] | undefined) ?? []);
     setLightSources((currentMap.lights as LightSource[] | undefined) ?? []);
 
-    // Invalidate wall cache and offscreen lighting canvas when map changes
-    wallCacheValidRef.current = false;
+    // Drop the offscreen lighting canvases when the map changes
     lightingOffscreenRef.current = null;
     lightCoverageOffscreenRef.current = null;
     lightOnlyOffscreenRef.current = null;
-  }, [currentMap?.id]);  
+    // A change to the same map's walls or lights arrives through the socket;
+    // loading them here again would wipe the DM's undo history.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loads once per map switch
+  }, [currentMap?.id]);
 
   // The stored walls and lights are asked for once the campaign is joined,
   // and again after each rejoin, so a change missed while disconnected
@@ -1190,11 +912,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const lastExploredReportRef = useRef(0);
   // The remembered cells as a raster, one pixel per grid square, rebuilt only
   // when the set changes; the lighting layer scales it to the map.
+  const exploredWidth = currentMap?.width;
+  const exploredHeight = currentMap?.height;
   const exploredRaster = useMemo<HTMLCanvasElement | null>(() => {
-    if (!currentMap || !exploredCells || exploredCells.size === 0) return null;
+    if (exploredWidth === undefined || exploredHeight === undefined || !exploredCells || exploredCells.size === 0) return null;
     const raster = document.createElement('canvas');
-    raster.width = currentMap.width;
-    raster.height = currentMap.height;
+    raster.width = exploredWidth;
+    raster.height = exploredHeight;
     const rctx = raster.getContext('2d');
     if (!rctx) return null;
     const img = rctx.createImageData(raster.width, raster.height);
@@ -1203,11 +927,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
     rctx.putImageData(img, 0, 0);
     return raster;
-  }, [exploredCells, currentMap?.width, currentMap?.height]);
+  }, [exploredCells, exploredWidth, exploredHeight]);
 
   // ============================================
   // Wall & Fog WebSocket Listeners
   // ============================================
+  // These listeners, and the pings' below, read only which map is open.
+  const currentMapId = currentMap?.id;
   useEffect(() => {
     if (!socket) return;
     const socketInstance = socket.getSocket();
@@ -1218,40 +944,41 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // too, so a player's door toggle or a change made through the API reaches
     // it. They are carried into the whole undo history, so the DM's undo does
     // not put back what someone else changed. The role plays no part, so a
-    // DM handover without a reload changes nothing here.
+    // DM handover without a reload changes nothing here. A wall drag in
+    // progress takes them too, so its drop does not put them back.
+    const carryIncoming = (change: (walls: WallSegment[]) => WallSegment[]) => {
+      carryWallHistory(change);
+      carryIntoDrags(change);
+    };
     const handleWallAdded = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
-      carryWallHistory((walls) => walls.some((s) => s.id === data.segment.id)
+      if (!currentMapId || data.mapId !== currentMapId) return;
+      carryIncoming((walls) => walls.some((s) => s.id === data.segment.id)
         ? walls.map((s) => s.id === data.segment.id ? data.segment : s)
         : [...walls, data.segment]);
-      wallCacheValidRef.current = false;
     };
 
     const handleWallRemoved = (data: { mapId: string; segmentId: string; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
-      carryWallHistory((walls) => walls.filter((s) => s.id !== data.segmentId));
-      wallCacheValidRef.current = false;
+      if (!currentMapId || data.mapId !== currentMapId) return;
+      carryIncoming((walls) => walls.filter((s) => s.id !== data.segmentId));
     };
 
     const handleWallUpdated = (data: { mapId: string; segment: WallSegment; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
-      carryWallHistory((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
-      wallCacheValidRef.current = false;
+      if (!currentMapId || data.mapId !== currentMapId) return;
+      carryIncoming((walls) => walls.map((s) => s.id === data.segment.id ? data.segment : s));
     };
 
     const handleWallsReplaced = (data: { mapId: string; segments: WallSegment[]; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       // The full stored list, from another page, the API or walls:request.
-      carryWallHistory(() => data.segments);
-      wallCacheValidRef.current = false;
+      carryIncoming(() => data.segments);
     };
 
     const handleFogUpdated = (data: { mapId: string; fogState: FogState }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       // Track newly-revealed cells for fade animation
       setFogState((prev) => {
         if (prev) {
@@ -1266,7 +993,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
 
     const handleFogCells = (data: { mapId: string; revealedCells: number[] }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setRevealedCells((prev) => {
         const newSet = new Set<number>(data.revealedCells);
         // Animate newly revealed cells
@@ -1277,22 +1004,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       });
     };
 
-    const handleDmEditing = (_data: { mapId: string }) => {
-      // Could show a transient indicator — handled by toolbar; canvas ignores for now
-    };
-
     // Dynamic lighting: token entered this player's view (or moved while
     // visible). Store writes are synchronous, so if token:appeared fires for
     // multiple tokens in the same macro-task (server re-sync after player
     // move), each call builds on the previous result.
     const handleTokenAppeared = (data: { token: Token; mapId: string }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       useGameStore.getState().revealToken(data.token);
     };
 
     // Dynamic lighting: token left this player's view
     const handleTokenDisappeared = (data: { tokenId: string; mapId: string }) => {
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       useGameStore.getState().removeToken(data.tokenId);
     };
 
@@ -1321,24 +1044,24 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // as for walls above.
     const handleLightAdded = (data: { mapId: string; light: LightSource; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources((prev) => prev.some((l) => l.id === data.light.id)
         ? prev.map((l) => l.id === data.light.id ? data.light : l)
         : [...prev, data.light]);
     };
     const handleLightRemoved = (data: { mapId: string; lightId: string; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources((prev) => prev.filter((l) => l.id !== data.lightId));
     };
     const handleLightUpdated = (data: { mapId: string; light: LightSource; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources((prev) => prev.map((l) => l.id === data.light.id ? data.light : l));
     };
     const handleLightsReplaced = (data: { mapId: string; lights: LightSource[]; opId?: string }) => {
       if (ownEdits.isOwn(data)) return;
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
       setLightSources(data.lights);
     };
 
@@ -1348,7 +1071,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     socketInstance.on('walls:replaced', handleWallsReplaced);
     socketInstance.on('fog:updated', handleFogUpdated);
     socketInstance.on('fog:cells', handleFogCells);
-    socketInstance.on('dm:editing', handleDmEditing);
     socketInstance.on('light:added', handleLightAdded);
     socketInstance.on('light:removed', handleLightRemoved);
     socketInstance.on('light:updated', handleLightUpdated);
@@ -1364,13 +1086,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socketInstance.off('walls:replaced', handleWallsReplaced);
       socketInstance.off('fog:updated', handleFogUpdated);
       socketInstance.off('fog:cells', handleFogCells);
-      socketInstance.off('dm:editing', handleDmEditing);
       socketInstance.off('light:added', handleLightAdded);
       socketInstance.off('light:removed', handleLightRemoved);
       socketInstance.off('light:updated', handleLightUpdated);
       socketInstance.off('lights:replaced', handleLightsReplaced);
     };
-  }, [socket, currentMap?.id, joinedEpoch]);
+  }, [socket, currentMapId, joinedEpoch, ownEdits, setCurrentMap, carryWallHistory, carryIntoDrags, revealOpacityRef]);
 
   // ============================================
   // Map pings — receive, name, and expire
@@ -1394,7 +1115,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     const handlePinged = (data: MapPingedBroadcast) => {
       // Ignore pings for a map this client isn't looking at.
-      if (!currentMap || data.mapId !== currentMap.id) return;
+      if (!currentMapId || data.mapId !== currentMapId) return;
 
       const id = `${data.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const ping: ActivePing = {
@@ -1420,7 +1141,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       socket.off('map.pinged', handlePinged);
       timers.forEach(clearTimeout);
     };
-  }, [socket, currentMap?.id, resolvePingerName]);
+  }, [socket, currentMapId, resolvePingerName]);
 
   // Switching maps drops any pings still in flight on the old one.
   useEffect(() => {
@@ -1430,186 +1151,72 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
   // Keyboard: Escape, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
   // ============================================
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // A key typed into a text box, a note or a dialog is left to it: none
-      // of the shortcuts below apply.
-      if (isTypingInto(e.target) || isTypingInto(document.activeElement)) return;
+  // The listener is added once and reads the tools as they are at the key
+  // press, so a tool chosen since is the one Escape asks.
+  const onMapKeyDown = useEffectEvent((e: KeyboardEvent) => {
+    // A key typed into a text box, a note or a dialog is left to it: none
+    // of the shortcuts below apply.
+    if (isTypingInto(e.target) || isTypingInto(document.activeElement)) return;
 
-      // ── Tab: ping at the cursor ──────────────────────────────────────
-      // Tab is the keyboard-navigation key and this listener is on `window`,
-      // so it is only safe to claim under strict guards: the pointer must be
-      // over the map, and focus must not be on anything the user could be
-      // navigating from or typing into. Click around the map and Tab pings;
-      // tab to any control and Tab keeps navigating as normal.
-      if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
-        const at = hoverMapPxRef.current;
-        if (!at || !currentMap) return;
+    // ── Tab: ping at the cursor ──────────────────────────────────────
+    // Tab is the keyboard-navigation key and this listener is on `window`,
+    // so it is only safe to claim under strict guards: the pointer must be
+    // over the map, and focus must not be on anything the user could be
+    // navigating from or typing into. Click around the map and Tab pings;
+    // tab to any control and Tab keeps navigating as normal.
+    if (e.key === 'Tab' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      const at = hoverMapPxRef.current;
+      if (!at || !currentMap) return;
 
-        const el = document.activeElement as HTMLElement | null;
-        const onFormControl =
-          !!el &&
-          (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
-            el.isContentEditable);
-        if (onFormControl) return;
+      const el = document.activeElement as HTMLElement | null;
+      const onFormControl =
+        !!el &&
+        (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(el.tagName) ||
+          el.isContentEditable);
+      if (onFormControl) return;
 
-        e.preventDefault();
-        socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        // A fog box being dragged is abandoned before any other Escape action
-        if (fogDragAnchorRef.current) {
-          cancelFogDrag();
-          return;
-        }
-        // Polygon mode: clear in-progress polygon first
-        if (polygonPoints.length > 0) {
-          setPolygonPoints([]);
-          return;
-        }
-        if (wallInProgress.length > 0) {
-          setWallInProgress([]);
-        } else if (wallMode === 'wall-select' && selectedWallIds.size > 0) {
-          // Drop the selection before the tool, the same two-stage escape the
-          // half-drawn wall above gets: letting go of what is held should not
-          // also put the tool away.
-          setSelectedWallIds(new Set());
-        } else if (wallMode) {
-          setWallMode(null);
-        } else if (lightMode) {
-          setLightMode(null);
-          setSelectedLightId(null);
-        } else if (showAoE) {
-          // Drop the placement first, then close the tool — the same two-stage
-          // escape as the wall tools above. The DM guide has always promised
-          // Esc dismisses this, but nothing here ever handled it.
-          //
-          // Last in the chain on purpose: the AoE overlay is not mutually
-          // exclusive with the wall and light tools, so it can sit armed while
-          // a wall is half-drawn. Esc has to cancel the more transient thing
-          // first, or it would quietly close this instead of the wall.
-          if (aoeAnchor) setAoEAnchor(null);
-          else setShowAoE(false);
-        }
-        return;
-      }
-
-      // Only handle undo/redo for DM with active map
-      if (!isDM || !currentMap) return;
-
-      const isCtrl = e.ctrlKey || e.metaKey;
-
-      // Wall selection keys, only while that tool is up so they do not steal
-      // Ctrl+A or Delete from the rest of the page.
-      if (wallMode === 'wall-select') {
-        if (isCtrl && e.key.toLowerCase() === 'a') {
-          e.preventDefault();
-          setSelectedWallIds(new Set(wallSegments.map((seg) => seg.id)));
-          return;
-        }
-        if ((e.key === 'Delete' || e.key === 'Backspace') && selectedWallIds.size > 0) {
-          e.preventDefault();
-          deleteSelectedWalls();
-          return;
-        }
-        const nudge: Record<string, [number, number]> = {
-          ArrowLeft: [-1, 0],
-          ArrowRight: [1, 0],
-          ArrowUp: [0, -1],
-          ArrowDown: [0, 1],
-        };
-        const direction = nudge[e.key];
-        if (direction && selectedWallIds.size > 0) {
-          e.preventDefault();
-          // A whole grid square with Shift, otherwise a pixel at a time for
-          // lining something up by eye.
-          const step = e.shiftKey ? gridSquaresToPx(1, currentMap.gridSize) : 1;
-          moveSelectedWalls(direction[0] * step, direction[1] * step);
-          return;
-        }
-      }
-
-      if (isCtrl && e.key === 'z' && !e.shiftKey) {
-        e.preventDefault();
-        // Polygon mode: Ctrl+Z removes last placed point (not a server undo)
-        if (polygonPoints.length > 0) {
-          setPolygonPoints((prev) => prev.slice(0, -1));
-          return;
-        }
-        if (wallInProgress.length > 0) {
-          // Cancel in-progress wall drawing first
-          setWallInProgress([]);
-          return;
-        }
-        const prev = undoWalls();
-        if (prev !== null) {
-          wallCacheValidRef.current = false;
-          const socketInstance = socket?.getSocket();
-          if (socketInstance) {
-            socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: prev }));
-          }
-        }
-      } else if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-        e.preventDefault();
-        const next = redoWalls();
-        if (next !== null) {
-          wallCacheValidRef.current = false;
-          const socketInstance = socket?.getSocket();
-          if (socketInstance) {
-            socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
-          }
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [wallMode, wallInProgress, polygonPoints, showAoE, aoeAnchor, isDM, currentMap, undoWalls, redoWalls, socket, wallSegments, selectedWallIds, deleteSelectedWalls, moveSelectedWalls]);
-
-  // ============================================
-  // Close Polygon — commits all polygon edges as one wall history entry
-  // ============================================
-  const closePolygon = useCallback(() => {
-    if (polygonPoints.length < 3 || !currentMap) {
-      setPolygonPoints([]);
+      e.preventDefault();
+      socket?.emitMapPing({ mapId: currentMap.id, x: at.x, y: at.y });
       return;
     }
-    const newSegs: WallSegment[] = [];
-    for (let i = 0; i < polygonPoints.length; i++) {
-      const a = polygonPoints[i];
-      const b = polygonPoints[(i + 1) % polygonPoints.length];
-      newSegs.push({
-        id: randomId(),
-        x1: a.x, y1: a.y,
-        x2: b.x, y2: b.y,
-        type: wallType,
-      });
-    }
-    const next = [...wallSegments, ...newSegs];
-    pushWallHistory(next);
-    wallCacheValidRef.current = false;
-    setPolygonPoints([]);
-    // Save to server
-    const socketInstance = socket?.getSocket();
-    if (socketInstance) {
-      socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
-    }
-  }, [polygonPoints, wallSegments, wallType, pushWallHistory, currentMap, socket]);
 
-  // ============================================
-  // Clear polygon when leaving polygon mode
-  // ============================================
-  useEffect(() => {
-    if (wallMode !== 'wall-polygon') {
-      setPolygonPoints([]);
+    if (e.key === 'Escape') {
+      // A held token is put back first: it is the most transient thing.
+      if (draggedToken) {
+        cancelHold();
+        return;
+      }
+      // Each press lets go of one thing, asking the tools in this order. The
+      // measuring tools come last on purpose: the AoE template is not
+      // mutually exclusive with the wall and light tools, so it can sit armed
+      // while a wall is half-drawn. Esc has to cancel the more transient
+      // thing first, or it would quietly close the template instead.
+      for (const tool of [fogTool, wallTool, lightTool, measuring]) {
+        if (tool.escape?.()) return;
+      }
+      return;
     }
-  }, [wallMode]);
 
-  // Leaving fog mode, or switching maps, drops any drag in progress.
+    // Only handle undo/redo for DM with active map
+    if (!isDM || !currentMap) return;
+
+    const isCtrl = e.ctrlKey || e.metaKey;
+
+    if (wallSelectKey(e)) return;
+
+    if (isCtrl && e.key === 'z' && !e.shiftKey) {
+      e.preventDefault();
+      wallUndoKey();
+    } else if (isCtrl && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+      e.preventDefault();
+      wallRedoKey();
+    }
+  });
   useEffect(() => {
-    cancelFogDrag();
-  }, [fogMode, currentMap?.id, cancelFogDrag]);
+    const handleKeyDown = (e: KeyboardEvent) => onMapKeyDown(e);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // ============================================
   // Canvas Rendering
@@ -1657,7 +1264,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const doorViewer = useCallback((): DoorViewer => {
     const lightingEnabled = currentMap?.lightingEnabled ?? false;
-    if (!currentMap || !lightingEnabled || isDM) return { role: userRole, lightingEnabled, canSee: () => true };
+    // Manual fog as this player has it: the squares their screen shows.
+    const fog = currentMap && !isDM && effectiveRevealedCells
+      ? {
+          grid: { fogCols: currentMap.width, fogRows: currentMap.height, cellPx: currentMap.gridSize },
+          isRevealed: (cell: number) => effectiveRevealedCells.has(cell),
+        }
+      : null;
+    if (!currentMap || !lightingEnabled || isDM) return { role: userRole, lightingEnabled, canSee: () => true, fog };
     const viewport: Viewport = {
       zoom: mapControls.zoom,
       panOffset: mapControls.panOffset,
@@ -1665,8 +1279,22 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       mapWidth: currentMap.width,
       mapHeight: currentMap.height,
     };
-    return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee };
-  }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn]);
+    return { role: userRole, lightingEnabled, canSee: ruleFor(tokens.filter(viewerOwn), viewport).canSee, fog };
+  }, [currentMap, isDM, userRole, mapControls.zoom, mapControls.panOffset, ruleFor, tokens, viewerOwn, effectiveRevealedCells]);
+
+  // Doors with no wall, fog or light tool up (map/tools/useDoorTool.ts).
+  const { tool: doorTool, doorAt, setDoorType, hoveredDoorId, setHoveredDoorId } = useDoorTool({
+    mapId: currentMap?.id, wallSegments, doorViewer, zoom: mapControls.zoom,
+    wallMode, fogMode, lightMode, holdingToken: draggedToken !== null,
+    tokenTakesClick: ({ gridCoords }) => draggedToken !== null || getMovableTokenAtPosition(gridCoords.x, gridCoords.y) !== null,
+    carryWallHistory, socket, ownEdits, showToast, markDirty,
+  });
+
+  // A choice from the door menu: the door changed, the menu closed.
+  const changeDoorType = useCallback((door: WallSegment, newType: WallType) => {
+    setDoorType(door, newType);
+    setDoorContextMenu(null);
+  }, [setDoorType]);
 
   /**
    * Draw the TERRAIN layer (bottom canvas): map image, grid, manual fog,
@@ -1751,7 +1379,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1815,7 +1443,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }, viewport);
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, userRole, user?.id, campaign?.characters, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, campaign?.spiritLayerStyle, tokens, tokenImages, animatingTokens, heldAt, draggedToken, dragOffset, hoverCoords, hoverToken, viewerRevealed, viewerOwn, previewing, previewedPlane, ruleFor, dmShowSpiritTokens, dmViewBothPlanes, characterHpCache, currentTurnTokenId, prefersReducedMotion, peekTokenId, isDM, previewControls]);
 
   /**
    * Draw the OVERLAY layer (top canvas): dynamic-lighting darkness, DM light
@@ -1979,6 +1607,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         aimMapPx: aoeAimRef.current,
         hoverExact: aoeAltHeldRef.current,
         feetPerSquare: currentMap.feetPerSquare ?? 5,
+        coneRule: campaign?.gameSystem === GameSystem.PATHFINDER_2E ? 'quarter-circle' : 'width-equals-distance',
       }, viewport);
     }
 
@@ -2028,7 +1657,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, userRole, user?.id, campaign?.characters, tokens, dmPreviewPlayerView, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, snapToGrid, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -2144,7 +1773,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         mapHeight: currentMap.height,
       });
     },
-    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens]
+    [tokens, currentMap, tokenView, previewing, previewedPlane, mapControls.zoom, mapControls.panOffset, ruleFor, viewerOwn, viewerRevealed, dmShowSpiritTokens, previewControls]
   );
 
   const getTokenAtPosition = useCallback(
@@ -2198,9 +1827,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // Mouse Event Handlers
   // ============================================
 
-  /**
-   * Handle mouse down (pick up token, place token, or pan map)
-   */
   // Helper: convert screen coords to map-space pixel coords (not grid coords)
   const screenToMapPx = (screenX: number, screenY: number) => {
     return {
@@ -2209,11 +1835,167 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     };
   };
 
-  // Helper: inverse of screenToMapPx — map-space pixel coords → screen coords
-  const mapPxToScreen = (mx: number, my: number) => ({
-    x: mx * mapControls.zoom + mapControls.panOffset.x,
-    y: my * mapControls.zoom + mapControls.panOffset.y,
-  });
+  // Throttle token move events to 60fps (~16ms)
+  const lastMoveEmitRef = useRef<number>(0);
+  const MOVE_THROTTLE_MS = 16;
+
+  /**
+   * Tokens and panning, when no other tool took the event: a click picks a
+   * token up or puts the held one down, and a drag on empty ground pans.
+   */
+  const tokenTool: MapTool = {
+    down({ e, gridCoords }: PointerAt) {
+      if (!currentMap) return false;
+        // If we're already holding a token, place it on this click
+        if (draggedToken && dragOffset) {
+          // Finalize token position (snap to grid)
+          const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
+          const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
+
+          // Two creatures do not share a square. The Basic Rules are blunt about it
+          // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
+          // friend or an enemy, you can't willingly end your move in its space."
+          // A token at zero hit points is treated as no longer holding its space,
+          // so a body can be stood on — that part is a house rule, not something
+          // the rulebook spells out.
+          //
+          // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
+          // swarm, scenery being arranged — is ordinary DM work, and refusing it
+          // would be an obstacle rather than a rule.
+          //
+          // Checked here on the client and nowhere else, deliberately: see
+          // `blockingTokensAt`, which explains why enforcing this server-side would
+          // turn a refused move into a way to find hidden creatures.
+          if (userRole !== 'DM') {
+            const blockedBy = blockingTokensAt(
+              tokens,
+              draggedToken,
+              { x: Math.floor(finalX), y: Math.floor(finalY) },
+              characterHpCache
+            );
+            if (blockedBy.length > 0) {
+              showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
+              cancelHold();
+              markDirty('tokens');
+              return true;
+            }
+          }
+
+          // Emit token.move.end event
+          if (canEmit() && currentMap.id) {
+            const event: TokenMoveEndEvent = {
+              tokenId: draggedToken.id,
+              mapId: currentMap.id,
+              x: Math.floor(finalX),
+              y: Math.floor(finalY),
+            };
+            socket!.emitTokenMoveEnd(event);
+          } else {
+            console.warn('⚠️ Cannot emit token.move.end - socket not connected');
+          }
+
+          // Update local token position
+          useGameStore.getState().applyTokenMove(draggedToken.id, {
+            x: Math.floor(finalX),
+            y: Math.floor(finalY),
+          });
+
+          // Clear drag state
+          setDraggedToken(null);
+          setDragOffset(null);
+          console.log('✅ Token placed, state cleared');
+          return true;
+        }
+
+        // Check if clicked on a token to pick it up.
+        //
+        // Deliberately looks past tokens this user cannot move rather than stopping
+        // at whatever is drawn on top: a player standing on the same square as an
+        // NPC could otherwise never pick their own token up again.
+        const token = getMovableTokenAtPosition(gridCoords.x, gridCoords.y);
+        console.log('🔍 Movable token at click position:', token?.name || 'none');
+
+        if (token) {
+          // Pick up token — disable ruler if it was active
+          if (showRuler) putRulerAway();
+          console.log('👆 Picking up token:', token.name);
+          heldOnMapRef.current = currentMap.id;
+          setDraggedToken(token);
+          setDragOffset({
+            x: gridCoords.x - token.position.x,
+            y: gridCoords.y - token.position.y,
+          });
+
+          // Emit token.move.start event
+          if (canEmit() && currentMap.id) {
+            const event: TokenMoveStartEvent = {
+              tokenId: token.id,
+              mapId: currentMap.id,
+            };
+            socket!.emitTokenMoveStart(event);
+          } else {
+            console.warn('⚠️ Cannot emit token.move.start - socket not connected');
+          }
+        } else if (!draggedToken) {
+          // Only start panning if we're not holding a token
+          mapControls.startDrag(e);
+        }
+      return true;
+    },
+    move({ e, gridCoords }: PointerAt) {
+      if (!currentMap) return false;
+        // Handle token dragging
+        if (draggedToken && dragOffset) {
+          // Calculate new token position (snapped to grid)
+          const newX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
+          const newY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
+
+          // Throttle move events to 60fps
+          const now = Date.now();
+          if (canEmit() && currentMap.id && now - lastMoveEmitRef.current >= MOVE_THROTTLE_MS) {
+            const event: TokenMoveEvent = {
+              tokenId: draggedToken.id,
+              mapId: currentMap.id,
+              x: Math.floor(newX),
+              y: Math.floor(newY),
+            };
+            socket!.emitTokenMove(event);
+            lastMoveEmitRef.current = now;
+          }
+
+          // Keep the hover panel honest while dragging. It used to be updated only
+          // in the branch below, so a held token left the last name it happened to
+          // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
+          // the cursor was over something else entirely. Reading the square under
+          // the cursor also shows what you are about to land on.
+          setHoverToken(getHoverTokenAt(gridCoords.x, gridCoords.y));
+
+          // Ghost follows the cursor — tokens layer only.
+          markDirty('tokens');
+        } else {
+          // Handle map panning
+          mapControls.handleDrag(e);
+
+          // Update hover token
+          const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
+          setHoverToken(token);
+
+          // Pan moves the whole scene → repaint every layer.
+          if (mapControls.isDragging) {
+            markDirty('terrain', 'tokens', 'overlay');
+          }
+        }
+      return true;
+    },
+  };
+
+  /**
+   * The tools a click or a move is offered to, in this order, until one takes
+   * it: a DM tool first, then doors, the fog boxes, the measuring tools, and
+   * tokens and panning last. The order is what decides a click when two tools
+   * are up at once. On mouse up each finishes what it holds, in the same order.
+   */
+  const pointerTools: MapTool[] = [wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
 
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !currentMap) return;
@@ -2234,428 +2016,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
+    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
-    // Wall-draw mode: place a point (or finish polyline on double-click)
-    if (wallMode === 'wall-draw' && isDM) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const snapped = snapPoint(mapPx);
-
-      if (e.detail >= 2) {
-        // Double-click: finish polyline without adding a duplicate final point
-        if (wallInProgress.length >= 2) {
-          // The last clicked point was already added on the first click of this double-click;
-          // just end the polyline
-        }
-        setWallInProgress([]);
-        return;
-      }
-
-      if (wallInProgress.length === 0) {
-        // For door/window types, snap the starting point to an existing wall if close
-        let startPt = snapped;
-        if (wallType !== 'wall') {
-          const snapThreshold = 14 / mapControls.zoom;
-          const wallHit = findWallAtPoint(snapped.x, snapped.y, snapThreshold);
-          if (wallHit) {
-            startPt = { x: Math.round(wallHit.point.x), y: Math.round(wallHit.point.y) };
-          }
-        }
-        setWallInProgress([startPt]);
-        return;
-      }
-
-      // Add new segment from last point to this point
-      const prevPt = wallInProgress[wallInProgress.length - 1];
-
-      // ── Snap-to-wall replacement for doors/windows ──
-      // When drawing a non-wall type, check if both endpoints lie on the same wall.
-      // If so, replace that wall section instead of just overlaying.
-      const isDoorOrWindow = wallType !== 'wall';
-      if (isDoorOrWindow) {
-        const snapThreshold = 14 / mapControls.zoom;
-        const hitA = findWallAtPoint(prevPt.x, prevPt.y, snapThreshold);
-        const hitB = findWallAtPoint(snapped.x, snapped.y, snapThreshold);
-
-        if (hitA && hitB && hitA.seg.id === hitB.seg.id) {
-          // Both points land on the same wall — do a replace
-          const replace = buildWallReplace(hitA.point, hitB.point, hitA.seg, wallType);
-          if (replace) {
-            const newSegs = wallSegments.filter((s) => !replace.remove.includes(s.id)).concat(replace.add);
-            pushWallHistory(newSegs);
-            wallCacheValidRef.current = false;
-
-            const socketInstance = socket?.getSocket();
-            if (socketInstance && currentMap) {
-              for (const id of replace.remove) {
-                socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: id }));
-              }
-              for (const seg of replace.add) {
-                socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: seg }));
-              }
-            }
-
-            // End the polyline after placing a door/window
-            setWallInProgress([]);
-            return;
-          }
-        }
-      }
-
-      // Default: just add the segment normally
-      const newSeg: WallSegment = {
-        id: randomId(),
-        x1: prevPt.x, y1: prevPt.y,
-        x2: snapped.x, y2: snapped.y,
-        type: wallType,
-      };
-
-      // Optimistic local add (push to undo history)
-      pushWallHistory([...wallSegments, newSeg]);
-      wallCacheValidRef.current = false;
-
-      // Emit to server
-      const socketInstance = socket?.getSocket();
-      if (socketInstance && currentMap) {
-        socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: newSeg }));
-      }
-
-      setWallInProgress((prev) => [...prev, snapped]);
-      return;
-    }
-
-    // Wall-polygon mode: place corners; close on click-near-first-point or double-click
-    if (wallMode === 'wall-polygon' && isDM) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const snapped = snapPoint(mapPx);
-
-      if (e.detail >= 2) {
-        // Double-click closes the polygon
-        closePolygon();
-        return;
-      }
-
-      // Check if clicking near the first point (close the polygon)
-      if (polygonPoints.length >= 3) {
-        const firstPt = polygonPoints[0];
-        const firstScreen = mapPxToScreen(firstPt.x, firstPt.y);
-        const distToFirst = Math.hypot(e.clientX - firstScreen.x, e.clientY - firstScreen.y);
-        if (distToFirst <= POLYGON_CLOSE_RADIUS) {
-          closePolygon();
-          return;
-        }
-      }
-
-      setPolygonPoints((prev) => [...prev, snapped]);
-      return;
-    }
-
-    // Wall-select mode: click near an endpoint to start dragging, or click a wall to select it
-    if (wallMode === 'wall-select' && isDM) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      // Check for endpoint hit first (drag-to-move)
-      const epHitRadius = 10 / mapControls.zoom;
-      let bestEpDist = epHitRadius;
-      let bestEpPoint: { x: number; y: number } | null = null;
-      for (const seg of wallSegments) {
-        for (const pt of [{ x: seg.x1, y: seg.y1 }, { x: seg.x2, y: seg.y2 }]) {
-          const d = Math.hypot(pt.x - mapPx.x, pt.y - mapPx.y);
-          if (d < bestEpDist) { bestEpDist = d; bestEpPoint = pt; }
-        }
-      }
-      if (bestEpPoint) {
-        const targets: Array<{ segId: string; end: 'start' | 'end' }> = [];
-        for (const seg of wallSegments) {
-          if (Math.round(seg.x1) === Math.round(bestEpPoint.x) && Math.round(seg.y1) === Math.round(bestEpPoint.y)) {
-            targets.push({ segId: seg.id, end: 'start' });
-          }
-          if (Math.round(seg.x2) === Math.round(bestEpPoint.x) && Math.round(seg.y2) === Math.round(bestEpPoint.y)) {
-            targets.push({ segId: seg.id, end: 'end' });
-          }
-        }
-        if (targets.length > 0) {
-          wallDragEndpointRef.current = { targets, point: { ...bestEpPoint }, preDragState: [...wallSegments], hasDragged: false };
-          return;
-        }
-      }
-      // No endpoint hit — fall through to segment selection
-      setSelectedEndpoint(null);
-      const hitThreshold = 12 / mapControls.zoom;
-      const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
-      const additive = e.shiftKey;
-
-      if (hit) {
-        if (additive) {
-          // Shift adds one, or takes it back out.
-          setSelectedWallIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(hit.id)) next.delete(hit.id);
-            else next.add(hit.id);
-            return next;
-          });
-          return;
-        }
-        // Grabbing something already selected moves the whole selection;
-        // grabbing anything else selects just that one, ready to be moved.
-        const selection = selectedWallIds.has(hit.id) ? selectedWallIds : new Set([hit.id]);
-        if (selection !== selectedWallIds) setSelectedWallIds(selection);
-        wallMoveRef.current = {
-          startX: mapPx.x,
-          startY: mapPx.y,
-          preDragState: [...wallSegments],
-          hasDragged: false,
-        };
-        return;
-      }
-
-      // Empty space: drag out a box. Shift keeps what was already selected.
-      wallMarqueeRef.current = { startX: mapPx.x, startY: mapPx.y, additive };
-      if (!additive) setSelectedWallIds(new Set());
-      setWallMarquee(rectFromDrag(mapPx.x, mapPx.y, mapPx.x, mapPx.y));
-      return;
-    }
-
-    // Wall-split mode: click to split segment at the closest point
-    if (wallMode === 'wall-split' && isDM) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 14 / mapControls.zoom;
-      const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
-      if (hit) {
-        const cp = closestPointOnSegment(mapPx.x, mapPx.y, hit);
-        // Reject if the split point is too close to an endpoint (less than 10px from either end)
-        const dA = Math.hypot(cp.x - hit.x1, cp.y - hit.y1);
-        const dB = Math.hypot(cp.x - hit.x2, cp.y - hit.y2);
-        if (dA < 10 || dB < 10) return;
-        const segA: WallSegment = { id: randomId(), x1: hit.x1, y1: hit.y1, x2: cp.x, y2: cp.y, type: hit.type };
-        const segB: WallSegment = { id: randomId(), x1: cp.x, y1: cp.y, x2: hit.x2, y2: hit.y2, type: hit.type };
-        const newSegs = wallSegments.filter((s) => s.id !== hit.id).concat(segA, segB);
-        pushWallHistory(newSegs);
-        wallCacheValidRef.current = false;
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('wall:remove', ownEdits.tag({ mapId: currentMap.id, segmentId: hit.id }));
-          socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: segA }));
-          socketInstance.emit('wall:add', ownEdits.tag({ mapId: currentMap.id, segment: segB }));
-        }
-      }
-      return;
-    }
-
-    // Wall-erase mode: start erasing brush
-    if (wallMode === 'wall-erase' && isDM) {
-      wallEraseBrushActiveRef.current = true;
-      wallErasedIdsRef.current = new Set();
-      const mapPx = screenToMapPx(screenX, screenY);
-      const r = WALL_ERASE_RADIUS / mapControls.zoom;
-      wallSegments.forEach((s) => {
-        if (distToSegment(mapPx.x, mapPx.y, s) <= r) wallErasedIdsRef.current.add(s.id);
-      });
-      markDirty('overlay');
-      return;
-    }
-
-    // Wall-brush mode: start painting
-    if (wallMode === 'wall-brush' && isDM) {
-      wallBrushActiveRef.current = true;
-      const mapPx = screenToMapPx(screenX, screenY);
-      const snapped = snapPoint(mapPx);
-      wallBrushPointsRef.current = [{ x: snapped.x, y: snapped.y }];
-      markDirty('overlay');
-      return;
-    }
-
-    // TODO(maps): this checks isDM and not previewing, so during a player-view
-    // preview, where no light markers are drawn, a click still places, selects
-    // or drags a light with nothing on screen to show it. Ignore the light
-    // tool while previewing.
-    // Light tool: place or select/drag
-    if (lightMode && isDM) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      if (lightMode === 'light-place') {
-        const newLight: LightSource = {
-          id: randomId(),
-          x: Math.round(mapPx.x),
-          y: Math.round(mapPx.y),
-          brightRadius: lightPlacementDefaults.brightRadius,
-          dimRadius: lightPlacementDefaults.dimRadius,
-          color: lightPlacementDefaults.color,
-          enabled: true,
-        };
-        setLightSources((prev) => [...prev, newLight]);
-        setSelectedLightId(newLight.id);
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('light:add', ownEdits.tag({ mapId: currentMap.id, light: newLight }));
-        }
-        return;
-      }
-      if (lightMode === 'light-select') {
-        const hitR = 16 / mapControls.zoom;
-        let closest: LightSource | null = null;
-        let closestDist = Infinity;
-        for (const l of lightSources) {
-          const dx = mapPx.x - l.x;
-          const dy = mapPx.y - l.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
-          if (d <= hitR && d < closestDist) { closest = l; closestDist = d; }
-        }
-        if (closest) {
-          setSelectedLightId(closest.id);
-          // Start drag-to-move
-          draggingLightRef.current = { id: closest.id, startX: mapPx.x, startY: mapPx.y };
-        } else {
-          setSelectedLightId(null);
-        }
-        return;
-      }
-    }
-
-    // Door interaction: click near a door segment to toggle open/closed. Only
-    // a door the map offers this viewer (doorAccess.ts): the DM any, a player
-    // one they can see, a spectator none, as the server's wall:update checks.
-    if (!wallMode && !fogMode && !lightMode) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 12 / mapControls.zoom;
-      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
-      if (door) {
-        if (door.type === 'door-locked') {
-          showToast('This door is locked.', 'info');
-          return;
-        }
-        const newType = door.type === 'door-closed' ? 'door-open' : 'door-closed';
-        const updated = { ...door, type: newType } as WallSegment;
-        carryWallHistory((walls) => walls.map((s) => s.id === door.id ? updated : s));
-        wallCacheValidRef.current = false;
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('wall:update', ownEdits.tag({ mapId: currentMap.id, segment: updated }));
-        }
-        return;
-      }
-    }
-
-    // Fog selection: anchor the box on mousedown
-    if (fogMode && isDM && fogState) {
-      e.preventDefault(); // Prevent native drag — keeps mousemove firing during the drag
-      const mapPx = screenToMapPx(screenX, screenY);
-      fogDragAnchorRef.current = mapPx;
-      setFogDragCurrent(mapPx);
-      return;
-    }
-
-    // If ruler is active and user is DM, set ruler origin on click
-    if (showRuler && isDM) {
-      setRulerOrigin(gridCoords);
-      return;
-    }
-
-    // AoE tool: click to set/move the anchor the template pivots about.
-    // Held in map pixels so Alt can place it anywhere, not just on a square.
-    if (showAoE) {
-      setAoEAnchor({ point: screenToMapPx(screenX, screenY), exact: e.altKey });
-      return;
-    }
-
-    // If we're already holding a token, place it on this click
-    if (draggedToken && dragOffset) {
-      // Finalize token position (snap to grid)
-      const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-      const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-
-      // Two creatures do not share a square. The Basic Rules are blunt about it
-      // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
-      // friend or an enemy, you can't willingly end your move in its space."
-      // A token at zero hit points is treated as no longer holding its space,
-      // so a body can be stood on — that part is a house rule, not something
-      // the rulebook spells out.
-      //
-      // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
-      // swarm, scenery being arranged — is ordinary DM work, and refusing it
-      // would be an obstacle rather than a rule.
-      //
-      // Checked here on the client and nowhere else, deliberately: see
-      // `blockingTokensAt`, which explains why enforcing this server-side would
-      // turn a refused move into a way to find hidden creatures.
-      if (userRole !== 'DM') {
-        const blockedBy = blockingTokensAt(
-          tokens,
-          draggedToken,
-          { x: Math.floor(finalX), y: Math.floor(finalY) },
-          characterHpCache
-        );
-        if (blockedBy.length > 0) {
-          showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
-          cancelHold();
-          markDirty('tokens');
-          return;
-        }
-      }
-
-      // Emit token.move.end event
-      if (canEmit() && currentMap.id) {
-        const event: TokenMoveEndEvent = {
-          tokenId: draggedToken.id,
-          mapId: currentMap.id,
-          x: Math.floor(finalX),
-          y: Math.floor(finalY),
-        };
-        socket!.emitTokenMoveEnd(event);
-      } else {
-        console.warn('⚠️ Cannot emit token.move.end - socket not connected');
-      }
-
-      // Update local token position
-      useGameStore.getState().applyTokenMove(draggedToken.id, {
-        x: Math.floor(finalX),
-        y: Math.floor(finalY),
-      });
-
-      // Clear drag state
-      setDraggedToken(null);
-      setDragOffset(null);
-      console.log('✅ Token placed, state cleared');
-      return;
-    }
-
-    // Check if clicked on a token to pick it up.
-    //
-    // Deliberately looks past tokens this user cannot move rather than stopping
-    // at whatever is drawn on top: a player standing on the same square as an
-    // NPC could otherwise never pick their own token up again.
-    const token = getMovableTokenAtPosition(gridCoords.x, gridCoords.y);
-    console.log('🔍 Movable token at click position:', token?.name || 'none');
-
-    if (token) {
-      // Pick up token — disable ruler if it was active
-      if (showRuler) {
-        setShowRuler(false);
-        setRulerOrigin(null);
-      }
-      console.log('👆 Picking up token:', token.name);
-      setDraggedToken(token);
-      setDragOffset({
-        x: gridCoords.x - token.position.x,
-        y: gridCoords.y - token.position.y,
-      });
-
-      // Emit token.move.start event
-      if (canEmit() && currentMap.id) {
-        const event: TokenMoveStartEvent = {
-          tokenId: token.id,
-          mapId: currentMap.id,
-        };
-        socket!.emitTokenMoveStart(event);
-      } else {
-        console.warn('⚠️ Cannot emit token.move.start - socket not connected');
-      }
-    } else if (!draggedToken) {
-      // Only start panning if we're not holding a token
-      mapControls.startDrag(e);
+    for (const tool of pointerTools) {
+      if (tool.down?.(at)) return;
     }
   };
-
-  // Throttle token move events to 60fps (~16ms)
-  const lastMoveEmitRef = useRef<number>(0);
-  const MOVE_THROTTLE_MS = 16;
 
   /**
    * Handle mouse move (pan + hover coordinates + token drag)
@@ -2667,380 +2033,56 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
+    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
     // Track raw map-px position (unquantised) for accurate ghost line in free-draw mode
-    hoverMapPxRef.current = screenToMapPx(screenX, screenY);
+    hoverMapPxRef.current = at.mapPx;
 
-    // AoE aim and Alt state, refreshed on every move for the reasons given
-    // where they are declared.
-    aoeAimRef.current = hoverMapPxRef.current;
-    aoeAltHeldRef.current = e.altKey;
-
-    // Aiming a pinned template turns it about a fixed point, so the angle
-    // changes with every pixel of cursor movement. The general hover repaint
-    // below only fires when the cursor crosses into a new *square*, which would
-    // make the sweep step round in jumps — the very thing this tool is meant to
-    // have stopped doing. The overlay layer alone is cheap to redraw.
-    if (showAoE) markDirty('overlay');
+    trackMeasure(at);
 
     // Update hover coordinates
+    // Only when the pointer reaches another square: a new object on every
+    // pixel of movement re-rendered the whole canvas.
     if (mapControls.isWithinBounds(gridCoords)) {
-      setHoverCoords(gridCoords);
+      setHoverCoords((prev) => (prev && prev.x === gridCoords.x && prev.y === gridCoords.y ? prev : gridCoords));
     } else {
       setHoverCoords(null);
     }
 
-    // Wall-select mode: drag endpoint or update hover
-    if (wallMode === 'wall-select' && isDM) {
-      if (rightPanActiveRef.current) { mapControls.handleDrag(e); markDirty('terrain', 'tokens', 'overlay'); return; }
-      const mapPx = screenToMapPx(screenX, screenY);
-      // Drag endpoint in progress
-      if (wallDragEndpointRef.current && (e.buttons & 1)) {
-        const snapped = snapPoint(mapPx);
-        if (!wallDragEndpointRef.current.hasDragged) {
-          const orig = wallDragEndpointRef.current.point;
-          if (Math.hypot(snapped.x - orig.x, snapped.y - orig.y) > 2 / mapControls.zoom) {
-            wallDragEndpointRef.current.hasDragged = true;
-          }
-        }
-        if (!wallDragEndpointRef.current.hasDragged) { markDirty('overlay'); return; }
-        wallDragEndpointRef.current.point = { x: snapped.x, y: snapped.y };
-        const { targets, point } = wallDragEndpointRef.current;
-        const targetSet = new Map(targets.map((t) => [`${t.segId}:${t.end}`, t]));
-        const updated = wallSegments.map((s) => {
-          const startKey = `${s.id}:start`;
-          const endKey = `${s.id}:end`;
-          let seg = s;
-          if (targetSet.has(startKey)) seg = { ...seg, x1: Math.round(point.x), y1: Math.round(point.y) };
-          if (targetSet.has(endKey)) seg = { ...seg, x2: Math.round(point.x), y2: Math.round(point.y) };
-          return seg;
-        });
-        replaceWallHistory(updated);
-        wallCacheValidRef.current = false;
-        markDirty('overlay');
-        return;
-      }
-      // Dragging the selection to a new place
-      if (wallMoveRef.current && (e.buttons & 1)) {
-        const move = wallMoveRef.current;
-        const dx = mapPx.x - move.startX;
-        const dy = mapPx.y - move.startY;
-        if (!move.hasDragged && Math.hypot(dx, dy) > 2 / mapControls.zoom) {
-          move.hasDragged = true;
-        }
-        if (!move.hasDragged) { markDirty('overlay'); return; }
-        // Previewed against where the drag began, so the offset never compounds.
-        // TODO(maps): a wall change from someone else that arrives during the
-        // drag is carried into the history, but this preview starts again from
-        // preDragState, taken before it, and the drop sends that list, so a
-        // player's door toggle in the middle of the DM's drag is undone for
-        // everyone. Carry incoming changes into preDragState too, and into the
-        // endpoint drag's.
-        const preview = move.preDragState.map((seg) =>
-          selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg
-        );
-        replaceWallHistory(preview);
-        wallCacheValidRef.current = false;
-        markDirty('overlay');
-        return;
-      }
-
-      // Dragging a box over empty space
-      if (wallMarqueeRef.current && (e.buttons & 1)) {
-        const { startX, startY } = wallMarqueeRef.current;
-        setWallMarquee(rectFromDrag(startX, startY, mapPx.x, mapPx.y));
-        markDirty('overlay');
-        return;
-      }
-
-      // Check endpoint proximity for cursor
-      const epHitRadius = 10 / mapControls.zoom;
-      let isNearEp = false;
-      for (const seg of wallSegments) {
-        for (const pt of [{ x: seg.x1, y: seg.y1 }, { x: seg.x2, y: seg.y2 }]) {
-          if (Math.hypot(pt.x - mapPx.x, pt.y - mapPx.y) < epHitRadius) { isNearEp = true; break; }
-        }
-        if (isNearEp) break;
-      }
-      setNearEndpoint(isNearEp);
-      // Normal hover highlight
-      const hitThreshold = 12 / mapControls.zoom;
-      const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
-      setHoveredWallId(hit?.id ?? null);
-      markDirty('overlay');
-      return;
-    }
-
-    // Wall-split mode: update split hover point
-    if (wallMode === 'wall-split' && isDM) {
-      if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 14 / mapControls.zoom;
-      const hit = wallSegments.find((s) => distToSegment(mapPx.x, mapPx.y, s) <= hitThreshold);
-      if (hit) {
-        const cp = closestPointOnSegment(mapPx.x, mapPx.y, hit);
-        setSplitHoverPoint({ x: cp.x, y: cp.y, wallId: hit.id });
-      } else {
-        setSplitHoverPoint(null);
-      }
-      markDirty('overlay');
-      return;
-    }
-
-    // Wall-erase mode: continue erasing while left mouse button held; pan on right
-    if (wallMode === 'wall-erase' && isDM) {
-      if (rightPanActiveRef.current) {
-        mapControls.handleDrag(e);
-      } else if (wallEraseBrushActiveRef.current) {
-        const mapPx = screenToMapPx(screenX, screenY);
-        const r = WALL_ERASE_RADIUS / mapControls.zoom;
-        wallSegments.forEach((s) => {
-          if (distToSegment(mapPx.x, mapPx.y, s) <= r) wallErasedIdsRef.current.add(s.id);
-        });
-      }
-      markDirty('overlay');
-      return;
-    }
-
-    // Wall-brush mode: continue painting stroke
-    if (wallMode === 'wall-brush' && isDM) {
-      if (rightPanActiveRef.current) {
-        mapControls.handleDrag(e);
-      } else if (wallBrushActiveRef.current) {
-        const mapPx = screenToMapPx(screenX, screenY);
-        const snapped = snapPoint(mapPx);
-        const pts = wallBrushPointsRef.current;
-        const last = pts[pts.length - 1];
-        if (last && Math.hypot(snapped.x - last.x, snapped.y - last.y) >= 3) {
-          pts.push({ x: snapped.x, y: snapped.y });
-        }
-      }
-      markDirty('overlay');
-      return;
-    }
-
-    // Wall-polygon mode: handle right-pan; re-render for ghost line update
-    if (wallMode === 'wall-polygon' && isDM) {
-      if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      markDirty('overlay');
-      return;
-    }
-
-    // Wall-draw mode: just re-render for ghost line update (cursor moves)
-    if (wallMode === 'wall-draw' && isDM) {
-      if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      markDirty('overlay');
-      return;
-    }
-
-    // Light mode: handle right-pan and drag-to-move
-    if (lightMode && isDM) {
-      if (rightPanActiveRef.current) mapControls.handleDrag(e);
-      // Drag-to-move: update light position in real time
-      if (draggingLightRef.current && (e.buttons & 1)) {
-        const mapPx = screenToMapPx(screenX, screenY);
-        const dragId = draggingLightRef.current.id;
-        setLightSources((prev) => prev.map((l) =>
-          l.id === dragId ? { ...l, x: Math.round(mapPx.x), y: Math.round(mapPx.y) } : l
-        ));
-        markDirty('overlay');
-      }
-      return;
-    }
-
-    // Door hover detection in pan mode — changes cursor to pointer over a door
-    // the map offers this viewer
-    if (!wallMode && !fogMode && !draggedToken) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 12 / mapControls.zoom;
-      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
-      const newHoveredDoorId = door?.id ?? null;
-      if (newHoveredDoorId !== hoveredDoorId) {
-        setHoveredDoorId(newHoveredDoorId);
-        markDirty('overlay');
-      }
-    }
-
-    // Fog selection: track the cursor. Also runs with no button held, so the
-    // idle single-cell outline follows the mouse before a drag starts.
-    if (fogMode && isDM && fogState) {
-      setFogDragCurrent(screenToMapPx(screenX, screenY));
-      markDirty('overlay');
-      return;
-    }
-
-    // Handle token dragging
-    if (draggedToken && dragOffset) {
-      // Calculate new token position (snapped to grid)
-      const newX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
-      const newY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-
-      // Throttle move events to 60fps
-      const now = Date.now();
-      if (canEmit() && currentMap.id && now - lastMoveEmitRef.current >= MOVE_THROTTLE_MS) {
-        const event: TokenMoveEvent = {
-          tokenId: draggedToken.id,
-          mapId: currentMap.id,
-          x: Math.floor(newX),
-          y: Math.floor(newY),
-        };
-        socket!.emitTokenMove(event);
-        lastMoveEmitRef.current = now;
-      }
-
-      // Keep the hover panel honest while dragging. It used to be updated only
-      // in the branch below, so a held token left the last name it happened to
-      // read sitting beside live coordinates — "Brave Fighter (12, 8)" while
-      // the cursor was over something else entirely. Reading the square under
-      // the cursor also shows what you are about to land on.
-      setHoverToken(getHoverTokenAt(gridCoords.x, gridCoords.y));
-
-      // Ghost follows the cursor — tokens layer only.
-      markDirty('tokens');
-    } else {
-      // Handle map panning
-      mapControls.handleDrag(e);
-
-      // Update hover token
-      const token = getHoverTokenAt(gridCoords.x, gridCoords.y);
-      setHoverToken(token);
-
-      // Pan moves the whole scene → repaint every layer.
-      if (mapControls.isDragging) {
-        markDirty('terrain', 'tokens', 'overlay');
-      }
+    for (const tool of pointerTools) {
+      if (tool.move?.(at)) return;
     }
   };
 
   /**
    * Handle mouse up (stop map panning)
-   * Note: Token placement is handled in handleMouseDown on second click
+   * Note: a held token is put down by the token tool's mouse down, on the second click
    */
-  const handleMouseUp = (e?: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseUp = (e?: { button: number }) => {
     // Release right-button pan
     if (e?.button === 2) {
       rightPanActiveRef.current = false;
       mapControls.stopDrag();
       return;
     }
-    // Commit a move of the selection
-    if (wallMoveRef.current) {
-      const { hasDragged, preDragState: preDrag } = wallMoveRef.current;
-      wallMoveRef.current = null;
-      if (hasDragged) {
-        const finalSegments = wallSegments;
-        // Put the pre-drag state back on the stack, then the result, so undo
-        // returns the walls where they started.
-        replaceWallHistory(preDrag);
-        commitWalls(finalSegments);
-      }
-    }
-
-    // Settle the box, taking in everything it touched
-    if (wallMarqueeRef.current) {
-      const { additive } = wallMarqueeRef.current;
-      const rect = wallMarquee;
-      wallMarqueeRef.current = null;
-      setWallMarquee(null);
-      if (rect) {
-        const caught = segmentsInRect(wallSegments, rect);
-        setSelectedWallIds((prev) => (additive ? new Set([...prev, ...caught]) : caught));
-      }
-      markDirty('overlay');
-    }
-
-    // Commit wall endpoint drag or select endpoint for merge
-    if (wallDragEndpointRef.current) {
-      const { hasDragged, preDragState: preDrag, point } = wallDragEndpointRef.current;
-      wallDragEndpointRef.current = null;
-      if (hasDragged) {
-        const finalSegments = wallSegments;
-        if (preDrag) replaceWallHistory(preDrag);
-        pushWallHistory(finalSegments);
-        wallCacheValidRef.current = false;
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: finalSegments }));
-        }
-        setSelectedEndpoint(null);
-      } else {
-        if (preDrag) replaceWallHistory(preDrag);
-        setSelectedEndpoint({ x: Math.round(point.x), y: Math.round(point.y) });
-        setSelectedWallIds(new Set());
-      }
-    }
-    // Commit light drag-to-move
-    if (draggingLightRef.current) {
-      const dragId = draggingLightRef.current.id;
-      draggingLightRef.current = null;
-      const movedLight = lightSourcesRef.current.find((l) => l.id === dragId);
-      if (movedLight) {
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('light:update', ownEdits.tag({ mapId: currentMap.id, light: movedLight }));
-        }
-      }
-    }
-    // Commit the fog selection box on mouse release — one operation per drag.
-    if (fogMode && fogDragAnchorRef.current) {
-      const end = fogDragCurrent ?? fogDragAnchorRef.current;
-      commitFogDrag(end.x, end.y);
-    }
-    // Commit wall erase brush
-    if (wallMode === 'wall-erase' && wallEraseBrushActiveRef.current) {
-      wallEraseBrushActiveRef.current = false;
-      const erased = wallErasedIdsRef.current;
-      if (erased.size > 0) {
-        const newSegs = wallSegments.filter((s) => !erased.has(s.id));
-        pushWallHistory(newSegs);
-        wallCacheValidRef.current = false;
-        const socketInstance = socket?.getSocket();
-        if (socketInstance && currentMap) {
-          socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: newSegs }));
-        }
-        wallErasedIdsRef.current = new Set();
-        markDirty('overlay');
-      }
-    }
-    // Commit wall brush stroke → simplify to wall segments
-    if (wallMode === 'wall-brush' && wallBrushActiveRef.current) {
-      wallBrushActiveRef.current = false;
-      const rawPoints = wallBrushPointsRef.current;
-      wallBrushPointsRef.current = [];
-
-      if (rawPoints.length >= 2 && currentMap) {
-        const gridPx = currentMap.gridSize ?? 50;
-        const epsilon = gridPx * 0.4;
-        let simplified = douglasPeucker(rawPoints, epsilon);
-        if (!snapToGrid && mapImage && simplified.length >= 2) {
-          simplified = edgeSnapPoints(simplified, mapImage, gridPx * 0.6);
-        }
-        if (simplified.length >= 2) {
-          const newSegs: WallSegment[] = [];
-          for (let i = 0; i < simplified.length - 1; i++) {
-            const a = simplified[i]!;
-            const b = simplified[i + 1]!;
-            newSegs.push({
-              id: randomId(),
-              x1: Math.round(a.x), y1: Math.round(a.y),
-              x2: Math.round(b.x), y2: Math.round(b.y),
-              type: wallType,
-            });
-          }
-          const next = [...wallSegments, ...newSegs];
-          pushWallHistory(next);
-          wallCacheValidRef.current = false;
-          const socketInstance = socket?.getSocket();
-          if (socketInstance) {
-            socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
-          }
-        }
-      }
-      markDirty('overlay');
-    }
+    for (const tool of pointerTools) tool.up?.();
     // Stop map panning
     mapControls.stopDrag();
   };
+
+  // A button let go outside the canvas never reaches its onMouseUp, which left
+  // an erase or brush stroke, a box, a drag or a right-button pan going. The
+  // window hears every release; one over the canvas is the canvas's own.
+  const handleMouseUpRef = useRef(handleMouseUp);
+  handleMouseUpRef.current = handleMouseUp;
+  useEffect(() => {
+    const onWindowMouseUp = (e: MouseEvent) => {
+      if (e.target === canvasRef.current) return;
+      handleMouseUpRef.current(e);
+    };
+    window.addEventListener('mouseup', onWindowMouseUp);
+    return () => window.removeEventListener('mouseup', onWindowMouseUp);
+  }, []);
 
   /**
    * Handle mouse leave (stop pan, clear hover, cancel token drag)
@@ -3100,9 +2142,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         characterTokenRequest(dragData, position, targetLayer),
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
     } catch (err) {
-      console.error('[MapCanvas] Failed to place token from roster drag:', err);
+      showToast(apiErrorMessage(err) || `Could not place ${dragData.name} on the map`, 'error');
     }
   };
 
@@ -3124,23 +2165,43 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * ticks (see `useCurrentTurnTokenId`), and the answer is only needed at the
    * moment of a right-click.
    */
-  /**
-   * Whether this viewer may roll a token's character sheet.
-   *
-   * Keyed on who owns the *character*, not on token.controlledBy: the rolls
-   * come from the sheet, and the roster and sheet viewer offer the same menu
-   * with no token in hand. One rule, three callers — see services/permissions.
-   */
-  /** Whether a character is one of this campaign's, as the campaign was loaded. */
-  const campaignHasCharacter = (characterId: string): boolean =>
-    campaign?.characters?.some((c) => c.id === characterId) ?? false;
+  // The sheet and roll entries, by the same rules as the initiative tracker's
+  // menu (utils/tokenCharacter).
+  const campaignHasCharacter = (characterId: string): boolean => campaignHasTokenCharacter(campaign, characterId);
+  const canRollForToken = (token: Token): boolean => canRollTokenCharacter(user, campaign, token);
 
-  const canRollForToken = (token: Token): boolean => {
-    if (!user || !token.characterId) return false;
-    const character = campaign?.characters?.find((c) => c.id === token.characterId);
-    if (!character) return false;
-    const membership = campaign?.memberships?.find((m) => m.userId === user.id);
-    return canRollAsCharacter(user, character, membership);
+  /**
+   * Whether this viewer may turn a token: the DM any token, anyone else a
+   * token they control, as for moving it. The server checks the same.
+   */
+  const canRotateToken = (token: Token): boolean => isDM || controlsToken(token, user?.id, userRole);
+
+  /**
+   * Whether the token menu offers this viewer anything. The DM always has the
+   * token actions; anyone else has the character's sheet and rolls, and
+   * turning a token they control, so a creature or an object they do not
+   * control would open an empty box.
+   */
+  const tokenMenuHasItems = (token: Token): boolean =>
+    canRotateToken(token) || (!!token.characterId && (campaignHasCharacter(token.characterId) || canRollForToken(token)));
+
+  /**
+   * Turn a token one step, shown at once and put back if the server refuses.
+   * Read from the store, so presses in a menu that stays open add up.
+   */
+  const rotateToken = async (tokenId: string, step: number) => {
+    if (!campaign?.id || !currentMap?.id) return;
+    const token = useGameStore.getState().tokens[tokenId];
+    if (!token) return;
+    const before = token.rotation;
+    const rotation = turned(before, step);
+    useGameStore.getState().patchToken(tokenId, { rotation });
+    try {
+      await api.updateToken(campaign.id, currentMap.id, tokenId, { rotation });
+    } catch (err) {
+      useGameStore.getState().patchToken(tokenId, { rotation: before });
+      showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
+    }
   };
 
   const canRollInitiativeFor = (token: Token): boolean => {
@@ -3176,8 +2237,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
     e.preventDefault();
     if (!canvasRef.current || !currentMap) return;
-    // Right-button was used for panning in wall mode — don't open any context menu
-    if (wallMode && isDM) return;
+    // The right button pans while a wall, fog or light tool is up, so no menu
+    // opens: some browsers send this event as the button goes down, before
+    // any drag, so a drag cannot be told from a click here.
+    if ((wallMode || fogMode || lightMode) && isDM) return;
 
     // Always close any open door context menu first
     setDoorContextMenu(null);
@@ -3191,9 +2254,10 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
 
-    // Check tokens first — they sit on a higher visual layer than doors
+    // Check tokens first — they sit on a higher visual layer than doors. A
+    // token whose menu would be empty for this viewer is passed over.
     const token = getTokenAtPosition(gridCoords.x, gridCoords.y);
-    if (token) {
+    if (token && tokenMenuHasItems(token)) {
       setContextMenu({ token, x: e.clientX, y: e.clientY });
       return;
     }
@@ -3202,9 +2266,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Door hit-test: right-click opens the full door state menu (only in pan
     // mode), for a door the map offers this viewer
     if (!wallMode && !fogMode) {
-      const mapPx = screenToMapPx(screenX, screenY);
-      const hitThreshold = 12 / mapControls.zoom;
-      const door = offeredDoorAt(wallSegments, mapPx.x, mapPx.y, hitThreshold, doorViewer());
+      const door = doorAt(screenToMapPx(screenX, screenY));
       if (door) {
         setDoorContextMenu({ door, x: e.clientX, y: e.clientY });
       }
@@ -3214,13 +2276,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   /**
    * Handle mouse wheel (zoom)
    */
+  // On the hook's own handler, which keeps its identity: the controls object
+  // is new each render, and the listener went off and on again with it.
+  const wheelZoom = mapControls.handleWheel;
   const handleWheel = useCallback(
     (e: WheelEvent) => {
       if (!canvasRef.current) return;
       const rect = canvasRef.current.getBoundingClientRect();
-      mapControls.handleWheel(e, rect);
+      wheelZoom(e, rect);
     },
-    [mapControls]
+    [wheelZoom]
   );
 
   /**
@@ -3406,17 +2471,21 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {(previewing
         ? previewedPlane === 'spirit'
         : userRole !== 'DM' && ((campaign?.spiritLayerEnabled ?? false) || playerSpiritVisible)) && (
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40 backdrop-blur-sm animate-pulse-soft">
-          <Ghost className="w-3.5 h-3.5 text-spirit-purple" />
-          <span className="text-xs font-semibold text-spirit-purple">Spirit Realm</span>
+        // An opaque backing under the tint, as the zoom panel has, so the
+        // words read over any map.
+        <div className="absolute top-4 right-4 z-10 rounded-cozy bg-parchment animate-pulse-soft">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-cozy bg-spirit-purple/20 border border-spirit-purple/40">
+            <Ghost className="w-3.5 h-3.5 text-spirit-ink" />
+            <span className="text-xs font-semibold text-spirit-ink">Spirit Realm</span>
+          </div>
         </div>
       )}
 
       {/* Toolbar - Glassmorphism */}
-      <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-sm">
+      <div className="absolute top-4 left-4 glass-panel p-2 flex items-center gap-2 bg-parchment/90 backdrop-blur-xs">
         {/* Zoom Out */}
         <Button
-          onClick={mapControls.zoomOut}
+          onClick={() => mapControls.zoomOut({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
           disabled={mapControls.zoom <= mapControls.minZoom}
           variant="secondary" className="p-2"
           title="Zoom Out"
@@ -3425,13 +2494,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </Button>
 
         {/* Zoom Level Display */}
-        <span className="text-xs text-stone-gray font-mono min-w-[4rem] text-center">
+        <span className="text-xs text-stone-gray font-mono min-w-16 text-center">
           {Math.round(mapControls.zoom * 100)}%
         </span>
 
         {/* Zoom In */}
         <Button
-          onClick={mapControls.zoomIn}
+          onClick={() => mapControls.zoomIn({ x: canvasSize.width / 2, y: canvasSize.height / 2 })}
           disabled={mapControls.zoom >= mapControls.maxZoom}
           variant="secondary" className="p-2"
           title="Zoom In"
@@ -3488,7 +2557,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 variant="secondary" className="p-2"
                 title={`Ruler color: ${rulerColor === 'amber' ? 'Amber' : rulerColor === 'purple' ? 'Purple' : 'Black'}`}
               >
-                <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-purple' : rulerColor === 'black' ? 'text-stone-gray' : 'text-warm-amber'}`} />
+                <Palette className={`w-4 h-4 ${rulerColor === 'purple' ? 'text-spirit-ink' : rulerColor === 'black' ? 'text-stone-gray' : 'text-accent-ink'}`} />
               </Button>
             )}
 
@@ -3507,16 +2576,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         {userRole === 'DM' && (
           <>
             <div className="w-px h-6 bg-moss-green/20" />
-            {/* TODO(ui): while dmShowSpiritTokens is true the tokens are
-               shown, yet the title says "Hiding spirit tokens (click to
-               show)"; both branches say click to show. It should read
-               "Spirit tokens shown, click to hide" in that case. */}
             <Button
               onClick={() => setDmShowSpiritTokens((prev) => !prev)}
               variant="secondary" className={`p-2 ${dmShowSpiritTokens ? 'bg-spirit-purple/15' : ''}`}
-              title={dmShowSpiritTokens ? 'Hiding spirit tokens (click to show)' : 'Spirit tokens hidden — click to show'}
+              title={dmShowSpiritTokens ? 'Spirit tokens shown, click to hide' : 'Spirit tokens hidden — click to show'}
             >
-              <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-purple' : 'text-stone-gray/40'}`} />
+              <Ghost className={`w-4 h-4 ${dmShowSpiritTokens ? 'text-spirit-ink' : 'text-stone-gray/40'}`} />
             </Button>
           </>
         )}
@@ -3577,132 +2642,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             }}
           />
           <DmWallControls
-            wallMode={wallMode}
+            {...wallPanel}
             onWallModeChange={(mode) => {
-              setWallMode(mode);
-              if (mode !== 'wall-select') { setSelectedWallIds(new Set()); setSelectedEndpoint(null); wallDragEndpointRef.current = null; setNearEndpoint(false); }
-              if (mode !== 'wall-split') setSplitHoverPoint(null);
-              if (mode !== 'wall-erase') { wallEraseBrushActiveRef.current = false; wallErasedIdsRef.current = new Set(); }
-              if (mode !== 'wall-brush') { wallBrushActiveRef.current = false; wallBrushPointsRef.current = []; }
-              if (mode !== 'wall-polygon') setPolygonPoints([]);
+              wallPanel.onWallModeChange(mode);
               // Deactivate fog/light tools when switching to wall tool
               if (mode) { setFogMode(null); setLightMode(null); setSelectedLightId(null); }
             }}
-            onCollapse={() => {
-              setWallMode(null);
-              setSelectedWallIds(new Set());
-              setSelectedEndpoint(null);
-              wallDragEndpointRef.current = null;
-              setNearEndpoint(false);
-              setSplitHoverPoint(null);
-              wallEraseBrushActiveRef.current = false;
-              wallErasedIdsRef.current = new Set();
-              wallBrushActiveRef.current = false;
-              wallBrushPointsRef.current = [];
-              setWallInProgress([]);
-              setPolygonPoints([]);
-            }}
-            wallType={wallType}
-            onWallTypeChange={setWallType}
-            snapToGrid={snapToGrid}
-            onSnapToGridChange={(v) => { setSnapToGrid(v); if (v) setSnapToEndpoint(false); }}
-            snapToEndpoint={snapToEndpoint}
-            onSnapToEndpointChange={setSnapToEndpoint}
-            wallCount={wallSegments.length}
-            onClearAll={() => {
-              const socketInstance = socket?.getSocket();
-              if (socketInstance && currentMap) {
-                socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: [] }));
-              }
-              pushWallHistory([]);
-            }}
-            canUndo={canUndoWalls}
-            canRedo={canRedoWalls}
-            onUndo={() => {
-              const prev = undoWalls();
-              if (prev !== null) {
-                wallCacheValidRef.current = false;
-                const socketInstance = socket?.getSocket();
-                if (socketInstance && currentMap) {
-                  socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: prev }));
-                }
-              }
-            }}
-            onRedo={() => {
-              const next = redoWalls();
-              if (next !== null) {
-                wallCacheValidRef.current = false;
-                const socketInstance = socket?.getSocket();
-                if (socketInstance && currentMap) {
-                  socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: next }));
-                }
-              }
-            }}
-            wallColor={wallColor}
-            onWallColorChange={setWallColor}
-            selectedSegmentType={selectedSegmentType}
-            onSelectedTypeChange={(newType) => {
-              if (selectedWallIds.size === 0 || !currentMap) return;
-              // Applies to everything selected, so a boxful of walls can become
-              // windows in one go.
-              const updated = wallSegments.map((s) =>
-                selectedWallIds.has(s.id) ? { ...s, type: newType } : s
-              );
-              pushWallHistory(updated);
-              wallCacheValidRef.current = false;
-              const socketInstance = socket?.getSocket();
-              if (socketInstance) {
-                socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: updated }));
-              }
-            }}
-            onDeleteSelected={deleteSelectedWalls}
-            selectedEndpoint={wallMode === 'wall-select' && selectedEndpoint ? (() => {
-              const ep = selectedEndpoint;
-              let count = 0;
-              let type: WallType | null = null;
-              let sameType = true;
-              for (const seg of wallSegments) {
-                const atStart = Math.round(seg.x1) === ep.x && Math.round(seg.y1) === ep.y;
-                const atEnd = Math.round(seg.x2) === ep.x && Math.round(seg.y2) === ep.y;
-                if (atStart || atEnd) {
-                  count++;
-                  if (type === null) type = seg.type;
-                  else if (seg.type !== type) sameType = false;
-                }
-              }
-              return count === 2 && sameType ? ep : null;
-            })() : null}
-            onMergeEndpoint={() => {
-              if (!selectedEndpoint || !currentMap) return;
-              const ep = selectedEndpoint;
-              const touching: Array<{ seg: WallSegment; end: 'start' | 'end' }> = [];
-              for (const seg of wallSegments) {
-                if (Math.round(seg.x1) === ep.x && Math.round(seg.y1) === ep.y) touching.push({ seg, end: 'start' });
-                if (Math.round(seg.x2) === ep.x && Math.round(seg.y2) === ep.y) touching.push({ seg, end: 'end' });
-              }
-              if (touching.length !== 2) return;
-              const [a, b] = touching;
-              if (a!.seg.type !== b!.seg.type) return;
-              const keepA = a!.end === 'start' ? { x: a!.seg.x2, y: a!.seg.y2 } : { x: a!.seg.x1, y: a!.seg.y1 };
-              const keepB = b!.end === 'start' ? { x: b!.seg.x2, y: b!.seg.y2 } : { x: b!.seg.x1, y: b!.seg.y1 };
-              const merged: WallSegment = {
-                id: randomId(),
-                x1: Math.round(keepA.x), y1: Math.round(keepA.y),
-                x2: Math.round(keepB.x), y2: Math.round(keepB.y),
-                type: a!.seg.type,
-              };
-              const removeIds = new Set([a!.seg.id, b!.seg.id]);
-              const newSegs = wallSegments.filter((s) => !removeIds.has(s.id)).concat(merged);
-              pushWallHistory(newSegs);
-              wallCacheValidRef.current = false;
-              const socketInstance = socket?.getSocket();
-              if (socketInstance) {
-                socketInstance.emit('walls:replace', ownEdits.tag({ mapId: currentMap.id, segments: newSegs }));
-              }
-              setSelectedEndpoint(null);
-            }}
-            brushSize={brushSize}
-            onBrushSizeChange={setBrushSize}
           />
           <DmLightControls
             lightMode={lightMode}
@@ -3750,8 +2695,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               setCurrentMap({ ...currentMap, globalIllumination: on });
               try {
                 await mapService.updateMap(campaign.id, currentMap.id, { globalIllumination: on });
-              } catch {
+              } catch (err) {
                 setCurrentMap(before);
+                // TODO(ui): the Lights panel's switch reads "Global illumination" and
+                // Edit Map's checkbox "Global Illumination"; settle on one spelling
+                // for both controls and this toast.
+                showToast(apiErrorMessage(err) || 'Could not change Global Illumination', 'error');
               }
             }}
             placementDefaults={lightPlacementDefaults}
@@ -3760,20 +2709,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         </DmToolPanelContainer>
       )}
 
-      {/* TODO(maps): the button that ends a preview renders only while
-         lighting or fog is on, and nothing else resets dmPreviewPlayerView,
-         so turning both off during a preview leaves the DM in the player's
-         view until one is turned back on or the page reloads. End the
-         preview when both go off, or keep the button while previewing. */}
-      {/* DM Preview Player View — shown when dynamic lighting is enabled */}
-      {userRole === 'DM' && ((currentMap?.lightingEnabled ?? false) || fogEnabled) && (
+      {/* DM Preview Player View — offered while dynamic lighting or fog is
+         on, and kept while a preview is on, so turning both off mid-preview
+         still leaves the way back to the DM's view. */}
+      {userRole === 'DM' && (dmPreviewPlayerView || (currentMap?.lightingEnabled ?? false) || fogEnabled) && (
         <div className="absolute bottom-20 right-2 z-30 flex items-center gap-1">
           {dmPreviewPlayerView && (
             <select
               value={previewSelection ? encodePreviewSelection(previewSelection) : ''}
               onChange={(e) => setPreviewSelection(decodePreviewSelection(e.target.value))}
               aria-label="Player or token to preview as"
-              className="px-2 py-1.5 rounded text-xs bg-ink/85 text-paper border border-ink/40"
+              className="px-2 py-1.5 rounded-sm text-xs bg-ink/85 text-paper border border-ink/40"
             >
               {previewChoices.length === 0 && <option value="">Nothing to preview</option>}
               {(['players', 'tokens'] as const).map((group) => {
@@ -3810,14 +2756,14 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       {/* Ruler hint for players with no token */}
       {showRuler && !isDM && !myToken && (
-        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-warm-amber text-xs px-3 py-1.5 rounded-full pointer-events-none">
+        <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/60 text-white text-xs px-3 py-1.5 rounded-full pointer-events-none">
           Place your character token on the map to use the ruler
         </div>
       )}
 
       {/* AoE panel */}
       {showAoE && currentMap && (
-        <div className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-sm">
+        <div className="absolute top-12 left-2 z-10 p-3 space-y-3 w-52 shadow-xl rounded-xl border border-moss-green/30 bg-parchment/95 backdrop-blur-xs">
           <p className="text-xs font-semibold text-brand-ink">AoE Shape</p>
 
           {/* Shape selector */}
@@ -3828,7 +2774,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 onClick={() => setAoEConfig((prev) => ({ ...prev, shape }))}
                 className={`text-xs px-2 py-1 rounded border transition-colors capitalize ${
                   aoeConfig.shape === shape
-                    ? 'bg-moss-green/20 border-moss-green/60 text-brand-ink font-medium'
+                    ? 'bg-moss-green/15 border-moss-green/60 text-brand-ink font-medium'
                     : 'border-stone-gray/30 text-stone-gray hover:border-moss-green/40 hover:text-brand-ink'
                 }`}
               >
@@ -3877,7 +2823,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <button
                   key={ft}
                   onClick={() => setAoEConfig((prev) => ({ ...prev, sizeFt: ft }))}
-                  className="text-xs px-1.5 py-0.5 rounded bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink border border-moss-green/20 transition-colors"
+                  className="text-xs px-1.5 py-0.5 rounded-sm bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink border border-moss-green/20 transition-colors"
                 >
                   {ft} ft
                 </button>
@@ -3913,7 +2859,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
       {/* Hover Coordinates */}
       {hoverCoords && !hoverToken && (
-        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-sm">
+        <div className="absolute bottom-4 left-4 glass-panel px-3 py-1.5 bg-parchment/90 backdrop-blur-xs">
           <span className="text-xs text-stone-gray font-mono font-semibold">
             ({hoverCoords.x}, {hoverCoords.y})
           </span>
@@ -3942,7 +2888,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         /** One labelled row. The labels line up, so the panel reads as a list. */
         const Row = ({ label, children }: { label: string; children: ReactNode }) => (
           <div className="flex items-baseline gap-2">
-            <span className="w-[4.75rem] shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
+            <span className="w-19 shrink-0 text-[11px] uppercase tracking-wide text-warm-gray">
               {label}
             </span>
             <span className="min-w-0 text-sm text-brand-ink">{children}</span>
@@ -3950,7 +2896,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         );
 
         return (
-          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-sm w-[22rem] max-w-[calc(100%-2rem)] shadow-lg">
+          <div className="absolute bottom-4 left-4 glass-panel px-4 py-3 bg-parchment/95 backdrop-blur-xs w-88 max-w-[calc(100%-2rem)] shadow-lg">
             <div className="flex items-start gap-3.5">
               {/* Large enough to actually recognise the art. On the map a token
                   is often only a few dozen pixels at play zoom, which is what
@@ -3959,11 +2905,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <img
                   src={image.src}
                   alt=""
-                  className="w-[4.5rem] h-[4.5rem] rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
+                  className="w-18 h-18 rounded-cozy object-cover border-2 border-warm-amber/50 shrink-0"
                 />
               ) : (
                 <div
-                  className="w-[4.5rem] h-[4.5rem] rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
+                  className="w-18 h-18 rounded-cozy border-2 border-warm-amber/50 shrink-0 flex items-center justify-center text-2xl font-semibold text-white"
                   style={{ backgroundColor: placeholderColor(hoverToken) }}
                   aria-hidden="true"
                 >
@@ -4090,7 +3036,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {contextMenu && (
         <div
           ref={contextMenuRef}
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-sm border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
           style={{
             left: `${contextMenuPos ? contextMenuPos.x : contextMenu.x}px`,
             top: `${contextMenuPos ? contextMenuPos.y : contextMenu.y}px`,
@@ -4115,7 +3061,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       const { character } = await api.getCharacter(characterId);
                       setViewingSheet({ character, tokenId });
                     } catch (err) {
-                      console.error('Failed to load character sheet:', err);
+                      console.error('Failed to load character sheet:', errorSummary(err));
                       showToast(apiErrorMessage(err) || 'Could not open that character sheet.', 'error');
                     }
                   }}
@@ -4142,6 +3088,27 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   Roll...
                 </button>
               )}
+            </>
+          )}
+
+          {/* Rotate Left / Right: the DM on any token, a player on a token
+              they control. The menu stays open so presses add up. */}
+          {canRotateToken(contextMenu.token) && (
+            <>
+              <button
+                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                title={`Turn ${ROTATION_STEP} degrees anticlockwise`}
+                onClick={() => { void rotateToken(contextMenu.token.id, -ROTATION_STEP); }}
+              >
+                Rotate Left
+              </button>
+              <button
+                className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
+                title={`Turn ${ROTATION_STEP} degrees clockwise`}
+                onClick={() => { void rotateToken(contextMenu.token.id, ROTATION_STEP); }}
+              >
+                Rotate Right
+              </button>
             </>
           )}
 
@@ -4189,7 +3156,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               {/* Add to Initiative — DM only */}
               {currentMap && (
                 <button
-                  className="w-full px-4 py-2 text-left text-sm text-warm-amber hover:bg-warm-amber/10 transition-colors"
+                  className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
                     setContextMenu(null);
@@ -4225,7 +3192,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       conditions: [],
                     });
                     useGameStore.getState().addToken(result.token);
-                    socket?.emitMapChange(currentMap.id);
                   } catch (err) {
                     // A copy is a new token, so an older one whose fields predate
                     // validation is refused: say which, so the DM can fix it in Edit Token.
@@ -4266,7 +3232,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 Save as Template
               </button>
 
-              {/* Hide from / Reveal to players — every token; see utils/tokenControls.ts */}
+              {/* Hide from / Reveal to players — every token; see utils/dmTokenMenu.ts */}
               {controls.hide && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
@@ -4275,14 +3241,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const token = contextMenu.token;
                     setContextMenu(null);
                     try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible, socket);
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
                     } catch (err) {
-                      // TODO(ui): this failure, and those of Obscure, Send to
-                      // Spirit Realm and Return to Material Plane below, go only
-                      // to the console, so the DM sees the menu close and nothing
-                      // change. Show them in a toast with apiErrorMessage(err),
-                      // as Save as Template above does.
-                      console.error('Failed to toggle token visibility:', err);
+                      showToast(apiErrorMessage(err) || (token.visible ? 'Could not hide the token from players' : 'Could not show the token to players'), 'error');
                     }
                   }}
                 >
@@ -4290,7 +3251,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 </button>
               )}
 
-              {/* Obscure / Reveal identity — every token; see utils/tokenControls.ts */}
+              {/* Obscure / Reveal identity — every token; see utils/dmTokenMenu.ts */}
               {controls.obscure && (
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-stone-gray hover:bg-moss-green/10 transition-colors"
@@ -4299,9 +3260,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const token = contextMenu.token;
                     setContextMenu(null);
                     try {
-                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured, socket);
+                      await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
                     } catch (err) {
-                      console.error('Failed to toggle token identity:', err);
+                      showToast(apiErrorMessage(err) || (token.obscured ? "Could not reveal the token's identity" : "Could not obscure the token's identity"), 'error');
                     }
                   }}
                 >
@@ -4314,7 +3275,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 contextMenu.token.layer === TokenLayer.TOKEN ? (
                   <button
                     disabled={isMovingTokenLayer}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-purple hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
+                    className="w-full px-4 py-2 text-left text-sm text-spirit-ink hover:bg-spirit-purple/10 transition-colors disabled:opacity-50"
                     onClick={async () => {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
@@ -4323,9 +3284,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.SPIRIT });
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
-                        socket?.emitMapChange(currentMap.id);
                       } catch (err) {
-                        console.error('Failed to move token to spirit realm:', err);
+                        showToast(apiErrorMessage(err) || 'Could not send the token to the spirit realm', 'error');
                       } finally {
                         setIsMovingTokenLayer(false);
                       }
@@ -4345,9 +3305,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.TOKEN });
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
-                        socket?.emitMapChange(currentMap.id);
                       } catch (err) {
-                        console.error('Failed to return token to material plane:', err);
+                        showToast(apiErrorMessage(err) || 'Could not return the token to the material plane', 'error');
                       } finally {
                         setIsMovingTokenLayer(false);
                       }
@@ -4364,7 +3323,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
               {(campaign?.maps ?? []).filter((m) => m.id !== currentMap?.id).length > 0 && (
                 <div>
                   <button
-                    className="w-full px-4 py-2 text-left text-sm text-warm-amber hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
+                    className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors flex items-center justify-between"
                     onClick={(e) => {
                       e.stopPropagation();
                       setContextMenuMoveToMapOpen(!contextMenuMoveToMapOpen);
@@ -4383,7 +3342,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                           .map((targetMap) => (
                             <button
                               key={targetMap.id}
-                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded transition-colors"
+                              className="w-full px-2 py-1.5 text-left text-xs text-charcoal hover:bg-moss-green/10 rounded-sm transition-colors"
                               onClick={async () => {
                                 if (!campaign?.id || !currentMap?.id) return;
                                 const token = contextMenu.token;
@@ -4439,7 +3398,6 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           try {
             await api.deleteToken(campaign.id, currentMap.id, token.id);
             useGameStore.getState().removeToken(token.id);
-            socket?.emitMapChange(currentMap.id);
           } catch (err) {
             showToast(apiErrorMessage(err) || 'Failed to remove the token', 'error');
           }
@@ -4475,7 +3433,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           // rolls are filed under the name everyone may see.
           publicName={characterRollPublicName(tokens.find((t) => t.id === rollPicker.tokenId), user?.id)}
           onRoll={(expression, purpose, characterName) =>
-            socket?.emitDiceRoll({ expression, purpose, characterName })
+            tableRoll({ expression, purpose, characterName })
           }
           // Only offered when this token is already in the initiative order and
           // this viewer may roll for it — the DM for anyone, a player for a
@@ -4500,7 +3458,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             anchorX={npcRollPicker.x}
             anchorY={npcRollPicker.y}
             onRoll={(expression, purpose, characterName) =>
-            socket?.emitDiceRoll({ expression, purpose, characterName })
+            tableRoll({ expression, purpose, characterName })
           }
             onClose={() => setNpcRollPicker(null)}
           />
@@ -4511,7 +3469,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           Same flex-column sizing as the token menu above; see the note there. */}
       {doorContextMenu && (
         <div
-          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-sm border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
+          className="fixed z-50 glass-panel bg-parchment/95 backdrop-blur-xs border border-moss-green/20 shadow-lg py-1 flex flex-col w-max min-w-[160px] max-w-[18rem]"
           style={{ left: `${doorContextMenu.x}px`, top: `${doorContextMenu.y}px` }}
           onClick={(e) => e.stopPropagation()}
         >

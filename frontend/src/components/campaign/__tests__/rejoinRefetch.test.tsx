@@ -13,6 +13,7 @@ import { render, waitFor, act } from '@testing-library/react';
 const ws = { reconnectCount: 0, joinedEpoch: 1 };
 
 vi.mock('framer-motion', () => ({
+  useReducedMotionConfig: () => false,
   motion: new Proxy({}, { get: () => (props: Record<string, unknown>) => {
     const { children, ...rest } = props as { children?: unknown } & Record<string, unknown>;
     const plain = Object.fromEntries(Object.entries(rest).filter(([k]) => !/^(initial|animate|exit|transition|layout|whileHover|whileTap)$/.test(k)));
@@ -29,7 +30,7 @@ vi.mock('@/contexts/AuthContext', () => ({
 }));
 const socket = {
   onDiceRolled: vi.fn(), onDiceRolledSecret: vi.fn(), onDiceHistoryCleared: vi.fn(),
-  onChatMessage: vi.fn(), onChatSystem: vi.fn(), on: vi.fn(), off: vi.fn(), emitDiceRoll: vi.fn(), emitChatMessage: vi.fn(),
+  onChatMessage: vi.fn(), onChatSystem: vi.fn(), on: vi.fn(), off: vi.fn(), rollDice: vi.fn().mockResolvedValue({ ok: true, id: "r" }), sendChatMessage: vi.fn(),
 };
 vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({ socket, status: 'connected', reconnectCount: ws.reconnectCount, joinedEpoch: ws.joinedEpoch }),

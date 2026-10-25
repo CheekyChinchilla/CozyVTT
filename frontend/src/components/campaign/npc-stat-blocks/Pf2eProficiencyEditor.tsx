@@ -86,7 +86,7 @@ export default function Pf2eProficiencyEditor({
             onClick={() => onChange(setPf2eBonus(statBlock, 'skills', key, null))}
             title="Remove this skill (creatures are untrained in unlisted skills)"
             aria-label={`Remove ${label}`}
-            className="rounded p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
+            className="rounded-sm p-1 text-ink-muted hover:bg-danger/10 hover:text-danger-ink"
           >
             <X className="h-3 w-3" />
           </button>

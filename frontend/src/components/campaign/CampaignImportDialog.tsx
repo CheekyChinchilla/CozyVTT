@@ -21,6 +21,8 @@ import type { CampaignImportPreview, CampaignImportResult, CampaignImportSkipped
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
 import { apiErrorMessage, apiErrorStatus, errorMessage as thrownMessage } from '@/utils/errors';
+import { readArchiveManifest } from '@/utils/archiveManifest';
+import { formatFileSize } from '@/utils/format';
 
 interface CampaignImportDialogProps {
   isOpen: boolean;
@@ -96,9 +98,14 @@ export default function CampaignImportDialog({
     setErrorMessage('');
 
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      const previewData = await api.previewCampaignImport(formData);
+      // Read here, the archive is sent once, to be imported. The server is
+      // asked only about one this cannot read, and says what is wrong with it.
+      let previewData = await readArchiveManifest(selectedFile);
+      if (!previewData) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        previewData = await api.previewCampaignImport(formData);
+      }
       setPreview(previewData);
       setCampaignName(previewData.campaignName);
       setStep('preview');
@@ -140,12 +147,6 @@ export default function CampaignImportDialog({
     }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   // The shared dialog: announced to a screen reader by its title, keeping
   // keyboard focus inside it, and closed by Escape, the backdrop or its X,
   // none of which work while the import runs: the request carries on without
@@ -169,7 +170,7 @@ export default function CampaignImportDialog({
               aria-label="Choose a campaign archive"
               className="border-2 border-dashed border-moss-green/30 rounded-xl p-8 text-center
                          hover:border-moss-green/50 hover:bg-moss-green/5 transition-colors cursor-pointer
-                         focus:outline-none focus:ring-2 focus:ring-brand"
+                         focus:outline-hidden focus:ring-2 focus:ring-brand"
               onClick={() => fileInputRef.current?.click()}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -221,7 +222,7 @@ export default function CampaignImportDialog({
 
             <div className="text-xs text-warm-gray flex items-center justify-between">
               <span>Total tokens: {preview.tokenCount} | Assets: {preview.assetCount}</span>
-              <span>{formatBytes(preview.totalSizeBytes)}</span>
+              <span>{formatFileSize(preview.totalSizeBytes, { largest: 'MB' })}</span>
             </div>
 
             <div className="text-xs text-warm-gray">
@@ -256,7 +257,7 @@ export default function CampaignImportDialog({
                   role="switch"
                   aria-checked={importTokens}
                   onClick={() => setImportTokens((v) => !v)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-moss-green/50 ${
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 ${
                     importTokens ? 'bg-moss-green' : 'bg-warm-gray/30'
                   }`}
                 >
@@ -329,7 +330,7 @@ export default function CampaignImportDialog({
               <Button
                 onClick={() => {
                 handleClose();
-                navigate(`/campaign/${result.campaignId}`);
+                navigate(`/campaigns/${result.campaignId}`);
                 }}
                 className="flex-1"
               >

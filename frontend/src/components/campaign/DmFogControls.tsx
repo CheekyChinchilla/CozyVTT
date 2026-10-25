@@ -7,7 +7,7 @@
  * nothing that would change what players see.
  */
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 
 export type FogToolMode = 'fog-reveal' | 'fog-hide' | null;
@@ -57,6 +57,7 @@ export default function DmFogControls({
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
+  const bodyId = useId();
 
   const handleRevealAll = () => {
     if (!confirmRevealAll) { setConfirmRevealAll(true); return; }
@@ -73,19 +74,22 @@ export default function DmFogControls({
   return (
     <div className="flex flex-col gap-0 bg-stone-800/90 rounded-lg border border-warm-amber/20 min-w-[160px] overflow-hidden">
       {/* Header with collapse toggle */}
-      <div
-        className="flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-controls={bodyId}
+        className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
         onClick={() => {
           const next = !collapsed;
           setCollapsed(next);
           if (next) onCollapse?.();
         }}
       >
-        <span className="text-xs text-warm-amber/70 font-medium uppercase tracking-wide">Fog of War</span>
-        <span className="text-stone-400 text-xs">{collapsed ? '▶' : '▼'}</span>
-      </div>
+        <span className="text-xs text-amber-300 font-medium uppercase tracking-wide">Fog of War</span>
+        <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
+      </button>
     {!collapsed && (
-      <div className="flex flex-col gap-2 p-2 pt-1">
+      <div id={bodyId} className="flex flex-col gap-2 p-2 pt-1">
 
       {/* The per-map switch. Off puts an armed tool down first: a reveal box
           dragged with fog off would change nothing players can see. */}
@@ -153,6 +157,9 @@ export default function DmFogControls({
 
       {/* Bulk actions */}
       <div className="flex gap-1 pt-1 border-t border-stone-700/50">
+        {/* TODO(ui): the Confirm? state below is white on lime-500, about 2:1;
+            give it dark text (text-stone-900), as Hide all and Reset explored
+            areas have on their amber Confirm? state. */}
         <button
           onClick={handleRevealAll}
           className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
@@ -170,7 +177,7 @@ export default function DmFogControls({
           onClick={handleHideAll}
           className={`flex-1 px-2 py-1 rounded text-xs font-medium transition-colors ${
             confirmHideAll
-              ? 'bg-warning text-white animate-pulse'
+              ? 'bg-warning text-stone-900 animate-pulse'
               : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
           }`}
           title={confirmHideAll ? 'Click again to confirm: hide entire map' : 'Hide all — cover entire map with fog'}
@@ -190,7 +197,7 @@ export default function DmFogControls({
             onClick={handleResetExploration}
             className={`w-full px-2 py-1 rounded text-xs font-medium transition-colors ${
               confirmReset
-                ? 'bg-warning text-white animate-pulse'
+                ? 'bg-warning text-stone-900 animate-pulse'
                 : 'bg-stone-700/50 text-stone-300 border border-stone-600/50 hover:bg-warning/30 hover:text-warning-ink'
             }`}
             title={confirmReset ? 'Click again to confirm: forget what every player has seen' : 'Reset explored areas: players forget what they have seen of this map'}

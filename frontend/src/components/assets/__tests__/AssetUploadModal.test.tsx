@@ -19,7 +19,7 @@ vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me', p
 vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
 vi.mock('@/services/campaign.service', () => ({ default: { getCampaigns: () => Promise.resolve(campaigns) } }));
 const uploadAsset = vi.fn();
-vi.mock('@/services/api', () => ({ api: { uploadAsset: (form: FormData) => uploadAsset(form) } }));
+vi.mock('@/services/api', () => ({ api: { uploadAsset: (form: FormData, onProgress?: (percent: number) => void) => uploadAsset(form, onProgress) } }));
 
 const campaign = (id: string, userRole: 'DM' | 'PLAYER' | 'SPECTATOR') =>
   ({ id, name: `Campaign ${id}`, ownerId: 'someone-else', userRole, memberships: [] }) as unknown as Campaign;
@@ -174,3 +174,97 @@ describe('the name, description and tags', () => {
     expect(((await screen.findByPlaceholderText('Enter asset name...')) as HTMLInputElement).value).toHaveLength(200);
   });
 });
+
+// The dialog kept a list of its own of the types browsers report, which had
+// drifted from what the server takes: Firefox reports an Ogg file as
+// application/ogg and a WAV as audio/x-wav, a browser often reports Markdown
+// with no type at all, and M4A passed here to be refused by the server. The
+// dialog now checks the file's extension against the server's own list.
+describe('the files the dialog takes', () => {
+  beforeEach(() => { campaigns = []; });
+
+  function choose(type: AssetType, name: string, browserType: string) {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} defaultType={type} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], name, { type: browserType })] } });
+  }
+
+  it.each([
+    [AssetType.AUDIO, 'rain.ogg', 'application/ogg'],
+    [AssetType.AUDIO, 'thunder.wav', 'audio/x-wav'],
+    [AssetType.AUDIO, 'Tavern.MP3', 'audio/mpeg'],
+    [AssetType.DOCUMENT, 'notes.md', ''],
+    [AssetType.MAP, 'cave.jpeg', 'image/jpeg'],
+  ])('takes %s file %s, reported as "%s"', async (type, name, browserType) => {
+    choose(type, name, browserType);
+    expect(await screen.findByText(name)).toBeInTheDocument();
+    expect(screen.queryByText(/Invalid file type/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    [AssetType.AUDIO, 'song.m4a', 'audio/mp4', '.mp3, .ogg, .wav'],
+    [AssetType.MAP, 'animation.gif', 'image/gif', '.png, .jpg, .jpeg, .webp'],
+    [AssetType.DOCUMENT, 'page.html', 'text/html', '.pdf, .txt, .md'],
+  ])('refuses %s file %s, which the server would refuse', async (type, name, browserType, listed) => {
+    choose(type, name, browserType);
+    expect(await screen.findByText(`Invalid file type. Allowed types: ${listed}`)).toBeInTheDocument();
+  });
+
+  it('offers only those files in the file picker', () => {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} defaultType={AssetType.AUDIO} />);
+    expect(document.querySelector('input[type="file"]')?.getAttribute('accept')).toBe('.mp3,.ogg,.wav');
+  });
+});
+
+// The bar was a 200 ms timer counting to 90%, started on every upload and
+// stopped only when one succeeded, so each refused upload left one running
+// for the life of the page. It now shows how much of the file has been sent.
+describe('upload progress', () => {
+  beforeEach(() => { campaigns = []; uploadAsset.mockReset(); });
+
+  async function startUpload() {
+    render(<AssetUploadModal isOpen onClose={() => undefined} onSuccess={() => undefined} defaultType={AssetType.MAP} />);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File(['x'], 'cave.png', { type: 'image/png' })] } });
+    fireEvent.click(await screen.findByRole('button', { name: /^Upload$/ }));
+  }
+
+  it('leaves no timer running after a refused upload', async () => {
+    uploadAsset.mockRejectedValue({ response: { status: 413, data: { message: 'The file is larger than 25 MB.' } } });
+    // The test library polls with intervals of its own, and clears them. jsdom
+    // runs animation frames on an interval of 1000 / 60 ms while any frame is
+    // asked for, which the dialog's opening animation does; on a slow machine it
+    // is still running when the message appears. That one is left out, and a
+    // frame is asked for here so the test meets it on every machine.
+    const frameTimer = 1000 / 60;
+    const started = vi.spyOn(window, 'setInterval');
+    const cleared = vi.spyOn(window, 'clearInterval');
+    try {
+      await startUpload();
+      expect(await screen.findByText('The file is larger than 25 MB.')).toBeInTheDocument();
+      requestAnimationFrame(() => undefined);
+      const clearedIds = new Set(cleared.mock.calls.map(([id]) => id));
+      const running = started.mock.calls.flatMap(([, delay], i) => {
+        const id = started.mock.results[i].value;
+        return delay === frameTimer || clearedIds.has(id) ? [] : [delay];
+      });
+      expect(running).toEqual([]);
+    } finally {
+      started.mockRestore();
+      cleared.mockRestore();
+    }
+  });
+
+  it('shows how much of the file has been sent', async () => {
+    uploadAsset.mockImplementation((_form: FormData, onProgress?: (percent: number) => void) => {
+      onProgress?.(40);
+      return new Promise(() => undefined);
+    });
+    await startUpload();
+    expect(await screen.findByText('40%')).toBeInTheDocument();
+    // And stays there while nothing more is sent, where the timer counted on.
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(screen.getByText('40%')).toBeInTheDocument();
+  });
+});
+

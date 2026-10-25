@@ -2,9 +2,10 @@
  * waitForDialogFocus returns only after the dialog's focus trap has moved
  * focus, so keys a test types next land where it expects.
  *
- * A field with autoFocus puts focus inside the dialog before the trap's frame
- * runs. Waiting for focus to be inside the dialog is then not enough: the
- * trap's frame still moves focus to the dialog's first control afterwards.
+ * A field with React's autoFocus puts focus inside the dialog before the
+ * trap's frame runs. Waiting for focus to be inside the dialog is then not
+ * enough: the trap's frame still moves focus to the field marked
+ * data-autofocus, or to the dialog's first control, afterwards.
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
@@ -16,7 +17,8 @@ function TrappedDialog() {
   return (
     <div ref={ref} role="dialog" aria-label="Trapped">
       <button type="button">Close dialog</button>
-      <input aria-label="Email" autoFocus />
+      <input aria-label="Name" autoFocus />
+      <input aria-label="Email" data-autofocus />
     </div>
   );
 }
@@ -42,13 +44,13 @@ afterEach(() => {
 describe('waitForDialogFocus', () => {
   it('returns after the focus trap has moved focus, even when a field has autoFocus', async () => {
     render(<TrappedDialog />);
-    expect(document.activeElement).toBe(screen.getByLabelText('Email'));
+    expect(document.activeElement).toBe(screen.getByLabelText('Name'));
 
     await waitForDialogFocus();
     const focusedWhenReturned = document.activeElement;
     await nextFrame();
 
     expect(document.activeElement).toBe(focusedWhenReturned);
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(document.activeElement).toBe(screen.getByLabelText('Email'));
   });
 });

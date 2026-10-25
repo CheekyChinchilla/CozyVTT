@@ -25,6 +25,8 @@ export interface WallMoveDrag {
   startY: number;
   preDragState: WallSegment[];
   hasDragged: boolean;
+  /** How far the selection has been carried, as of the last pointer move. */
+  offset?: { dx: number; dy: number };
 }
 
 export interface WallEndpointDrag {

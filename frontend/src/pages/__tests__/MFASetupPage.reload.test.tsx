@@ -73,9 +73,23 @@ describe('leaving with the backup codes on screen', () => {
     fireEvent.click(screen.getByRole('button', { name: /verify & enable/i }));
     await screen.findByText('ABCD-EFGH');
 
-    expect(leavingIsQuestioned()).toBe(true);
+    // The listener is added by an effect that can run after the codes show.
+    await waitFor(() => expect(leavingIsQuestioned()).toBe(true));
 
     fireEvent.click(screen.getByRole('checkbox'));
     expect(leavingIsQuestioned()).toBe(false);
+  });
+});
+
+// The setup page is outside the routes that wait for the server, so while the
+// sign-in check got no answer it showed a spinner for as long as that lasted.
+describe('while the server does not answer', () => {
+  it('says so and offers to try again, as the other pages do', () => {
+    const retryAuthCheck = vi.fn();
+    auth.mockReturnValue({ authenticated: false, loading: true, serverUnreachable: true, retryAuthCheck, setupMFA, completeMFASetup });
+    renderPage();
+    expect(screen.getByRole('alert')).toHaveTextContent("Can't reach the server");
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+    expect(retryAuthCheck).toHaveBeenCalled();
   });
 });

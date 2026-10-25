@@ -32,7 +32,8 @@
  * answer the API gives, so the pages can show the message.
  *
  * A key's count can be forgotten (`forget`) when the credential the guesses
- * were at has changed: a new password opens a locked account at once.
+ * were at has changed: a new password opens a locked account at once. An
+ * admin can read a key's count (`peek`) and forget it too.
  *
  * Kept in memory, like the other limiters: a restart forgets it.
  */
@@ -45,6 +46,8 @@ export interface FailureLimiter extends RequestHandler {
   recordFailure(req: Request): void;
   /** Forget the wrong answers counted against `key`, as the `key` option returns it. Requests waiting on it are let through. */
   forget(key: string): void;
+  /** The wrong answers counted against `key` within the window, and when its refusals end if it is refused now. */
+  peek(key: string): { failures: number; lockedUntil: Date | null };
 }
 
 export interface FailureLimiterOptions {
@@ -63,6 +66,12 @@ export interface FailureLimiterOptions {
   onLimit?: (req: Request, key: string) => void;
   /** How long a request may wait for a check ahead of it to finish; 15 seconds unless set. */
   waitMs?: number;
+  /**
+   * Whether this limiter sends the `RateLimit-*` headers; true unless set.
+   * A second limiter on the same route sets false, or its headers replace
+   * the first one's and tell a client the wrong allowance.
+   */
+  headers?: boolean;
 }
 
 /**
@@ -93,20 +102,23 @@ interface AddressState {
   waiting: Array<() => void>;
 }
 
+/**
+ * The address a request is counted under: as Express reads it with the app's
+ * `trust proxy` setting, which is what express-rate-limit keyed on. One IPv6
+ * visitor usually holds a whole /56 network and can send each guess from a
+ * new address in it, so the network is counted, as express-rate-limit counts
+ * it.
+ */
+export function addressKey(req: Request): string {
+  const address = req.ip ?? req.socket.remoteAddress;
+  return address ? ipKeyGenerator(address) : 'unknown';
+}
+
 export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
   const { windowMs, max, message, onLimit } = options;
   const waitMs = options.waitMs ?? FAILURE_LIMITER_WAIT_MS;
   const addresses = new Map<string, AddressState>();
-
-  // The address as Express reads it with the app's `trust proxy` setting,
-  // which is what express-rate-limit keyed on. One IPv6 visitor usually holds
-  // a whole /56 network and can send each guess from a new address in it, so
-  // the network is counted, as express-rate-limit counts it.
-  const byAddress = (req: Request): string => {
-    const address = req.ip ?? req.socket.remoteAddress;
-    return address ? ipKeyGenerator(address) : 'unknown';
-  };
-  const keyOf = options.key ?? byAddress;
+  const keyOf = options.key ?? addressKey;
 
   const stateOf = (key: string): AddressState => {
     let state = addresses.get(key);
@@ -129,6 +141,7 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
 
   /** The standard rate-limit headers, as the limiter this replaced sent them. */
   const setHeaders = (res: Response, state: AddressState, now: number): void => {
+    if (options.headers === false) return;
     const resetSeconds = state.failures.length > 0 ? Math.ceil((state.failures[0] + windowMs - now) / 1000) : 0;
     res.setHeader('RateLimit-Policy', `${max};w=${Math.round(windowMs / 1000)}`);
     res.setHeader('RateLimit-Limit', String(max));
@@ -248,6 +261,15 @@ export function failureLimiter(options: FailureLimiterOptions): FailureLimiter {
       state.failures.length = 0;
       for (const waiter of state.waiting.splice(0)) waiter();
       forgetIfIdle(key, state);
+    },
+    peek(key: string): { failures: number; lockedUntil: Date | null } {
+      const state = addresses.get(key);
+      if (!state) return { failures: 0, lockedUntil: null };
+      prune(state, Date.now());
+      const failures = state.failures.length;
+      // Refused until enough of the oldest have aged out to leave one fewer than the limit.
+      const lockedUntil = failures >= max ? new Date(state.failures[failures - max] + windowMs) : null;
+      return { failures, lockedUntil };
     },
   });
 }

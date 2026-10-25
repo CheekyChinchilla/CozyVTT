@@ -26,6 +26,8 @@ vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }),
 }));
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+
 vi.mock('@/contexts/WebSocketContext', () => ({
   useWebSocket: () => ({
     socket: { emit: vi.fn(), on: vi.fn(), off: vi.fn(), emitInitiativeRoll, emitInitiativeSet },

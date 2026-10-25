@@ -101,4 +101,21 @@ describe('POST /api/characters/:id/copy', () => {
     const stored = await prisma.character.findUnique({ where: { id: copy.body.character.id }, select: { name: true } });
     expect(stored?.name).toBe(`${'n'.repeat(192)} (Copy)`);
   });
+
+  it('writes the copy name into the sheet, so the first save keeps it', async () => {
+    const { id, agent } = await signedIn();
+    const dnd = await prisma.character.create({
+      data: { userId: id, name: 'Aldra', gameSystem: 'DND_5E', data: { characterName: 'Aldra', level: 3 } },
+    });
+    const coc = await prisma.character.create({
+      data: { userId: id, name: 'Harvey', gameSystem: 'CALL_OF_CTHULHU_7E', data: { investigatorName: 'Harvey' } },
+    });
+
+    const dndCopy = await agent.post(`/api/characters/${dnd.id}/copy`);
+    expect(dndCopy.status).toBe(201);
+    expect(dndCopy.body.character.data).toEqual({ characterName: 'Aldra (Copy)', level: 3 });
+    const cocCopy = await agent.post(`/api/characters/${coc.id}/copy`);
+    expect(cocCopy.status).toBe(201);
+    expect(cocCopy.body.character.data.investigatorName).toBe('Harvey (Copy)');
+  });
 });

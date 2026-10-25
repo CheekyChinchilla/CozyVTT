@@ -260,7 +260,17 @@ export function registerExplorationHandlers(io: Server, socket: AuthenticatedSoc
         return;
       }
       forgetQueuedReveals(mapId);
-      await prisma.mapExploration.deleteMany({ where: { mapId } });
+      // Each player's memory under that player's lock, the one a write of it
+      // holds: a write that had read the old row before the delete wrote it
+      // back after, and the player kept what the DM cleared. In a fixed
+      // order, so two resets cannot wait on each other.
+      await prisma.$transaction(async (tx) => {
+        const rows = await tx.mapExploration.findMany({ where: { mapId }, select: { userId: true }, orderBy: { userId: 'asc' } });
+        for (const { userId } of rows) {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}), hashtext(${userId}))`;
+        }
+        await tx.mapExploration.deleteMany({ where: { mapId } });
+      });
       await emitToMapReaders(io, socket.campaignId, mapId, 'exploration:state', { mapId, userId: null, cells: [] });
     } catch (error) {
       logger.error('exploration:reset failed', { err: error });

@@ -3,9 +3,12 @@
 //
 // CSS-positioned (no floating-ui dependency): shows a small themed bubble
 // above the wrapped element on hover or keyboard focus, after a short
-// delay. Honors prefers-reduced-motion (fade is a transition, and framer
-// isn't involved). Intended for icon-only toolbar buttons — pair with
-// <Button iconOnly aria-label>.
+// delay, fading in. Honors prefers-reduced-motion (the fade is a CSS
+// animation, and framer isn't involved). Intended for icon-only toolbar
+// buttons — pair with <Button iconOnly aria-label>.
+//
+// The bubble is on the page only while it shows: laid out and transparent,
+// one beside the window's right edge made the whole page scroll sideways.
 // ============================================
 
 import { useId, useRef, useState } from 'react';
@@ -47,20 +50,20 @@ export default function Tooltip({ content, delay = 400, side = 'top', children }
       aria-describedby={visible ? id : undefined}
     >
       {children}
-      <span
-        id={id}
-        role="tooltip"
-        className={cn(
-          'pointer-events-none absolute left-1/2 -translate-x-1/2 z-[70]',
-          side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
-          'whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium',
-          'bg-ink text-canvas shadow-lg',
-          'transition-opacity duration-150',
-          visible ? 'opacity-100' : 'opacity-0'
-        )}
-      >
-        {content}
-      </span>
+      {visible && (
+        <span
+          id={id}
+          role="tooltip"
+          className={cn(
+            'pointer-events-none absolute left-1/2 -translate-x-1/2 z-70',
+            side === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5',
+            'whitespace-nowrap rounded-lg px-2.5 py-1 text-xs font-medium',
+            'bg-ink text-canvas shadow-lg animate-fade-in'
+          )}
+        >
+          {content}
+        </span>
+      )}
     </span>
   );
 }

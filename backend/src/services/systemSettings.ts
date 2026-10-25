@@ -54,7 +54,7 @@ export async function markSetupCompleted(db: Prisma.TransactionClient = prisma):
  */
 export async function completeSetupInTransaction(
   tx: Prisma.TransactionClient,
-  settings: { instanceName?: string; timezone?: string; allowRegistration?: boolean }
+  settings: { instanceName?: string; allowRegistration?: boolean }
 ): Promise<void> {
   await getSystemSettings(tx);
   await tx.systemSettings.updateMany({ data: { ...settings, setupCompleted: true } });
@@ -104,7 +104,6 @@ export async function getAppearanceSettings() {
  */
 export async function updateSystemSettings(data: {
   instanceName?: string;
-  timezone?: string;
   allowRegistration?: boolean;
   requireAdminApproval?: boolean;
   themeId?: string;

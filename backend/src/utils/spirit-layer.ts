@@ -1,5 +1,6 @@
+import { createHash } from 'crypto';
 import { prisma } from '../config/database';
-import { computeVisibility, isPointVisible } from './raycasting';
+import { computeVisibility, isPointVisible, type VisibilityPolygon } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
 import { tokenCentre } from './tokenCentre';
 import type { WallSegment, LightSource } from '../types/walls';
@@ -48,6 +49,29 @@ export interface MapData {
   updatedAt: Date;
 }
 
+/** The tokens on a map's spirit plane that are shown, out of its stored tokens JSON. */
+function shownSpiritTokens(tokens: unknown): Token[] {
+  return ((Array.isArray(tokens) ? tokens : []) as Token[]).filter((t) => t.layer === 'spirit' && t.visible);
+}
+
+/**
+ * The spirit-layer rule itself, for one member of one campaign (see
+ * getSpiritVisibility). `spiritTokens` are the shown spirit-plane tokens of
+ * the campaign's current map, or null when it has none or they were not read
+ * because the answer does not depend on them. Every function below decides by
+ * this, so the three cannot answer differently.
+ */
+function seesSpiritPlane(
+  role: string | undefined,
+  spiritLayerEnabled: boolean,
+  spiritTokens: Token[] | null,
+  userId: string
+): boolean {
+  if (!role) return false;
+  if (role === 'DM' || spiritLayerEnabled) return true;
+  return role === 'PLAYER' && spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId);
+}
+
 /**
  * Check if a user can see the spirit layer for a given campaign.
  *
@@ -86,39 +110,18 @@ export async function getSpiritVisibility(
     return false;
   }
 
-  // DM always sees the spirit layer
-  if (membership.role === 'DM') {
-    return true;
-  }
-
-  // All players/spectators see it when DM has globally enabled it
-  if (campaign.spiritLayerEnabled) {
-    return true;
-  }
-
-  // Individual player check: are they personally in the spirit realm?
-  // A player has crossed over if their token (controlledBy === userId) is on
-  // the spirit layer and visible in the campaign's current map. Only a
-  // player: a spectator can still be named on a token from before they were
-  // demoted, and that name is nobody's, here as in every other filter.
-  if (membership.role === 'PLAYER' && campaign.currentMapId) {
+  // The current map's tokens matter only to a player, while the plane is not
+  // open to everyone: they see it once their own token has crossed over.
+  let spiritTokens: Token[] | null = null;
+  if (membership.role === 'PLAYER' && !campaign.spiritLayerEnabled && campaign.currentMapId) {
     const currentMap = await prisma.map.findUnique({
       where: { id: campaign.currentMapId },
       select: { tokens: true },
     });
-
-    if (currentMap?.tokens) {
-      const tokens = (Array.isArray(currentMap.tokens) ? currentMap.tokens : []) as unknown as Token[];
-      const isPersonallyInSpiritRealm = tokens.some(
-        (t) => t.layer === 'spirit' && t.visible && t.controlledBy === userId
-      );
-      if (isPersonallyInSpiritRealm) {
-        return true;
-      }
-    }
+    spiritTokens = currentMap ? shownSpiritTokens(currentMap.tokens) : null;
   }
 
-  return false;
+  return seesSpiritPlane(membership.role, campaign.spiritLayerEnabled, spiritTokens, userId);
 }
 
 /**
@@ -172,24 +175,62 @@ export async function getSpiritVisibilityBatch(
       where: { id: campaign.currentMapId },
       select: { tokens: true },
     });
-    const tokens = (Array.isArray(currentMap?.tokens) ? currentMap!.tokens : []) as unknown as Token[];
-    spiritTokens = tokens.filter((t) => t.layer === 'spirit' && t.visible);
+    spiritTokens = shownSpiritTokens(currentMap?.tokens);
   }
 
   for (const userId of uniqueIds) {
-    const role = roleByUser.get(userId);
-    if (!role || !campaign) {
-      result.set(userId, false);
-      continue;
-    }
-    if (role === 'DM' || campaign.spiritLayerEnabled) {
-      result.set(userId, true);
-      continue;
-    }
-    // Crossing over is a player's; see getSpiritVisibility.
-    result.set(userId, role === 'PLAYER' && spiritTokens != null && spiritTokens.some((t) => t.controlledBy === userId));
+    result.set(userId, campaign ? seesSpiritPlane(roleByUser.get(userId), campaign.spiritLayerEnabled, spiritTokens, userId) : false);
   }
 
+  return result;
+}
+
+/**
+ * The other way round from getSpiritVisibilityBatch: one user, many
+ * campaigns. Whether they see the spirit plane in each campaign they are a
+ * member of, in a fixed number of queries (memberships and campaigns in one
+ * each, the current maps' tokens at most once), however many campaigns there
+ * are. A campaign they are not a member of is left out of the answer.
+ *
+ * @param userId - The user to resolve
+ * @param campaignIds - The campaigns (duplicates are de-duped)
+ * @returns Map of campaignId → whether the user sees the spirit layer there
+ */
+export async function getSpiritVisibilityAcrossCampaigns(
+  userId: string,
+  campaignIds: string[]
+): Promise<Map<string, boolean>> {
+  const result = new Map<string, boolean>();
+  const ids = [...new Set(campaignIds)];
+  if (ids.length === 0) return result;
+
+  const [memberships, campaigns] = await Promise.all([
+    prisma.campaignMembership.findMany({
+      where: { userId, campaignId: { in: ids } },
+      select: { campaignId: true, role: true },
+    }),
+    prisma.campaign.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, spiritLayerEnabled: true, currentMapId: true },
+    }),
+  ]);
+  const roleIn = new Map(memberships.map((m) => [m.campaignId, m.role]));
+
+  // Only where a player's own crossing over decides it.
+  const crossoverMapIds = campaigns
+    .filter((c) => roleIn.get(c.id) === 'PLAYER' && !c.spiritLayerEnabled && c.currentMapId)
+    .map((c) => c.currentMapId!);
+  const currentMaps = crossoverMapIds.length === 0
+    ? []
+    : await prisma.map.findMany({ where: { id: { in: crossoverMapIds } }, select: { id: true, tokens: true } });
+  const spiritTokensOn = new Map(currentMaps.map((m) => [m.id, shownSpiritTokens(m.tokens)]));
+
+  for (const campaign of campaigns) {
+    const role = roleIn.get(campaign.id);
+    if (!role) continue;
+    const spiritTokens = campaign.currentMapId ? spiritTokensOn.get(campaign.currentMapId) ?? null : null;
+    result.set(campaign.id, seesSpiritPlane(role, campaign.spiritLayerEnabled, spiritTokens, userId));
+  }
   return result;
 }
 
@@ -342,6 +383,59 @@ export function filterTokensByLighting(
  */
 const litCache = new WeakMap<object, WeakMap<object, { key: string; lits: Lit[] }>>();
 
+/**
+ * What each light reaches, kept from one read of the map to the next. Every
+ * token move reads the map again, with the same walls and lights as the move
+ * before, and raycasting each light afresh was most of what a move cost on a
+ * lit map. Keyed by everything the reach is worked out from: every wall's
+ * type and ends, in order, the map's size, and the light's place and dim
+ * radius, so a changed wall or a moved light is worked out again. The
+ * LIGHT_REACHES_KEPT used most recently are kept, and fewer when together
+ * they pass LIGHT_REACH_POINTS_KEPT points: a wide light on a map of
+ * thousands of walls reaches tens of thousands of points, at about 80 bytes
+ * a point, so the bound holds the cache near 80 MB. A reach of more points
+ * than that alone is never kept.
+ */
+const LIGHT_REACHES_KEPT = 256;
+export const LIGHT_REACH_POINTS_KEPT = 1_000_000;
+const lightReaches = new Map<string, VisibilityPolygon>();
+let lightReachPoints = 0;
+
+/** The walls as far as sight is concerned, in a few bytes. */
+function wallsFingerprint(walls: WallSegment[]): string {
+  const ends = walls.map((w) => [w.type, w.x1, w.y1, w.x2, w.y2]);
+  return createHash('sha256').update(JSON.stringify(ends)).digest('base64');
+}
+
+function lightReach(
+  light: LightSource,
+  dimRadiusPx: number,
+  wallsKey: string,
+  wallSegs: WallSegment[],
+  mapWidthPx: number,
+  mapHeightPx: number
+): VisibilityPolygon {
+  const key = JSON.stringify([wallsKey, mapWidthPx, mapHeightPx, light.x, light.y, dimRadiusPx]);
+  const kept = lightReaches.get(key);
+  if (kept) {
+    // Most recently used goes last, so the first is the one to let go.
+    lightReaches.delete(key);
+    lightReaches.set(key, kept);
+    return kept;
+  }
+  const reach = computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx);
+  if (reach.points.length > LIGHT_REACH_POINTS_KEPT) return reach;
+  lightReaches.set(key, reach);
+  lightReachPoints += reach.points.length;
+  while (lightReaches.size > LIGHT_REACHES_KEPT || lightReachPoints > LIGHT_REACH_POINTS_KEPT) {
+    const oldest = lightReaches.entries().next().value;
+    if (oldest === undefined) break;
+    lightReaches.delete(oldest[0]);
+    lightReachPoints -= oldest[1].points.length;
+  }
+  return reach;
+}
+
 function litsFor(
   walls: unknown,
   lights: unknown,
@@ -357,12 +451,13 @@ function litsFor(
   if (hit && hit.key === key) return hit.lits;
   // Light positions are already in map-space pixels (Y=0 at top), so no flip
   // is needed.
+  const wallsKey = enabledLights.length > 0 ? wallsFingerprint(wallSegs) : '';
   const lits: Lit[] = enabledLights.map((light) => {
     const dimRadiusPx = (light.dimRadius ?? light.brightRadius ?? 3) * gridSize;
     return {
       cx: light.x,
       cy: light.y,
-      reach: computeVisibility({ x: light.x, y: light.y }, wallSegs, mapWidthPx, mapHeightPx, dimRadiusPx),
+      reach: lightReach(light, dimRadiusPx, wallsKey, wallSegs, mapWidthPx, mapHeightPx),
       brightPx: (light.brightRadius ?? 0) * gridSize,
       dimPx: dimRadiusPx,
     };
@@ -593,8 +688,12 @@ export function lightReachesPlayers(light: LightSource | undefined): boolean {
   return light?.enabled === true;
 }
 
-/** Whether a light changing from `before` to `after` changes the copy anyone but the DM has. */
+/**
+ * Whether a light changing from `before` to `after` changes the copy anyone
+ * but the DM has. A light set to the values it already has changes nothing.
+ */
 export function lightChangeReachesPlayers(before: LightSource, after: LightSource): boolean {
+  if (sameLight(before, after)) return false;
   return lightReachesPlayers(before) || lightReachesPlayers(after);
 }
 

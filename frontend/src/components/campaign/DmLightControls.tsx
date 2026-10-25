@@ -9,7 +9,7 @@
  * TTRPG light mechanics.
  */
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useId } from 'react';
 import type { LightSource } from '@/types/walls';
 
 export type LightToolMode = 'light-place' | 'light-select' | null;
@@ -112,6 +112,7 @@ export default function DmLightControls({
   // Folded away to begin with, like the other map tools: a DM arriving at the
   // table wants to see the map, not three open panels over it.
   const [collapsed, setCollapsed] = useState(true);
+  const bodyId = useId();
 
   const handleClearAll = () => {
     if (!confirmClear) { setConfirmClear(true); return; }
@@ -135,8 +136,14 @@ export default function DmLightControls({
   const [localBright, setLocalBright] = useState<number | null>(null);
   const [localDim, setLocalDim] = useState<number | null>(null);
 
+  // The colour box as typed. Only a complete colour is applied, so the box
+  // holds what is typed until then; it showed the colour in use instead,
+  // which undid every key.
+  const [colourDraft, setColourDraft] = useState<string | null>(null);
+
   // Sync local overrides when selected light changes externally
   useEffect(() => {
+    setColourDraft(null);
     setLocalBright(null);
     setLocalDim(null);
   }, [selectedLight?.id]);
@@ -173,8 +180,11 @@ export default function DmLightControls({
   return (
     <div className="flex flex-col gap-0 bg-stone-800/90 rounded-lg border border-amber-400/20 min-w-[200px] overflow-hidden">
       {/* Header with collapse toggle */}
-      <div
-        className="flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
+      <button
+        type="button"
+        aria-expanded={!collapsed}
+        aria-controls={bodyId}
+        className="w-full flex items-center justify-between px-2 py-1.5 cursor-pointer hover:bg-stone-700/50 select-none"
         onClick={() => {
           const next = !collapsed;
           setCollapsed(next);
@@ -184,17 +194,17 @@ export default function DmLightControls({
         <span className="text-xs text-amber-400/70 font-medium uppercase tracking-wide">
           Lights
           {lightCount > 0 && (
-            <span className="ml-1 text-stone-400 normal-case">({lightCount})</span>
+            <>{' '}<span className="text-stone-400 normal-case">({lightCount})</span></>
           )}
         </span>
-        <span className="text-stone-400 text-xs">{collapsed ? '▶' : '▼'}</span>
-      </div>
+        <span className="text-stone-400 text-xs" aria-hidden="true">{collapsed ? '▶' : '▼'}</span>
+      </button>
 
       {!collapsed && (
-        <div className="flex flex-col gap-2 p-2 pt-1">
+        <div id={bodyId} className="flex flex-col gap-2 p-2 pt-1">
           {/* Warning when lighting is off */}
           {!lightingEnabled && (
-            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
+            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded-sm px-1.5 py-1 border border-amber-400/10">
               Dynamic lighting is off. Enable it in Edit Map for lights to affect player visibility.
             </div>
           )}
@@ -215,7 +225,7 @@ export default function DmLightControls({
             </label>
           )}
           {lightingEnabled && !globalIllumination && lightCount === 0 && (
-            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded px-1.5 py-1 border border-amber-400/10">
+            <div className="text-[10px] text-amber-400/60 bg-amber-400/5 rounded-sm px-1.5 py-1 border border-amber-400/10">
               No lights placed and Global Illumination is off: players see only their darkvision.
             </div>
           )}
@@ -250,7 +260,7 @@ export default function DmLightControls({
 
           {/* Light property editor — shows for BOTH place mode (defaults) and select mode (editing) */}
           {lightMode && (
-            <div className="flex flex-col gap-2 bg-stone-700/40 rounded p-2 border border-stone-600/40">
+            <div className="flex flex-col gap-2 bg-stone-700/40 rounded-sm p-2 border border-stone-600/40">
               <div className="text-[10px] text-stone-400 uppercase tracking-wide">
                 {isEditing ? 'Edit Light' : 'New Light Settings'}
               </div>
@@ -262,7 +272,7 @@ export default function DmLightControls({
                     type="checkbox"
                     checked={selectedLight.enabled}
                     onChange={(e) => updateSelected({ enabled: e.target.checked })}
-                    className="rounded accent-amber-400"
+                    className="rounded-sm accent-amber-400"
                   />
                   <span className="text-[11px] text-stone-300">
                     {selectedLight.enabled ? 'Enabled' : 'Disabled (extinguished)'}
@@ -386,21 +396,25 @@ export default function DmLightControls({
                       if (isEditing) updateSelected({ color: e.target.value });
                       else updateDefaults({ color: e.target.value });
                     }}
-                    className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent"
+                    className="w-5 h-5 rounded-sm cursor-pointer border-0 bg-transparent"
                     title="Pick custom color"
                   />
                   <input
                     type="text"
-                    value={displayColor}
+                    value={colourDraft ?? displayColor}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (/^#[0-9a-fA-F]{6}$/.test(v)) {
-                        const lower = v.toLowerCase();
-                        if (isEditing) updateSelected({ color: lower });
-                        else updateDefaults({ color: lower });
+                      setColourDraft(v);
+                      const hex = /^#?([0-9a-fA-F]{6})$/.exec(v.trim());
+                      if (hex) {
+                        const colour = `#${hex[1].toLowerCase()}`;
+                        if (isEditing) updateSelected({ color: colour });
+                        else updateDefaults({ color: colour });
                       }
                     }}
-                    className="flex-1 text-[10px] bg-stone-800 border border-stone-600 rounded px-1.5 py-0.5 text-stone-300 font-mono"
+                    onBlur={() => setColourDraft(null)}
+                    aria-label="Light colour"
+                    className="flex-1 text-[10px] bg-stone-800 border border-stone-600 rounded-sm px-1.5 py-0.5 text-stone-300 font-mono"
                     maxLength={7}
                     placeholder="#ffcc66"
                   />
@@ -412,7 +426,7 @@ export default function DmLightControls({
                 <button
                   type="button"
                   onClick={onDeleteSelected}
-                  className="text-[11px] py-1 rounded bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors"
+                  className="text-[11px] py-1 rounded-sm bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors"
                 >
                   Delete Light
                 </button>

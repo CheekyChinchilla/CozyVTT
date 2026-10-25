@@ -6,7 +6,8 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { StatsSection } from '../../../../../types/flexible-character-sheet';
 import { calculateModifier, formatModifier, generateId } from '../../utils/section-helpers';
-import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import { FLEXIBLE_MAX_FIELDS, SHEET_NAME_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../../../ListLimitNote';
 
 interface StatsEditorProps {
   section: StatsSection;
@@ -14,11 +15,11 @@ interface StatsEditorProps {
 }
 
 export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) => {
-  // TODO(sheets): the server keeps at most 200 stats in a section (FLEXIBLE_MAX_FIELDS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
+  // The server keeps at most FLEXIBLE_MAX_FIELDS stats in a section, so Add
+  // Stat turns off there.
+  const statsFull = listIsFull(section.fields, FLEXIBLE_MAX_FIELDS);
   const addField = () => {
+    if (statsFull) return;
     const newField = {
       id: generateId(),
       name: 'New Stat',
@@ -55,11 +56,11 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
         {section.fields.map((field) => (
           <div
             key={field.id}
-            className="bg-parchment/30 border border-moss-green/20 rounded-lg p-3 relative group"
+            className="bg-ink/5 border border-moss-green/20 rounded-lg p-3 relative group"
           >
             <button
               onClick={() => removeField(field.id)}
-              className="absolute top-2 right-2 p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+              className="absolute top-2 right-2 p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
               title="Remove stat"
             >
               <Trash2 className="w-4 h-4" />
@@ -71,7 +72,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                 value={field.name}
                 onChange={(e) => updateField(field.id, { name: e.target.value })}
                 maxLength={SHEET_NAME_MAX}
-                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
+                className="w-full text-sm font-semibold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-brand-ink"
                 placeholder="Stat name"
               />
 
@@ -82,7 +83,7 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
                   onChange={(e) =>
                     updateField(field.id, { value: parseInt(e.target.value) || 0 })
                   }
-                  className="w-20 text-2xl font-bold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-brand-ink"
+                  className="w-20 text-2xl font-bold bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-brand-ink"
                 />
                 <span className="text-lg text-stone-gray">
                   ({formatModifier(field.modifier || 0)})
@@ -95,11 +96,13 @@ export const StatsEditor: React.FC<StatsEditorProps> = ({ section, onUpdate }) =
 
       <button
         onClick={addField}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        disabled={statsFull}
+        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/15 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
       >
         <Plus className="w-4 h-4" />
         Add Stat
       </button>
+      <ListLimitNote full={statsFull} max={FLEXIBLE_MAX_FIELDS} />
     </div>
   );
 };

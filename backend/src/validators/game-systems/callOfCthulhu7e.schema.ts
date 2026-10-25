@@ -37,12 +37,16 @@ const characteristicsSchema = z.object({
 
 /**
  * Hit points
+ *
+ * CON + SIZ under 10 works out to 0 hit points. Rolled characteristics never
+ * get there (CON at least 15, SIZ at least 40), typed ones can, so the maximum
+ * and the major wound threshold may be 0.
  */
 const hitPointsSchema = z.object({
-  maximum: z.number().int().min(1),
+  maximum: z.number().int().min(0),
   current: z.number().int(),
   formula: shortText,
-  majorWoundThreshold: z.number().int().min(1),
+  majorWoundThreshold: z.number().int().min(0),
 });
 
 /**
@@ -108,12 +112,14 @@ const skillSchema = z.object({
 });
 
 /**
- * Fighting skill
+ * Fighting skill. A specialisation the player adds (Sword, Axe) carries its
+ * name; Brawl has none.
  */
 const fightingSkillSchema = z.object({
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
+  specialization: shortText.optional(),
 });
 
 /**
@@ -125,12 +131,14 @@ const fightingSkillsSchema = z.object({
 });
 
 /**
- * Firearms skill
+ * Firearms skill. A specialisation the player adds (Bow, Submachine Gun)
+ * carries its name; the three printed on the sheet have none.
  */
 const firearmsSkillSchema = z.object({
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
+  specialization: shortText.optional(),
 });
 
 /**
@@ -144,20 +152,21 @@ const firearmsSkillsSchema = z.object({
 });
 
 /**
- * Language skill
+ * Language skill. The name may be empty, as the sheet's other name boxes may:
+ * clearing one to retype it writes an empty string.
  */
 const languageSkillSchema = z.object({
-  language: shortText.min(1),
+  language: shortText,
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
 });
 
 /**
- * Science skill
+ * Science skill. The specialisation may be empty, as a language's name may.
  */
 const scienceSkillSchema = z.object({
-  specialization: shortText.min(1),
+  specialization: shortText,
   baseValue: z.number().int().min(0).max(100),
   currentValue: z.number().int().min(0).max(100),
   improvementChecked: z.boolean(),
@@ -187,7 +196,7 @@ const skillsSchema = z.object({
   history: skillSchema,
   intimidate: skillSchema,
   jump: skillSchema,
-  languageOwn: skillSchema.extend({ language: shortText.min(1) }),
+  languageOwn: skillSchema.extend({ language: shortText }),
   languageOther: sheetList(languageSkillSchema),
   law: skillSchema,
   libraryUse: skillSchema,
@@ -299,12 +308,13 @@ const backstorySchema = z.object({
 });
 
 /**
- * Contact
- * Role and notes optional for quick contact addition
+ * Contact. Role and notes are optional, and the name and role may be empty:
+ * the editor adds a contact with no role, and clearing a box writes an empty
+ * string.
  */
 const contactSchema = z.object({
-  name: shortText.min(1),
-  role: shortText.min(1).optional(),
+  name: shortText,
+  role: shortText.optional(),
   notes: longText.optional(),
 });
 

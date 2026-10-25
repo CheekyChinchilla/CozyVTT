@@ -6,26 +6,40 @@
 
 import { z } from 'zod';
 import { GameSystem } from '@prisma/client';
-import { VibeSettingsSchema } from './campaigns';
+import { ImportVibeSettingsSchema } from './campaigns';
 import { SPIRIT_STYLE_PATTERN } from '../utils/styleAllowlists';
 import { NpcStatBlockSchema } from './statBlock';
 import { TokenHpSchema, TokenSightRadiusSchema, TokenSizeSchema, TOKEN_TYPES, TOKEN_DISPOSITIONS, TOKEN_DISPLAY_MODES } from './tokens';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAX_FOG_CELLS } from './maps';
+import { TOKEN_LIMITS } from './tokenLimits';
+import { CAMPAIGN_LIMITS } from './campaignLimits';
 
 // ── Limits ──────────────────────────────────────────────────────────────────
 
 // Tokens on a map, walls and lights are held to the app's own limits
 // (MAP_LIMITS, validators/walls.ts), so anything the app stores imports.
+// How many maps, pictures and sound files an archive holds is bounded by
+// MAX_FILE_COUNT, since each is a file in it. Creatures and token templates
+// have counts of their own: bounded only by their 10 MB list, a list of
+// 65,000 minimal creatures stopped the server, and 2,000 import in about
+// 20 MB. The export checks the same bounds, so a campaign that exports
+// imports again. (Counts of 50 maps, 200 creatures, 500 templates and 500
+// files used to refuse or cut archives a campaign could export.)
 export const IMPORT_LIMITS = {
-  MAX_MAPS: 50,
-  MAX_CREATURES: 200,
-  MAX_TOKEN_TEMPLATES: 500,
-  MAX_ASSETS: 500,
   MAX_JSON_SIZE_BYTES: 10 * 1024 * 1024, // 10 MB per JSON file
   MAX_FILE_COUNT: 1000,
+  MAX_CREATURES: 2000,
+  MAX_TOKEN_TEMPLATES: 2000,
   // How deeply a data file may nest objects and lists. An export reaches
   // six, at a map token's stat block's proficiencies; this is five times that.
   MAX_JSON_DEPTH: 32,
+  // How many values and members one map file may hold, counted on its text
+  // before it is parsed. The largest map an export writes (a 500 by 500 fog,
+  // 5,000 walls, and as many tokens carrying the longest SRD stat block as
+  // fit in the 10 MB a file may hold, about 760) holds about 340,000; 10 MB
+  // of tiny walls or empty objects holds over a million and cost several
+  // times as much to parse.
+  MAX_MAP_VALUES: 1_000_000,
   FORMAT_VERSION: 1,
 } as const;
 
@@ -51,8 +65,8 @@ const ImportHpSchema = TokenHpSchema.nullable().optional().catch(null);
 // Conditions are kept one at a time, so an over-long entry costs itself and
 // not the list.
 const ImportConditionsSchema = z
-  .array(z.string().trim().max(60).catch(''))
-  .max(50)
+  .array(z.string().trim().max(TOKEN_LIMITS.maxConditionLength).catch(''))
+  .max(TOKEN_LIMITS.maxConditions)
   .catch([])
   .transform((conditions) => conditions.filter((c) => c.length > 0));
 
@@ -74,13 +88,13 @@ export const ManifestSchema = z.object({
   formatVersion: z.literal(IMPORT_LIMITS.FORMAT_VERSION),
   exportedAt: z.string().max(50),
   exportedFrom: z.string().max(100),
-  campaignName: z.string().min(1).max(200),
+  campaignName: z.string().min(1).max(CAMPAIGN_LIMITS.maxNameLength),
   gameSystem: z.string().max(50),
-  mapCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_MAPS),
+  mapCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_FILE_COUNT),
   tokenCount: z.number().int().min(0),
-  creatureCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_CREATURES),
-  tokenTemplateCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_TOKEN_TEMPLATES),
-  assetCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_ASSETS),
+  creatureCount: z.number().int().min(0),
+  tokenTemplateCount: z.number().int().min(0),
+  assetCount: z.number().int().min(0).max(IMPORT_LIMITS.MAX_FILE_COUNT),
   includesAudio: z.boolean(),
   totalSizeBytes: z.number().int().min(0),
 }).strip();
@@ -88,12 +102,12 @@ export const ManifestSchema = z.object({
 // ── Campaign settings ───────────────────────────────────────────────────────
 
 export const CampaignSettingsSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().max(5000).nullable().optional(),
+  name: z.string().min(1).max(CAMPAIGN_LIMITS.maxNameLength),
+  description: z.string().max(CAMPAIGN_LIMITS.maxDescriptionLength).nullable().optional(),
   gameSystem: z.unknown().optional(),
   // Both fall back to the default when an archive carries a value outside the
   // allowlist, so one bad field does not refuse the whole campaign.
-  vibeSettings: VibeSettingsSchema.optional().catch(undefined),
+  vibeSettings: ImportVibeSettingsSchema.optional().catch(undefined),
   currentVibe: z.string().max(100).nullable().optional(),
   spiritLayerEnabled: z.boolean().optional(),
   spiritLayerStyle: z.string().max(100, { abort: true }).regex(SPIRIT_STYLE_PATTERN).optional().catch(undefined),
@@ -251,8 +265,8 @@ export const AssetEntrySchema = z.object({
 // import and listed, as an asset whose content does not match is.
 export const AssetManifestSchema = z.record(z.string().max(200), z.unknown())
   .refine(
-    (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_ASSETS,
-    { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_ASSETS} assets` }
+    (obj) => Object.keys(obj).length <= IMPORT_LIMITS.MAX_FILE_COUNT,
+    { message: `Asset manifest exceeds maximum of ${IMPORT_LIMITS.MAX_FILE_COUNT} assets` }
   );
 
 // ── Types ───────────────────────────────────────────────────────────────────

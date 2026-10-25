@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import logger from './logger';
 import { errorCode } from './errors';
+import { UPLOAD_CONTENT_TYPES, UPLOAD_EXTENSIONS } from '../validators/uploadTypes';
 
 /**
  * Asset types, as the database declares them.
@@ -121,16 +122,10 @@ export const UPLOAD_LIMITS: Readonly<Record<ConfigurableAssetType, number>> = Ob
 export const MAX_UPLOAD_BYTES: number = Math.max(...Object.values(UPLOAD_LIMITS));
 
 /**
- * Allowed MIME types for each asset type
+ * The content types each asset type is stored as, from the list the upload
+ * dialog shares (validators/uploadTypes.ts).
  */
-export const ALLOWED_MIME_TYPES = {
-  MAP: ['image/png', 'image/jpeg', 'image/webp'],
-  TOKEN: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
-  AUDIO: ['audio/mpeg', 'audio/ogg', 'audio/wav'],
-  AVATAR: ['image/png', 'image/jpeg', 'image/webp'],
-  DOCUMENT: ['application/pdf', 'text/plain', 'text/markdown'],
-  OTHER: [],
-} as const satisfies Record<AssetType, readonly string[]>;
+export const ALLOWED_MIME_TYPES = UPLOAD_CONTENT_TYPES satisfies Record<AssetType, readonly string[]>;
 
 /**
  * The type a file is stored and served as, from what file-type found in its
@@ -145,16 +140,9 @@ export function storedFileType(detected: { mime: string; ext: string }): { mime:
 }
 
 /**
- * Allowed file extensions for each asset type
+ * Allowed file extensions for each asset type, from the same shared list.
  */
-export const ALLOWED_EXTENSIONS = {
-  MAP: ['.png', '.jpg', '.jpeg', '.webp'],
-  TOKEN: ['.png', '.jpg', '.jpeg', '.webp', '.gif'],
-  AUDIO: ['.mp3', '.ogg', '.wav'],
-  AVATAR: ['.png', '.jpg', '.jpeg', '.webp'],
-  DOCUMENT: ['.pdf', '.txt', '.md'],
-  OTHER: [],
-} as const satisfies Record<AssetType, readonly string[]>;
+export const ALLOWED_EXTENSIONS = UPLOAD_EXTENSIONS satisfies Record<AssetType, readonly string[]>;
 
 /**
  * Generate a unique filename with UUID and preserve extension
@@ -179,7 +167,7 @@ export function getFilePath(
   scope: AssetScope,
   campaignId?: string
 ): string {
-  const baseDir = process.env.UPLOAD_DIR || 'uploads';
+  const baseDir = uploadsDirectorySetting();
 
   switch (assetType) {
     case 'MAP':
@@ -230,24 +218,6 @@ export function getFilePath(
       // file in temp, which is why the route must never let OTHER reach here.
       throw new Error(`Unknown asset type: ${assetType}`);
   }
-}
-
-/**
- * Get the full file path (directory + filename)
- * @param assetType Type of asset
- * @param scope Scope of asset
- * @param filename Filename
- * @param campaignId Campaign ID (if CAMPAIGN scope)
- * @returns Full file path
- */
-export function getFullFilePath(
-  assetType: AssetType,
-  scope: AssetScope,
-  filename: string,
-  campaignId?: string
-): string {
-  const directory = getFilePath(assetType, scope, campaignId);
-  return path.join(directory, filename);
 }
 
 /**
@@ -343,6 +313,18 @@ export function isAllowedExtension(assetType: AssetType, extension: string): boo
 }
 
 /**
+ * Whether a file whose bytes were identified as `detected` (after
+ * storedFileType) may be stored as this asset type: its type must be allowed,
+ * and so must the extension it is stored under. The type alone is not
+ * enough: MPEG layer 1 and 2 audio is audio/mpeg like an MP3, but would be
+ * stored as .mp1 or .mp2, which the audio route does not serve and no browser
+ * plays. The upload and the campaign import both decide by this.
+ */
+export function isAcceptedContent(assetType: AssetType, detected: { mime: string; ext: string }): boolean {
+  return isAllowedMimeType(assetType, detected.mime) && isAllowedExtension(assetType, detected.ext);
+}
+
+/**
  * Options for `res.sendFile` and `res.download` on a path the server built
  * itself, from a stored row or a name it has checked. Express 5's file sender
  * refuses any path with a folder whose name starts with a dot, and the
@@ -351,13 +333,27 @@ export function isAllowedExtension(assetType: AssetType, extension: string): boo
  */
 export const SERVER_BUILT_PATH = { dotfiles: 'allow' } as const;
 
+/** What the environment can say about where uploads go. */
+type UploadsEnv = Record<string, string | undefined>;
+
+/**
+ * The uploads folder as it is set: `UPLOAD_DIR`, or `uploads`, as written.
+ * The file paths stored for uploaded assets begin with it, relative to the
+ * working directory unless UPLOAD_DIR is absolute, so the paths that are
+ * stored are built from this one, unresolved. Read when asked, so a test
+ * that sets UPLOAD_DIR is followed.
+ */
+export function uploadsDirectorySetting(env: UploadsEnv = process.env): string {
+  return env.UPLOAD_DIR || 'uploads';
+}
+
 /**
  * The uploads folder as an absolute path: `UPLOAD_DIR`, or `uploads` in the
  * working directory. Read when asked, so a test that sets UPLOAD_DIR is
  * followed.
  */
-export function getUploadsDirectory(): string {
-  return path.resolve(process.env.UPLOAD_DIR || 'uploads');
+export function getUploadsDirectory(env: UploadsEnv = process.env): string {
+  return path.resolve(uploadsDirectorySetting(env));
 }
 
 /**
@@ -365,8 +361,7 @@ export function getUploadsDirectory(): string {
  * @returns Path to temp directory
  */
 export function getTempDirectory(): string {
-  const baseDir = process.env.UPLOAD_DIR || 'uploads';
-  return path.join(baseDir, 'temp');
+  return path.join(uploadsDirectorySetting(), 'temp');
 }
 
 /**

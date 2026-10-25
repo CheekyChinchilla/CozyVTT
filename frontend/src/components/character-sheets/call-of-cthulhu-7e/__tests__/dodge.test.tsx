@@ -16,6 +16,8 @@ import { CallOfCthulhu7eCharacterView } from '../CallOfCthulhu7eCharacterView';
 import type { CharacterData } from '../../../../types';
 import { COC_BLANK_SHEET, cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 interface SavedDodge {
   skills: { dodge: { baseValue: number; currentValue: number } };
   derivedStats: { dodge: { value: number } };
@@ -131,7 +133,7 @@ describe('Dodge in the read-only sheet', () => {
 
     render(<CallOfCthulhu7eCharacterView character={character} />);
 
-    const box = screen.getAllByText('Dodge').find((el) => el.closest('.bg-blue-50'))!.closest('.bg-blue-50')!;
+    const box = screen.getAllByText('Dodge').find((el) => el.closest('.bg-info\\/10'))!.closest('.bg-info\\/10')!;
     expect(box.textContent).toContain('45%');
   });
 });

@@ -16,19 +16,31 @@ import { useServerConfigQuery } from '@/hooks/queries';
 import { useToast } from '@/contexts/ToastContext';
 import type { InvitableUser } from '@/types';
 import { Button, Modal, Field, Input } from '@/components/ui';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '@/constants/inviteSearchLimits';
 
 /** How long typing has to pause before a search goes out. */
 const SEARCH_DELAY_MS = 300;
 
+/**
+ * How long an invitation from the app stands before it runs out. The DM can
+ * withdraw one sooner from Campaign Settings → Members.
+ */
+const INVITATION_EXPIRY_DAYS = 14;
+
 interface InvitePlayerModalProps {
+  /**
+   * Whether it is open. A parent keeps it mounted and changes its `key` on
+   * each opening, so it fades out on close and opens with an empty search.
+   */
+  open?: boolean;
   campaignId: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
 export default function InvitePlayerModal({
+  open = true,
   campaignId,
   onClose,
   onSuccess,
@@ -100,7 +112,8 @@ export default function InvitePlayerModal({
       const { emailSent } = await api.inviteUserToCampaign(
         campaignId,
         selectedUserId,
-        sendEmail && emailAvailable
+        sendEmail && emailAvailable,
+        INVITATION_EXPIRY_DAYS
       );
       // Say what actually happened. Asking for an email and not getting one is
       // worth knowing about, and the server is the only thing that can tell us.
@@ -111,7 +124,7 @@ export default function InvitePlayerModal({
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Error sending invitation:', err);
+      console.error('Error sending invitation:', errorSummary(err));
       setError(apiErrorMessage(err) || 'Failed to send invitation');
     } finally {
       setSending(false);
@@ -123,7 +136,7 @@ export default function InvitePlayerModal({
 
   return (
     <Modal
-      open
+      open={open}
       onClose={onClose}
       title="Invite Player"
       icon={Mail}
@@ -149,7 +162,7 @@ export default function InvitePlayerModal({
         {/* Error */}
         {error && (
           <div role="alert" className="p-3 rounded-lg bg-danger/10 border border-danger/30">
-            <p className="text-sm text-danger">{error}</p>
+            <p className="text-sm text-danger-ink">{error}</p>
           </div>
         )}
 
@@ -165,7 +178,7 @@ export default function InvitePlayerModal({
               onChange={(e) => setSearch(e.target.value)}
               maxLength={50}
               autoComplete="off"
-              autoFocus
+              data-autofocus
               disabled={sending}
             />
           )}
@@ -246,7 +259,7 @@ export default function InvitePlayerModal({
               checked={sendEmail && emailAvailable}
               onChange={(e) => setSendEmail(e.target.checked)}
               disabled={sending || !emailAvailable}
-              className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
+              className="w-4 h-4 rounded-sm border-moss-green/30 text-brand-ink focus:ring-moss-green/50"
             />
           </div>
           <div>

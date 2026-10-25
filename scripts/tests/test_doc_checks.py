@@ -192,6 +192,92 @@ class WebsocketEvents(unittest.TestCase):
         '''})
         self.assertEqual(we.unreadable(), [])
 
+    def test_says_which_doors_a_player_may_toggle(self):
+        we = self.events({
+            'handlers/walls.ts': '''
+                socket.on('wall:update', async (data) => {
+                  if (!canToggleDoor(socket.role)) return;
+                  if (map.lightingEnabled && !sight?.seesPoint(x, y)) return;
+                  if (map.fogEnabled && !doorBesideRevealedFog(door, map)) return;
+                });
+            ''',
+            'handlers/plain.ts': '''
+                socket.on('door:plain', async (data) => {
+                  if (!canToggleDoor(socket.role)) return;
+                });
+            ''',
+        })
+        inbound, _ = we.collect()
+        self.assertEqual(
+            we.who_may_send(inbound['wall:update']),
+            'DM; a player may toggle an unlocked door (on a lit map, one their tokens see; '
+            'under manual fog, one beside a square revealed to them)')
+        self.assertEqual(we.who_may_send(inbound['door:plain']), 'DM; a player may toggle an unlocked door')
+
+    def test_says_when_a_player_may_roll_initiative(self):
+        we = self.events({'handlers/initiative.ts': '''
+            socket.on('initiative.roll', async (data) => {
+              if (socket.role !== 'DM') {
+                if (!canControlToken(socket.role, token.controlledBy, socket.userId)) return;
+                if (existingIndex === -1) return;
+                if (state.active) return;
+                if (playerHasRolled(campaignId, tokenId)) return;
+                markPlayerRolled(campaignId, tokenId);
+              }
+            });
+            socket.on('token.nudge', async (data) => {
+              if (!canControlToken(socket.role, token.controlledBy, socket.userId)) return;
+            });
+        '''})
+        inbound, _ = we.collect()
+        self.assertEqual(
+            we.who_may_send(inbound['initiative.roll']),
+            "DM, or the token's player: once the DM has put it in the order, before the fight starts, "
+            'once each time it joins the order')
+        self.assertEqual(we.who_may_send(inbound['token.nudge']), "DM, or the token's player")
+
+    def test_says_who_each_outbound_event_is_sent_to(self):
+        we = self.events({
+            'handlers/a.ts': '''
+                socket.on('ask', async () => {
+                  socket.emit('answer', {});
+                  io.to(socket.campaignId!).emit('everyone', {});
+                  io.to(userId).emit('just.them', {});
+                  socket.to(room).emit('others', {});
+                  for (const s of sockets) s.emit('picked', {});
+                  broadcastToUser(userId, 'user.event', {});
+                  broadcastToCampaign(campaignId, 'campaign.event', {});
+                  await emitToMapReaders(io, campaignId, mapId, 'map.event', {});
+                  await tellMapReadersAs(campaignId, mapId, 'per.role', (role) => null);
+                  await emitMoveToVisibleSockets('token.moved', token, mapId, null, {}, true);
+                });
+                function tell(socket) {
+                  socket.emit('handed', {});
+                }
+            ''',
+            'handlers/b.ts': '''
+                socket.on('again', () => { socket.emit('everyone', {}); });
+            ''',
+        })
+        _, outbound = we.collect()
+        sent = {name: info['to'] for name, info in outbound.items()}
+        self.assertEqual(sent, {
+            'answer': {'the sender'},
+            'everyone': {'the campaign', 'the sender'},
+            'just.them': {"one user's sockets"},
+            'others': {'the campaign but the sender'},
+            'picked': {'members the handler picks'},
+            'user.event': {"one user's sockets"},
+            'campaign.event': {'the campaign'},
+            'map.event': {'map readers'},
+            'per.role': {'map readers, as their role sees it'},
+            'token.moved': {'map readers sent the token'},
+            'handed': {'one socket'},
+        })
+        rows = we.table({}, outbound).split('\n')
+        self.assertIn('| Event | Sent to | Emitted from |', rows)
+        self.assertIn('| `everyone` | The campaign; the sender | `a.ts` |', rows)
+
 
 if __name__ == '__main__':
     unittest.main()

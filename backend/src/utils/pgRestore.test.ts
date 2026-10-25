@@ -9,9 +9,10 @@
  * What these tests do not do: load a prepared file into a real PostgreSQL.
  * They check the text psql is handed and the arguments it is run with. The
  * suites run where the PostgreSQL client tools need not be installed (the
- * backend image has them; a developer's machine need not), so a test that
- * needed psql would be skipped there and prove nothing. Restoring a real
- * backup end to end is part of the upgrade rehearsal before a release, in
+ * backend image has them; a developer's machine need not).
+ * pgRestoreRoundTrip.test.ts runs the real tools where they are installed,
+ * on an install whose DATABASE_URL names a schema. Restoring a real backup
+ * end to end is also part of the upgrade rehearsal before a release, in
  * docs/DEVELOPMENT.md ("Before a release: rehearse the upgrade").
  */
 
@@ -29,9 +30,17 @@ import {
   isPrivilegeStatement,
   isSettingUnknownToServer,
   prepareDumpForRestore,
+  restorePreamble,
+  restoreTrailer,
   RESTORE_PREAMBLE,
   RESTORE_TRAILER,
 } from './pgRestore';
+import { PRISMA_ONLY_PARAMETERS } from '../config/prismaClient';
+
+/** An instance that keeps its data in the public schema, as every install the guides describe does. */
+const PUBLIC_DB = 'postgresql://u:p@h:5432/db';
+/** One whose DATABASE_URL names a schema of its own, with the pool size the app reads. */
+const COZY_DB = 'postgresql://u:p@h:5432/db?schema=cozy&connection_limit=5';
 
 describe('buildRestoreArgs', () => {
   const args = buildRestoreArgs('postgresql://u:p@h:5432/db', '/tmp/backup/database.sql');
@@ -77,6 +86,14 @@ describe('pgConnection', () => {
     expect(dbname).not.toContain('p%40ss');
   });
 
+  // The app's driver reads such a password as written, so the app ran while
+  // every backup failed with nothing useful in the log.
+  it('gives libpq a password holding a % that encodes nothing as it is written', () => {
+    const { dbname, env } = pgConnection('postgresql://u:pa%ss@h/db');
+    expect(env.PGPASSWORD).toBe('pa%ss');
+    expect(dbname).toBe('postgresql://u@h/db');
+  });
+
   it('keeps the query string, which may carry connection options', () => {
     const { dbname } = pgConnection('postgresql://u:p@h:5432/db?sslmode=require');
     expect(dbname).toBe('postgresql://u@h:5432/db?sslmode=require');
@@ -100,6 +117,40 @@ describe('pgConnection', () => {
   });
 });
 
+/**
+ * libpq refuses a setting it does not know (`invalid URI query parameter`)
+ * and a `sslmode` it does not have, and the address is the app's, which may
+ * carry both: `schema` and `connection_limit` are Prisma's, and `no-verify`
+ * is the pg driver's. Every backup and restore on such an install failed.
+ */
+describe('pgConnection, with settings libpq does not read', () => {
+  it.each(PRISMA_ONLY_PARAMETERS)('leaves out %s, which only the app reads', (name) => {
+    const { dbname } = pgConnection(`postgresql://u:p@h:5432/db?${name}=5&sslmode=require`);
+    expect(dbname).toBe('postgresql://u@h:5432/db?sslmode=require');
+  });
+
+  it('gives an address with nothing else in its query string none at all', () => {
+    expect(pgConnection(COZY_DB).dbname).toBe('postgresql://u@h:5432/db');
+  });
+
+  it("asks libpq for an encrypted connection without a certificate check, which is the driver's no-verify", () => {
+    expect(pgConnection('postgresql://u:p@h:5432/db?sslmode=no-verify').dbname).toBe('postgresql://u@h:5432/db?sslmode=require');
+  });
+
+  it('keeps every other setting exactly as written, percent escapes included', () => {
+    const { dbname } = pgConnection(
+      'postgresql://u:p@h/db?options=-c%20statement_timeout%3D0&schema=cozy&sslmode=verify-full&sslrootcert=%2Fetc%2Fca.crt'
+    );
+    expect(dbname).toBe('postgresql://u@h/db?options=-c%20statement_timeout%3D0&sslmode=verify-full&sslrootcert=%2Fetc%2Fca.crt');
+  });
+
+  it('takes the settings out of an address without a password too', () => {
+    const { dbname, env } = pgConnection('postgresql://u@h:5432/db?connection_limit=5');
+    expect(dbname).toBe('postgresql://u@h:5432/db');
+    expect(env).not.toHaveProperty('PGPASSWORD');
+  });
+});
+
 describe('buildDumpArgs and buildRestoreArgs', () => {
   it.each([
     ['buildDumpArgs', buildDumpArgs],
@@ -120,6 +171,58 @@ describe('buildDumpArgs', () => {
 
   it('leaves the login sessions out, so a restore cannot bring back a sign-in that was ended since', () => {
     expect(buildDumpArgs('postgresql://x', '/tmp/db.sql')).toContain('--exclude-table-data=public.session');
+  });
+
+  it('dumps an install that keeps its data in public exactly as before', () => {
+    expect(buildDumpArgs(PUBLIC_DB, '/tmp/db.sql')).toEqual([
+      '--dbname', 'postgresql://u@h:5432/db', '--file', '/tmp/db.sql',
+      '--clean', '--if-exists', '--no-owner', '--no-privileges', '--exclude-table-data=public.session',
+    ]);
+  });
+
+  it('dumps only the schema DATABASE_URL names, without its login sessions', () => {
+    expect(buildDumpArgs(COZY_DB, '/tmp/db.sql')).toEqual([
+      '--dbname', 'postgresql://u@h:5432/db', '--file', '/tmp/db.sql',
+      '--clean', '--if-exists', '--no-owner', '--no-privileges',
+      '--schema="cozy"', '--exclude-table-data="cozy".session',
+    ]);
+  });
+
+  it('names a schema with capitals or a double quote in it as it is spelled', () => {
+    const args = buildDumpArgs('postgresql://u@h/db?schema=My%22Cozy', '/tmp/db.sql');
+    expect(args).toContain('--schema="My""Cozy"');
+    expect(args).toContain('--exclude-table-data="My""Cozy".session');
+  });
+});
+
+describe('restorePreamble and restoreTrailer', () => {
+  it('are, for public, the statements a restore has always run', () => {
+    expect(restorePreamble('public')).toEqual(RESTORE_PREAMBLE);
+    expect(restoreTrailer('public')).toEqual(RESTORE_TRAILER);
+  });
+
+  it('replace and empty the named schema alone', () => {
+    expect(restorePreamble('cozy')).toEqual(['DROP SCHEMA "cozy" CASCADE;', 'CREATE SCHEMA "cozy";']);
+    expect(restoreTrailer('cozy')).toEqual([
+      "DO $$ BEGIN IF to_regclass('\"cozy\".session') IS NOT NULL THEN DELETE FROM \"cozy\".session; END IF; END $$;",
+    ]);
+  });
+
+  it('quote a name holding quotes, so it cannot end the statement', () => {
+    expect(restorePreamble('a"b')).toEqual(['DROP SCHEMA "a""b" CASCADE;', 'CREATE SCHEMA "a""b";']);
+    expect(restoreTrailer("it's")[0]).toContain("to_regclass('\"it''s\".session')");
+  });
+
+  // The trailer is a dollar-quoted block, and a name holding the quote's tag
+  // ($$) ended it early, so the restore failed and rolled back.
+  it('quote the block with a tag the name does not hold', () => {
+    const [statement] = restoreTrailer('a$$b');
+    const tag = /^DO (\$[a-z0-9_]*\$) /.exec(statement)?.[1];
+    expect(tag).toBeDefined();
+    expect(statement.endsWith(` END ${tag};`)).toBe(true);
+    const body = statement.slice(`DO ${tag} `.length, -` ${tag};`.length);
+    expect(body).not.toContain(tag);
+    expect(body).toContain('"a$$b".session');
   });
 });
 
@@ -286,7 +389,7 @@ describe('prepareDumpForRestore', () => {
     const src = await write('database.sql', NEWER_CLIENT_DUMP);
     const dest = path.join(dir, 'restore.sql');
 
-    const result = await prepareDumpForRestore(src, dest);
+    const result = await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
     const [restrict, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
     expect(restrict).toMatch(RESTRICT_LINE);
@@ -295,11 +398,87 @@ describe('prepareDumpForRestore', () => {
     expect(result.refused).toBeNull();
   });
 
+  describe('on an install whose DATABASE_URL names a schema', () => {
+    /** What pg_dump --schema=cozy writes, in short. */
+    const COZY_DUMP = [
+      '-- PostgreSQL database dump',
+      'DROP TABLE IF EXISTS cozy."User";',
+      'DROP SCHEMA IF EXISTS cozy;',
+      'CREATE SCHEMA cozy;',
+      'CREATE TABLE cozy."User" (',
+      '    id text NOT NULL',
+      ');',
+      'CREATE TABLE cozy._prisma_migrations (',
+      '    id character varying(36) NOT NULL',
+      ');',
+      'COPY cozy."User" (id) FROM stdin;',
+      'u1',
+      '\\.',
+      '-- PostgreSQL database dump complete',
+    ];
+
+    it('replaces that schema alone and empties its login sessions', async () => {
+      const src = await write('database.sql', COZY_DUMP);
+      const dest = path.join(dir, 'restore.sql');
+
+      const result = await prepareDumpForRestore(src, dest, COZY_DB);
+
+      expect(result.refused).toBeNull();
+      const [, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
+      expect(rest.join('\n')).toBe([...restorePreamble('cozy'), ...COZY_DUMP, ...restoreTrailer('cozy')].join('\n') + '\n');
+      expect(rest.join('\n')).not.toMatch(/SCHEMA public/);
+    });
+
+    it('takes a schema pg_dump has to quote', async () => {
+      const dump = COZY_DUMP.map((line) => line.replace(/\bcozy\b/g, '"My Cozy"'));
+      const src = await write('database.sql', dump);
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), 'postgresql://u@h/db?schema=My%20Cozy');
+      expect(refused).toBeNull();
+    });
+
+    it('refuses a backup of an install that kept its data in public', async () => {
+      const src = await write('database.sql', NEWER_CLIENT_DUMP);
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), COZY_DB);
+      expect(refused).toBe(
+        'it is a backup of the database schema "public", and this instance keeps its data in the schema "cozy". ' +
+          'Restore it on an instance whose DATABASE_URL names the schema it came from'
+      );
+    });
+
+    it('refuses a backup of another schema', async () => {
+      const src = await write('database.sql', COZY_DUMP);
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), 'postgresql://u@h/db?schema=other');
+      expect(refused).toMatch(/schema "cozy", and this instance keeps its data in the schema "other"/);
+    });
+
+    it('refuses a backup of its own schema that also creates tables in another', async () => {
+      const dump = [...COZY_DUMP];
+      dump.splice(1, 0, 'CREATE TABLE public.elsewhere (', '    id text', ');');
+      const src = await write('database.sql', dump);
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), COZY_DB);
+      expect(refused).toMatch(/^it is a backup of the database schemas "cozy" and "public", and this instance keeps its data in the schema "cozy"\./);
+    });
+
+    it('is refused, as a backup of another schema, by an install that keeps its data in public', async () => {
+      const src = await write('database.sql', COZY_DUMP);
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
+      expect(refused).toMatch(/schema "cozy", and this instance keeps its data in the schema "public"/);
+    });
+  });
+
+  it('still restores a backup of public that also holds other schemas, as it always has', async () => {
+    const dump = [...NEWER_CLIENT_DUMP];
+    dump.splice(dump.indexOf('-- PostgreSQL database dump complete'), 0, 'CREATE TABLE other.kept (', '    id text', ');');
+    const src = await write('database.sql', dump);
+    const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
+    expect(refused).toBeNull();
+  });
+
   it('drops every owner and privilege statement, so the backup restores under whatever database user the instance has', async () => {
     const src = await write('database.sql', NEWER_CLIENT_DUMP);
     const dest = path.join(dir, 'restore.sql');
 
-    await prepareDumpForRestore(src, dest);
+    await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
     const out = await fs.readFile(dest, 'utf8');
     // A statement ends in a semicolon; the COPY row that starts like one does not, and stays.
@@ -313,7 +492,7 @@ describe('prepareDumpForRestore', () => {
     const src = await write('database.sql', NEWER_CLIENT_DUMP);
     const dest = path.join(dir, 'restore.sql');
 
-    await prepareDumpForRestore(src, dest);
+    await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
     const out = await fs.readFile(dest, 'utf8');
     expect(out).toContain('a1\tSET transaction_timeout = 0;\n');
@@ -327,7 +506,7 @@ describe('prepareDumpForRestore', () => {
     const src = await write('database.sql', clean);
     const dest = path.join(dir, 'restore.sql');
 
-    const result = await prepareDumpForRestore(src, dest);
+    const result = await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
     const [restrict, ...rest] = (await fs.readFile(dest, 'utf8')).split('\n');
     expect(restrict).toMatch(RESTRICT_LINE);
@@ -340,7 +519,7 @@ describe('prepareDumpForRestore', () => {
     const src = await write('database.sql', NEWER_CLIENT_DUMP);
     const dest = path.join(dir, 'restore.sql');
 
-    await prepareDumpForRestore(src, dest);
+    await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
     expect((await fs.stat(dest)).mode & 0o077).toBe(0);
   });
@@ -351,8 +530,8 @@ describe('prepareDumpForRestore', () => {
       const first = path.join(dir, 'first.sql');
       const second = path.join(dir, 'second.sql');
 
-      await prepareDumpForRestore(src, first);
-      await prepareDumpForRestore(src, second);
+      await prepareDumpForRestore(src, first, PUBLIC_DB);
+      await prepareDumpForRestore(src, second, PUBLIC_DB);
 
       const a = (await fs.readFile(first, 'utf8')).split('\n')[0];
       const b = (await fs.readFile(second, 'utf8')).split('\n')[0];
@@ -365,7 +544,7 @@ describe('prepareDumpForRestore', () => {
       const src = await write('database.sql', NEWER_CLIENT_DUMP);
       const dest = path.join(dir, 'restore.sql');
 
-      await prepareDumpForRestore(src, dest);
+      await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
       const out = await fs.readFile(dest, 'utf8');
       expect(out).not.toContain('k3y');
@@ -383,7 +562,7 @@ describe('prepareDumpForRestore', () => {
       dump.splice(dump.indexOf('SET statement_timeout = 0;'), 0, line);
       const src = await write('database.sql', dump);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/psql command/);
       expect(refused).toContain(line);
@@ -396,7 +575,7 @@ describe('prepareDumpForRestore', () => {
         dump.splice(dump.indexOf('SET default_table_access_method = heap;'), 0, line);
         const src = await write('database.sql', dump);
 
-        const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+        const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
         expect(refused).toMatch(/transaction/);
         expect(refused).toContain(line);
@@ -408,7 +587,7 @@ describe('prepareDumpForRestore', () => {
       dump.splice(dump.indexOf('SET default_table_access_method = heap;'), 0, "COPY public.\"Note\" TO PROGRAM 'sh /tmp/x';");
       const src = await write('database.sql', dump);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/COPY that is not table data/);
     });
@@ -419,7 +598,7 @@ describe('prepareDumpForRestore', () => {
       const src = await write('database.sql', dump);
       const dest = path.join(dir, 'restore.sql');
 
-      const { refused } = await prepareDumpForRestore(src, dest);
+      const { refused } = await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
       expect(refused).toBeNull();
       expect(await fs.readFile(dest, 'utf8')).toContain('\n\\N\tnote with no id\n');
@@ -430,7 +609,7 @@ describe('prepareDumpForRestore', () => {
     it('refuses an empty file', async () => {
       const src = await write('database.sql', []);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/cut short/);
     });
@@ -439,7 +618,7 @@ describe('prepareDumpForRestore', () => {
       const cut = NEWER_CLIENT_DUMP.slice(0, NEWER_CLIENT_DUMP.indexOf('\\.') + 1);
       const src = await write('database.sql', cut);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/cut short/);
     });
@@ -448,7 +627,7 @@ describe('prepareDumpForRestore', () => {
       const cut = NEWER_CLIENT_DUMP.slice(0, NEWER_CLIENT_DUMP.indexOf('\\.'));
       const src = await write('database.sql', cut);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/partway through/);
     });
@@ -458,7 +637,7 @@ describe('prepareDumpForRestore', () => {
       dump.push('-- PostgreSQL database dump complete');
       const src = await write('database.sql', dump);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/partway through/);
     });
@@ -467,7 +646,7 @@ describe('prepareDumpForRestore', () => {
       const other = NEWER_CLIENT_DUMP.filter((l) => !l.startsWith('CREATE TABLE public."User"'));
       const src = await write('database.sql', other);
 
-      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'));
+      const { refused } = await prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB);
 
       expect(refused).toMatch(/not a CozyVTT backup/);
       expect(refused).toContain('User');
@@ -478,7 +657,7 @@ describe('prepareDumpForRestore', () => {
       await fs.writeFile(src, NEWER_CLIENT_DUMP.join('\r\n') + '\r\n');
       const dest = path.join(dir, 'restore.sql');
 
-      const { refused } = await prepareDumpForRestore(src, dest);
+      const { refused } = await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
       expect(refused).toBeNull();
       const out = await fs.readFile(dest, 'utf8');
@@ -502,7 +681,7 @@ describe('prepareDumpForRestore', () => {
     await fs.writeFile(src, body);
     const dest = path.join(dir, 'restore.sql');
 
-    const { refused } = await prepareDumpForRestore(src, dest);
+    const { refused } = await prepareDumpForRestore(src, dest, PUBLIC_DB);
 
     expect(refused).toBeNull();
     const out = await fs.readFile(dest);
@@ -529,7 +708,7 @@ describe('prepareDumpForRestore', () => {
       },
     }) as unknown as WriteStream);
     try {
-      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'))).rejects.toThrow(/ENOSPC/);
+      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB)).rejects.toThrow(/ENOSPC/);
     } finally {
       slowly.mockRestore();
       full.mockRestore();
@@ -546,7 +725,7 @@ describe('prepareDumpForRestore', () => {
       destroy(_error, callback) { callback(Object.assign(new Error('EDQUOT: disk quota exceeded, close'), { code: 'EDQUOT' })); },
     }) as unknown as WriteStream);
     try {
-      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'))).rejects.toThrow(/EDQUOT/);
+      await expect(prepareDumpForRestore(src, path.join(dir, 'restore.sql'), PUBLIC_DB)).rejects.toThrow(/EDQUOT/);
     } finally {
       closeFails.mockRestore();
     }

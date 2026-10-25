@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Loader2, ZoomIn, ZoomOut, Sparkles } from 'lucide-react';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { Asset, Map, UpdateMapRequest } from '@/types';
+import type { Asset, CampaignMap, UpdateMapRequest } from '@/types';
 import { AssetType } from '@/types';
 import AssetPicker from '@/components/assets/AssetPicker';
 import { detectMapGrid, type GridDetectionResult } from '@/utils/detectMapGrid';
@@ -18,10 +18,10 @@ import { extractAssetId } from '@/utils/assetUrl';
 
 interface EditMapModalProps {
   isOpen: boolean;
-  map: Map;
+  map: CampaignMap;
   campaignId: string;
   onClose: () => void;
-  onUpdated: (map: Map) => void;
+  onUpdated: (map: CampaignMap) => void;
 }
 
 // ============================================
@@ -123,7 +123,7 @@ function MapPreviewCanvas({
       ref={canvasRef}
       width={PREVIEW_PX}
       height={PREVIEW_PX}
-      className="w-full rounded border border-moss-green/30 bg-parchment/50"
+      className="w-full rounded-sm border border-moss-green/30 bg-parchment/50"
       style={{ aspectRatio: '1 / 1' }}
       aria-label="Grid alignment preview"
     />
@@ -193,7 +193,7 @@ interface OpenedValues {
 }
 
 /** The form's values for a map, with the same defaults the form fills in. */
-function openedValues(map: Map): OpenedValues {
+function openedValues(map: CampaignMap): OpenedValues {
   return {
     name: map.name.trim(),
     imageUrl: extractAssetId(map.imageUrl),
@@ -283,20 +283,6 @@ export default function EditMapModal({
       setError(null);
     }
   }, [isOpen, map]);
-
-  // The Map Library's list leaves out the spirit layer picture, so the
-  // picker would show none. Read the whole map for it, unless the DM has
-  // already picked one.
-  useEffect(() => {
-    if (!isOpen || !map) return;
-    let cancelled = false;
-    mapService.getMap(campaignId, map.id)
-      .then((whole) => {
-        if (!cancelled && !spiritTouched.current) setSpiritAssetId(extractAssetId(whole.spiritLayerUrl));
-      })
-      .catch(() => { /* the picker shows none; a save leaves the picture alone */ });
-    return () => { cancelled = true; };
-  }, [isOpen, map, campaignId]);
 
   // When the map image is swapped to a different one, attempt auto-detection
   // (Don't run on initial open — the existing settings are already correct)
@@ -483,7 +469,7 @@ export default function EditMapModal({
                             onClick={() => setFeetPreset(v)}
                             className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
                               feetPreset === v
-                                ? 'bg-moss-green text-paper-white border-moss-green'
+                                ? 'bg-moss-green text-brand-text border-moss-green'
                                 : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60'
                             }`}
                           >
@@ -495,7 +481,7 @@ export default function EditMapModal({
                           onClick={() => setFeetPreset('custom')}
                           className={`px-3 py-1.5 rounded-lg text-sm transition-colors border ${
                             feetPreset === 'custom'
-                              ? 'bg-moss-green text-paper-white border-moss-green'
+                              ? 'bg-moss-green text-brand-text border-moss-green'
                               : 'bg-paper-white text-stone-gray border-moss-green/30 hover:border-moss-green/60'
                           }`}
                         >
@@ -546,6 +532,9 @@ export default function EditMapModal({
                             className="mt-0.5 accent-moss-green"
                           />
                           <div>
+                            {/* TODO(ui): this reads 5/10/5/10 ft whatever the Grid Scale;
+                                at 10 ft a square it is 10/20/10/20 ft. Word it from the
+                                scale, or as "every second diagonal costs double". */}
                             <span className="text-sm text-stone-gray group-hover:text-brand-ink transition-colors">
                               Alternating — 5/10/5/10 ft diagonals
                             </span>
@@ -660,7 +649,7 @@ export default function EditMapModal({
 
                   {/* Zoom control */}
                   <div className="flex items-center gap-2">
-                    <ZoomOut className="w-4 h-4 text-stone-gray/50 flex-shrink-0" />
+                    <ZoomOut className="w-4 h-4 text-stone-gray/50 shrink-0" />
                     <input
                       type="range"
                       min="0.1"
@@ -671,13 +660,13 @@ export default function EditMapModal({
                       className="flex-1 accent-moss-green cursor-pointer"
                       aria-label="Preview zoom level"
                     />
-                    <ZoomIn className="w-4 h-4 text-stone-gray/50 flex-shrink-0" />
+                    <ZoomIn className="w-4 h-4 text-stone-gray/50 shrink-0" />
                   </div>
 
                   {/* Auto-detect suggestion banner — only shown when image is changed */}
                   {detectedGrid && (
                     <div className="flex items-start gap-2 p-2.5 bg-warning/10 border border-warning/30 rounded-lg">
-                      <Sparkles className="w-4 h-4 text-warning-ink flex-shrink-0 mt-0.5" />
+                      <Sparkles className="w-4 h-4 text-warning-ink shrink-0 mt-0.5" />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-warning-ink">Grid detected</p>
                         <p className="text-xs text-warning-ink mt-0.5">
@@ -687,11 +676,11 @@ export default function EditMapModal({
                           </span>
                         </p>
                       </div>
-                      <div className="flex gap-1 flex-shrink-0">
+                      <div className="flex gap-1 shrink-0">
                         <button
                           type="button"
                           onClick={applyDetectedGrid}
-                          className="text-xs px-2 py-1 bg-warning text-white rounded hover:bg-warning transition-colors"
+                          className="text-xs px-2 py-1 bg-warning/15 border border-warning/30 text-warning-ink rounded-sm hover:bg-warning/25 transition-colors"
                         >
                           Apply
                         </button>
@@ -715,7 +704,7 @@ export default function EditMapModal({
             </div>
 
             {/* Footer */}
-            <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-sm border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
+            <div className="sticky bottom-0 bg-parchment/80 backdrop-blur-xs border-t border-moss-green/20 px-6 py-4 flex items-center justify-end gap-3">
               <Button
                 type="button"
                 onClick={onClose}

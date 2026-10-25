@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { tokenCopyRequest, clampTokenPosition, copyController } from '../tokenCopy';
+import { tokenCopyRequest, clampTokenPosition, copyController, tokenControllerStanding } from '../tokenCopy';
 import type { Token } from '@/types';
 import { CampaignRole, TokenLayer, TokenType, TokenDisposition } from '@/types';
 
@@ -104,5 +104,31 @@ describe('copyController', () => {
   it('keeps nobody as nobody', () => {
     expect(copyController(null, members)).toBeNull();
     expect(copyController(undefined, members)).toBeNull();
+  });
+});
+
+describe('tokenControllerStanding', () => {
+  const members = [
+    { userId: 'dm', role: CampaignRole.DM, user: { displayName: 'Dee' } },
+    { userId: 'player', role: CampaignRole.PLAYER, user: { displayName: 'Pia' } },
+    { userId: 'watcher', role: CampaignRole.SPECTATOR, user: { displayName: 'Wes' } },
+  ];
+
+  it('names a controller who is a player', () => {
+    expect(tokenControllerStanding('player', members)).toEqual({ kind: 'player', name: 'Pia' });
+  });
+
+  // The Token Manager called anyone named on a token "Player", and Edit
+  // Token had no entry for them, while they could no longer move it.
+  it.each([
+    ['who became a spectator', 'watcher', 'Wes'],
+    ['who became the DM', 'dm', 'Dee'],
+    ['who left the campaign', 'gone', null],
+  ])('says a controller %s is no longer a player', (_why, id, name) => {
+    expect(tokenControllerStanding(id, members)).toEqual({ kind: 'not a player', name });
+  });
+
+  it('says nobody controls a token with no controller', () => {
+    expect(tokenControllerStanding(null, members)).toEqual({ kind: 'nobody' });
   });
 });

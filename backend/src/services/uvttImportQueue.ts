@@ -27,7 +27,8 @@ export const UVTT_IMPORT_TIME_LIMIT_MS = 30_000;
 
 /**
  * Longest an import may wait for its turn. Waiting and running together stay
- * under nginx's 60 seconds, so the DM sees the reason and not a proxy error.
+ * under nginx's 60 seconds, so the DM sees the reason and not a proxy error;
+ * keepInStep.test.ts holds the two at least five seconds under it.
  */
 export const UVTT_IMPORT_MAX_WAIT_MS = 20_000;
 

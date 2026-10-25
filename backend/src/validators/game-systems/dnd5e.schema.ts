@@ -12,7 +12,12 @@ import {
 } from './sheetText';
 import { featureEntrySchema } from './featureEntry.schema';
 import { alliesAndOrganizationsSchema } from './alliesAndOrganizations.schema';
-import { SPELL_SLOTS_MAX } from './sheetLimits';
+import {
+  DND5E_ATTACK_DAMAGE_ROLLS_MAX,
+  DND5E_CUSTOM_SKILLS_MAX,
+  DND5E_WEAPON_PROPERTIES_MAX,
+  SPELL_SLOTS_MAX,
+} from './sheetLimits';
 import { sheetList } from './sheetLists';
 import { MAX_BONUS_OVERRIDE, MIN_BONUS_OVERRIDE } from '../../utils/rules/dnd5e';
 
@@ -157,11 +162,9 @@ const hitPointsSchema = z.object({
  * Hit dice
  */
 const hitDiceSchema = z.object({
-  // TODO(sheets): the editor's "+ Add" buttons create hit-dice rows with an
-  // empty class, and attack, inventory and spell rows with an empty name, and
-  // this minimum and the three below refuse the whole save until each is filled
-  // in. Have the buttons seed a name, or let a new row save with the field
-  // empty.
+  // Required, as an attack's, an item's and a spell's name are. The editor
+  // starts a new hit die with the character's class, and leaves out of the
+  // save an attack, item or spell row added and never typed in.
   class: shortText.min(1),
   // The older field, packing count and die into one string ("5d10"). Optional
   // now that `die` and `maximum` carry those separately; still accepted so
@@ -213,9 +216,9 @@ const attackSchema = z.object({
   // common case, not the limit — a homebrew game may name any number more, and
   // the sheet draws a badge for whatever is stored. Bounded only so the field
   // cannot be used as storage, the same reason token conditions are bounded.
-  properties: z.array(z.string().max(60)).max(20).optional(),
+  properties: z.array(z.string().max(60)).max(DND5E_WEAPON_PROPERTIES_MAX).optional(),
   notes: longText.optional(),
-  additionalDamage: z.array(additionalDamageSchema).max(10).optional(),
+  additionalDamage: z.array(additionalDamageSchema).max(DND5E_ATTACK_DAMAGE_ROLLS_MAX).optional(),
 });
 
 /**
@@ -366,7 +369,7 @@ export const dnd5eCharacterDataSchema = z.object({
   inspiration: z.boolean().optional(),
   savingThrows: savingThrowsSchema.optional(),
   skills: skillsSchema.optional(),
-  customSkills: z.array(customSkillSchema).max(30).optional(),
+  customSkills: z.array(customSkillSchema).max(DND5E_CUSTOM_SKILLS_MAX).optional(),
   passivePerception: z.number().int().min(1).optional(),
   // Additions to passive Perception that are not the Perception skill itself:
   // the Observant feat's +5, and items that raise passive scores. Mirrors

@@ -539,15 +539,22 @@ describe('POST /api/admin/backups/restore', () => {
     }
   });
 
-  it('says the database was restored but not migrated when the migration run fails', async () => {
+  it('says the database was restored but not migrated when the migration run fails, and logs the restore', async () => {
     const calls = stubTools({ cmd: MIGRATE, stderr: 'Error: P1001' });
     const zip = await backupZip({ 'database.sql': DUMP_FROM_NEWER_CLIENT });
+    const startedAt = new Date();
 
     const res = await restore(admin, zip);
 
     expect(res.status).toBe(500);
     expect(res.body.message).toMatch(/restart/i);
     expect(calls.map((c) => c.cmd)).toEqual(['pg_dump', 'psql', MIGRATE]);
+    // The database was replaced, so the activity log says who did it.
+    const logged = await prisma.systemLog.findMany({
+      where: { userId: adminId, message: 'Restored instance from backup', createdAt: { gte: startedAt } },
+    });
+    expect(logged).toHaveLength(1);
+    expect(logged[0]).toMatchObject({ level: 'WARNING', context: expect.objectContaining({ migrationsFailed: true }) });
   });
 
   it('ends every live connection when the database is replaced', async () => {
@@ -970,6 +977,9 @@ describe('POST /api/admin/backups', () => {
         'uploads/tokens/campaigns/c1/goblin.png': 'a token',
         'uploads/documents/global/.notes.md': 'a name starting with a dot',
       });
+      // Not even the folder itself, which would restore as an empty one.
+      const backupsEntries = zip.files.map((f) => f.path).filter((p) => /^uploads\/backups(\/|$)/.test(p));
+      expect(backupsEntries).toEqual([]);
     } finally {
       if (made) await fs.rm(made, { force: true });
       await fs.rm(UPLOAD_DIR, { recursive: true, force: true });

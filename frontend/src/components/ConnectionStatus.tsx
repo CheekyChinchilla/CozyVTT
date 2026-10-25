@@ -16,12 +16,12 @@ export default function ConnectionStatus() {
   // Don't show anything when fully connected
   if (status === 'connected') {
     return (
-      <div className="flex items-center gap-2 text-sm text-brand-ink">
+      <div role="status" className="flex items-center gap-2 text-sm text-brand-ink">
         <div className="relative">
           <Wifi className="w-4 h-4" />
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-moss-green" />
         </div>
-        <span className="hidden sm:inline">Connected</span>
+        <span className="sr-only sm:not-sr-only">Connected</span>
       </div>
     );
   }
@@ -29,19 +29,19 @@ export default function ConnectionStatus() {
   // Connecting state
   if (status === 'connecting') {
     return (
-      <div className="flex items-center gap-2 text-sm text-warm-amber">
+      <div role="status" className="flex items-center gap-2 text-sm text-accent-ink">
         <div className="relative">
           <Loader2 className="w-4 h-4 animate-spin" />
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-warm-amber animate-pulse" />
         </div>
-        <span className="hidden sm:inline">Connecting...</span>
+        <span className="sr-only sm:not-sr-only">Connecting...</span>
       </div>
     );
   }
 
   // Disconnected or error state
   return (
-    <div className="flex items-center gap-2">
+    <div role="status" className="flex items-center gap-2">
       <div className="flex items-center gap-2 text-sm text-danger-ink">
         <div className="relative">
           {status === 'error' ? (
@@ -51,7 +51,7 @@ export default function ConnectionStatus() {
           )}
           <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-danger" />
         </div>
-        <span className="hidden sm:inline">
+        <span className="sr-only sm:not-sr-only">
           {status === 'error' ? 'Connection Error' : 'Disconnected'}
         </span>
       </div>
@@ -59,64 +59,11 @@ export default function ConnectionStatus() {
       {/* Retry button */}
       <button
         onClick={reconnect}
-        className="text-xs px-2 py-1 rounded bg-danger/10 text-danger-ink hover:bg-danger/20 transition-colors"
+        className="text-xs px-2 py-1 rounded-sm bg-danger/10 text-danger-ink hover:bg-danger/15 transition-colors"
         title={error || 'Reconnect to server'}
       >
         Retry
       </button>
-    </div>
-  );
-}
-
-// ============================================
-// Compact variant (for header use)
-// ============================================
-
-export function ConnectionStatusCompact() {
-  const { status } = useWebSocket();
-
-  // Status colors
-  const getStatusColor = () => {
-    switch (status) {
-      case 'connected':
-        return 'bg-moss-green';
-      case 'connecting':
-        return 'bg-warm-amber animate-pulse';
-      case 'disconnected':
-      case 'error':
-        return 'bg-danger';
-      default:
-        return 'bg-stone-gray';
-    }
-  };
-
-  // Status tooltips
-  const getStatusTooltip = () => {
-    switch (status) {
-      case 'connected':
-        return 'Connected to server';
-      case 'connecting':
-        return 'Connecting to server...';
-      case 'disconnected':
-        return 'Disconnected from server';
-      case 'error':
-        return 'Connection error';
-      default:
-        return 'Unknown status';
-    }
-  };
-
-  return (
-    <div
-      className="relative group"
-      title={getStatusTooltip()}
-    >
-      <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
-
-      {/* Tooltip on hover */}
-      <div className="absolute top-full right-0 mt-2 px-2 py-1 bg-black/80 text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-        {getStatusTooltip()}
-      </div>
     </div>
   );
 }

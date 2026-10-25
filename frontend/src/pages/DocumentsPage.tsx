@@ -26,12 +26,7 @@ import { useToast } from '@/contexts/ToastContext';
 import api from '@/services/api';
 import { AssetType, type Asset } from '@/types';
 import { assetScopeLabel } from '@/utils/assetUrl';
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
+import { formatFileSize } from '@/utils/format';
 
 export default function DocumentsPage() {
   const navigate = useNavigate();
@@ -96,7 +91,7 @@ export default function DocumentsPage() {
             </button>
             <div className="flex items-center gap-3">
               <div className="p-2 rounded-lg bg-moss-green/10">
-                <BookOpen className="w-6 h-6 text-moss-green" />
+                <BookOpen className="w-6 h-6 text-brand-ink" />
               </div>
               <div>
                 <h1 className="text-2xl font-semibold text-brand-ink font-heading">Documents</h1>
@@ -141,7 +136,7 @@ export default function DocumentsPage() {
           </p>
         ) : documents.length === 0 ? (
           <div className="glass-panel p-10 text-center">
-            <FileText className="w-10 h-10 mx-auto mb-3 text-moss-green/50" />
+            <FileText className="w-10 h-10 mx-auto mb-3 text-brand-ink/50" />
             <p className="text-sm font-medium text-brand-ink mb-1">No documents yet</p>
             <p className="text-xs text-warm-gray">
               Upload a rulebook or a page of house rules and it will be readable from here and from any
@@ -151,14 +146,14 @@ export default function DocumentsPage() {
         ) : (
           <ul className="space-y-2">
             {documents.map((doc) => {
-              const format = documentFormat(doc.originalName);
+              const format = documentFormat(doc.filename);
               return (
                 <li
                   key={doc.id}
                   className="glass-panel p-4 flex items-center gap-4"
                 >
-                  <div className="p-2 rounded-lg bg-moss-green/10 flex-shrink-0">
-                    <FileText className="w-6 h-6 text-moss-green" />
+                  <div className="p-2 rounded-lg bg-moss-green/10 shrink-0">
+                    <FileText className="w-6 h-6 text-brand-ink" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <button
@@ -169,11 +164,11 @@ export default function DocumentsPage() {
                       {doc.name}
                     </button>
                     <p className="text-xs text-warm-gray truncate">
-                      {FORMAT_LABEL[format]} · {formatSize(doc.fileSize)} · {assetScopeLabel(doc.scope)}
+                      {FORMAT_LABEL[format]} · {formatFileSize(doc.fileSize, { kbDecimals: 0, largest: 'MB' })} · {assetScopeLabel(doc.scope)}
                       {doc.description ? ` · ${doc.description}` : ''}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
                     <Button
                       type="button"
                       variant="secondary"
@@ -251,7 +246,7 @@ export default function DocumentsPage() {
         onClose={() => setReading(null)}
         documentId={reading?.id ?? null}
         name={reading?.name ?? ''}
-        originalName={reading?.originalName ?? ''}
+        filename={reading?.filename ?? ''}
         canEdit={reading !== null && canChange(reading)}
         onSaved={() => queryClient.invalidateQueries({ queryKey: ['assets'] })}
       />

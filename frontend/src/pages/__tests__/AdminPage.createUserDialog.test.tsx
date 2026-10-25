@@ -56,6 +56,16 @@ async function openCreateUser() {
 }
 
 describe('the Create User window', () => {
+  it('opens with the email box focused, and gives focus back to Create User when closed', async () => {
+    await openCreateUser();
+    expect(screen.getByLabelText(/Email/)).toHaveFocus();
+
+    await userEvent.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create User' })).toBeNull());
+    expect(screen.getByRole('button', { name: /Create User/ })).toHaveFocus();
+  });
+
   it('is a labelled modal dialog that Escape closes', async () => {
     const dialog = await openCreateUser();
     expect(dialog).toHaveAttribute('aria-modal', 'true');
@@ -77,5 +87,28 @@ describe('the Create User window', () => {
     expect(screen.getByRole('dialog', { name: 'Create User' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Done' }));
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Create User' })).toBeNull());
+  });
+
+  // Over plain HTTP, as on a home network, the browser has no
+  // navigator.clipboard; Copy did nothing there and said nothing.
+  it('copies the temporary password on a page with no navigator.clipboard', async () => {
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+    Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true });
+    const execCommand = vi.fn(() => true);
+    Object.defineProperty(document, 'execCommand', { value: execCommand, configurable: true });
+    try {
+      await openCreateUser();
+      await userEvent.type(screen.getByLabelText(/Email/), 'new@example.test');
+      const createButtons = screen.getAllByRole('button', { name: 'Create User' });
+      await userEvent.click(createButtons[createButtons.length - 1]);
+      await screen.findByText('ABCD-EFGH-IJKL-MNOP');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+      expect(execCommand).toHaveBeenCalledWith('copy');
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard);
+    }
   });
 });

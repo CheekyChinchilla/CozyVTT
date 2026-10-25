@@ -2,8 +2,8 @@
  * CozyVTT Theme Definitions
  *
  * Each theme defines RGB channel triplets (e.g. "74 93 78") for every CSS
- * variable consumed by Tailwind. Tailwind composes them with alpha via
- * rgb(var(--color-x) / <alpha-value>).
+ * variable consumed by Tailwind, set on the page as --rgb-x. The @theme block in
+ * index.css gives Tailwind each one as --color-x: rgb(var(--rgb-x)).
  *
  * Readability contract: every theme meets WCAG AA contrast (≥4.5:1) between
  * text colors and the backgrounds they are rendered on. This is enforced, not
@@ -15,7 +15,8 @@
  * Authored values that already pass are never modified.
  */
 
-import { ensureReadableChannels, ensureReadableOnAll, readableTextOn } from './utils/color';
+import { TOKEN_HUES } from './utils/tokenColours';
+import { ensureReadableChannels, ensureReadableOnAll, parseRgb, readableTextOn, relativeLuminance } from './utils/color';
 
 export interface ThemeColors {
   brand: string;
@@ -519,11 +520,6 @@ export function hexToRgbChannels(hex: string): string {
   return `${r} ${g} ${b}`;
 }
 
-export function rgbChannelsToHex(channels: string): string {
-  const [r, g, b] = channels.split(' ').map(Number);
-  return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
-}
-
 /**
  * Canonical hues for states the palettes don't define. Each is adapted per
  * theme (see deriveReadableTokens) so a dark theme gets a lighter green rather
@@ -546,55 +542,94 @@ export const STATE_HUES = {
  *     unchanged, so this only moves the themes whose muted text is genuinely
  *     too faint.
  */
+/** `fill` laid over `background` at `alpha`, as `bg-danger/15` draws it. */
+function over(fill: string, background: string, alpha: number): string {
+  const f = fill.split(/\s+/).map(Number);
+  const b = background.split(/\s+/).map(Number);
+  return f.map((v, i) => Math.round(v * alpha + b[i] * (1 - alpha))).join(' ');
+}
+
 export function deriveReadableTokens(colors: ThemeColors): Record<string, string> {
   const onPage = [colors.bgBase, colors.bgSurface];
   const onPaper = [colors.paper];
   const everywhere = [...onPage, ...onPaper];
+  // Coloured text also sits on its own colour's tint (a chip or panel at 10
+  // to 15%: the alert and badge classes, deepened to 25 or 30% on hover), and
+  // plain text on a wash of the ink (an inset panel or a hovered row at 5 to
+  // 10%).
+  const andItsTint = (fill: string) => [
+    ...everywhere,
+    ...everywhere.map((bg) => over(fill, bg, 0.15)),
+    ...everywhere.map((bg) => over(fill, bg, 0.3)),
+  ];
+  const andInkWash = [...everywhere, over(colors.ink, colors.paper, 0.1), over(colors.ink, colors.bgSurface, 0.1)];
+  const brandText = ensureReadableChannels('255 255 255', colors.brand);
 
   return {
-    '--color-ink-muted': ensureReadableOnAll(colors.inkMuted, everywhere),
+    '--rgb-ink-secondary': ensureReadableOnAll(colors.inkSecondary, andInkWash),
+    '--rgb-ink-muted': ensureReadableOnAll(colors.inkMuted, andInkWash),
     // Label on an accent-filled button. Authored values that already contrast
     // are kept; the rest are nudged until the label is legible.
-    '--color-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
+    '--rgb-accent-text': ensureReadableChannels(colors.accentText, colors.accent),
+    // Label on a brand-filled button or tick: white where it reads, a shade
+    // nudged from white where the brand is too light for it.
+    '--rgb-brand-text': brandText,
+    // The brand button's hover: the fill moved away from its label, darker
+    // under a light label and lighter under a dark one, so it reads as well.
+    '--rgb-brand-hover': over(relativeLuminance(parseRgb(brandText)) > 0.5 ? '0 0 0' : '255 255 255', colors.brand, 0.12),
+    // The danger button's fill: the theme's danger colour, darkened until a
+    // white label reads on it.
+    '--rgb-danger-fill': ensureReadableChannels(colors.danger, '255 255 255'),
     // brand is a fill in ~290 places (buttons, borders) AND text in ~470.
     // The fill keeps the authored color; text uses this readable shade of it.
-    '--color-brand-ink': ensureReadableOnAll(colors.brand, everywhere),
-    '--color-accent-ink': ensureReadableOnAll(colors.accent, everywhere),
-    '--color-spirit-ink': ensureReadableOnAll(colors.spirit, everywhere),
-    '--color-danger-ink': ensureReadableOnAll(colors.danger, everywhere),
-    '--color-success': STATE_HUES.success,
-    '--color-success-ink': ensureReadableOnAll(STATE_HUES.success, everywhere),
-    '--color-warning': STATE_HUES.warning,
-    '--color-warning-ink': ensureReadableOnAll(STATE_HUES.warning, everywhere),
-    '--color-info': STATE_HUES.info,
-    '--color-info-ink': ensureReadableOnAll(STATE_HUES.info, everywhere),
+    '--rgb-brand-ink': ensureReadableOnAll(colors.brand, andItsTint(colors.brand)),
+    '--rgb-accent-ink': ensureReadableOnAll(colors.accent, andItsTint(colors.accent)),
+    '--rgb-spirit-ink': ensureReadableOnAll(colors.spirit, andItsTint(colors.spirit)),
+    '--rgb-danger-ink': ensureReadableOnAll(colors.danger, andItsTint(colors.danger)),
+    '--rgb-success': STATE_HUES.success,
+    '--rgb-success-ink': ensureReadableOnAll(STATE_HUES.success, andItsTint(STATE_HUES.success)),
+    '--rgb-warning': STATE_HUES.warning,
+    '--rgb-warning-ink': ensureReadableOnAll(STATE_HUES.warning, andItsTint(STATE_HUES.warning)),
+    '--rgb-info': STATE_HUES.info,
+    '--rgb-info-ink': ensureReadableOnAll(STATE_HUES.info, andItsTint(STATE_HUES.info)),
+    // The map's token colours (utils/tokenColours.ts), fixed in every theme,
+    // each with a readable shade for text in the panels.
+    ...Object.fromEntries((['player', 'hostile', 'friendly', 'neutral', 'object'] as const).flatMap((kind) => [
+      [`--rgb-token-${kind}`, TOKEN_HUES[kind]],
+      [`--rgb-token-${kind}-ink`, ensureReadableOnAll(TOKEN_HUES[kind], andItsTint(TOKEN_HUES[kind]))],
+    ])),
   };
 }
 
 export function applyThemeColors(colors: ThemeColors): void {
   const root = document.documentElement;
-  root.style.setProperty('--color-brand', colors.brand);
-  root.style.setProperty('--color-brand-dark', colors.brandDark);
-  root.style.setProperty('--color-accent', colors.accent);
-  root.style.setProperty('--color-accent-hover', colors.accentHover);
-  root.style.setProperty('--color-accent-text', colors.accentText);
-  root.style.setProperty('--color-bg-base', colors.bgBase);
-  root.style.setProperty('--color-bg-surface', colors.bgSurface);
-  root.style.setProperty('--color-bg-surface-light', colors.bgSurfaceLight);
-  root.style.setProperty('--color-bg-surface-dark', colors.bgSurfaceDark);
-  root.style.setProperty('--color-ink', colors.ink);
-  root.style.setProperty('--color-ink-secondary', colors.inkSecondary);
-  root.style.setProperty('--color-ink-muted', colors.inkMuted);
-  root.style.setProperty('--color-paper', colors.paper);
-  root.style.setProperty('--color-danger', colors.danger);
-  root.style.setProperty('--color-spirit', colors.spirit);
+  root.style.setProperty('--rgb-brand', colors.brand);
+  root.style.setProperty('--rgb-brand-dark', colors.brandDark);
+  root.style.setProperty('--rgb-accent', colors.accent);
+  root.style.setProperty('--rgb-accent-hover', colors.accentHover);
+  root.style.setProperty('--rgb-accent-text', colors.accentText);
+  root.style.setProperty('--rgb-bg-base', colors.bgBase);
+  root.style.setProperty('--rgb-bg-surface', colors.bgSurface);
+  root.style.setProperty('--rgb-bg-surface-light', colors.bgSurfaceLight);
+  root.style.setProperty('--rgb-bg-surface-dark', colors.bgSurfaceDark);
+  root.style.setProperty('--rgb-ink', colors.ink);
+  root.style.setProperty('--rgb-ink-secondary', colors.inkSecondary);
+  root.style.setProperty('--rgb-ink-muted', colors.inkMuted);
+  root.style.setProperty('--rgb-paper', colors.paper);
+  root.style.setProperty('--rgb-danger', colors.danger);
+  root.style.setProperty('--rgb-spirit', colors.spirit);
 
   // Readable text variants + state colors, computed from the above.
-  // Set last: --color-ink-muted is intentionally overwritten with its clamped
+  // Set last: --rgb-ink-muted is intentionally overwritten with its clamped
   // value when the authored one is too faint to read.
   for (const [name, value] of Object.entries(deriveReadableTokens(colors))) {
     root.style.setProperty(name, value);
   }
+
+  // The browser draws its own controls (text boxes, checkboxes, a dropdown's
+  // open list) for the scheme it is told; a dark paper is a dark theme,
+  // custom ones included.
+  root.style.colorScheme = relativeLuminance(parseRgb(colors.paper)) < 0.18 ? 'dark' : 'light';
 }
 
 /**

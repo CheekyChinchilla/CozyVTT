@@ -36,40 +36,40 @@ const FEAT_CATEGORIES: Array<{
     key: 'ancestryAndHeritage',
     label: 'Ancestry & Heritage',
     icon: Star,
-    color: 'text-purple-600',
-    bgColor: 'bg-purple-50',
+    color: 'text-spirit-ink',
+    bgColor: 'bg-spirit/10 border-spirit/30',
     description: 'Feats from ancestry and heritage choices',
   },
   {
     key: 'class',
     label: 'Class Feats',
     icon: Award,
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-50',
+    color: 'text-info-ink',
+    bgColor: 'bg-info/10 border-info/30',
     description: 'Class-specific feats and abilities',
   },
   {
     key: 'skill',
     label: 'Skill Feats',
     icon: Zap,
-    color: 'text-green-600',
-    bgColor: 'bg-green-50',
+    color: 'text-success-ink',
+    bgColor: 'bg-success/10 border-success/30',
     description: 'Feats that enhance skills',
   },
   {
     key: 'general',
     label: 'General Feats',
     icon: Circle,
-    color: 'text-stone-600',
-    bgColor: 'bg-stone-50',
+    color: 'text-ink-secondary',
+    bgColor: 'bg-ink/5 border-ink/10',
     description: 'General feats available to all characters',
   },
   {
     key: 'bonus',
     label: 'Bonus Feats',
     icon: Gift,
-    color: 'text-amber-600',
-    bgColor: 'bg-amber-50',
+    color: 'text-warning-ink',
+    bgColor: 'bg-warning/10 border-warning/30',
     description: 'Bonus feats from class or ancestry',
   },
 ];
@@ -85,39 +85,43 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
         const Icon = category.icon;
 
         return (
-          <div key={category.key} className={`${category.bgColor} border-2 border-stone-200 rounded-lg p-4`}>
+          <div key={category.key} className={`${category.bgColor} border-2 rounded-lg p-4`}>
             {/* Category Header */}
             <div className="flex items-center space-x-2 mb-3">
               <Icon className={`w-5 h-5 ${category.color}`} />
               <h4 className={`font-bold ${category.color} text-lg`}>{category.label}</h4>
-              <span className="text-xs text-stone-500">({categoryFeats.length})</span>
+              <span className="text-xs text-ink-muted">({categoryFeats.length})</span>
             </div>
 
-            {/* Feats List */}
+            {/* Feats by level, sorted as a copy so the character's own list
+                is left as it was; a feat with no level (the schema allows it)
+                comes first. */}
             <div className="space-y-2">
-              {categoryFeats
-                .sort((a, b) => a.level - b.level)
+              {[...categoryFeats]
+                .sort((a, b) => (a.level ?? 0) - (b.level ?? 0))
                 .map((feat, index) => (
                   <div
                     key={`${feat.name}-${index}`}
-                    className="bg-white border border-stone-200 rounded-lg p-3 shadow-sm"
+                    className="bg-paper border border-ink/10 rounded-lg p-3 shadow-xs"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2 mb-1">
-                          <span className="font-semibold text-stone-800">{feat.name}</span>
-                          <span className="px-2 py-0.5 bg-stone-100 text-stone-600 text-xs rounded-full font-medium">
-                            Level {feat.level}
-                          </span>
+                          <span className="font-semibold text-ink">{feat.name}</span>
+                          {feat.level != null && (
+                            <span className="px-2 py-0.5 bg-ink/10 text-ink-secondary text-xs rounded-full font-medium">
+                              Level {feat.level}
+                            </span>
+                          )}
                         </div>
                         {/* The editor's box writes `description`; the
                             built-in templates wrote `notes`. Either may be
                             present, so both are shown. */}
                         {feat.description && (
-                          <p className="text-sm text-stone-600 mt-1 whitespace-pre-line">{feat.description}</p>
+                          <p className="text-sm text-ink-secondary mt-1 whitespace-pre-line">{feat.description}</p>
                         )}
                         {feat.notes && feat.notes !== feat.description && (
-                          <p className="text-sm text-stone-600 mt-1">{feat.notes}</p>
+                          <p className="text-sm text-ink-secondary mt-1">{feat.notes}</p>
                         )}
                       </div>
                     </div>
@@ -130,7 +134,7 @@ export const FeatsList: React.FC<FeatsListProps> = ({ feats }) => {
 
       {/* Empty State */}
       {Object.values(feats).every(arr => !arr || arr.length === 0) && (
-        <div className="text-center py-8 text-stone-500 italic">
+        <div className="text-center py-8 text-ink-muted italic">
           No feats recorded yet
         </div>
       )}

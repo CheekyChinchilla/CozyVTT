@@ -184,10 +184,14 @@ export function errorMessage(err: unknown): string | undefined {
  * A line to log for a caught error: its status and the server's message, or
  * the error's own message. Never the error itself, since one the API client
  * throws carries the request it answered, body included (a password, a code),
- * and error lines are kept in production builds.
+ * and error lines are kept in production builds. An error that came with no
+ * request (the page's own code threw it) keeps its stack, which holds none.
  */
 export function errorSummary(err: unknown): string {
   const status = apiErrorStatus(err);
   const message = apiErrorMessage(err) ?? errorMessage(err) ?? 'Unknown error';
-  return status !== undefined ? `${status} ${message}` : message;
+  if (status !== undefined) return `${status} ${message}`;
+  const fromRequest = err !== null && typeof err === 'object' && ('config' in err || 'response' in err || 'request' in err);
+  if (err instanceof Error && !fromRequest && err.stack) return err.stack.startsWith(`${err.name}: ${err.message}`) ? err.stack : `${message}\n${err.stack}`;
+  return message;
 }

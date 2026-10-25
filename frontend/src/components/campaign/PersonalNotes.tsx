@@ -292,12 +292,12 @@ export default function PersonalNotes() {
       <div className="h-full flex flex-col gap-2">
         {/* Picker */}
         <div className="flex items-center gap-2">
-          <NotebookPen className="w-4 h-4 text-warm-amber shrink-0" />
+          <NotebookPen className="w-4 h-4 text-accent-ink shrink-0" />
           <select
             value={selectedId ?? ''}
             onChange={(e) => { void openNote(e.target.value); }}
             aria-label="Choose a note"
-            className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-warm-amber/30 rounded-cozy bg-parchment/60 focus:outline-none focus:ring-2 focus:ring-warm-amber"
+            className="flex-1 min-w-0 px-2 py-1.5 text-sm border border-warm-amber/30 rounded-cozy bg-parchment/60 focus:outline-hidden focus:ring-2 focus:ring-warm-amber"
           >
             <option value="" disabled>
               {notes.length ? 'Choose a note…' : 'No notes yet'}
@@ -312,7 +312,7 @@ export default function PersonalNotes() {
             onClick={handleCreate}
             title="New note"
             aria-label="New note"
-            className="p-1.5 rounded-cozy border border-warm-amber/40 bg-warm-amber/10 text-warm-amber hover:bg-warm-amber/20 shrink-0"
+            className="p-1.5 rounded-cozy border border-warm-amber/40 bg-warm-amber/10 text-accent-ink hover:bg-warm-amber/15 shrink-0"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -337,7 +337,7 @@ export default function PersonalNotes() {
                 onChange={(e) => handleRename(e.target.value)}
                 maxLength={120}
                 aria-label="Note title"
-                className="flex-1 min-w-0 px-2 py-1 text-sm font-semibold border border-warm-amber/30 rounded-cozy bg-parchment/60 focus:outline-none focus:ring-2 focus:ring-warm-amber"
+                className="flex-1 min-w-0 px-2 py-1 text-sm font-semibold border border-warm-amber/30 rounded-cozy bg-parchment/60 focus:outline-hidden focus:ring-2 focus:ring-warm-amber"
               />
               <button
                 onClick={() => setEditing((on) => !on)}
@@ -351,7 +351,7 @@ export default function PersonalNotes() {
                 onClick={() => setConfirmDelete(true)}
                 title="Delete note"
                 aria-label="Delete note"
-                className="p-1.5 rounded-cozy border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/20 shrink-0"
+                className="p-1.5 rounded-cozy border border-danger/30 bg-danger/10 text-danger-ink hover:bg-danger/15 shrink-0"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -370,7 +370,7 @@ export default function PersonalNotes() {
                 // Matches the server's cap, so the editor cannot get into a
                 // state where every autosave is refused.
                 maxLength={MAX_CONTENT}
-                className="flex-1 min-h-0 w-full px-3 py-2 text-sm font-mono border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-none focus:outline-none focus:ring-2 focus:ring-warm-amber"
+                className="flex-1 min-h-0 w-full px-3 py-2 text-sm font-mono border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-none focus:outline-hidden focus:ring-2 focus:ring-warm-amber"
               />
             ) : (
               /* Rendered preview, through the app's one Markdown component:

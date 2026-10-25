@@ -2,8 +2,9 @@ import { CampaignRole, PlatformRole, AssetType, AssetScope } from '@prisma/clien
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { readTokens } from '../utils/prisma-json';
-import { getSpiritVisibility } from '../utils/spirit-layer';
+import { getSpiritVisibility, getSpiritVisibilityAcrossCampaigns } from '../utils/spirit-layer';
 import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/asset-urls';
+import { escapeLikePattern } from '../utils/likePattern';
 
 /**
  * Permission Verification Helpers
@@ -14,89 +15,8 @@ import { extractAssetId, isExactAssetAddress, isSameOriginPath } from '../utils/
 /**
  * Check if user is an admin
  */
-export function isAdmin(platformRole: PlatformRole): boolean {
+function isAdmin(platformRole: PlatformRole): boolean {
   return platformRole === 'ADMIN';
-}
-
-/**
- * Check if user is DM of a campaign
- */
-export function isDM(campaignRole: CampaignRole): boolean {
-  return campaignRole === 'DM';
-}
-
-/**
- * Check if user is Player in a campaign
- */
-export function isPlayer(campaignRole: CampaignRole): boolean {
-  return campaignRole === 'PLAYER';
-}
-
-/**
- * Check if user can edit campaign settings
- * Only DM can edit campaign
- */
-export function canEditCampaign(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-// TODO(sheets): nothing calls canEditCharacter, and it disagrees with
-// PUT /api/characters/:id, which decides this itself: it lets any admin edit,
-// it takes the campaign id from its caller instead of the character, and it
-// does not refuse a spectator who owns the character. Delete it, or make it
-// match the route and have the route call it, so the rule is declared once.
-// The same goes for the other helpers here that no route calls (isAdmin,
-// isDM, isPlayer, canEditCampaign, canManageMaps, canToggleSpiritLayer,
-// canChangeVibe, canManageSessions, canInvitePlayers, canDeleteMessages,
-// canExportCampaign): each is a second statement of a rule the routes state
-// in their guards.
-/**
- * Check if user can edit a specific character
- * 
- * - Players can edit own characters
- * - DM can edit any character in campaign
- * - Admin can edit any character
- */
-export async function canEditCharacter(
-  userId: string,
-  characterId: string,
-  campaignId: string,
-  platformRole: PlatformRole
-): Promise<boolean> {
-  // Admins can edit anything
-  if (isAdmin(platformRole)) {
-    return true;
-  }
-
-  // Get character
-  const character = await prisma.character.findUnique({
-    where: { id: characterId },
-  });
-
-  if (!character) {
-    return false;
-  }
-
-  // Owner can always edit their own character
-  if (character.userId === userId) {
-    return true;
-  }
-
-  // Check if user is DM of the campaign
-  const membership = await prisma.campaignMembership.findUnique({
-    where: {
-      userId_campaignId: {
-        userId,
-        campaignId,
-      },
-    },
-  });
-
-  if (membership && isDM(membership.role)) {
-    return true;
-  }
-
-  return false;
 }
 
 /**
@@ -167,67 +87,6 @@ export function canReadMap(
 ): boolean {
   if (role === 'DM') return true;
   return !!currentMapId && mapId === currentMapId;
-}
-
-/**
- * Check if user can manage campaign maps
- * Only DM can manage maps
- */
-export function canManageMaps(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can toggle Spirit Layer
- * Only DM can toggle Spirit Layer
- */
-export function canToggleSpiritLayer(
-  campaignRole: CampaignRole,
-  platformRole: PlatformRole
-): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can change vibe tracker
- * Only DM can change time of day
- */
-export function canChangeVibe(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can manage campaign sessions
- * Only DM can start/pause/end sessions
- */
-export function canManageSessions(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can invite players to campaign
- * Only campaign owner (DM) can invite
- */
-export async function canInvitePlayers(
-  userId: string,
-  campaignId: string,
-  platformRole: PlatformRole
-): Promise<boolean> {
-  // Admins can invite to any campaign
-  if (isAdmin(platformRole)) {
-    return true;
-  }
-
-  // Check if user is the campaign owner
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
-
-  if (!campaign) {
-    return false;
-  }
-
-  return campaign.ownerId === userId;
 }
 
 /**
@@ -323,45 +182,11 @@ export function canToggleDoor(campaignRole: string | undefined): boolean {
 }
 
 /**
- * Check if user can delete chat messages
- * Only DM can delete messages
- */
-export function canDeleteMessages(campaignRole: CampaignRole, platformRole: PlatformRole): boolean {
-  return isDM(campaignRole) || isAdmin(platformRole);
-}
-
-/**
- * Check if user can export campaign data
- * Campaign owner (DM) and Admin
- */
-export async function canExportCampaign(
-  userId: string,
-  campaignId: string,
-  platformRole: PlatformRole
-): Promise<boolean> {
-  // Admins can export any campaign
-  if (isAdmin(platformRole)) {
-    return true;
-  }
-
-  // Check if user is the campaign owner
-  const campaign = await prisma.campaign.findUnique({
-    where: { id: campaignId },
-  });
-
-  if (!campaign) {
-    return false;
-  }
-
-  return campaign.ownerId === userId;
-}
-
-/**
  * The answer also carries the campaign the asset may be filed under, because
  * `campaignId` is what decides which campaign lists an asset and a caller's own
  * value cannot be trusted for that. Only a CAMPAIGN-scoped asset has one.
  */
-export type ScopeDecision =
+type ScopeDecision =
   | { allowed: true; campaignId: string | null }
   | { allowed: false; status: 400 | 403; message: string };
 
@@ -436,24 +261,16 @@ export async function canPlaceAssetAtScope(
  */
 export async function spiritLayerAssetIdsHiddenFrom(userId: string, campaignIds: string[]): Promise<string[]> {
   if (campaignIds.length === 0) return [];
-  const memberships = await prisma.campaignMembership.findMany({
-    where: { userId, campaignId: { in: campaignIds } },
-    select: { campaignId: true, role: true },
+  // In a fixed number of queries however many campaigns: worked out one
+  // campaign at a time, a player in many made the asset list run hundreds.
+  const sees = await getSpiritVisibilityAcrossCampaigns(userId, campaignIds);
+  const hiddenIn = [...sees].filter(([, visible]) => !visible).map(([campaignId]) => campaignId);
+  if (hiddenIn.length === 0) return [];
+  const maps = await prisma.map.findMany({
+    where: { campaignId: { in: hiddenIn }, spiritLayerUrl: { not: null } },
+    select: { spiritLayerUrl: true },
   });
-  const hidden: string[] = [];
-  for (const m of memberships) {
-    if (m.role === 'DM') continue;
-    if (await getSpiritVisibility(m.campaignId, userId)) continue;
-    const maps = await prisma.map.findMany({
-      where: { campaignId: m.campaignId, spiritLayerUrl: { not: null } },
-      select: { spiritLayerUrl: true },
-    });
-    for (const map of maps) {
-      const id = extractAssetId(map.spiritLayerUrl);
-      if (id) hidden.push(id);
-    }
-  }
-  return hidden;
+  return maps.map((map) => extractAssetId(map.spiritLayerUrl)).filter((id): id is string => id !== null);
 }
 
 /** Whether `assetId` is a spirit-layer image of a map in `campaignId` that `userId` may not see there. */
@@ -505,7 +322,7 @@ async function spiritLayerHidesAsset(assetId: string, campaignId: string, userId
  * storing it, and the id it gives must equal `assetId`. Where a query below
  * matches the id as a substring, that only narrows the rows it reads.
  */
-export async function assetUsedInUserCampaign(
+async function assetUsedInUserCampaign(
   assetId: string,
   userId: string,
   uploaderId: string | null
@@ -609,14 +426,18 @@ export async function assetUsedInUserCampaign(
   });
   if (ambience) return true;
 
-  // Tokens live as JSON on the map, so they cannot be matched by column. Only
-  // the art URL is read, and only once everything cheaper has missed.
-  const maps = await prisma.map.findMany({
-    where: readableMaps,
-    select: { tokens: true },
-  });
-  return maps.some((map) =>
-    readTokens(map.tokens).some((token) => names(token?.imageUrl))
+  // Tokens live as JSON on the map, so they cannot be matched by column, and
+  // this runs only once everything cheaper has missed. The database narrows
+  // to the readable maps whose tokens mention the id at all, as the column
+  // searches above do; only those maps' tokens are read, and each token's art
+  // address is checked as above. Loading every readable map's tokens made
+  // each request for an asset the campaign does not use read all of them.
+  const mentioning = await prisma.$queryRaw<Array<{ tokens: unknown }>>`
+    SELECT tokens FROM "Map"
+    WHERE ("campaignId" = ANY(${dmCampaignIds}::text[]) OR id = ANY(${currentMapIds}::text[]))
+      AND tokens::text LIKE ${`%${escapeLikePattern(assetId)}%`}`;
+  return mentioning.some((map) =>
+    readTokens(map.tokens as Prisma.JsonValue).some((token) => names(token?.imageUrl))
   );
 }
 
@@ -713,7 +534,7 @@ export async function mayChangeAsset(
 }
 
 /** What mayChangeAsset reads about a user: whether they manage global assets, and their role in each campaign. */
-export interface AssetChangeFacts {
+interface AssetChangeFacts {
   globalAssetManager: boolean;
   roles: ReadonlyMap<string, CampaignRole>;
 }
@@ -804,6 +625,12 @@ export async function canReferenceAsset(
     select: { id: true, scope: true, uploadedById: true, campaignId: true },
   });
   if (!asset) return true;
+  // TODO(assets): the asset's type is not read here, so a token's picture can
+  // name a MAP asset, and an animated map picture of up to 200 million pixels
+  // across its frames goes on a token, past the 50 million a token picture
+  // may be. A token's picture should name only a TOKEN asset, as
+  // isMapPicture holds a map's picture to a MAP asset, with the address
+  // already stored kept as it is.
   // Never as an administrator: an admin may read any file, but a stored
   // reference opens the asset to everyone at the table, as setting a scene's
   // music does (handlers/atmosphere.ts).

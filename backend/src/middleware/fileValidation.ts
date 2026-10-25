@@ -2,10 +2,11 @@ import { Response, NextFunction } from 'express';
 import { fileTypeFromFile } from 'file-type';
 import fs from 'fs/promises';
 import path from 'path';
-import { AssetType, isAllowedMimeType, deleteFile, getFileSizeLimit, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
+import { AssetType, isAcceptedContent, deleteFile, getFileSizeLimit, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
 import { UploadRequest } from './upload';
 import logger from '../utils/logger';
 import { isPlainTextFile } from '../utils/textFile';
+import { isPictureAssetType, pictureLimitProblem } from '../utils/pictureLimits';
 
 /** The first bytes of a file, or an empty buffer if it cannot be read. */
 async function leadingBytes(filePath: string, count: number): Promise<Buffer> {
@@ -136,8 +137,9 @@ export async function validateFileType(
       }
     }
 
-    // Validate MIME type against allowed types for this asset
-    if (!isAllowedMimeType(assetType, fileType.mime)) {
+    // The type and the extension it will be stored under must both be ones
+    // this asset type allows (isAcceptedContent).
+    if (!isAcceptedContent(assetType, fileType)) {
       // Delete the file
       await deleteFile(filePath);
 
@@ -146,6 +148,18 @@ export async function validateFileType(
         message: `Invalid file type. ${assetType} files must be one of: ${getAllowedExtensionsString(assetType)}`,
       });
       return;
+    }
+
+    // A map, token or avatar picture is held to the picture limits, read
+    // from its header: every frame of an animation is unpacked in each
+    // player's browser.
+    if (isPictureAssetType(assetType)) {
+      const problem = await pictureLimitProblem(filePath, assetType);
+      if (problem) {
+        await deleteFile(filePath);
+        res.status(400).json({ error: 'Validation Error', message: problem });
+        return;
+      }
     }
 
     // The content is known and allowed. Force the stored extension to match it,

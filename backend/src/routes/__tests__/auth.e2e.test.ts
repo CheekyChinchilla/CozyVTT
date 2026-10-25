@@ -10,12 +10,15 @@
 
 // Mock rate limiter before any imports that load the auth router
 jest.mock('express-rate-limit', () => {
-  return () => (_req: Request, _res: Response, next: NextFunction) => next();
+  // Every limiter lets the request through; the address helper stays real.
+  const { ipKeyGenerator } = jest.requireActual('express-rate-limit');
+  return Object.assign(() => (_req: Request, _res: Response, next: NextFunction) => next(), { ipKeyGenerator });
 });
 // The sign-in limiter is not express-rate-limit, and these cases send more
 // wrong answers from one address than it allows. It is tested in
 // signInLimiter.e2e.test.ts.
 jest.mock('../../middleware/failureLimiter', () => ({
+  ...jest.requireActual('../../middleware/failureLimiter'),
   failureLimiter: () => Object.assign((_req: Request, _res: Response, next: NextFunction) => next(), { recordFailure: () => undefined, forget: () => undefined }),
 }));
 

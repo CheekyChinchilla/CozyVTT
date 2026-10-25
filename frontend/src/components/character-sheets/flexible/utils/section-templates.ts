@@ -170,13 +170,6 @@ export const SECTION_TEMPLATES: SectionTemplate[] = [
 ];
 
 /**
- * Get template by ID
- */
-export const getTemplate = (id: string): SectionTemplate | undefined => {
-  return SECTION_TEMPLATES.find((t) => t.id === id);
-};
-
-/**
  * Get templates by category
  */
 export const getCommonTemplates = (): SectionTemplate[] => {

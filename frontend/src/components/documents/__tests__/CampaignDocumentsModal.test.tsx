@@ -18,8 +18,9 @@ import { AssetType, AssetScope } from '@/types';
 // Not under test here, and it needs a QueryClient of its own.
 vi.mock('@/components/assets/AssetUploadModal', () => ({ default: () => null }));
 
+const auth = vi.hoisted(() => ({ platformRole: 'USER' }));
 vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'dm', platformRole: 'USER', globalAssetManager: false } }),
+  useAuth: () => ({ user: { id: 'dm', platformRole: auth.platformRole, globalAssetManager: false } }),
 }));
 
 vi.mock('@/services/api', () => {
@@ -42,10 +43,12 @@ const linkCampaignDocument = api.linkCampaignDocument as ReturnType<typeof vi.fn
 const unlinkCampaignDocument = api.unlinkCampaignDocument as ReturnType<typeof vi.fn>;
 const deleteAsset = api.deleteAsset as ReturnType<typeof vi.fn>;
 
-const shared = (id: string, name: string, originalName: string): CampaignDocument => ({
+/** Stored under its uploaded name's extension, as an ordinary upload is, unless `filename` says otherwise. */
+const shared = (id: string, name: string, originalName: string, filename = `${id}${originalName.slice(originalName.lastIndexOf('.'))}`): CampaignDocument => ({
   id,
   name,
   description: null,
+  filename,
   originalName,
   mimeType: 'application/pdf',
   fileSize: 1024,
@@ -73,7 +76,7 @@ const mine = (id: string, name: string, originalName: string): Asset =>
     uploadedById: 'dm',
     mimeType: 'application/pdf',
     fileSize: 1024,
-    filename: '',
+    filename: `${id}${originalName.slice(originalName.lastIndexOf('.'))}`,
     description: null,
     tags: [],
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -95,6 +98,14 @@ describe('CampaignDocumentsModal', () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
       expect(await screen.findByText('Core Rules')).toBeInTheDocument();
       expect(screen.getByText(/shared by The DM/)).toBeInTheDocument();
+    });
+
+    // The server serves a document by its stored name, which the upload sets
+    // from what the bytes are; the name it was uploaded under can say otherwise.
+    it('labels a document as what it is stored as', async () => {
+      listCampaignDocuments.mockResolvedValue({ documents: [shared('d9', 'Handout', 'handout.txt', 'd9.pdf')] });
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM={false} />);
+      expect(await screen.findByText(/^PDF · shared by The DM/)).toBeInTheDocument();
     });
 
     it('offers no way to share or unshare', async () => {
@@ -143,6 +154,17 @@ describe('CampaignDocumentsModal', () => {
   });
 
   describe('as the DM', () => {
+    // The share list fetched the newest 100 documents and no more.
+    it('offers a document from a later page of the library', async () => {
+      listAssets.mockImplementation(async (params: { page?: number }) => (params.page === 2
+        ? { assets: [mine('d7', 'Old Handout', 'old.md')], pagination: { page: 2, limit: 100, total: 101, totalPages: 2 } }
+        : { assets: [mine('d1', 'Core Rules', 'rules.pdf')], pagination: { page: 1, limit: 100, total: 101, totalPages: 2 } }));
+      render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+      await screen.findByText('Core Rules');
+      fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
+      expect(await screen.findByText('Old Handout')).toBeInTheDocument();
+    });
+
     it('offers only documents not already shared', async () => {
       render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
       await screen.findByText('Core Rules');
@@ -171,6 +193,27 @@ describe('CampaignDocumentsModal', () => {
       expect(screen.getByText('House Rules')).toBeInTheDocument();
       expect(screen.getByText('System Reference')).toBeInTheDocument();
       expect(screen.queryByText("Someone Else's Handout")).toBeNull();
+    });
+
+    it('offers a DM who is a server admin no one else\'s private document either', async () => {
+      // An admin can read every file, and the server still refuses to let an
+      // admin share someone else's private document into their table.
+      auth.platformRole = 'ADMIN';
+      try {
+        const theirs = { ...mine('d3', 'Someone Else\'s Notes', 'notes.md'), uploadedById: 'other', scope: AssetScope.USER } as Asset;
+        listAssets.mockResolvedValue({
+          assets: [mine('d2', 'House Rules', 'house.md'), theirs],
+          pagination: { page: 1, limit: 100, total: 2 },
+        });
+        render(<CampaignDocumentsModal isOpen onClose={vi.fn()} campaignId="c1" isDM />);
+        await screen.findByText('Core Rules');
+        fireEvent.click(screen.getByRole('button', { name: /share existing/i }));
+
+        expect(screen.getByText('House Rules')).toBeInTheDocument();
+        expect(screen.queryByText("Someone Else's Notes")).toBeNull();
+      } finally {
+        auth.platformRole = 'USER';
+      }
     });
 
     it('shares and refreshes the list', async () => {

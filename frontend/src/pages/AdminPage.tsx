@@ -48,12 +48,15 @@ import {
   Upload,
   RotateCcw,
   Palette,
+  LockOpen,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { copyText } from '@/utils/clipboard';
 import { adminService } from '@/services/admin.service';
 import type {
   User,
+  AdminListedUser,
   SystemStats,
   AdminHealth,
   AdminSystemSettings,
@@ -86,6 +89,7 @@ import { assetScopeLabel } from '@/utils/assetUrl';
 import DeletionBlockers from '@/components/admin/DeletionBlockers';
 import OrphanedFilesPanel from '@/components/admin/OrphanedFilesPanel';
 import { LogActor, LogChanges } from '@/components/admin/AdminLogDetails';
+import { formatDuration, formatFileSize, formatRelativeTime, type FileSizeOptions } from '@/utils/format';
 
 /** The four colours the appearance form edits. */
 interface AppearanceColors {
@@ -99,12 +103,8 @@ interface AppearanceColors {
 // Helpers
 // ============================================
 
-function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${units[i]}`;
-}
+/** How the Admin Panel writes a size: "512.0 B", "1.5 KB", up to TB. */
+const ADMIN_SIZES: FileSizeOptions = { byteDecimals: 1, largest: 'TB' };
 
 /**
  * Body size a reverse proxy must accept: the largest upload limit plus a few MB
@@ -124,16 +124,9 @@ function formatDate(dateStr: string | null): string {
   });
 }
 
-function formatRelativeTime(dateStr: string | null): string {
-  if (!dateStr) return '\u2014';
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+/** The time of day a sign-in lock ends, as the user list shows it. */
+function formatLockTime(dateStr: string): string {
+  return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatExpiry(dateStr: string | null): string {
@@ -147,22 +140,11 @@ function formatExpiry(dateStr: string | null): string {
   return new Date(dateStr).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `${days}d`;
-}
-
 const LOG_LEVEL_COLORS: Record<string, string> = {
   INFO: 'bg-info/10 text-info-ink',
   WARNING: 'bg-warning/10 text-warning-ink',
   ERROR: 'bg-danger/10 text-danger-ink',
-  CRITICAL: 'bg-danger/20 text-danger-ink font-bold',
+  CRITICAL: 'bg-danger/15 text-danger-ink font-bold',
 };
 
 type Tab = 'dashboard' | 'users' | 'settings' | 'appearance' | 'activity' | 'backups' | 'assets';
@@ -188,7 +170,7 @@ export default function AdminPage() {
   const [healthFailed, setHealthFailed] = useState<{ reachedServer: boolean } | null>(null);
 
   // ---- Users ----
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<AdminListedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState('');
   const [userSearch, setUserSearch] = useState('');
@@ -238,6 +220,10 @@ export default function AdminPage() {
 
   // User approval
   const [approvingUserId, setApprovingUserId] = useState<string | null>(null);
+
+  // Clearing a sign-in lock, after the confirmation
+  const [lockToClear, setLockToClear] = useState<AdminListedUser | null>(null);
+  const [clearingLock, setClearingLock] = useState(false);
 
   // ---- Settings ----
   const [settings, setSettings] = useState<AdminSystemSettings | null>(null);
@@ -495,13 +481,15 @@ export default function AdminPage() {
       loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
       if (adminCampaigns.length === 0) loadAdminCampaigns();
     }
-  }, [activeTab]);  
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loads what a tab needs as it is opened, not as its data arrives
+  }, [activeTab]);
 
   // Reload assets when filters/page change
   useEffect(() => {
     if (activeTab !== 'assets') return;
     loadAdminAssets(adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner);
-  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);  
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- reloads the assets when a filter or the page changes; opening the tab loads them above
+  }, [adminAssetsPage, adminAssetsScope, adminAssetsType, debouncedAdminAssetsSearch, adminAssetsOwner]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -519,7 +507,7 @@ export default function AdminPage() {
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, templateEditor: next } : x));
     try {
       const updated = await adminService.updateUser(u.id, { templateEditor: next });
-      setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       showToast(`Template editing ${next ? 'enabled' : 'disabled'} for ${u.displayName}`, 'success');
     } catch (err: unknown) {
       // Revert on error
@@ -538,7 +526,7 @@ export default function AdminPage() {
     setUsers(prev => prev.map(x => x.id === u.id ? { ...x, globalAssetManager: next } : x));
     try {
       const updated = await adminService.updateUser(u.id, { globalAssetManager: next });
-      setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       showToast(`Global Assets ${next ? 'enabled' : 'disabled'} for ${u.displayName}`, 'success');
     } catch (err: unknown) {
       // Revert on error
@@ -558,7 +546,7 @@ export default function AdminPage() {
         ? PlatformRole.USER
         : PlatformRole.ADMIN;
       const updated = await adminService.updateUser(u.id, { platformRole: newRole });
-      setUsers(prev => prev.map(x => x.id === u.id ? updated : x));
+      setUsers(prev => prev.map(x => x.id === u.id ? { ...x, ...updated } : x));
       showToast(`Role updated to ${newRole}`, 'success');
     } catch (err: unknown) {
       const e = err as { response?: { data?: { message?: string } } };
@@ -623,18 +611,13 @@ export default function AdminPage() {
     if (left.length === 0) setDeleteError('');
   };
 
-  // TODO(ui): navigator.clipboard is undefined over plain HTTP, so on a LAN
-  // instance this copies nothing and says nothing; the temporary password
-  // stays on screen to copy by hand. Use copyText from utils/clipboard, which
-  // falls back to the older copy, and say so when it fails, as the two-factor
-  // Copy buttons do.
+  // copyText also works over plain HTTP, where navigator.clipboard is missing.
   const handleCopyToClipboard = async (text: string, setCopiedFn: (v: boolean) => void) => {
-    try {
-      await navigator.clipboard.writeText(text);
+    if (await copyText(text)) {
       setCopiedFn(true);
       setTimeout(() => setCopiedFn(false), 2000);
-    } catch {
-      // clipboard unavailable — user can select manually
+    } else {
+      showToast('Could not copy the password. Select it and copy it yourself.', 'warning');
     }
   };
 
@@ -752,6 +735,20 @@ export default function AdminPage() {
       setResetMfaError(apiErrorMessage(e) ?? 'Failed to reset MFA');
     } finally {
       setIsResettingMfa(false);
+    }
+  };
+
+  const handleClearSignInLock = async (target: AdminListedUser) => {
+    setClearingLock(true);
+    try {
+      await adminService.clearSignInLock(target.id);
+      setUsers(prev => prev.map(u => u.id === target.id ? { ...u, signInLockedUntil: null } : u));
+      showToast(`Sign-in lock cleared for ${target.displayName}`, 'success');
+    } catch (err: unknown) {
+      showToast(apiErrorMessage(err) ?? 'Failed to clear the sign-in lock', 'error');
+    } finally {
+      setClearingLock(false);
+      setLockToClear(null);
     }
   };
 
@@ -935,7 +932,7 @@ export default function AdminPage() {
   // ============================================
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="min-h-screen bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
 
       {/* ---- Header ---- */}
       <header className="bg-moss-green/10 border-b border-moss-green/20">
@@ -1021,8 +1018,8 @@ export default function AdminPage() {
                   {[...Array(7)].map((_, i) => (
                     <div key={i} className="flex flex-col items-center p-4 space-y-2">
                       <div className="w-7 h-7 bg-moss-green/10 rounded-full" />
-                      <div className="h-8 w-10 bg-moss-green/15 rounded" />
-                      <div className="h-3 w-14 bg-stone-gray/10 rounded" />
+                      <div className="h-8 w-10 bg-moss-green/15 rounded-sm" />
+                      <div className="h-3 w-14 bg-stone-gray/10 rounded-sm" />
                     </div>
                   ))}
                 </div>
@@ -1038,10 +1035,10 @@ export default function AdminPage() {
                     aria-label="Disk nearly full"
                     className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-4 text-sm flex items-start gap-3"
                   >
-                    <HardDrive className="w-5 h-5 flex-shrink-0 mt-0.5" aria-hidden="true" />
+                    <HardDrive className="w-5 h-5 shrink-0 mt-0.5" aria-hidden="true" />
                     <div>
                       <p className="font-semibold">
-                        The disk that holds your uploads is {stats.uploadsDisk.usedPercent}% full ({formatBytes(stats.uploadsDisk.freeBytes)} free).
+                        The disk that holds your uploads is {stats.uploadsDisk.usedPercent}% full ({formatFileSize(stats.uploadsDisk.freeBytes, ADMIN_SIZES)} free).
                       </p>
                       <p className="mt-1">
                         When it fills, uploads fail, and backups and the database stop working too if they are on the same disk.
@@ -1060,7 +1057,7 @@ export default function AdminPage() {
                   </div>
 
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
-                    <FolderOpen className="w-7 h-7 text-warm-amber mb-2" />
+                    <FolderOpen className="w-7 h-7 text-accent-ink mb-2" />
                     <p className="text-3xl font-bold text-brand-ink">{stats?.campaignCount ?? '\u2014'}</p>
                     <p className="text-xs text-warm-gray mt-1">Campaigns</p>
                     {stats && (
@@ -1084,7 +1081,7 @@ export default function AdminPage() {
                   </div>
 
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
-                    <Database className="w-7 h-7 text-teal-500 mb-2" />
+                    <Database className="w-7 h-7 text-token-friendly-ink mb-2" />
                     <p className="text-3xl font-bold text-brand-ink">{stats?.mapCount ?? '\u2014'}</p>
                     <p className="text-xs text-warm-gray mt-1">Maps</p>
                   </div>
@@ -1092,12 +1089,12 @@ export default function AdminPage() {
                   <div className="glass-panel p-5 flex flex-col items-center text-center">
                     <Database className="w-7 h-7 text-spirit-ink mb-2" />
                     <p className="text-2xl font-bold text-brand-ink break-all">
-                      {stats ? formatBytes(stats.totalStorageBytes) : '\u2014'}
+                      {stats ? formatFileSize(stats.totalStorageBytes, ADMIN_SIZES) : '\u2014'}
                     </p>
                     <p className="text-xs text-warm-gray mt-1">Storage</p>
                     {stats?.uploadsDisk && (
                       <p className={`text-xs mt-0.5 ${stats.uploadsDisk.warning ? 'text-danger-ink' : 'text-success-ink'}`}>
-                        {formatBytes(stats.uploadsDisk.freeBytes)} free on disk
+                        {formatFileSize(stats.uploadsDisk.freeBytes, ADMIN_SIZES)} free on disk
                       </p>
                     )}
                   </div>
@@ -1109,7 +1106,7 @@ export default function AdminPage() {
                 {stats && stats.assetBreakdown.length > 0 && (
                   <section className="glass-panel overflow-hidden">
                     <div className="px-4 py-3 border-b border-warm-gray/20 flex items-center gap-2">
-                      <FolderOpen className="w-4 h-4 text-warm-amber" />
+                      <FolderOpen className="w-4 h-4 text-accent-ink" />
                       <h3 className="font-semibold text-brand-ink text-sm">Asset Breakdown</h3>
                     </div>
                     <div className="overflow-x-auto">
@@ -1126,7 +1123,7 @@ export default function AdminPage() {
                             <tr key={row.type} className="border-b border-warm-gray/10 hover:bg-moss-green/5">
                               <td className="px-4 py-2 font-medium text-stone-gray">{row.type}</td>
                               <td className="px-4 py-2 text-right text-warm-gray">{row.count}</td>
-                              <td className="px-4 py-2 text-right text-warm-gray">{formatBytes(row.sizeBytes)}</td>
+                              <td className="px-4 py-2 text-right text-warm-gray">{formatFileSize(row.sizeBytes, ADMIN_SIZES)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1137,7 +1134,7 @@ export default function AdminPage() {
                               {stats.assetBreakdown.reduce((s, r) => s + r.count, 0)}
                             </td>
                             <td className="px-4 py-2 text-right text-stone-gray">
-                              {formatBytes(stats.totalStorageBytes)}
+                              {formatFileSize(stats.totalStorageBytes, ADMIN_SIZES)}
                             </td>
                           </tr>
                         </tfoot>
@@ -1246,7 +1243,7 @@ export default function AdminPage() {
                                 {/* User */}
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 rounded-full bg-moss-green/20 flex items-center justify-center text-brand-ink font-medium text-xs flex-shrink-0">
+                                    <div className="w-8 h-8 rounded-full bg-moss-green/15 flex items-center justify-center text-brand-ink font-medium text-xs shrink-0">
                                       {u.displayName.charAt(0).toUpperCase()}
                                     </div>
                                     <span className="font-medium text-stone-gray">{u.displayName}</span>
@@ -1255,6 +1252,14 @@ export default function AdminPage() {
                                     )}
                                     {isPending && (
                                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-warning/10 text-warning-ink font-medium">Pending</span>
+                                    )}
+                                    {u.signInLockedUntil && (
+                                      <span
+                                        className="text-xs px-1.5 py-0.5 rounded-full bg-danger/10 text-danger-ink font-medium whitespace-nowrap"
+                                        title="Too many wrong passwords or sign-in codes. The account cannot sign in until then, or until the lock is cleared."
+                                      >
+                                        Locked until {formatLockTime(u.signInLockedUntil)}
+                                      </span>
                                     )}
                                   </div>
                                 </td>
@@ -1270,7 +1275,7 @@ export default function AdminPage() {
                                       title={isSelf ? 'Cannot change your own role' : 'Change role (asks to confirm)'}
                                       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                         u.platformRole === PlatformRole.ADMIN
-                                          ? 'bg-moss-green/20 text-brand-ink hover:bg-moss-green/30'
+                                          ? 'bg-moss-green/15 text-brand-ink hover:bg-moss-green/30'
                                           : 'bg-warm-gray/20 text-warm-gray hover:bg-warm-gray/30'
                                       } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                     >
@@ -1285,7 +1290,7 @@ export default function AdminPage() {
                                         title="Can upload and delete global assets"
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                           u.globalAssetManager
-                                            ? 'bg-warm-amber/20 text-warm-amber hover:bg-warm-amber/30'
+                                            ? 'bg-warm-amber/15 text-accent-ink hover:bg-warm-amber/30'
                                             : 'bg-warm-gray/10 text-warm-gray/60 hover:bg-warm-gray/20'
                                         } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                       >
@@ -1304,7 +1309,7 @@ export default function AdminPage() {
                                         title="Can edit and delete anyone's character template"
                                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-colors ${
                                           u.templateEditor
-                                            ? 'bg-spirit-purple/20 text-spirit-purple hover:bg-spirit-purple/30'
+                                            ? 'bg-spirit-purple/15 text-spirit-ink hover:bg-spirit-purple/30'
                                             : 'bg-warm-gray/10 text-warm-gray/60 hover:bg-warm-gray/20'
                                         } ${isSelf ? 'opacity-60 cursor-default' : 'cursor-pointer'}`}
                                       >
@@ -1330,7 +1335,7 @@ export default function AdminPage() {
                                   {u.lastLoginAt ? (
                                     formatDate(u.lastLoginAt)
                                   ) : (
-                                    <span className="inline-flex items-center rounded-full bg-warm-amber/15 text-warm-amber px-2 py-0.5 text-[10px] font-medium">
+                                    <span className="inline-flex items-center rounded-full bg-warm-amber/15 text-accent-ink px-2 py-0.5 text-[10px] font-medium">
                                       Never signed in
                                     </span>
                                   )}
@@ -1344,12 +1349,23 @@ export default function AdminPage() {
                                         onClick={() => handleResendInvite(u.id)}
                                         disabled={resendingInviteId === u.id}
                                         title="Email a fresh invitation link (invalidates any previous one)"
-                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-moss-green/30 text-brand-ink hover:bg-moss-green/5 transition-colors disabled:opacity-50"
+                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-moss-green/30 text-brand-ink hover:bg-moss-green/5 transition-colors disabled:opacity-50"
                                       >
                                         {resendingInviteId === u.id
                                           ? <Loader2 className="w-3 h-3 animate-spin" />
                                           : <Mail className="w-3 h-3" />}
                                         Invite
+                                      </button>
+                                    )}
+                                    {/* Clear lock: only while the account's sign-in is locked */}
+                                    {u.signInLockedUntil && (
+                                      <button
+                                        onClick={() => setLockToClear(u)}
+                                        title="Let this account sign in again at once (asks to confirm)"
+                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors whitespace-nowrap"
+                                      >
+                                        <LockOpen className="w-3 h-3" />
+                                        Clear lock
                                       </button>
                                     )}
                                     {/* Approve — only when pending */}
@@ -1358,7 +1374,7 @@ export default function AdminPage() {
                                         onClick={() => handleApproveUser(u.id)}
                                         disabled={isApproving}
                                         title="Approve this account"
-                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-success/30 text-success-ink hover:bg-success/10 transition-colors disabled:opacity-50"
+                                        className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-success/30 text-success-ink hover:bg-success/10 transition-colors disabled:opacity-50"
                                       >
                                         {isApproving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                                         Approve
@@ -1454,7 +1470,7 @@ export default function AdminPage() {
                                         <button
                                           onClick={() => handleResetMfa(u.id)}
                                           disabled={isResettingMfa}
-                                          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium bg-warning text-white hover:bg-warning disabled:opacity-50 transition-colors"
+                                          className="flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium bg-warning/15 border border-warning/30 text-warning-ink hover:bg-warning/25 disabled:opacity-50 transition-colors"
                                         >
                                           {isResettingMfa && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                           Confirm Reset
@@ -1493,7 +1509,7 @@ export default function AdminPage() {
                                             Temporary password generated. Share it securely — the user must change it on next login.
                                           </p>
                                           <div className="flex items-center gap-2">
-                                            <code className="flex-1 bg-paper border border-warm-gray/30 rounded px-3 py-2 text-sm font-mono text-ink-secondary select-all">
+                                            <code className="flex-1 bg-paper border border-warm-gray/30 rounded-sm px-3 py-2 text-sm font-mono text-ink-secondary select-all">
                                               {tempPassword}
                                             </code>
                                             <Button
@@ -1579,7 +1595,7 @@ export default function AdminPage() {
                                       </p>
                                       {deletingUserAssetCount > 0 && (
                                         <div className="flex items-start gap-2 mb-3 p-2.5 bg-warning/10 border border-warning/30 rounded-lg text-xs text-warning-ink">
-                                          <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-warning-ink" />
+                                          <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0 text-warning-ink" />
                                           <span>
                                             This user has <strong>{deletingUserAssetCount}</strong> personal file{deletingUserAssetCount !== 1 ? 's' : ''}. Their avatar, and any of them nothing uses and no campaign shares, are deleted with the account.
                                             The rest stay, owned by no one, and a file a campaign uses can then be seen by admins alone.
@@ -1604,7 +1620,7 @@ export default function AdminPage() {
                                         <button
                                           onClick={handleDeleteUser}
                                           disabled={deleteEmail !== u.email || isDeleting}
-                                          className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-danger text-white hover:bg-danger disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                          className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-medium bg-danger-fill text-white hover:bg-danger-fill disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                         >
                                           {isDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                                           Delete
@@ -1763,11 +1779,11 @@ export default function AdminPage() {
                             <tr className={`border-b border-warm-gray/10 hover:bg-moss-green/5 transition-colors ${isDeleting ? 'opacity-50' : ''}`}>
                               {/* Thumb */}
                               <td className="px-3 py-2">
-                                <div className="w-10 h-10 rounded bg-moss-green/10 overflow-hidden flex items-center justify-center flex-shrink-0">
+                                <div className="w-10 h-10 rounded-sm bg-moss-green/10 overflow-hidden flex items-center justify-center shrink-0">
                                   {thumbUrl ? (
                                     <img src={thumbUrl} alt="" className="w-full h-full object-cover" onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                   ) : asset.type === AssetType.AUDIO ? (
-                                    <FileAudio className="w-5 h-5 text-spirit-purple" />
+                                    <FileAudio className="w-5 h-5 text-spirit-ink" />
                                   ) : asset.type === AssetType.DOCUMENT ? (
                                     <FileText className="w-5 h-5 text-stone-gray/60" />
                                   ) : (
@@ -1787,10 +1803,10 @@ export default function AdminPage() {
                               {/* Type */}
                               <td className="px-3 py-2">
                                 <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full bg-parchment border border-moss-green/20 text-stone-gray">
-                                  {asset.type === AssetType.MAP && <MapPin className="w-3 h-3 text-warm-amber" />}
+                                  {asset.type === AssetType.MAP && <MapPin className="w-3 h-3 text-accent-ink" />}
                                   {asset.type === AssetType.TOKEN && <UserIcon className="w-3 h-3 text-brand-ink" />}
-                                  {asset.type === AssetType.AUDIO && <FileAudio className="w-3 h-3 text-spirit-purple" />}
-                                  {asset.type === AssetType.AVATAR && <UserIcon className="w-3 h-3 text-sunset-orange" />}
+                                  {asset.type === AssetType.AUDIO && <FileAudio className="w-3 h-3 text-spirit-ink" />}
+                                  {asset.type === AssetType.AVATAR && <UserIcon className="w-3 h-3 text-accent-ink" />}
                                   {asset.type === AssetType.DOCUMENT && <FileText className="w-3 h-3 text-stone-gray" />}
                                   {asset.type}
                                 </span>
@@ -1802,7 +1818,7 @@ export default function AdminPage() {
                                     ? 'bg-spirit/10 text-spirit-ink'
                                     : asset.scope === AssetScope.USER
                                       ? 'bg-moss-green/15 text-brand-ink'
-                                      : 'bg-warm-amber/15 text-warm-amber'
+                                      : 'bg-warm-amber/15 text-accent-ink'
                                 }`}>
                                   {asset.scope === AssetScope.GLOBAL && <Globe className="w-3 h-3" />}
                                   {asset.scope === AssetScope.USER && <UserIcon className="w-3 h-3" />}
@@ -1820,7 +1836,7 @@ export default function AdminPage() {
                               </td>
                               {/* Size */}
                               <td className="px-3 py-2 text-warm-gray text-xs whitespace-nowrap">
-                                {formatBytes(asset.fileSize)}
+                                {formatFileSize(asset.fileSize, ADMIN_SIZES)}
                               </td>
                               {/* Actions */}
                               <td className="px-3 py-2">
@@ -1838,7 +1854,7 @@ export default function AdminPage() {
                                           handleAdminAssetScopeChange(asset, newScope);
                                         }
                                       }}
-                                      className="text-xs py-1 px-2 pr-6 rounded border border-moss-green/30 text-stone-gray bg-paper-white hover:border-moss-green/60 cursor-pointer disabled:opacity-50 appearance-none"
+                                      className="text-xs py-1 px-2 pr-6 rounded-sm border border-moss-green/30 text-stone-gray bg-paper-white hover:border-moss-green/60 cursor-pointer disabled:opacity-50 appearance-none"
                                       title="Change scope"
                                     >
                                       <option value={AssetScope.GLOBAL}>Global</option>
@@ -1856,7 +1872,7 @@ export default function AdminPage() {
                                   <button
                                     onClick={() => setAssetToDelete(asset)}
                                     disabled={isDeleting || isChangingScope}
-                                    className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
+                                    className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
                                     title="Delete asset"
                                     aria-label={`Delete asset ${asset.name}`}
                                   >
@@ -1874,7 +1890,7 @@ export default function AdminPage() {
                               <tr className="bg-warm-amber/5 border-b border-warm-gray/10">
                                 <td colSpan={8} className="px-6 py-3">
                                   <div className="flex items-center gap-3 max-w-lg">
-                                    <Users className="w-4 h-4 text-warm-amber flex-shrink-0" />
+                                    <Users className="w-4 h-4 text-accent-ink shrink-0" />
                                     <p className="text-xs text-stone-gray font-medium whitespace-nowrap">Move to campaign:</p>
                                     <select
                                       value={assetScopePicker?.campaignId ?? ''}
@@ -1929,7 +1945,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => setAdminAssetsPage(p => Math.max(1, p - 1))}
                         disabled={adminAssetsPage <= 1 || adminAssetsLoading}
-                        className="p-1 rounded hover:bg-moss-green/10 disabled:opacity-40"
+                        className="p-1 rounded-sm hover:bg-moss-green/10 disabled:opacity-40"
                       >
                         <ChevronLeft className="w-4 h-4" />
                       </button>
@@ -1937,7 +1953,7 @@ export default function AdminPage() {
                       <button
                         onClick={() => setAdminAssetsPage(p => Math.min(adminAssetsTotalPages, p + 1))}
                         disabled={adminAssetsPage >= adminAssetsTotalPages || adminAssetsLoading}
-                        className="p-1 rounded hover:bg-moss-green/10 disabled:opacity-40"
+                        className="p-1 rounded-sm hover:bg-moss-green/10 disabled:opacity-40"
                       >
                         <ChevronRight className="w-4 h-4" />
                       </button>
@@ -2051,7 +2067,7 @@ export default function AdminPage() {
             {/* ---- SMTP Configuration (read-only) ---- */}
             <section className="glass-panel p-6 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-                <Mail className="w-4 h-4 text-warm-amber" />
+                <Mail className="w-4 h-4 text-accent-ink" />
                 <h3 className="font-semibold text-brand-ink text-sm">SMTP Configuration</h3>
                 <span className="ml-auto text-xs text-warm-gray">Read-only — set via environment variables</span>
               </div>
@@ -2104,10 +2120,10 @@ export default function AdminPage() {
 
                   {!serverConfig.smtp.configured && (
                     <p className="text-xs text-warm-gray">
-                      Set <code className="font-mono bg-warm-gray/10 px-1 rounded">SMTP_HOST</code>,{' '}
-                      <code className="font-mono bg-warm-gray/10 px-1 rounded">SMTP_USER</code>, and{' '}
-                      <code className="font-mono bg-warm-gray/10 px-1 rounded">SMTP_PASS</code>{' '}
-                      in your <code className="font-mono bg-warm-gray/10 px-1 rounded">.env</code> to enable email delivery.
+                      Set <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">SMTP_HOST</code>,{' '}
+                      <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">SMTP_USER</code>, and{' '}
+                      <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">SMTP_PASS</code>{' '}
+                      in your <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">.env</code> to enable email delivery.
                     </p>
                   )}
                 </div>
@@ -2119,7 +2135,7 @@ export default function AdminPage() {
             {/* ---- Upload Size Limits (read-only) ---- */}
             <section className="glass-panel p-6 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-                <FolderOpen className="w-4 h-4 text-warm-amber" />
+                <FolderOpen className="w-4 h-4 text-accent-ink" />
                 <h3 className="font-semibold text-brand-ink text-sm">Upload Size Limits</h3>
                 <span className="ml-auto text-xs text-warm-gray">Read-only — set via environment variables</span>
               </div>
@@ -2136,7 +2152,7 @@ export default function AdminPage() {
                       {(Object.entries(serverConfig.uploadLimits) as [string, number][]).map(([type, bytes]) => (
                         <tr key={type} className="border-b border-warm-gray/10 last:border-0">
                           <td className="py-1.5 text-stone-gray font-medium w-24">{type}</td>
-                          <td className="py-1.5 text-warm-gray">{formatBytes(bytes)}</td>
+                          <td className="py-1.5 text-warm-gray">{formatFileSize(bytes, ADMIN_SIZES)}</td>
                           <td className="py-1.5 text-right text-xs text-warm-gray/60">
                             <code className="font-mono">MAX_{type}_SIZE_MB</code>
                           </td>
@@ -2148,13 +2164,13 @@ export default function AdminPage() {
                     Your reverse proxy must allow request bodies of at least{' '}
                     <strong>{requiredProxyBodyMB(serverConfig.uploadLimits)} MB</strong>, or larger
                     uploads fail with HTTP 413 before reaching the API. For the bundled Nginx, set{' '}
-                    <code className="font-mono bg-warm-gray/10 px-1 rounded">
+                    <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">
                       NGINX_MAX_BODY_SIZE={requiredProxyBodyMB(serverConfig.uploadLimits)}M
                     </code>{' '}
-                    in your <code className="font-mono bg-warm-gray/10 px-1 rounded">.env</code> and
+                    in your <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">.env</code> and
                     apply it with{' '}
-                    <code className="font-mono bg-warm-gray/10 px-1 rounded">docker compose up -d</code>
-                    ; <code className="font-mono bg-warm-gray/10 px-1 rounded">docker compose restart</code>{' '}
+                    <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">docker compose up -d</code>
+                    ; <code className="font-mono bg-warm-gray/10 px-1 rounded-sm">docker compose restart</code>{' '}
                     keeps the old value. Cloudflare-proxied setups (including Tunnels) also cap request
                     bodies at 100 MB on Free/Pro plans.
                   </p>
@@ -2167,7 +2183,7 @@ export default function AdminPage() {
             {/* ---- Session Timeouts (read-only) ---- */}
             <section className="glass-panel p-6 space-y-4">
               <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-                <Clock className="w-4 h-4 text-warm-amber" />
+                <Clock className="w-4 h-4 text-accent-ink" />
                 <h3 className="font-semibold text-brand-ink text-sm">Session Timeouts</h3>
                 <span className="ml-auto text-xs text-warm-gray">Read-only — set via environment variables</span>
               </div>
@@ -2183,7 +2199,7 @@ export default function AdminPage() {
                     <tr className="border-b border-warm-gray/10">
                       <td className="py-1.5 text-stone-gray font-medium">Session timeout</td>
                       <td className="py-1.5 text-warm-gray">
-                        {formatDuration(serverConfig.sessionTimeoutMs)}
+                        {formatDuration(serverConfig.sessionTimeoutMs, 'largest')}
                       </td>
                       <td className="py-1.5 text-right text-xs text-warm-gray/60">
                         <code className="font-mono">SESSION_MAX_AGE</code>
@@ -2192,7 +2208,7 @@ export default function AdminPage() {
                     <tr>
                       <td className="py-1.5 text-stone-gray font-medium">Remember me</td>
                       <td className="py-1.5 text-warm-gray">
-                        {formatDuration(serverConfig.rememberMeTimeoutMs)}
+                        {formatDuration(serverConfig.rememberMeTimeoutMs, 'largest')}
                       </td>
                       <td className="py-1.5 text-right text-xs text-warm-gray/60">
                         <code className="font-mono">REMEMBER_ME_MAX_AGE</code>
@@ -2319,7 +2335,7 @@ export default function AdminPage() {
 
             {backupCreateError && (
               <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-4 text-sm flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{backupCreateError}</span>
               </div>
             )}
@@ -2364,14 +2380,14 @@ export default function AdminPage() {
                       {backups.map(b => (
                         <tr key={b.filename} className="border-b border-warm-gray/10 hover:bg-moss-green/5">
                           <td className="px-4 py-2.5 font-mono text-xs text-stone-gray">{b.filename}</td>
-                          <td className="px-4 py-2.5 text-warm-gray text-xs">{formatBytes(b.sizeBytes)}</td>
+                          <td className="px-4 py-2.5 text-warm-gray text-xs">{formatFileSize(b.sizeBytes, ADMIN_SIZES)}</td>
                           <td className="px-4 py-2.5 text-warm-gray text-xs">{formatRelativeTime(b.createdAt)}</td>
                           <td className="px-4 py-2.5">
                             <div className="flex items-center justify-end gap-1.5">
                               <a
                                 href={adminService.getBackupDownloadUrl(b.filename)}
                                 download={b.filename}
-                                className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors"
+                                className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-moss-green/30 text-brand-ink hover:bg-moss-green/10 transition-colors"
                               >
                                 <Download className="w-3 h-3" />
                                 Download
@@ -2379,7 +2395,7 @@ export default function AdminPage() {
                               <button
                                 onClick={() => setBackupToDelete(b.filename)}
                                 disabled={deletingBackupFile === b.filename}
-                                className="text-xs py-1 px-2 flex items-center gap-1 rounded border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
+                                className="text-xs py-1 px-2 flex items-center gap-1 rounded-sm border border-danger/30 text-danger-ink hover:bg-danger/10 transition-colors disabled:opacity-50"
                                 title="Delete backup"
                                 aria-label={`Delete backup ${b.filename}`}
                               >
@@ -2415,7 +2431,7 @@ export default function AdminPage() {
                     {/* A full page load: this session went with the old database. */}
                     <a
                       href="/auth/login"
-                      className="inline-block text-xs py-1.5 px-4 mt-1 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors font-medium"
+                      className="inline-block text-xs py-1.5 px-4 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors font-medium"
                     >
                       Go to Login
                     </a>
@@ -2423,7 +2439,7 @@ export default function AdminPage() {
                 ) : (
                   <>
                     <div className="bg-danger/10 border border-danger/60 rounded-lg p-3 flex items-start gap-2">
-                      <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 flex-shrink-0" />
+                      <AlertCircle className="w-4 h-4 text-danger-ink mt-0.5 shrink-0" />
                       <p className="text-xs text-danger-ink">
                         Restoring <strong>replaces the current database</strong> with the backup's and copies the backup's
                         uploaded files over yours. A backup of the database as it is now is saved to the backup list first,
@@ -2453,14 +2469,14 @@ export default function AdminPage() {
                       </Button>
                       {restoreFile && (
                         <p className="text-xs text-warm-gray mt-1.5 font-mono">
-                          {restoreFile.name} ({formatBytes(restoreFile.size)})
+                          {restoreFile.name} ({formatFileSize(restoreFile.size, ADMIN_SIZES)})
                         </p>
                       )}
                     </div>
 
                     {restoreError && (
                       <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-3 text-xs flex items-start gap-2">
-                        <AlertCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                        <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                         {restoreError}
                       </div>
                     )}
@@ -2469,7 +2485,7 @@ export default function AdminPage() {
                       <button
                         onClick={handleRestoreBackup}
                         disabled={restoring}
-                        className="flex items-center gap-2 text-sm py-1.5 px-4 rounded-lg bg-danger text-white hover:bg-danger disabled:opacity-50 transition-colors font-medium"
+                        className="flex items-center gap-2 text-sm py-1.5 px-4 rounded-lg bg-danger-fill text-white hover:bg-danger-fill disabled:opacity-50 transition-colors font-medium"
                       >
                         {restoring
                           ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Restoring…</>
@@ -2546,7 +2562,7 @@ export default function AdminPage() {
                             <tr key={u.id} className="border-b border-warm-gray/10 hover:bg-moss-green/5">
                               <td className="px-4 py-2">
                                 <div className="flex items-center gap-2">
-                                  <span className="inline-block w-2 h-2 rounded-full bg-success flex-shrink-0" />
+                                  <span className="inline-block w-2 h-2 rounded-full bg-success shrink-0" />
                                   <span className="font-medium text-stone-gray">{u.displayName}</span>
                                 </div>
                               </td>
@@ -2554,13 +2570,13 @@ export default function AdminPage() {
                               <td className="px-4 py-2">
                                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                                   u.platformRole === PlatformRole.ADMIN
-                                    ? 'bg-moss-green/20 text-brand-ink'
+                                    ? 'bg-moss-green/15 text-brand-ink'
                                     : 'bg-warm-gray/20 text-warm-gray'
                                 }`}>
                                   {u.platformRole}
                                 </span>
                               </td>
-                              <td className="px-4 py-2 text-warm-gray text-xs">{formatRelativeTime(u.lastLoginAt)}</td>
+                              <td className="px-4 py-2 text-warm-gray text-xs">{u.lastLoginAt ? formatRelativeTime(u.lastLoginAt) : '\u2014'}</td>
                               <td className="px-4 py-2 text-xs text-warm-gray">{formatExpiry(u.sessionExpiry)}</td>
                             </tr>
                           ))}
@@ -2573,7 +2589,7 @@ export default function AdminPage() {
                 {/* Recent Admin Actions */}
                 <section className="glass-panel overflow-hidden">
                   <div className="px-4 py-3 border-b border-warm-gray/20 flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-warm-amber" />
+                    <Clock className="w-4 h-4 text-accent-ink" />
                     <h3 className="font-semibold text-brand-ink text-sm">Recent Admin Actions</h3>
                     <span className="text-xs text-warm-gray ml-auto">last 100</span>
                   </div>
@@ -2644,7 +2660,7 @@ export default function AdminPage() {
                               <td className="px-4 py-2">
                                 <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                                   u.platformRole === PlatformRole.ADMIN
-                                    ? 'bg-moss-green/20 text-brand-ink'
+                                    ? 'bg-moss-green/15 text-brand-ink'
                                     : 'bg-warm-gray/20 text-warm-gray'
                                 }`}>
                                   {u.platformRole}
@@ -2723,13 +2739,12 @@ export default function AdminPage() {
         title={createUserMode === 'invite' ? 'Invite User' : 'Create User'}
         icon={createUserMode === 'invite' ? Mail : UserPlus}
         closeDisabled={!!newUserPassword || creatingUser}
-        closeOnBackdrop={!newUserPassword}
       >
         {createUserSuccess ? (
           /* Invited, or created with the details emailed — no password to show */
           <div className="space-y-4">
             <div className="flex items-start gap-2">
-              <Check className="w-4 h-4 text-success-ink mt-0.5 flex-shrink-0" />
+              <Check className="w-4 h-4 text-success-ink mt-0.5 shrink-0" />
               <p className="text-sm text-success-ink font-medium">{createUserSuccess}</p>
             </div>
             <p className="text-xs text-warm-gray">
@@ -2748,7 +2763,7 @@ export default function AdminPage() {
               required to replace it before they can use their account.
             </p>
             <div className="flex items-center gap-2 mb-4">
-              <code className="flex-1 bg-warm-amber/10 border border-warm-amber/30 rounded px-3 py-2 text-sm font-mono text-stone-gray select-all">
+              <code className="flex-1 bg-warm-amber/10 border border-warm-amber/30 rounded-sm px-3 py-2 text-sm font-mono text-stone-gray select-all">
                 {newUserPassword}
               </code>
               <Button
@@ -2791,7 +2806,7 @@ export default function AdminPage() {
                 onChange={e => setCreateUserForm(f => ({ ...f, email: e.target.value }))}
                 className="input-cozy w-full"
                 placeholder="user@example.com"
-                autoFocus
+                data-autofocus
               />
             </div>
 
@@ -2821,7 +2836,7 @@ export default function AdminPage() {
                     className={`flex-1 py-2 rounded-lg text-sm font-medium border transition-colors ${
                       createUserForm.platformRole === role
                         ? role === 'ADMIN'
-                          ? 'bg-moss-green text-white border-moss-green'
+                          ? 'bg-moss-green text-brand-text border-moss-green'
                           : 'bg-stone-gray/20 text-stone-gray border-stone-gray/40'
                         : 'border-warm-gray/30 text-warm-gray hover:border-warm-gray/60'
                     }`}
@@ -2895,6 +2910,22 @@ export default function AdminPage() {
         onCancel={() => setRoleChangeTarget(null)}
       />
 
+      {/* Clear sign-in lock confirmation */}
+      <ConfirmDialog
+        isOpen={lockToClear !== null}
+        title="Clear Sign-in Lock"
+        message={
+          lockToClear?.signInLockedUntil
+            ? `Clear the sign-in lock on ${lockToClear.displayName} (${lockToClear.email})? Too many wrong passwords or sign-in codes locked it until ${formatLockTime(lockToClear.signInLockedUntil)}. Clearing it lets the next correct password sign in at once. If they did not make those attempts, someone may be guessing the password: consider resetting it as well.`
+            : ''
+        }
+        confirmLabel="Clear lock"
+        variant="warning"
+        isLoading={clearingLock}
+        onConfirm={() => lockToClear && handleClearSignInLock(lockToClear)}
+        onCancel={() => setLockToClear(null)}
+      />
+
       {/* Restore backup confirmation */}
       <ConfirmDialog
         isOpen={showRestoreConfirm}
@@ -2962,7 +2993,7 @@ function SettingsLoadFailed({ message, onRetry }: { message: string; onRetry: ()
   return (
     <section className="glass-panel p-6 space-y-3">
       <div className="bg-danger/10 border border-danger/30 text-danger-ink rounded-lg p-4 text-sm flex items-start gap-2">
-        <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
+        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
         <span>{message || 'The settings could not be loaded.'}</span>
       </div>
       <p className="text-xs text-warm-gray">Nothing can be changed here until they load, so nothing is saved over them.</p>

@@ -1,7 +1,8 @@
 /**
  * Game Systems Type Definitions Index (Frontend)
- * Exports all game system types and provides utility types
- * Mirrors backend structure from backend/src/game-systems/index.ts
+ * Exports all game system types and provides utility types.
+ * Each sheet type follows its Zod schema in backend/src/validators/game-systems/,
+ * and backend/src/__tests__/keepInStep.test.ts fails when one drifts.
  */
 
 // Export all D&D 5e types
@@ -18,15 +19,9 @@ import type { PF2eCharacterData } from './pathfinder2e';
 import type { SR6CharacterData } from './shadowrun6e';
 import type { CoC7eCharacterData } from './callOfCthulhu7e';
 
-/**
- * Game system enum matching backend GameSystem enum
- */
-export enum GameSystem {
-  DND_5E = 'DND_5E',
-  PATHFINDER_2E = 'PATHFINDER_2E',
-  SHADOWRUN_6E = 'SHADOWRUN_6E',
-  CALL_OF_CTHULHU_7E = 'CALL_OF_CTHULHU_7E',
-}
+import { GameSystem } from '../gameSystem';
+
+export { GameSystem };
 
 /**
  * Mapped type for character data by game system
@@ -47,14 +42,4 @@ export type GameSystemCharacterData =
   | SR6CharacterData
   | CoC7eCharacterData;
 
-/**
- * Fields the app stores on every character sheet, whatever the game system.
- *
- * `themeColor` is the header colour chosen in the editor: a preset name or a
- * `#RRGGBB` colour. No game system defines it, so every system's server-side
- * schema declares it explicitly. The server stores the parsed sheet, and a
- * key no schema declares does not survive a save.
- */
-export interface SheetChrome {
-  themeColor?: string;
-}
+export type { SheetChrome } from './sheetChrome';

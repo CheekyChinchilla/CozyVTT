@@ -12,6 +12,7 @@ import logger from '../utils/logger';
 import { acceptInvitationSchema } from '../validators/invitations';
 import { systemsCompatible } from '../utils/gameSystemCompatibility';
 import { clearKeeperNotes } from '../utils/keeperNotes';
+import { standingInvitation } from '../utils/invitationState';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
     const invitations = await prisma.campaignInvitation.findMany({
       where: {
         userId,
-        status: 'PENDING',
+        ...standingInvitation(),
       },
       include: {
         campaign: {
@@ -42,13 +43,17 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             description: true,
             gameSystem: true,
             status: true,
-            // TODO(ui): the dashboard and InvitationModal show this owner as
-            // "DM:", which is wrong once the game has been handed over. Send
-            // the member whose role is DM and show that.
             owner: {
               select: {
                 displayName: true,
               },
+            },
+            // Who runs the game, which is not the owner once it has been
+            // handed over; the invitation names this member as its DM.
+            memberships: {
+              where: { role: 'DM' },
+              take: 1,
+              select: { user: { select: { displayName: true } } },
             },
           },
         },
@@ -58,7 +63,10 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
       },
     });
 
-    return res.json(invitations);
+    return res.json(invitations.map(({ campaign: { memberships, ...campaign }, ...invitation }) => ({
+      ...invitation,
+      campaign: { ...campaign, dm: memberships[0]?.user ?? null },
+    })));
   } catch (error) {
     logger.error('Error fetching invitations', { err: error });
     return res.status(500).json({ message: 'Failed to fetch invitations' });
@@ -89,12 +97,9 @@ router.post('/:id/accept', authenticated, async (req: AuthenticatedRequest, res:
       include: { campaign: true },
     });
 
-    if (!invitation) {
+    // Someone else's invitation answers as one that is not there.
+    if (!invitation || invitation.userId !== userId) {
       return res.status(404).json({ message: 'Invitation not found' });
-    }
-
-    if (invitation.userId !== userId) {
-      return res.status(403).json({ message: 'Not authorized' });
     }
 
     if (invitation.status !== 'PENDING') {
@@ -225,12 +230,9 @@ router.post('/:id/decline', authenticated, async (req: AuthenticatedRequest, res
       where: { id: invitationId },
     });
 
-    if (!invitation) {
+    // Someone else's invitation answers as one that is not there.
+    if (!invitation || invitation.userId !== userId) {
       return res.status(404).json({ message: 'Invitation not found' });
-    }
-
-    if (invitation.userId !== userId) {
-      return res.status(403).json({ message: 'Not authorized' });
     }
 
     if (invitation.status !== 'PENDING') {

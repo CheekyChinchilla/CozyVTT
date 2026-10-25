@@ -8,9 +8,14 @@ import { AuthenticatedSocket } from '../auth';
 import { prisma } from '../../config/database';
 import logger from '../../utils/logger';
 import { toJson } from '../../utils/prisma-json';
-import type { DnD5eHitDice } from '../../game-systems/dnd5e';
+import type { DnD5eCharacterData } from '../../validators/game-systems/dnd5e.schema';
 import { withinCeiling } from '../shared';
 import { emitCharacterUpdated } from '../utils';
+import { characterInCampaign } from '../../utils/characterCampaign';
+import { applyHitPointChange } from '../../utils/rules/hitPoints';
+
+/** The largest change of hit points one event may make, either way. */
+const MAX_HP_DELTA = 100_000;
 
 /** The parts of a character blob this handler touches — see `charData` below. */
 interface HpBlock {
@@ -19,7 +24,7 @@ interface HpBlock {
   temporary?: unknown;
 }
 /** One hit dice pool as it sits in the blob, read loosely: only `remaining` is touched. */
-type HitDiceEntry = Partial<Record<keyof DnD5eHitDice, unknown>>;
+type HitDiceEntry = Partial<Record<keyof NonNullable<DnD5eCharacterData['hitDice']>[number], unknown>>;
 interface CharacterHitDiceData {
   hitDice?: unknown;
   [key: string]: unknown;
@@ -36,7 +41,9 @@ type Refusal = { error: string };
 
 /**
  * The sheet with `delta` applied to its current hit points, clamped to 0 and
- * the maximum, or why it cannot be.
+ * the maximum, or why it cannot be. In D&D 5e and Pathfinder 2e damage takes
+ * temporary hit points first and only the rest comes off current hit points;
+ * healing does not restore them (both rulebooks say so).
  *
  * Only the HP-bearing corners of the sheet are described: the blob is a full
  * character in one of several systems, and nothing else is read or written.
@@ -55,9 +62,13 @@ function applyHpDelta(
         return { error: 'Character does not have HP tracking' };
       }
       const max = charData.hp.maximum;
-      const temp = typeof charData.hp.temporary === 'number' ? charData.hp.temporary : 0;
-      const current = Math.max(0, Math.min(max, (typeof charData.hp.current === 'number' ? charData.hp.current : max) + delta));
-      return { data: { ...charData, hp: { ...charData.hp, current } }, hp: { current, max, temp } };
+      const heldTemp = typeof charData.hp.temporary === 'number' ? Math.max(0, charData.hp.temporary) : 0;
+      const { current, temp } = applyHitPointChange(
+        { current: typeof charData.hp.current === 'number' ? charData.hp.current : max, max, temp: heldTemp },
+        delta,
+      );
+      const hp = temp !== heldTemp ? { ...charData.hp, current, temporary: temp } : { ...charData.hp, current };
+      return { data: { ...charData, hp }, hp: { current, max, temp } };
     }
     case 'CALL_OF_CTHULHU_7E': {
       if (!charData?.derivedStats?.hp || typeof charData.derivedStats.hp.maximum !== 'number') {
@@ -104,6 +115,12 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         socket.emit('error', { message: 'characterId (string) and delta (number) are required' });
         return;
       }
+      // Sheets store whole hit points: half a point was stored as 7.5, which
+      // the sheet's schema then refused on every save.
+      if (!Number.isInteger(delta) || Math.abs(delta) > MAX_HP_DELTA) {
+        socket.emit('error', { message: `delta must be a whole number of hit points from -${MAX_HP_DELTA} to ${MAX_HP_DELTA}` });
+        return;
+      }
 
       // Fetch the character
       const character = await prisma.character.findUnique({
@@ -115,12 +132,8 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      // Verify character belongs to this campaign
-      const membership = await prisma.campaignMembership.findFirst({
-        where: { campaignId: socket.campaignId, characterIds: { has: characterId } },
-      });
-
-      if (!membership) {
+      // The character is this campaign's, as the REST routes judge it.
+      if (!(await characterInCampaign(character, socket.campaignId))) {
         socket.emit('error', { message: 'Character is not in this campaign' });
         return;
       }
@@ -199,10 +212,7 @@ export function registerCharacterHandlers(io: Server, socket: AuthenticatedSocke
         return;
       }
 
-      const membership = await prisma.campaignMembership.findFirst({
-        where: { campaignId: socket.campaignId, characterIds: { has: characterId } },
-      });
-      if (!membership) {
+      if (!(await characterInCampaign(character, socket.campaignId))) {
         socket.emit('error', { message: 'Character is not in this campaign' });
         return;
       }

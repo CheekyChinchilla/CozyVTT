@@ -4,8 +4,8 @@
  * Tokens saved here can be reused across maps and copied to other campaigns.
  */
 
+import { tokenPlaceholder } from '@/utils/tokenColours';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
 import {
   X,
   Search,
@@ -22,14 +22,15 @@ import {
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useGameStore } from '@/stores/gameStore';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { STAT_BLOCK_LIMITS } from '@/constants/statBlockLimits';
 import type { TokenTemplate, NpcStatBlock, Campaign } from '@/types';
 import { TokenType, AssetType, AssetScope, CampaignRole } from '@/types';
 import type { TokenDisplayMode } from '@/types';
 import StatBlockEditor from './npc-stat-blocks/StatBlockEditor';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { useServerConfigQuery } from '@/hooks/queries';
 import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
@@ -58,7 +59,6 @@ interface TokenTemplateLibraryProps {
 
 export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateLibraryProps) {
   const { campaign, currentMap } = useCampaign();
-  const { socket } = useWebSocket();
 
   // ── Data state ──
   const [templates, setTemplates] = useState<TokenTemplate[]>([]);
@@ -79,6 +79,10 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   // The template whose Delete button was clicked, until it is confirmed or cancelled.
   const [templateToDelete, setTemplateToDelete] = useState<TokenTemplate | null>(null);
   const [copyMenuId, setCopyMenuId] = useState<string | null>(null);
+  // The template being copied, while the copy is on its way: one at a time.
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  // What the last copy did, named for the campaign it went to.
+  const [notice, setNotice] = useState<string | null>(null);
   const [dmCampaigns, setDmCampaigns] = useState<Campaign[]>([]);
 
   // ── Fetch templates ──
@@ -86,6 +90,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
     if (!campaign) return;
     setIsLoading(true);
     setError(null);
+    setNotice(null);
     try {
       const result = await api.listTokenTemplates(campaign.id, {
         search: searchQuery || undefined,
@@ -105,6 +110,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   useEffect(() => {
     if (!isOpen || !campaign) return;
     fetchTemplates();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetches on opening and on a type change; typing searches through the debounce below
   }, [isOpen, campaign?.id, typeFilter]);
 
   // Debounced search
@@ -113,6 +119,7 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
     clearTimeout(searchTimeoutRef.current);
     searchTimeoutRef.current = setTimeout(() => fetchTemplates(), 300);
     return () => clearTimeout(searchTimeoutRef.current);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- runs when the search text changes, after a pause in typing
   }, [searchQuery]);
 
   // Fetch campaigns user is DM of (for copy-to feature)
@@ -163,13 +170,12 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
         tokenPayload
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
     } catch (err) {
       setError(apiErrorMessage(err) || 'Failed to place token on map');
     } finally {
       setPlacingId(null);
     }
-  }, [campaign, currentMap, socket]);
+  }, [campaign, currentMap]);
 
   // ── Delete template ──
   const handleDelete = useCallback(async (id: string) => {
@@ -180,8 +186,8 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
       setTemplates((prev) => prev.filter((t) => t.id !== id));
       setTotal((prev) => prev - 1);
       if (expandedId === id) setExpandedId(null);
-    } catch {
-      setError('Failed to delete template');
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to delete template');
     }
   }, [campaign, expandedId]);
 
@@ -193,163 +199,151 @@ export default function TokenTemplateLibrary({ isOpen, onClose }: TokenTemplateL
   }, []);
 
   // ── Copy to campaign ──
-  const handleCopyToCampaign = useCallback(async (templateId: string, targetCampaignId: string) => {
-    if (!campaign) return;
+  const handleCopyToCampaign = useCallback(async (template: TokenTemplate, target: Campaign) => {
+    if (!campaign || copyingId) return;
+    setCopyingId(template.id);
+    setNotice(null);
+    setError(null);
     try {
-      // TODO(ui): a copy that works only closes the menu, with nothing to say
-      // it happened, and a refusal shows the fixed sentence below without the
-      // server's reason. Confirm the copy with a toast naming the campaign, and
-      // show apiErrorMessage(err) on failure.
-      await api.copyTokenTemplateToCampaign(campaign.id, templateId, targetCampaignId);
+      await api.copyTokenTemplateToCampaign(campaign.id, template.id, target.id);
+      setNotice(`Copied "${template.name}" to ${target.name}.`);
+    } catch (err) {
+      setError(apiErrorMessage(err) || 'Failed to copy template');
+    } finally {
+      setCopyingId(null);
       setCopyMenuId(null);
-    } catch {
-      setError('Failed to copy template');
     }
-  }, [campaign]);
+  }, [campaign, copyingId]);
 
   return (
     <>
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            key="token-tpl-backdrop"
-            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
+    <SlideOver
+      open={isOpen}
+      onClose={onClose}
+      side="left"
+      backdropClassName="bg-black/40"
+      className="max-w-md bg-paper-white shadow-2xl flex flex-col"
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
+        <Stamp className="w-5 h-5 text-brand-ink shrink-0" />
+        <SlideOverTitle className="flex-1 text-base font-bold text-brand-ink">Token Templates</SlideOverTitle>
+        <span className="text-xs text-stone-gray/60">
+          {total} template{total !== 1 ? 's' : ''}
+        </span>
+        <SlideOverClose className="btn-secondary p-1.5 shrink-0" iconClassName="w-4 h-4" title="Close" />
+      </div>
+
+      {/* Search & Filters */}
+      <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-gray/50" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search templates..."
+            className="input-cozy w-full pl-8 text-sm"
           />
+        </div>
 
-          {/* Panel */}
-          <motion.div
-            key="token-tpl-panel"
-            className="fixed left-0 top-0 h-full z-50 w-full max-w-md bg-paper-white shadow-2xl flex flex-col"
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        <div className="flex gap-2 items-center">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value)}
+            className="input-cozy text-xs flex-1"
           >
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-moss-green/20 bg-parchment/60 sticky top-0 z-10">
-              <Stamp className="w-5 h-5 text-brand-ink flex-shrink-0" />
-              <h2 className="flex-1 text-base font-bold text-brand-ink">Token Templates</h2>
-              <span className="text-xs text-stone-gray/60">
-                {total} template{total !== 1 ? 's' : ''}
-              </span>
-              <Button onClick={onClose} variant="secondary" className="p-1.5 flex-shrink-0" title="Close">
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
+            <option value="">All Types</option>
+            <option value="object">Objects</option>
+            <option value="npc">NPCs</option>
+            <option value="player">Players</option>
+          </select>
+          <button
+            onClick={() => { setEditingTemplate(null); setShowForm(true); }}
+            className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
+          >
+            <Plus className="w-3 h-3" /> New Template
+          </button>
+        </div>
+      </div>
 
-            {/* Search & Filters */}
-            <div className="px-4 py-3 border-b border-moss-green/10 space-y-2">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-gray/50" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search templates..."
-                  className="input-cozy w-full pl-8 text-sm"
-                />
-              </div>
-
-              <div className="flex gap-2 items-center">
-                <select
-                  value={typeFilter}
-                  onChange={(e) => setTypeFilter(e.target.value)}
-                  className="input-cozy text-xs flex-1"
-                >
-                  <option value="">All Types</option>
-                  <option value="object">Objects</option>
-                  <option value="npc">NPCs</option>
-                  <option value="player">Players</option>
-                </select>
-                <button
-                  onClick={() => { setEditingTemplate(null); setShowForm(true); }}
-                  className="flex items-center gap-1 text-xs text-brand-ink hover:text-brand-ink/80 transition-colors"
-                >
-                  <Plus className="w-3 h-3" /> New Template
-                </button>
-              </div>
-            </div>
-
-            {/* Error */}
-            {error && (
-              <div className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
-                {error}
-              </div>
-            )}
-
-            {/* Template List */}
-            <div className="flex-1 overflow-y-auto">
-              {isLoading && templates.length === 0 ? (
-                <div className="flex items-center justify-center py-12 text-stone-gray">
-                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                  Loading templates...
-                </div>
-              ) : templates.length === 0 ? (
-                <div className="text-center py-12 px-6">
-                  <Stamp className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
-                  <p className="text-sm text-stone-gray/70">
-                    {searchQuery ? 'No templates match your search.' : 'No saved token templates yet.'}
-                  </p>
-                  <p className="text-xs text-stone-gray/50 mt-1">
-                    Save tokens from the map or create a new template to get started.
-                  </p>
-                </div>
-              ) : (
-                <div className="divide-y divide-moss-green/10">
-                  {templates.map((template) => (
-                    <TemplateRow
-                      key={template.id}
-                      template={template}
-                      isExpanded={expandedId === template.id}
-                      isPlacing={placingId === template.id}
-                      showCopyMenu={copyMenuId === template.id}
-                      dmCampaigns={dmCampaigns}
-                      onToggle={() => setExpandedId(expandedId === template.id ? null : template.id)}
-                      onPlace={() => handlePlace(template)}
-                      onEdit={() => handleEdit(template)}
-                      onDelete={() => setTemplateToDelete(template)}
-                      onToggleCopyMenu={() => setCopyMenuId(copyMenuId === template.id ? null : template.id)}
-                      onCopyToCampaign={(targetId) => handleCopyToCampaign(template.id, targetId)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Create / Edit Form */}
-            {showForm && (
-              // Keyed so switching straight from one template to another
-              // remounts the form — handleEdit leaves showForm true, so
-              // otherwise the previous template's field state carried over and
-              // saving wrote it onto the newly selected template.
-              <TemplateForm
-                key={editingTemplate?.id ?? 'new'}
-                campaignId={campaign?.id || ''}
-                editingTemplate={editingTemplate}
-                onCreated={(t) => {
-                  setTemplates((prev) => [t, ...prev]);
-                  setTotal((prev) => prev + 1);
-                  setShowForm(false);
-                  setEditingTemplate(null);
-                }}
-                onEdited={(t) => {
-                  setTemplates((prev) => prev.map((x) => x.id === t.id ? t : x));
-                  setShowForm(false);
-                  setEditingTemplate(null);
-                }}
-                onCancel={() => { setShowForm(false); setEditingTemplate(null); }}
-              />
-            )}
-          </motion.div>
-        </>
+      {/* Error */}
+      {error && (
+        <div className="mx-4 mt-2 text-xs text-danger-ink bg-danger/10 border border-danger/20 rounded-cozy px-3 py-2">
+          {error}
+        </div>
       )}
-    </AnimatePresence>
+      {notice && (
+        <div role="status" className="mx-4 mt-2 text-xs text-success-ink bg-success/10 border border-success/20 rounded-cozy px-3 py-2">
+          {notice}
+        </div>
+      )}
+
+      {/* Template List */}
+      <div className="flex-1 overflow-y-auto">
+        {isLoading && templates.length === 0 ? (
+          <div className="flex items-center justify-center py-12 text-stone-gray">
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+            Loading templates...
+          </div>
+        ) : templates.length === 0 ? (
+          <div className="text-center py-12 px-6">
+            <Stamp className="w-8 h-8 text-brand-ink/30 mx-auto mb-2" />
+            <p className="text-sm text-stone-gray/70">
+              {searchQuery ? 'No templates match your search.' : 'No saved token templates yet.'}
+            </p>
+            <p className="text-xs text-stone-gray/50 mt-1">
+              Save tokens from the map or create a new template to get started.
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-moss-green/10">
+            {templates.map((template) => (
+              <TemplateRow
+                key={template.id}
+                template={template}
+                isExpanded={expandedId === template.id}
+                isPlacing={placingId === template.id}
+                showCopyMenu={copyMenuId === template.id}
+                dmCampaigns={dmCampaigns}
+                onToggle={() => setExpandedId(expandedId === template.id ? null : template.id)}
+                onPlace={() => handlePlace(template)}
+                onEdit={() => handleEdit(template)}
+                onDelete={() => setTemplateToDelete(template)}
+                onToggleCopyMenu={() => setCopyMenuId(copyMenuId === template.id ? null : template.id)}
+                isCopying={copyingId === template.id}
+                onCopyToCampaign={(target) => handleCopyToCampaign(template, target)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Create / Edit Form */}
+      {showForm && (
+        // Keyed so switching straight from one template to another
+        // remounts the form — handleEdit leaves showForm true, so
+        // otherwise the previous template's field state carried over and
+        // saving wrote it onto the newly selected template.
+        <TemplateForm
+          key={editingTemplate?.id ?? 'new'}
+          campaignId={campaign?.id || ''}
+          editingTemplate={editingTemplate}
+          onCreated={(t) => {
+            setTemplates((prev) => [t, ...prev]);
+            setTotal((prev) => prev + 1);
+            setShowForm(false);
+            setEditingTemplate(null);
+          }}
+          onEdited={(t) => {
+            setTemplates((prev) => prev.map((x) => x.id === t.id ? t : x));
+            setShowForm(false);
+            setEditingTemplate(null);
+          }}
+          onCancel={() => { setShowForm(false); setEditingTemplate(null); }}
+        />
+      )}
+    </SlideOver>
     <ConfirmDialog
       isOpen={templateToDelete !== null}
       title="Delete token template"
@@ -372,13 +366,15 @@ interface TemplateRowProps {
   isExpanded: boolean;
   isPlacing: boolean;
   showCopyMenu: boolean;
+  /** A copy of this template is on its way. */
+  isCopying: boolean;
   dmCampaigns: Campaign[];
   onToggle: () => void;
   onPlace: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onToggleCopyMenu: () => void;
-  onCopyToCampaign: (targetCampaignId: string) => void;
+  onCopyToCampaign: (target: Campaign) => void;
 }
 
 function TemplateRow({
@@ -386,6 +382,7 @@ function TemplateRow({
   isExpanded,
   isPlacing,
   showCopyMenu,
+  isCopying,
   dmCampaigns,
   onToggle,
   onPlace,
@@ -397,7 +394,7 @@ function TemplateRow({
   const typeColors: Record<string, string> = {
     object: 'bg-warning/10 text-warning-ink',
     npc: 'bg-danger/10 text-danger-ink',
-    player: 'bg-teal-500/10 text-teal-600',
+    player: 'bg-token-player/10 text-token-player-ink',
   };
 
   return (
@@ -411,13 +408,10 @@ function TemplateRow({
           <img
             src={api.storedAssetSrc(template.imageUrl, 'tokens')}
             alt={template.name}
-            className="w-8 h-8 rounded-full object-cover flex-shrink-0 border border-moss-green/20"
+            className="w-8 h-8 rounded-full object-cover shrink-0 border border-moss-green/20"
           />
         ) : (
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm ${
-            template.disposition === 'hostile' ? 'bg-danger' :
-            template.disposition === 'friendly' ? 'bg-teal-500' : 'bg-warning'
-          }`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${tokenPlaceholder(template.type, template.disposition)}`}>
             {template.name.charAt(0).toUpperCase()}
           </div>
         )}
@@ -430,14 +424,14 @@ function TemplateRow({
           </div>
         </div>
 
-        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${typeColors[template.type] || typeColors.object}`}>
+        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${typeColors[template.type] || typeColors.object}`}>
           {template.type}
         </span>
 
         {isExpanded ? (
-          <ChevronDown className="w-4 h-4 text-stone-gray/40 flex-shrink-0" />
+          <ChevronDown className="w-4 h-4 text-stone-gray/40 shrink-0" />
         ) : (
-          <ChevronRight className="w-4 h-4 text-stone-gray/40 flex-shrink-0" />
+          <ChevronRight className="w-4 h-4 text-stone-gray/40 shrink-0" />
         )}
       </button>
 
@@ -447,7 +441,7 @@ function TemplateRow({
             <button
               onClick={onPlace}
               disabled={isPlacing}
-              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/20 transition-colors font-medium"
+              className="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors font-medium"
             >
               {isPlacing ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
               {isPlacing ? 'Placing...' : 'Place on Map'}
@@ -475,8 +469,9 @@ function TemplateRow({
                   {dmCampaigns.map((c) => (
                     <button
                       key={c.id}
-                      onClick={() => onCopyToCampaign(c.id)}
-                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-moss-green/5 transition-colors truncate"
+                      onClick={() => onCopyToCampaign(c)}
+                      disabled={isCopying}
+                      className="w-full text-left px-3 py-1.5 text-xs hover:bg-moss-green/5 transition-colors truncate disabled:opacity-50 disabled:cursor-wait"
                     >
                       {c.name}
                     </button>
@@ -642,8 +637,8 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       formData.append('file', file);
       const { asset } = await api.uploadAsset(formData);
       setImageUrl(asset.id);
-    } catch {
-      setFormError('Failed to upload image');
+    } catch (err) {
+      setFormError(apiErrorMessage(err) || 'Failed to upload image');
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
@@ -687,8 +682,8 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
         const created = await api.createTokenTemplate(campaignId, payload);
         onCreated(created);
       }
-    } catch {
-      setFormError(isEdit ? 'Failed to update template' : 'Failed to create template');
+    } catch (err) {
+      setFormError(apiErrorMessage(err) || (isEdit ? 'Failed to update template' : 'Failed to create template'));
     } finally {
       setIsSubmitting(false);
     }
@@ -706,13 +701,13 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       </div>
 
       {formError && (
-        <div className="text-xs text-danger-ink bg-danger/10 rounded px-2 py-1">{formError}</div>
+        <div className="text-xs text-danger-ink bg-danger/10 rounded-sm px-2 py-1">{formError}</div>
       )}
 
       {/* Name */}
       <div>
         <label className="text-[10px] text-stone-gray block mb-0.5">Name *</label>
-        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Treasure Chest" className="input-cozy w-full text-sm" />
+        <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Treasure Chest" maxLength={STAT_BLOCK_LIMITS.maxNameLength} className="input-cozy w-full text-sm" />
       </div>
 
       {/* Image */}
@@ -802,7 +797,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
             // A bar needs hit points to show; start from 10 as the form always has.
             if (e.target.checked && hpMaxText.trim() === '') setHpMaxText('10');
           }}
-          className="rounded border-moss-green/30 ml-2"
+          className="rounded-sm border-moss-green/30 ml-2"
         />
         <label htmlFor="template-hp" className="text-[10px] text-stone-gray">Show HP Bar</label>
       </div>
@@ -844,7 +839,7 @@ function TemplateForm({ campaignId, editingTemplate, onCreated, onEdited, onCanc
       {/* Notes */}
       <div>
         <label className="text-[10px] text-stone-gray block mb-0.5">Notes</label>
-        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="input-cozy w-full text-xs resize-y" placeholder="Optional description or notes" />
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="input-cozy w-full text-xs resize-y" placeholder="Optional description or notes" maxLength={STAT_BLOCK_LIMITS.maxNotesLength} />
       </div>
 
       {/* Submit */}

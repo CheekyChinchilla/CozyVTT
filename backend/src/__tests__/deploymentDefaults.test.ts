@@ -51,6 +51,7 @@
  * and no more.
  */
 
+import { spawnSync } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -145,7 +146,14 @@ describe('the images', () => {
 
   it('leave the development tools out of the backend image that runs', () => {
     const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
-    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev$/m);
+    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev(?: && .*)?$/m);
+  });
+
+  it("leave npm's compile cache out of the backend image's /tmp, which the backend_tmp volume copies", () => {
+    // npm writes it as root; on the volume it outlives every rebuild, and
+    // the backend's user can neither use nor remove it.
+    const stages = read('backend/Dockerfile.prod').split(/^FROM\s/m);
+    expect(stages[stages.length - 1]).toMatch(/^RUN npm ci --omit=dev && rm -rf \/tmp\/node-compile-cache$/m);
   });
 });
 
@@ -218,6 +226,24 @@ function backendExecLines(rel: string): string[] {
     .filter((line) => /docker compose exec(?: -[A-Za-z]+(?: \S+)?)* backend\b|docker exec(?: -\S+)* cozyvtt-backend\b/.test(line));
 }
 
+// The backend's memory ceiling was fixed at 512 MB in the compose file, so a
+// server with more memory could not give a large campaign import more room
+// without an override file. It is a setting now, with the old default; below
+// the 256 MB reservation Docker refuses to create the container.
+describe("the backend's memory limit", () => {
+  it('is BACKEND_MEMORY_LIMIT, 512M when unset, above a 256M reservation', () => {
+    const block = service('docker-compose.yml', 'backend');
+    expect(block).toMatch(/limits:\n {10}memory: \$\{BACKEND_MEMORY_LIMIT:-512M\}\n/);
+    expect(block).toMatch(/reservations:\n {10}memory: 256M\n/);
+  });
+
+  it.each(['.env.example', 'docs/DEPLOYMENT.md'])('is described in %s, with its 256M floor', (file) => {
+    const text = read(file);
+    expect(text).toContain('BACKEND_MEMORY_LIMIT');
+    expect(text).toMatch(/256M/);
+  });
+});
+
 describe('the containers', () => {
   it.each(['database', 'backend', 'frontend', 'nginx'])('run %s with no-new-privileges', (name) => {
     expect(service('docker-compose.yml', name)).toMatch(/\n {4}security_opt:\n {6}- no-new-privileges:true\n/);
@@ -259,6 +285,14 @@ describe('the containers', () => {
     expect([...listed(nginx, 'tmpfs')].sort()).toEqual(['/etc/nginx/conf.d', '/run', '/tmp']);
   });
 
+  it('stop the proxy with SIGTERM, which a live connection does not hold up', () => {
+    // The image's SIGQUIT waits for every websocket to close, which a
+    // connected player's never does, so `docker compose stop` killed nginx
+    // after 10 s. worker_shutdown_timeout would bound that wait, but it
+    // belongs to nginx's main settings, which nginx/nginx.conf is not.
+    expect(service('docker-compose.yml', 'nginx')).toMatch(/\n {4}stop_signal: SIGTERM\n/);
+  });
+
   it("keep the proxy's request and response files on a volume, out of its memory limit", () => {
     // A 50 MB upload passes through /var/cache/nginx; in memory it would
     // count against the proxy's 64 MB and stop it.
@@ -288,6 +322,44 @@ describe('the containers', () => {
     const lines = script.split('\n').filter((line) => !line.trimStart().startsWith('#'));
     /** Where the root phase ends: everything after it runs as appuser. */
     const appuserPhase = script.slice(script.indexOf('\nfi\n', script.indexOf('if [ "$(id -u)" = "0" ]')));
+
+    /** The root phase: everything before appuserPhase. */
+    const rootPhase = script.slice(script.indexOf('if [ "$(id -u)" = "0" ]'), script.length - appuserPhase.length);
+
+    it('still starts when a mounted folder refuses an owner change, as a NAS, CIFS or FUSE mount does', () => {
+      // Under set -e, a bare chown that fails stops the backend before it starts.
+      const chowns = rootPhase.split('\n').filter((line) => !line.trimStart().startsWith('#') && /\bchown\b/.test(line));
+      expect(chowns.length).toBeGreaterThan(0);
+      expect(chowns.filter((line) => !/^\s*if ! chown -R appuser:appgroup \S+ 2>\/dev\/null; then$/.test(line))).toEqual([]);
+      for (const folder of ['/app/uploads', '/app/logs', '/app/backups']) expect(rootPhase).toContain(folder);
+    });
+
+    it('removes, as root, the compile cache an older image left on the backend_tmp volume', () => {
+      expect(rootPhase).toMatch(/^ {2}rm -rf \/tmp\/node-compile-cache 2>\/dev\/null \|\| true$/m);
+      expect(rootPhase.indexOf('rm -rf /tmp/node-compile-cache')).toBeLessThan(rootPhase.indexOf('exec su-exec'));
+    });
+
+    it('says, as the backend user, when it cannot write to the uploads or logs folder', () => {
+      expect(appuserPhase).toMatch(/^for dir in \/app\/uploads \/app\/logs; do$/m);
+      expect(appuserPhase).toMatch(/^ {2}if \[ -d "\$dir" \] && \[ ! -w "\$dir" \]; then$/m);
+      expect(appuserPhase.indexOf('[ ! -w "$dir" ]')).toBeLessThan(appuserPhase.lastIndexOf('exec "$@"'));
+    });
+
+    it.each([
+      ['names a port', 'postgresql://cozyvtt:secret@database:5433/cozyvtt', '5433'],
+      ['names none', 'postgresql://cozyvtt:secret@database/cozyvtt', '5432'],
+      ['names none and has options', 'postgresql://cozyvtt:secret@database/cozyvtt?schema=public', '5432'],
+    ])('waits for the database on the right port when the address %s', (_label, url, port) => {
+      // Only the lines that read the address, so nothing else in the script runs.
+      const start = script.indexOf('# Parse DATABASE_URL');
+      const parse = script.slice(start, script.indexOf('echo "   Host:', start));
+      expect(parse).toMatch(/DB_PORT=/);
+      const result = spawnSync('bash', ['-c', `${parse}\nprintf '%s' "$DB_PORT"`], {
+        encoding: 'utf8',
+        env: { PATH: process.env.PATH ?? '', DATABASE_URL: url },
+      });
+      expect(result.stdout).toBe(port);
+    });
 
     it("runs the project's own Prisma, without npx, which writes to the home folder", () => {
       expect(lines.filter((line) => /\bnpx\b/.test(line))).toEqual([]);

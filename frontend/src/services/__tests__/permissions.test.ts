@@ -12,7 +12,7 @@
 
 import { describe, it, expect } from 'vitest';
 
-import { canEditCharacter, canEditCharacterIn, canRollAsCharacter, characterEditRefusal } from '../permissions';
+import { canEditCharacter, canEditCharacterIn, canRollAsCharacter, canRemoveCharacterFromCampaign, characterEditRefusal } from '../permissions';
 import { CampaignRole } from '@/types';
 import type { User, CampaignMembership, Campaign } from '@/types';
 
@@ -127,5 +127,21 @@ describe('characterEditRefusal', () => {
 
   it('tells anyone else who may edit', () => {
     expect(characterEditRefusal(user(OTHER), character(OWNER))).toMatch(/owner or the DM/);
+  });
+});
+
+// The server lets the owner, or the DM of the character's campaign, take it
+// out of that campaign; the roster offers Remove from Campaign to the same
+// people. The roster passes the viewer's membership of the campaign the
+// character is in.
+describe('canRemoveCharacterFromCampaign', () => {
+  it('offers it to the owner and to the DM', () => {
+    expect(canRemoveCharacterFromCampaign(user(OWNER), character(OWNER), membership(CampaignRole.PLAYER))).toBe(true);
+    expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.DM))).toBe(true);
+  });
+
+  it('does not offer it to another player or a spectator', () => {
+    expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.PLAYER))).toBe(false);
+    expect(canRemoveCharacterFromCampaign(user(OTHER), character(OWNER), membership(CampaignRole.SPECTATOR))).toBe(false);
   });
 });

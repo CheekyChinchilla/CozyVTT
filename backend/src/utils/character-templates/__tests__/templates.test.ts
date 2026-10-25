@@ -77,6 +77,54 @@ describe('Character Templates Validation', () => {
     });
   });
 
+  // Basic Rules, Fighter: "Hit Dice: 1d10 per fighter level", "Hit Points at
+  // 1st Level: 10 + your Constitution modifier", "Saving Throws: Strength,
+  // Constitution". The blank starter is a Fighter, and had a d8 and 8 HP.
+  describe('D&D 5e level 1 Fighters', () => {
+    interface FighterSheet {
+      class: string;
+      level: number;
+      proficiencyBonus: number;
+      stats: Record<string, { score: number; modifier: number }>;
+      savingThrows: Record<string, { proficient: boolean; bonus: number }>;
+      hp: { maximum: number; current: number };
+      hitDice: { class: string; die: string; maximum: number; remaining: number }[];
+    }
+    const fighters = getDnD5eTemplates()
+      .map((t) => ({ name: t.name, data: t.data as unknown as FighterSheet }))
+      .filter((t) => t.data.class === 'Fighter' && t.data.level === 1);
+    const conModifier = (s: FighterSheet) => Math.floor((s.stats.constitution.score - 10) / 2);
+
+    it('include the blank starter', () => {
+      expect(fighters.map((t) => t.name)).toContain('Blank D&D 5e Character');
+    });
+
+    it.each(fighters.map((t) => [t.name, t.data] as const))('%s has one d10 hit die', (_name, s) => {
+      expect(s.hitDice).toEqual([expect.objectContaining({ die: 'd10', maximum: 1, remaining: 1 })]);
+    });
+
+    it.each(fighters.map((t) => [t.name, t.data] as const))('%s has 10 + CON hit points', (_name, s) => {
+      expect(s.hp.maximum).toBe(10 + conModifier(s));
+      expect(s.hp.current).toBe(s.hp.maximum);
+    });
+
+    it.each(fighters.map((t) => [t.name, t.data] as const))('%s is proficient in Strength and Constitution saves', (_name, s) => {
+      for (const ability of ['strength', 'constitution']) {
+        expect(s.savingThrows[ability]).toEqual({ proficient: true, bonus: s.stats[ability].modifier + s.proficiencyBonus });
+      }
+    });
+
+    // SRD 5.1: chain mail is AC 16 (no Dexterity), a shield adds 2, and the
+    // Defense fighting style adds 1 while wearing armor. The Fighter shipped 18.
+    it('gives the Level 1 Fighter in chain mail with a shield and Defense AC 19', () => {
+      const fighter = getDnD5eTemplates().find((t) => t.name === 'Level 1 Fighter');
+      const data = fighter?.data as { armorClass: number; featuresAndTraits?: unknown; inventory: { name: string }[] };
+      expect(data.inventory.map((item) => item.name)).toEqual(expect.arrayContaining(['Chain Mail', 'Shield']));
+      expect(JSON.stringify(data)).toContain('Fighting Style: Defense');
+      expect(data.armorClass).toBe(19);
+    });
+  });
+
   describe('Call of Cthulhu 7e Templates', () => {
     const templates = getCoC7eTemplates();
 

@@ -67,3 +67,12 @@ describe('the name a roll is filed under', () => {
     expect(name).toBe('Unknown creature');
   });
 });
+
+describe('the close button', () => {
+  it('is named Close', () => {
+    const onClose = vi.fn();
+    render(<CharacterRollPicker character={seelah} onRoll={vi.fn()} onClose={onClose} anchorX={0} anchorY={0} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

@@ -12,6 +12,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import type { CharacterData } from '../../../../types';
 import { cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 describe('possessions', () => {
   it('keeps a note that contains " - " when the list is edited', async () => {
     const onSave = vi.fn<(data: CharacterData) => Promise<void>>().mockResolvedValue(undefined);

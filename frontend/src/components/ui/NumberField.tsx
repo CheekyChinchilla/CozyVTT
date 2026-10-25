@@ -72,8 +72,7 @@ export default function NumberField({
     if (asNumber !== value) {
       setText(value == null ? '' : String(value));
     }
-    // Deliberately keyed on `value` only: reacting to `text` here would undo
-    // each keystroke as it is typed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on value only: reacting to text here would undo each keystroke as it is typed
   }, [value]);
 
   const resolvedFallback = fallback ?? min ?? 0;
@@ -93,10 +92,12 @@ export default function NumberField({
   };
 
   const handleBlur = () => {
-    // Now that editing has finished, settle on something valid.
+    // Now that editing has finished, settle on something valid. A value that
+    // is already the committed one is not reported again: focus passing
+    // through a box is not an edit.
     if (text === '' || text === '-' || !Number.isFinite(Number(text))) {
       setText(String(resolvedFallback));
-      onChange(resolvedFallback);
+      if (resolvedFallback !== value) onChange(resolvedFallback);
       return;
     }
 
@@ -106,7 +107,7 @@ export default function NumberField({
     if (max !== undefined && settled > max) settled = max;
 
     setText(String(settled));
-    onChange(settled);
+    if (settled !== value) onChange(settled);
   };
 
   return (

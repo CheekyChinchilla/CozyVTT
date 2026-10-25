@@ -17,7 +17,7 @@
  * against the viewport, and callers must render it bare.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Toast from '../Toast';
@@ -53,7 +53,7 @@ describe('Toast', () => {
     render(<Toast show message={long} onClose={noop} />);
 
     const text = screen.getByText(long);
-    expect(text.className).toContain('break-words');
+    expect(text.className).toContain('wrap-break-word');
     expect(text.className).not.toContain('truncate');
     expect(text.className).not.toContain('whitespace-nowrap');
   });
@@ -71,5 +71,24 @@ describe('Toast', () => {
     render(<Toast show message="Announced" onClose={noop} />);
     const alert = screen.getByRole('alert');
     expect(alert).toHaveAttribute('aria-live', 'assertive');
+  });
+});
+
+// A page that hands the toast a new close function each time it draws (the
+// Asset Library did) restarted its timer on every draw, so it stayed up for as
+// long as the page kept drawing.
+describe('Toast timing', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('closes after its own time, however often its page draws', () => {
+    vi.useFakeTimers();
+    const closed = vi.fn();
+    const { rerender } = render(<Toast show message="Uploaded" onClose={() => closed()} duration={5000} />);
+    vi.advanceTimersByTime(3000);
+    rerender(<Toast show message="Uploaded" onClose={() => closed()} duration={5000} />);
+    vi.advanceTimersByTime(2100);
+    expect(closed).toHaveBeenCalledTimes(1);
   });
 });

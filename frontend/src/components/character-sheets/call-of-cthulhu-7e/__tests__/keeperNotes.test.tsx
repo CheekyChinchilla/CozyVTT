@@ -14,6 +14,8 @@ import { CallOfCthulhu7eCharacterEditor } from '../CallOfCthulhu7eCharacterEdito
 import { CallOfCthulhu7eCharacterView } from '../CallOfCthulhu7eCharacterView';
 import { cocCharacter } from './cocFixture';
 
+vi.mock('@/hooks/queries', () => ({ useServerConfigQuery: () => ({ data: undefined }) }));
+
 function openBackstory(character: ReturnType<typeof cocCharacter>) {
   render(<CallOfCthulhu7eCharacterEditor character={character} onSave={vi.fn()} onCancel={vi.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: 'Backstory' }));

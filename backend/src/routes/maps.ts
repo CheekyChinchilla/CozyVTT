@@ -5,6 +5,8 @@ import path from 'path';
 import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { campaignMember, campaignDM } from '../middleware/compose';
+import { downloadOnly } from '../middleware/downloadOnly';
+import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middleware/campaignArchiveLimits';
 import { prisma } from '../config/database';
 import {
   canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
@@ -29,12 +31,13 @@ import {
   deleteFile,
 } from '../utils/fileUtils';
 import { generateThumbnail } from '../utils/thumbnails';
-import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { MULTIPART_FIELD_LIMITS, MULTIPART_NAME_CHARSET } from '../utils/multipartLimits';
 import { oneAtATime } from '../utils/oneAtATime';
 import { QueueCallerLeft, QueueTimeLimitReached, QueueWaitExpired } from '../utils/serialQueue';
 import { uvttImportQueue, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { uploadLimiter } from './assets';
 import { openPicture, NotAPictureError } from '../utils/sharpInput';
+import { pictureLimitProblem } from '../utils/pictureLimits';
 import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
@@ -91,6 +94,7 @@ async function sweepStaleUvttUploads(): Promise<void> {
  * there for its turn; on disk it costs nothing until it is read.
  */
 const uvttUpload = multer({
+  ...MULTIPART_NAME_CHARSET,
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
       ensureDirectory(UVTT_TEMP_DIR)
@@ -205,6 +209,22 @@ async function tellMapReadersAs(
  * change to what players are sent. The change is saved by then, so a failure
  * here is logged, never answered as the change having failed.
  */
+/** A map's walls with every end moved by `kx` across and `ky` down, to whole pixels. */
+function scaledWalls(stored: unknown, kx: number, ky: number): WallSegment[] {
+  const walls = (Array.isArray(stored) ? stored : []) as WallSegment[];
+  return walls.map((w) => ({
+    ...w,
+    x1: Math.round(w.x1 * kx), y1: Math.round(w.y1 * ky),
+    x2: Math.round(w.x2 * kx), y2: Math.round(w.y2 * ky),
+  }));
+}
+
+/** A map's lights moved the same way; their radii are in squares and stay. */
+function scaledLights(stored: unknown, kx: number, ky: number): LightSource[] {
+  const lights = (Array.isArray(stored) ? stored : []) as LightSource[];
+  return lights.map((l) => ({ ...l, x: Math.round(l.x * kx), y: Math.round(l.y * ky) }));
+}
+
 async function resendIfCurrent(campaignId: string, map: Parameters<typeof broadcastMapData>[2]): Promise<void> {
   try {
     const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
@@ -212,6 +232,36 @@ async function resendIfCurrent(campaignId: string, map: Parameters<typeof broadc
   } catch (err) {
     logger.warn('Map not re-sent to the table; the change stands', { err, mapId: map.id });
   }
+}
+
+/**
+ * resendIfCurrent for the token routes, which a player may call for a token
+ * they control as often as the request limit allows. Each re-send builds the
+ * map for every member, with sight on a lit map, so these routes ask for one
+ * and it goes at most once per TOKEN_RESEND_MS for each map, read as it
+ * stands when it goes: a burst of changes reaches the table as one map
+ * carrying them all. The window is fixed from the first request, so a steady
+ * stream cannot put the re-send off, or multiply it.
+ */
+const TOKEN_RESEND_MS = 100;
+const pendingTokenResends = new Set<string>();
+
+function resendSoonIfCurrent(campaignId: string, mapId: string): void {
+  const key = `${campaignId}:${mapId}`;
+  if (pendingTokenResends.has(key)) return;
+  pendingTokenResends.add(key);
+  const timer = setTimeout(() => {
+    pendingTokenResends.delete(key);
+    void (async () => {
+      try {
+        const map = await prisma.map.findUnique({ where: { id: mapId } });
+        if (map && map.campaignId === campaignId) await resendIfCurrent(campaignId, map);
+      } catch (err) {
+        logger.warn('Map not re-sent to the table after a token change; the change stands', { err, mapId });
+      }
+    })();
+  }, TOKEN_RESEND_MS);
+  timer.unref?.();
 }
 
 // The token shape lives in websocket/shared.ts — see the note there on why this
@@ -388,6 +438,9 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
         fogEnabled: true,
         globalIllumination: true,
         explorationEnabled: true,
+        // The DM's alone, for Edit Map; a player is sent it with the map,
+        // when the spirit layer is theirs to see (filterMapData).
+        spiritLayerUrl: role === 'DM',
         createdAt: true,
         updatedAt: true,
       },
@@ -598,6 +651,14 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
           message: `The picture inside this file is too large. Maps must be smaller than ${limitMB}MB.`,
         });
       }
+      // The limits on its pixels and frames that an uploaded map has.
+      const pictureProblem = await pictureLimitProblem(parsed.imageBuffer, 'MAP');
+      if (pictureProblem) {
+        return answer(400, {
+          error: 'Validation Error',
+          message: `The picture inside this file cannot be used as a map. ${pictureProblem}`,
+        });
+      }
 
       // ── Save the embedded image as an asset ──────────────────────────────
       signal.throwIfAborted();
@@ -719,84 +780,94 @@ async function importUvttFile(req: AuthenticatedRequest, res: Response, signal: 
 router.get(
   '/:id/export-uvtt',
   campaignDM,
+  downloadOnly,
+  // The picture is read whole and encoded in memory, so one at a time for
+  // each user, as campaign archives are.
+  oneCampaignArchiveAtATime,
   async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const { campaignId, id } = req.params;
-
-      const map = await prisma.map.findFirst({
-        where: { id, campaignId },
-        select: {
-          id: true,
-          name: true,
-          imageUrl: true,
-          width: true,
-          height: true,
-          gridSize: true,
-          wallSegments: true,
-          lights: true,
-        },
-      });
-      if (!map) {
-        return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
-      }
-      if (!map.imageUrl) {
-        return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
-      }
-
-      // Resolve asset file path. The file goes into the download, so the
-      // caller must be able to read it, and the address is read the way the
-      // reference check reads it: a map could otherwise name another user's
-      // private file and hand it over here.
-      const assetId = extractAssetId(map.imageUrl);
-      const asset = assetId
-        ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
-        : null;
-      if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
-        return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
-      }
-
-      const imagePath = path.resolve(asset.filePath.replace(/\\/g, '/'));
-      let imageBuffer: Buffer;
+    // Under the slot until the work is done, even if the caller hangs up,
+    // as the campaign export is: the slot is let go on close otherwise.
+    await whileHoldingArchiveSlot(res, async () => {
       try {
-        imageBuffer = await fs.readFile(imagePath);
-      } catch {
-        return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image file not found on disk' });
-      }
+        const { campaignId, id } = req.params;
 
-      // Get image dimensions for pixels_per_grid calculation. A map stored
-      // before its picture had to be a map picture can name any file, so the
-      // bytes are identified first, and only a picture is read.
-      let imageWidthPx: number | undefined;
-      try {
-        imageWidthPx = (await (await openPicture(imageBuffer)).metadata()).width;
+        const map = await prisma.map.findFirst({
+          where: { id, campaignId },
+          select: {
+            id: true,
+            name: true,
+            imageUrl: true,
+            width: true,
+            height: true,
+            gridSize: true,
+            wallSegments: true,
+            lights: true,
+          },
+        });
+        if (!map) {
+          return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
+        }
+        if (!map.imageUrl) {
+          return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map has no image' });
+        }
+
+        // Resolve asset file path. The file goes into the download, so the
+        // caller must be able to read it, and the address is read the way the
+        // reference check reads it: a map could otherwise name another user's
+        // private file and hand it over here.
+        const assetId = extractAssetId(map.imageUrl);
+        const asset = assetId
+          ? await prisma.asset.findUnique({ where: { id: assetId }, select: { filePath: true } })
+          : null;
+        if (!asset || !assetId || !(await canReadAssetById(assetId, req.session.userId!, req.session.platformRole === 'ADMIN'))) {
+          return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image asset not found' });
+        }
+
+        const imagePath = path.resolve(asset.filePath.replace(/\\/g, '/'));
+        let imageBuffer: Buffer;
+        try {
+          imageBuffer = await fs.readFile(imagePath);
+        } catch {
+          return res.status(422).json({ error: 'Unprocessable Entity', message: 'Map image file not found on disk' });
+        }
+
+        // Get image dimensions for pixels_per_grid calculation. A map stored
+        // before its picture had to be a map picture can name any file, so the
+        // bytes are identified first, and only a picture is read. Only the
+        // header is read, so the image library's pixel limit (16,383 squared)
+        // is off: a map picture may be 16,384 pixels on each side.
+        let imageWidthPx: number | undefined;
+        try {
+          imageWidthPx = (await (await openPicture(imageBuffer, { limitInputPixels: false })).metadata()).width;
+        } catch (error) {
+          if (!(error instanceof NotAPictureError)) throw error;
+          return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });
+        }
+
+        const wallSegments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
+        const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
+
+        const uvttBuffer = buildUVTT({
+          mapWidth: map.width,
+          mapHeight: map.height,
+          gridSizePx: map.gridSize,
+          wallSegments,
+          lights,
+          imageBuffer,
+          imageWidthPx,
+        });
+
+        // Sanitize filename for Content-Disposition
+        const safeName = map.name.replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'map';
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename="${safeName}.uvtt"`);
+        res.setHeader('Content-Length', uvttBuffer.length);
+        return res.send(uvttBuffer);
       } catch (error) {
-        if (!(error instanceof NotAPictureError)) throw error;
-        return res.status(422).json({ error: 'Unprocessable Entity', message: UVTT_EXPORT_NOT_A_PICTURE_MESSAGE });
+        logger.error('Error exporting UVTT file:', error);
+        return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to export UVTT file' });
       }
-
-      const wallSegments = (Array.isArray(map.wallSegments) ? map.wallSegments : []) as unknown as WallSegment[];
-      const lights = (Array.isArray(map.lights) ? map.lights : []) as unknown as LightSource[];
-
-      const uvttBuffer = buildUVTT({
-        mapWidth: map.width,
-        mapHeight: map.height,
-        gridSizePx: map.gridSize,
-        wallSegments,
-        lights,
-        imageBuffer,
-        imageWidthPx,
-      });
-
-      // Sanitize filename for Content-Disposition
-      const safeName = map.name.replace(/[^a-zA-Z0-9 _-]/g, '').trim() || 'map';
-      res.setHeader('Content-Type', 'application/json');
-      res.setHeader('Content-Disposition', `attachment; filename="${safeName}.uvtt"`);
-      res.setHeader('Content-Length', uvttBuffer.length);
-      return res.send(uvttBuffer);
-    } catch (error) {
-      logger.error('Error exporting UVTT file:', error);
-      return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to export UVTT file' });
-    }
+    });
   }
 );
 
@@ -832,7 +903,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -859,7 +930,7 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
     if (membership.role !== 'DM') {
       const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
       if (!canReadMap(membership.role, map.id, campaign?.currentMapId)) {
-        return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+        return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
       }
     }
 
@@ -909,7 +980,7 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     if (existingMap.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1055,11 +1126,36 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       });
     }
 
-    // Update the map
-    const updatedMap = await prisma.map.update({
-      where: { id },
-      data: updateData,
+    // Walls, doors and lights are stored in map pixels, and the picture is
+    // drawn across width × gridSize by height × gridSize, so when either side
+    // of that changes they scale with it, each axis by its own change, and
+    // stay on the art. Read and written under the map's lock, so no wall edit
+    // lands between the two.
+    const size = (field: 'width' | 'height' | 'gridSize') =>
+      typeof updateData[field] === 'number' ? (updateData[field] as number) : existingMap[field];
+    const kx = (size('width') * size('gridSize')) / (existingMap.width * existingMap.gridSize);
+    const ky = (size('height') * size('gridSize')) / (existingMap.height * existingMap.gridSize);
+    const { updatedMap, moved } = await withMapsLocked([id], async (tx) => {
+      if (kx === 1 && ky === 1) return { updatedMap: await tx.map.update({ where: { id }, data: updateData }), moved: null };
+      const current = await tx.map.findUniqueOrThrow({ where: { id }, select: { wallSegments: true, lights: true } });
+      const walls = scaledWalls(current.wallSegments, kx, ky);
+      const lights = scaledLights(current.lights, kx, ky);
+      updateData.wallSegments = toJson(walls);
+      updateData.lights = toJson(lights);
+      return {
+        updatedMap: await tx.map.update({ where: { id }, data: updateData }),
+        moved: { wallsBefore: current.wallSegments, walls, lightsBefore: current.lights, lights },
+      };
     });
+
+    // Open pages hold the walls and lights they loaded, and would go on
+    // drawing them where they were, and send them back with their next bulk
+    // edit. They are told as a bulk replace is, with no operation id, so the
+    // DM's own page takes them too.
+    if (moved) {
+      await tellMapReadersAs(campaignId, id, 'walls:replaced', (role) => wallsReplacedSentTo(role, id, moved.wallsBefore, moved.walls));
+      await tellMapReadersAs(campaignId, id, 'lights:replaced', (role) => lightsReplacedSentTo(role, id, moved.lightsBefore, moved.lights));
+    }
 
     // Any per-map flag change reaches every connected client at once, as one
     // event carrying all of them, so a client never holds a stale flag.
@@ -1087,8 +1183,12 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
     // Lighting and Global Illumination decide which tokens each player is
     // sent, so when either changes every client gets the map again as they
     // can now see it. The flags alone would leave a player holding a token the
-    // server would no longer send, or missing one it now would.
-    if (updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
+    // server would no longer send, or missing one it now would. So does a
+    // change to what the canvas draws from the row itself: the picture, the
+    // size, the grid and its scale, the name and the spirit layer.
+    const drawn = ['name', 'imageUrl', 'baseLayerUrl', 'width', 'height', 'gridSize', 'feetPerSquare', 'diagonalRule', 'spiritLayerUrl'] as const;
+    const drawnChanged = drawn.some((key) => updatedMap[key] !== existingMap[key]);
+    if (drawnChanged || updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
       await resendIfCurrent(campaignId, updatedMap);
@@ -1129,27 +1229,27 @@ router.delete('/:id', campaignDM, async (req: AuthenticatedRequest, res: Respons
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
-    // Check if this is the current map
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { currentMapId: true },
+    // The current map is never deleted. Checked and deleted under the
+    // campaign's row lock, which making a map current also takes: a switch to
+    // this map landing between the check and the delete was undone by it,
+    // leaving the campaign with no current map.
+    const deleted = await prisma.$transaction(async (tx) => {
+      const [campaign] = await tx.$queryRaw<Array<{ currentMapId: string | null }>>`
+        SELECT "currentMapId" FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
+      if (campaign?.currentMapId === id) return false;
+      await tx.map.delete({ where: { id } });
+      return true;
     });
-
-    if (campaign?.currentMapId === id) {
+    if (!deleted) {
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Cannot delete the current map. Set a different map as current first.',
       });
     }
-
-    // Delete the map
-    await prisma.map.delete({
-      where: { id },
-    });
 
     // Combatants that stood on it leave the order with it.
     if (removeCombatants(campaignId, (c) => c.mapId === id)) {
@@ -1192,25 +1292,41 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
-    // Update the campaign's currentMapId
-    const updatedCampaign = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { currentMapId: id },
-      include: {
-        currentMap: {
-          select: {
-            id: true,
-            name: true,
-            imageUrl: true,
+    // Under the campaign's row lock, which a delete also takes, and only
+    // while the map is still there: one deleted meanwhile answers 404, as an
+    // unknown map does, where the foreign key's refusal was a 500.
+    const updatedCampaign = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
+      if (!(await tx.map.findUnique({ where: { id }, select: { id: true } }))) return null;
+      return tx.campaign.update({
+        where: { id: campaignId },
+        data: { currentMapId: id },
+        include: {
+          currentMap: {
+            select: {
+              id: true,
+              name: true,
+              imageUrl: true,
+            },
           },
         },
-      },
+      });
     });
+    if (!updatedCampaign) {
+      return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
+    }
 
+    // Every page goes onto the new map, each member's as they may see it,
+    // whoever asked: the DM's page, another tab or a script.
+    try {
+      await broadcastMapData(getSocketInstance(), campaignId, map);
+    } catch (err) {
+      logger.warn('Map not sent to the table; it is current all the same', { err, mapId: id });
+    }
     // Which plane each player is on is decided by the current map, and with
     // it which combatants they are sent.
     await resendInitiative(campaignId);
@@ -1232,11 +1348,12 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
 // TOKEN MANIPULATION ENDPOINTS
 // ============================================
 
-// TODO(tokens): only the move route below tells open pages of its change.
-// Creating, updating or deleting a token here broadcasts nothing but the
-// initiative order; the web app follows each call with a map-change emit of
-// its own, so a change made by any other client stays unseen until the next
-// broadcast or a reload. Broadcast from these routes, as the move route does.
+// Every route here that changes a map's tokens sends the map again to the
+// table, as each member may see it, when it is the map the campaign is
+// showing (resendSoonIfCurrent, a moment later), and the initiative order as
+// before: the same `map.changed` the DM's `map.change` sends. The web app used to follow each
+// call with that emit itself, so a change from a script, a second tab or a
+// player's edit to their own token reached nobody.
 
 /**
  * POST /api/campaigns/:campaignId/maps/:id/tokens
@@ -1279,7 +1396,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1435,6 +1552,7 @@ router.post('/:id/tokens', campaignDM, async (req: AuthenticatedRequest, res: Re
       return res.status(400).json({ error: 'Limit Exceeded', message: tooManyTokensMessage(appended.full) });
     }
     const updatedMap = appended.map;
+    resendSoonIfCurrent(campaignId, mapId);
 
     // A player's spirit-layer token placed on the map the table is on moves
     // them to the spirit plane, which changes what they are sent of the
@@ -1486,7 +1604,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1511,7 +1629,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
     // they may only fetch that one: a prepared map answers as if it were not
     // here, even where it holds a token they control.
     if (!canReadMap(membership.role, mapId, map.campaign.currentMapId)) {
-      return res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     }
 
     // Get existing tokens array
@@ -1700,6 +1818,7 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       return res.status(404).json({ error: 'Not Found', message: 'Token not found on this map' });
     }
     const { token: updatedToken, map: updatedMap } = written;
+    resendSoonIfCurrent(campaignId, mapId);
 
     // A combatant's own change follows the token. A layer, visibility or
     // controller change on any token may move a player between planes,
@@ -1852,7 +1971,7 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     if (map.campaignId !== campaignId) {
       return res.status(404).json({
         error: 'Not Found',
-        message: 'Map not found in this campaign',
+        message: 'Map not found',
       });
     }
 
@@ -1873,8 +1992,9 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
     // at once used to leave only whichever wrote last.
     await withMapsLocked([mapId], async (tx) => {
       const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
-      await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
+      return tx.map.update({ where: { id: mapId }, data: { tokens: toJson(readTokens(fresh.tokens).filter((t) => t.id !== tokenId)) } });
     });
+    resendSoonIfCurrent(campaignId, mapId);
 
     // The entry goes with the token, and the order is sent again without it.
     // Any other token's deletion can move its controller between planes (a
@@ -1903,7 +2023,9 @@ router.delete('/:id/tokens/:tokenId', campaignDM, async (req: AuthenticatedReque
 
 /**
  * Helper: verify map belongs to campaign and return it, or send error response.
- * Returns null if a response was already sent.
+ * Returns null if a response was already sent. Another campaign's map, and a
+ * prepared map to anyone but the DM, are answered exactly as an id that names
+ * nothing, so the answer cannot confirm that a map exists.
  */
 async function findMapInCampaign(
   campaignId: string,
@@ -1917,14 +2039,14 @@ async function findMapInCampaign(
     return null;
   }
   if (map.campaignId !== campaignId) {
-    res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+    res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     return null;
   }
   // A prepared map is the DM's alone; to anyone else it is not here.
   if (role !== 'DM') {
     const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
     if (!canReadMap(role, map.id, campaign?.currentMapId)) {
-      res.status(404).json({ error: 'Not Found', message: 'Map not found in this campaign' });
+      res.status(404).json({ error: 'Not Found', message: 'Map not found' });
       return null;
     }
   }

@@ -1,7 +1,7 @@
-/// <reference path="../types/express.d.ts" />
+import type {} from '../types/express';
 import { Router, Request, Response } from 'express';
 import qrcode from 'qrcode';
-import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError } from '../services/auth';
+import { registerUser, authenticateUser, sanitizeUser, hashPassword, verifyPassword, RegistrationError, answeredBusy } from '../services/auth';
 import { rememberMeMaxAge } from '../config/sessionDurations';
 import { validatePasswordStrength } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail } from '../services/email';
@@ -16,10 +16,11 @@ import { prisma } from '../config/database';
 import { getSystemSettings, getAppearanceSettings } from '../services/systemSettings';
 import rateLimit from 'express-rate-limit';
 import { failureLimiter } from '../middleware/failureLimiter';
-import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, mfaAccountLimiter } from '../middleware/authLimiters';
+import { hashingPerAddress, hashingPerAddressWhen } from '../middleware/hashingPerAddress';
 import logger from '../utils/logger';
 import { deleteAccount, removePersonalFilesAfterwards, runsCampaignsMessage } from '../services/accountDeletion';
-import { adminMfaDeadline } from '../services/adminMfaPolicy';
+import { adminMfaDeadline, restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import {
   parseBody,
   LoginBodySchema,
@@ -99,10 +100,11 @@ const router = Router();
  * Only a wrong answer counts, recorded by the route where it finds one: a
  * wrong password, a wrong code, a reset link that is not valid. A correct
  * answer never moves you towards a lockout, and nor does a refusal. Correct
- * sign-ins arriving together from one address (a household, a club, every
- * visitor behind a proxy that hides their addresses) are all let through;
- * see middleware/failureLimiter for how wrong ones sent together are still
- * held to five.
+ * sign-ins from one address (a household, a club, every visitor behind a
+ * proxy that hides their addresses) never lock it, though only two may be
+ * checked at once (middleware/hashingPerAddress); see
+ * middleware/failureLimiter for how wrong ones sent together are still held
+ * to five.
  *
  * Exported for the tests, which mount it on a bare app.
  */
@@ -178,26 +180,23 @@ export const mfaLoginLimiter = failureLimiter({
 });
 
 /**
- * The code step, per account: 5 wrong codes per 15 minutes for one account,
- * from wherever they come. The limiter above counts per address, so someone
- * who already has the password could otherwise spread their guesses at the
- * code across many addresses. Keyed on the account the pending sign-in
- * belongs to, which the password step put in the session; a request with no
- * sign-in pending is refused by the handler and neither held nor counted here.
+ * Whether a code step sends a backup code, which is checked against its
+ * Argon2 hashes; a six-digit code is checked without hashing. A token that
+ * is not empty is used first, as the route does.
  */
-export const mfaAccountLimiter = failureLimiter({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: 'Too many MFA login attempts for this account, please try again later',
-  key: (req) => (req.session?.mfaPendingUserId ? `mfa-account:${req.session.mfaPendingUserId}` : null),
-});
+function sendsBackupCode(req: Request): boolean {
+  const body: unknown = req.body;
+  if (typeof body !== 'object' || body === null) return false;
+  const { token, backupCode } = body as Record<string, unknown>;
+  return !(typeof token === 'string' && token !== '') && typeof backupCode === 'string' && backupCode !== '';
+}
 
 /**
  * POST /api/auth/register
  * Register a new user account
  * First user automatically becomes ADMIN
  */
-router.post('/register', accountCreationLimiter, async (req: Request, res: Response) => {
+router.post('/register', hashingPerAddress, accountCreationLimiter, async (req: Request, res: Response) => {
   const body = parseBody(RegisterBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { email, password, displayName } = body.data;
@@ -260,6 +259,7 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
       user: sanitizeUser(user),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     // Only a refusal of what was sent is explained; anything else is the
     // server's, and its text stays in the log.
     if (error instanceof RegistrationError) {
@@ -280,7 +280,7 @@ router.post('/register', accountCreationLimiter, async (req: Request, res: Respo
  * POST /api/auth/login
  * Authenticate user and create session
  */
-router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Request, res: Response) => {
+router.post('/login', hashingPerAddress, credentialLimiter, accountLoginLimiter, async (req: Request, res: Response) => {
   const body = parseBody(LoginBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { email, password, rememberMe } = body.data;
@@ -347,6 +347,7 @@ router.post('/login', credentialLimiter, accountLoginLimiter, async (req: Reques
       mustChangePassword: user.mustChangePassword,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in login', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -454,6 +455,21 @@ async function issueResetLinkFor(user: { id: string; email: string; displayName:
   }
 }
 
+/** The reset links being issued after their answer went, by account. */
+const issuingResetLinks = new Map<string, Promise<void>>();
+
+/** Reset links still being issued, which the tests wait for. */
+export const resetLinksBeingIssued = {
+  get count(): number {
+    return issuingResetLinks.size;
+  },
+
+  /** Settles once none is being issued: at once when none is. */
+  async finished(): Promise<void> {
+    while (issuingResetLinks.size > 0) await Promise.all([...issuingResetLinks.values()]);
+  },
+};
+
 /**
  * POST /api/auth/forgot-password
  * Request a password reset email
@@ -469,16 +485,18 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
       where: { email: email.toLowerCase() },
     });
 
-    if (user) {
-      // Only a known address reaches the writes that issue a link, so a failure
-      // in them must not change the answer: a 500 here and a 200 for an unknown
-      // address would show which addresses have accounts while it lasted. It is
-      // logged for the administrator and the person gets the usual answer.
-      try {
-        await issueResetLinkFor(user);
-      } catch (issueError) {
-        logger.error('Failed to issue a password reset link', { err: issueError, userId: user.id });
-      }
+    // Only a known address reaches the writes that issue a link, so the
+    // answer goes before them: waiting would let the time taken tell which
+    // addresses have accounts, and a failure in them must not change the
+    // answer either. A failure is logged for the administrator. A request
+    // while a link is on its way finds it as it would find one just issued.
+    if (user && !issuingResetLinks.has(user.id)) {
+      const issuing = issueResetLinkFor(user)
+        .catch((issueError: unknown) => {
+          logger.error('Failed to issue a password reset link', { err: issueError, userId: user.id });
+        })
+        .finally(() => issuingResetLinks.delete(user.id));
+      issuingResetLinks.set(user.id, issuing);
     }
 
     // Always return the same response to prevent email enumeration
@@ -505,7 +523,7 @@ router.post('/forgot-password', emailDispatchLimiter, async (req: Request, res: 
  * POST /api/auth/reset-password
  * Reset password using a valid token
  */
-router.post('/reset-password', credentialLimiter, async (req: Request, res: Response) => {
+router.post('/reset-password', hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(ResetPasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { token, newPassword } = body.data;
@@ -540,26 +558,26 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
     // are voided in the same step, since the password they would set is
     // settled now. Yields the account's email, or false when the link had
     // been claimed.
-    const accountEmail = await prisma.$transaction(async (tx) => {
+    const account = await prisma.$transaction(async (tx) => {
       const claim = await tx.passwordResetToken.updateMany({
         where: { id: resetToken.id, used: false, expiresAt: { gt: new Date() } },
         data: { used: true },
       });
       if (claim.count === 0) return false;
 
-      const { email } = await tx.user.update({
+      const updated = await tx.user.update({
         where: { id: resetToken.userId },
         data: {
           passwordHash,
           mustChangePassword: false,
         },
-        select: { email: true },
+        select: { email: true, platformRole: true, mfaEnabled: true, lastLoginAt: true },
       });
       await voidOutstandingResetLinks(resetToken.userId, tx);
-      return email;
+      return updated;
     });
 
-    if (accountEmail === false) {
+    if (account === false) {
       return res.status(400).json({
         error: 'Invalid Token',
         message: 'This password reset link is invalid or has expired',
@@ -568,7 +586,22 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
 
     // The wrong passwords counted against the account were guesses at the
     // old one; a locked account opens with its new password.
-    accountLoginLimiter.forget(accountLoginKey(accountEmail));
+    accountLoginLimiter.forget(accountLoginKey(account.email));
+
+    // An invited administrator's 7 days to set up two-factor authentication
+    // counted from the invitation, which also lasts 7 days, so accepting late
+    // left almost none. They start again when an invitation link (one that
+    // lasts longer than a reset link) sets the password of an account nobody
+    // has signed in to, so nobody who has used the account gains a day.
+    const wasInvitation = resetToken.expiresAt.getTime() - resetToken.createdAt.getTime() > RESET_LINK_TTL_MS;
+    if (wasInvitation && account.platformRole === 'ADMIN' && !account.mfaEnabled && account.lastLoginAt === null) {
+      await restartAdminMfaGrace({
+        targetUserId: resetToken.userId,
+        byUserId: resetToken.userId,
+        level: 'INFO',
+        message: `${account.email} accepted an invitation to be an administrator; 7 days to set up two-factor authentication start now`,
+      });
+    }
 
     // A reset by link is how someone recovers an account they cannot or will
     // not sign in to, so every sign-in opened with the old password ends,
@@ -580,6 +613,7 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
       message: 'Password has been reset successfully',
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in reset-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -594,7 +628,7 @@ router.post('/reset-password', credentialLimiter, async (req: Request, res: Resp
  * against passwordCheckLimiter, shared with DELETE /account and an email
  * change: 10 per 15 minutes for the account.
  */
-router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+router.post('/change-password', requireAuth, hashingPerAddress, passwordCheckLimiter, async (req: Request, res: Response) => {
   const body = parseBody(ChangePasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { currentPassword, newPassword } = body.data;
@@ -662,6 +696,7 @@ router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: R
       message: 'Password changed successfully',
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in change-password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',
@@ -675,7 +710,7 @@ router.post('/change-password', requireAuth, passwordCheckLimiter, async (req: R
  * Self-service account deletion. Requires password confirmation; a wrong
  * password counts against passwordCheckLimiter.
  */
-router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request, res: Response) => {
+router.delete('/account', requireAuth, hashingPerAddress, passwordCheckLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;
@@ -723,6 +758,7 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
 
     return res.status(200).json({ message: 'Account deleted successfully' });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error deleting account', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to delete account' });
   }
@@ -741,7 +777,7 @@ router.delete('/account', requireAuth, passwordCheckLimiter, async (req: Request
  * decides who can sign in from then on, so a session alone is not enough, as
  * with turning MFA off.
  */
-router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/setup', requireAuth, hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;
@@ -785,6 +821,7 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
       secret,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in MFA setup', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to setup MFA' });
   }
@@ -795,7 +832,7 @@ router.post('/mfa/setup', requireAuth, credentialLimiter, async (req: Request, r
  * Verify TOTP token to complete MFA setup. Generates and returns backup codes (shown once).
  * Requires: Authentication + mfaSecret stored on user
  */
-router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify', requireAuth, hashingPerAddress, mfaSetupLimiter, async (req: Request, res: Response) => {
   const body = parseBody(MfaVerifyBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { token } = body.data;
@@ -853,6 +890,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
       backupCodes: plainCodes,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in MFA verify', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify MFA token' });
   }
@@ -863,7 +901,7 @@ router.post('/mfa/verify', requireAuth, mfaSetupLimiter, async (req: Request, re
  * Verify TOTP or backup code during login MFA flow.
  * Requires: mfaPending session state (set by /login when user has MFA enabled)
  */
-router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/verify-login', hashingPerAddressWhen(sendsBackupCode), mfaLoginLimiter, mfaAccountLimiter, async (req: Request, res: Response) => {
   try {
     if (!req.session.mfaPending || !req.session.mfaPendingUserId) {
       return res.status(401).json({
@@ -1001,6 +1039,7 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
 
     return res.status(200).json(response);
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error in MFA verify-login', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to verify MFA' });
   }
@@ -1012,7 +1051,7 @@ router.post('/mfa/verify-login', mfaLoginLimiter, mfaAccountLimiter, async (req:
  * Admins cannot disable MFA
  * Requires: Authentication
  */
-router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/disable', requireAuth, hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(MfaDisableBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password, token } = body.data;
@@ -1071,6 +1110,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
 
     return res.status(200).json({ message: 'MFA disabled successfully' });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error disabling MFA', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to disable MFA' });
   }
@@ -1081,7 +1121,7 @@ router.post('/mfa/disable', requireAuth, credentialLimiter, async (req: Request,
  * Regenerate backup codes. Requires current password.
  * Requires: Authentication + MFA enabled
  */
-router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Request, res: Response) => {
+router.post('/mfa/backup-codes', requireAuth, hashingPerAddress, credentialLimiter, async (req: Request, res: Response) => {
   const body = parseBody(PasswordBodySchema, req.body);
   if (!body.ok) return invalid(res, body.message);
   const { password } = body.data;
@@ -1119,6 +1159,7 @@ router.post('/mfa/backup-codes', requireAuth, credentialLimiter, async (req: Req
       backupCodes: plainCodes,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error regenerating backup codes', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to regenerate backup codes' });
   }

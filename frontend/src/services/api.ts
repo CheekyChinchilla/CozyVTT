@@ -5,6 +5,7 @@ import { rememberSignInNotice } from '@/services/signInNotice';
 import { signInPath } from '@/utils/returnTo';
 import type {
   User,
+  AdminListedUser,
   InvitableUserSearch,
   AuthResponse,
   MFARequiredResponse,
@@ -27,7 +28,7 @@ import type {
   UpdateCharacterRequest,
   Asset,
   AssetListResponse,
-  Map,
+  CampaignMap,
   CreateMapRequest,
   UpdateMapRequest,
   CreateTokenRequest,
@@ -47,6 +48,7 @@ import type {
   PersonalNote,
   PersonalNoteSummary,
   CampaignInvitation,
+  CampaignInvitationSummary,
   ApiError,
   SystemStats,
   AdminHealth,
@@ -65,6 +67,7 @@ import type {
   CampaignMembership,
 } from '@/types';
 import { withKnownCreatureChoices, withKnownTemplateChoices } from '@/utils/knownChoices';
+import { saveBlob } from '@/utils/download';
 
 // ============================================
 // API Client Configuration
@@ -310,8 +313,8 @@ class ApiClient {
   // Users
   // ============================================
 
-  async listUsers(): Promise<{ users: User[] }> {
-    const response = await this.client.get<{ users: User[] }>('/api/users');
+  async listUsers(): Promise<{ users: AdminListedUser[] }> {
+    const response = await this.client.get<{ users: AdminListedUser[] }>('/api/users');
     return response.data;
   }
 
@@ -441,6 +444,12 @@ class ApiClient {
     return response.data;
   }
 
+  /** Forget an account's wrong passwords and sign-in codes, so it can sign in at once. */
+  async clearAdminUserSignInLock(userId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/admin/users/${userId}/sign-in-lock`);
+    return response.data;
+  }
+
   async approveAdminUser(userId: string): Promise<{ message: string }> {
     const response = await this.client.post(`/api/admin/users/${userId}/approve`);
     return response.data;
@@ -565,9 +574,22 @@ class ApiClient {
   async inviteUserToCampaign(
     campaignId: string,
     userId: string,
-    sendEmail = false
+    sendEmail = false,
+    expiresInDays?: number
   ): Promise<{ message: string; emailSent: boolean }> {
-    const response = await this.client.post(`/api/campaigns/${campaignId}/invite`, { userId, sendEmail });
+    const response = await this.client.post(`/api/campaigns/${campaignId}/invite`, { userId, sendEmail, expiresInDays });
+    return response.data;
+  }
+
+  /** The campaign's invitations that still stand (DM only). */
+  async listCampaignInvitations(campaignId: string): Promise<{ invitations: CampaignInvitationSummary[] }> {
+    const response = await this.client.get(`/api/campaigns/${campaignId}/invitations`);
+    return response.data;
+  }
+
+  /** Withdraw a pending invitation (DM only); the player no longer has it. */
+  async withdrawCampaignInvitation(campaignId: string, invitationId: string): Promise<{ message: string }> {
+    const response = await this.client.delete(`/api/campaigns/${campaignId}/invitations/${invitationId}`);
     return response.data;
   }
 
@@ -900,6 +922,8 @@ class ApiClient {
     uploadedBy?: string;
     /** Only what the caller may put on a map or token; see GET /api/assets. */
     usable?: boolean;
+    /** Newest first when left out. */
+    sort?: 'name' | 'size';
   }): Promise<AssetListResponse> {
     const response = await this.client.get<AssetListResponse>('/api/assets', { params });
     return response.data;
@@ -909,11 +933,20 @@ class ApiClient {
    * Upload a picture, sound, PDF or other file (up to 50 MB for a map picture
    * or PDF). Serves map pictures, PDFs, token art, avatars and sheet portraits.
    */
-  async uploadAsset(formData: FormData): Promise<{ message: string; asset: Asset }> {
+  /**
+   * `onProgress` is told the share of the request sent so far, 0 to 100, as
+   * the browser reports it.
+   */
+  async uploadAsset(formData: FormData, onProgress?: (percent: number) => void): Promise<{ message: string; asset: Asset }> {
     const response = await this.client.post('/api/assets/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: onProgress
+        ? (event) => {
+            if (event.total) onProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        : undefined,
       // No limit of the page's own: the shared 30 seconds count the upload
       // itself, so a 50 MB file on a connection slower than about 14 Mbit/s
       // was cut off with "Failed to upload asset" before it had arrived.
@@ -953,6 +986,14 @@ class ApiClient {
     return `${API_BASE_URL}/api/assets/${type}/${id}`;
   }
 
+  /**
+   * A map or token picture's thumbnail, at most 512 pixels, for cards and
+   * pickers; the full picture for one that has none.
+   */
+  getAssetThumbnailUrl(id: string, type: 'maps' | 'tokens'): string {
+    return `${API_BASE_URL}/api/assets/${type}/${id}/thumbnail`;
+  }
+
   /** The address that downloads an asset under its original file name. */
   getAssetDownloadUrl(id: string): string {
     return `${API_BASE_URL}/api/assets/${encodeURIComponent(id)}/download`;
@@ -972,32 +1013,41 @@ class ApiClient {
   // Maps & Tokens
   // ============================================
 
-  async listMaps(campaignId: string): Promise<{ maps: Map[] }> {
-    const response = await this.client.get<{ maps: Map[] }>(`/api/campaigns/${campaignId}/maps`);
+  async listMaps(campaignId: string): Promise<{ maps: CampaignMap[] }> {
+    const response = await this.client.get<{ maps: CampaignMap[] }>(`/api/campaigns/${campaignId}/maps`);
     return response.data;
   }
 
-  async createMap(campaignId: string, data: CreateMapRequest): Promise<{ map: Map }> {
+  async createMap(campaignId: string, data: CreateMapRequest): Promise<{ map: CampaignMap }> {
     const response = await this.client.post(`/api/campaigns/${campaignId}/maps`, data);
     return response.data;
   }
 
-  async getMap(campaignId: string, mapId: string): Promise<{ map: Map; spiritVisible?: boolean }> {
-    const response = await this.client.get<{ map: Map; spiritVisible?: boolean }>(`/api/campaigns/${campaignId}/maps/${mapId}`);
+  async getMap(campaignId: string, mapId: string): Promise<{ map: CampaignMap; spiritVisible?: boolean }> {
+    const response = await this.client.get<{ map: CampaignMap; spiritVisible?: boolean }>(`/api/campaigns/${campaignId}/maps/${mapId}`);
     return response.data;
   }
 
-  async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<{ map: Map }> {
+  async updateMap(campaignId: string, mapId: string, data: UpdateMapRequest): Promise<{ map: CampaignMap }> {
     const response = await this.client.put(`/api/campaigns/${campaignId}/maps/${mapId}`, data);
     return response.data;
   }
 
   /**
-   * Get the URL for downloading a UVTT export of a map.
-   * Uses the base URL so the browser can handle the file download with auth cookies.
+   * Save a map as a Universal VTT file. It is fetched first and saved once
+   * it has arrived, so a refusal (a map with no picture, or one that is not
+   * a PNG, JPEG, WebP or GIF image) rejects like any other request, with its
+   * message readable by `apiErrorMessage`; a plain download link saved the
+   * server's error as the file. The map's picture is inside the file, so it
+   * is fetched without the shared client's thirty-second limit.
    */
-  getExportUVTTUrl(campaignId: string, mapId: string): string {
-    return `/api/campaigns/${campaignId}/maps/${mapId}/export-uvtt`;
+  async downloadUVTTExport(campaignId: string, mapId: string, fileName: string): Promise<void> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/campaigns/${encodeURIComponent(campaignId)}/maps/${encodeURIComponent(mapId)}/export-uvtt`,
+      { credentials: 'include' }
+    );
+    if (!response.ok) throw await refusalFrom(response);
+    saveBlob(fileName, await response.blob());
   }
 
   /**
@@ -1014,7 +1064,7 @@ class ApiClient {
     name?: string,
     gridSize?: number,
     options?: { confirm?: boolean; includeObjectWalls?: boolean },
-  ): Promise<{ map: Map; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
+  ): Promise<{ map: CampaignMap; wallCount: number; portalCount: number; totalSegments: number; lightCount: number }> {
     const formData = new FormData();
     formData.append('file', file);
     if (name) formData.append('name', name);
@@ -1137,6 +1187,8 @@ class ApiClient {
       description?: string | null;
       tokenImageUrl?: string | null;
       data?: unknown;
+      /** The version this save was made from; the server answers 409 if the template has changed since. */
+      updatedAt?: string;
     }
   ): Promise<CharacterTemplate> {
     const response = await this.client.put(`/api/character-templates/${id}`, data);
@@ -1298,16 +1350,7 @@ class ApiClient {
       }
     }
 
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    // Revoked a little later: some browsers start the download only after
-    // the click handler has returned.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    saveBlob(fileName, await response.blob());
     return 'saved';
   }
 

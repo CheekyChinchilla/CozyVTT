@@ -35,6 +35,14 @@ describe('calcGridDistance', () => {
   it('respects feetPerSquare', () => {
     expect(calcGridDistance(2, 0, 10, 'flat')).toBe(20);
   });
+
+  // Diagonals cost one square, then two, of whatever size the map's are; they
+  // were priced at 5 ft whatever the square.
+  it('alternating rule: prices diagonals by the square size too', () => {
+    expect(calcGridDistance(2, 2, 10, 'alternating')).toBe(30);
+    expect(calcGridDistance(4, 2, 10, 'alternating')).toBe(50);
+    expect(calcGridDistance(1, 1, 1.5, 'alternating')).toBe(1.5);
+  });
 });
 
 describe('douglasPeucker', () => {

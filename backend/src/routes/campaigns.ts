@@ -3,23 +3,24 @@ import multer from 'multer';
 import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
-import { canDeleteCampaign, canTransferDM, canReadMap, canReadAsset } from '../services/permissions';
+import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
 import { getSpiritVisibility } from '../utils/spirit-layer';
-import { captureGameState, getNextSessionNumber, getLastSession } from '../services/sessionState';
+import { captureGameState, getNextSessionNumber, withSessionsHeld, openSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
 import { broadcastMapData } from '../websocket/shared';
 import { clearState as clearCombatState } from '../websocket/initiativeState';
 import { isSmtpConfigured, sendCampaignInvitationEmail } from '../services/email';
-import { DEFAULT_VIBE_SETTINGS, validateVibeSettings, findVibePeriod, preserveAtmosphereAudio, VibeSettings } from '../utils/vibe-presets';
-import { vibePeriodAudioAssetId } from '../utils/vibeAudio';
+import { DEFAULT_VIBE_SETTINGS } from '../utils/vibe-presets';
+import { issueMessages } from '../validators/issueMessages';
+import { saveVibeSettings, vibeAudioRefusal } from '../services/vibeSave';
 import { prepareCampaignExport, ExportTooLargeError, type PreparedExport } from '../services/campaignExporter';
 import { CAMPAIGN_ARCHIVE_MAX_BYTES, megabytes } from '../utils/campaignArchiveSize';
 import { previewCampaignImport, importCampaign, importTempDirectory, IMPORT_FAILED_MESSAGE } from '../services/campaignImporter';
 import { ArchiveRefusedError } from '../utils/archive';
-import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema } from '../validators/campaigns';
+import { CreateCampaignSchema, UpdateCampaignSchema, TransferDMSchema, CampaignInviteSchema, VibeSettingsSchema } from '../validators/campaigns';
 import { CreatePersonalNoteSchema, UpdatePersonalNoteSchema, MAX_NOTES_PER_CAMPAIGN } from '../validators/personalNotes';
-import { UpdateSessionNotesSchema } from '../validators/sessionNotes';
+import { UpdateSessionNotesSchema, EndSessionSchema } from '../validators/sessionNotes';
 import { listLeftCampaigns, getLeftCampaign, getLeftCampaignNote, getLeftCampaignNotes } from './leftCampaigns';
 import { leftNotesDownloadLimiter } from '../middleware/leftNotesDownloadLimiter';
 import type { Prisma } from '@prisma/client';
@@ -29,11 +30,14 @@ import { toJson, readJsonObject } from '../utils/prisma-json';
 import { extractCharacterHp } from '../utils/characterHp';
 import logger from '../utils/logger';
 import { encodeMessageCursor, decodeMessageCursor } from '../utils/messageCursor';
-import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { MULTIPART_FIELD_LIMITS, MULTIPART_NAME_CHARSET } from '../utils/multipartLimits';
 import { invitationEmailLimiter } from '../middleware/invitationEmailLimiter';
 import { MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
 import { INVITE_SEARCH_MIN_LENGTH, INVITE_SEARCH_MAX_RESULTS } from '../validators/inviteSearchLimits';
 import { escapeLikePattern } from '../utils/likePattern';
+import { standingInvitation, isStanding } from '../utils/invitationState';
+import { CAMPAIGN_LIMITS } from '../validators/campaignLimits';
+import { downloadOnly } from '../middleware/downloadOnly';
 import {
   campaignPreviewLimiter,
   campaignImportLimiter,
@@ -45,6 +49,17 @@ import { randomUUID } from 'crypto';
 import path from 'path';
 import fsp from 'fs/promises';
 const router = Router();
+
+/**
+ * What a campaign member's account carries wherever a membership is sent:
+ * the roster, the campaign fetch, the members list and a role change. Never
+ * the email address: these go to every member, and a DM must not be able to
+ * collect the addresses of the people at their table.
+ */
+export const MEMBER_USER_SELECT = { id: true, displayName: true, avatarUrl: true } as const satisfies Prisma.UserSelect;
+
+/** The account fields a chat message carries for its author. */
+export const MESSAGE_USER_SELECT = { id: true, displayName: true } as const satisfies Prisma.UserSelect;
 
 // ── Import file upload ──────────────────────────────────────────────────────
 // A campaign archive is written to disk and read from there, never held in
@@ -71,6 +86,7 @@ async function removeStaleImports(): Promise<void> {
 }
 
 const importUpload = multer({
+  ...MULTIPART_NAME_CHARSET,
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
       fsp
@@ -104,6 +120,18 @@ async function removeUploadedArchive(file: Express.Multer.File | undefined): Pro
   if (file?.path) await fsp.rm(file.path, { force: true }).catch(() => undefined);
 }
 
+// ── Session steps ───────────────────────────────────────────────────────────
+// A step that cannot go ahead returns one of these from inside
+// `withSessionsHeld`, and the route answers with it once the hold is let go.
+interface SessionRefusal { refused: 400 | 404; message: string }
+
+function sessionRefusal(refused: 400 | 404, message: string): SessionRefusal {
+  return { refused, message };
+}
+
+function sendSessionRefusal(res: Response, { refused, message }: SessionRefusal) {
+  return res.status(refused).json({ error: refused === 404 ? 'Not Found' : 'Bad Request', message });
+}
 
 /**
  * Campaign Routes
@@ -151,13 +179,7 @@ router.get('/', authenticated, async (req: AuthenticatedRequest, res: Response) 
             },
             memberships: {
               include: {
-                user: {
-                  select: {
-                    id: true,
-                    displayName: true,
-                    avatarUrl: true,
-                  },
-                },
+                user: { select: MEMBER_USER_SELECT },
               },
             },
           },
@@ -229,13 +251,7 @@ router.post('/', authenticated, async (req: AuthenticatedRequest, res: Response)
       include: {
         memberships: {
           include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-              },
-            },
+            user: { select: MEMBER_USER_SELECT },
           },
         },
       },
@@ -277,13 +293,7 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
         },
         memberships: {
           include: {
-            user: {
-              select: {
-                id: true,
-                displayName: true,
-                avatarUrl: true,
-              },
-            },
+            user: { select: MEMBER_USER_SELECT },
           },
         },
         // PERFORMANCE: return map/character METADATA only. The full
@@ -394,13 +404,7 @@ router.get('/:campaignId/characters', campaignMember, async (req: AuthenticatedR
     const memberships = await prisma.campaignMembership.findMany({
       where: { campaignId },
       include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-          },
-        },
+        user: { select: MEMBER_USER_SELECT },
       },
     });
 
@@ -472,14 +476,12 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (name !== undefined) updateData.name = name;
     if (description !== undefined) updateData.description = description;
     if (status !== undefined) updateData.status = status;
+    // Vibe settings are saved after the rest, as PUT .../vibe saves them;
+    // a track the DM may not play to the table refuses the whole request
+    // before anything is written.
     if (vibeSettings !== undefined) {
-      const stored = await prisma.campaign.findUnique({
-        where: { id: campaignId },
-        select: { vibeSettings: true },
-      });
-      updateData.vibeSettings = toJson(
-        preserveAtmosphereAudio(vibeSettings, stored?.vibeSettings)
-      );
+      const refusal = await vibeAudioRefusal(campaignId, req.session.userId!, vibeSettings);
+      if (refusal) return res.status(400).json({ error: 'Validation Error', message: refusal });
     }
     if (spiritLayerEnabled !== undefined) updateData.spiritLayerEnabled = spiritLayerEnabled;
     if (spiritLayerStyle !== undefined) updateData.spiritLayerStyle = spiritLayerStyle;
@@ -500,10 +502,35 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
       updateData.gameSystem = gameSystem;
     }
 
-    const campaign = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: updateData,
-    });
+    // A status is set between sessions only, under the same hold as the
+    // session steps, so a Start cannot slip in beside it.
+    const outcome = status === undefined
+      ? { campaign: await prisma.campaign.update({ where: { id: campaignId }, data: updateData }) }
+      : await withSessionsHeld(campaignId, async (tx) => (await openSession(tx, campaignId))
+        ? sessionRefusal(400, 'End the session before changing the campaign status')
+        : { campaign: await tx.campaign.update({ where: { id: campaignId }, data: updateData }) });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const campaign = vibeSettings === undefined
+      ? outcome.campaign
+      : { ...outcome.campaign, ...(await saveVibeSettings(campaignId, req.session.userId!, vibeSettings)) };
+
+    // Every member's page shows these, so a player at the table follows them
+    // without a reload: the chat box's cooldown, the campaign's name.
+    // The change is saved either way, so a failed broadcast is only logged.
+    if ([name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds].some((value) => value !== undefined)) {
+      try {
+        broadcastToCampaign(campaignId, 'campaign.settings.updated', {
+          campaignId,
+          name: campaign.name,
+          description: campaign.description,
+          gameSystem: campaign.gameSystem,
+          chatCooldownEnabled: campaign.chatCooldownEnabled,
+          chatCooldownSeconds: campaign.chatCooldownSeconds,
+        });
+      } catch (error) {
+        logger.error('Campaign settings saved but not sent to the table', { err: error, campaignId });
+      }
+    }
 
     return res.status(200).json({
       message: 'Campaign updated successfully',
@@ -527,86 +554,18 @@ router.put('/:campaignId', campaignDM, async (req: AuthenticatedRequest, res: Re
 router.put('/:campaignId/vibe', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    const { vibeSettings } = req.body;
-
-    if (!vibeSettings) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'vibeSettings is required',
-      });
+    if (!req.body?.vibeSettings) {
+      return res.status(400).json({ error: 'Validation Error', message: 'vibeSettings is required' });
     }
-
-    // Validate structure
-    const validationError = validateVibeSettings(vibeSettings);
-    if (validationError) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: validationError,
-      });
+    const parsed = VibeSettingsSchema.safeParse(req.body.vibeSettings);
+    if (!parsed.success) {
+      return res.status(400).json({ error: 'Validation Error', message: issueMessages(parsed.error) });
     }
+    const refusal = await vibeAudioRefusal(campaignId, req.session.userId!, parsed.data);
+    if (refusal) return res.status(400).json({ error: 'Validation Error', message: refusal });
 
-    // A period's audio names an asset the whole table fetches while that
-    // period is the vibe, so the save asks the same question the ambient
-    // setter asks: may this DM open this track to the room? Never as an
-    // admin, for the same reason the setter refuses that.
-    const checkedAudio = new Map<string, boolean>();
-    for (const period of (vibeSettings as VibeSettings).periods) {
-      if (period.audio == null) continue;
-      const assetId = vibePeriodAudioAssetId(period.audio);
-      let allowed = false;
-      if (assetId) {
-        if (checkedAudio.has(assetId)) {
-          allowed = checkedAudio.get(assetId) === true;
-        } else {
-          const asset = await prisma.asset.findUnique({ where: { id: assetId } });
-          allowed = !!asset
-            && asset.type === 'AUDIO'
-            && !(asset.scope === 'CAMPAIGN' && asset.campaignId !== campaignId)
-            && (await canReadAsset(asset, req.session.userId!, false));
-          checkedAudio.set(assetId, allowed);
-        }
-      }
-      if (!allowed) {
-        return res.status(400).json({
-          error: 'Validation Error',
-          message: `The "${period.name}" period's audio must be an audio track available to this campaign, or none`,
-        });
-      }
-    }
-
-    // If campaign has a currentVibe, verify it still exists in the new periods
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { currentVibe: true, vibeSettings: true },
-    });
-
-    const updateData: Prisma.CampaignUpdateInput = {
-      vibeSettings: toJson(preserveAtmosphereAudio(vibeSettings, campaign?.vibeSettings)),
-    };
-
-    // Reset currentVibe if current period no longer exists in new settings
-    if (campaign?.currentVibe) {
-      const period = findVibePeriod(vibeSettings as VibeSettings, campaign.currentVibe);
-      if (!period) {
-        updateData.currentVibe = null;
-      }
-    }
-
-    const updatedCampaign = await prisma.campaign.update({
-      where: { id: campaignId },
-      data: updateData,
-      select: {
-        id: true,
-        vibeSettings: true,
-        currentVibe: true,
-      },
-    });
-
-    return res.status(200).json({
-      message: 'Vibe settings updated successfully',
-      vibeSettings: updatedCampaign.vibeSettings,
-      currentVibe: updatedCampaign.currentVibe,
-    });
+    const saved = await saveVibeSettings(campaignId, req.session.userId!, parsed.data);
+    return res.status(200).json({ message: 'Vibe settings updated successfully', ...saved });
   } catch (error) {
     logger.error('Error updating vibe settings', { err: error });
     return res.status(500).json({
@@ -720,9 +679,9 @@ router.get('/:campaignId/invitable-users', campaignDM, async (req: Authenticated
       select: { userId: true },
     });
 
-    // Find pending invitation user IDs
+    // Those already invited, by an invitation that still stands
     const pendingInvitations = await prisma.campaignInvitation.findMany({
-      where: { campaignId, status: 'PENDING' },
+      where: { campaignId, ...standingInvitation() },
       select: { userId: true },
     });
 
@@ -835,7 +794,7 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
       },
     });
 
-    if (existingInvitation && existingInvitation.status === 'PENDING') {
+    if (existingInvitation && isStanding(existingInvitation)) {
       return res.status(400).json({
         error: 'Bad Request',
         message: 'User already has a pending invitation to this campaign',
@@ -956,6 +915,50 @@ router.post('/:campaignId/invite', campaignDM, invitationEmailLimiter, async (re
       error: 'Internal Server Error',
       message: 'Failed to invite user',
     });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/invitations
+ * The campaign's invitations that still stand (pending and in date), newest
+ * first, so the DM can see who has been asked and withdraw one.
+ * Requires: Campaign DM role
+ */
+router.get('/:campaignId/invitations', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId } = req.params;
+    const invitations = await prisma.campaignInvitation.findMany({
+      where: { campaignId, ...standingInvitation() },
+      select: { id: true, userId: true, createdAt: true, expiresAt: true, user: { select: { displayName: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    return res.json({ invitations });
+  } catch (error) {
+    logger.error('Error listing campaign invitations', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to list invitations' });
+  }
+});
+
+/**
+ * DELETE /api/campaigns/:campaignId/invitations/:invitationId
+ * Withdraw a pending invitation: it is deleted, so the player no longer has
+ * it and can be invited again. One of another campaign, or one already
+ * answered, is answered 404 as an unknown one is.
+ * Requires: Campaign DM role
+ */
+router.delete('/:campaignId/invitations/:invitationId', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, invitationId } = req.params;
+    const { count } = await prisma.campaignInvitation.deleteMany({
+      where: { id: invitationId, campaignId, status: 'PENDING' },
+    });
+    if (count === 0) {
+      return res.status(404).json({ error: 'Not Found', message: 'Invitation not found' });
+    }
+    return res.json({ message: 'Invitation withdrawn' });
+  } catch (error) {
+    logger.error('Error withdrawing invitation', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to withdraw invitation' });
   }
 });
 
@@ -1103,15 +1106,7 @@ router.put('/:campaignId/members/:userId/role', campaignDM, async (req: Authenti
         where: { userId_campaignId: { userId, campaignId } },
         data: { role },
         include: {
-          user: {
-            select: {
-              id: true,
-              displayName: true,
-              avatarUrl: true,
-              // SECURITY: never embed `email` — this payload is returned to
-              // DM-role users who shouldn't be able to harvest member emails.
-            },
-          },
+          user: { select: MEMBER_USER_SELECT },
         },
       });
       return { ok: true, updated } as const;
@@ -1177,12 +1172,15 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     }
     const { userId: incomingId } = parsed.data;
 
+    // A campaign the caller is not in, does not own and cannot run as an
+    // admin answers as one that is not there; a member who may not hand the
+    // seat over is told so below.
     const campaign = await prisma.campaign.findUnique({
       where: { id: campaignId },
-      select: { id: true },
+      select: { ownerId: true, memberships: { where: { userId: callerId }, select: { userId: true } } },
     });
 
-    if (!campaign) {
+    if (!campaign || (platformRole !== 'ADMIN' && campaign.ownerId !== callerId && campaign.memberships.length === 0)) {
       return res.status(404).json({
         error: 'Not Found',
         message: 'Campaign not found',
@@ -1239,14 +1237,7 @@ router.put('/:campaignId/dm', authenticated, async (req: AuthenticatedRequest, r
     const memberships = await prisma.campaignMembership.findMany({
       where: { campaignId },
       include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-            avatarUrl: true,
-            // SECURITY: never embed `email` — same reasoning as the role route.
-          },
-        },
+        user: { select: MEMBER_USER_SELECT },
       },
     });
 
@@ -1392,14 +1383,7 @@ router.get('/:campaignId/messages', campaignMember, async (req: AuthenticatedReq
             }
           : {}),
       },
-      include: {
-        user: {
-          select: {
-            id: true,
-            displayName: true,
-          },
-        },
-      },
+      include: { user: { select: MESSAGE_USER_SELECT } },
       // createdAt alone is not unique — a burst of system messages lands in one
       // millisecond — and paging needs a total order or rows on the boundary are
       // skipped or repeated. The existing [campaignId, createdAt] index carries
@@ -1896,45 +1880,26 @@ router.post('/:campaignId/sessions', campaignDM, async (req: AuthenticatedReques
   try {
     const { campaignId } = req.params;
 
-    // Check if there's already an active session
-    const campaign = await prisma.campaign.findUnique({
-      where: { id: campaignId },
-      select: { status: true },
-    });
-
-    if (!campaign) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Campaign not found',
+    // Refused while a session is open, running or paused: a paused one is
+    // resumed or ended, or it would be left without an end time for good.
+    // The campaign's status is not consulted, so a campaign an older version
+    // left marked ACTIVE or PAUSED with no session open can start again.
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      if (!campaign) return sessionRefusal(404, 'Campaign not found');
+      if (await openSession(tx, campaignId)) {
+        return sessionRefusal(400, 'A session is already active or paused. Resume or end it first.');
+      }
+      const sessionNumber = await getNextSessionNumber(campaignId, tx);
+      const session = await tx.session.create({ data: { campaignId, sessionNumber } });
+      await tx.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'ACTIVE', lastPlayedAt: new Date() },
       });
-    }
-
-    if (campaign.status === 'ACTIVE') {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'A session is already active. Please end or pause the current session first.',
-      });
-    }
-
-    // Get next session number
-    const sessionNumber = await getNextSessionNumber(campaignId);
-
-    // Create new session
-    const session = await prisma.session.create({
-      data: {
-        campaignId,
-        sessionNumber,
-      },
+      return { session };
     });
-
-    // Update campaign status to ACTIVE
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'ACTIVE',
-        lastPlayedAt: new Date(),
-      },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session } = outcome;
+    const { sessionNumber } = session;
 
     // Send system message
     await sendSystemMessage(
@@ -1977,40 +1942,21 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
   try {
     const { campaignId, sessionId } = req.params;
 
-    // Verify session exists and belongs to campaign
-    const session = await prisma.session.findFirst({
-      where: {
-        id: sessionId,
-        campaignId,
-      },
+    // The snapshot is taken under the hold, so an End sent at the same moment
+    // waits, and then ends the session this left paused.
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      const session = await tx.session.findFirst({ where: { id: sessionId, campaignId } });
+      if (!campaign || !session) return sessionRefusal(404, 'Session not found');
+      if (session.endedAt) return sessionRefusal(400, 'Session has already ended');
+      if (campaign.status === 'PAUSED') return sessionRefusal(400, 'Session is already paused');
+
+      const gameState = await captureGameState(campaignId, sessionId, tx);
+      await tx.session.update({ where: { id: sessionId }, data: { savedState: toJson(gameState) } });
+      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } });
+      return { session };
     });
-
-    if (!session) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Session not found',
-      });
-    }
-
-    if (session.endedAt) {
-      return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Session has already ended',
-      });
-    }
-
-    // Capture and save current game state
-    const gameState = await captureGameState(campaignId, sessionId);
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: { savedState: toJson(gameState) },
-    });
-
-    // Update campaign status to PAUSED
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'PAUSED' },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session } = outcome;
 
     // Send system message
     await sendSystemMessage(
@@ -2047,52 +1993,37 @@ router.put('/:campaignId/sessions/:sessionId/pause', campaignDM, async (req: Aut
 router.put('/:campaignId/sessions/:sessionId/end', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId, sessionId } = req.params;
-    const { saveState = true, notes } = req.body;
-
-    // Verify session exists and belongs to campaign
-    const session = await prisma.session.findFirst({
-      where: {
-        id: sessionId,
-        campaignId,
-      },
-    });
-
-    if (!session) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'Session not found',
-      });
-    }
-
-    if (session.endedAt) {
+    const parsed = EndSessionSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
       return res.status(400).json({
-        error: 'Bad Request',
-        message: 'Session has already ended',
+        error: 'Validation Error',
+        message: parsed.error.issues[0]?.message ?? 'Invalid request',
       });
     }
+    const saveState = parsed.data.saveState ?? true;
+    const notes = parsed.data.notes?.trim();
 
-    // Capture game state if requested
-    let savedState = null;
-    if (saveState) {
-      const gameState = await captureGameState(campaignId, sessionId);
-      savedState = gameState;
-    }
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      const session = await tx.session.findFirst({ where: { id: sessionId, campaignId } });
+      if (!campaign || !session) return sessionRefusal(404, 'Session not found');
+      if (session.endedAt) return sessionRefusal(400, 'Session has already ended');
 
-    // Update session with end time, optional notes, and saved state
-    await prisma.session.update({
-      where: { id: sessionId },
-      data: {
-        endedAt: new Date(),
-        savedState: toJson(savedState),
-        ...(notes ? { notes: String(notes).slice(0, 2000) } : {}),
-      },
+      // Unticked, the snapshot taken at pause (if any) is kept as it was.
+      const savedState = saveState ? toJson(await captureGameState(campaignId, sessionId, tx)) : undefined;
+      await tx.session.update({
+        where: { id: sessionId },
+        data: {
+          endedAt: new Date(),
+          ...(savedState !== undefined ? { savedState } : {}),
+          ...(notes ? { notes } : {}),
+        },
+      });
+      // INACTIVE: the session formally ended, not just paused.
+      await tx.campaign.update({ where: { id: campaignId }, data: { status: 'INACTIVE' } });
+      return { session };
     });
-
-    // Update campaign status to INACTIVE (session formally ended, not just paused)
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: { status: 'INACTIVE' },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session } = outcome;
 
     // Send system message
     await sendSystemMessage(
@@ -2135,36 +2066,23 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
   try {
     const { campaignId } = req.params;
 
-    // Get the most recent session
-    const lastSession = await getLastSession(campaignId);
-
-    if (!lastSession) {
-      return res.status(404).json({
-        error: 'Not Found',
-        message: 'No previous session found',
-      });
-    }
-
     // The live state is the state: everything is stored as it is played, so
     // the snapshot pause took is a record of where the break began and is
     // never written back. Restoring it undid whatever the DM did during the
     // break, silently: a token hidden then was shown to players again, a
     // moved one jumped back, an added one vanished, a map switch reverted.
-
-    // Clear endedAt to "reopen" the session
-    await prisma.session.update({
-      where: { id: lastSession.id },
-      data: { endedAt: null },
+    const outcome = await withSessionsHeld(campaignId, async (tx, campaign) => {
+      const session = await openSession(tx, campaignId);
+      if (!campaign || !session) return sessionRefusal(400, 'There is no paused session to resume');
+      if (campaign.status !== 'PAUSED') return sessionRefusal(400, 'The session is not paused');
+      await tx.campaign.update({
+        where: { id: campaignId },
+        data: { status: 'ACTIVE', lastPlayedAt: new Date() },
+      });
+      return { session };
     });
-
-    // Update campaign status to ACTIVE
-    await prisma.campaign.update({
-      where: { id: campaignId },
-      data: {
-        status: 'ACTIVE',
-        lastPlayedAt: new Date(),
-      },
-    });
+    if ('refused' in outcome) return sendSessionRefusal(res, outcome);
+    const { session: lastSession } = outcome;
 
     // Send system message
     await sendSystemMessage(
@@ -2189,6 +2107,7 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
       session: {
         id: lastSession.id,
         sessionNumber: lastSession.sessionNumber,
+        startedAt: lastSession.startedAt,
       },
     });
   } catch (error) {
@@ -2213,7 +2132,7 @@ router.put('/:campaignId/resume', campaignDM, async (req: AuthenticatedRequest, 
  * Requires: Campaign DM role. Per user: CAMPAIGN_ARCHIVE_RATE_LIMIT an hour
  * (20 by default), and one archive operation at a time.
  */
-router.get('/:campaignId/export', campaignDM, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/:campaignId/export', campaignDM, downloadOnly, oneCampaignArchiveAtATime, campaignExportLimiter, async (req: AuthenticatedRequest, res: Response) => {
   await whileHoldingArchiveSlot(res, async () => {
     const { campaignId } = req.params;
     const includeAudio = req.query.includeAudio === 'true';
@@ -2349,10 +2268,10 @@ router.post('/import', authenticated, oneCampaignArchiveAtATime, campaignImportL
       const campaignName = typeof req.body.campaignName === 'string' ? req.body.campaignName.trim() : undefined;
       const importTokens = req.body.importTokens !== 'false'; // default true
 
-      if (campaignName !== undefined && (campaignName.length === 0 || campaignName.length > 200)) {
+      if (campaignName !== undefined && (campaignName.length === 0 || campaignName.length > CAMPAIGN_LIMITS.maxNameLength)) {
         return {
           status: 400,
-          body: { error: 'Validation Error', message: 'Campaign name must be between 1 and 200 characters.' },
+          body: { error: 'Validation Error', message: `Campaign name must be between 1 and ${CAMPAIGN_LIMITS.maxNameLength} characters.` },
         };
       }
 

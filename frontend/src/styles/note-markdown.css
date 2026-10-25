@@ -9,7 +9,9 @@
    ============================================ */
 
 .prose-notes {
-  color: var(--color-brand-ink, #2c2416);
+  /* The theme's --rgb-* variables hold bare channels ("74 93 78"), so each
+     is wrapped in rgb(); used bare, as these were, the rule never applied. */
+  color: rgb(var(--rgb-brand-ink));
   font-size: 0.875rem;
   line-height: 1.55;
   word-break: break-word;
@@ -55,7 +57,7 @@
 }
 
 .prose-notes a {
-  color: var(--color-info-ink, #1d4ed8);
+  color: rgb(var(--rgb-info-ink));
   text-decoration: underline;
   text-underline-offset: 2px;
 }
@@ -63,8 +65,8 @@
 .prose-notes blockquote {
   margin: 0.7em 0;
   padding-left: 0.8em;
-  border-left: 3px solid var(--color-warm-amber, #d9a441);
-  color: var(--color-stone-gray, #6b6255);
+  border-left: 3px solid rgb(var(--rgb-accent));
+  color: rgb(var(--rgb-ink-muted));
   font-style: italic;
 }
 
@@ -92,7 +94,7 @@
 .prose-notes hr {
   margin: 1em 0;
   border: 0;
-  border-top: 1px solid var(--color-warm-amber, #d9a441);
+  border-top: 1px solid rgb(var(--rgb-accent));
   opacity: 0.4;
 }
 

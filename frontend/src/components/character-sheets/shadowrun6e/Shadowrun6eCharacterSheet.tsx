@@ -9,8 +9,8 @@ export const Shadowrun6eCharacterSheet: React.FC<CharacterSheetProps> = () => {
   return (
     <div className="glass-panel p-6">
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <div className="p-4 rounded-full bg-purple-100">
-          <AlertCircle className="w-8 h-8 text-purple-600" />
+        <div className="p-4 rounded-full bg-spirit/15">
+          <AlertCircle className="w-8 h-8 text-spirit-ink" />
         </div>
         <h3 className="text-xl font-semibold text-warm-gray">
           Shadowrun 6e Character Sheet

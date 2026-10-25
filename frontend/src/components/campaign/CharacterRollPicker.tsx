@@ -20,6 +20,7 @@ import {
   type CharacterRolls,
 } from '@/utils/characterRolls';
 import { resolveCharacterInitiative } from '@/utils/rules/initiative';
+import { getModeLabels, systemSupportsAdvantage, type RollMode } from '@/utils/rollModes';
 import CustomRollFooter from './CustomRollFooter';
 
 // ---------------------------------------------------------------------------
@@ -38,8 +39,11 @@ interface CharacterRollPickerProps {
    * The name comes from here rather than from each caller because this is the
    * component that already holds the character; three call sites looking it up
    * for themselves is how the roll menu got its ownership check wrong.
+   *
+   * Resolves whether the roll was made, when the host can tell, so a hit die
+   * is spent only for a roll that was.
    */
-  onRoll: (expression: string, purpose: string, characterName?: string) => void;
+  onRoll: (expression: string, purpose: string, characterName?: string) => void | Promise<boolean>;
   /**
    * The name to file rolls under in place of the character's. The dice log
    * goes to the whole table, so a picker opened from an obscured token passes
@@ -67,8 +71,6 @@ interface CharacterRollPickerProps {
   anchorY: number;
 }
 
-type RollMode = 'normal' | 'advantage' | 'disadvantage';
-
 // ---------------------------------------------------------------------------
 // Category section
 // ---------------------------------------------------------------------------
@@ -94,32 +96,13 @@ const Section: React.FC<SectionProps> = ({ title, rolls, mode: _mode, onRoll }) 
           onClick={() => onRoll(opt)}
           className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
         >
-          <Dices className="w-3 h-3 text-brand-ink flex-shrink-0" />
+          <Dices className="w-3 h-3 text-brand-ink shrink-0" />
           <span className="flex-1">{opt.label}</span>
         </button>
       ))}
     </div>
   );
 };
-
-// ---------------------------------------------------------------------------
-// Roll-mode selector (Normal / Advantage / Disadvantage)
-// ---------------------------------------------------------------------------
-
-const MODE_LABELS: Record<string, Record<RollMode, string>> = {
-  DND_5E:           { normal: 'Normal', advantage: 'Advantage', disadvantage: 'Disadvantage' },
-  PATHFINDER_2E:    { normal: 'Normal', advantage: 'Fortune',   disadvantage: 'Misfortune' },
-  CALL_OF_CTHULHU_7E: { normal: 'Normal', advantage: 'Normal', disadvantage: 'Normal' },
-};
-
-function getModeLabels(gameSystem: string | null): Record<RollMode, string> {
-  return MODE_LABELS[gameSystem ?? ''] ?? { normal: 'Normal', advantage: 'Advantage', disadvantage: 'Disadvantage' };
-}
-
-// Does this game system support advantage/disadvantage variants?
-function systemSupportsAdvantage(gameSystem: string | null): boolean {
-  return gameSystem === 'DND_5E' || gameSystem === 'PATHFINDER_2E';
-}
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -202,10 +185,15 @@ export default function CharacterRollPicker({
       purpose = `${purpose} (${modeLabel})`;
     }
 
-    onRoll(expr, purpose, publicName ?? character?.name);
-    // Spending is recorded after the roll, so a failure to decrement cannot
-    // swallow the roll the player just made.
-    if (opt.hitDiceIndex !== undefined) onSpendHitDie?.(opt.hitDiceIndex);
+    const made = onRoll(expr, purpose, publicName ?? character?.name);
+    // Spent once the roll is made: a refused roll used to take the die
+    // anyway. After the roll, so a failure to decrement cannot swallow it.
+    const hitDiceIndex = opt.hitDiceIndex;
+    if (hitDiceIndex !== undefined) {
+      void Promise.resolve(made).then((ok) => {
+        if (ok !== false) onSpendHitDie?.(hitDiceIndex);
+      });
+    }
     onClose();
   };
 
@@ -230,7 +218,7 @@ export default function CharacterRollPicker({
   return (
     <div
       ref={pickerRef}
-      className="fixed z-[60] bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
+      className="fixed z-60 bg-soft-cream border-2 border-moss-green/30 rounded-lg shadow-2xl overflow-hidden flex flex-col"
       style={{
         left:       pos ? pos.x : anchorX,
         top:        pos ? pos.y : anchorY,
@@ -241,26 +229,26 @@ export default function CharacterRollPicker({
       }}
     >
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
+      <div className="shrink-0 flex items-center justify-between px-3 py-2 bg-moss-green/10 border-b border-moss-green/20">
         <div className="flex items-center gap-2">
           <Dices className="w-4 h-4 text-brand-ink" />
           <span className="text-sm font-semibold text-stone-gray truncate">
             Roll for {characterName}
           </span>
         </div>
-        <button onClick={onClose} className="p-0.5 rounded hover:bg-moss-green/10 transition-colors">
-          <X className="w-4 h-4 text-warm-gray" />
+        <button type="button" onClick={onClose} aria-label="Close" className="p-0.5 rounded-sm hover:bg-moss-green/10 transition-colors">
+          <X className="w-4 h-4 text-warm-gray" aria-hidden="true" />
         </button>
       </div>
 
       {/* Roll Mode Selector (d20 systems only) */}
       {hasAdvantage && !loading && hasAnyRolls && (
-        <div className="flex-shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
+        <div className="shrink-0 px-3 py-2 border-b border-moss-green/10 bg-parchment/30">
           <div className="text-xs text-warm-gray mb-1">Roll mode</div>
           <div className="relative">
             <button
               onClick={() => setModeOpen((o) => !o)}
-              className="w-full flex items-center justify-between px-2 py-1.5 rounded border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
+              className="w-full flex items-center justify-between px-2 py-1.5 rounded-sm border border-moss-green/30 bg-paper/60 text-sm text-ink-secondary hover:bg-paper/80 transition-colors"
             >
               <span className={mode !== 'normal' ? 'text-warning-ink font-medium' : ''}>
                 {modeLabels[mode]}
@@ -312,7 +300,7 @@ export default function CharacterRollPicker({
               onClick={() => { onRollInitiative(); onClose(); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 text-sm text-stone-gray hover:bg-moss-green/10 transition-colors text-left"
             >
-              <Dices className="w-3 h-3 text-brand-ink flex-shrink-0" />
+              <Dices className="w-3 h-3 text-brand-ink shrink-0" />
               {/* The wording follows the system. Call of Cthulhu ranks
                   combatants by Dexterity with no die involved, so offering to
                   "roll" would promise something that does not happen. */}
@@ -320,7 +308,7 @@ export default function CharacterRollPicker({
                 {initiative?.kind === 'fixed' ? 'Set Initiative' : 'Roll Initiative'}
               </span>
               {initiative && (
-                <span className="text-xs text-warm-gray flex-shrink-0">{initiative.label}</span>
+                <span className="text-xs text-warm-gray shrink-0">{initiative.label}</span>
               )}
             </button>
           </div>

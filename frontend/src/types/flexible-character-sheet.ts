@@ -1,5 +1,9 @@
 /**
  * Flexible Character Sheet Types
+ *
+ * FlexibleCharacterData is the shape the backend's schema accepts
+ * (backend/src/validators/game-systems/flexible.schema.ts);
+ * backend/src/__tests__/keepInStep.test.ts fails when the two disagree.
  */
 
 /**
@@ -77,7 +81,9 @@ export type FlexibleSection = StatsSection | ListSection | TextSection | TableSe
  * Complete flexible character data structure
  */
 export interface FlexibleCharacterData {
-  sections: FlexibleSection[];
+  sections?: FlexibleSection[];
+  /** Anything else a Flexible sheet holds is kept as it was stored. */
+  [key: string]: unknown;
 }
 
 /**

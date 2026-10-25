@@ -138,7 +138,10 @@ describe('POST /api/admin/users/:id/resend-invite', () => {
     const res = await admin.post(`/api/admin/users/${settled.id}/resend-invite`);
 
     expect(res.status).toBe(409);
-    expect(res.body.message).toMatch(/reset link/i);
+    // Names the button as the Admin Panel shows it.
+    expect(res.body.message).toBe(
+      'This account has already signed in, so there is no invitation to resend. Use Send Reset Link to email them a link to set a new password.'
+    );
     expect(sendInvitationEmail).not.toHaveBeenCalled();
     expect(await prisma.passwordResetToken.count({ where: { userId: settled.id } })).toBe(0);
   });

@@ -15,7 +15,7 @@
  * because the auth check fires after theme is mounted.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { useAuth } from './AuthContext';
 import { useTheme } from './ThemeContext';
 
@@ -23,16 +23,20 @@ export function ThemeSyncBridge() {
   const { user, authenticated } = useAuth();
   const { applyUserPreferences } = useTheme();
 
-  useEffect(() => {
+  const applyForSignedIn = useEffectEvent(() => {
     if (authenticated && user) {
       applyUserPreferences(user.preferences ?? null);
     } else {
       applyUserPreferences(null);
     }
-    // We intentionally key on the serialized preferences identity so that
-    // partial updates (savePref) re-trigger the effect.
-     
-  }, [authenticated, user?.id, JSON.stringify(user?.preferences ?? null)]);
+  });
+
+  // Keyed on the preferences' contents, so a partial update (savePref)
+  // applies again and a refreshed user object with the same ones does not.
+  const preferencesKey = JSON.stringify(user?.preferences ?? null);
+  useEffect(() => {
+    applyForSignedIn();
+  }, [authenticated, user?.id, preferencesKey]);
 
   return null;
 }

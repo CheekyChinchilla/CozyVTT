@@ -20,6 +20,7 @@ import {
   MAX_PROFICIENCY_BONUS,
   MIN_ABILITY_SCORE,
 } from '../utils/rules/dnd5e';
+import { STAT_BLOCK_LIMITS } from './statBlockLimits';
 
 /**
  * Storage bounds for any save or skill bonus, across every game system.
@@ -143,7 +144,7 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     ac: z.number().int().min(0).max(99),
     // Optional: stat blocks created before HP tracking have neither field
     hpMax: z.number().int().min(1).max(99999).optional(),
-    hitDice: z.string().max(50).optional(),
+    hitDice: z.string().max(STAT_BLOCK_LIMITS.maxHitDiceLength).optional(),
     speed: z.string().max(options.maxSpeedLength),
     abilities: z.object({
       str: z.number().int().min(MIN_ABILITY_SCORE).max(MAX_ABILITY_SCORE),
@@ -172,23 +173,23 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
     savingThrows: bonusRecordSchema.optional(),
     skills: bonusRecordSchema.optional(),
     proficiencies: proficienciesSchema.optional(),
-    damageVulnerabilities: z.string().max(500).optional(),
-    damageResistances: z.string().max(500).optional(),
-    damageImmunities: z.string().max(500).optional(),
-    conditionImmunities: z.string().max(500).optional(),
-    senses: z.string().max(500).optional(),
-    languages: z.string().max(500).optional(),
-    challengeRating: z.string().max(10).optional(),
+    damageVulnerabilities: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
+    damageResistances: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
+    damageImmunities: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
+    conditionImmunities: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
+    senses: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
+    languages: z.string().max(STAT_BLOCK_LIMITS.maxDetailLength).optional(),
+    challengeRating: z.string().max(STAT_BLOCK_LIMITS.maxChallengeRatingLength).optional(),
     xp: z.number().int().min(0).optional(),
     traits: listSchema,
     actions: listSchema,
     bonusActions: listSchema,
     reactions: listSchema,
     legendaryActions: listSchema,
-    creatureType: z.string().max(200).optional(),
-    alignment: z.string().max(100).optional(),
+    creatureType: z.string().max(STAT_BLOCK_LIMITS.maxCreatureTypeLength).optional(),
+    alignment: z.string().max(STAT_BLOCK_LIMITS.maxAlignmentLength).optional(),
     gameSystem: z.string().max(50).optional(),
-    notes: z.string().max(5000).optional(),
+    notes: z.string().max(STAT_BLOCK_LIMITS.maxNotesLength).optional(),
   };
   const named = new Set(Object.keys(shape));
 
@@ -219,10 +220,10 @@ export function createNpcStatBlockSchema(options: StatBlockSchemaOptions) {
  * down to them, so anything imported can be placed and saved.
  */
 export const AUTHORING_STAT_BLOCK_LIMITS: StatBlockSchemaOptions = {
-  maxListEntries: 50,
-  maxNameLength: 200,
-  maxDescriptionLength: 5000,
-  maxSpeedLength: 200,
+  maxListEntries: STAT_BLOCK_LIMITS.maxListEntries,
+  maxNameLength: STAT_BLOCK_LIMITS.maxEntryNameLength,
+  maxDescriptionLength: STAT_BLOCK_LIMITS.maxEntryDescriptionLength,
+  maxSpeedLength: STAT_BLOCK_LIMITS.maxSpeedLength,
   maxStoredLength: MAX_STAT_BLOCK_LENGTH,
   maxExtraKeys: MAX_EXTRA_STAT_BLOCK_KEYS,
 };

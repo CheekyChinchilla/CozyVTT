@@ -1,6 +1,6 @@
 // ============================================
 // Delete Character Modal
-// Confirmation dialog with campaign assignment validation
+// Confirmation dialog, warning when the character is in a campaign
 // ============================================
 
 import { useState } from 'react';
@@ -8,6 +8,7 @@ import { AlertTriangle, Trash2 } from 'lucide-react';
 import type { CharacterSummary, Campaign } from '@/types';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 
 interface DeleteCharacterModalProps {
   isOpen: boolean;
@@ -48,13 +49,9 @@ export default function DeleteCharacterModal({
     campaign.status === 'ARCHIVED'
   );
 
+  // An owner may delete a character in a campaign being played, as the
+  // server allows; the dialog warns, naming the campaign.
   const handleConfirm = async () => {
-    // Prevent deletion if in active campaign
-    if (isInActiveCampaign) {
-      setError(`Cannot delete character assigned to ${campaign!.status.toLowerCase()} campaign`);
-      return;
-    }
-
     setError('');
     setLoading(true);
 
@@ -73,7 +70,7 @@ export default function DeleteCharacterModal({
       {/* Error Alert */}
       {error && (
         <div role="alert" className="mb-4 bg-danger/10 border border-danger/30 rounded-lg p-4">
-          <p className="text-sm text-danger font-medium">{error}</p>
+          <p className="text-sm text-danger-ink font-medium">{error}</p>
         </div>
       )}
 
@@ -83,19 +80,15 @@ export default function DeleteCharacterModal({
                 {isInActiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-warm-amber mb-1">
-                          Cannot Delete Character
+                        <h3 className="font-semibold text-accent-ink mb-1">
+                          {character.name} is in a campaign being played
                         </h3>
                         <p className="text-sm text-stone-gray">
-                          This character is assigned to <strong>{campaign!.name}</strong>,
-                          which is currently {campaign!.status.toLowerCase()}. You cannot delete
-                          characters that are assigned to active or paused campaigns.
-                        </p>
-                        <p className="text-sm text-stone-gray mt-2">
-                          To delete this character, first unassign it from the campaign or wait
-                          until the campaign is completed or archived.
+                          Deleting it takes it off the roster of <strong>{campaign!.name}</strong>,
+                          which is currently {campaign!.status.toLowerCase()}, for everyone at the
+                          table. This cannot be undone.
                         </p>
                       </div>
                     </div>
@@ -106,9 +99,9 @@ export default function DeleteCharacterModal({
                 {isInInactiveCampaign && (
                   <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                     <div className="flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                      <AlertTriangle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                       <div>
-                        <h3 className="font-semibold text-warm-amber mb-1">
+                        <h3 className="font-semibold text-accent-ink mb-1">
                           Character is Assigned to Campaign
                         </h3>
                         <p className="text-sm text-stone-gray">
@@ -142,7 +135,7 @@ export default function DeleteCharacterModal({
                     <div className="flex justify-between">
                       <dt className="text-warm-gray">Game System:</dt>
                       <dd className="text-stone-gray font-medium">
-                        {character.gameSystem || 'Flexible'}
+                        {gameSystemName(character.gameSystem)}
                       </dd>
                     </div>
                     {campaign && (
@@ -170,7 +163,6 @@ export default function DeleteCharacterModal({
         <Button
           type="button"
           onClick={handleConfirm}
-          disabled={!!isInActiveCampaign}
           loading={loading}
           icon={Trash2}
           variant="danger"

@@ -164,9 +164,9 @@ docker compose down          # Stop and remove containers (data volume preserved
 docker compose down -v       # ⚠️ Also removes volumes — deletes all database data
 ```
 
-Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it.
+Stopping the backend takes about a second. It finishes the requests it is answering, disconnects everyone at the table (their browsers reconnect by themselves once it is back), closes its database connections, and exits. Anything still running after 8 seconds, such as a large download, is cut off and the backend exits anyway. A backend run without Docker stops the same way on Ctrl+C or when a service manager such as systemd or pm2 stops it. The bundled nginx stops at once, players connected or not.
 
-**While the Admin Dashboard is making a backup, stopping waits for it.** The backend takes no new requests, lets the backup finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping`. `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back.
+**While the Admin Dashboard is making or restoring a backup, stopping waits for it.** The backend takes no new requests, lets the backup or restore finish for up to 10 minutes, and then stops as above. `docker compose stop`, `restart` and an upgrade's `up -d --build` show the backend as stopping until then, and `docker compose logs backend` says `A backup is being written; waiting up to 10 minutes for it to finish before stopping` (`A backup is being restored` for a restore). `docker-compose.yml` lets the backend take ten and a half minutes to stop before Docker forces it. A backup still unfinished after 10 minutes is lost, and the log says so; make it again once the backend is back. A restore still unfinished then may be left half done, and the log says so; restoring the backup again puts everything as it was in the backup.
 
 **Deleting an account removes its files just after the page confirms it.** If the backend is stopped in those seconds it waits up to 4 seconds for the removal to finish. Files it did not reach stay as assets with no owner, which an administrator can find with the **No Uploader (account deleted)** filter on the **Assets** tab of the Admin Panel and delete.
 
@@ -344,9 +344,9 @@ curl -s -w '\n%{http_code} %{content_type}\n' https://cozyvtt.example.com/api/se
 
 ### Visitor addresses and sign-in limits
 
-CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment.
+CozyVTT limits how often one visitor may get a password wrong: five failed sign-ins in fifteen minutes, then that visitor waits. Only a wrong password (or a wrong code when turning two-factor sign-in off, or a password reset link that no longer works) counts. Typing the right password never does, even when everyone in a household signs in at the same moment. Only two passwords from one address are checked at once, though: a third person pressing **Sign In** in the same second is asked to try again in a moment, which counts for nothing.
 
-Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with the **Forgot password?** link, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in; the counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
+Wrong passwords are also counted for the account itself, whatever addresses they come from: ten in an hour for one email address, and that account refuses sign-in for an hour, from everywhere, with "Too many failed sign-ins for this account, please try again later". A new password opens the account at once, whether the owner sets it with the **Forgot password?** link, you give them a temporary one from **Admin → Users**, or they change it from a device still signed in. You can also open it without changing the password: a locked account shows **Locked until** on its row in **Admin → Users**, and **Clear lock** there clears it after asking. The counts are kept in memory, so restarting the backend also clears them. Each time an account locks, a line appears in **Admin → Activity**, so you can see when someone is guessing at your users' passwords.
 
 The two-factor code (the six-digit code from an authenticator app, or a backup code, asked for after the password on accounts that use two-factor sign-in) has a separate limit: five wrong codes in fifteen minutes from one visitor, and five for one account from anywhere. Only a wrong code counts, so people signing in together behind one address are all let through, exactly as with passwords.
 
@@ -392,7 +392,7 @@ After the `cozyvtt-nginx |` label, each line starts with the address CozyVTT saw
 cozyvtt-nginx  | 203.0.113.25 - - [28/Sep/2026:14:09:46 +0000] "GET /api/auth/me HTTP/1.1" 200 ...
 ```
 
-You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address: a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes, and the whole table shares the 300 requests a minute, which a group opening a map with many pictures at once can use up, so the app's requests are refused for the rest of that minute. That happens when:
+You want the phone's public address there. **If it starts with `172.`, `10.` or `192.168.`**, every visitor is being counted as that one address: a few wrong passwords from anyone lock everybody out of signing in for fifteen minutes, only two people can sign in at the same moment, and the whole table shares the 300 requests a minute, which a group opening a map with many pictures at once can use up, so the app's requests are refused for the rest of that minute. That happens when:
 
 - **A tunnel or proxy stands in front of nginx and is not listed** in `NGINX_TRUSTED_PROXIES`, or the range you listed does not hold the address shown. Add its line from the table above, or the range [your server uses](#the-range-for-a-proxy-on-the-same-server).
 - **Docker hands visitors to nginx from its own address** and there is no proxy in front: Docker Desktop and rootless Docker do this for every visitor, and a server reached over IPv6 does it for those visitors. Listing Docker's range would let them choose their address, so put a [Cloudflare Tunnel](#cloudflare-tunnel-recommended-for-public-instances) or your own proxy in front instead, set up as above.
@@ -830,7 +830,9 @@ VITE_API_URL="" VITE_SOCKET_URL="" npm run build
 # Output: frontend/dist/
 ```
 
-If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. Leave out `sslmode=no-verify`, which the driver also offers: the Admin Dashboard's **Create Backup** and restore give the same address to `pg_dump` and `psql`, which refuse that value (`invalid sslmode value`), so every backup and restore fails.
+If your database runs on another server and asks for an encrypted connection, add the setting to the end of `DATABASE_URL`, such as `postgresql://cozyvtt:your-db-password@db.example.com:5432/cozyvtt?sslmode=verify-full`. The backend reads these settings with the `pg` driver for every connection it makes. That driver checks the database's certificate for `sslmode=require` too, so a database whose certificate it cannot check is refused (`self-signed certificate` in the backend's log): name the certificate authority's file as well, such as `?sslmode=verify-full&sslrootcert=/path/to/ca.crt`. The driver also offers `sslmode=no-verify`, which encrypts the connection without checking the certificate. The Admin Dashboard's **Create Backup** and **Restore** give `pg_dump` and `psql` `sslmode=require` in its place, which does the same for them. Leave `sslrootcert` out of an address with `no-verify`: given that file, `pg_dump` and `psql` check the certificate against it under `require`, so backups and restores fail where the backend connects.
+
+To keep CozyVTT's tables apart from other software's in a database they share, end `DATABASE_URL` with `?schema=` and a name of its own, such as `?schema=cozyvtt` (join it to another setting with `&`: `?sslmode=verify-full&schema=cozyvtt`). Everything CozyVTT stores goes into that PostgreSQL schema, the sign-ins included. **Create Backup** then backs up that schema alone, and **Restore** replaces that schema alone; see [Database Backups](#database-backups). The backup and restore scripts work with the `public` schema only, and refuse such an address.
 
 ### 4. Run the backend with pm2
 
@@ -851,6 +853,13 @@ pm2 startup  # Follow the printed instructions to enable autostart
 Create `/etc/nginx/sites-available/cozyvtt`:
 
 ```nginx
+# The live table's address for the page's security policy below: this
+# server's own name, written only when the browser sent a well-formed one.
+map $host $csp_socket_sources {
+    ~^(\[[0-9a-f:.]+\]|[a-z0-9.-]+)$  "ws://$host:* wss://$host:*";
+    default                            "";
+}
+
 server {
     listen 80;
     server_name your-domain.com;
@@ -984,7 +993,7 @@ server {
         # because a location that sets any header of its own loses the ones
         # set in the server block above.
         add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
+        add_header Content-Security-Policy "default-src 'self'; script-src 'self'; script-src-attr 'none'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' $csp_socket_sources; media-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'" always;
         add_header X-Frame-Options "DENY" always;
         add_header X-Content-Type-Options "nosniff" always;
         add_header Referrer-Policy "strict-origin-when-cross-origin" always;
@@ -1076,6 +1085,8 @@ NGINX_MAX_BODY_SIZE=55M
 
 These take effect on `docker compose up -d` (no image rebuild needed): the backend enforces them, and the app fetches them at runtime for the admin panel and the upload dialog. Values that aren't a positive number are ignored, with a warning in the backend log.
 
+Whatever these say, a map, token or avatar picture can be at most 16,384 pixels on each side, and an animated one at most 1,000 frames and 200 million pixels across them for a map (50 million for a token or avatar); raising a size limit does not raise these (see [Asset Types](USER_GUIDE.md#asset-types) in the User Guide).
+
 `MAX_DOCUMENT_SIZE_MB` covers the PDF, text and Markdown files in the document library. Core rulebooks often run past 50 MB; if your group's do, raise this one and `NGINX_MAX_BODY_SIZE` together.
 
 **Universal VTT imports need more room than the map limit.** A `.uvtt` file carries its picture as text, which is about a third (4/3) bigger than the picture itself. CozyVTT accepts a `.uvtt` file of up to the map limit times 4/3, plus 8 MB for the walls and lights (about 75 MB with the default `MAX_MAP_SIZE_MB=50`), and answers a larger one with a message saying so. With the default `NGINX_MAX_BODY_SIZE=55M`, the proxy refuses any `.uvtt` file over 55 MB with a 413, which means a picture larger than about 40 MB, although a plain map upload of up to 50 MB works. To let through every file CozyVTT accepts, multiply `MAX_MAP_SIZE_MB` by 4/3 and add 10: that covers the 8 MB for walls and lights and leaves a little over for the way the browser wraps the upload. With the default map limit, set `NGINX_MAX_BODY_SIZE=76M`. Whatever the limit, each import waits at most 20 seconds for its turn behind other DMs' imports and has 30 seconds to finish once it starts, so that one slow import cannot hold up every other DM's. Past either limit nothing is saved, and the DM's Map Library shows "Another map import is running on the server. Try again in a minute." or "This map import took longer than 30 seconds and was stopped, so nothing was saved. Try again in a minute." That answer comes at most 50 seconds after the upload has reached the backend, within the 60 seconds the bundled nginx waits for it. A proxy of your own must wait at least that long, or the DM sees only "Failed to import UVTT file."
@@ -1119,7 +1130,27 @@ CAMPAIGN_ARCHIVE_RATE_LIMIT=20
 
 Then apply it with `docker compose up -d`. Leave it out and the default of 20 applies. A value that is not a whole number above zero is ignored, with a warning in the backend log.
 
-Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT`.
+Uploading pictures, sound and documents, and importing Universal VTT maps, are not counted here. They have their own limit of 30 a minute per user, set with `ASSET_UPLOAD_RATE_LIMIT` in the same way. A value that is not a whole number above zero is ignored there too, with a warning in the backend log.
+
+### Backend memory
+
+The backend container may use up to 512 MB of memory, and Node gives about half of that to the work in hand at once, such as a campaign archive being read. That is enough for an ordinary instance. On a server with memory to spare, raise it if importing a large campaign fails or the backend restarts during one:
+
+1. Add this line to `.env` (pick a size your server can spare: `1G`, `2G`):
+
+   ```env
+   BACKEND_MEMORY_LIMIT=1G
+   ```
+
+2. Apply it:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   The backend is recreated with the new limit. `docker stats` shows it in the **MEM USAGE / LIMIT** column.
+
+It cannot go below **256M**, the amount reserved for the backend: with a smaller value Docker does not start the backend at all, and `docker compose up -d` says "Minimum memory limit can not be less than memory reservation limit". Leave the line out and the default of 512M applies. A limit set in `docker-compose.override.yml` still takes precedence.
 
 ### Other settings
 
@@ -1128,7 +1159,7 @@ The rest of what the backend reads from its environment. Every one is optional; 
 | Setting | Default | What it does | Docker |
 |---|---|---|---|
 | `SESSION_MAX_AGE` | `3600000` (1 hour) | How long a sign-in lasts without a request, in milliseconds | Yes |
-| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds | Yes |
+| `REMEMBER_ME_MAX_AGE` | `2592000000` (30 days) | How long a **Remember me** sign-in lasts, and the longest any sign-in lasts, in milliseconds. A game tab left open is disconnected within a minute of that limit | Yes |
 | `RATE_LIMIT_MAX_REQUESTS` | `300` | Requests per minute to `/api` from one address | Yes |
 | `ASSET_UPLOAD_RATE_LIMIT` | `30` | Uploads per minute per user | Yes |
 | `LOG_LEVEL` | `info` (`debug` in development) | How much the backend logs: `debug`, `info`, `warn` or `error` | Yes |
@@ -1304,7 +1335,9 @@ If the backend is stopped while a restore is running, the uploaded backup it was
 
 **Restore only backups made by this dashboard or by the backup script, on an instance you trust.** A backup is a set of instructions the database carries out with its owner's full rights. The restore refuses the database tool's own commands, and a line that starts with a copy statement that is not table data, but it cannot tell harmless SQL from harmful SQL. A file made to do harm can put anything at all in your database, and on the Docker setup it can also run programs inside the database container.
 
-A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema, which needs the database role to own the database and that schema. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (in each command the `cozyvtt` after `-d` or `DATABASE` is the database, the one after `TO` the user). The second command is needed on PostgreSQL 14, and on a database first created on 14 and upgraded since; on newer ones it does no harm:
+**If your `DATABASE_URL` names a schema** (it ends in `?schema=` and a name, as in [step 3 of the manual install](#3-configure-and-build)), a backup holds that schema alone, and a restore drops and recreates that schema alone: `public` and every other schema in the database are left as they were. The one exception is anything another program built on CozyVTT's tables, such as a view of them, or a foreign key in its own table pointing at one of them: the database removes it along with the schema, so make it again after a restore. A backup restores only onto an instance whose `DATABASE_URL` names the schema it came from; any other is refused with **This file cannot be restored because it is a backup of the database schema "…", and this instance keeps its data in the schema "…"**, and nothing changes. To move such a backup between schemas, set the same `?schema=` on the instance you restore it on. The backup and restore scripts below work with the `public` schema only and stop with a message if `DATABASE_URL` names another; use the dashboard. A file `backup.sh` made on such an install with 1.5.3 or earlier holds the whole database, and neither the dashboard nor the scripts restore it; see [Restoring an older script backup of an install that names a schema](#restoring-an-older-script-backup-of-an-install-that-names-a-schema).
+
+A backup restores onto an instance whose database user has a different name, which is what moving to a new machine with a fresh `.env` produces: everything in it ends up owned by the instance's own database user. Restoring drops and recreates the database's `public` schema (or the schema `DATABASE_URL` names), which needs the database role to own the database and that schema. The Docker setup does that for you. On a manual install, make sure of it once, using your own database and user names if you chose different ones (in each command the `cozyvtt` after `-d` or `DATABASE` is the database, the one after `TO` the user). The second command is needed on PostgreSQL 14, and on a database first created on 14 and upgraded since; on newer ones it does no harm:
 
 ```bash
 sudo -u postgres psql -c "ALTER DATABASE cozyvtt OWNER TO cozyvtt;"
@@ -1410,6 +1443,41 @@ instance that is already set up: its tables already exist, so the load fails,
 and depending on the options it either changes nothing or leaves a mix of old
 and new rows. `restore.sh` replaces the tables first, loads the backup in one
 step that is undone if any part fails, and empties the login sessions.
+
+### Restoring an older script backup of an install that names a schema
+
+Only for a manual install whose `DATABASE_URL` ends in `?schema=` and a name, and only for a file `backup.sh` made with 1.5.3 or earlier. Those files hold the whole database, every schema in it, so the dashboard refuses them and the scripts stop at the `?schema=` address. Load one into a new, empty database and point CozyVTT at that. Your current database is not touched, so you can go back to it by undoing step 3.
+
+1. Make the empty database, owned by CozyVTT's database user (use your own names if you changed them; the second `cozyvtt` is the user):
+
+   ```bash
+   sudo -u postgres createdb -O cozyvtt cozyvtt_restored
+   ```
+
+   It prints nothing if it worked.
+
+2. Load the backup into it as that user, putting your file name and database password in place of the examples:
+
+   ```bash
+   gunzip -c backups/cozyvtt_20261001_020000.sql.gz \
+     | psql "postgresql://cozyvtt:YOUR_PASSWORD@localhost:5432/cozyvtt_restored" -v ON_ERROR_STOP=1 -q
+   ```
+
+   It prints a short `set_config` table and stops. A line starting `ERROR:` means the load stopped there; drop the database with `sudo -u postgres dropdb cozyvtt_restored` and start again from step 1 once the cause is fixed. Running it as CozyVTT's user keeps everything it creates owned by that user, which the backend needs.
+
+3. In `backend/.env`, change the database name in `DATABASE_URL` (the part after the last `/` and before `?`) to `cozyvtt_restored`. Keep the `?schema=` part as it is.
+
+4. Bring the restored data up to this version and restart the backend the way you run it:
+
+   ```bash
+   cd backend && npx prisma migrate deploy
+   ```
+
+   It ends with `All migrations have been successfully applied` or `No pending migrations to apply`. Everyone signs in again afterwards.
+
+5. Once you have checked your campaigns are there, make a backup from the dashboard. It holds your schema alone and restores as usual.
+
+The new database also holds a copy of whatever other software kept in the old one; CozyVTT ignores it.
 
 ### Automated Daily Backups (cron)
 
@@ -1605,6 +1673,23 @@ cozyvtt-frontend  | 10-listen-on-ipv6-by-default.sh: info: can not modify /etc/n
 
 If the container keeps running and `docker compose ps` shows the database as `healthy`, there is nothing to fix.
 
+### The backend's log says it cannot write to `/app/uploads` or `/app/logs`
+
+When the backend starts it gives `backend/uploads` and `backend/logs` to its own user. A folder on a NAS, a Windows share (CIFS) or another network or FUSE mount may refuse that; the backend still starts, and `docker compose logs backend` says so:
+
+```
+⚠️  Could not give the uploads folder to the backend user; if uploads fail, check the folder's owner.
+⚠️  The backend user (user ID 100) cannot write to /app/uploads. Give that folder on the host to user ID 100, or let that user write to it.
+```
+
+The first line alone is harmless: the folder already lets the backend write. With the second, uploads (or, for `/app/logs`, the log files) fail until the folder lets that user ID write. On the host, give the folder to it, using the number from the message:
+
+```bash
+sudo chown -R 100 backend/uploads
+```
+
+On a share that ignores owners, set the owner, or write permission for everyone, in the share's own mount options or settings. Then `docker compose restart backend`; the second line no longer appears in its log.
+
 ### The site answers 502 after `docker compose up -d` recreated the backend
 
 The bundled nginx looks the backend and frontend up again within ten seconds of either being recreated, so this clears by itself. If it does not, your `nginx/nginx.conf` is an older or edited copy that still names `http://backend:4000` in its `proxy_pass` lines: when `docker compose up -d` recreates only the backend (after you change `.env`, for example), nginx keeps using the old container's address, and everything sent to the backend answers **502 Bad Gateway**. The pages load, but signing in fails, while `docker compose ps` shows the backend as `healthy`. Restart nginx so it finds the new one:
@@ -1639,7 +1724,7 @@ docker compose logs backend | grep -i "upload limits"
 
 ## Updating CozyVTT
 
-Read the new version's **Upgrading** notes at the top of `CHANGELOG.md` first, on GitHub before you pull or in your CozyVTT folder straight after. They say whether that release needs anything from you. If you are more than one release behind, read the notes of every release you skipped, oldest first: the commands below stay the same, and the database migrations of every release in between run in order on the first start. 1.5.2 does if a Cloudflare Tunnel or another proxy sits in front of CozyVTT: it needs `NGINX_TRUSTED_PROXIES` in `.env`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains, or every visitor counts as the proxy's one address. Then:
+Read the new version's **Upgrading** notes at the top of `CHANGELOG.md` first, on GitHub before you pull or in your CozyVTT folder straight after. They say whether that release needs anything from you. If you are more than one release behind, read the notes of every release you skipped, oldest first: the commands below stay the same, and the database migrations of every release in between run in order on the first start. 1.5.2 needs one thing if a Cloudflare Tunnel or another proxy sits in front of CozyVTT: it needs `NGINX_TRUSTED_PROXIES` in `.env`, as [Visitor addresses and sign-in limits](#visitor-addresses-and-sign-in-limits) explains, or every visitor counts as the proxy's one address. Then:
 
 ```bash
 git pull origin main
@@ -1657,7 +1742,7 @@ Database migrations run automatically via `prisma migrate deploy` on every start
 
 ### One-off data migration (only if upgrading from before 1.3.0)
 
-**None of 1.4.0, 1.5.0, 1.5.1, 1.5.2 and 1.5.3 needs a manual step here**: their database migrations run automatically, and 1.5.1 and 1.5.2 have none. Only one of them changes existing data: 1.5.3 clears the author of any custom creature whose account had already been deleted, and keeps the creature. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
+**None of 1.4.0, 1.5.0, 1.5.1, 1.5.2, 1.5.3 and 1.5.4 needs a manual step here**: their database migrations run automatically, and 1.5.1, 1.5.2 and 1.5.4 have none. Only one of them changes existing data: 1.5.3 clears the author of any custom creature whose account had already been deleted, and keeps the creature. (1.5.0 has four things to know after the upgrade, all in the changelog's upgrade note: backups now live in `backend/backups/`, MFA backup codes must be regenerated, a production instance refuses to start while `DATABASE_PASSWORD` is still the placeholder, and an install without Docker needs the database role to own the database before a backup can be restored.) This section applies only if you have characters created on a version **before 1.3.0** and never ran it.
 
 Characters made from the built-in templates of those versions keep some of their content in fields the sheet no longer reads: a Pathfinder 2e character's strikes and class features, and a D&D 5e character's languages, personality traits, ideals, bonds, flaws and allies. Saving a character moves its own content to the right place. Until a character is saved or moved, though, a Pathfinder 2e sheet shows no strikes or class features. Run this once to move every character at once:
 

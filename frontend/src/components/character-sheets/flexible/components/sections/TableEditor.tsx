@@ -6,7 +6,8 @@ import React from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import type { TableSection } from '../../../../../types/flexible-character-sheet';
 import { generateId } from '../../utils/section-helpers';
-import { SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import { FLEXIBLE_MAX_COLUMNS, FLEXIBLE_MAX_ROWS, SHEET_NAME_MAX, SHEET_SHORT_TEXT_MAX } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../../../ListLimitNote';
 
 interface TableEditorProps {
   section: TableSection;
@@ -14,11 +15,12 @@ interface TableEditorProps {
 }
 
 export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) => {
-  // TODO(sheets): the server keeps at most 50 columns in a table (FLEXIBLE_MAX_COLUMNS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
+  // The server keeps at most FLEXIBLE_MAX_COLUMNS columns and
+  // FLEXIBLE_MAX_ROWS rows in a table, so each add button turns off there.
+  const columnsFull = listIsFull(section.columns, FLEXIBLE_MAX_COLUMNS);
+  const rowsFull = listIsFull(section.rows, FLEXIBLE_MAX_ROWS);
   const addColumn = () => {
+    if (columnsFull) return;
     const newColumn = {
       id: generateId(),
       name: 'New Column',
@@ -50,11 +52,8 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
     });
   };
 
-  // TODO(sheets): the server keeps at most 1000 rows in a table (FLEXIBLE_MAX_ROWS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
   const addRow = () => {
+    if (rowsFull) return;
     const newRow = {
       id: generateId(),
       cells: section.columns.reduce((acc, col) => ({ ...acc, [col.id]: '' }), {}),
@@ -87,13 +86,13 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                     value={column.name}
                     onChange={(e) => updateColumnName(column.id, e.target.value)}
                     maxLength={SHEET_NAME_MAX}
-                    className="flex-1 bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-none text-sm font-semibold text-brand-ink"
+                    className="flex-1 bg-transparent border-b border-moss-green/30 focus:border-moss-green focus:outline-hidden text-sm font-semibold text-brand-ink"
                     placeholder="Column name"
                   />
                   {section.columns.length > 1 && (
                     <button
                       onClick={() => removeColumn(column.id)}
-                      className="p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                      className="p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
                       title="Remove column"
                     >
                       <Trash2 className="w-3 h-3" />
@@ -105,7 +104,8 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
             <th className="px-2 py-2 w-12">
               <button
                 onClick={addColumn}
-                className="p-1 rounded bg-moss-green/10 text-brand-ink hover:bg-moss-green/20"
+                disabled={columnsFull}
+                className={`p-1 rounded-sm bg-moss-green/10 text-brand-ink hover:bg-moss-green/15 ${ADD_BUTTON_OFF}`}
                 title="Add column"
               >
                 <Plus className="w-4 h-4" />
@@ -118,7 +118,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
             <tr
               key={row.id}
               className={`border-b border-stone-gray/20 group ${
-                rowIndex % 2 === 0 ? 'bg-parchment/10' : ''
+                rowIndex % 2 === 0 ? 'bg-ink/5' : ''
               }`}
             >
               {section.columns.map((column) => (
@@ -128,7 +128,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
                     value={row.cells[column.id] || ''}
                     onChange={(e) => updateCell(row.id, column.id, e.target.value)}
                     maxLength={SHEET_SHORT_TEXT_MAX}
-                    className="w-full bg-transparent border-b border-transparent focus:border-moss-green focus:outline-none text-warm-gray"
+                    className="w-full bg-transparent border-b border-transparent focus:border-moss-green focus:outline-hidden text-warm-gray"
                     placeholder="-"
                   />
                 </td>
@@ -136,7 +136,7 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
               <td className="px-2 py-2">
                 <button
                   onClick={() => removeRow(row.id)}
-                  className="p-1 rounded bg-red-50 text-red-600 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-100"
+                  className="p-1 rounded-sm bg-danger/10 text-danger-ink opacity-0 group-hover:opacity-100 transition-opacity hover:bg-danger/15"
                   title="Remove row"
                 >
                   <Trash2 className="w-3 h-3" />
@@ -146,14 +146,17 @@ export const TableEditor: React.FC<TableEditorProps> = ({ section, onUpdate }) =
           ))}
         </tbody>
       </table>
+      <ListLimitNote full={columnsFull} max={FLEXIBLE_MAX_COLUMNS} />
 
       <button
         onClick={addRow}
-        className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+        disabled={rowsFull}
+        className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/15 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
       >
         <Plus className="w-4 h-4" />
         Add Row
       </button>
+      <ListLimitNote full={rowsFull} max={FLEXIBLE_MAX_ROWS} />
     </div>
   );
 };

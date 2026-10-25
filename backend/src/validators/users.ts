@@ -10,9 +10,10 @@
 
 import { z } from 'zod';
 import { sanitizeInput } from '../utils/validation';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from './accountLimits';
 
-/** The limit the profile and register pages already enforce. */
-export const MAX_DISPLAY_NAME_LENGTH = 50;
+/** The most characters a display name has (accountLimits.ts). */
+export const MAX_DISPLAY_NAME_LENGTH = DISPLAY_NAME_MAX_LENGTH;
 
 /**
  * Characters a name does not keep: controls (Cc), invisible formatting (Cf:
@@ -78,7 +79,7 @@ export const displayNameSchema = z
   .pipe(
     z
       .string()
-      .min(1, { error: 'Display name is required' })
+      .min(DISPLAY_NAME_MIN_LENGTH, { error: 'Display name is required' })
       .max(MAX_DISPLAY_NAME_LENGTH, {
         error: `Display name must be ${MAX_DISPLAY_NAME_LENGTH} characters or fewer`,
       }),

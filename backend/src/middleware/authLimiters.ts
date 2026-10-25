@@ -5,8 +5,9 @@ import { MAX_EMAIL_LENGTH } from '../utils/validation';
 
 /**
  * Limits shared by routes in more than one router. The per-address sign-in
- * limiters live with the sign-in routes in routes/auth.ts; these two are also
- * needed by the users router.
+ * limiters live with the sign-in routes in routes/auth.ts; these are also
+ * needed by the users router, and the two per-account sign-in limits by the
+ * admin router, which clears an account's sign-in lock.
  */
 
 /**
@@ -56,6 +57,9 @@ export const accountLoginLimiter = failureLimiter({
   max: 10,
   message: 'Too many failed sign-ins for this account, please try again later',
   key: signInEmailKey,
+  // It runs after the per-address limiter, whose allowance is the smaller
+  // and the one the headers describe.
+  headers: false,
   onLimit: (req, key) => {
     const email = key.slice('account:'.length);
     void writeSystemLog({
@@ -65,6 +69,46 @@ export const accountLoginLimiter = failureLimiter({
     });
   },
 });
+
+/** The key the per-account code limit counts a pending sign-in under. */
+export function mfaAccountKey(userId: string): string {
+  return `mfa-account:${userId}`;
+}
+
+/**
+ * The code step, per account: 5 wrong codes per 15 minutes for one account,
+ * from wherever they come. The per-address code limiter in routes/auth.ts
+ * counts per address, so someone who already has the password could
+ * otherwise spread their guesses at the code across many addresses. Keyed on
+ * the account the pending sign-in belongs to, which the password step put in
+ * the session; a request with no sign-in pending is refused by the handler
+ * and neither held nor counted here.
+ */
+export const mfaAccountLimiter = failureLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: 'Too many MFA login attempts for this account, please try again later',
+  key: (req) => (req.session?.mfaPendingUserId ? mfaAccountKey(req.session.mfaPendingUserId) : null),
+});
+
+/**
+ * When an account's sign-in lock ends: the later of the lock for wrong
+ * passwords and the lock for wrong codes, or null when neither holds. For the
+ * Admin Panel's user list, which an admin alone may read.
+ */
+export function signInLockedUntil(account: { id: string; email: string }): Date | null {
+  const ends = [
+    accountLoginLimiter.peek(accountLoginKey(account.email)).lockedUntil,
+    mfaAccountLimiter.peek(mfaAccountKey(account.id)).lockedUntil,
+  ].filter((end): end is Date => end !== null);
+  return ends.length === 0 ? null : new Date(Math.max(...ends.map((end) => end.getTime())));
+}
+
+/** Forget an account's wrong passwords and wrong codes, which opens its sign-in at once. */
+export function clearSignInLock(account: { id: string; email: string }): void {
+  accountLoginLimiter.forget(accountLoginKey(account.email));
+  mfaAccountLimiter.forget(mfaAccountKey(account.id));
+}
 
 /**
  * Password checks made from a signed-in session: changing the password,
@@ -84,9 +128,13 @@ export const passwordCheckLimiter = failureLimiter({
   message: 'Too many wrong passwords, please try again later',
   key: (req: Request) => {
     if (!req.session?.userId) return null;
-    const body: unknown = req.body;
-    const asks = typeof body === 'object' && body !== null
-      && ['password', 'currentPassword'].some((field) => typeof (body as Record<string, unknown>)[field] === 'string');
-    return asks ? `password-check:${req.session.userId}` : null;
+    return asksForPassword(req) ? `password-check:${req.session.userId}` : null;
   },
 });
+
+/** Whether the body confirms a password (`password` or `currentPassword`), which the route then checks. */
+export function asksForPassword(req: Request): boolean {
+  const body: unknown = req.body;
+  return typeof body === 'object' && body !== null
+    && ['password', 'currentPassword'].some((field) => typeof (body as Record<string, unknown>)[field] === 'string');
+}

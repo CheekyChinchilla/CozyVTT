@@ -52,6 +52,27 @@
  * sheet editors stop each box at them; an editor allowing more is a sheet the
  * player fills in and cannot save. The file is kept identical in both packages.
  *
+ * The creature and stat block limits. The server refuses a creature, token
+ * template or token over them and the forms stop each box at them. The file is
+ * kept identical in both packages.
+ *
+ * The limits on a token's conditions. The server refuses a token over them and
+ * the token editor's condition box stops at them. The file is kept identical in
+ * both packages.
+ *
+ * The limits on a campaign's name and description. The server refuses a
+ * campaign over them and the campaign dialogs stop each box at them. The file
+ * is kept identical in both packages.
+ *
+ * The files each kind of asset may be uploaded as. The server decides by a
+ * file's bytes; the Upload Asset dialog checks a file's extension against the
+ * same list, and refused Ogg, WAV and Markdown files the server takes while
+ * its own list differed. The file is kept identical in both packages.
+ *
+ * The campaign archive format version. The import window reads an archive's
+ * manifest in the browser and shows it only for the version the server
+ * imports; for any other it asks the server, sending the archive twice.
+ *
  * The session secret examples. A production server refuses the example values
  * for SESSION_SECRET, so a self-hoster who copies a block as written is told
  * to generate one; the guide's example was once changed without the list of
@@ -101,6 +122,32 @@
  * above it names one too; when an update of that package asks for the same
  * version or a newer one, the override is no longer needed, and left in place
  * it would hold the package back.
+ *
+ * The character sheets. Each is declared twice: the Zod schema, which decides
+ * what is stored, and the frontend type every sheet component trusts. The
+ * frontend cannot import the schema, so the TypeScript compiler compares the
+ * two here, field by field: names, whether a field can be absent or null,
+ * arrays and the values a field takes (helpers/sheetTypeParity.ts).
+ *
+ * The Basic Flexible sheet. The server offers it as a starter sheet, and its
+ * four sections are the Flexible editor's Attributes, Skills, Inventory and
+ * Background section templates. Compared here, ids aside.
+ *
+ * The fields of a wall and a light. The schemas decide what is stored; the
+ * comparisons that decide whether a change reaches players read the fields
+ * one by one, and one missing there is a change players are never sent. The
+ * types are declared in each package, and compared here.
+ *
+ * The game systems. The database decides them (the GameSystem enum in
+ * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
+ * declares its own enum, which has to name the same values.
+ *
+ * The Universal VTT import's longest wait. An import waits for its turn and
+ * then runs, each up to a limit (services/uvttImportQueue.ts), so the DM is
+ * told why it failed before the bundled nginx gives up on the request and
+ * shows a proxy error instead. Both limits together, and five seconds more,
+ * stay within the proxy_read_timeout of the location in nginx/locations.conf
+ * that serves the import, chosen as nginx chooses it.
  */
 
 import crypto from 'crypto';
@@ -110,6 +157,12 @@ import { RESTORE_TRAILER } from '../utils/pgRestore';
 import { sessionSecretProblem } from '../config/sessionSecret';
 import { SOCKET_CEILINGS, type CeilingWindow } from '../websocket/shared';
 import { THEME_IDS, FONT_IDS } from '../validators/appearance';
+import { sheetTypeMismatches } from './helpers/sheetTypeParity';
+import ts from 'typescript';
+import { flexibleBasicTemplate } from '../utils/character-templates/flexible-templates';
+import { IMPORT_LIMITS } from '../validators/campaignImport';
+import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
+import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -339,9 +392,47 @@ describe('the token centre', () => {
   });
 });
 
+describe('sight on the map', () => {
+  it('is cast by the same file in the browser and on the server', () => {
+    expect(read('frontend/src/utils/raycasting.ts')).toBe(read('backend/src/utils/raycasting.ts'));
+  });
+
+  it('finds walls near a point with the same file in the browser and on the server', () => {
+    expect(read('frontend/src/utils/spatialIndex.ts')).toBe(read('backend/src/utils/spatialIndex.ts'));
+  });
+});
+
 describe('the limits on an upload\'s name, description and tags', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/assetLimits.ts')).toBe(read('backend/src/validators/assetLimits.ts'));
+  });
+});
+
+// The server takes display names of 1 to 50 characters; Profile, Sign Up and
+// the setup wizard refused one-letter names it accepts, each with its own
+// numbers, and Sign Up said "less than 50" where 50 passes.
+describe('the display name limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/accountLimits.ts')).toBe(read('backend/src/validators/accountLimits.ts'));
+  });
+
+  it.each(['frontend/src/pages/ProfilePage.tsx', 'frontend/src/pages/auth/RegisterPage.tsx', 'frontend/src/pages/SetupWizardPage.tsx'])(
+    'are what %s uses, with no number of its own',
+    (page) => {
+      const source = read(page);
+      expect(source).toContain("from '@/constants/accountLimits'");
+      expect(source).not.toMatch(/Display name must be (at least|less than|50)|maxLength=\{50\}|\.length\}\/50</);
+    }
+  );
+});
+
+// Profile said "of 10 backup codes left", repeating the server's count.
+describe('the number of two-factor backup codes', () => {
+  it('is the one the server makes, read by the profile', () => {
+    expect(read('backend/src/utils/backupCodes.ts')).toContain('BACKUP_CODE_COUNT');
+    const profile = read('frontend/src/components/profile/MFASection.tsx');
+    expect(profile).toContain("from '@/constants/accountLimits'");
+    expect(profile).not.toMatch(/of \d+ backup codes/);
   });
 });
 
@@ -360,6 +451,37 @@ describe('the Invite Player search limits', () => {
 describe('the character sheet limits', () => {
   it('are the same file in the browser and on the server', () => {
     expect(read('frontend/src/constants/sheetLimits.ts')).toBe(read('backend/src/validators/game-systems/sheetLimits.ts'));
+  });
+});
+
+describe('the creature and stat block limits', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/statBlockLimits.ts')).toBe(read('backend/src/validators/statBlockLimits.ts'));
+  });
+});
+
+describe('the limits on a token\'s conditions', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/tokenLimits.ts')).toBe(read('backend/src/validators/tokenLimits.ts'));
+  });
+});
+
+describe('the limits on a campaign\'s name and description', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/campaignLimits.ts')).toBe(read('backend/src/validators/campaignLimits.ts'));
+  });
+});
+
+describe('the files each kind of asset may be uploaded as', () => {
+  it('are the same file in the browser and on the server', () => {
+    expect(read('frontend/src/constants/uploadTypes.ts')).toBe(read('backend/src/validators/uploadTypes.ts'));
+  });
+});
+
+describe('the campaign archive format version', () => {
+  it('is the one the import window reads in the browser', () => {
+    const reader = read('frontend/src/utils/archiveManifest.ts').match(/^const FORMAT_VERSION = (\d+);$/m);
+    expect(Number(reader?.[1])).toBe(IMPORT_LIMITS.FORMAT_VERSION);
   });
 });
 
@@ -639,5 +761,208 @@ describe.each(['backend', 'frontend'])('the npm overrides in %s/package.json', (
       return newer(version, asked) ? [] : [`${parent} asks for ${name} ${asked}, the override holds it at ${version}: remove the override`];
     });
     expect(wrong).toEqual([]);
+  });
+});
+
+describe('the character sheets, as the schemas take them and the frontend types describe them', () => {
+  const schemas = 'backend/src/validators/game-systems';
+  const types = 'frontend/src/types';
+  const mismatches = sheetTypeMismatches([
+    { label: 'D&D 5e', schemaModule: `${schemas}/dnd5e.schema`, schemaExport: 'dnd5eCharacterDataSchema',
+      typeModule: `${types}/game-systems/dnd5e`, typeExport: 'DnD5eCharacterData' },
+    { label: 'Pathfinder 2e', schemaModule: `${schemas}/pathfinder2e.schema`, schemaExport: 'pathfinder2eCharacterDataSchema',
+      typeModule: `${types}/game-systems/pathfinder2e`, typeExport: 'PF2eCharacterData' },
+    { label: 'Call of Cthulhu 7e', schemaModule: `${schemas}/callOfCthulhu7e.schema`, schemaExport: 'callOfCthulhu7eCharacterDataSchema',
+      typeModule: `${types}/game-systems/callOfCthulhu7e`, typeExport: 'CoC7eCharacterData' },
+    { label: 'Shadowrun 6e', schemaModule: `${schemas}/shadowrun6e.schema`, schemaExport: 'shadowrun6eCharacterDataSchema',
+      typeModule: `${types}/game-systems/shadowrun6e`, typeExport: 'SR6CharacterData' },
+    { label: 'Flexible', schemaModule: `${schemas}/flexible.schema`, schemaExport: 'flexibleCharacterDataSchema',
+      typeModule: `${types}/flexible-character-sheet`, typeExport: 'FlexibleCharacterData' },
+  ]);
+
+  it.each(Object.keys(mismatches))('%s: the frontend type matches what the schema takes', (label) => {
+    expect(mismatches[label]).toEqual([]);
+  });
+});
+
+describe('the Basic Flexible sheet and the editor\'s section templates', () => {
+  /** A literal from the frontend source as a plain value; every id is '<id>'. */
+  function literal(node: ts.Expression): unknown {
+    if (ts.isParenthesizedExpression(node)) return literal(node.expression);
+    if (ts.isObjectLiteralExpression(node)) {
+      return Object.fromEntries(node.properties.map((p) => {
+        if (!ts.isPropertyAssignment(p)) throw new Error(`unexpected ${ts.SyntaxKind[p.kind]} in a section template`);
+        const name = p.name.getText();
+        return [name, name === 'id' ? '<id>' : literal(p.initializer)];
+      }));
+    }
+    if (ts.isArrayLiteralExpression(node)) return node.elements.map((e) => literal(e));
+    if (ts.isStringLiteral(node)) return node.text;
+    if (ts.isNumericLiteral(node)) return Number(node.text);
+    if (node.kind === ts.SyntaxKind.TrueKeyword) return true;
+    if (node.kind === ts.SyntaxKind.FalseKeyword) return false;
+    throw new Error(`unexpected ${ts.SyntaxKind[node.kind]} in a section template; teach this test to read it`);
+  }
+
+  function editorSection(id: string): unknown {
+    const file = 'frontend/src/components/character-sheets/flexible/utils/section-templates.ts';
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    let found: unknown;
+    const visit = (node: ts.Node): void => {
+      if (ts.isObjectLiteralExpression(node)) {
+        const idProp = node.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'id');
+        const create = node.properties.find((p) => ts.isPropertyAssignment(p) && p.name.getText() === 'create');
+        if (idProp && create && ts.isPropertyAssignment(idProp) && ts.isStringLiteral(idProp.initializer) && idProp.initializer.text === id
+          && ts.isPropertyAssignment(create) && ts.isArrowFunction(create.initializer)) {
+          found = literal(create.initializer.body as ts.Expression);
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+    if (found === undefined) throw new Error(`no '${id}' section template in ${file}`);
+    return found;
+  }
+
+  const withoutIds = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, v) => (key === 'id' ? '<id>' : v)));
+
+  it('has the editor\'s Attributes, Skills, Inventory and Background sections', () => {
+    const sections = (flexibleBasicTemplate().data as { sections: unknown[] }).sections;
+    expect(withoutIds(sections)).toEqual(['attributes', 'skills', 'inventory', 'background'].map(editorSection));
+  });
+});
+
+describe('the fields of a wall and a light', () => {
+  /** The fields a comparison in utils/spirit-layer.ts reads, as `a.<field> === b.<field>`. */
+  function compared(name: string): string[] {
+    const m = new RegExp(`function ${name}\\(a: \\w+, b: \\w+\\): boolean \\{([\\s\\S]*?)\\n\\}`).exec(read('backend/src/utils/spirit-layer.ts'));
+    if (!m) throw new Error(`no ${name} in utils/spirit-layer.ts; update this test with the declaration`);
+    return [...m[1].matchAll(/\ba\.(\w+) === b\.(\w+)/g)].map(([, left, right]) => {
+      expect(left).toBe(right);
+      return left;
+    });
+  }
+
+  it('are all compared when a wall change is judged, as the schema takes them', () => {
+    expect(compared('sameWall').sort()).toEqual(Object.keys(WallSegmentSchema.shape).sort());
+  });
+
+  it('are all compared when a light change is judged, as the schema takes them', () => {
+    expect(compared('sameLight').sort()).toEqual(Object.keys(LightSourceSchema.shape).sort());
+  });
+
+  it.each(['WallSegment', 'FogState', 'LightSource'])('%s has the same fields in the browser and on the server', (name) => {
+    expect(interfaceFields(read('frontend/src/types/walls.ts'), name)).toEqual(interfaceFields(read('backend/src/types/walls.ts'), name));
+  });
+
+  it('take the same wall types in the browser and on the server', () => {
+    const wallType = (rel: string) => /export type WallType = ([^;]+);/.exec(read(rel))?.[1].replace(/\s+/g, ' ').trim();
+    expect(wallType('frontend/src/types/walls.ts')).toBeDefined();
+    expect(wallType('frontend/src/types/walls.ts')).toBe(wallType('backend/src/types/walls.ts'));
+  });
+});
+
+describe('the game systems', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum GameSystem \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum GameSystem \{([^}]*)\}/.exec(read('frontend/src/types/gameSystem.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a GameSystem enum moved; update this test');
+    const prisma = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(prisma);
+  });
+});
+
+
+// A campaign member's account fields: the routes select them once, and the
+// frontend's member type declares what it may read. The frontend once read an
+// email the server never sent.
+describe('the account fields a campaign membership and a chat message carry', () => {
+  it.each([
+    ['MEMBER_USER_SELECT', 'MemberUser'],
+    ['MESSAGE_USER_SELECT', 'MessageUser'],
+  ])('%s in the routes and %s in the frontend name the same fields', (constant, type) => {
+    const select = new RegExp(`export const ${constant} = \\{([^}]*)\\}`).exec(read('backend/src/routes/campaigns.ts'))?.[1] ?? '';
+    const selected = [...select.matchAll(/(\w+):\s*true/g)].map((m) => m[1]).sort();
+    const pick = new RegExp(`export type ${type} = Pick<User, ([^>]*)>`).exec(read('frontend/src/types/index.ts'))?.[1] ?? '';
+    const declared = [...pick.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+    expect(selected.length).toBeGreaterThan(0);
+    expect(declared).toEqual(selected);
+  });
+});
+
+
+/** A location block of an nginx file: its modifier (`=`, `^~`, `~`, `~*` or none), its path or pattern, and its body. */
+interface NginxLocation { modifier: string; match: string; body: string }
+
+function nginxLocations(conf: string): NginxLocation[] {
+  const text = conf.replace(/#.*$/gm, '');
+  const found: NginxLocation[] = [];
+  const start = /\blocation\s+(=|\^~|~\*|~)?\s*(\S+)\s*\{/g;
+  for (let m = start.exec(text); m; m = start.exec(text)) {
+    let depth = 1;
+    let i = start.lastIndex;
+    for (; i < text.length && depth > 0; i++) {
+      if (text[i] === '{') depth++;
+      else if (text[i] === '}') depth--;
+    }
+    found.push({ modifier: m[1] ?? '', match: m[2], body: text.slice(start.lastIndex, i - 1) });
+    start.lastIndex = i;
+  }
+  return found;
+}
+
+/**
+ * The location nginx serves `uri` from: an exact match; else the longest
+ * prefix if it is marked `^~`; else the first regular expression that
+ * matches, in the order written; else the longest prefix.
+ */
+function nginxLocationFor(conf: string, uri: string): NginxLocation {
+  const locations = nginxLocations(conf);
+  const exact = locations.find((l) => l.modifier === '=' && l.match === uri);
+  if (exact) return exact;
+  const prefixes = locations
+    .filter((l) => (l.modifier === '' || l.modifier === '^~') && uri.startsWith(l.match))
+    .sort((a, b) => b.match.length - a.match.length);
+  if (prefixes[0]?.modifier === '^~') return prefixes[0];
+  const pattern = locations.find((l) => (l.modifier === '~' || l.modifier === '~*') && new RegExp(l.match, l.modifier === '~*' ? 'i' : '').test(uri));
+  if (pattern) return pattern;
+  if (!prefixes[0]) throw new Error(`no location in the file serves ${uri}`);
+  return prefixes[0];
+}
+
+/** A location's proxy_read_timeout in milliseconds; it must set one, so nothing is assumed from elsewhere. */
+function proxyReadTimeoutMs(location: NginxLocation): number {
+  const m = /\bproxy_read_timeout\s+(\d+)(ms|s|m|h)?\s*;/.exec(location.body);
+  if (!m) throw new Error(`location ${location.match} sets no proxy_read_timeout; set one, or teach this test where it comes from`);
+  const unit = { ms: 1, s: 1000, m: 60_000, h: 3_600_000 }[m[2] ?? 's'] ?? 1000;
+  return Number(m[1]) * unit;
+}
+
+describe('the Universal VTT import\'s longest wait', () => {
+  const IMPORT = '/api/campaigns/c1/maps/import-uvtt';
+
+  it('ends at least five seconds before nginx stops waiting for the answer', () => {
+    const location = nginxLocationFor(read('nginx/locations.conf'), IMPORT);
+    expect(UVTT_IMPORT_MAX_WAIT_MS + UVTT_IMPORT_TIME_LIMIT_MS + 5000).toBeLessThanOrEqual(proxyReadTimeoutMs(location));
+  });
+
+  it('is read from the location nginx would choose', () => {
+    const conf = [
+      'location /api/ { proxy_read_timeout 60s; }',
+      'location /api/campaigns/import { proxy_read_timeout 300s; }',
+      'location = /health { proxy_read_timeout 10s; }',
+      '# location /api/campaigns/ { proxy_read_timeout 1s; }',
+    ].join('\n');
+    expect(proxyReadTimeoutMs(nginxLocationFor(conf, IMPORT))).toBe(60_000);
+    expect(proxyReadTimeoutMs(nginxLocationFor(conf, '/api/campaigns/import'))).toBe(300_000);
+    expect(proxyReadTimeoutMs(nginxLocationFor(conf, '/health'))).toBe(10_000);
+    const withPattern = `${conf}\nlocation ~ /maps/import-uvtt$ { proxy_read_timeout 2m; }`;
+    expect(proxyReadTimeoutMs(nginxLocationFor(withPattern, IMPORT))).toBe(120_000);
+    const withPrefixFirst = `${withPattern}\nlocation ^~ /api/campaigns/ { proxy_read_timeout 45s; }`;
+    expect(proxyReadTimeoutMs(nginxLocationFor(withPrefixFirst, IMPORT))).toBe(45_000);
   });
 });

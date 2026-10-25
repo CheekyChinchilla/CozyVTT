@@ -8,7 +8,9 @@
 
 import { prisma as appPrisma } from '../../config/database';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
-import { inSerializableTransaction, isSerializationFailure } from '../serializable';
+import { Prisma } from '@prisma/client';
+import { inSerializableTransaction, isSerializationFailure, SERIALIZABLE_ATTEMPTS } from '../serializable';
+import logger from '../logger';
 
 const created: string[] = [];
 
@@ -118,4 +120,22 @@ it('reads a refusal from the driver adapter\'s error, and nothing else it report
   expect(isSerializationFailure(driverError({ kind: 'UniqueConstraintViolation', originalCode: '23505' }))).toBe(false);
   expect(isSerializationFailure(driverError({ kind: 'DatabaseNotReachable' }))).toBe(false);
   expect(isSerializationFailure({ name: 'DriverAdapterError' })).toBe(false);
+});
+
+it('logs once when PostgreSQL refuses every run, and passes the refusal on', async () => {
+  const refusal = new Prisma.PrismaClientKnownRequestError('Transaction failed due to a write conflict or a deadlock', {
+    code: 'P2034',
+    clientVersion: Prisma.prismaVersion.client,
+  });
+  const transaction = jest.spyOn(appPrisma, '$transaction').mockRejectedValue(refusal);
+  const logged = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+  try {
+    await expect(inSerializableTransaction(async () => 'never')).rejects.toBe(refusal);
+    expect(transaction).toHaveBeenCalledTimes(SERIALIZABLE_ATTEMPTS);
+    expect(logged).toHaveBeenCalledTimes(1);
+    expect(logged.mock.calls[0][0]).toMatch(new RegExp(`refused .*${SERIALIZABLE_ATTEMPTS} times`));
+  } finally {
+    transaction.mockRestore();
+    logged.mockRestore();
+  }
 });

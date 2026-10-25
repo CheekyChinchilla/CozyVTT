@@ -10,6 +10,7 @@
 import { useId } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { X, type LucideIcon } from 'lucide-react';
 import { useFocusTrap } from '@/hooks/useFocusTrap';
 import { cn } from '@/utils/cn';
@@ -18,7 +19,10 @@ export type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
 
 export interface ModalProps {
   open: boolean;
-  /** Called on backdrop click, Escape, and the X button. */
+  /**
+   * Called on Escape and the X button. A click beside the window never closes
+   * it, so typed input survives a stray click.
+   */
   onClose: () => void;
   /** Dialog heading — wired to aria-labelledby. */
   title: string;
@@ -27,10 +31,8 @@ export interface ModalProps {
   size?: ModalSize;
   /** Right-aligned action row rendered below the body. */
   footer?: React.ReactNode;
-  /** Disables closing (backdrop/X/Escape) while an operation is in flight. */
+  /** Disables closing (X/Escape) while an operation is in flight. */
   closeDisabled?: boolean;
-  /** Set false for confirm-style dialogs that must not close on backdrop click. */
-  closeOnBackdrop?: boolean;
   /** z-index tier — 'overlay' sits above other modals (confirm-on-modal). */
   layer?: 'base' | 'overlay';
   /**
@@ -59,20 +61,23 @@ export default function Modal({
   size = 'md',
   footer,
   closeDisabled = false,
-  closeOnBackdrop = true,
   layer = 'base',
   children,
   fitViewport = false,
 }: ModalProps) {
   const titleId = useId();
+  const dialogExit = useMotionExit({ opacity: 0, scale: 0.95, y: 20 });
 
   const handleClose = () => {
     if (!closeDisabled) onClose();
   };
 
   const modalRef = useFocusTrap(open, handleClose);
-  const zBackdrop = layer === 'overlay' ? 'z-[60]' : 'z-40';
-  const zDialog = layer === 'overlay' ? 'z-[60]' : 'z-50';
+  // The backdrop shares the dialog's layer, so a window opened from a side
+  // panel (z-50, see SlideOver) dims the panel too; it comes later in the
+  // page, so it is drawn over it.
+  const zBackdrop = layer === 'overlay' ? 'z-60' : 'z-50';
+  const zDialog = layer === 'overlay' ? 'z-60' : 'z-50';
 
   // Portal to <body>: ancestors with transform/filter/backdrop-filter (e.g.
   // .glass-panel) create containing blocks that would trap position:fixed
@@ -86,8 +91,7 @@ export default function Modal({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className={cn('fixed inset-0 bg-black/50 backdrop-blur-sm', zBackdrop)}
-            onClick={closeOnBackdrop ? handleClose : undefined}
+            className={cn('fixed inset-0 bg-black/50 backdrop-blur-xs', zBackdrop)}
             aria-hidden="true"
           />
 
@@ -100,7 +104,7 @@ export default function Modal({
               aria-labelledby={titleId}
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              exit={dialogExit}
               transition={{ duration: 0.2 }}
               className={cn(
                 'w-full p-6 relative rounded-cozy-lg border border-brand/20 shadow-2xl',
@@ -111,7 +115,7 @@ export default function Modal({
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="flex items-center justify-between mb-6 flex-shrink-0">
+              <div className="flex items-center justify-between mb-6 shrink-0">
                 <div className="flex items-center gap-3">
                   {Icon && (
                     <div className="p-2 rounded-lg bg-brand/10" aria-hidden="true">
@@ -129,7 +133,7 @@ export default function Modal({
                   disabled={closeDisabled}
                   className="p-2 rounded-lg hover:bg-ink/10 transition-colors
                              disabled:opacity-50 disabled:cursor-not-allowed
-                             focus:outline-none focus:ring-2 focus:ring-brand"
+                             focus:outline-hidden focus:ring-2 focus:ring-brand"
                   aria-label="Close dialog"
                 >
                   <X className="w-5 h-5 text-ink-muted" aria-hidden="true" />
@@ -140,7 +144,7 @@ export default function Modal({
               {fitViewport ? <div className="flex-1 min-h-0 flex flex-col">{children}</div> : children}
 
               {/* Footer */}
-              {footer && <div className="flex gap-3 justify-end pt-4 flex-shrink-0">{footer}</div>}
+              {footer && <div className="flex gap-3 justify-end pt-4 shrink-0">{footer}</div>}
             </motion.div>
           </div>
         </>

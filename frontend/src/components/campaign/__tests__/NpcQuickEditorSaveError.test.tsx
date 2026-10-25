@@ -25,6 +25,8 @@ vi.mock('framer-motion', () => {
     return <div {...(plain as Record<string, unknown>)}>{children as never}</div>;
   };
   return {
+    useReducedMotionConfig: () => false,
+    useIsPresent: () => true,
     motion: new Proxy({}, { get: () => MotionDiv }),
     AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
   };

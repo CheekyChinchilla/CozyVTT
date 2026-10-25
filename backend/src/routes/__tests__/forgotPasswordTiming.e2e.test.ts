@@ -31,6 +31,8 @@ import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
+import * as passwordResetTokens from '../../services/passwordResetTokens';
+import { resetLinksBeingIssued } from '../auth';
 
 const app = createTestApp();
 const created: string[] = [];
@@ -50,6 +52,43 @@ it('answers a known address before the email has been sent', async () => {
   const res = await request(app).post('/api/auth/forgot-password').send({ email: u.email });
 
   expect(res.status).toBe(200);
+  await resetLinksBeingIssued.finished();
   expect(sendPasswordResetEmail).toHaveBeenCalledTimes(1);
   expect(await prisma.passwordResetToken.count({ where: { userId: u.id } })).toBe(1);
 }, 3000);
+
+// Issuing a link takes several database round trips that an unknown address
+// never makes, so waiting for them told the two apart by the time taken.
+it('answers a known address before its link has been issued', async () => {
+  const u = await createTestUser({ email: `forgot-issue-${Date.now()}@test.cozyvtt.local` });
+  created.push(u.id);
+  let releaseIssue: () => void = () => {};
+  const held = new Promise<string>((resolve) => { releaseIssue = () => resolve('never-sent'); });
+  const issuing = jest.spyOn(passwordResetTokens, 'issueResetToken').mockImplementationOnce(() => held);
+
+  try {
+    const res = await request(app).post('/api/auth/forgot-password').send({ email: u.email });
+    expect(res.status).toBe(200);
+    expect(res.body.message).toBe('If an account with that email exists, a password reset link has been sent.');
+    expect(resetLinksBeingIssued.count).toBe(1);
+  } finally {
+    releaseIssue();
+    await resetLinksBeingIssued.finished();
+    issuing.mockRestore();
+  }
+}, 3000);
+
+// Requests while a link is on its way find it as they would find one just
+// issued, so a burst of requests still sends one email.
+it('issues one link for requests that arrive while one is on its way', async () => {
+  const u = await createTestUser({ email: `forgot-burst-${Date.now()}@test.cozyvtt.local` });
+  created.push(u.id);
+  const issued = jest.spyOn(passwordResetTokens, 'issueResetToken');
+  try {
+    await Promise.all(Array.from({ length: 3 }, () => request(app).post('/api/auth/forgot-password').send({ email: u.email })));
+    await resetLinksBeingIssued.finished();
+    expect(issued).toHaveBeenCalledTimes(1);
+  } finally {
+    issued.mockRestore();
+  }
+});

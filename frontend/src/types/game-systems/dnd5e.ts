@@ -1,8 +1,13 @@
 /**
  * D&D 5e Character Data Type Definitions (Frontend)
- * Mirrors backend types from backend/src/game-systems/dnd5e.ts
+ *
+ * The shape the backend's schema accepts (backend/src/validators/game-systems/
+ * dnd5e.schema.ts), which decides what is stored. A field the schema lets be
+ * absent is optional here, since the server sends a sheet as it was stored.
+ * backend/src/__tests__/keepInStep.test.ts fails when the two disagree.
  */
 
+import type { SheetChrome } from './sheetChrome';
 import type { FeatureEntry } from '@/utils/featureEntries';
 import type { Dnd5eCustomSkill } from '@/utils/rules/dnd5e';
 
@@ -141,8 +146,8 @@ export interface DnD5eDeathSaves {
  * "Radiant rider" — and is free text, because the reasons are not enumerable.
  */
 export interface DnD5eAdditionalDamage {
-  label: string;
-  damageRoll: string;
+  label?: string;
+  damageRoll?: string;
   damageType?: string;
 }
 
@@ -152,11 +157,11 @@ export interface DnD5eAdditionalDamage {
 export interface DnD5eAttack {
   name: string;
   attackBonus: number;
-  damageRoll: string;
-  damageType: string;
-  range: number;
-  properties: string[];
-  notes: string;
+  damageRoll?: string;
+  damageType?: string;
+  range?: number;
+  properties?: string[];
+  notes?: string;
   /** Extra damage lines beyond the primary one. Absent on most attacks. */
   additionalDamage?: DnD5eAdditionalDamage[];
 }
@@ -177,14 +182,14 @@ export interface DnD5eCurrency {
  */
 export interface DnD5eInventoryItem {
   name: string;
-  quantity: number;
-  weight: number;
-  notes: string;
-  equippable: boolean;
-  equipped: boolean;
-  requiresAttunement: boolean;
-  attuned: boolean;
-  value: number;
+  quantity?: number;
+  weight?: number;
+  notes?: string;
+  equippable?: boolean;
+  equipped?: boolean;
+  requiresAttunement?: boolean;
+  attuned?: boolean;
+  value?: number;
 }
 
 /**
@@ -225,48 +230,48 @@ export interface DnD5eSpell {
  * Spellcasting information
  */
 export interface DnD5eSpellcasting {
-  class: string;
-  ability: string;
+  class?: string;
+  ability?: string;
   /** Derived: 8 + proficiency bonus + ability modifier + spellSaveDCOtherBonus. */
-  spellSaveDC: number;
+  spellSaveDC?: number;
   /** Derived: proficiency bonus + ability modifier + spellAttackOtherBonus. */
-  spellAttackBonus: number;
+  spellAttackBonus?: number;
   /** Adjustments from items and features; separate, since some raise only one. */
   spellSaveDCOtherBonus?: number;
   spellAttackOtherBonus?: number;
-  cantrips: string[];
-  slots: DnD5eSpellSlots;
-  spells: DnD5eSpell[];
+  cantrips?: string[];
+  slots?: DnD5eSpellSlots;
+  spells?: DnD5eSpell[];
 }
 
 /**
  * Character appearance
  */
 export interface DnD5eAppearance {
-  age: number;
-  height: string;
-  weight: string;
-  eyes: string;
-  skin: string;
-  hair: string;
+  age?: string | number | null;
+  height?: string;
+  weight?: string;
+  eyes?: string;
+  skin?: string;
+  hair?: string;
 }
 
 /**
  * Character personality
  */
 export interface DnD5ePersonality {
-  traits: string;
-  ideals: string;
-  bonds: string;
-  flaws: string;
+  traits?: string;
+  ideals?: string;
+  bonds?: string;
+  flaws?: string;
 }
 
 /**
  * Allies and organizations
  */
 export interface DnD5eAlliesAndOrganizations {
-  name: string;
-  description: string;
+  name?: string;
+  description?: string;
 }
 
 /**
@@ -278,7 +283,7 @@ export interface DnD5eAlliesAndOrganizations {
  * OPTIONAL fields:
  * - All other fields (can be added progressively)
  */
-export interface DnD5eCharacterData {
+export interface DnD5eCharacterData extends SheetChrome {
   // Required: Core identity
   characterName: string;
   class: string;
@@ -329,12 +334,15 @@ export interface DnD5eCharacterData {
    * replace this: flattening loses which box an entry came from, and guessing
    * it back put anything unrecognised — Thieves' Cant, Druidic — under weapons.
    */
-  proficiencies?: {
-    armor?: string;
-    weapons?: string;
-    tools?: string;
-    languages?: string;
-  };
+  proficiencies?:
+    | {
+        armor?: string;
+        weapons?: string;
+        tools?: string;
+        languages?: string;
+      }
+    /** The one list sheets from before 1.3.0 stored, until they are saved again. */
+    | string[];
   proficienciesAndLanguages?: string[];
   /**
    * Features and traits: a name plus an optional description.

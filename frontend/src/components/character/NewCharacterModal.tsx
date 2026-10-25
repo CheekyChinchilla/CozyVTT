@@ -7,15 +7,28 @@ import { useState, FormEvent, useEffect, useRef } from 'react';
 import { Loader2, User, Sparkles } from 'lucide-react';
 import { Modal } from '@/components/ui';
 import { Character, GameSystem, Campaign } from '@/types';
-import { GAME_SYSTEM_OPTIONS } from '@/constants/game-systems';
+import { GAME_SYSTEM_OPTIONS, gameSystemName } from '@/constants/game-systems';
+import { SHEET_NAME_MAX } from '@/constants/sheetLimits';
 import api from '@/services/api';
 import Button from '@/components/ui/Button';
-import { apiErrorMessage, apiValidationIssues, errorMessage } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorMessage, errorSummary } from '@/utils/errors';
+
+/** Set when the character was made and publishing it as a template was not. */
+export interface TemplatePublishFailure {
+  templateFailed: true;
+  /** The server's reason, when it gave one. */
+  reason?: string;
+}
 
 interface NewCharacterModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (character: Character) => void;
+  /**
+   * The character was created. The second argument is set when Create &
+   * Publish as Template made the character and failed to publish it, so the
+   * page can say so once this dialog has closed.
+   */
+  onSuccess: (character: Character, templateFailure?: TemplatePublishFailure) => void;
   /** If provided, character will be assigned to this campaign */
   campaign?: Campaign;
   /** If provided, this game system will be pre-selected and locked */
@@ -106,17 +119,19 @@ export default function NewCharacterModal({
     }
   }, [isOpen, campaign]);
 
-  // Update game system when campaign selection changes
-  useEffect(() => {
-    if (selectedCampaignId && availableCampaigns.length > 0) {
-      const selectedCampaign = availableCampaigns.find(
-        (c) => c.id === selectedCampaignId
-      );
-      if (selectedCampaign?.gameSystem) {
-        setGameSystem(selectedCampaign.gameSystem);
-      }
+  // The game system follows the chosen campaign's, Flexible for a campaign
+  // with none: a D&D campaign and then a Flexible one left D&D chosen, with
+  // nothing locking it. A new system starts from its blank sheet.
+  const chooseCampaign = (campaignId: string | null) => {
+    setSelectedCampaignId(campaignId);
+    const chosen = availableCampaigns.find((c) => c.id === campaignId);
+    if (!chosen) return;
+    const system = chosen.gameSystem ?? null;
+    if (system !== gameSystem) {
+      setGameSystem(system);
+      setSelectedTemplate('blank');
     }
-  }, [selectedCampaignId, availableCampaigns]);
+  };
 
   const fetchUserCampaigns = async () => {
     setLoadingCampaigns(true);
@@ -124,7 +139,7 @@ export default function NewCharacterModal({
       const response = await api.listCampaigns();
       setAvailableCampaigns(response.campaigns);
     } catch (err) {
-      console.error('Failed to fetch campaigns:', err);
+      console.error('Failed to fetch campaigns:', errorSummary(err));
     } finally {
       setLoadingCampaigns(false);
     }
@@ -136,12 +151,10 @@ export default function NewCharacterModal({
       return true;
     }
 
-    // If campaign is selected and has a game system, lock it
+    // A chosen campaign decides the system, Flexible for a campaign with none:
+    // the server takes only a character of the campaign's own system.
     if (selectedCampaignId && availableCampaigns.length > 0) {
-      const selectedCampaign = availableCampaigns.find(
-        (c) => c.id === selectedCampaignId
-      );
-      return selectedCampaign?.gameSystem !== null && selectedCampaign?.gameSystem !== undefined;
+      return availableCampaigns.some((c) => c.id === selectedCampaignId);
     }
 
     return false;
@@ -177,6 +190,10 @@ export default function NewCharacterModal({
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+    // Read once and cleared for every way this submit ends, so a create that
+    // fails or is stopped here does not publish on the next plain Create.
+    const publishTemplate = alsoPublishTemplate.current;
+    alsoPublishTemplate.current = false;
 
     // Validation
     if (name.trim().length < 2) {
@@ -184,12 +201,9 @@ export default function NewCharacterModal({
       return;
     }
 
-    // TODO(sheets): the server and the sheet editors take 200 characters
-    // (SHEET_NAME_MAX), and 100 itself passes here though the message says
-    // "less than 100". The note below also promises a redirect to the editor
-    // that creation does not do.
-    if (name.trim().length > 100) {
-      setError('Character name must be less than 100 characters');
+    // The server and the sheet editors take names up to SHEET_NAME_MAX.
+    if (name.trim().length > SHEET_NAME_MAX) {
+      setError(`Character name can be at most ${SHEET_NAME_MAX} characters`);
       return;
     }
 
@@ -213,22 +227,24 @@ export default function NewCharacterModal({
         data: templateData as unknown as import('@/types').CharacterData,
       });
 
-      // Optionally publish the same sheet as a shared template. Done after the
-      // character exists, and failing softly: the character is the thing the
-      // user asked for, so a template error must not lose it.
-      if (alsoPublishTemplate.current) {
+      // Optionally publish the character's sheet as a shared template: the
+      // sheet as the server stored it, with the name and anything else it
+      // filled in, and not the starter sheet sent. Done after the character
+      // exists, and failing softly: the character is the thing the user asked
+      // for, so a template error must not lose it. The dialog closes either
+      // way, so the failure goes to the page to say.
+      let templateFailure: TemplatePublishFailure | undefined;
+      if (publishTemplate) {
         try {
           await api.createCharacterTemplate({
             name: name.trim(),
-            gameSystem: gameSystem || null,
-            data: templateData,
+            gameSystem: response.character.gameSystem ?? null,
+            data: response.character.data,
           });
-        } catch {
-          setError(
-            'Character created, but publishing it as a template failed. You can retry with "Save as Template" in the editor.'
-          );
+        } catch (templateErr) {
+          const reason = apiErrorMessage(templateErr);
+          templateFailure = reason ? { templateFailed: true, reason } : { templateFailed: true };
         }
-        alsoPublishTemplate.current = false;
       }
 
       // Reset form
@@ -238,7 +254,11 @@ export default function NewCharacterModal({
       setSelectedTemplate('blank');
 
       // Notify parent
-      onSuccess(response.character);
+      if (templateFailure) {
+        onSuccess(response.character, templateFailure);
+      } else {
+        onSuccess(response.character);
+      }
 
       // Close modal
       onClose();
@@ -277,7 +297,7 @@ export default function NewCharacterModal({
       {/* Error Alert */}
       {error && (
                 <div className="mb-4 bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4 max-h-60 overflow-y-auto">
-                  <p className="text-sm text-spirit-red font-medium whitespace-pre-wrap font-mono">
+                  <p className="text-sm text-danger-ink font-medium whitespace-pre-wrap font-mono">
                     {error}
                   </p>
                 </div>
@@ -291,7 +311,7 @@ export default function NewCharacterModal({
                     htmlFor="characterName"
                     className="block text-sm font-semibold text-ink mb-2"
                   >
-                    Character Name <span className="text-spirit-red">*</span>
+                    Character Name <span className="text-danger-ink">*</span>
                   </label>
                   <input
                     type="text"
@@ -300,12 +320,13 @@ export default function NewCharacterModal({
                     onChange={(e) => setName(e.target.value)}
                     placeholder="Aria Moonshadow"
                     disabled={loading}
+                    maxLength={SHEET_NAME_MAX}
                     className="input-cozy w-full disabled:opacity-50 disabled:cursor-not-allowed"
-                    autoFocus
+                    data-autofocus
                     required
                   />
                   <p className="mt-1 text-xs text-ink-muted">
-                    Give your character a memorable name (2-100 characters)
+                    Give your character a memorable name (2-{SHEET_NAME_MAX} characters)
                   </p>
                 </div>
 
@@ -321,9 +342,7 @@ export default function NewCharacterModal({
                     <select
                       id="campaign"
                       value={selectedCampaignId || ''}
-                      onChange={(e) =>
-                        setSelectedCampaignId(e.target.value || null)
-                      }
+                      onChange={(e) => chooseCampaign(e.target.value || null)}
                       disabled={loading || loadingCampaigns}
                       className="input-cozy w-full disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -331,7 +350,7 @@ export default function NewCharacterModal({
                       {availableCampaigns.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
-                          {c.gameSystem && ` (${c.gameSystem})`}
+                          {c.gameSystem && ` (${gameSystemName(c.gameSystem)})`}
                         </option>
                       ))}
                     </select>
@@ -412,7 +431,7 @@ export default function NewCharacterModal({
                                 {template.label}
                               </span>
                               {template.value !== 'blank' && (
-                                <Sparkles className="w-4 h-4 text-warm-amber" />
+                                <Sparkles className="w-4 h-4 text-accent-ink" />
                               )}
                             </div>
                             <p className="text-sm text-ink-muted mt-1">
@@ -432,8 +451,9 @@ export default function NewCharacterModal({
                 <div className="rounded-lg p-4 bg-moss-green/10 border border-moss-green/30">
                   <p className="text-sm text-ink">
                     <strong className="text-brand-ink">Note:</strong> After
-                    creation, you'll be redirected to the character editor where
-                    you can customize all details and save when ready.
+                    creation, the character appears in your list. Choose Edit
+                    Character from its card&apos;s menu to fill in the rest of
+                    its sheet.
                   </p>
                 </div>
 

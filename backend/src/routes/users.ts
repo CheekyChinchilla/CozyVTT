@@ -1,10 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
-import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey } from '../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, accountLoginKey, signInLockedUntil, asksForPassword } from '../middleware/authLimiters';
+import { hashingPerAddress, hashingPerAddressWhen } from '../middleware/hashingPerAddress';
 import { prisma } from '../config/database';
 import { Prisma, type User } from '@prisma/client';
 import { toJson } from '../utils/prisma-json';
-import { sanitizeUser, hashPassword, verifyPassword } from '../services/auth';
+import { sanitizeUser, hashPassword, verifyPassword, answeredBusy } from '../services/auth';
 import { validateEmail, sanitizeInput } from '../utils/validation';
 import { isSmtpConfigured, sendPasswordResetEmail, sendEmailChangedNotice } from '../services/email';
 import { destroyUserLoginSessions } from '../services/sessionStore';
@@ -30,7 +31,8 @@ const router = Router();
 
 /**
  * GET /api/users
- * List all users (Admin only)
+ * List all users (Admin only), each with `signInLockedUntil`: when the
+ * account's sign-in lock ends, or null.
  * Requires: Admin role
  */
 router.get('/', requireAuth, requireAdmin, async (_req: Request, res: Response) => {
@@ -40,7 +42,10 @@ router.get('/', requireAuth, requireAdmin, async (_req: Request, res: Response) 
     });
 
     // Sanitize all users before returning
-    const sanitizedUsers = users.map((user) => sanitizeUser(user));
+    const sanitizedUsers = users.map((user) => ({
+      ...sanitizeUser(user),
+      signInLockedUntil: signInLockedUntil(user)?.toISOString() ?? null,
+    }));
 
     return res.status(200).json({ users: sanitizedUsers });
   } catch (error) {
@@ -101,7 +106,7 @@ router.get('/:id', requireAuth, async (req: Request<{ id: string }>, res: Respon
  * Changing your own email needs currentPassword; an admin changing someone
  * else's does not.
  */
-router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request<{ id: string }>, res: Response) => {
+router.put('/:id', requireAuth, hashingPerAddressWhen(asksForPassword), passwordCheckLimiter, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
     const requestingUserId = req.session.userId;
@@ -397,6 +402,7 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request<{ id: 
       user: sanitizeUser(updatedUser),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     // Another account took the new address after the check above.
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return res.status(400).json({ error: 'Bad Request', message: 'Email already in use' });
@@ -411,7 +417,8 @@ router.put('/:id', requireAuth, passwordCheckLimiter, async (req: Request<{ id: 
 
 /**
  * GET /api/users/:id/preferences
- * Returns the user's stored preferences blob (theme/font/dice color/etc.).
+ * Returns the user's stored preferences blob: theme, custom theme colours
+ * and font (UserPreferencesSchema).
  * Returns an empty object if the user has not set any preferences yet —
  * frontend layers on top of system defaults.
  *
@@ -602,7 +609,7 @@ router.delete('/:id', requireAuth, requireAdmin, async (req: Request<{ id: strin
  * Requires: Admin role
  * Returns: Temporary password (one-time display)
  */
-router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Request<{ id: string }>, res: Response) => {
+router.post('/:id/reset-password', requireAuth, requireAdmin, hashingPerAddress, async (req: Request<{ id: string }>, res: Response) => {
   try {
     const { id } = req.params;
 
@@ -610,11 +617,9 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
     // /api/auth/change-password); a stolen session must not read a new
     // temporary password for its own account here instead.
     if (id === req.session.userId) {
-      // TODO(accounts): the Profile page's button reads "Change Password"; the
-      // message should spell it the same way.
       return res.status(400).json({
         error: 'Bad Request',
-        message: 'You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.',
+        message: 'You cannot reset your own password from here. Use Change Password on your profile, which asks for your current password.',
       });
     }
 
@@ -672,6 +677,7 @@ router.post('/:id/reset-password', requireAuth, requireAdmin, async (req: Reques
       notice: 'This temporary password will only be displayed once. The user will be required to change it on next login, and any active sessions have been signed out.',
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error resetting password', { err: error });
     return res.status(500).json({
       error: 'Internal Server Error',

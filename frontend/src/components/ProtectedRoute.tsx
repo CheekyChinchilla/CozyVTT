@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { PlatformRole } from '@/types/user.types';
 import Button from '@/components/ui/Button';
 import { signInPath } from '@/utils/returnTo';
+import ServerUnreachablePanel from './ServerUnreachablePanel';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -31,30 +32,13 @@ export default function ProtectedRoute({
   } = useAuth();
   const location = useLocation();
 
-  // The sign-in check got no answer: a restart or an upgrade under way. The
-  // sign-in may well be fine, so wait for the server instead of sending the
-  // user to sign in again.
-  if (loading && serverUnreachable) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
-        <div role="alert" className="glass-panel max-w-md w-full p-8 text-center space-y-4">
-          <h1 className="text-2xl font-bold text-brand-ink font-heading">Can't reach the server</h1>
-          <p className="text-stone-gray">
-            CozyVTT is not answering at the moment, perhaps because it is restarting. This page tries again by
-            itself, or you can try now.
-          </p>
-          <Button onClick={retryAuthCheck} className="w-full">
-            Try Again
-          </Button>
-        </div>
-      </div>
-    );
-  }
+  // The sign-in check got no answer: a restart or an upgrade under way.
+  if (loading && serverUnreachable) return <ServerUnreachablePanel onRetry={retryAuthCheck} />;
 
   // Show loading state while checking authentication
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="glass-panel p-8 text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-moss-green mx-auto mb-4"></div>
           <p className="text-brand-ink">Loading...</p>
@@ -77,12 +61,12 @@ export default function ProtectedRoute({
   // Check role-based access if required
   if (requireRole && user.platformRole !== requireRole) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div className="glass-panel max-w-md w-full p-8 text-center space-y-4">
           <div className="flex justify-center">
             <div className="bg-spirit-red/10 rounded-full p-4">
               <svg
-                className="w-12 h-12 text-spirit-red"
+                className="w-12 h-12 text-danger-ink"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"

@@ -13,9 +13,11 @@ import userEvent from '@testing-library/user-event';
 
 const { previewCampaignImport, importCampaign } = vi.hoisted(() => ({ previewCampaignImport: vi.fn(), importCampaign: vi.fn() }));
 vi.mock('@/services/api', () => ({ default: { previewCampaignImport, importCampaign } }));
-vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock('react-router', () => ({ useNavigate: () => navigate }));
 
 import CampaignImportDialog from '../CampaignImportDialog';
+import { zipFixture } from '@/test/zipFixture';
 
 /** An error shaped as axios rejects with it. */
 function httpError(status: number, data: unknown) {
@@ -31,6 +33,7 @@ function chooseArchive() {
 beforeEach(() => {
   previewCampaignImport.mockReset();
   importCampaign.mockReset();
+  navigate.mockReset();
 });
 
 describe('CampaignImportDialog', () => {
@@ -106,6 +109,14 @@ describe('CampaignImportDialog done screen', () => {
     expect(screen.getByRole('list', { name: 'Changed to fit' }).textContent).toBe(
       'Map "Cellar": shortened the notes of 1 token to 5,000 characters.'
     );
+  });
+
+  // It went to /campaign/<id>, which is no page, and the app sent that on to
+  // the dashboard.
+  it('opens the imported campaign at its page', async () => {
+    await importArchive({ warnings: [], skipped: [] });
+    fireEvent.click(screen.getByRole('button', { name: 'Open Campaign' }));
+    expect(navigate).toHaveBeenCalledWith('/campaigns/c1');
   });
 
   it('counts the maps that were made, not the ones the archive held', async () => {
@@ -215,5 +226,42 @@ describe('CampaignImportDialog while an import is running', () => {
     await userEvent.keyboard('{Escape}');
 
     expect(onClose).toHaveBeenCalled();
+  });
+});
+
+// The window sent the whole archive to the server to show what it holds, then
+// sent it again to import it.
+describe('CampaignImportDialog sends the archive once', () => {
+  const manifest = {
+    formatVersion: 1, exportedAt: '2026-10-18T00:00:00.000Z', exportedFrom: 'CozyVTT v1.5.3', campaignName: 'The Sunken Keep',
+    gameSystem: 'DND_5E', mapCount: 3, tokenCount: 14, creatureCount: 2, tokenTemplateCount: 1, assetCount: 4,
+    includesAudio: false, totalSizeBytes: 2048,
+  };
+
+  it('reads what the archive holds itself, and sends it only to be imported', async () => {
+    importCampaign.mockResolvedValue({ campaignId: 'c1', campaignName: 'The Sunken Keep', mapCount: 3, tokenCount: 14, creatureCount: 2, tokenTemplateCount: 1 });
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+    const bytes = await zipFixture([{ name: 'manifest.json', data: JSON.stringify(manifest) }]);
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [new File([bytes as BlobPart], 'keep.cozyvtt', { type: 'application/zip' })] } });
+
+    expect(await screen.findByDisplayValue('The Sunken Keep')).toBeTruthy();
+    expect(screen.getByText('Total tokens: 14 | Assets: 4')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Import Campaign/ }));
+    await screen.findByText('Import Complete!');
+
+    expect(previewCampaignImport).not.toHaveBeenCalled();
+    expect(importCampaign).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the server about an archive it cannot read, and shows why it was refused', async () => {
+    previewCampaignImport.mockRejectedValue(httpError(400, { error: 'Invalid Archive', message: 'Invalid archive: missing manifest.json' }));
+    render(<CampaignImportDialog isOpen onClose={() => undefined} />);
+
+    chooseArchive();
+
+    expect(await screen.findByText('Invalid archive: missing manifest.json')).toBeTruthy();
+    expect(previewCampaignImport).toHaveBeenCalledTimes(1);
+    expect(importCampaign).not.toHaveBeenCalled();
   });
 });

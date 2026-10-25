@@ -1,17 +1,21 @@
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
+import { useState, useEffect, useEffectEvent, useLayoutEffect, useRef, useCallback, useMemo, FormEvent, KeyboardEvent } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, X, Plus } from 'lucide-react';
+import { Dices, Send, AlertCircle, RotateCcw, Trash2, EyeOff, Eye, Plus } from 'lucide-react';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { getDiceRolls } from '@/services/dice.service';
 import api from '@/services/api';
 import { mayDisplayRoll, visibleRolls } from '@/utils/secretRolls';
-import type { DiceRolledEvent, DiceRolledSecretEvent, DiceRollDetail, DiceMacro } from '@/types';
+import type { DiceRolledEvent, DiceRolledSecretEvent, DiceMacro } from '@/types';
+import { rollDice as rollExpression, parseDiceExpression, DiceParserError } from '@/utils/dice-parser';
 import { CampaignStatus } from '@/types';
 import DiceResult from './DiceResult';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
+import Modal from '@/components/ui/Modal';
 import DiceMacroManager from './DiceMacroManager';
+import JumpToNewest from './JumpToNewest';
+import { errorSummary } from '@/utils/errors';
 
 /**
  * Stable identity for a roll, used to dedupe the live socket stream against
@@ -25,94 +29,30 @@ function rollKey(roll: DiceRolledEvent): string {
   return roll.id ?? `${roll.userId}-${roll.timestamp}`;
 }
 
-// ============================================
-// Local (offline) dice evaluator
-// Used when session is paused — no server, no DB, no DM visibility
-// Handles: NdS, NdSkh/klN, modifiers (+/-N), chained groups (2d6+1d4+3)
-// ============================================
-
-function localRoll(sides: number): number {
-  return Math.floor(Math.random() * sides) + 1;
-}
-
-function evaluateLocalRoll(
+/**
+ * A roll worked out in the browser, for a paused table: no server, no
+ * database, no DM visibility. It uses the server's own parser (the same
+ * file, byte for byte), so it reads every expression as a running table
+ * would. Call it with an expression `validateExpression` has passed.
+ */
+function rollLocally(
   expression: string,
   user: { id: string; displayName: string },
   characterName?: string,
   purpose?: string,
-): DiceRolledEvent | null {
-  try {
-    const expr = expression.trim().replace(/\s+/g, '');
-
-    // Tokenise by splitting on + / - boundaries (keeping signs)
-    const tokens = expr.match(/[+-]?[^+-]+/g);
-    if (!tokens || tokens.length === 0) return null;
-
-    const detailRolls: DiceRollDetail[] = [];
-    const formulaParts: string[] = [];
-    let total = 0;
-
-    for (const token of tokens) {
-      const negative = token.startsWith('-');
-      const sign = negative ? -1 : 1;
-      const part = token.replace(/^[+-]/, '');
-
-      // Dice group: NdS or NdSkh/klK
-      const diceMatch = part.match(/^(\d+)d(\d+)(?:(kh|kl)(\d+))?$/i);
-      if (diceMatch) {
-        const count = Math.min(parseInt(diceMatch[1]), 100);
-        const sides = Math.min(parseInt(diceMatch[2]), 1000);
-        const keepMode = diceMatch[3]?.toLowerCase() as 'kh' | 'kl' | undefined;
-        const keepCount = diceMatch[4] ? Math.min(parseInt(diceMatch[4]), count) : undefined;
-
-        const results = Array.from({ length: count }, () => localRoll(sides));
-
-        let kept: number[] | undefined;
-        let groupTotal: number;
-
-        if (keepMode && keepCount) {
-          const sorted = [...results].sort((a, b) => b - a);
-          kept = keepMode === 'kh' ? sorted.slice(0, keepCount) : sorted.slice(count - keepCount);
-          groupTotal = kept.reduce((s, v) => s + v, 0);
-        } else {
-          groupTotal = results.reduce((s, v) => s + v, 0);
-        }
-
-        const effectiveTotal = sign * groupTotal;
-        total += effectiveTotal;
-        formulaParts.push(negative && formulaParts.length > 0 ? `- ${groupTotal}` : String(groupTotal));
-        detailRolls.push({ type: 'dice', notation: part.toLowerCase(), count, sides, results, total: groupTotal, kept });
-      } else {
-        // Plain modifier
-        const modValue = parseInt(part, 10);
-        if (isNaN(modValue)) return null;
-        const effectiveMod = sign * modValue;
-        total += effectiveMod;
-        formulaParts.push(
-          negative && formulaParts.length > 0 ? `- ${modValue}` : (sign < 0 ? String(effectiveMod) : `+${modValue}`),
-        );
-        detailRolls.push({ type: 'modifier', value: effectiveMod });
-      }
-    }
-
-    if (detailRolls.length === 0) return null;
-
-    const formula = formulaParts.join(' + ').replace(/\+ \+/g, '+').replace(/\+ -/g, '- ') + ` = ${total}`;
-
-    return {
-      userId: user.id,
-      userName: user.displayName,
-      characterName: characterName?.trim() || null,
-      expression,
-      result: total,
-      breakdown: { expression, rolls: detailRolls, total, formula },
-      purpose: purpose?.trim() || null,
-      timestamp: new Date().toISOString(),
-      secret: false,
-    };
-  } catch {
-    return null;
-  }
+): DiceRolledEvent {
+  const breakdown = rollExpression(expression);
+  return {
+    userId: user.id,
+    userName: user.displayName,
+    characterName: characterName?.trim() || null,
+    expression,
+    result: breakdown.total,
+    breakdown,
+    purpose: purpose?.trim() || null,
+    timestamp: new Date().toISOString(),
+    secret: false,
+  };
 }
 
 // Quick roll button configurations with whimsical forest colors
@@ -121,7 +61,7 @@ const QUICK_ROLLS = [
   { label: 'd6', expression: '1d6', color: 'bg-success/15 dark:bg-success/30 border-success/50 hover:bg-success/80 dark:hover:bg-success/40' },
   { label: 'd8', expression: '1d8', color: 'bg-spirit/15 dark:bg-spirit/30 border-spirit/50 hover:bg-spirit/80 dark:hover:bg-spirit/40' },
   { label: 'd10', expression: '1d10', color: 'bg-warning/15 dark:bg-warning/30 border-warning/50 hover:bg-warning/80 dark:hover:bg-warning/40' },
-  { label: 'd12', expression: '1d12', color: 'bg-teal-100/80 dark:bg-teal-900/30 border-teal-300/50 hover:bg-teal-200/80 dark:hover:bg-teal-900/40' },
+  { label: 'd12', expression: '1d12', color: 'bg-token-friendly/15 dark:bg-token-friendly/30 border-token-friendly/50 hover:bg-token-friendly/80 dark:hover:bg-token-friendly/40' },
   { label: 'd20', expression: '1d20', color: 'bg-danger/15 dark:bg-danger/30 border-danger/50 hover:bg-danger/80 dark:hover:bg-danger/40' },
   { label: 'd100', expression: '1d100', color: 'bg-info/15 dark:bg-info/30 border-info/50 hover:bg-info/80 dark:hover:bg-info/40' },
 ];
@@ -180,37 +120,25 @@ export default function DiceRoller() {
   const rollsEndRef = useRef<HTMLDivElement>(null);
   const rollsContainerRef = useRef<HTMLDivElement>(null);
   const wasAtBottomRef = useRef(true);
+  /** Rolls that arrived live while the history was being read, by key. */
+  const liveDuringRead = useRef<Set<string> | null>(null);
+  /** A roll arrived below while the reader was scrolled up. */
+  const [newBelow, setNewBelow] = useState(false);
 
   /**
-   * Safety net for the "Rolling…" state.
-   *
-   * A roll is only ever ended by a message coming back from the server, so
-   * anything that loses that message leaves the button disabled until the user
-   * reloads. The listener bug that caused this in practice is fixed in the
-   * socket client, but a roll can still be lost if the connection drops between
-   * the emit and the reply — and a control that can wedge with no way out
-   * should always have one.
+   * End the "Rolling…" state. The roll coming back as `dice.rolled` ends it,
+   * and so does the server's answer to the roll, which also comes when the
+   * roll was refused or never answered (see `rollDice` in the socket client),
+   * so the button cannot stay disabled.
    */
-  const rollTimeoutRef = useRef<number | null>(null);
-  const ROLL_TIMEOUT_MS = 10000;
-
   const clearPendingRoll = useCallback(() => {
-    if (rollTimeoutRef.current !== null) {
-      clearTimeout(rollTimeoutRef.current);
-      rollTimeoutRef.current = null;
-    }
     setIsRolling(false);
   }, []);
 
-  // A pending roll cannot be answered while the socket is down, and drop the
-  // timer on unmount so it cannot fire against a gone component.
+  // A pending roll cannot be answered while the socket is down.
   useEffect(() => {
     if (status !== 'connected') clearPendingRoll();
   }, [status, clearPendingRoll]);
-
-  useEffect(() => () => {
-    if (rollTimeoutRef.current !== null) clearTimeout(rollTimeoutRef.current);
-  }, []);
 
   // Confirm clear history
   const [confirmClear, setConfirmClear] = useState(false);
@@ -228,6 +156,9 @@ export default function DiceRoller() {
 
   // Secret roll popup state
   const [secretRollResult, setSecretRollResult] = useState<DiceRolledEvent | null>(null);
+  // The roll list announces new rolls only once the history is in: it
+  // arrives as up to 50 rolls at once, which a live region would read out.
+  const [historyIn, setHistoryIn] = useState(false);
 
   // Rate limit state
   const [rateLimitCooldown, setRateLimitCooldown] = useState(0);
@@ -257,37 +188,46 @@ export default function DiceRoller() {
   useEffect(() => {
     if (!campaign?.id) return;
     let cancelled = false;
+    const isRejoin = rejoins > 0;
+    liveDuringRead.current = new Set();
 
     const loadHistory = async () => {
+      setHistoryIn(false);
       try {
         const fetched = await getDiceRolls(campaign.id, 50);
         if (cancelled) return;
         const visible = fetched.filter((r) => mayDisplayRoll(r, user?.id, userRole === 'DM'));
+        const arrivedLive = liveDuringRead.current ?? new Set<string>();
+        liveDuringRead.current = null;
 
-        // TODO(play): suspected, not reproduced. This merge only adds, and
-        // the DM's clear reaches only members online at the time, so a member
-        // who was offline then keeps the cleared rolls after rejoining, until
-        // they reload. On a rejoin, take the server's list as the history,
-        // keeping only rolls that arrived live since it was fetched.
         setRolls((prev) => {
-          // Merge rather than replace: a roll can land live between mount and
-          // this response, and it must not be lost or duplicated.
-          const seen = new Set(prev.map(rollKey));
-          const merged = [...prev, ...visible.filter((r) => !seen.has(rollKey(r)))];
+          // Merged, not replaced, on the first load: a roll can land live
+          // between mount and this response, and it must not be lost or
+          // duplicated. On a rejoin the server's list is the history: a clear
+          // made while this page was away reached only the pages online, and
+          // merging kept every cleared roll. Kept beside it are the rolls that
+          // arrived while it was being read, and rolls made in this browser
+          // during a pause, which the server never had.
+          const held = isRejoin ? prev.filter((r) => !r.id || arrivedLive.has(rollKey(r))) : prev;
+          const seen = new Set(held.map(rollKey));
+          const merged = [...held, ...visible.filter((r) => !seen.has(rollKey(r)))];
           merged.sort(
             (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
           );
           return merged.slice(0, 50);
         });
       } catch (err) {
-        console.error('[DiceRoller] Failed to load roll history:', err);
+        console.error('[DiceRoller] Failed to load roll history:', errorSummary(err));
         // Non-fatal — live rolls still arrive over the socket.
+      } finally {
+        // A frame later, so the history is drawn before the list goes live.
+        requestAnimationFrame(() => { if (!cancelled) setHistoryIn(true); });
       }
     };
 
     loadHistory();
     return () => { cancelled = true; };
-  }, [campaign?.id, userRole, rejoins]);
+  }, [campaign?.id, userRole, rejoins, user?.id]);
 
   // Saved rolls for this campaign. Failure is quiet on purpose: macros are a
   // convenience on top of a dice panel that works without them, and an error
@@ -307,6 +247,10 @@ export default function DiceRoller() {
       cancelled = true;
     };
   }, [campaign?.id]);
+
+  // The role at the moment a roll arrives, which a DM handover can change
+  // while the listener below stays bound.
+  const viewerIsDm = useEffectEvent(() => userRole === 'DM');
 
   useEffect(() => {
     if (!socket) return;
@@ -336,14 +280,13 @@ export default function DiceRoller() {
 
       // Someone else's secret roll is not mine to see. The server does not send
       // them, so reaching this is already wrong; drop it rather than draw it.
-      if (!mayDisplayRoll(data, user?.id, userRole === 'DM')) return;
+      if (!mayDisplayRoll(data, user?.id, viewerIsDm())) return;
+      liveDuringRead.current?.add(rollKey(data));
 
       // Newest first in state; the list renders oldest-first, chat style.
-      setRolls((prev) => {
-        const updated = [data, ...prev];
-        // Keep only last 50 rolls
-        return updated.length > 50 ? updated.slice(0, 50) : updated;
-      });
+      // A roll already listed (sent twice, or loaded with the history while
+      // it was on its way) is not added again.
+      setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(data)) ? prev : [data, ...prev].slice(0, 50)));
     };
 
     socket.onDiceRolled(handleDiceRolled);
@@ -352,7 +295,7 @@ export default function DiceRoller() {
       console.log('[DiceRoller] Cleaning up dice.rolled listener');
       socket.off('dice.rolled', handleDiceRolled);
     };
-  }, [socket, user]);
+  }, [socket, user, clearPendingRoll]);
 
   // DM Audit: Listen for secret rolls by other players
   useEffect(() => {
@@ -368,14 +311,9 @@ export default function DiceRoller() {
         ...data,
         secret: true, // Keep secret flag for styling
       };
+      liveDuringRead.current?.add(rollKey(auditRoll));
 
-      setRolls((prev) => {
-        const updated = [auditRoll, ...prev];
-        if (updated.length > 50) {
-          return updated.slice(0, 50);
-        }
-        return updated;
-      });
+      setRolls((prev) => (prev.some((r) => rollKey(r) === rollKey(auditRoll)) ? prev : [auditRoll, ...prev].slice(0, 50)));
     };
 
     socket.onDiceRolledSecret(handleSecretRollAudit);
@@ -385,35 +323,6 @@ export default function DiceRoller() {
       socket.off('dice.rolled.secret', handleSecretRollAudit);
     };
   }, [socket, userRole]);
-
-  // Handle WebSocket errors (rate limiting)
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleError = (data: { message: string }) => {
-      console.log('[DiceRoller] Received error event:', data);
-
-      // Check if it's a rate limit error
-      if (data.message.includes('Rate limit exceeded')) {
-        setError(data.message);
-        clearPendingRoll();
-        // Only set cooldown if not already in cooldown (prevent reset)
-        if (!isInCooldown.current) {
-          isInCooldown.current = true;
-          setRateLimitCooldown(20); // 20 seconds cooldown
-        }
-      } else {
-        setError(data.message);
-        clearPendingRoll();
-      }
-    };
-
-    socket.on('error', handleError);
-
-    return () => {
-      socket.off('error', handleError);
-    };
-  }, [socket]);
 
   // Countdown timer for rate limit cooldown
   useEffect(() => {
@@ -456,43 +365,23 @@ export default function DiceRoller() {
   // Input Validation
   // ============================================
 
+  /** Why the server would refuse this expression, in its words, or null. */
   const validateExpression = (expr: string): string | null => {
-    if (!expr.trim()) {
-      return 'Expression cannot be empty';
+    try {
+      parseDiceExpression(expr);
+      return null;
+    } catch (err) {
+      return err instanceof DiceParserError ? `Invalid dice expression: ${err.message}` : 'Invalid dice expression';
     }
-
-    // Check length limit (200 characters)
-    if (expr.length > 200) {
-      return 'Expression too long (max 200 characters)';
-    }
-
-    // Basic validation for dice notation
-    const dicePattern = /^[\dd+\-*/khldisavw\s]+$/i;
-    if (!dicePattern.test(expr)) {
-      return 'Invalid characters in expression';
-    }
-
-    // Check for maximum dice count (100)
-    const diceMatches = expr.match(/(\d+)d/gi);
-    if (diceMatches) {
-      const totalDice = diceMatches.reduce((sum, match) => {
-        const count = parseInt(match.replace(/d/i, ''));
-        return sum + count;
-      }, 0);
-
-      if (totalDice > 100) {
-        return 'Too many dice (max 100 per roll)';
-      }
-    }
-
-    return null;
   };
 
   // ============================================
   // Roll Handlers
   // ============================================
 
-  const rollDice = (expr: string) => {
+  /** `named` is a saved roll's name, sent as the roll's purpose in place of the Purpose box. */
+  const rollDice = (expr: string, named?: string) => {
+    const rollPurpose = (named ?? purpose).trim();
     if (isSpectator) {
       setError('Spectators watch the dice; they cannot roll.');
       return;
@@ -504,12 +393,8 @@ export default function DiceRoller() {
       if (validationError) { setError(validationError); return; }
       setError(null);
       setIsRolling(true);
-      const localResult = evaluateLocalRoll(expr, user, characterName.trim(), purpose.trim());
-      if (localResult) {
-        setRolls((prev) => [localResult, ...prev]);
-      } else {
-        setError('Could not evaluate expression locally');
-      }
+      const localResult = rollLocally(expr, user, characterName.trim(), rollPurpose);
+      setRolls((prev) => [localResult, ...prev]);
       clearPendingRoll();
       return;
     }
@@ -533,24 +418,28 @@ export default function DiceRoller() {
     setError(null);
     setIsRolling(true);
 
-    // The roll is fire-and-forget, so nothing but a reply ends this state. If
-    // the connection drops in between, release the button rather than leaving
-    // it disabled until the user works out that a reload is the only way on.
-    if (rollTimeoutRef.current !== null) clearTimeout(rollTimeoutRef.current);
-    rollTimeoutRef.current = window.setTimeout(() => {
-      rollTimeoutRef.current = null;
-      setIsRolling(false);
-      setError("That roll didn't come back — check your connection and try again.");
-    }, ROLL_TIMEOUT_MS);
-
     console.log('[DiceRoller] Rolling dice:', expr, 'secret:', isSecret);
 
-    socket.emitDiceRoll({
-      expression: expr.trim(),
-      characterName: characterName.trim() || undefined,
-      purpose: purpose.trim() || undefined,
-      secret: isSecret,
-    });
+    // Only the answer to this roll is this panel's to show: it used to take
+    // every `error` on the socket as a refused roll, chat and token refusals
+    // included.
+    void socket
+      .rollDice({
+        expression: expr.trim(),
+        characterName: characterName.trim() || undefined,
+        purpose: rollPurpose || undefined,
+        secret: isSecret,
+      })
+      .then((answer) => {
+        clearPendingRoll();
+        if (answer.ok) return;
+        setError(answer.error);
+        // The server's flood ceiling: wait it out before rolling again.
+        if (answer.error.startsWith('Rate limit exceeded') && !isInCooldown.current) {
+          isInCooldown.current = true;
+          setRateLimitCooldown(20);
+        }
+      });
 
     // Reset secret roll checkbox after rolling
     if (isSecret) {
@@ -563,12 +452,14 @@ export default function DiceRoller() {
     rollDice(expression);
   };
 
-  const handleQuickRoll = (expr: string) => {
+  const handleQuickRoll = (expr: string, named?: string) => {
     setExpression(expr);
-    rollDice(expr);
+    rollDice(expr, named);
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // Enter while an input method is composing confirms the candidate.
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       rollDice(expression);
@@ -612,10 +503,21 @@ export default function DiceRoller() {
   const newestIsMine = newestRoll !== undefined && newestRoll.userId === user?.id;
   useLayoutEffect(() => {
     const container = rollsContainerRef.current;
-    if (!container || (!wasAtBottomRef.current && !newestIsMine)) return;
+    if (!container || newestRollKey === null) return;
+    if (!wasAtBottomRef.current && !newestIsMine) {
+      setNewBelow(true);
+      return;
+    }
     container.scrollTo({ top: container.scrollHeight });
     wasAtBottomRef.current = true;
+    setNewBelow(false);
   }, [newestRollKey, newestIsMine]);
+
+  const jumpToNewest = () => {
+    rollsContainerRef.current?.scrollTo({ top: rollsContainerRef.current.scrollHeight });
+    wasAtBottomRef.current = true;
+    setNewBelow(false);
+  };
 
   /**
    * Only scrolling up leaves the bottom, so a position short of it that the
@@ -626,8 +528,12 @@ export default function DiceRoller() {
     const container = rollsContainerRef.current;
     if (!container) return;
     const atBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 50;
-    if (atBottom) wasAtBottomRef.current = true;
-    else if (container.scrollTop < lastScrollTopRef.current) wasAtBottomRef.current = false;
+    if (atBottom) {
+      wasAtBottomRef.current = true;
+      setNewBelow(false);
+    } else if (container.scrollTop < lastScrollTopRef.current) {
+      wasAtBottomRef.current = false;
+    }
     lastScrollTopRef.current = container.scrollTop;
   };
 
@@ -636,8 +542,10 @@ export default function DiceRoller() {
   };
 
   const handleConfirmClear = () => {
-    socket?.emitClearDiceHistory();
     setConfirmClear(false);
+    void socket?.clearDiceHistory().then((answer) => {
+      if (!answer.ok) setError(answer.error);
+    });
   };
 
   // ============================================
@@ -665,9 +573,9 @@ export default function DiceRoller() {
       onConfirm={handleConfirmClear}
       onCancel={() => setConfirmClear(false)}
     />
-    <div className="h-full flex flex-col bg-surface/50 backdrop-blur-sm rounded-lg border border-ink-muted/20 relative">
+    <div className="h-full flex flex-col bg-surface/50 backdrop-blur-xs rounded-lg border border-ink-muted/20 relative">
       {/* Header */}
-      <div className="flex-shrink-0 p-3 border-b border-ink-muted/20">
+      <div className="shrink-0 p-3 border-b border-ink-muted/20">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Dices className="w-4 h-4 text-brand-ink dark:text-brand-ink" />
@@ -685,7 +593,7 @@ export default function DiceRoller() {
               className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-all ${
                 showSecretRolls
                   ? 'border-ink-muted/30 bg-paper/50 text-ink hover:bg-paper/70'
-                  : 'border-warm-amber/40 bg-warm-amber/10 text-warm-amber'
+                  : 'border-warm-amber/40 bg-warm-amber/10 text-accent-ink'
               }`}
               title={
                 showSecretRolls
@@ -701,7 +609,7 @@ export default function DiceRoller() {
           {userRole === 'DM' && rolls.length > 0 && (
             <button
               onClick={handleClearHistory}
-              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/20 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
+              className="flex items-center gap-1 px-2 py-1 text-xs rounded-md border border-danger/30 bg-danger/10 dark:bg-danger/15 text-danger-ink dark:text-danger-ink hover:bg-danger/15 dark:hover:bg-danger/30 transition-all"
               title="Clear all roll history"
             >
               <Trash2 className="w-3 h-3" />
@@ -713,9 +621,14 @@ export default function DiceRoller() {
       </div>
 
       {/* Roll list — a running log, oldest first, like the chat beside it */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         ref={rollsContainerRef}
         onScroll={handleRollsScroll}
+        role="log"
+        aria-live={historyIn ? 'polite' : 'off'}
+        aria-label="Dice rolls"
+        aria-relevant="additions"
         className="flex-1 overflow-y-auto p-3 min-h-0"
       >
         {rolls.length === 0 ? (
@@ -747,13 +660,15 @@ export default function DiceRoller() {
           </div>
         )}
       </div>
+      {newBelow && <JumpToNewest onClick={jumpToNewest} />}
+      </div>
 
       {/* Input Area */}
-      <div className="flex-shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-sm">
+      <div className="shrink-0 border-t border-ink-muted/20 p-3 bg-surface/80 backdrop-blur-xs">
         {/* Paused notice: rolls still work, but only in this browser */}
         {isPaused && (
-          <p className="text-xs text-warm-amber text-center mb-2 italic">
-            Session paused: your rolls stay on your own screen.
+          <p className="text-xs text-accent-ink text-center mb-2 italic">
+            Session paused: rolls from this tab stay on your own screen.
           </p>
         )}
         {isSpectator && (
@@ -770,7 +685,7 @@ export default function DiceRoller() {
               exit={{ opacity: 0, height: 0 }}
               className="mb-2 flex items-center gap-2 text-danger-ink dark:text-danger-ink text-xs"
             >
-              <AlertCircle className="w-3 h-3 flex-shrink-0" />
+              <AlertCircle className="w-3 h-3 shrink-0" />
               <span>{error}</span>
             </motion.div>
           )}
@@ -823,14 +738,14 @@ export default function DiceRoller() {
             {macros.map((macro) => (
               <button
                 key={macro.id}
-                onClick={() => handleQuickRoll(macro.expression)}
+                onClick={() => handleQuickRoll(macro.expression, macro.name)}
                 disabled={isRolling}
                 title={`${macro.name} — ${macro.expression}`}
                 className="
                   px-2 py-1 rounded-md border border-spirit-purple/30 text-xs font-medium
                   bg-spirit-purple/10 hover:bg-spirit-purple/20 transition-all
                   disabled:opacity-50 disabled:cursor-not-allowed
-                  text-ink max-w-[10rem] truncate
+                  text-ink max-w-40 truncate
                 "
               >
                 {macro.name}
@@ -862,8 +777,12 @@ export default function DiceRoller() {
               onChange={(e) => setExpression(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="e.g., 2d6+3, 1d20+5, 4d6kh3"
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 font-mono text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Dice expression"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 font-mono text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
           </div>
 
@@ -874,10 +793,14 @@ export default function DiceRoller() {
               value={characterName}
               onChange={(e) => setCharacterName(e.target.value)}
               placeholder="Character"
+              aria-label="Character name"
               // The longest name and purpose the server stores with a roll.
               maxLength={200}
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
 
             <input
@@ -886,9 +809,13 @@ export default function DiceRoller() {
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
               placeholder="Purpose"
+              aria-label="Purpose"
               maxLength={300}
-              disabled={isRolling}
-              className="input-cozy px-2 py-1.5 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              // Read-only while a roll is on its way: disabled, it threw keyboard
+              // focus to the page after every roll.
+              readOnly={isRolling}
+              aria-disabled={isRolling}
+              className="input-cozy px-2 py-1.5 text-xs read-only:opacity-50 read-only:cursor-not-allowed"
             />
           </div>
 
@@ -900,7 +827,7 @@ export default function DiceRoller() {
               checked={isSecret}
               onChange={(e) => setIsSecret(e.target.checked)}
               disabled={isRolling}
-              className="w-3 h-3 rounded border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-3 h-3 rounded-sm border-ink-muted/30 text-brand-ink focus:ring-brand/50 disabled:opacity-50 disabled:cursor-not-allowed"
             />
             <label
               htmlFor="secretRoll"
@@ -921,10 +848,10 @@ export default function DiceRoller() {
               disabled={isRolling || !expression.trim() || rateLimitCooldown > 0}
               className="
                 flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md
-                bg-success hover:bg-success text-white font-semibold text-xs shadow-sm
+                bg-success/15 hover:bg-success/25 border border-success/30 text-success-ink font-semibold text-xs shadow-xs
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200
-                focus:outline-none focus:ring-2 focus:ring-success/50
+                focus:outline-hidden focus:ring-2 focus:ring-success/50
               "
             >
               {isRolling ? (
@@ -955,7 +882,7 @@ export default function DiceRoller() {
                 text-ink
                 disabled:opacity-50 disabled:cursor-not-allowed
                 transition-all duration-200
-                focus:outline-none focus:ring-2 focus:ring-brand/50
+                focus:outline-hidden focus:ring-2 focus:ring-brand/50
               "
               title="Clear all fields"
             >
@@ -976,68 +903,35 @@ export default function DiceRoller() {
         )}
       </div>
 
-      {/* Secret Roll Popup Overlay */}
-      <AnimatePresence>
-        {secretRollResult && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      {/* Secret roll popup: the confirmation that my own secret roll landed */}
+      <Modal
+        open={secretRollResult !== null}
+        onClose={() => setSecretRollResult(null)}
+        title="Secret Roll"
+        icon={EyeOff}
+        size="sm"
+        footer={
+          <button
+            type="button"
             onClick={() => setSecretRollResult(null)}
+            className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-hover text-brand-text font-semibold text-sm shadow-xs transition-all"
           >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-surface-light rounded-lg border-2 border-brand/50 shadow-2xl max-w-md w-full relative"
-            >
-              {/* Close Button */}
-              <button
-                onClick={() => setSecretRollResult(null)}
-                className="absolute top-2 right-2 p-1 rounded-md bg-surface hover:bg-surface-dark transition-all"
-                title="Close"
-              >
-                <X className="w-4 h-4 text-ink" />
-              </button>
-
-              {/* Header */}
-              <div className="p-4 border-b border-ink/10">
-                <div className="flex items-center gap-2">
-                  <EyeOff className="w-5 h-5 text-brand-ink" />
-                  <h3 className="text-lg font-semibold text-ink">
-                    Secret Roll
-                  </h3>
-                </div>
-                <p className="text-xs text-ink-muted mt-1">
-                  Hidden from other players — your DM can still see it
-                </p>
-              </div>
-
-              {/* Roll Result */}
-              <div className="p-4 bg-paper">
-                <div className="bg-paper rounded-lg p-3 shadow-inner">
-                  <DiceResult
-                    roll={secretRollResult}
-                    isCurrentUser={true}
-                  />
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-3 border-t border-ink/10 bg-surface rounded-b-lg">
-                <button
-                  onClick={() => setSecretRollResult(null)}
-                  className="w-full px-3 py-2 rounded-md bg-brand hover:bg-brand-dark text-white font-semibold text-sm shadow-sm transition-all"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+            Close
+          </button>
+        }
+      >
+        <p className="text-xs text-ink-muted -mt-4 mb-4">
+          Hidden from other players — your DM can still see it
+        </p>
+        {secretRollResult && (
+          <div className="bg-paper rounded-lg p-3 shadow-inner">
+            <DiceResult
+              roll={secretRollResult}
+              isCurrentUser={true}
+            />
+          </div>
         )}
-      </AnimatePresence>
+      </Modal>
     </div>
     </>
   );

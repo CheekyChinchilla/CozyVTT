@@ -8,6 +8,7 @@ import {
   useContext,
   useState,
   useEffect,
+  useEffectEvent,
   useRef,
   ReactNode,
   useCallback,
@@ -16,7 +17,7 @@ import {
 import { useParams } from 'react-router';
 import type { Socket } from 'socket.io-client';
 import socketClient from '@/services/socket';
-import { errorMessage } from '@/utils/errors';
+import { errorMessage, errorSummary } from '@/utils/errors';
 import { keepSessionAlive, SESSION_KEEPALIVE_MS } from '@/services/sessionKeepAlive';
 import type { AccessRevoked } from '@/types';
 
@@ -83,7 +84,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
   const [error, setError] = useState<string | null>(null);
   const [reconnectCount, setReconnectCount] = useState(0);
   const [joinedEpoch, setJoinedEpoch] = useState(0);
-  const heartbeatCleanupRef = useRef<(() => void) | null>(null);
   const connectedCampaignRef = useRef<string | null>(null);
   const statusRef = useRef<ConnectionStatus>('disconnected');
   const isMountedRef = useRef(true);
@@ -150,10 +150,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     const onRevoked = (revoked: AccessRevoked) => {
       if (!isMountedRef.current) return;
       revokedRef.current = true;
-      if (heartbeatCleanupRef.current) {
-        heartbeatCleanupRef.current();
-        heartbeatCleanupRef.current = null;
-      }
       setStatus('error');
       setError(revoked.message);
     };
@@ -267,9 +263,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
 
       const socket = socketClient.getSocket();
       if (socket) attachLifecycle(socket);
-
-      const cleanup = socketClient.startHeartbeat(30000); // 30 second interval
-      heartbeatCleanupRef.current = cleanup || null;
     } catch (err) {
       // A socket whose connect failed is often still being retried by
       // socket.io, and its lifecycle is already followed (onCreated), so the
@@ -302,12 +295,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       clearTimeout(retryTimerRef.current);
       retryTimerRef.current = null;
     }
-    // Stop heartbeat
-    if (heartbeatCleanupRef.current) {
-      heartbeatCleanupRef.current();
-      heartbeatCleanupRef.current = null;
-    }
-
     socketClient.disconnect();
     setStatus('disconnected');
     setError(null);
@@ -328,10 +315,13 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
     await connect(campaignId);
   }, [campaignId, disconnect, connect]);
 
-  // Auto-connect when campaign ID changes
+  // Auto-connect when campaign ID changes. connect is called as an effect
+  // event: as a dependency, its every change would run the cleanup below and
+  // drop the connection.
+  const connectTo = useEffectEvent((id: string) => connect(id));
   useEffect(() => {
     if (campaignId && connectedCampaignRef.current !== campaignId) {
-      connect(campaignId);
+      connectTo(campaignId);
     }
 
     // Cleanup on unmount or campaign change
@@ -341,10 +331,6 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
         retryTimerRef.current = null;
       }
       failedConnectsRef.current = 0;
-      if (heartbeatCleanupRef.current) {
-        heartbeatCleanupRef.current();
-        heartbeatCleanupRef.current = null;
-      }
 
       socketClient.disconnect();
       setStatus('disconnected'); // Reset status so reconnect can work
@@ -356,7 +342,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       // Likewise the join count: the next campaign's first join is not a rejoin.
       setJoinedEpoch(0);
     };
-  }, [campaignId]); // connect is stable - no need in deps (causes premature cleanup)
+  }, [campaignId]);
 
   // Browser network listeners — flip status immediately when the OS reports
   // the network has gone away, and actively trigger reconnection when it
@@ -405,7 +391,7 @@ export function WebSocketProvider({ children }: WebSocketProviderProps) {
       setTimeout(() => {
         if (isMountedRef.current) {
           connect(cid).catch((err) => {
-            console.error('[WebSocket] Auto-reconnect on online event failed:', err);
+            console.error('[WebSocket] Auto-reconnect on online event failed:', errorSummary(err));
           });
         }
       }, 300);

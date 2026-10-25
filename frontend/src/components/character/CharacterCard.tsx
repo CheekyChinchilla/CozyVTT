@@ -8,6 +8,7 @@ import type { CharacterSummary, Campaign } from '@/types';
 import { User, Calendar, Link2, MoreVertical, Edit, Copy, Trash2, FileDown, Link as LinkIcon } from 'lucide-react';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 
 interface CharacterCardProps {
   character: CharacterSummary;
@@ -35,6 +36,7 @@ function CharacterCardInner({
   onExport,
 }: CharacterCardProps) {
   const [showMenu, setShowMenu] = useState(false);
+  const menuExit = useMotionExit({ opacity: 0, scale: 0.95, y: -10 });
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -91,7 +93,7 @@ function CharacterCardInner({
         onClick={handleCardClick}
         className={`group relative glass-panel p-6 text-left transition-all duration-300
                    hover:scale-105 hover:shadow-xl hover:shadow-moss-green/20
-                   focus:outline-none focus:ring-2 focus:ring-moss-green/50 focus:scale-105
+                   focus:outline-hidden focus:ring-2 focus:ring-moss-green/50 focus:scale-105
                    active:scale-100 w-full cursor-pointer ${showMenu ? 'z-50' : 'z-0'}`}
         role="button"
         tabIndex={0}
@@ -110,7 +112,7 @@ function CharacterCardInner({
           <button
             onClick={handleMenuToggle}
             className="p-2 rounded-lg hover:bg-warm-gray/20 transition-colors
-                     focus:outline-none focus:ring-2 focus:ring-moss-green/50"
+                     focus:outline-hidden focus:ring-2 focus:ring-moss-green/50"
             aria-label="Character actions"
             type="button"
           >
@@ -123,7 +125,7 @@ function CharacterCardInner({
               <motion.div
                 initial={{ opacity: 0, scale: 0.95, y: -10 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                exit={menuExit}
                 transition={{ duration: 0.15 }}
                 className="absolute right-0 mt-2 w-48 rounded-lg shadow-xl z-50
                            bg-surface-light/95 backdrop-blur-cozy border border-brand/20"
@@ -171,7 +173,7 @@ function CharacterCardInner({
 
                   <button
                     onClick={(e) => handleMenuItemClick(e, () => onDelete(character))}
-                    className="w-full px-4 py-2 text-left text-sm text-spirit-red hover:bg-spirit-red/10
+                    className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-spirit-red/10
                              flex items-center gap-2 transition-colors"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -202,7 +204,7 @@ function CharacterCardInner({
           <div className="flex-1 min-w-0 pr-8">
             {/* Character Name */}
             <h3 className="text-xl font-semibold text-brand-ink mb-1 truncate
-                         group-hover:text-spirit-purple transition-colors">
+                         group-hover:text-spirit-ink transition-colors">
               {character.name}
             </h3>
 
@@ -215,8 +217,8 @@ function CharacterCardInner({
         {campaign && (
           <div className="mb-4 px-3 py-2 rounded-lg bg-spirit-purple/10 border border-spirit-purple/30">
             <div className="flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-spirit-purple" />
-              <span className="text-sm font-medium text-spirit-purple">
+              <Link2 className="w-4 h-4 text-spirit-ink" />
+              <span className="text-sm font-medium text-spirit-ink">
                 Assigned to:
               </span>
               <span className="text-sm text-stone-gray truncate">
@@ -241,14 +243,14 @@ function CharacterCardInner({
         <div className="space-y-2 text-sm">
           {/* Last Updated */}
           <div className="flex items-center gap-2 text-stone-gray">
-            <Calendar className="w-4 h-4 text-warm-amber" />
+            <Calendar className="w-4 h-4 text-accent-ink" />
             <span className="text-warm-gray">Updated:</span>
             <span className="text-stone-gray font-medium">{formatDate(character.updatedAt)}</span>
           </div>
         </div>
 
         {/* Hover Overlay Effect */}
-        <div className="absolute inset-0 rounded-lg bg-gradient-to-br from-moss-green/5 to-spirit-purple/5
+        <div className="absolute inset-0 rounded-lg bg-linear-to-br/srgb from-moss-green/5 to-spirit-purple/5
                         opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
              style={{ transform: 'translateZ(-1px)' }} />
       </div>

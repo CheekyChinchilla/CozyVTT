@@ -4,13 +4,16 @@
  * Supports real-time updates via WebSocket
  */
 
-import { useState, useEffect } from 'react';
+import { HP_HUES, TEMP_HP_FILL, hpTier, hueColour } from '@/utils/tokenColours';
+import { useState, useEffect, useEffectEvent, useRef } from 'react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useGameStore } from '@/stores/gameStore';
+import { useGameStore, useCharacterHp } from '@/stores/gameStore';
 import { characterTokenDrag, characterTokenRequest } from '@/utils/characterTokenDrag';
 import { useAuth } from '@/contexts/AuthContext';
+import { useTableRoll } from '@/hooks/useTableRoll';
 import { api } from '@/services/api';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { canRollAsCharacter, canEditCharacter, canRemoveCharacterFromCampaign } from '@/services/permissions';
 import { Users, Crown, Gamepad2, Eye, Edit, X, Minus, Plus, Dices, MapPin } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -25,44 +28,63 @@ import type { CampaignRole, GameSystem, Character, RosterMember } from '@/types'
 import { TokenLayer } from '@/types';
 
 export default function CampaignRoster() {
-  const { campaign, currentMap, userRole, characterHpCache, seedCharacterHpCache } = useCampaign();
+  const { campaign, currentMap, userRole } = useCampaign();
+  const characterHpCache = useCharacterHp();
   const { socket } = useWebSocket();
+  const tableRoll = useTableRoll(socket);
   const { user } = useAuth();
   const { toast, showToast, hideToast } = useToast();
   const [roster, setRoster] = useState<RosterMember[]>([]);
   // User IDs with at least one live connection to this campaign.
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
+  // The last load failed, so an empty list is not an empty campaign.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedCharacter, setSelectedCharacter] = useState<Character | null>(null);
   const [editorCharacter, setEditorCharacter] = useState<Character | null>(null);
   const [_viewerLoading, setViewerLoading] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; characterId: string; characterUserId: string } | null>(null);
   const [rollPicker, setRollPicker] = useState<{ x: number; y: number; characterId: string } | null>(null);
-  const [confirmRemove, setConfirmRemove] = useState(false);
+  // The character Remove from Campaign asks about. Kept apart from the menu,
+  // which closes as soon as the item is chosen.
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
-  // Fetch roster data
+  // Each fetch is numbered and only the newest answer is shown: two
+  // refetches can answer out of order.
+  const rosterSeq = useRef(0);
+
+  // Fetch roster data. "Loading roster..." is for the first load only; a
+  // refetch keeps the list on screen, so a drag or hover on it carries on.
   const fetchRoster = async () => {
     if (!campaign?.id) return;
+    const seq = ++rosterSeq.current;
 
     try {
-      setLoading(true);
       const response = await api.getCampaignCharacters(campaign.id);
+      if (seq !== rosterSeq.current) return;
       setRoster(response.roster);
+      setLoadFailed(false);
 
-      // Seed the HP cache in CampaignContext so MapCanvas can render player HP bars
+      // Seed the HP cache so MapCanvas can render player HP bars
       const hpEntries = response.roster.flatMap((m) =>
         m.characters.map((c) => ({ id: c.id, hp: c.hp }))
       );
-      seedCharacterHpCache(hpEntries);
+      useGameStore.getState().seedCharacterHp(hpEntries);
     } catch (error) {
-      console.error('Error fetching campaign roster:', error);
+      if (seq !== rosterSeq.current) return;
+      setLoadFailed(true);
+      showToast(apiErrorMessage(error) || 'Could not load the roster', 'error');
     } finally {
-      setLoading(false);
+      if (seq === rosterSeq.current) setLoading(false);
     }
   };
 
-  useEffect(() => {
+  const refetchRoster = useEffectEvent(() => {
     fetchRoster();
+  });
+
+  useEffect(() => {
+    refetchRoster();
   }, [campaign?.id]);
 
   // Listen for roster updates via WebSocket
@@ -71,7 +93,7 @@ export default function CampaignRoster() {
 
     const handleRosterUpdate = () => {
       console.log('Roster updated - refetching...');
-      fetchRoster();
+      refetchRoster();
     };
 
     socket.on('roster.updated', handleRosterUpdate);
@@ -113,7 +135,7 @@ export default function CampaignRoster() {
       const { character } = await api.getCharacter(characterId);
       setSelectedCharacter(character);
     } catch (error) {
-      console.error('Error fetching character:', error);
+      showToast(apiErrorMessage(error) || 'Could not open that character sheet', 'error');
     } finally {
       setViewerLoading(false);
     }
@@ -156,8 +178,7 @@ export default function CampaignRoster() {
         const { character } = await api.getCharacter(contextMenu.characterId);
         setEditorCharacter(character);
       } catch (error) {
-        console.error('Error fetching character for editing:', error);
-        showToast('Failed to load character for editing', 'error');
+        showToast(apiErrorMessage(error) || 'Failed to load character for editing', 'error');
       }
     }
   };
@@ -214,28 +235,27 @@ export default function CampaignRoster() {
         ),
       );
       useGameStore.getState().addToken(result.token);
-      socket?.emitMapChange(currentMap.id);
       showToast(`${character.name} placed on the map`, 'success');
     } catch (error) {
-      console.error('Failed to place character on map:', error);
-      showToast('Could not place that character on the map', 'error');
+      showToast(apiErrorMessage(error) || 'Could not place that character on the map', 'error');
     }
   };
 
   const handleRemoveFromCampaign = () => {
     if (!contextMenu || !campaign) return;
-    setConfirmRemove(true);
+    setConfirmRemove(contextMenu.characterId);
   };
 
   const handleConfirmRemove = async () => {
-    if (!contextMenu || !campaign) return;
-    setConfirmRemove(false);
+    const characterId = confirmRemove;
+    setConfirmRemove(null);
+    if (!characterId || !campaign) return;
     try {
-      await api.assignCharacterToCampaign(contextMenu.characterId, null);
+      await api.assignCharacterToCampaign(characterId, null);
       await fetchRoster();
     } catch (error) {
-      console.error('Error removing character from campaign:', error);
-      showToast('Failed to remove character from campaign', 'error');
+      console.error('Error removing character from campaign:', errorSummary(error));
+      showToast(apiErrorMessage(error) || 'Failed to remove character from campaign', 'error');
     }
   };
 
@@ -304,6 +324,17 @@ export default function CampaignRoster() {
       {loading ? (
         <div className="text-center py-4">
           <p className="text-sm text-warm-gray">Loading roster...</p>
+        </div>
+      ) : roster.length === 0 && loadFailed ? (
+        <div className="text-center py-4 space-y-2">
+          <p className="text-sm text-warm-gray">The roster could not be loaded.</p>
+          <button
+            type="button"
+            onClick={() => { void fetchRoster(); }}
+            className="text-xs text-brand-ink underline hover:text-brand-ink/80"
+          >
+            Try again
+          </button>
         </div>
       ) : roster.length === 0 ? (
         <div className="text-center py-4">
@@ -428,9 +459,7 @@ export default function CampaignRoster() {
           }
           anchorX={rollPicker.x}
           anchorY={rollPicker.y}
-          onRoll={(expression, purpose, characterName) => {
-            socket?.emitDiceRoll({ expression, purpose, characterName });
-          }}
+          onRoll={(expression, purpose, characterName) => tableRoll({ expression, purpose, characterName })}
           onClose={() => setRollPicker(null)}
         />
       )}
@@ -447,13 +476,13 @@ export default function CampaignRoster() {
       <Toast message={toast.message} type={toast.type} show={toast.show} onClose={hideToast} />
 
       <ConfirmDialog
-        isOpen={confirmRemove}
+        isOpen={confirmRemove !== null}
         title="Remove from Campaign"
         message="Are you sure you want to remove this character from the campaign?"
         confirmLabel="Remove"
         variant="danger"
         onConfirm={handleConfirmRemove}
-        onCancel={() => setConfirmRemove(false)}
+        onCancel={() => setConfirmRemove(null)}
       />
     </>
   );
@@ -491,7 +520,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             header indicators, which sit next to the words "Live"/"Connected" —
             so colour alone would fail WCAG 1.4.1. Hence the label. No pulse
             either: a roster can show many of these at once. */}
-        <div className="relative flex-shrink-0">
+        <div className="relative shrink-0">
           <div
             className={`p-1.5 rounded-full ${
               member.role === 'DM' ? 'bg-moss-green/20' : 'bg-spirit-purple/20'
@@ -500,7 +529,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             {/* eslint-disable-next-line react-hooks/static-components -- getRoleIcon picks one of two lucide icons; no component is made here */}
             <RoleIcon
               className={`w-4 h-4 ${
-                member.role === 'DM' ? 'text-brand-ink' : 'text-spirit-purple'
+                member.role === 'DM' ? 'text-brand-ink' : 'text-spirit-ink'
               }`}
             />
           </div>
@@ -538,7 +567,7 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
             return (
             <div
               key={character.id}
-              className="rounded bg-paper/50 hover:bg-paper/70 transition-colors"
+              className="rounded-sm bg-paper/50 hover:bg-paper/70 transition-colors"
             >
               <div
                 onClick={() => onCharacterClick(character.id)}
@@ -595,22 +624,20 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
               const canAdjust = isDM || (canAdjustOwn && character.userId === currentUserId);
               if (!hp || hp.max === 0) return null;
               const pct = Math.max(0, Math.min(1, hp.current / hp.max));
-              const barColor = pct >= 0.75 ? 'bg-success'
-                            : pct >= 0.50 ? 'bg-lime-500'
-                            : pct >= 0.25 ? 'bg-warning'
-                            :               'bg-danger';
+              // The tiers and colours of the map's HP bars.
+              const barColor = hueColour(HP_HUES[hpTier(pct)]);
               return (
                 <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
                   {/* HP progress bar */}
                   <div className="h-1.5 w-full rounded-full bg-black/20 overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-300 ${barColor}`}
-                      style={{ width: `${pct * 100}%` }}
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{ width: `${pct * 100}%`, backgroundColor: barColor }}
                     />
                     {hp.temp > 0 && (
                       <div
-                        className="h-full rounded-full bg-info/75 -mt-1.5 ml-auto"
-                        style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%` }}
+                        className="h-full rounded-full -mt-1.5 ml-auto"
+                        style={{ width: `${Math.min(1, hp.temp / hp.max) * 100}%`, backgroundColor: TEMP_HP_FILL }}
                       />
                     )}
                   </div>
@@ -619,12 +646,12 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => onHpDelta(character.id, -5)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
                         title="−5 HP"
                       >−5</button>
                       <button
                         onClick={() => onHpDelta(character.id, -1)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-stone-gray bg-black/10 hover:bg-danger/10 hover:text-danger-ink transition-colors"
                         title="−1 HP"
                       ><Minus className="w-3 h-3" /></button>
                       <span className="flex-1 text-center text-xs font-semibold text-stone-gray">
@@ -633,12 +660,12 @@ function MemberCard({ member, getRoleIcon, getSystemBadgeColor, getSystemShortNa
                       </span>
                       <button
                         onClick={() => onHpDelta(character.id, 1)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
                         title="+1 HP"
                       ><Plus className="w-3 h-3" /></button>
                       <button
                         onClick={() => onHpDelta(character.id, 5)}
-                        className="flex items-center justify-center w-5 h-5 rounded text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
+                        className="flex items-center justify-center w-5 h-5 rounded-sm text-xs font-bold text-stone-gray bg-black/10 hover:bg-success/10 hover:text-success-ink transition-colors"
                         title="+5 HP"
                       >+5</button>
                     </div>

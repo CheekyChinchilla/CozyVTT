@@ -8,15 +8,9 @@ import type { CharacterHpInfo } from '@/utils/characterHp';
 // Enums
 // ============================================
 
-/**
- * Game system enum - mirrors backend GameSystem enum
- */
-export enum GameSystem {
-  DND_5E = 'DND_5E',
-  PATHFINDER_2E = 'PATHFINDER_2E',
-  SHADOWRUN_6E = 'SHADOWRUN_6E',
-  CALL_OF_CTHULHU_7E = 'CALL_OF_CTHULHU_7E',
-}
+import { GameSystem } from './gameSystem';
+
+export { GameSystem };
 
 export enum PlatformRole {
   ADMIN = 'ADMIN',
@@ -265,6 +259,36 @@ export interface User {
   lastLoginAt: string | null;
   mustChangePassword?: boolean;
   isApproved?: boolean;
+  preferences?: UserPreferences | null;
+  /**
+   * For an administrator without two-factor authentication: when it becomes
+   * required, after which the server refuses everything but enrolment. Null
+   * or absent for everyone else.
+   */
+  adminMfaDeadline?: string | null;
+  /** How many MFA backup codes are left; null with MFA off. */
+  mfaBackupCodesRemaining?: number | null;
+}
+
+/** A campaign member's user, as the campaign routes send it. */
+export type MemberUser = Pick<User, 'id' | 'displayName' | 'avatarUrl'>;
+
+/** A chat message's author, as the message routes send it. */
+export type MessageUser = Pick<User, 'id' | 'displayName'>;
+
+/** One of the newest accounts on the Admin Panel's activity tab (GET /api/admin/activity). */
+export type AdminRecentUser = Pick<
+  User,
+  'id' | 'email' | 'displayName' | 'platformRole' | 'mfaEnabled' | 'createdAt' | 'lastLoginAt'
+>;
+
+/**
+ * A user as the Admin Panel's user list has them (GET /api/users, admins
+ * only): when the account's sign-in lock ends, or null when it is not locked.
+ * Absent on a user from any other route.
+ */
+export interface AdminListedUser extends User {
+  signInLockedUntil?: string | null;
 }
 
 /** One match from the invite picker's search: never an email address. */
@@ -402,7 +426,7 @@ export interface AdminSystemLog {
 }
 
 export interface AdminActivityData {
-  recentUsers: User[];
+  recentUsers: AdminRecentUser[];
   recentSessions: AdminActivitySession[];
   onlineUsers: AdminOnlineUser[];
   recentLogs: AdminSystemLog[];
@@ -557,7 +581,7 @@ export interface Campaign {
    * full because those endpoints return full objects; do not read the omitted
    * fields off these embedded arrays.
    */
-  maps?: Map[];
+  maps?: CampaignMap[];
   characters?: Character[];
   /** Most recent open (non-ended) session, if any — populated by GET /campaigns/:id */
   activeSession?: { id: string; sessionNumber: number; startedAt: string } | null;
@@ -584,7 +608,7 @@ export interface CampaignMembership {
   role: CampaignRole;
   characterIds: string[];
   joinedAt: string;
-  user?: User;
+  user?: MemberUser;
 }
 
 export interface CampaignInvitation {
@@ -603,7 +627,20 @@ export interface CampaignInvitation {
     owner?: {
       displayName: string;
     };
+    /** The member who runs the game, which is not the owner once it is handed over. */
+    dm?: {
+      displayName: string;
+    } | null;
   };
+}
+
+/** An invitation as the campaign's DM lists them. */
+export interface CampaignInvitationSummary {
+  id: string;
+  userId: string;
+  createdAt: string;
+  expiresAt: string | null;
+  user: { displayName: string };
 }
 
 // ============================================
@@ -645,6 +682,8 @@ export interface CampaignDocument {
   id: string;
   name: string;
   description: string | null;
+  /** The stored file's name, whose extension the document is served by. */
+  filename: string;
   originalName: string;
   /** As declared at upload. Not what the file is served as. */
   mimeType: string;
@@ -755,6 +794,11 @@ export interface Character {
   tokenImageUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The owner, as GET /api/characters/:id gives it to anyone who may read the
+   * character. Absent from every other response, live updates included.
+   */
+  user?: { id: string; displayName: string; avatarUrl: string | null };
 }
 
 /**
@@ -783,7 +827,7 @@ export type CharacterData =
 // Map & Tokens
 // ============================================
 
-export interface Map {
+export interface CampaignMap {
   id: string;
   campaignId: string;
   name: string;
@@ -829,7 +873,8 @@ export interface Token {
   disposition: TokenDisposition | null;
   hp:          TokenHp | null;
   showHpBar:   boolean;
-  notes:       string;
+  /** The DM's notes. Never sent to players (tokenSentTo), so absent for them. */
+  notes?:      string | null;
   initiative:  number | null;
   /**
    * Darkvision, in grid squares: how far the token makes things out with no
@@ -980,7 +1025,7 @@ export interface Message {
   id: string;
   campaignId: string;
   userId: string | null;
-  user?: User;
+  user?: MessageUser;
   type: MessageType;
   content: string;
   metadata: MessageMetadata | null;
@@ -1136,7 +1181,8 @@ export interface CreateCampaignRequest {
 export interface UpdateCampaignRequest {
   name?: string;
   gameSystem?: GameSystem | null;
-  description?: string;
+  /** null clears it. */
+  description?: string | null;
   status?: CampaignStatus;
   vibeSettings?: VibeSettings;
   spiritLayerEnabled?: boolean;
@@ -1210,7 +1256,7 @@ export interface CreateTokenRequest {
   disposition?: TokenDisposition | null;
   hp?: TokenHp | null;
   showHpBar?: boolean;
-  notes?: string;
+  notes?: string | null;
   initiative?: number | null;
   /** Darkvision in grid squares; 0 = none. DM only on update. */
   sightRadius?: number | null;
@@ -1302,6 +1348,12 @@ export interface DiceRollEvent {
   secret?: boolean;
 }
 
+/** The server's answer to a `dice.roll` sent with an acknowledgement: the stored roll's id, or why not. */
+export type DiceRollAck = { ok: true; id: string } | { ok: false; error: string };
+
+/** The server's answer to a request that returns nothing but whether it was done. */
+export type DoneAck = { ok: true } | { ok: false; error: string };
+
 export interface DiceRolledEvent {
   /**
    * The stored roll's id. Optional because a roll made while the session is
@@ -1331,7 +1383,16 @@ export interface DiceRolledSecretEvent extends DiceRolledEvent {
 export interface ChatMessageEvent {
   content: string;
   type: MessageType;
+  /**
+   * The sender's own name for the message, 1 to 64 letters, digits, hyphens
+   * or underscores. It comes back on the sender's copy of the broadcast, and
+   * a message resent with it is stored and sent once.
+   */
+  clientId?: string;
 }
+
+/** The server's answer to a `chat.message` sent with an acknowledgement. */
+export type ChatMessageAck = { ok: true; id: string } | { ok: false; error: string };
 
 /**
  * A system notice. The server sends the row's real id, which is what lets a
@@ -1352,12 +1413,11 @@ export interface ChatMessageBroadcast {
   content: string;
   type: MessageType;
   timestamp: string;
+  /** On the sender's own copy only: the `clientId` it was sent with. */
+  clientId?: string;
 }
 
 // Session Events
-// No fields needed - campaign ID comes from server-side socket.campaignId
-export type SessionStartEvent = Record<string, never>;
-
 export interface SessionStartedBroadcast {
   sessionId: string;
   sessionNumber: number;
@@ -1390,6 +1450,25 @@ export interface VibeUpdatedBroadcast {
   hue: string;
   filter: string;
   audio?: string;
+}
+
+/** The DM saved the vibe periods: the periods as saved, and the vibe they leave in force. */
+export interface VibeSettingsUpdatedBroadcast {
+  campaignId: string;
+  vibeSettings: VibeSettings;
+  currentVibe: string | null;
+  updatedBy: string;
+  timestamp: string;
+}
+
+/** The DM saved Campaign Settings (`campaign.settings.updated`): the fields every member's page shows. */
+export interface CampaignSettingsUpdatedBroadcast {
+  campaignId: string;
+  name: string;
+  description: string | null;
+  gameSystem: GameSystem | null;
+  chatCooldownEnabled: boolean;
+  chatCooldownSeconds: number;
 }
 
 // Atmosphere Events

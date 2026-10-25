@@ -509,25 +509,9 @@ describe('backend/RBAC_QUICK_REFERENCE.md', () => {
 describe('the schema documents in backend/prisma', () => {
   const schema = read('backend/prisma/schema.prisma');
   const modelNames = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1]);
-  const enumCount = (schema.match(/^enum \w+ \{/gm) ?? []).length;
-  const verification = read('backend/prisma/SCHEMA_VERIFICATION.md');
 
-  // The verification file said "20 models" when there were 21.
-  it('state how many models and enums the schema has', () => {
+  it('README.md says how many models the schema has', () => {
     expect(read('backend/prisma/README.md')).toContain(`${modelNames.length} models`);
-    expect(verification).toContain(`**${modelNames.length} models and ${enumCount} enums today**`);
-  });
-
-  it('SCHEMA_VERIFICATION.md names every model it does not cover', () => {
-    const covered = [...verification.slice(verification.indexOf('## Models'), verification.indexOf('## Enums')).matchAll(/^- ✅ (\w+)$/gm)].map((m) => m[1]);
-    const uncovered = verification.slice(0, verification.indexOf('## Models'));
-    expect(covered.length).toBeGreaterThan(0);
-    expect(modelNames.filter((name) => !covered.includes(name) && !uncovered.includes(`\`${name}\``))).toEqual([]);
-  });
-
-  // It also ended on "VERIFIED AND COMPLETE" and a next phase long finished.
-  it('SCHEMA_VERIFICATION.md does not close with a present-tense assurance', () => {
-    expect(verification).not.toMatch(/Schema Status:\*\* ✅ \*\*VERIFIED AND COMPLETE\*\*/);
   });
 
   // The README said the upload route rejects DOCUMENT; it accepts it.
@@ -631,8 +615,9 @@ describe('the guides on moving a token and on setting up', () => {
     expect(found).toEqual([]);
   });
 
+  // The behaviour itself is driven through MapCanvas by this suite.
   it('describe the pick-up and put-down the map really uses', () => {
-    expect(read('frontend/src/components/campaign/MapCanvas.tsx')).toContain('Token placement is handled in handleMouseDown on second click');
+    expect(read('frontend/src/components/campaign/__tests__/MapCanvasInput.test.tsx')).toContain("describe('moving a token: click to pick it up, click again to put it down'");
     for (const { text } of guides) expect(text).toMatch(/click/i);
   });
 
@@ -670,10 +655,11 @@ describe('what the comments in the backend source point to', () => {
   });
 
   // The Shadowrun types cited /Examples/Shadowrun_character.json, a file the
-  // repository does not have.
+  // repository does not have. Those types are gone and nothing cites an
+  // example file now; this keeps any new citation true.
   it('name only example character files that exist', () => {
+    expect(sources.length).toBeGreaterThan(0);
     const cited = sources.flatMap((rel) => [...read(rel).matchAll(/\/Examples\/([\w.-]+)/g)].map((m) => ({ rel, file: m[1] })));
-    expect(cited.length).toBeGreaterThan(0);
     expect(cited.filter(({ file }) => !fs.existsSync(path.join(root, 'Examples', file))).map(({ rel, file }) => `${rel}: ${file}`)).toEqual([]);
   });
 });

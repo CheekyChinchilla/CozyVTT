@@ -16,6 +16,7 @@ import Modal from '@/components/ui/Modal';
 import Button from '@/components/ui/Button';
 import Field from '@/components/ui/Field';
 import { Input, Textarea, Select } from '@/components/ui/Input';
+import { pictureForTemplate, TEMPLATE_PUBLISHED_WITHOUT_PICTURE } from '@/utils/templatePicture';
 
 interface NewCharacterTemplateModalProps {
   onClose: () => void;
@@ -65,15 +66,22 @@ export default function NewCharacterTemplateModal({
         data = starter.data ?? {};
       }
 
+      // A character's picture goes with it only when everyone can load it.
+      const tokenImageUrl = await pictureForTemplate(initial?.tokenImageUrl);
+
       await api.createCharacterTemplate({
         name: name.trim(),
         description: description.trim() || null,
         gameSystem: gameSystem || null,
-        tokenImageUrl: initial?.tokenImageUrl ?? null,
+        tokenImageUrl,
         data,
       });
 
-      showToast('Template published', 'success');
+      if (initial?.tokenImageUrl && !tokenImageUrl) {
+        showToast(TEMPLATE_PUBLISHED_WITHOUT_PICTURE, 'warning');
+      } else {
+        showToast('Template published', 'success');
+      }
       onCreated();
     } catch (err) {
       const message =

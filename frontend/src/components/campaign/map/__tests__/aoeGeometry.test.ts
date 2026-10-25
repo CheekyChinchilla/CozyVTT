@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  coneOutline,
   cubeRect,
   snapSpanCentre,
   snapToGridLine,
@@ -216,3 +217,35 @@ describe('squareExitPoint', () => {
   });
 });
 
+// The cone was drawn with its far corners on an arc a cone's length out, so it
+// fell about a tenth short and narrow of a D&D 5e cone, and Pathfinder 2e's
+// cone, a different shape, was drawn the same.
+describe('coneOutline', () => {
+  const close = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    expect(a.x).toBeCloseTo(b.x, 6);
+    expect(a.y).toBeCloseTo(b.y, 6);
+  };
+
+  it('draws D&D 5e\'s cone as wide at its far end as it is long', () => {
+    const outline = coneOutline({ x: 10, y: 20 }, 0, 100, 'width-equals-distance');
+    if (outline.kind !== 'triangle') throw new Error('expected a triangle');
+    close(outline.points[0], { x: 10, y: 20 });
+    close(outline.points[1], { x: 110, y: -30 });
+    close(outline.points[2], { x: 110, y: 70 });
+  });
+
+  it('keeps that width at every point along it, aimed any way', () => {
+    const angle = Math.PI / 3;
+    const outline = coneOutline({ x: 0, y: 0 }, angle, 60, 'width-equals-distance');
+    if (outline.kind !== 'triangle') throw new Error('expected a triangle');
+    const [, a, b] = outline.points;
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeCloseTo(60, 6);
+    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    close(mid, { x: Math.cos(angle) * 60, y: Math.sin(angle) * 60 });
+  });
+
+  it('draws Pathfinder 2e\'s cone as a quarter circle', () => {
+    const outline = coneOutline({ x: 5, y: 5 }, Math.PI / 2, 90, 'quarter-circle');
+    expect(outline).toEqual({ kind: 'sector', centre: { x: 5, y: 5 }, radius: 90, from: Math.PI / 4, to: (3 * Math.PI) / 4 });
+  });
+});

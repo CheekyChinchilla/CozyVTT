@@ -9,6 +9,7 @@ import Toast, { useToast } from '@/components/Toast';
 import type { CampaignInvitation, CharacterSummary } from '@/types';
 import { Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface InvitationModalProps {
@@ -27,6 +28,8 @@ export default function InvitationModal({
   const [characters, setCharacters] = useState<CharacterSummary[]>([]);
   const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // Why the characters could not be loaded, so none is not taken for none owned.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
   const { toast, showToast, hideToast } = useToast();
 
@@ -44,7 +47,7 @@ export default function InvitationModal({
 
         setCharacters(compatible);
       } catch (error) {
-        console.error('Error fetching characters:', error);
+        setLoadError(apiErrorMessage(error) || 'Please try again later');
       } finally {
         setLoading(false);
       }
@@ -69,7 +72,6 @@ export default function InvitationModal({
       await api.acceptInvitation(invitation.id, selectedCharacterIds);
       onAccept();
     } catch (error) {
-      console.error('Error accepting invitation:', error);
       showToast(apiErrorMessage(error) || 'Failed to accept invitation', 'error');
     } finally {
       setProcessing(false);
@@ -83,28 +85,9 @@ export default function InvitationModal({
       await api.declineInvitation(invitation.id);
       onDecline();
     } catch (error) {
-      console.error('Error declining invitation:', error);
       showToast(apiErrorMessage(error) || 'Failed to decline invitation', 'error');
     } finally {
       setProcessing(false);
-    }
-  };
-
-  // Get game system display name
-  const getSystemName = (gameSystem: string | null) => {
-    switch (gameSystem) {
-      case 'DND_5E':
-        return 'D&D 5th Edition';
-      case 'PATHFINDER_2E':
-        return 'Pathfinder 2nd Edition';
-      case 'SHADOWRUN_6E':
-        return 'Shadowrun 6th Edition';
-      case 'CALL_OF_CTHULHU_7E':
-        return 'Call of Cthulhu 7th Edition';
-      case null:
-        return 'Flexible/Custom';
-      default:
-        return gameSystem;
     }
   };
 
@@ -129,14 +112,14 @@ export default function InvitationModal({
               <div>
                 <span className="text-warm-gray">Game System:</span>{' '}
                 <span className="font-medium text-stone-gray">
-                  {getSystemName(invitation.campaign?.gameSystem || null)}
+                  {gameSystemName(invitation.campaign?.gameSystem || null)}
                 </span>
               </div>
-              {invitation.campaign?.owner && (
+              {invitation.campaign?.dm && (
                 <div>
                   <span className="text-warm-gray">DM:</span>{' '}
                   <span className="font-medium text-stone-gray">
-                    {invitation.campaign.owner.displayName}
+                    {invitation.campaign.dm.displayName}
                   </span>
                 </div>
               )}
@@ -155,6 +138,15 @@ export default function InvitationModal({
             {loading ? (
               <div className="text-center py-8">
                 <p className="text-sm text-warm-gray">Loading characters...</p>
+              </div>
+            ) : loadError ? (
+              <div className="text-center py-8 px-4 rounded-lg bg-parchment/50">
+                <p className="text-sm text-warm-gray mb-2">
+                  Your characters could not be loaded: {loadError}
+                </p>
+                <p className="text-xs text-warm-gray">
+                  You can still join without characters and add them later.
+                </p>
               </div>
             ) : characters.length === 0 ? (
               <div className="text-center py-8 px-4 rounded-lg bg-parchment/50">
@@ -176,7 +168,7 @@ export default function InvitationModal({
                       type="checkbox"
                       checked={selectedCharacterIds.includes(character.id)}
                       onChange={() => toggleCharacter(character.id)}
-                      className="w-4 h-4 rounded border-moss-green/30 text-brand-ink focus:ring-moss-green focus:ring-offset-0"
+                      className="w-4 h-4 rounded-sm border-moss-green/30 text-brand-ink focus:ring-moss-green focus:ring-offset-0"
                     />
                     {character.tokenImageUrl ? (
                       <img
@@ -197,7 +189,7 @@ export default function InvitationModal({
                       </p>
                       {character.gameSystem && (
                         <p className="text-xs text-warm-gray">
-                          {getSystemName(character.gameSystem)}
+                          {gameSystemName(character.gameSystem)}
                         </p>
                       )}
                     </div>
@@ -212,7 +204,7 @@ export default function InvitationModal({
             <button
               onClick={handleDecline}
               disabled={processing}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger hover:bg-danger/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-danger/10 text-danger-ink hover:bg-danger/15 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <XCircle className="w-4 h-4" />
               Decline
@@ -220,7 +212,7 @@ export default function InvitationModal({
             <button
               onClick={handleAccept}
               disabled={processing}
-              className="flex items-center gap-2 px-6 py-2 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-6 py-2 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Check className="w-4 h-4" />
               {processing ? 'Processing...' : 'Accept Invitation'}

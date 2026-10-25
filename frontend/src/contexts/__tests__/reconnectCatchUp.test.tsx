@@ -23,7 +23,7 @@ const socketOn = vi.fn();
 vi.mock('@/services/socket', () => ({
   default: {
     onCharacterHpUpdated: vi.fn(), onDmTransferred: vi.fn(), onMemberRoleChanged: vi.fn(),
-    on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null), startHeartbeat: vi.fn(),
+    on: (...a: unknown[]) => socketOn(...a), off: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), getSocket: vi.fn().mockReturnValue(null),
   },
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me' } }) }));
@@ -183,4 +183,37 @@ it('writes nothing once the page has closed', async () => {
 
   await act(async () => { releaseMap(); await catching; });
   expect(Object.keys(useGameStore.getState().tokens)).toEqual(['from-c2']);
+});
+
+// The vibe, the weather, the ambient track and the spirit layer were left as
+// they were before the drop: a player who missed the DM moving the vibe to
+// night, stopping the rain and the music, kept the old tint, the rain and the
+// track until they reloaded, while the chat said the time had changed.
+it('picks up the vibe, the atmosphere and the spirit layer', async () => {
+  const periods = [{ name: 'Day', hue: '#ffffff', filter: 'none' }, { name: 'Night', hue: '#112244', filter: 'brightness(0.5)' }];
+  getCampaign.mockResolvedValueOnce({
+    ...campaignAs('ACTIVE', 'm1', 'PLAYER'), currentVibe: 'Day', spiritLayerEnabled: false, spiritLayerStyle: 'wispy',
+    vibeSettings: { periods, atmosphereEffect: 'rain', atmosphereAudio: { assetId: 'track-1', volume: 0.4, loop: true } },
+  });
+  render(
+    <MemoryRouter initialEntries={['/campaigns/c1']}>
+      <Routes>
+        <Route path="/campaigns/:id" element={<CampaignProvider><Probe /></CampaignProvider>} />
+      </Routes>
+    </MemoryRouter>
+  );
+  await waitFor(() => expect(latest?.activeAtmosphereEffect).toBe('rain'));
+
+  getCampaign.mockResolvedValueOnce({
+    ...campaignAs('ACTIVE', 'm1', 'PLAYER'), currentVibe: 'Night', spiritLayerEnabled: true, spiritLayerStyle: 'shadow',
+    vibeSettings: { periods },
+  });
+  await act(async () => { await latest!.catchUpAfterReconnect(); });
+
+  expect(latest!.currentVibe).toBe('Night');
+  expect(latest!.activeVibeEffect).toEqual({ hue: '#112244', filter: 'brightness(0.5)' });
+  expect(latest!.activeAtmosphereEffect).toBeNull();
+  expect(latest!.activeAtmosphereAudio).toBeNull();
+  expect(latest!.campaign?.spiritLayerEnabled).toBe(true);
+  expect(latest!.campaign?.spiritLayerStyle).toBe('shadow');
 });

@@ -14,18 +14,20 @@ import { StatsEditor } from './components/sections/StatsEditor';
 import { ListEditor } from './components/sections/ListEditor';
 import { TextEditor } from './components/sections/TextEditor';
 import { TableEditor } from './components/sections/TableEditor';
-import { api } from '../../../services/api';
-import { AssetType } from '../../../types';
 import { useServerConfigQuery } from '@/hooks/queries';
-import { getUploadLimit, formatUploadLimit } from '@/utils/uploadLimits';
-import { apiErrorMessage } from '@/utils/errors';
+import { tokenPictureProblem, uploadTokenPicture } from '@/utils/tokenPicture';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import type { CharacterData } from '@/types';
-import { assetNameFrom } from '@/utils/assetName';
+import Button from '@/components/ui/Button';
+import { FLEXIBLE_MAX_SECTIONS } from '@/constants/sheetLimits';
+import ListLimitNote, { ADD_BUTTON_OFF, listIsFull } from '../ListLimitNote';
 
 interface FlexibleCharacterSheetEditProps {
   character: Character;
   onSave: (data: CharacterData, showToast?: boolean, tokenImageUrl?: string) => Promise<void>;
   onCancel: () => void;
+  /** Whether to offer a token picture to upload; see CharacterSheetProps. */
+  allowTokenPicture?: boolean;
   /** Told whenever the sheet gains or loses unsaved changes. */
   onDirtyChange?: (dirty: boolean) => void;
   /**
@@ -42,6 +44,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   onCancel,
   onDirtyChange,
   onDone,
+  allowTokenPicture = true,
 }) => {
   const initialData = initializeFlexibleData(character.data);
   const [sections, setSections] = useState<FlexibleSection[]>(initialData.sections || []);
@@ -93,13 +96,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   const handleTokenImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        setTokenError('Please select an image file');
-        return;
-      }
-      const tokenLimit = getUploadLimit(serverConfig, AssetType.TOKEN);
-      if (file.size > tokenLimit) {
-        setTokenError(`Image must be smaller than ${formatUploadLimit(tokenLimit)}`);
+      const problem = tokenPictureProblem(file, serverConfig);
+      if (problem) {
+        setTokenError(problem);
         return;
       }
       setTokenImageFile(file);
@@ -121,23 +120,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       let newTokenImageUrl: string | undefined = undefined;
       if (tokenImageFile) {
         try {
-          const assetFormData = new FormData();
-          // File last so the server can name the type if it rejects the upload
-          assetFormData.append('type', 'TOKEN');
-          if (character.campaignId) {
-            assetFormData.append('scope', 'CAMPAIGN');
-            assetFormData.append('campaignId', character.campaignId);
-          } else {
-            assetFormData.append('scope', 'USER');
-          }
-          assetFormData.append('name', assetNameFrom(`${character.name} Token`));
-          assetFormData.append('file', tokenImageFile);
-
-          const uploadResponse = await api.uploadAsset(assetFormData);
-          const assetId = uploadResponse.asset.id;
-          newTokenImageUrl = `/api/assets/tokens/${assetId}`;
+          newTokenImageUrl = await uploadTokenPicture(tokenImageFile, character.name, character.campaignId);
         } catch (uploadError: unknown) {
-          console.error('Error uploading token image:', uploadError);
+          console.error('Error uploading token image:', errorSummary(uploadError));
           setTokenError(apiErrorMessage(uploadError) || 'Failed to upload token image');
           setIsSaving(false);
           return;
@@ -159,17 +144,17 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       if (!changedMeanwhile) onDone?.();
     } catch (error) {
       // Whoever hosts the sheet says why; the sections stay as typed.
-      console.error('Error saving character:', error);
+      console.error('Error saving character:', errorSummary(error));
     } finally {
       setIsSaving(false);
     }
   };
 
-  // TODO(sheets): the server keeps at most 100 sections on a sheet (FLEXIBLE_MAX_SECTIONS) and this
-  // has no limit, so one more makes a sheet that cannot be saved. Turn the
-  // add button off at the limit, as the typed sheets' lists do with listIsFull
-  // and ListLimitNote.
+  // The server keeps at most FLEXIBLE_MAX_SECTIONS sections on a sheet, so
+  // Add Section turns off there.
+  const sectionsFull = listIsFull(sections, FLEXIBLE_MAX_SECTIONS);
   const addSection = (template: SectionTemplate) => {
+    if (sectionsFull) return;
     const newSection = template.create();
     setSections([...sections, newSection]);
     setShowAddMenu(false);
@@ -216,11 +201,12 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   return (
-    <div className="glass-panel p-6">
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
       {/* Header with Save/Cancel */}
       <div className="flex items-center justify-between pb-4 border-b border-moss-green/20 mb-6">
         <div className="flex items-center gap-4">
           {/* Token Image Upload */}
+          {allowTokenPicture && (
           <div className="relative group">
             <input
               type="file"
@@ -249,16 +235,17 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
               </div>
             </label>
             {tokenError && (
-              <div className="absolute top-full mt-1 text-xs text-red-500 whitespace-nowrap">
+              <div className="absolute top-full mt-1 text-xs text-danger-ink whitespace-nowrap">
                 {tokenError}
               </div>
             )}
             {!character.campaignId && (
-              <div className="absolute top-full mt-1 text-xs text-amber-600 whitespace-nowrap">
+              <div className="absolute top-full mt-1 text-xs text-warning-ink whitespace-nowrap">
                 Saves as personal token
               </div>
             )}
           </div>
+          )}
 
           <div>
             <h2 className="text-2xl font-bold text-brand-ink">
@@ -270,14 +257,9 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
           </div>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex items-center gap-2 px-4 py-2 bg-moss-green text-white rounded-lg hover:bg-moss-green/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Save className="w-4 h-4" />
+          <Button onClick={handleSave} disabled={isSaving} icon={Save}>
             {isSaving ? 'Saving...' : 'Save'}
-          </button>
+          </Button>
           <button
             onClick={onCancel}
             className="flex items-center gap-2 px-4 py-2 bg-stone-gray/10 text-stone-gray rounded-lg hover:bg-stone-gray/20 transition-colors"
@@ -308,12 +290,14 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
       <div className="relative">
         <button
           onClick={() => setShowAddMenu(!showAddMenu)}
-          className="flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/20 transition-colors w-full justify-center"
+          disabled={sectionsFull}
+          className={`flex items-center gap-2 px-4 py-2 bg-moss-green/10 text-brand-ink rounded-lg hover:bg-moss-green/15 transition-colors w-full justify-center ${ADD_BUTTON_OFF}`}
         >
           <Plus className="w-4 h-4" />
           Add Section
         </button>
-        {showAddMenu && <AddSectionMenu onSelect={addSection} onClose={() => setShowAddMenu(false)} />}
+        {showAddMenu && !sectionsFull && <AddSectionMenu onSelect={addSection} onClose={() => setShowAddMenu(false)} />}
+        <ListLimitNote full={sectionsFull} max={FLEXIBLE_MAX_SECTIONS} />
       </div>
     </div>
   );

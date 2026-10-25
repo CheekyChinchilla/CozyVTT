@@ -5,8 +5,8 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import {
-  X,
   Plus,
   MapPin,
   Loader2,
@@ -19,15 +19,15 @@ import {
   Download,
 } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
 import { api } from '@/services/api';
 import mapService from '@/services/map.service';
-import type { Map, Token } from '@/types';
+import type { CampaignMap, Token } from '@/types';
 import CreateMapModal from './CreateMapModal';
 import EditMapModal from './EditMapModal';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import Button from '@/components/ui/Button';
+import SlideOver, { SlideOverClose, SlideOverTitle } from '@/components/ui/SlideOver';
 import { extractAssetId } from '@/utils/assetUrl';
 import { apiErrorCode, apiErrorMessage } from '@/utils/errors';
 import {
@@ -52,7 +52,7 @@ interface MapManagerProps {
 
 interface TokenTransferProps {
   tokens: Token[];
-  targetMap: Map;
+  targetMap: CampaignMap;
   onConfirm: (selectedTokenIds: string[]) => void;
   onCancel: () => void;
   isSwitching: boolean;
@@ -82,7 +82,7 @@ function TokenTransferConfirmation({
   return (
     <div className="mt-3 p-3 bg-warm-amber/10 border border-warm-amber/30 rounded-lg space-y-3">
       <div className="flex items-start gap-2">
-        <AlertTriangle className="w-4 h-4 text-warm-amber flex-shrink-0 mt-0.5" />
+        <AlertTriangle className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
         <div>
           <p className="text-sm font-medium text-stone-gray">
             Current map has {tokens.length} token{tokens.length !== 1 ? 's' : ''}
@@ -107,17 +107,17 @@ function TokenTransferConfirmation({
         {tokens.map((token) => (
           <label
             key={token.id}
-            className="flex items-center gap-2 p-1.5 rounded hover:bg-warm-amber/10 cursor-pointer"
+            className="flex items-center gap-2 p-1.5 rounded-sm hover:bg-warm-amber/10 cursor-pointer"
           >
             <input
               type="checkbox"
               checked={selected.has(token.id)}
               onChange={() => toggleToken(token.id)}
-              className="rounded accent-moss-green"
+              className="rounded-sm accent-moss-green"
             />
             <span className="text-sm text-stone-gray truncate">{token.name}</span>
             {token.layer === 'spirit' && (
-              <span className="text-xs text-spirit-purple bg-spirit-purple/10 px-1 rounded">spirit</span>
+              <span className="text-xs text-spirit-ink bg-spirit-purple/10 px-1 rounded-sm">spirit</span>
             )}
           </label>
         ))}
@@ -160,16 +160,16 @@ function TokenTransferConfirmation({
 // ============================================
 
 interface MapCardProps {
-  map: Map;
+  map: CampaignMap;
   isActive: boolean;
   campaignId: string;
-  onSetActive: (map: Map) => void;
-  onEdit: (map: Map) => void;
-  onDelete: (map: Map) => void;
-  onExport: (map: Map) => void;
+  onSetActive: (map: CampaignMap) => void;
+  onEdit: (map: CampaignMap) => void;
+  onDelete: (map: CampaignMap) => void;
+  onExport: (map: CampaignMap) => void;
   switchingToId: string | null;
   tokens: Token[];
-  currentMap: Map | null;
+  currentMap: CampaignMap | null;
 }
 
 function MapCard({
@@ -186,14 +186,15 @@ function MapCard({
 }: MapCardProps) {
   const thumbnailId = extractAssetId(map.imageUrl);
   const isSwitchingToThis = switchingToId === map.id;
+  const cardExit = useMotionExit({ opacity: 0, scale: 0.95 });
 
   return (
     <motion.div
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className={`bg-parchment/50 border rounded-xl overflow-hidden shadow-sm transition-shadow hover:shadow-md ${
+      exit={cardExit}
+      className={`bg-parchment/50 border rounded-xl overflow-hidden shadow-xs transition-shadow hover:shadow-md ${
         isActive ? 'border-moss-green/60' : 'border-moss-green/20'
       }`}
     >
@@ -201,7 +202,7 @@ function MapCard({
       <div className="relative h-36 bg-moss-green/10 overflow-hidden">
         {thumbnailId ? (
           <img
-            src={api.getAssetUrl(thumbnailId, 'maps')}
+            src={api.getAssetThumbnailUrl(thumbnailId, 'maps')}
             alt={map.name}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -218,7 +219,7 @@ function MapCard({
 
         {/* Active badge */}
         {isActive && (
-          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-moss-green text-white text-xs font-semibold rounded-full shadow">
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 bg-moss-green text-brand-text text-xs font-semibold rounded-full shadow-sm">
             <CheckCircle className="w-3 h-3" />
             Active
           </div>
@@ -242,7 +243,7 @@ function MapCard({
             className={`flex-1 text-xs py-1.5 px-2 rounded-lg transition-colors flex items-center justify-center gap-1 ${
               isActive
                 ? 'bg-moss-green/10 text-brand-ink/50 cursor-not-allowed'
-                : 'bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink'
+                : 'bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink'
             }`}
           >
             {isSwitchingToThis ? (
@@ -257,7 +258,7 @@ function MapCard({
             type="button"
             onClick={() => onEdit(map)}
             title="Edit map"
-            className="p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/20 text-warm-amber transition-colors"
+            className="p-1.5 rounded-lg bg-warm-amber/10 hover:bg-warm-amber/15 text-accent-ink transition-colors"
           >
             <Pencil className="w-3.5 h-3.5" />
           </button>
@@ -266,7 +267,7 @@ function MapCard({
             type="button"
             onClick={() => onExport(map)}
             title="Export as .uvtt file"
-            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
+            className="p-1.5 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
           </button>
@@ -279,7 +280,7 @@ function MapCard({
             className={`p-1.5 rounded-lg transition-colors ${
               isActive
                 ? 'bg-danger/5 text-danger-ink/40 cursor-not-allowed'
-                : 'bg-danger/10 hover:bg-danger/20 text-danger-ink'
+                : 'bg-danger/10 hover:bg-danger/15 text-danger-ink'
             }`}
           >
             <Trash2 className="w-3.5 h-3.5" />
@@ -296,18 +297,17 @@ function MapCard({
 
 export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const { campaign, currentMap, setCurrentMap, upsertCampaignMap, removeCampaignMap } = useCampaign();
-  const { socket } = useWebSocket();
 
-  const [maps, setMaps] = useState<Map[]>([]);
+  const [maps, setMaps] = useState<CampaignMap[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
-  const [editingMap, setEditingMap] = useState<Map | null>(null);
+  const [editingMap, setEditingMap] = useState<CampaignMap | null>(null);
 
   // Map switching state
-  const [switchingToMap, setSwitchingToMap] = useState<Map | null>(null);
+  const [switchingToMap, setSwitchingToMap] = useState<CampaignMap | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
 
   // The active map comes straight from the campaign: setCurrentMap keeps
@@ -319,7 +319,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
   const [currentMapTokens, setCurrentMapTokens] = useState<Token[]>([]);
 
   // Confirm delete
-  const [mapToDelete, setMapToDelete] = useState<Map | null>(null);
+  const [mapToDelete, setMapToDelete] = useState<CampaignMap | null>(null);
 
   // UVTT import
   const uvttInputRef = useRef<HTMLInputElement>(null);
@@ -359,12 +359,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- CRUD handlers ----
 
-  const handleCreated = (map: Map) => {
+  const handleCreated = (map: CampaignMap) => {
     setMaps((prev) => [map, ...prev]);
     upsertCampaignMap(map);
   };
 
-  const handleUpdated = (updated: Map) => {
+  const handleUpdated = (updated: CampaignMap) => {
     setMaps((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     upsertCampaignMap(updated);
     // If the updated map is the current one, refresh context
@@ -373,28 +373,17 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     }
   };
 
-  // TODO(ui): a refused export (422, such as a map whose picture is not a
-  // PNG, JPEG, WebP or GIF image) is never shown: the link below downloads
-  // whatever the server answers, and the catch cannot see an HTTP status.
-  // Fetch the file first, save it only when it arrives, and show the
-  // server's message with setError when it is refused.
-  const handleExport = async (map: Map) => {
+  const handleExport = async (map: CampaignMap) => {
     if (!campaign?.id) return;
+    setError(null);
     try {
-      const url = api.getExportUVTTUrl(campaign.id, map.id);
-      // Use a hidden link to trigger the download with session cookies
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${map.name}.uvtt`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await api.downloadUVTTExport(campaign.id, map.id, `${map.name}.uvtt`);
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to export map.');
     }
   };
 
-  const handleDeleteClick = (map: Map) => {
+  const handleDeleteClick = (map: CampaignMap) => {
     setMapToDelete(map);
   };
 
@@ -465,7 +454,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   // ---- Map switching ----
 
-  const handleSetActiveClick = async (map: Map) => {
+  const handleSetActiveClick = async (map: CampaignMap) => {
     if (!campaign?.id || map.id === activeMapId) return;
 
     if (currentMap) {
@@ -483,10 +472,12 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
         } else {
           performSwitch(map, []);
         }
-      } catch {
+      } catch (err: unknown) {
+        // Without the tokens there is nothing to offer to bring along, and
+        // switching anyway could leave the party behind unasked.
         setIsSwitching(false);
         setCurrentMapTokens([]);
-        performSwitch(map, []);
+        setError(apiErrorMessage(err) || 'Could not read the tokens on this map, so the switch was stopped. Try again.');
       }
     } else {
       performSwitch(map, []);
@@ -504,7 +495,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
     setCurrentMapTokens([]);
   };
 
-  const performSwitch = async (targetMap: Map, tokenIdsToTransfer: string[]) => {
+  const performSwitch = async (targetMap: CampaignMap, tokenIdsToTransfer: string[]) => {
     if (!campaign?.id) return;
     setIsSwitching(true);
     setError(null);
@@ -529,10 +520,7 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
       setCurrentMapTokens([]);
 
-      // 6. Notify other connected clients via WebSocket
-      if (socket) {
-        socket.emitMapChange(targetMap.id);
-      }
+      // The server sends every page the new map when it is set current.
     } catch (err: unknown) {
       setError(apiErrorMessage(err) || 'Failed to switch map. Please try again.');
     } finally {
@@ -544,146 +532,129 @@ export default function MapManager({ isOpen, onClose }: MapManagerProps) {
 
   return (
     <>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
-          >
-            <motion.div
-              initial={{ x: '100%' }}
-              animate={{ x: 0 }}
-              exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
-              className="absolute right-0 top-0 h-full w-full max-w-xl bg-paper-white shadow-2xl overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-sm border-b border-moss-green/20 px-6 py-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <MapPin className="w-6 h-6 text-brand-ink" />
-                    <div>
-                      <h2 className="text-xl font-bold text-brand-ink">Map Library</h2>
-                      <p className="text-xs text-stone-gray">{campaign.name}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      onClick={() => uvttInputRef.current?.click()}
-                      disabled={isImportingUVTT}
-                      variant="secondary" className="flex items-center gap-2 text-sm"
-                      title="Import a .uvtt or .dd2vtt file (Dungeondraft, DunGen, Dungeon Alchemist, etc.)"
-                    >
-                      {isImportingUVTT ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Upload className="w-4 h-4" />
-                      )}
-                      Import UVTT
-                    </Button>
-                    <input
-                      ref={uvttInputRef}
-                      type="file"
-                      accept=".uvtt,.dd2vtt,.df2vtt"
-                      onChange={handleUVTTImport}
-                      className="hidden"
-                    />
-                    <Button
-                      type="button"
-                      onClick={() => setCreateModalOpen(true)}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create Map
-                    </Button>
-                    <button
-                      onClick={onClose}
-                      className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
-                    >
-                      <X className="w-5 h-5 text-stone-gray" />
-                    </button>
-                  </div>
-                </div>
+      <SlideOver
+        open={isOpen}
+        onClose={onClose}
+        className="max-w-xl bg-paper-white shadow-2xl overflow-y-auto"
+      >
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-moss-green/10 backdrop-blur-xs border-b border-moss-green/20 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <MapPin className="w-6 h-6 text-brand-ink" />
+              <div>
+                <SlideOverTitle className="text-xl font-bold text-brand-ink">Map Library</SlideOverTitle>
+                <p className="text-xs text-stone-gray">{campaign.name}</p>
               </div>
-
-              {/* Content */}
-              <div className="p-6">
-                {error && (
-                  <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    {error}
-                  </div>
-                )}
-
-                {importSuccess && (
-                  <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
-                    <CheckCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                    {importSuccess}
-                  </div>
-                )}
-
-                {isLoading ? (
-                  <div className="flex items-center justify-center py-20">
-                    <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
-                  </div>
-                ) : maps.length === 0 ? (
-                  <div className="text-center py-16 space-y-3">
-                    <MapPin className="w-14 h-14 mx-auto text-stone-gray/25" />
-                    <p className="text-stone-gray font-medium">No maps yet</p>
-                    <p className="text-sm text-stone-gray/60">
-                      Create your first map to start your adventure.
-                    </p>
-                    <Button
-                      type="button"
-                      onClick={() => setCreateModalOpen(true)}
-                      className="inline-flex items-center gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Create Map
-                    </Button>
-                  </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                onClick={() => uvttInputRef.current?.click()}
+                disabled={isImportingUVTT}
+                variant="secondary" className="flex items-center gap-2 text-sm"
+                title="Import a .uvtt or .dd2vtt file (Dungeondraft, DunGen, Dungeon Alchemist, etc.)"
+              >
+                {isImportingUVTT ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
-                    <AnimatePresence>
-                      {maps.map((map) => (
-                        <div key={map.id}>
-                          <MapCard
-                            map={map}
-                            isActive={map.id === activeMapId}
-                            campaignId={campaign.id}
-                            onSetActive={handleSetActiveClick}
-                            onEdit={setEditingMap}
-                            onDelete={handleDeleteClick}
-                            onExport={handleExport}
-                            switchingToId={isSwitching ? switchingToMap?.id ?? null : null}
-                            tokens={currentMapTokens}
-                            currentMap={currentMap}
-                          />
-                          {/* Token transfer confirmation (shown under the target card) */}
-                          {switchingToMap?.id === map.id && (
-                            <TokenTransferConfirmation
-                              tokens={currentMapTokens}
-                              targetMap={map}
-                              onConfirm={handleTransferConfirm}
-                              onCancel={handleTransferCancel}
-                              isSwitching={isSwitching}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </AnimatePresence>
-                  </div>
+                  <Upload className="w-4 h-4" />
                 )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+                Import UVTT
+              </Button>
+              <input
+                ref={uvttInputRef}
+                type="file"
+                accept=".uvtt,.dd2vtt,.df2vtt"
+                onChange={handleUVTTImport}
+                className="hidden"
+              />
+              <Button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="flex items-center gap-2 text-sm"
+              >
+                <Plus className="w-4 h-4" />
+                Create Map
+              </Button>
+              <SlideOverClose
+                className="p-2 hover:bg-moss-green/10 rounded-lg transition-colors"
+                iconClassName="w-5 h-5 text-stone-gray"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-6">
+          {error && (
+            <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger-ink text-sm flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+              {error}
+            </div>
+          )}
+
+          {importSuccess && (
+            <div className="mb-4 p-3 bg-moss-green/10 border border-moss-green/30 rounded-lg text-brand-ink text-sm flex items-start gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              {importSuccess}
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="w-10 h-10 text-brand-ink animate-spin" />
+            </div>
+          ) : maps.length === 0 ? (
+            <div className="text-center py-16 space-y-3">
+              <MapPin className="w-14 h-14 mx-auto text-stone-gray/25" />
+              <p className="text-stone-gray font-medium">No maps yet</p>
+              <p className="text-sm text-stone-gray/60">
+                Create your first map to start your adventure.
+              </p>
+              <Button
+                type="button"
+                onClick={() => setCreateModalOpen(true)}
+                className="inline-flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                Create Map
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <AnimatePresence>
+                {maps.map((map) => (
+                  <div key={map.id}>
+                    <MapCard
+                      map={map}
+                      isActive={map.id === activeMapId}
+                      campaignId={campaign.id}
+                      onSetActive={handleSetActiveClick}
+                      onEdit={setEditingMap}
+                      onDelete={handleDeleteClick}
+                      onExport={handleExport}
+                      switchingToId={isSwitching ? switchingToMap?.id ?? null : null}
+                      tokens={currentMapTokens}
+                      currentMap={currentMap}
+                    />
+                    {/* Token transfer confirmation (shown under the target card) */}
+                    {switchingToMap?.id === map.id && (
+                      <TokenTransferConfirmation
+                        tokens={currentMapTokens}
+                        targetMap={map}
+                        onConfirm={handleTransferConfirm}
+                        onCancel={handleTransferCancel}
+                        isSwitching={isSwitching}
+                      />
+                    )}
+                  </div>
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+        </div>
+      </SlideOver>
 
       {/* Create Map Modal */}
       <CreateMapModal

@@ -263,7 +263,9 @@ characters, notes and dice macros, their avatar, and every personal (`USER`
 scope) upload that nothing names and no campaign shares, row and file. Chat
 messages, dice rolls, campaign uploads, shared documents and personal uploads
 something still names stay, with no owner, as do the character templates they
-published and the token templates and creatures they made.
+published and the token templates and creatures they made. A personal upload
+that only one campaign uses or shares, a campaign they were in, becomes that
+campaign's.
 Every sign-in of the account ends, on every device, and any open game connection
 of the account is dropped. The instance's only admin is
 refused with `409` until another user has been promoted to admin, and so is
@@ -363,7 +365,7 @@ Get a single campaign's details. The embedded `maps` and `characters` arrays con
 
 ### `PUT /api/campaigns/:id`
 
-Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status`, `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
+Update campaign properties (DM only). Every field is optional and is validated when present: `name` (1–200 characters), `description` (up to 5000, or `null` to clear), `status` (`PREPARATION`, `COMPLETED` or `ARCHIVED`, and only while no session is running or paused; starting, pausing and ending a session set the others), `gameSystem` (or `null`), `vibeSettings`, `spiritLayerEnabled`, `spiritLayerStyle`, `chatCooldownEnabled`, `chatCooldownSeconds` (1–300). A bad value is a `400` whose `message` describes the first problem found. Most name the field; a value of the wrong type for `name` or `description`, a `spiritLayerStyle` over 100 characters and most `vibeSettings` problems get a generic message such as "Invalid input: expected string, received number".
 
 **Request:** Partial campaign fields.
 
@@ -665,7 +667,7 @@ Export a campaign as a `.cozyvtt` ZIP archive. Requires DM role. Each user may e
 
 ### `POST /api/campaigns/import/preview`
 
-Upload a `.cozyvtt` archive and return its manifest preview without creating anything. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
+Upload a `.cozyvtt` archive and return its manifest preview without creating anything. The app's import window reads the manifest in the browser and uses this route only for an archive it cannot read there. Requires authentication. Each user may preview 20 archives an hour, one archive operation at a time; past either answers `429`.
 
 **Request:** `multipart/form-data` with field `file` containing the archive, at most 500 MB; a larger one answers `413`. The bundled nginx gives this route and the import 512 MB, apart from `NGINX_MAX_BODY_SIZE`, and five minutes to answer.
 
@@ -675,7 +677,7 @@ Upload a `.cozyvtt` archive and return its manifest preview without creating any
   "preview": {
     "formatVersion": 1,
     "exportedAt": "2026-04-18T12:00:00.000Z",
-    "exportedFrom": "CozyVTT v1.5.3",
+    "exportedFrom": "CozyVTT v1.5.4",
     "campaignName": "The Lost Mines",
     "gameSystem": "DND_5E",
     "mapCount": 5,
@@ -763,7 +765,7 @@ For a character with a game system, `name` is written into the sheet's `characte
 
 ### `GET /api/characters/:id`
 
-Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `403`. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
+Get a single character, with its sheet in `data`, its `campaign` (`{ id, name }` or null) and its owner as `user` (`{ id, displayName, avatarUrl }`). The owner may always read it, and so may any member of its campaign while the owner is still a member there; anyone else gets `404`, as for an id that names nothing. On a Call of Cthulhu sheet the Keeper's Notes (`notes`) are sent only to the DM of the character's campaign, and are left out for everyone else, its owner included.
 
 ---
 
@@ -894,6 +896,8 @@ into a character or editing it.
   sheet reads them first, as they are for a character. A flexible template's
   `data` must be an object laid out as a Flexible sheet, as a Flexible
   character's must; anything else answers `400` with `validationErrors`.
+- A template is stored without the sheet's `playerName`, and a Call of
+  Cthulhu one without its `notes` (Keeper's Notes), here and on `PUT`.
 - **`tokenImageUrl` must reference a `GLOBAL` asset.** A template is visible to
   everyone, so a `USER`- or `CAMPAIGN`-scoped image would 403 for other readers
   and show as broken. A non-global asset returns `400` with an explanation.
@@ -906,6 +910,14 @@ into a character or editing it.
 Accepts `name`, `description`, `tokenImageUrl`, `data`. An empty body returns
 `400`. `gameSystem` is fixed at creation, as it is for a character — the sheet
 data is only meaningful against the system it was built for.
+
+Send `updatedAt` exactly as `GET /api/character-templates/:id` gave it, and the
+save is refused with **409 Conflict** (`code` `TEMPLATE_CHANGED`) if the
+template has changed since, by someone else's save or your own from another
+window. Nothing is written; load the template again and make the change on the
+new version. Of two saves sent with the same `updatedAt`, only one goes
+through. Leave `updatedAt` out and the save is made whatever changed in
+between. A successful save returns the template with its new `updatedAt`.
 
 ### `DELETE /api/character-templates/:id`
 
@@ -1048,6 +1060,9 @@ Enforced on every creature, token-template and campaign-import write:
   JSON); a larger one answers `400`.
 
 Failures return `400` with `{ "error": "Validation Error", "message": "..." }`.
+For a creature or token template, `message` lists every problem, joined with
+`; `, each starting with the field it is about:
+`statBlock.traits.0.description: Too big: expected string to have <=5000 characters`.
 A campaign import applies the same limits but does not refuse: it cuts text and
 lists over them down to them, leaves a stat block it cannot store off a token or
 template, and leaves out a creature whose stat block it cannot store, saying so
@@ -1495,7 +1510,7 @@ change their own password with `POST /api/auth/change-password`, which asks for 
 
 ### `DELETE /api/users/:id` *(Admin only)*
 
-Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A campaign they own passes to its sitting DM.
+Delete a user account. Their memberships, characters, notes and dice macros go with it, and so do their avatar and the personal uploads nothing names and no campaign shares (removed just after the answer is sent); their chat messages, dice rolls, other uploads, published character templates, token templates and creatures stay with no owner. A personal upload that only one campaign uses or shares, a campaign they were in, becomes that campaign's. A campaign they own passes to its sitting DM.
 
 **409** while they sit in the DM seat of any campaign, whether or not they own it, or own a campaign whose DM seat is empty. The body lists each such campaign and its other members, so the admin can hand the DM seat over (`PUT /api/campaigns/:id/dm`, which an admin may call for any campaign) or delete the campaign, then try again. The instance's only admin is refused with `409` too, with no list:
 
@@ -1610,6 +1625,7 @@ List the instance backups in the backups folder, newest first.
 ### `POST /api/admin/backups` *(Admin only)*
 
 Create a new backup: a ZIP holding a `pg_dump` of the database and every uploaded file.
+When `DATABASE_URL` names a schema (`?schema=<name>`), the dump holds that schema alone.
 Refused with `409` while a restore takes its upload or writes its safety backup, and with
 `503` while the restore replaces the database. Backups are never deleted automatically.
 
@@ -1624,12 +1640,13 @@ Delete a backup file.
 ### `POST /api/admin/backups/restore` *(Admin only)*
 
 Restore the instance from a backup archive. **Destructive: it replaces the whole database**
-and copies the archive's uploaded files over the existing ones. A backup of the database as
+(only the schema `DATABASE_URL` names, when it names one) and copies the archive's uploaded files over the existing ones. A backup of the database as
 it was is written to the backup list first, and the response names it as `safetyBackup`.
 
 One restore runs at a time: a second sent while the first takes its upload or writes that
 backup answers `409`. A refused file answers `400` (not named `.zip`, not a ZIP archive,
-more than 100,000 entries, or not a complete CozyVTT backup) or `413` (over 4 GB, or
+more than 100,000 entries, not a complete CozyVTT backup, a backup of a schema other than
+the one `DATABASE_URL` names, or an upload that could not be read, such as one cut off) or `413` (over 4 GB, or
 unpacking to more than 10 GiB), with the reason. While the database is being replaced,
 live connections are closed and every other API request, a second restore included,
 answers `503` with `Retry-After: 60` until the restore ends.
@@ -1747,7 +1764,8 @@ when it sees it.
 An administrator account must use two-factor authentication. One without it has 7 days to set it
 up, given as `adminMfaDeadline` on the `user` that `GET /api/auth/me` and the sign-in replies return
 (`null` for everyone else). The 7 days run from the latest of when the rule started on the instance,
-the account's creation, its promotion to admin, and an administrator's **Reset MFA** on it. Past the
+the account's creation, its promotion to admin, an administrator's **Reset MFA** on it, and an invitation link
+setting its password. Past the
 deadline, every endpoint except `POST /api/auth/mfa/setup`, `POST /api/auth/mfa/verify`,
 `POST /api/auth/change-password`, `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/ping`,
 `GET /api/auth/appearance` and `GET /api/config` returns:

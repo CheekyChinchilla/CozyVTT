@@ -15,6 +15,28 @@
 import { createReadStream, createWriteStream } from 'fs';
 import { randomBytes } from 'crypto';
 import { once } from 'events';
+import { databaseConnectionSettings, PRISMA_ONLY_PARAMETERS } from '../config/prismaClient';
+
+/**
+ * The PostgreSQL schema an instance keeps its data in: the one DATABASE_URL
+ * names with `?schema=`, read as the app's own connection reads it, or
+ * `public`. A backup holds that schema and a restore replaces it alone, so an
+ * install sharing its database with other software leaves that software's
+ * data as it was.
+ */
+export function instanceSchema(dbUrl: string): string {
+  return databaseConnectionSettings(dbUrl).schema;
+}
+
+/**
+ * The schema's name as SQL and pg_dump's patterns take it. `public` is
+ * written bare, as every statement for it always has been; any other name is
+ * quoted, so capitals, spaces or a reserved word mean the schema they spell,
+ * and a double quote inside is doubled.
+ */
+function schemaIdentifier(schema: string): string {
+  return schema === 'public' ? 'public' : `"${schema.replace(/"/g, '""')}"`;
+}
 
 /**
  * Statements run before the dump itself.
@@ -24,28 +46,44 @@ import { once } from 'events';
  * references a table the dump is about to drop, the drop fails and the restore
  * stops; and a table the dump does not mention would otherwise survive with
  * stale rows. Replacing the schema first makes a restore mean what the screen
- * says: afterwards the database holds the backup and nothing else. The
- * statements sit at the top of the file psql loads with --single-transaction,
- * so a dump that fails to apply rolls the schema back too. Migrations then run
- * to bring an older backup up to the running version.
+ * says: afterwards the instance's schema holds the backup and nothing else.
+ * Only that schema: on a database shared with other software, the other
+ * schemas are not CozyVTT's. The statements sit at the top of the file psql
+ * loads with --single-transaction, so a dump that fails to apply rolls the
+ * schema back too. Migrations then run to bring an older backup up to the
+ * running version.
  */
-export const RESTORE_PREAMBLE = ['DROP SCHEMA public CASCADE;', 'CREATE SCHEMA public;'];
+export function restorePreamble(schema: string): string[] {
+  const name = schemaIdentifier(schema);
+  return [`DROP SCHEMA ${name} CASCADE;`, `CREATE SCHEMA ${name};`];
+}
 
 /**
  * Statements run after the dump, in the same transaction.
  *
- * Login sessions live in `public.session`, beside the app's tables. New
+ * Login sessions live in the `session` table, beside the app's tables. New
  * backups leave its rows out (see buildDumpArgs), but every backup made
  * before that carries them, and a restore would bring back each sign-in
  * that had not yet expired, ones ended since by a password change or an
  * account removal included. So a restore ends by emptying the table, which
- * a very old backup may not have at all, hence the check. The restore
- * script (backend/scripts/restore.sh) appends the same statement, and
- * keepInStep.test.ts fails if the two differ.
+ * a very old backup may not have at all, hence the check.
  */
-export const RESTORE_TRAILER = [
-  "DO $$ BEGIN IF to_regclass('public.session') IS NOT NULL THEN DELETE FROM public.session; END IF; END $$;",
-];
+export function restoreTrailer(schema: string): string[] {
+  const table = `${schemaIdentifier(schema)}.session`;
+  const body = `BEGIN IF to_regclass('${table.replace(/'/g, "''")}') IS NOT NULL THEN DELETE FROM ${table}; END IF; END`;
+  // The block is dollar-quoted, so its tag must not appear in a schema name.
+  let tag = '$$';
+  for (let n = 0; body.includes(tag); n += 1) tag = `$t${n || ''}$`;
+  return [`DO ${tag} ${body} ${tag};`];
+}
+
+/**
+ * The preamble and trailer of an instance that keeps its data in `public`.
+ * The restore script (backend/scripts/restore.sh) handles that schema only,
+ * appends the same trailer, and keepInStep.test.ts fails if the two differ.
+ */
+export const RESTORE_PREAMBLE = restorePreamble('public');
+export const RESTORE_TRAILER = restoreTrailer('public');
 
 /**
  * Settings a newer pg_dump writes that an older server rejects.
@@ -110,7 +148,12 @@ const COPY_END = '\\.';
  * replacement above commits, and the instance is left empty while the restore
  * reports success. So a file is refused unless, outside its table data, it
  * ends with the trailer pg_dump writes last and creates the tables every
- * CozyVTT database has.
+ * CozyVTT database has, in the schema this instance keeps its data in. A
+ * backup of another schema is refused: loaded, its tables would land in the
+ * schema it came from while the restore reported success. An instance with a
+ * schema of its own also refuses tables in any other schema, which are not
+ * its to replace; a backup of `public` restores everything it holds, as it
+ * always has.
  *
  * psql also runs whatever the file says, as the database owner. A backslash
  * command such as `\!` runs a shell command in the backend container, `COPY
@@ -135,7 +178,23 @@ const COPY_END = '\\.';
  */
 const DUMP_COMPLETE = '-- PostgreSQL database dump complete';
 const RESTRICTED_MODE_LINE = /^\\(?:un)?restrict /;
-const CREATE_TABLE = /^CREATE TABLE public\.(?:"([^"]+)"|([A-Za-z_][A-Za-z0-9_]*)) \($/;
+/** `CREATE TABLE <schema>.<table> (`, each name bare or quoted as pg_dump writes it. */
+const CREATE_TABLE = /^CREATE TABLE ("(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*)\.("(?:[^"]|"")+"|[A-Za-z_][A-Za-z0-9_$]*) \($/;
+
+/** A name as pg_dump wrote it, without its quotes, read back from latin1 (see linesOf) as the UTF-8 the dump is in. */
+function unquoted(name: string): string {
+  const bare = name.startsWith('"') ? name.slice(1, -1).replace(/""/g, '"') : name;
+  return Buffer.from(bare, 'latin1').toString('utf8');
+}
+
+/** Why a backup of `found` (its schemas, sorted) is not one for an instance that keeps its data in `schema`. */
+function anotherSchema(found: string[], schema: string): string {
+  const names = found.map((name) => `"${name}"`).join(' and ');
+  return (
+    `it is a backup of the database schema${found.length > 1 ? 's' : ''} ${names}, and this instance keeps its data in the schema "${schema}". ` +
+    'Restore it on an instance whose DATABASE_URL names the schema it came from'
+  );
+}
 const TRANSACTION_CONTROL =
   /^(?:BEGIN|START TRANSACTION|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE|PREPARE TRANSACTION)\b/i;
 
@@ -198,12 +257,15 @@ async function* linesOf(path: string): AsyncGenerator<{ raw: string; statement: 
  *
  * `refused` says why the file is not a backup that can be loaded (see
  * DUMP_COMPLETE above), and a caller must not load a file that was refused.
+ * `dbUrl` is the instance's, which decides the schema replaced.
  */
-export async function prepareDumpForRestore(sqlPath: string, outPath: string): Promise<PreparedDump> {
+export async function prepareDumpForRestore(sqlPath: string, outPath: string, dbUrl: string): Promise<PreparedDump> {
   const skipped: SkippedStatements = { settings: [], ownership: 0, privileges: 0 };
   let refused: string | null = null;
   let complete = false;
-  const tables = new Set<string>();
+  const schema = instanceSchema(dbUrl);
+  /** The tables the dump creates, by schema. */
+  const tables = new Map<string, Set<string>>();
 
   // The whole database: readable by the backend's user alone.
   const out = createWriteStream(outPath, { encoding: 'latin1', mode: 0o600 });
@@ -220,7 +282,7 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
   let endedWithNewline = true;
   try {
     await write(`\\restrict ${randomBytes(32).toString('hex')}\n`);
-    for (const line of RESTORE_PREAMBLE) await write(line + '\n');
+    for (const line of restorePreamble(schema)) await write(line + '\n');
 
     for await (const { raw, statement, newline } of linesOf(sqlPath)) {
       let keep = true;
@@ -249,7 +311,11 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
         keep = false;
       } else {
         const table = CREATE_TABLE.exec(statement);
-        if (table) tables.add(table[1] ?? table[2]);
+        if (table) {
+          const [inSchema, name] = [unquoted(table[1]), unquoted(table[2])];
+          if (!tables.has(inSchema)) tables.set(inSchema, new Set());
+          tables.get(inSchema)?.add(name);
+        }
       }
       if (keep) {
         await write(newline ? raw + '\n' : raw);
@@ -257,7 +323,7 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
       }
     }
     if (!endedWithNewline) await write('\n');
-    for (const line of RESTORE_TRAILER) await write(line + '\n');
+    for (const line of restoreTrailer(schema)) await write(line + '\n');
     if (failure.error) throw failure.error;
     out.end();
     // Until the file is closed, not only written: some filesystems (NFS over
@@ -270,11 +336,16 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
   }
 
   if (refused === null) {
-    const missing = REQUIRED_TABLES.filter((t) => !tables.has(t));
+    const found = [...tables.keys()].sort();
+    const elsewhere = found.filter((name) => name !== schema);
+    const missing = REQUIRED_TABLES.filter((t) => !tables.get(schema)?.has(t));
+    const backupOfAnother = elsewhere.some((name) => REQUIRED_TABLES.every((t) => tables.get(name)?.has(t)));
     if (inCopy) {
       refused = "it stops partway through a table's rows, so it was cut short";
     } else if (!complete) {
       refused = 'it does not end the way a complete pg_dump backup does, so it was cut short or is not a pg_dump backup';
+    } else if ((schema !== 'public' && elsewhere.length > 0) || (missing.length > 0 && backupOfAnother)) {
+      refused = anotherSchema(found, schema);
     } else if (missing.length > 0) {
       refused = `it does not create the ${missing.join(' and ')} table${missing.length > 1 ? 's' : ''}, so it is not a CozyVTT backup`;
     }
@@ -282,12 +353,6 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
   return { skipped, refused };
 }
 
-/**
- * Arguments for dumping the database at `dbUrl` to `sqlPath`. The dump drops
- * each object before recreating it, names no owner and no privilege, so it
- * loads under whichever database user the restoring instance has, and leaves
- * the login sessions' rows out.
- */
 /**
  * How pg_dump and psql are told where the database is: the address with the
  * password taken out, and the password in the environment as PGPASSWORD.
@@ -299,16 +364,18 @@ export async function prepareDumpForRestore(sqlPath: string, outPath: string): P
  * which only the same user or root can read. The environment handed over is
  * the path and the password alone; the tools need nothing else of the app's.
  *
- * An address that does not parse, or carries no password, is passed on as it
- * is, so an unusual one (a Unix socket, a passwordless local server) still
- * connects the way it did.
+ * The address is the app's, and libpq refuses a setting it does not know
+ * (`invalid URI query parameter`), so the ones only the app reads are left
+ * out: `schema` (pg_dump is given the schema as --schema, see buildDumpArgs),
+ * `connection_limit` and the rest of PRISMA_ONLY_PARAMETERS. The pg driver's
+ * `sslmode=no-verify`, encryption without a certificate check, is libpq's
+ * `require`. Every other setting reaches libpq exactly as written; with an
+ * `sslrootcert` beside it, libpq's `require` checks the certificate against
+ * that file, which DEPLOYMENT.md tells a self-hoster.
+ *
+ * An address that does not parse is passed on as it is, so an unusual one (a
+ * Unix socket) still connects the way it did.
  */
-// TODO(backups): the address goes to pg_dump and psql with its query string,
-// and libpq refuses what it does not know: `?schema=` and `?connection_limit=`
-// ("invalid URI query parameter") and `sslmode=no-verify` ("invalid sslmode
-// value"), all of which the app's pg pool accepts, so every backup and restore
-// fails there. Drop the parameters prismaClient.ts handles itself, and pass the
-// schema with --schema, so the tools get only what libpq reads.
 export function pgConnection(dbUrl: string): { dbname: string; env: Record<string, string> } {
   const env: Record<string, string> = { PATH: process.env.PATH ?? '' };
   let parsed: URL;
@@ -317,13 +384,60 @@ export function pgConnection(dbUrl: string): { dbname: string; env: Record<strin
   } catch {
     return { dbname: dbUrl, env };
   }
-  if (!parsed.password) return { dbname: dbUrl, env };
-  env.PGPASSWORD = decodeURIComponent(parsed.password);
-  parsed.password = '';
-  return { dbname: parsed.toString(), env };
+  let changed = false;
+
+  // Pair by pair, so what is kept is not encoded again: URLSearchParams
+  // would write a space as `+`, which libpq reads as a plus sign.
+  const kept: string[] = [];
+  for (const pair of parsed.search.slice(1).split('&')) {
+    if (pair === '') continue;
+    const at = pair.indexOf('=');
+    const name = decodedOrAsIs(at < 0 ? pair : pair.slice(0, at));
+    const value = at < 0 ? '' : decodedOrAsIs(pair.slice(at + 1));
+    if (PRISMA_ONLY_PARAMETERS.includes(name)) {
+      changed = true;
+    } else if (name === 'sslmode' && value === 'no-verify') {
+      kept.push('sslmode=require');
+      changed = true;
+    } else {
+      kept.push(pair);
+    }
+  }
+  if (changed) parsed.search = kept.length > 0 ? `?${kept.join('&')}` : '';
+
+  if (parsed.password) {
+    // A `%` that encodes nothing (`pa%ss`) is the password as written: the
+    // app's driver reads it so, and decodeURIComponent would throw, failing
+    // every backup with nothing useful in the log.
+    env.PGPASSWORD = decodedOrAsIs(parsed.password);
+    parsed.password = '';
+    changed = true;
+  }
+  return { dbname: changed ? parsed.toString() : dbUrl, env };
 }
 
+/** A percent-encoded part of an address, decoded, or as written when it does not decode (a lone `%`). */
+function decodedOrAsIs(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+/**
+ * Arguments for dumping the database at `dbUrl` to `sqlPath`. The dump drops
+ * each object before recreating it, names no owner and no privilege, so it
+ * loads under whichever database user the restoring instance has, and leaves
+ * the login sessions' rows out.
+ *
+ * An instance that keeps its data in `public` is dumped whole, as it always
+ * has been. One whose DATABASE_URL names a schema of its own shares its
+ * database with other software, so its backup holds that schema alone.
+ */
 export function buildDumpArgs(dbUrl: string, sqlPath: string): string[] {
+  const schema = instanceSchema(dbUrl);
+  const name = schemaIdentifier(schema);
   return [
     '--dbname',
     pgConnection(dbUrl).dbname,
@@ -333,9 +447,10 @@ export function buildDumpArgs(dbUrl: string, sqlPath: string): string[] {
     '--if-exists',
     '--no-owner',
     '--no-privileges',
+    ...(schema === 'public' ? [] : [`--schema=${name}`]),
     // The login sessions: a backup that carried them would sign every
-    // sign-in of the day back in when restored (see RESTORE_TRAILER).
-    '--exclude-table-data=public.session',
+    // sign-in of the day back in when restored (see restoreTrailer).
+    `--exclude-table-data=${name}.session`,
   ];
 }
 

@@ -13,11 +13,12 @@ import { getProxyLimitWarnings } from './utils/proxyLimits';
 import { applyRequestTimeouts } from './config/httpServer';
 import { createShutdown, onShutdownSignals, onProcessFailure } from './utils/shutdown';
 import { setupState } from './services/systemSettings';
-import { removeLeftoverRestoreUploads } from './services/restoreState';
+import { removeLeftoverRestoreUploads, restoresInProgress } from './services/restoreState';
 import { resolveBackupDir } from './utils/backupDir';
 import { setupTokenHint } from './services/setupToken';
 import { backupsInProgress } from './services/backupsInProgress';
 import { personalFilesBeingRemoved } from './services/accountDeletion';
+import { makeDummyPasswordHash } from './services/auth';
 
 // An error nothing caught is written to the log before the process ends.
 onProcessFailure();
@@ -41,7 +42,7 @@ const io = initializeWebSocket(httpServer);
 // here, which lets a backup being written finish, then closes the sockets,
 // lets the removal of a deleted account's files finish, and closes the
 // database and the session store.
-onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress, files: personalFilesBeingRemoved }));
+onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInProgress, restores: restoresInProgress, files: personalFilesBeingRemoved }));
 
 // ============================================
 // START SERVER
@@ -50,6 +51,10 @@ onShutdownSignals(createShutdown({ io, prisma, sessionPool, backups: backupsInPr
 // A large import or restore streamed through nginx can take longer than
 // Node's default five minutes to arrive; see config/httpServer.ts.
 applyRequestTimeouts(httpServer);
+
+// Started before the server listens, so the first sign-ins for unknown
+// emails find it made or being made; see services/auth.ts.
+void makeDummyPasswordHash();
 
 httpServer.listen(PORT, () => {
   logger.info(`CozyVTT Backend running on port ${PORT}`);

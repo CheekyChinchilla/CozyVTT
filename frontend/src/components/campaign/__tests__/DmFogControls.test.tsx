@@ -72,3 +72,22 @@ describe('DmFogControls', () => {
     expect(props.onFogModeChange).not.toHaveBeenCalled();
   });
 });
+
+// The title that folds the panel was a clickable box, out of reach of Tab and
+// silent about whether the panel was open.
+describe('the Fog of War title', () => {
+  it('is a button that says whether the panel is open, and folds it', () => {
+    render(
+      <DmFogControls fogMode={null} onFogModeChange={vi.fn()} onRevealAll={vi.fn()} onHideAll={vi.fn()} fogEnabled onFogEnabledChange={vi.fn()} />
+    );
+    const title = screen.getByRole('button', { name: 'Fog of War' });
+    expect(title).toHaveAttribute('aria-expanded', 'false');
+
+    fireEvent.click(title);
+
+    expect(title).toHaveAttribute('aria-expanded', 'true');
+    const body = document.getElementById(title.getAttribute('aria-controls') ?? '');
+    expect(body).toContainElement(screen.getByLabelText('Fog of war on this map'));
+  });
+});
+

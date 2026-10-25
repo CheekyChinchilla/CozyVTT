@@ -1,5 +1,6 @@
 import { memo, useState } from 'react';
 import { motion } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import {
   Eye,
   Trash2,
@@ -14,10 +15,11 @@ import {
   FileText,
 } from 'lucide-react';
 import { Asset, AssetType, AssetScope } from '../../types';
-import { useAuth } from '../../contexts/AuthContext';
 import { api } from '../../services/api';
 import ConfirmDialog from '@/components/common/ConfirmDialog';
 import { assetScopeLabel } from '@/utils/assetUrl';
+import { formatFileSize } from '@/utils/format';
+import { errorSummary } from '@/utils/errors';
 
 interface AssetCardProps {
   asset: Asset;
@@ -32,23 +34,13 @@ interface AssetCardProps {
  * Displays a single asset with thumbnail and actions
  */
 function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
-  const { user } = useAuth();
-  const [showActions, setShowActions] = useState(false);
+  const cardExit = useMotionExit({ opacity: 0, scale: 0.9 });
   const [isDeleting, setIsDeleting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  // Check if current user can delete this asset
-  // TODO(assets): the server also lets the DM of a campaign asset's campaign
-  // delete it; offer Delete to that DM, as AssetDetailPanel should.
-  const canDelete =
-    user?.id === asset.uploadedById || user?.platformRole === 'ADMIN';
-
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  // What the asset list says the server will allow: the uploader, the DM of
+  // a campaign asset's campaign, or an admin, by the delete route's own rule.
+  const canDelete = asset.canChange === true;
 
   /**
    * Whether this type is shown as a picture. Audio and documents are shown as
@@ -56,16 +48,20 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
    * document fell through to an <img> with no source and rendered as a broken
    * picture.
    */
+  const [pictureFailed, setPictureFailed] = useState(false);
+  // A picture that fails to load is shown as its type's icon, as audio and
+  // documents are. Kept in state: the fallback used to change React's own
+  // nodes, which React does not expect.
   const showsPicture =
-    asset.type === AssetType.MAP || asset.type === AssetType.TOKEN || asset.type === AssetType.AVATAR;
+    !pictureFailed && (asset.type === AssetType.MAP || asset.type === AssetType.TOKEN || asset.type === AssetType.AVATAR);
 
   // Get asset thumbnail URL
   const getThumbnailUrl = (): string => {
     if (asset.type === AssetType.MAP) {
-      return api.getAssetUrl(asset.id, 'maps');
+      return api.getAssetThumbnailUrl(asset.id, 'maps');
     }
     if (asset.type === AssetType.TOKEN) {
-      return api.getAssetUrl(asset.id, 'tokens');
+      return api.getAssetThumbnailUrl(asset.id, 'tokens');
     }
     // An avatar is served by its owner's id; a deleted account's has none.
     if (asset.type === AssetType.AVATAR) {
@@ -79,15 +75,15 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   const getAssetIcon = () => {
     switch (asset.type) {
       case AssetType.MAP:
-        return <MapPin className="w-8 h-8 text-warm-amber" />;
+        return <MapPin className="w-8 h-8 text-accent-ink" />;
       case AssetType.TOKEN:
         return <User className="w-8 h-8 text-brand-ink" />;
       case AssetType.AUDIO:
-        return <FileAudio className="w-8 h-8 text-spirit-purple" />;
+        return <FileAudio className="w-8 h-8 text-spirit-ink" />;
       case AssetType.AVATAR:
-        return <User className="w-8 h-8 text-sunset-orange" />;
+        return <User className="w-8 h-8 text-accent-ink" />;
       case AssetType.DOCUMENT:
-        return <FileText className="w-8 h-8 text-moss-green" />;
+        return <FileText className="w-8 h-8 text-brand-ink" />;
       default:
         return <FileImage className="w-8 h-8 text-stone-gray" />;
     }
@@ -103,7 +99,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
     try {
       await onDelete(asset);
     } catch (error) {
-      console.error('Error deleting asset:', error);
+      console.error('Error deleting asset:', errorSummary(error));
     } finally {
       setIsDeleting(false);
       setConfirmOpen(false);
@@ -136,12 +132,12 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
         layout
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-all"
+        exit={cardExit}
+        className="bg-parchment/50 border border-moss-green/20 rounded-lg p-4 hover:shadow-lg transition-shadow"
       >
         <div className="flex items-center gap-4">
           {/* Thumbnail */}
-          <div className="flex-shrink-0 w-20 h-20 bg-moss-green/10 rounded-lg overflow-hidden flex items-center justify-center">
+          <div className="shrink-0 w-20 h-20 bg-moss-green/10 rounded-lg overflow-hidden flex items-center justify-center">
             {!showsPicture ? (
               getAssetIcon()
             ) : (
@@ -150,11 +146,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 alt={asset.name}
                 loading="lazy"
                 className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null; // prevent recursive error
-                  target.style.display = 'none';
-                }}
+                onError={() => setPictureFailed(true)}
               />
             )}
           </div>
@@ -175,7 +167,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 )}
                 {assetScopeLabel(asset.scope)}
               </span>
-              <span>{formatFileSize(asset.fileSize)}</span>
+              <span>{formatFileSize(asset.fileSize, { largest: 'MB' })}</span>
               <span>{asset.type}</span>
             </div>
             {asset.tags.length > 0 && (
@@ -183,7 +175,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
                 {asset.tags.slice(0, 3).map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/20 text-warm-amber text-xs rounded-md"
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/15 text-accent-ink text-xs rounded-md"
                   >
                     <Tag className="w-3 h-3" />
                     {tag}
@@ -201,16 +193,20 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
           {/* Actions */}
           <div className="flex items-center gap-2">
             <button
+              type="button"
               onClick={onView}
-              className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/20 text-brand-ink transition-colors"
+              className="p-2 rounded-lg bg-moss-green/10 hover:bg-moss-green/15 text-brand-ink transition-colors"
               title="View details"
+              aria-label={`View ${asset.name}`}
             >
               <Eye className="w-5 h-5" />
             </button>
             <button
+              type="button"
               onClick={handleDownload}
-              className="p-2 rounded-lg bg-sunset-orange/10 hover:bg-sunset-orange/20 text-sunset-orange transition-colors"
+              className="p-2 rounded-lg bg-sunset-orange/10 hover:bg-sunset-orange/15 text-accent-ink transition-colors"
               title="Download"
+              aria-label={`Download ${asset.name}`}
             >
               <Download className="w-5 h-5" />
             </button>
@@ -218,7 +214,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className="p-2 rounded-lg bg-danger/10 hover:bg-danger/20 text-danger-ink transition-colors disabled:opacity-50"
+                className="p-2 rounded-lg bg-danger/10 hover:bg-danger/15 text-danger-ink transition-colors disabled:opacity-50"
                 title="Delete"
                 aria-label={`Delete ${asset.name}`}
               >
@@ -235,20 +231,15 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
   // Grid view
   return (
     <>
-    {/* TODO(ui): `transition-all` here and on the list card above also
-        transitions opacity, so in Firefox each card fades in twice: when
-        framer-motion's fade ends it writes the final opacity on the element,
-        and the 150ms CSS transition replays it from 0. The cards should
-        transition only what hover changes (`transition-shadow`). */}
+    {/* Only the shadow is transitioned, as hover changes only that: a CSS
+        transition on opacity replayed framer-motion's fade in Firefox. */}
     <motion.div
       layout
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.9 }}
+      exit={cardExit}
       whileHover={{ y: -4 }}
-      className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all relative group"
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => setShowActions(false)}
+      className="bg-parchment/50 border border-moss-green/20 rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-shadow relative group"
     >
       {/* Thumbnail */}
       <div className="relative w-full h-48 bg-moss-green/10 overflow-hidden">
@@ -262,19 +253,12 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             alt={asset.name}
             loading="lazy"
             className="w-full h-full object-cover transition-transform group-hover:scale-110"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const iconDiv = document.createElement('div');
-              iconDiv.className = 'flex items-center justify-center w-full h-full';
-              iconDiv.innerHTML = '<div></div>';
-              target.parentElement?.appendChild(iconDiv);
-            }}
+            onError={() => setPictureFailed(true)}
           />
         )}
 
         {/* Scope Badge */}
-        <div className="absolute top-2 right-2 px-2 py-1 bg-paper-white backdrop-blur-sm rounded-md text-xs font-medium text-stone-gray flex items-center gap-1">
+        <div className="absolute top-2 right-2 px-2 py-1 bg-paper-white backdrop-blur-xs rounded-md text-xs font-medium text-stone-gray flex items-center gap-1">
           {asset.scope === AssetScope.GLOBAL ? (
             <Globe className="w-3 h-3" />
           ) : asset.scope === AssetScope.USER ? (
@@ -285,40 +269,44 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
           {assetScopeLabel(asset.scope)}
         </div>
 
-        {/* Hover Actions */}
-        {showActions && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center gap-3"
+        {/* Actions: over the dimmed picture on hover and while one has
+            keyboard focus; always shown on a screen with no hover (touch), as
+            a strip in the bottom corner that leaves the picture clear. Hidden,
+            the overlay lets clicks through to the card. */}
+        <div
+          className="absolute inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center gap-3 transition-opacity opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto [@media(hover:none)]:inset-auto [@media(hover:none)]:bottom-2 [@media(hover:none)]:right-2 [@media(hover:none)]:gap-2 [@media(hover:none)]:bg-transparent [@media(hover:none)]:backdrop-blur-none"
+        >
+          <button
+            type="button"
+            onClick={onView}
+            className="p-3 [@media(hover:none)]:p-2 [@media(hover:none)]:shadow-md bg-paper-white rounded-full hover:bg-white transition-colors"
+            title="View details"
+            aria-label={`View ${asset.name}`}
           >
+            <Eye className="w-5 h-5 text-brand-ink" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="p-3 [@media(hover:none)]:p-2 [@media(hover:none)]:shadow-md bg-paper-white rounded-full hover:bg-white transition-colors"
+            title="Download"
+            aria-label={`Download ${asset.name}`}
+          >
+            <Download className="w-5 h-5 text-accent-ink" aria-hidden="true" />
+          </button>
+          {canDelete && (
             <button
-              onClick={onView}
-              className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
-              title="View details"
+              type="button"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="p-3 [@media(hover:none)]:p-2 [@media(hover:none)]:shadow-md bg-danger/90 rounded-full hover:bg-danger transition-colors disabled:opacity-50"
+              title="Delete"
+              aria-label={`Delete ${asset.name}`}
             >
-              <Eye className="w-5 h-5 text-brand-ink" />
+              <Trash2 className="w-5 h-5 text-white" aria-hidden="true" />
             </button>
-            <button
-              onClick={handleDownload}
-              className="p-3 bg-paper-white rounded-full hover:bg-white transition-colors"
-              title="Download"
-            >
-              <Download className="w-5 h-5 text-sunset-orange" />
-            </button>
-            {canDelete && (
-              <button
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="p-3 bg-danger/90 rounded-full hover:bg-danger transition-colors disabled:opacity-50"
-                title="Delete"
-                aria-label={`Delete ${asset.name}`}
-              >
-                <Trash2 className="w-5 h-5 text-white" />
-              </button>
-            )}
-          </motion.div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* Content */}
@@ -329,7 +317,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
 
         <div className="flex items-center justify-between text-sm text-stone-gray mb-3">
           <span className="capitalize">{asset.type.toLowerCase()}</span>
-          <span>{formatFileSize(asset.fileSize)}</span>
+          <span>{formatFileSize(asset.fileSize, { largest: 'MB' })}</span>
         </div>
 
         {/* Tags */}
@@ -338,7 +326,7 @@ function AssetCardInner({ asset, viewMode, onView, onDelete }: AssetCardProps) {
             {asset.tags.slice(0, 2).map((tag) => (
               <span
                 key={tag}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/20 text-warm-amber text-xs rounded-md"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-warm-amber/15 text-accent-ink text-xs rounded-md"
               >
                 <Tag className="w-3 h-3" />
                 {tag}

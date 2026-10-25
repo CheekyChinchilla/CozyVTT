@@ -6,10 +6,13 @@
 // Right: Chat, dice roller, controls
 // ============================================
 
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useId, lazy, Suspense } from 'react';
 import { isCampaignOwner } from '@/utils/campaignRoles';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router';
+import { createPortal } from 'react-dom';
+import { useFocusTrap } from '@/hooks/useFocusTrap';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { CampaignProvider, useCampaign } from '@/contexts/CampaignContext';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
 import { useGameStore } from '@/stores/gameStore';
@@ -44,6 +47,7 @@ import TokenManager from '@/components/campaign/TokenManager';
 import SpiritLayerControls from '@/components/campaign/SpiritLayerControls';
 import AtmospherePanel from '@/components/campaign/AtmospherePanel';
 import AtmospherePlayer from '@/components/campaign/AtmospherePlayer';
+import TableRefusals from '@/components/campaign/TableRefusals';
 import NpcQuickEditor from '@/components/campaign/NpcQuickEditor';
 import CreatureLibrary from '@/components/campaign/CreatureLibrary';
 import TokenTemplateLibrary from '@/components/campaign/TokenTemplateLibrary';
@@ -58,7 +62,11 @@ import type { Token } from '@/types';
 import Button from '@/components/ui/Button';
 import Tooltip from '@/components/ui/Tooltip';
 import { useOnRejoin } from '@/hooks/useOnRejoin';
+import { optionalStorage } from '@/utils/optionalStorage';
 import { useAccessRevoked } from '@/hooks/useAccessRevoked';
+
+/** Set to `yes` once this browser has chosen Continue anyway on a narrow screen. */
+const NARROW_SCREEN_KEY = 'cozyvtt.continueOnNarrowScreen';
 
 // ============================================
 // Campaign Page Content (inside provider)
@@ -134,8 +142,22 @@ function CampaignPageContent() {
   // column sizes survive reloads.
   const { defaultLayout, onLayoutChanged } = useDefaultLayout({
     id: 'cozyvtt-session-layout',
-    storage: localStorage,
+    storage: optionalStorage,
   });
+  // Below 1024 px the page covers itself with a "Desktop Required" notice
+  // until **Continue anyway**, which this browser then remembers.
+  const [continueOnNarrowScreen, setContinueOnNarrowScreen] = useState(
+    () => optionalStorage.getItem(NARROW_SCREEN_KEY) === 'yes',
+  );
+  const continueAnyway = () => {
+    optionalStorage.setItem(NARROW_SCREEN_KEY, 'yes');
+    setContinueOnNarrowScreen(true);
+  };
+  // The notice is drawn only below lg (1024 px); while it shows it holds the
+  // keyboard, over any window or side panel open under it.
+  const narrowScreen = useMediaQuery('(max-width: 1023.98px)');
+  const narrowNoticeRef = useFocusTrap(narrowScreen && !continueOnNarrowScreen);
+  const narrowNoticeTitleId = useId();
   const leftPanelRef = usePanelRef();
   const rightPanelRef = usePanelRef();
   const [leftCollapsed, setLeftCollapsed] = useState(false);
@@ -220,7 +242,7 @@ function CampaignPageContent() {
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="text-center space-y-4">
           <Loader2 className="w-12 h-12 text-brand-ink animate-spin mx-auto" />
           <p className="text-stone-gray">Loading campaign...</p>
@@ -232,9 +254,9 @@ function CampaignPageContent() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="card-cozy max-w-md text-center space-y-4">
-          <p className="text-spirit-red font-medium">{error}</p>
+          <p className="text-danger-ink font-medium">{error}</p>
           <Button onClick={() => navigate('/dashboard')}>
             <ArrowLeft className="w-4 h-4 inline mr-2" />
             Back to Dashboard
@@ -247,7 +269,7 @@ function CampaignPageContent() {
   // No campaign loaded
   if (!campaign) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
         <div className="card-cozy max-w-md text-center space-y-4">
           <p className="text-stone-gray">Campaign not found</p>
           <Button onClick={() => navigate('/dashboard')}>
@@ -260,10 +282,11 @@ function CampaignPageContent() {
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20">
+    <div className="h-screen flex flex-col bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20">
       {/* Header Bar */}
-      <header className="flex items-center justify-between px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-sm">
-        <div className="flex items-center gap-3">
+      {/* Wraps onto a second row in a narrow window instead of running off its edge. */}
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
+        <div className="flex min-w-0 items-center gap-3">
           <Button
             onClick={() => navigate('/dashboard')}
             variant="secondary" className="flex items-center gap-2"
@@ -274,12 +297,12 @@ function CampaignPageContent() {
 
           <div className="h-6 w-px bg-moss-green/20" />
 
-          <h1 className="text-xl font-bold text-brand-ink">
+          <h1 className="min-w-0 break-words text-xl font-bold text-brand-ink">
             {campaign.name}
           </h1>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Connection Status */}
           <ConnectionStatus />
 
@@ -292,8 +315,8 @@ function CampaignPageContent() {
           )}
           {campaign.status === CampaignStatus.PAUSED && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-warm-amber/10 border border-warm-amber/20">
-              <PauseCircle className="w-3.5 h-3.5 text-warm-amber" />
-              <span className="text-xs font-medium text-warm-amber hidden sm:inline">Paused</span>
+              <PauseCircle className="w-3.5 h-3.5 text-accent-ink" />
+              <span className="text-xs font-medium text-accent-ink hidden sm:inline">Paused</span>
             </div>
           )}
           {campaign.status === CampaignStatus.INACTIVE && (
@@ -306,8 +329,8 @@ function CampaignPageContent() {
           {/* Vibe indicator (visible to all) */}
           {campaign?.currentVibe && (
             <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-warm-amber/10 border border-warm-amber/20">
-              <Sun className="w-3.5 h-3.5 text-warm-amber" />
-              <span className="text-xs font-medium text-warm-amber capitalize hidden sm:inline">
+              <Sun className="w-3.5 h-3.5 text-accent-ink" />
+              <span className="text-xs font-medium text-accent-ink capitalize hidden sm:inline">
                 {campaign.currentVibe}
               </span>
             </div>
@@ -395,15 +418,17 @@ function CampaignPageContent() {
       {/* Session Paused Banner — visible to players when session is paused */}
       {campaign.status === CampaignStatus.PAUSED && userRole !== 'DM' && (
         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-warm-amber/10 border-b border-warm-amber/20">
-          <PauseCircle className="w-4 h-4 text-warm-amber flex-shrink-0" />
-          <p className="text-xs font-medium text-warm-amber">
-            Session is paused. Token movement is disabled, and your dice rolls stay on your own screen.
+          <PauseCircle className="w-4 h-4 text-accent-ink shrink-0" />
+          <p className="text-xs font-medium text-accent-ink">
+            Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.
           </p>
         </div>
       )}
 
-      {/* Main Content - Three Resizable Panels */}
-      <main className="flex-1 min-h-0 overflow-hidden hidden lg:block">
+      {/* Main Content - Three Resizable Panels. Relative, so it clips what is
+          absolutely placed inside it too, such as the hidden names of the
+          rail's icon tabs, which otherwise widened a narrow page. */}
+      <main className={`relative flex-1 min-h-0 overflow-hidden ${continueOnNarrowScreen ? 'block' : 'hidden lg:block'}`}>
         <Group
           orientation="horizontal"
           className="h-full w-full"
@@ -550,21 +575,43 @@ function CampaignPageContent() {
       {/* Atmosphere Player — mounts for ALL users, manages ambient audio sync */}
       <AtmospherePlayer />
 
-      {/* Mobile Warning */}
-      <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
-        <div className="card-cozy max-w-md text-center space-y-4">
-          <h2 className="text-xl font-bold text-brand-ink">
-            Desktop Required
-          </h2>
-          <p className="text-stone-gray">
-            The campaign view is optimized for desktop screens (1024px+). Mobile
-            support will be added in future updates.
-          </p>
-          <Button onClick={() => navigate('/dashboard')}>
-            Back to Dashboard
-          </Button>
-        </div>
-      </div>
+      {/* What the server refuses, shown as a message */}
+      <TableRefusals />
+
+      {/* Narrow screen notice, on <body> above every panel and window (z-60)
+          so none can cover it; toasts stay above it. */}
+      {!continueOnNarrowScreen && createPortal(
+        <div className="lg:hidden fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-80">
+          <div
+            ref={narrowNoticeRef}
+            role={narrowScreen ? 'dialog' : undefined}
+            aria-modal={narrowScreen ? true : undefined}
+            aria-labelledby={narrowNoticeTitleId}
+            className="card-cozy max-w-md text-center space-y-4"
+          >
+            <h2 id={narrowNoticeTitleId} className="text-xl font-bold text-brand-ink">
+              Desktop Required
+            </h2>
+            <p className="text-stone-gray">
+              The campaign view is optimized for desktop screens (1024px+). Mobile
+              support will be added in future updates.
+            </p>
+            <p className="text-stone-gray">
+              On a narrow window or a tablet you can continue anyway. The page keeps
+              its desktop layout, so some panels will be cramped.
+            </p>
+            <div className="flex flex-wrap justify-center gap-2">
+              <Button onClick={() => navigate('/dashboard')}>
+                Back to Dashboard
+              </Button>
+              <Button variant="secondary" onClick={continueAnyway}>
+                Continue anyway
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

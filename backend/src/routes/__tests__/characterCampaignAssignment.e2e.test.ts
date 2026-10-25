@@ -134,7 +134,7 @@ describe('creating a character with a campaign preselected', () => {
     await outsiderAgent
       .post('/api/characters')
       .send({ name: 'Gatecrasher', campaignId })
-      .expect(403);
+      .expect(404);
 
     const characters = await prisma.character.findMany({ where: { userId: outsiderId } });
     expect(characters).toHaveLength(0);

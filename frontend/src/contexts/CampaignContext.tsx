@@ -18,10 +18,9 @@ import campaignService from '@/services/campaign.service';
 import api from '@/services/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useGameStore } from '@/stores/gameStore';
-import type { Campaign, CampaignRole, CampaignStatus, Map, VibeSettings, VibePeriod, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast } from '@/types';
-import type { CharacterHpInfo } from '@/utils/characterHp';
+import type { Campaign, CampaignRole, CampaignStatus, CampaignMap, VibeSettings, CharacterHpUpdatedBroadcast, DmTransferredBroadcast, MemberRoleChangedBroadcast, VibeSettingsUpdatedBroadcast, CampaignSettingsUpdatedBroadcast } from '@/types';
 import socketClient from '@/services/socket';
-import { apiErrorMessage, apiErrorStatus } from '@/utils/errors';
+import { apiErrorMessage, apiErrorStatus, errorSummary } from '@/utils/errors';
 import { withMemberRole } from '@/utils/campaignRoles';
 
 // ============================================
@@ -36,7 +35,7 @@ import { withMemberRole } from '@/utils/campaignRoles';
 interface CampaignContextState {
   // Campaign Data
   campaign: Campaign | null;
-  currentMap: Map | null;
+  currentMap: CampaignMap | null;
 
   // User Role
   userRole: CampaignRole | null;
@@ -47,6 +46,12 @@ interface CampaignContextState {
 
   // Actions
   loadCampaign: (id: string) => Promise<void>;
+  /**
+   * Re-read the campaign after a change to it (settings, members, the DM
+   * seat) and replace it in place: the table stays as it is, and the map,
+   * which arrives over the socket, is not reloaded. A failure is logged and
+   * the page keeps what it has.
+   */
   refreshCampaign: () => Promise<void>;
   /**
    * Re-fetch ONLY the current map (tokens, walls, lights, fog) without
@@ -66,13 +71,13 @@ interface CampaignContextState {
    * map it captured earlier may have been edited since. The function form
    * never switches maps.
    */
-  setCurrentMap: (map: Map | null | ((current: Map | null) => Map | null)) => void;
+  setCurrentMap: (map: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null)) => void;
   /**
    * Keep `campaign.maps` in step with the Map Library: insert a created or
    * imported map, or replace a renamed one by id. The Move to Map… submenu
    * reads that list, so a map missing from it cannot be a move target.
    */
-  upsertCampaignMap: (map: Map) => void;
+  upsertCampaignMap: (map: CampaignMap) => void;
   /** Drop a deleted map from `campaign.maps`. */
   removeCampaignMap: (mapId: string) => void;
   /** Update spirit layer enabled/style in local campaign state (after WS broadcast or API call) */
@@ -89,8 +94,8 @@ interface CampaignContextState {
   activeVibeEffect: { hue: string; filter: string } | null;
   /** Called when vibe.updated WebSocket arrives — updates currentVibe + activeVibeEffect */
   updateVibe: (period: string, hue: string, filter: string) => void;
-  /** Called after saving ConfigureVibeModal — patches campaign.vibeSettings in local state */
-  updateVibeSettings: (settings: VibeSettings) => void;
+  /** The vibe periods as saved, and the vibe they leave in force (null for none) */
+  updateVibeSettings: (settings: VibeSettings, currentVibe: string | null) => void;
   /** Current open session (id, sessionNumber, startedAt) — null when no active session */
   activeSession: { id: string; sessionNumber: number; startedAt: string } | null;
   /** Set active session — called by SessionControls after start/resume REST response */
@@ -105,10 +110,6 @@ interface CampaignContextState {
   activeAtmosphereAudio: { assetId: string; audioUrl: string; volume: number; loop: boolean } | null;
   /** Update atmosphere audio — called by AtmospherePlayer on WS broadcast */
   updateAtmosphereAudio: (audio: { assetId: string; audioUrl: string; volume: number; loop: boolean } | null) => void;
-  /** Cache of character HP keyed by characterId — populated from roster, updated by character.hp.updated WS events */
-  characterHpCache: Record<string, CharacterHpInfo>;
-  /** Seed the HP cache from roster data (called by CampaignRoster after fetch) */
-  seedCharacterHpCache: (entries: { id: string; hp: CharacterHpInfo | null }[]) => void;
 }
 
 // ============================================
@@ -142,6 +143,12 @@ interface VibeSettingsBlob {
   };
 }
 
+/** The tint of the vibe in force: the period named `currentVibe`, or none. */
+function vibeEffectOf(settings: VibeSettings | undefined, currentVibe: string | null | undefined): { hue: string; filter: string } | null {
+  const period = currentVibe ? settings?.periods?.find((p) => p.name === currentVibe) : undefined;
+  return period ? { hue: period.hue, filter: period.filter } : null;
+}
+
 export function CampaignProvider({ children }: CampaignProviderProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -156,7 +163,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     shownCampaignId.current = campaign?.id ?? null;
     return () => { shownCampaignId.current = null; };
   }, [campaign?.id]);
-  const [currentMap, setCurrentMapState] = useState<Map | null>(null);
+  const [currentMap, setCurrentMapState] = useState<CampaignMap | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // DM local view preference — not persisted, resets each session
@@ -170,8 +177,15 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // Atmosphere state — effect + audio
   const [activeAtmosphereEffect, setActiveAtmosphereEffect] = useState<string | null>(null);
   const [activeAtmosphereAudio, setActiveAtmosphereAudio] = useState<{ assetId: string; audioUrl: string; volume: number; loop: boolean } | null>(null);
-  // Character HP cache — keyed by characterId, updated by WS event and roster seed
-  const [characterHpCache, setCharacterHpCache] = useState<Record<string, CharacterHpInfo>>({});
+  // Each load is numbered and only the newest is applied, so the answer for
+  // a campaign the page has already left cannot write over the next one.
+  const loadSeq = useRef(0);
+  // The return to the dashboard after a refused load; cancelled when the
+  // page moves on first.
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The same for re-reads after a settings or roster change: answers can
+  // arrive out of order, and an older one would put back an older member list.
+  const rereadSeq = useRef(0);
 
   // Derived: current vibe period name
   const currentVibe = campaign?.currentVibe ?? null;
@@ -182,43 +196,43 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       ? campaign.memberships?.find((m) => m.userId === user.id)?.role || null
       : null;
 
+  // The atmosphere and the vibe's tint, worked out from a campaign as the
+  // server holds it: on the first load, and after a reconnect, when the DM
+  // may have changed them while this page was away.
+  const applyCampaignEffects = useCallback((data: Campaign) => {
+    // Initialize atmosphere state from saved campaign vibeSettings
+    const vs = data.vibeSettings as VibeSettingsBlob | undefined;
+    setActiveAtmosphereEffect(vs?.atmosphereEffect ?? null);
+    if (vs?.atmosphereAudio?.assetId) {
+      setActiveAtmosphereAudio({
+        assetId: vs.atmosphereAudio.assetId,
+        audioUrl: `/api/assets/audio/${vs.atmosphereAudio.assetId}`,
+        volume: vs.atmosphereAudio.volume ?? 0.5,
+        loop: vs.atmosphereAudio.loop !== false,
+      });
+    } else {
+      setActiveAtmosphereAudio(null);
+    }
+
+    setActiveVibeEffect(vibeEffectOf(data.vibeSettings, data.currentVibe));
+  }, []);
+
   // Load campaign data
   const loadCampaign = useCallback(async (campaignId: string) => {
+    const seq = ++loadSeq.current;
+    const isNewest = () => seq === loadSeq.current;
     setLoading(true);
     setError(null);
 
     try {
       const data = await campaignService.getCampaign(campaignId);
+      if (!isNewest()) return;
       setCampaign(data);
 
       // Initialize active session from campaign response
       setActiveSession(data.activeSession ?? null);
 
-      // Initialize atmosphere state from saved campaign vibeSettings
-      const vs = data.vibeSettings as VibeSettingsBlob | undefined;
-      setActiveAtmosphereEffect(vs?.atmosphereEffect ?? null);
-      if (vs?.atmosphereAudio?.assetId) {
-        setActiveAtmosphereAudio({
-          assetId: vs.atmosphereAudio.assetId,
-          audioUrl: `/api/assets/audio/${vs.atmosphereAudio.assetId}`,
-          volume: vs.atmosphereAudio.volume ?? 0.5,
-          loop: vs.atmosphereAudio.loop !== false,
-        });
-      } else {
-        setActiveAtmosphereAudio(null);
-      }
-
-      // Initialize vibe effect from saved campaign state
-      if (data.currentVibe && data.vibeSettings?.periods) {
-        const activePeriod = (data.vibeSettings.periods as VibePeriod[]).find(
-          (p) => p.name === data.currentVibe,
-        );
-        setActiveVibeEffect(
-          activePeriod ? { hue: activePeriod.hue, filter: activePeriod.filter } : null,
-        );
-      } else {
-        setActiveVibeEffect(null);
-      }
+      applyCampaignEffects(data);
 
       // Load current map via the filtered REST endpoint so tokens are spirit-filtered
       // per this user's role. The campaign response (maps: true) returns raw unfiltered
@@ -226,10 +240,12 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       if (data.currentMapId) {
         try {
           const { map, spiritVisible } = await api.getMap(data.id, data.currentMapId);
+          if (!isNewest()) return;
           setCurrentMapState(map);
           useGameStore.getState().setTokens(map.tokens || []);
           setPlayerSpiritVisible(spiritVisible ?? false);
         } catch {
+          if (!isNewest()) return;
           // Fall back to embedded map metadata (no tokens) if the fetch fails
           const mapMeta = data.maps?.find((m: { id: string }) => m.id === data.currentMapId);
           if (mapMeta) {
@@ -239,34 +255,47 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
         }
       }
     } catch (err) {
-      console.error('Failed to load campaign:', err);
+      if (!isNewest()) return;
+      console.error('Failed to load campaign:', errorSummary(err));
 
       // Handle specific errors
       if (apiErrorStatus(err) === 403) {
         setError('You do not have permission to view this campaign');
-        setTimeout(() => navigate('/dashboard'), 2000);
+        redirectTimer.current = setTimeout(() => navigate('/dashboard'), 2000);
       } else if (apiErrorStatus(err) === 404) {
         setError('Campaign not found');
-        setTimeout(() => navigate('/dashboard'), 2000);
+        redirectTimer.current = setTimeout(() => navigate('/dashboard'), 2000);
       } else {
         setError(apiErrorMessage(err) || 'Failed to load campaign');
       }
     } finally {
-      setLoading(false);
+      if (isNewest()) setLoading(false);
     }
-  }, [navigate]);
+  }, [navigate, applyCampaignEffects]);
 
-  // Refresh campaign data
-  // TODO(play): this reloads the campaign through loadCampaign, which sets
-  // `loading`, so CampaignPage swaps the live table for its spinner and back:
-  // one Campaign Settings save refetches every token picture (44 requests on
-  // a seeded map) and reopens the settings on General. Refresh the campaign
-  // row without the page's loading state.
+  /** The campaign as it is now, or null when a newer re-read has started or the page has moved on. */
+  const rereadCampaign = useCallback(async (campaignId: string) => {
+    const seq = ++rereadSeq.current;
+    const fresh = await campaignService.getCampaign(campaignId);
+    return seq === rereadSeq.current && shownCampaignId.current === campaignId ? fresh : null;
+  }, []);
+
+  // Re-read the campaign in place. Going through loadCampaign set `loading`,
+  // so the page swapped the live table for its spinner and back: a Campaign
+  // Settings save fetched every token picture again and reopened the
+  // settings on their first tab.
   const refreshCampaign = useCallback(async () => {
-    if (campaign?.id) {
-      await loadCampaign(campaign.id);
+    const campaignId = campaign?.id;
+    if (!campaignId) return;
+    try {
+      const fresh = await rereadCampaign(campaignId);
+      if (!fresh) return;
+      setCampaign((prev) => (prev && prev.id === fresh.id ? fresh : prev));
+      setActiveSession(fresh.activeSession ?? null);
+    } catch (err) {
+      console.error('[CampaignContext] Failed to refresh the campaign:', errorSummary(err));
     }
-  }, [campaign?.id, loadCampaign]);
+  }, [campaign?.id, rereadCampaign]);
 
   // Re-fetch the current map only — used after a WebSocket reconnect so the
   // local token/wall/light/fog state catches up with anything that broadcast
@@ -280,13 +309,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh current map after reconnect:', err);
+      console.error('[CampaignContext] Failed to refresh current map after reconnect:', errorSummary(err));
       // Non-fatal — user will receive future real-time updates normally
     }
   }, [campaign?.id, currentMap?.id]);
 
   // Events sent while this page was offline are not replayed: a pause or an
-  // end, a member's role, a switch to another map. Re-read them without the
+  // end, a member's role, a switch to another map, the vibe, the weather and
+  // ambient track, the spirit layer. Re-read them without the
   // full reload's loading screen, then load the map the table is on now,
   // which may not be the one this page had (a player may no longer read it).
   const catchUpAfterReconnect = useCallback(async () => {
@@ -301,13 +331,23 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       if (!stillShown()) return;
       setCampaign((prev) =>
         prev && prev.id === fresh.id
-          ? { ...prev, status: fresh.status, memberships: fresh.memberships, currentMapId: fresh.currentMapId }
+          ? {
+              ...prev,
+              status: fresh.status,
+              memberships: fresh.memberships,
+              currentMapId: fresh.currentMapId,
+              currentVibe: fresh.currentVibe,
+              vibeSettings: fresh.vibeSettings,
+              spiritLayerEnabled: fresh.spiritLayerEnabled,
+              spiritLayerStyle: fresh.spiritLayerStyle,
+            }
           : prev
       );
       setActiveSession(fresh.activeSession ?? null);
+      applyCampaignEffects(fresh);
       mapId = fresh.currentMapId ?? null;
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', err);
+      console.error('[CampaignContext] Failed to refresh the campaign after reconnect:', errorSummary(err));
     }
     if (!mapId) return;
     try {
@@ -317,9 +357,9 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       useGameStore.getState().setTokens(map.tokens || []);
       setPlayerSpiritVisible(spiritVisible ?? false);
     } catch (err) {
-      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', err);
+      console.error('[CampaignContext] Failed to refresh the current map after reconnect:', errorSummary(err));
     }
-  }, [campaign?.id, currentMap?.id]);
+  }, [campaign?.id, currentMap?.id, applyCampaignEffects]);
 
   // Update currentVibe + activeVibeEffect when vibe.updated WS event arrives
   const updateVibe = useCallback((period: string, hue: string, filter: string) => {
@@ -327,9 +367,39 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     setActiveVibeEffect({ hue, filter });
   }, []);
 
-  // Patch campaign.vibeSettings after ConfigureVibeModal saves
-  const updateVibeSettings = useCallback((settings: VibeSettings) => {
-    setCampaign((prev) => (prev ? { ...prev, vibeSettings: settings } : null));
+  // The vibe periods as saved, and the vibe they leave in force: from the
+  // DM's own save, and from the broadcast every member's page is sent.
+  const updateVibeSettings = useCallback((settings: VibeSettings, currentVibe: string | null) => {
+    setCampaign((prev) => (prev ? { ...prev, vibeSettings: settings, currentVibe } : null));
+    setActiveVibeEffect(vibeEffectOf(settings, currentVibe));
+  }, []);
+
+  // The DM saved the vibe periods. Every page shows them and the vibe's tint,
+  // so each takes the periods and the vibe the save left: an edited period in
+  // force shows its new colour, and one renamed or deleted ends the vibe.
+  useEffect(() => {
+    const handleVibeSettings = (data: VibeSettingsUpdatedBroadcast) => {
+      if (shownCampaignId.current !== data?.campaignId) return;
+      updateVibeSettings(data.vibeSettings, data.currentVibe);
+    };
+    socketClient.on('vibe.settings.updated', handleVibeSettings);
+    return () => {
+      socketClient.off('vibe.settings.updated', handleVibeSettings);
+    };
+  }, [updateVibeSettings]);
+
+  // The DM saved Campaign Settings. A player at the table takes them without a
+  // reload: the chat box's cooldown, the campaign's name and description.
+  useEffect(() => {
+    const handleSettings = (data: CampaignSettingsUpdatedBroadcast) => {
+      if (shownCampaignId.current !== data?.campaignId) return;
+      const { name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds } = data;
+      setCampaign((prev) => (prev ? { ...prev, name, description, gameSystem, chatCooldownEnabled, chatCooldownSeconds } : null));
+    };
+    socketClient.on('campaign.settings.updated', handleSettings);
+    return () => {
+      socketClient.off('campaign.settings.updated', handleSettings);
+    };
   }, []);
 
   // Update campaign.status in local state (called by session WebSocket listeners)
@@ -341,7 +411,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   // switch goes through here, so the id follows the map. The Map Library
   // re-reads campaign.currentMapId each time it opens for its Active badge,
   // which pointed at the map the page loaded with until this kept it current.
-  const setCurrentMap = useCallback((map: Map | null | ((current: Map | null) => Map | null)) => {
+  const setCurrentMap = useCallback((map: CampaignMap | null | ((current: CampaignMap | null) => CampaignMap | null)) => {
     if (typeof map === 'function') {
       setCurrentMapState(map);
       return;
@@ -355,7 +425,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
   }, []);
 
   // Keep campaign.maps in step with the Map Library (create, rename, import).
-  const upsertCampaignMap = useCallback((map: Map) => {
+  const upsertCampaignMap = useCallback((map: CampaignMap) => {
     setCampaign((prev) => {
       if (!prev) return prev;
       const maps = prev.maps ?? [];
@@ -383,24 +453,12 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     setActiveAtmosphereAudio(audio);
   }, []);
 
-  // Seed HP cache from roster API response (called by CampaignRoster after fetchRoster)
-  const seedCharacterHpCache = useCallback((entries: { id: string; hp: CharacterHpInfo | null }[]) => {
-    setCharacterHpCache((prev) => {
-      const next = { ...prev };
-      for (const { id, hp } of entries) {
-        if (hp) next[id] = hp;
-      }
-      return next;
-    });
-  }, []);
-
-  // Listen for real-time character HP updates
+  // Listen for real-time character HP updates. They go to the game store,
+  // where only the roster and the map's HP bars read them: a new context
+  // value for every hit of a fight re-rendered everything on the page.
   useEffect(() => {
     const handleHpUpdated = (data: CharacterHpUpdatedBroadcast) => {
-      setCharacterHpCache((prev) => ({
-        ...prev,
-        [data.characterId]: data.hp,
-      }));
+      useGameStore.getState().setCharacterHp(data.characterId, data.hp);
     };
 
     socketClient.onCharacterHpUpdated(handleHpUpdated);
@@ -465,14 +523,14 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     const handleRosterUpdated = (data: { campaignId?: string }) => {
       const campaignId = data?.campaignId;
       if (!campaignId) return;
-      campaignService
-        .getCampaign(campaignId)
+      rereadCampaign(campaignId)
         .then((fresh) => {
+          if (!fresh) return;
           setCampaign((prev) => (prev && prev.id === fresh.id
             ? { ...prev, memberships: fresh.memberships, characters: fresh.characters ?? prev.characters }
             : prev));
         })
-        .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', err));
+        .catch((err: unknown) => console.error('[CampaignContext] Failed to refresh members:', errorSummary(err)));
     };
     socketClient.onMemberRoleChanged(handleRoleChanged);
     socketClient.on('authenticated', handleAuthenticated);
@@ -482,7 +540,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       socketClient.off('authenticated', handleAuthenticated);
       socketClient.off('roster.updated', handleRosterUpdated);
     };
-  }, []);
+  }, [rereadCampaign]);
 
   // Update spirit layer enabled/style in local campaign state
   const updateCampaignSpiritLayer = useCallback((enabled: boolean, style?: string) => {
@@ -507,6 +565,10 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
       loadCampaign(id);
     }
     return () => {
+      // A load still on its way is for a page that is gone.
+      loadSeq.current += 1;
+      if (redirectTimer.current) clearTimeout(redirectTimer.current);
+      redirectTimer.current = null;
       useGameStore.getState().clearGameState();
     };
   }, [id, loadCampaign]);
@@ -543,8 +605,6 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     updateAtmosphereEffect,
     activeAtmosphereAudio,
     updateAtmosphereAudio,
-    characterHpCache,
-    seedCharacterHpCache,
   }), [
     campaign,
     currentMap,
@@ -554,6 +614,7 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     loadCampaign,
     refreshCampaign,
     refreshCurrentMap,
+    setCurrentMap,
     catchUpAfterReconnect,
     upsertCampaignMap,
     removeCampaignMap,
@@ -570,8 +631,6 @@ export function CampaignProvider({ children }: CampaignProviderProps) {
     updateAtmosphereEffect,
     activeAtmosphereAudio,
     updateAtmosphereAudio,
-    characterHpCache,
-    seedCharacterHpCache,
   ]);
 
   return (

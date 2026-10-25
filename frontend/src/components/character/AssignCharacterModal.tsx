@@ -10,6 +10,7 @@ import api from '@/services/api';
 import GameSystemBadge from '@/components/common/GameSystemBadge';
 import { Button, Modal } from '@/components/ui';
 import { apiErrorMessage } from '@/utils/errors';
+import { gameSystemName } from '@/constants/game-systems';
 import { systemsCompatible } from '@/utils/gameSystemCompatibility';
 
 interface AssignCharacterModalProps {
@@ -103,7 +104,7 @@ export default function AssignCharacterModal({
       {/* Error Alert */}
       {error && (
         <div role="alert" className="mb-4 bg-danger/10 border border-danger/30 rounded-lg p-4">
-          <p className="text-sm text-danger font-medium">{error}</p>
+          <p className="text-sm text-danger-ink font-medium">{error}</p>
         </div>
       )}
 
@@ -114,7 +115,7 @@ export default function AssignCharacterModal({
                   <h3 className="font-semibold text-brand-ink mb-2">Character</h3>
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-lg bg-moss-green/10 border-2 border-moss-green/30
-                                  flex items-center justify-center overflow-hidden flex-shrink-0">
+                                  flex items-center justify-center overflow-hidden shrink-0">
                       {character.tokenImageUrl ? (
                         <img
                           src={character.tokenImageUrl}
@@ -138,7 +139,7 @@ export default function AssignCharacterModal({
                 {currentCampaign && (
                   <div className="bg-spirit-purple/10 border border-spirit-purple/30 rounded-lg p-4">
                     <p className="text-sm text-stone-gray">
-                      <strong className="text-spirit-purple">Currently assigned to:</strong>{' '}
+                      <strong className="text-spirit-ink">Currently assigned to:</strong>{' '}
                       {currentCampaign.name}
                     </p>
                   </div>
@@ -160,7 +161,7 @@ export default function AssignCharacterModal({
                   ) : compatibleCampaigns.length === 0 ? (
                     <div className="bg-warm-amber/10 border border-warm-amber/30 rounded-lg p-4">
                       <div className="flex items-start gap-3">
-                        <AlertCircle className="w-5 h-5 text-warm-amber flex-shrink-0 mt-0.5" />
+                        <AlertCircle className="w-5 h-5 text-accent-ink shrink-0 mt-0.5" />
                         <div>
                           <p className="text-sm text-stone-gray">
                             No compatible campaigns found. Create a campaign with the same
@@ -241,7 +242,7 @@ export default function AssignCharacterModal({
                   <div className="bg-moss-green/10 border border-moss-green/30 rounded-lg p-3">
                     <p className="text-xs text-stone-gray">
                       <strong className="text-brand-ink">Note:</strong> Only showing campaigns
-                      that use {character.gameSystem}.
+                      that use {gameSystemName(character.gameSystem)}.
                     </p>
                   </div>
                 )}

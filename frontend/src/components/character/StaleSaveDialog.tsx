@@ -1,6 +1,6 @@
 /**
  * What happens when a character save is refused because the character changed
- * after the editor opened it.
+ * after the editor opened it, or a template's because someone else saved it.
  *
  * The editor stays open with everything typed. The newest version is fetched,
  * the user's own changes are carried onto it (utils/reapplyEdits), and this
@@ -9,14 +9,14 @@
  * Nothing is saved until they press Save my changes; Keep editing leaves the
  * editor as it was, still unsaved.
  *
- * Both the editor that opens over a sheet and the full-page Character Editor
- * use `useStaleSaveReapply`, so the two behave the same way.
+ * The editor that opens over a sheet, the full-page Character Editor and Edit
+ * Template use `useStaleSaveReapply`, so they behave the same way.
  */
 
 import { useCallback, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { Button, Modal } from '@/components/ui';
-import type { Character, CharacterData } from '@/types';
+import type { CharacterData } from '@/types';
 import {
   reapplyEdits,
   withChoices,
@@ -26,15 +26,31 @@ import {
 } from '@/utils/reapplyEdits';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 
+/** What was saved: a character, or a template's sheet. */
+export type StaleSaveSubject = 'character' | 'template';
+
+/** How the dialog says where the newer version came from. */
+const CHANGED_ELSEWHERE: Record<StaleSaveSubject, string> = {
+  character: 'It was changed somewhere else after you opened it, at the table or in another window.',
+  template: 'Someone else saved it after you opened it, or you did in another window.',
+};
+
 interface StaleSaveDialogProps {
   result: Reapplied<CharacterData>;
   /** A new token picture goes with the save. */
   withNewPicture: boolean;
+  subject?: StaleSaveSubject;
   onSave: (keepMine: boolean[]) => void;
   onKeepEditing: () => void;
 }
 
-export function StaleSaveDialog({ result, withNewPicture, onSave, onKeepEditing }: StaleSaveDialogProps) {
+export function StaleSaveDialog({
+  result,
+  withNewPicture,
+  subject = 'character',
+  onSave,
+  onKeepEditing,
+}: StaleSaveDialogProps) {
   const { applied, conflicts, merged } = result;
   // Nothing is picked for the user: each field changed in both places waits
   // for a choice before Save is offered.
@@ -46,11 +62,10 @@ export function StaleSaveDialog({ result, withNewPicture, onSave, onKeepEditing 
     <Modal
       open
       onClose={onKeepEditing}
-      title="This character has changed"
+      title={`This ${subject} has changed`}
       icon={RefreshCw}
       size="md"
       layer="overlay"
-      closeOnBackdrop={false}
       footer={
         <>
           <Button type="button" variant="secondary" onClick={onKeepEditing}>
@@ -68,8 +83,7 @@ export function StaleSaveDialog({ result, withNewPicture, onSave, onKeepEditing 
     >
       <div className="space-y-4 text-sm text-ink-secondary">
         <p>
-          It was changed somewhere else after you opened it, at the table or in another window.
-          Nothing you typed has been saved yet. Your changes have been put onto the newest
+          {CHANGED_ELSEWHERE[subject]} Nothing you typed has been saved yet. Your changes have been put onto the newest
           version, and nothing is saved until you press <strong>Save my changes</strong>.
         </p>
 
@@ -135,47 +149,57 @@ export function StaleSaveDialog({ result, withNewPicture, onSave, onKeepEditing 
   );
 }
 
-export interface StaleSaveRequest {
+/** A stored character or template: its sheet, and the version it is. */
+interface Versioned {
+  data: unknown;
+  updatedAt: string;
+}
+
+export interface StaleSaveRequest<T extends Versioned> {
   /** The sheet as the editor opened it: what the user's changes are measured from. */
   opened: CharacterData;
   /** What the refused save sent. */
   edited: CharacterData;
   /** A new token picture goes with the save. */
   withNewPicture: boolean;
-  fetchLatest: () => Promise<Character>;
+  /** What is being saved, for the dialog's wording. A character when left out. */
+  subject?: StaleSaveSubject;
+  fetchLatest: () => Promise<T>;
   /** Told about each newer version fetched, so the host can show it elsewhere. */
-  onLatest?: (latest: Character) => void;
+  onLatest?: (latest: T) => void;
   /** Saves `data` as made from the version stored at `updatedAt`. */
-  save: (data: CharacterData, updatedAt: string) => Promise<Character>;
+  save: (data: CharacterData, updatedAt: string) => Promise<T>;
 }
 
 interface Question {
   result: Reapplied<CharacterData>;
   withNewPicture: boolean;
+  subject?: StaleSaveSubject;
   answer: (keepMine: boolean[] | null) => void;
 }
 
 /**
  * Handles a stale save for an editor host. `reapply` resolves with the stored
- * character once the user has confirmed and the save has gone through, or with
- * null when they chose to keep editing. A save refused as stale again, because
- * the character changed once more meanwhile, starts over from the version that
- * was just shown. Any other failure is thrown, for the host to report.
+ * character or template once the user has confirmed and the save has gone
+ * through, or with null when they chose to keep editing. A save refused as
+ * stale again, because it changed once more meanwhile, starts over from the
+ * version that was just shown. Any other failure is thrown, for the host to report.
  */
 export function useStaleSaveReapply() {
   const [question, setQuestion] = useState<Question | null>(null);
 
-  const reapply = useCallback(async (request: StaleSaveRequest): Promise<Character | null> => {
+  const reapply = useCallback(async <T extends Versioned>(request: StaleSaveRequest<T>): Promise<T | null> => {
     let opened = request.opened;
     let edited = request.edited;
     for (;;) {
       const latest = await request.fetchLatest();
       request.onLatest?.(latest);
-      const result = reapplyEdits(opened, edited, latest.data);
+      const result = reapplyEdits(opened, edited, latest.data as CharacterData);
       const keepMine = await new Promise<boolean[] | null>((resolve) => {
         setQuestion({
           result,
           withNewPicture: request.withNewPicture,
+          subject: request.subject,
           answer: (choice) => {
             setQuestion(null);
             resolve(choice);
@@ -189,7 +213,7 @@ export function useStaleSaveReapply() {
         return await request.save(merged, latest.updatedAt);
       } catch (error) {
         if (!isStaleCharacterSave(error)) throw error;
-        opened = latest.data;
+        opened = latest.data as CharacterData;
         edited = merged;
       }
     }
@@ -199,6 +223,7 @@ export function useStaleSaveReapply() {
     <StaleSaveDialog
       result={question.result}
       withNewPicture={question.withNewPicture}
+      subject={question.subject}
       onSave={(keepMine) => question.answer(keepMine)}
       onKeepEditing={() => question.answer(null)}
     />

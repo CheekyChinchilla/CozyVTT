@@ -9,6 +9,7 @@
 import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
+import type { SocketAck } from './ack';
 import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
 import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
@@ -279,12 +280,16 @@ const refusalNotices = new RateLimiter();
  * Whether this socket's user may send one more `event` now, counting it if
  * so. Checked before any work. A refused event changes nothing; its socket
  * is told once in REFUSAL_NOTICE_MS, not once per event, and nothing is
- * logged, so a flood fills neither the socket nor the log.
+ * logged, so a flood fills neither the socket nor the log. A request that
+ * came with an acknowledgement is answered through it every time instead:
+ * the client asked for an answer to that request.
  */
-export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent): boolean {
+export function withinCeiling(socket: AuthenticatedSocket, event: CeilingEvent, ack: SocketAck | null = null): boolean {
   const ceiling: SocketCeiling = SOCKET_CEILINGS[event];
   if (ceilingLimiter.checkAll(`${limiterKey(socket)}:${event}`, ceiling.windows)) return true;
-  if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
+  if (ack) {
+    ack({ ok: false, error: ceiling.refusal });
+  } else if (refusalNotices.check(`${socket.id}:${event}`, 1, REFUSAL_NOTICE_MS)) {
     socket.emit('error', { message: ceiling.refusal });
   }
   return false;
@@ -343,16 +348,25 @@ export function buildWsFogState(map: { width: number; height: number; gridSize: 
 }
 
 /**
- * Load fog state from DB, rebuilding from scratch if the stored cell size no longer
- * matches the map's current grid size (e.g. after a cellPx migration or grid resize).
+ * Load fog state from DB. A grid of the map's columns and rows is kept, at the
+ * map's cell size: a grid-size change draws the same squares larger or
+ * smaller, so what was revealed stays revealed. Anything else, a different
+ * width or height or a grid that is not one cell per square (such as one
+ * stored before fog cells were squares), is rebuilt fully hidden.
  * Throws FogTooLargeError for a map too large for fog, whatever is stored.
  */
 export function loadFogState(map: { width: number; height: number; gridSize: number }, stored: FogState | null): FogState {
   const expected = buildWsFogState(map);
-  if (!stored || stored.cellPx !== expected.cellPx || stored.fogCols !== expected.fogCols || stored.fogRows !== expected.fogRows) {
+  if (
+    !stored
+    || stored.fogCols !== expected.fogCols
+    || stored.fogRows !== expected.fogRows
+    || !Array.isArray(stored.revealed)
+    || stored.revealed.length !== expected.revealed.length
+  ) {
     return expected; // Reset: stale/misaligned fog data
   }
-  return stored;
+  return stored.cellPx === expected.cellPx ? stored : { ...stored, cellPx: expected.cellPx };
 }
 
 export function applyWsFogOperation(fog: FogState, operation: FogOperation): void {

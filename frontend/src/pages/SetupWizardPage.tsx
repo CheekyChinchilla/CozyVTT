@@ -7,6 +7,7 @@
 import { useState, useEffect, FormEvent } from 'react';
 import { useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { Shield, Settings, CheckCircle, ArrowRight, ArrowLeft, Loader2 } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { setupService } from '@/services/setup.service';
@@ -18,7 +19,9 @@ import {
   type PasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 import { apiErrorMessage, apiErrorStatus, apiErrorText, errorSummary } from '@/utils/errors';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
 // ============================================
 // Types
@@ -47,6 +50,7 @@ export default function SetupWizardPage() {
 
   // Step management
   const [currentStep, setCurrentStep] = useState(1);
+  const stepExit = useMotionExit({ opacity: 0, x: -20 });
   const totalSteps = 4;
 
   // Form data
@@ -113,12 +117,10 @@ export default function SetupWizardPage() {
     }
 
     // Display name
-    if (!adminData.displayName) {
+    if (adminData.displayName.trim().length < DISPLAY_NAME_MIN_LENGTH) {
       errors.displayName = 'Display name is required';
-    } else if (adminData.displayName.length < 2) {
-      // TODO(accounts): the server accepts names of 1 to 50 characters
-      // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
-      errors.displayName = 'Display name must be at least 2 characters';
+    } else if (adminData.displayName.trim().length > DISPLAY_NAME_MAX_LENGTH) {
+      errors.displayName = `Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer`;
     }
 
     // Email
@@ -279,7 +281,7 @@ export default function SetupWizardPage() {
   if (checkingStatus) {
     return (
       <div
-        className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20"
+        className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20"
         aria-live="polite"
         aria-label="Checking setup status"
       >
@@ -289,7 +291,7 @@ export default function SetupWizardPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4 py-8">
       <div className="glass-panel max-w-3xl w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -323,7 +325,7 @@ export default function SetupWizardPage() {
         {/* Error Alert */}
         {error && (
           <div className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 
@@ -333,7 +335,7 @@ export default function SetupWizardPage() {
             key={currentStep}
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
+            exit={stepExit}
             transition={{ duration: 0.3 }}
           >
             {renderStep()}
@@ -418,7 +420,7 @@ function Step1Welcome() {
   return (
     <div className="space-y-6 text-center">
       <div className="flex justify-center gap-4">
-        <Shield className="w-12 h-12 text-spirit-purple" />
+        <Shield className="w-12 h-12 text-spirit-ink" />
         <Settings className="w-12 h-12 text-brand-ink" />
       </div>
 
@@ -436,15 +438,15 @@ function Step1Welcome() {
         <h3 className="font-semibold text-brand-ink">What we'll set up:</h3>
         <ul className="space-y-2 text-sm text-stone-gray">
           <li className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
             <span>Create your administrator account</span>
           </li>
           <li className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
             <span>Configure basic system settings</span>
           </li>
           <li className="flex items-start gap-2">
-            <CheckCircle className="w-5 h-5 text-brand-ink flex-shrink-0 mt-0.5" />
+            <CheckCircle className="w-5 h-5 text-brand-ink shrink-0 mt-0.5" />
             <span>Complete the installation process</span>
           </li>
         </ul>
@@ -506,7 +508,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             the server. If you set SETUP_TOKEN in your .env file, enter that value instead.
           </p>
           {fieldErrors.setupToken && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.setupToken}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.setupToken}</p>
           )}
         </div>
 
@@ -524,10 +526,10 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
               fieldErrors.displayName ? 'border-spirit-red' : ''
             }`}
             placeholder="Your name"
-            maxLength={50}
+            maxLength={DISPLAY_NAME_MAX_LENGTH}
           />
           {fieldErrors.displayName && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.displayName}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.displayName}</p>
           )}
         </div>
 
@@ -547,7 +549,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             placeholder="admin@example.com"
           />
           {fieldErrors.email && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.email}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.email}</p>
           )}
         </div>
 
@@ -567,40 +569,10 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             placeholder="At least 12 characters"
           />
           {fieldErrors.password && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.password}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.password}</p>
           )}
 
-          {/* Password Strength Indicator */}
-          {data.password && passwordStrength && (
-            <div className="mt-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-warm-gray">Password Strength:</span>
-                <span
-                  className={`text-xs font-medium ${
-                    passwordStrength.color === 'green'
-                      ? 'text-success-ink'
-                      : passwordStrength.color === 'yellow'
-                      ? 'text-warning-ink'
-                      : 'text-danger-ink'
-                  }`}
-                >
-                  {passwordStrength.label}
-                </span>
-              </div>
-              <div className="w-full bg-warm-gray/20 rounded-full h-1.5">
-                <div
-                  className={`h-1.5 rounded-full transition-all ${
-                    passwordStrength.color === 'green'
-                      ? 'bg-success'
-                      : passwordStrength.color === 'yellow'
-                      ? 'bg-warning'
-                      : 'bg-danger'
-                  }`}
-                  style={{ width: `${passwordStrength.percent}%` }}
-                ></div>
-              </div>
-            </div>
-          )}
+          <PasswordStrengthIndicator password={data.password} strength={passwordStrength} />
         </div>
 
         {/* Confirm Password */}
@@ -622,7 +594,7 @@ function Step2AdminAccount({ data, setData, setupToken, setSetupToken, fieldErro
             placeholder="Re-enter your password"
           />
           {fieldErrors.confirmPassword && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.confirmPassword}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.confirmPassword}</p>
           )}
         </div>
       </div>
@@ -675,7 +647,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
             Shown in the browser tab and in the emails the instance sends
           </p>
           {fieldErrors.instanceName && (
-            <p className="mt-1 text-xs text-spirit-red">{fieldErrors.instanceName}</p>
+            <p className="mt-1 text-xs text-danger-ink">{fieldErrors.instanceName}</p>
           )}
         </div>
 
@@ -689,7 +661,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
               onChange={(e) =>
                 setData({ ...data, enableRegistration: e.target.checked })
               }
-              className="mt-1 h-4 w-4 text-warm-amber focus:ring-warm-amber border-warm-gray/30 rounded"
+              className="mt-1 h-4 w-4 text-accent-ink focus:ring-warm-amber border-warm-gray/30 rounded-sm"
             />
             <div className="flex-1">
               <label
@@ -702,7 +674,7 @@ function Step3SystemConfig({ data, setData, fieldErrors }: Step3Props) {
                 Allow anyone to create an account on this instance. You can change this
                 later in system settings.
               </p>
-              <p className="mt-2 text-xs text-warm-amber font-medium">
+              <p className="mt-2 text-xs text-accent-ink font-medium">
                 ⚠️ Recommended: Keep this disabled for private instances
               </p>
             </div>
@@ -776,7 +748,7 @@ function Step4Review({ adminData, systemConfig }: Step4Props) {
               <dt className="text-warm-gray">Public Registration:</dt>
               <dd
                 className={`font-medium ${
-                  systemConfig.enableRegistration ? 'text-warm-amber' : 'text-stone-gray'
+                  systemConfig.enableRegistration ? 'text-accent-ink' : 'text-stone-gray'
                 }`}
               >
                 {systemConfig.enableRegistration ? 'Enabled' : 'Disabled'}

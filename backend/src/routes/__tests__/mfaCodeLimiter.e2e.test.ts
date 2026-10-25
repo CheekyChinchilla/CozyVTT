@@ -51,7 +51,9 @@ afterAll(async () => {
 
 it('lets eight correct codes from one address through at once', async () => {
   const address = freshAddress();
-  const signIns = await Promise.all(Array.from({ length: 8 }, () => pending(address)));
+  // Signed in one at a time: one address may have only two passwords checked at once.
+  const signIns: Array<{ agent: request.Agent; secret: string }> = [];
+  for (let i = 0; i < 8; i += 1) signIns.push(await pending(address));
 
   const answers = await Promise.all(signIns.map(({ agent, secret }) => agent.post('/api/auth/mfa/verify-login').send({ token: code(secret) })));
 

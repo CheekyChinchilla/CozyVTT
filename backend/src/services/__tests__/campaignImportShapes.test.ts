@@ -22,7 +22,7 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-shapes-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-import { importCampaign, jsonNestsDeeperThan } from '../campaignImporter';
+import { importCampaign, jsonNestsDeeperThan, jsonListCut, jsonHoldsMoreValuesThan } from '../campaignImporter';
 import { NpcStatBlockSchema } from '../../validators/statBlock';
 import { prisma, createTestUser, cleanupUsers } from '../../__tests__/helpers/db';
 import { writeZip, type FixtureEntry } from '../../__tests__/helpers/zipFixtures';
@@ -190,11 +190,82 @@ describe('data nested deeper than an export ever writes', () => {
   });
 });
 
+// A map file may unpack to 10 MB. Filled with tiny walls or empty objects it
+// holds over a million values, and parsing it cost several times what the
+// largest map an export writes does (a 500 by 500 fog, 5,000 walls and
+// tokens with full stat blocks up to 10 MB hold about 340,000). Such a map is left out before it is parsed.
+describe('a map holding more values than an export ever writes', () => {
+  it('is left out, with the reason, and the others imported', async () => {
+    const walls = Array.from({ length: 1_000_001 }, () => 0);
+    const result = await importCampaign(
+      await archive({ maps: [map({ name: 'Crowded', wallSegments: walls }), map({ name: 'Plain' })] }),
+      userId
+    );
+
+    expect(result.mapCount).toBe(1);
+    expect(result.skipped).toEqual([{ kind: 'map', name: 'Map 1', reason: 'It holds more than 1,000,000 values, far more than CozyVTT ever writes for one map.' }]);
+  });
+});
+
+describe('jsonHoldsMoreValuesThan', () => {
+  it('counts the values and members outside strings, and stops at the limit', () => {
+    expect(jsonHoldsMoreValuesThan('[1,2,3]', 3)).toBe(false);
+    expect(jsonHoldsMoreValuesThan('[1,2,3,4]', 3)).toBe(true);
+    expect(jsonHoldsMoreValuesThan('{"a":1,"b":[2,3]}', 3)).toBe(false);
+    expect(jsonHoldsMoreValuesThan(JSON.stringify({ note: 'a, b, c, d, e' }), 1)).toBe(false);
+    expect(jsonHoldsMoreValuesThan(JSON.stringify({ note: 'a \\" , , , ,' }), 1)).toBe(false);
+  });
+});
+
 describe('jsonNestsDeeperThan', () => {
   it('counts objects and lists, and nothing inside a string', () => {
     expect(jsonNestsDeeperThan('{"a":[{"b":1}]}', 3)).toBe(false);
     expect(jsonNestsDeeperThan('{"a":[{"b":[1]}]}', 3)).toBe(true);
     expect(jsonNestsDeeperThan(JSON.stringify({ note: '[[[[[[{{{{{{' }), 1)).toBe(false);
     expect(jsonNestsDeeperThan(JSON.stringify({ note: 'a \\" quote [[[[' }), 1)).toBe(false);
+  });
+});
+
+// The counts were lifted to what the 10 MB list allows, and a list of 65,000
+// minimal creatures stopped the server. An archive carries up to 2,000 of
+// each; the rest are left out and listed, as they were at the old caps.
+describe('a list longer than an archive may carry', () => {
+  it('imports the first 2,000 creatures and lists the rest as left out', async () => {
+    const creatures = Array.from({ length: 2050 }, (_, i) => creature({ name: `Bandit ${i}` }));
+    const result = await importCampaign(await archive({ creatures }), userId);
+    expect(result.creatureCount).toBe(2000);
+    expect(result.skipped).toEqual([
+      { kind: 'creature', name: '50 creatures', reason: 'An archive can carry 2,000 creatures. These were the last in its list.' },
+    ]);
+    const stored = await prisma.creatureTemplate.findMany({ where: { campaignId: result.campaignId }, select: { name: true } });
+    expect(stored).toHaveLength(2000);
+    expect(stored.some((c) => c.name === 'Bandit 1999')).toBe(true);
+    expect(stored.some((c) => c.name === 'Bandit 2000')).toBe(false);
+  });
+
+  it('imports the first 2,000 token templates and lists the rest as left out', async () => {
+    const templates = Array.from({ length: 2001 }, (_, i) => template({ name: `Guard ${i}` }));
+    const result = await importCampaign(await archive({ templates }), userId);
+    expect(result.tokenTemplateCount).toBe(2000);
+    expect(result.skipped).toEqual([
+      { kind: 'tokenTemplate', name: '1 token template', reason: 'An archive can carry 2,000 token templates. These were the last in its list.' },
+    ]);
+  });
+});
+
+describe('jsonListCut', () => {
+  it('counts a list\'s items and finds where the last one kept ends', () => {
+    const text = ' [ {"a":[1,2]}, "x,]", 3 , {"b":"}"} ] ';
+    expect(jsonListCut(text, 2)).toEqual({ items: 4, cutAt: text.indexOf(', 3') });
+    expect(JSON.parse(`${text.slice(0, jsonListCut(text, 2)!.cutAt!)}]`)).toEqual([{ a: [1, 2] }, 'x,]']);
+  });
+
+  it('cuts nothing from a list at or under the limit', () => {
+    expect(jsonListCut('[1,2]', 2)).toEqual({ items: 2, cutAt: null });
+    expect(jsonListCut('[]', 2)).toEqual({ items: 0, cutAt: null });
+  });
+
+  it('is null for text that is not a list', () => {
+    expect(jsonListCut('{"a":1}', 2)).toBeNull();
   });
 });

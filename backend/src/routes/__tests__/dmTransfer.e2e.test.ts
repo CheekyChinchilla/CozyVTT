@@ -193,7 +193,7 @@ describe('PUT /api/campaigns/:campaignId/dm', () => {
     it('refuses someone with no membership in the campaign', async () => {
       const agent = await login(emails.outsider);
       const res = await agent.put(`/api/campaigns/${campaignId}/dm`).send({ userId: playerId });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(404);
       expect((await rolesById())[dmId]).toBe('DM');
     });
 

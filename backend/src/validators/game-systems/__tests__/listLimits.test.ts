@@ -224,8 +224,10 @@ describe('the Pathfinder 2e spell slots', () => {
     expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: SPELL_SLOTS_MAX + 1, expended: 0 }))).toEqual([
       `spellcasting.slots.3.total: Must be from 0 to ${SPELL_SLOTS_MAX}`,
     ]);
+    // Also more used than the 4 there are, which is refused on its own.
     expect(refusals(GameSystem.PATHFINDER_2E, withSlot({ total: 4, expended: SPELL_SLOTS_MAX + 1 }))).toEqual([
       `spellcasting.slots.3.expended: Must be from 0 to ${SPELL_SLOTS_MAX}`,
+      'spellcasting.slots.3.expended: Used slots cannot be more than the total',
     ]);
   });
 
@@ -236,7 +238,12 @@ describe('the Pathfinder 2e spell slots', () => {
 });
 
 describe('the Call of Cthulhu lists', () => {
-  const sheet = (path: string, value: unknown) => setAt(blank(GameSystem.CALL_OF_CTHULHU_7E), path, value);
+  const sheet = (path: string, value: unknown) => {
+    const withList = setAt(blank(GameSystem.CALL_OF_CTHULHU_7E), path, value);
+    // The shipped blank sheet has no spells block; the editor writes the
+    // Cthulhu Mythos value beside the spells, and the schema requires it.
+    return path.startsWith('spellsAndMythos') ? setAt(withList, 'spellsAndMythos.cthulhuMythos', 0) : withList;
+  };
   const skill = { baseValue: 20, currentValue: 20, improvementChecked: false };
   const named = { name: 'Revolver' };
 

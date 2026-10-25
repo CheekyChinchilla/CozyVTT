@@ -95,7 +95,7 @@ export default function ThemePicker({
       {/* Theme Picker */}
       <section className="glass-panel p-6 space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-          <Palette className="w-4 h-4 text-warm-amber" />
+          <Palette className="w-4 h-4 text-accent-ink" />
           <h3 className="font-semibold text-brand-ink text-sm">Color Theme</h3>
         </div>
 
@@ -146,7 +146,7 @@ export default function ThemePicker({
                   {theme.description}
                 </p>
                 {isSelected && (
-                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-moss-green text-white flex items-center justify-center text-[10px]">
+                  <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-moss-green text-brand-text flex items-center justify-center text-[10px]">
                     ✓
                   </span>
                 )}
@@ -184,7 +184,7 @@ export default function ThemePicker({
               Pick your own colors
             </p>
             {themeId === 'custom' && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-moss-green text-white flex items-center justify-center text-[10px]">
+              <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-moss-green text-brand-text flex items-center justify-center text-[10px]">
                 ✓
               </span>
             )}
@@ -207,7 +207,7 @@ export default function ThemePicker({
                     type="color"
                     value={customColors[key]}
                     onChange={e => handleCustomColor(key, e.target.value)}
-                    className="w-8 h-8 rounded cursor-pointer border border-warm-gray/30"
+                    className="w-8 h-8 rounded-sm cursor-pointer border border-warm-gray/30"
                     aria-label={`${label} color`}
                   />
                   <span className="text-xs text-warm-gray font-mono">
@@ -224,7 +224,7 @@ export default function ThemePicker({
       {/* Font Picker */}
       <section className="glass-panel p-6 space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-warm-gray/20">
-          <Settings className="w-4 h-4 text-warm-amber" />
+          <Settings className="w-4 h-4 text-accent-ink" />
           <h3 className="font-semibold text-brand-ink text-sm">Font Family</h3>
         </div>
 
@@ -297,9 +297,9 @@ function ContrastReport({ colors }: { colors: ThemePickerColors }) {
         {checks.map((check) => (
           <li key={check.label} className="flex items-center gap-2 text-[11px]">
             {check.ratio >= AA_TEXT ? (
-              <Check className="w-3 h-3 text-success-ink flex-shrink-0" aria-hidden="true" />
+              <Check className="w-3 h-3 text-success-ink shrink-0" aria-hidden="true" />
             ) : (
-              <AlertTriangle className="w-3 h-3 text-warning-ink flex-shrink-0" aria-hidden="true" />
+              <AlertTriangle className="w-3 h-3 text-warning-ink shrink-0" aria-hidden="true" />
             )}
             <span className="text-warm-gray">{check.label}</span>
             <span className={`font-mono ml-auto ${check.ratio >= AA_TEXT ? 'text-warm-gray' : 'text-warning-ink'}`}>

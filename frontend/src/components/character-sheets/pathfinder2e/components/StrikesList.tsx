@@ -60,7 +60,7 @@ const getStrikeIcon = (type: string | undefined, savingThrow?: string) => {
 export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRollContext }) => {
   if (!strikes || strikes.length === 0) {
     return (
-      <div className="text-center py-8 text-stone-500 italic">
+      <div className="text-center py-8 text-ink-muted italic">
         No strikes/attacks recorded
       </div>
     );
@@ -83,7 +83,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
         return (
           <div
             key={`${strike.name}-${index}`}
-            className={`bg-white border-2 border-stone-200 rounded-lg p-4 shadow-sm transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-300 hover:shadow-md select-none' : 'hover:shadow-md'}`}
+            className={`bg-paper border-2 border-ink/10 rounded-lg p-4 shadow-xs transition-shadow group ${isClickable ? 'cursor-pointer hover:bg-accent/10 hover:border-accent/30 hover:shadow-md select-none' : 'hover:shadow-md'}`}
             onClick={isClickable ? () => onRoll!(attackExpr, attackPurpose) : undefined}
             onContextMenu={isClickable && onRollContext ? (e) => { e.preventDefault(); onRollContext(e, attackExpr, attackPurpose); } : undefined}
             title={isClickable ? `Left-click: roll attack  |  Right-click: Fortune / Misfortune` : undefined}
@@ -91,13 +91,13 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
             {/* Strike Header */}
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center space-x-2 flex-1">
-                <Icon className={`w-5 h-5 ${isMelee ? 'text-red-600' : 'text-blue-600'}`} />
-                <h4 className="font-bold text-stone-800 text-lg">{strike.name}</h4>
+                <Icon className={`w-5 h-5 ${isMelee ? 'text-danger-ink' : 'text-accent-ink'}`} />
+                <h4 className="font-bold text-ink text-lg">{strike.name}</h4>
                 <ProficiencyIndicator rank={strike.proficiencyRank} size="sm" />
-                {isClickable && <Dices className="w-4 h-4 text-blue-600 opacity-0 group-hover:opacity-60 transition-opacity" />}
+                {isClickable && <Dices className="w-4 h-4 text-accent-ink opacity-0 group-hover:opacity-60 transition-opacity" />}
               </div>
               <div className="text-right">
-                <div className="text-xs text-stone-500 uppercase tracking-wide">
+                <div className="text-xs text-ink-muted uppercase tracking-wide">
                   {strike.type}
                   {/* `!== null` alone let an absent range through as
                       "(undefined ft.)". The field is optional on the schema, so
@@ -112,10 +112,10 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
             <div className="grid grid-cols-2 gap-4 mb-2">
               {/* Attack Bonus or Saving Throw */}
               <div>
-                <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                   {strike.savingThrow ? 'Saving Throw' : 'Attack'}
                 </div>
-                <div className="text-2xl font-bold text-blue-700">
+                <div className="text-2xl font-bold text-accent-ink">
                   {strike.savingThrow ? (
                     <span className="text-lg capitalize">{strike.savingThrow}</span>
                   ) : (
@@ -126,16 +126,16 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
 
               {/* Damage — click separately */}
               <div
-                className={onRoll && strike.damageRoll ? 'cursor-pointer hover:text-red-700' : ''}
+                className={onRoll && strike.damageRoll ? 'cursor-pointer hover:text-danger-ink' : ''}
                 onClick={onRoll && strike.damageRoll ? (e) => { e.stopPropagation(); onRoll(strike.damageRoll!, `${strike.name} Damage`); } : undefined}
                 title={onRoll && strike.damageRoll ? `Click to roll damage: ${strike.damageRoll}` : undefined}
               >
-                <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                   Damage
                 </div>
-                <div className="text-xl font-bold text-red-700">
+                <div className="text-xl font-bold text-danger-ink">
                   {strike.damageRoll}
-                  <span className="text-sm text-stone-600 ml-1 capitalize">
+                  <span className="text-sm text-ink-secondary ml-1 capitalize">
                     {strike.damageType}
                   </span>
                 </div>
@@ -145,14 +145,14 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
             {/* Traits */}
             {strike.traits && strike.traits.length > 0 && (
               <div className="mb-2">
-                <div className="text-xs font-semibold text-stone-600 uppercase tracking-wide mb-1">
+                <div className="text-xs font-semibold text-ink-secondary uppercase tracking-wide mb-1">
                   Traits
                 </div>
                 <div className="flex flex-wrap gap-1">
                   {strike.traits.map((trait, idx) => (
                     <span
                       key={idx}
-                      className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full font-medium"
+                      className="px-2 py-0.5 bg-accent/15 text-accent-ink text-xs rounded-full font-medium"
                     >
                       {trait}
                     </span>
@@ -163,7 +163,7 @@ export const StrikesList: React.FC<StrikesListProps> = ({ strikes, onRoll, onRol
 
             {/* Notes */}
             {strike.notes && (
-              <div className="mt-2 text-sm text-stone-600 italic border-t border-stone-200 pt-2">
+              <div className="mt-2 text-sm text-ink-secondary italic border-t border-ink/10 pt-2">
                 {strike.notes}
               </div>
             )}

@@ -36,6 +36,7 @@ import {
   cleanupUsers,
   TEST_PASSWORD,
 } from '../../__tests__/helpers/db';
+import { craftedGif } from '../../__tests__/helpers/animatedPictures';
 
 const app = createTestApp();
 
@@ -127,8 +128,10 @@ describe('uploading an image under a dangerous name', () => {
     expect(served.headers['content-type']).toMatch(/image\/png/);
   });
 
+  // A GIF upload has to be one the server can measure, which the bytes above
+  // are not, so a whole GIF stands in for them here.
   it('normalises a GIF uploaded as .js to a gif on disk', async () => {
-    const res = await upload('evil.js', 'image/gif', GIF_JS, 'TOKEN');
+    const res = await upload('evil.js', 'image/gif', craftedGif({ width: 1, height: 1, frames: 1 }), 'TOKEN');
     expect(res.status).toBe(201);
     expect(res.body.asset.filename).toMatch(/\.gif$/);
     const served = await agent.get(`/api/assets/tokens/${res.body.asset.id}`);

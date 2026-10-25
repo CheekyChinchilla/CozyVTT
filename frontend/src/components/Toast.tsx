@@ -4,8 +4,9 @@
 // Auto-dismisses after timeout
 // ============================================
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useMotionExit } from '@/utils/motion';
 import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -25,16 +26,25 @@ export default function Toast({
   onClose,
   show,
 }: ToastProps) {
+  // The latest close function, so the timer runs from when the toast shows
+  // and not from the last time its page drew: a page that hands over a new
+  // function each draw kept restarting it.
+  const closeLatest = useRef(onClose);
+  const toastExit = useMotionExit({ opacity: 0, scale: 0.95 });
+  useEffect(() => {
+    closeLatest.current = onClose;
+  });
+
   useEffect(() => {
     if (show && duration > 0) {
       const timer = setTimeout(() => {
-        onClose();
+        closeLatest.current();
       }, duration);
 
       return () => clearTimeout(timer);
     }
     return undefined;
-  }, [show, duration, onClose]);
+  }, [show, duration]);
 
   const getIcon = () => {
     switch (type) {
@@ -70,9 +80,11 @@ export default function Toast({
         <motion.div
           initial={{ opacity: 0, y: -50, scale: 0.95 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.95 }}
+          exit={toastExit}
           transition={{ duration: 0.2 }}
-          className="fixed top-4 right-4 z-50 max-w-md"
+          // Above dialogs and side panels, which render at the end of <body>,
+          // as ToastContainer's notifications are
+          className="fixed top-4 right-4 z-9998 max-w-md"
         >
           <div
             role="alert"
@@ -80,13 +92,13 @@ export default function Toast({
             aria-atomic="true"
             className={`glass-panel border-2 ${getStyles()} shadow-lg rounded-lg p-4 flex items-start gap-3`}
           >
-            <div className="flex-shrink-0 mt-0.5">{getIcon()}</div>
+            <div className="shrink-0 mt-0.5">{getIcon()}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium break-words">{message}</p>
+              <p className="text-sm font-medium wrap-break-word">{message}</p>
             </div>
             <button
               onClick={onClose}
-              className="flex-shrink-0 ml-2 hover:opacity-70 transition-opacity"
+              className="shrink-0 ml-2 hover:opacity-70 transition-opacity"
               aria-label="Close notification"
             >
               <X className="w-4 h-4" />

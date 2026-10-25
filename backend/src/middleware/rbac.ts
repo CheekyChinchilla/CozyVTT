@@ -135,29 +135,6 @@ export function requireDMOrPlayer(req: AuthenticatedRequest, res: Response, next
 }
 
 /**
- * Require specific campaign role
- */
-export function requireCampaignRole(role: CampaignRole) {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.campaignMembership) {
-      return res.status(500).json({
-        error: 'Internal Server Error',
-        message: 'Campaign membership not loaded. Use loadCampaignMembership middleware first.',
-      });
-    }
-
-    if (req.campaignMembership.role !== role) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: `This action requires ${role} role`,
-      });
-    }
-
-    return next();
-  };
-}
-
-/**
  * Allow campaign members with any role (DM, Player, or Spectator)
  * Simply verifies membership exists (already checked by loadCampaignMembership)
  */

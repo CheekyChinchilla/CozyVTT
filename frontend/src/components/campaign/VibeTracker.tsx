@@ -69,7 +69,7 @@ export default function VibeTracker() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Sun className="w-4 h-4 text-warm-amber" />
+            <Sun className="w-4 h-4 text-accent-ink" />
             <h3 className="text-sm font-semibold text-brand-ink">Vibe Tracker</h3>
           </div>
 
@@ -89,7 +89,7 @@ export default function VibeTracker() {
           {activePeriod ? (
             <>
               <div
-                className="w-4 h-4 rounded-full flex-shrink-0 ring-1 ring-black/10"
+                className="w-4 h-4 rounded-full shrink-0 ring-1 ring-black/10"
                 style={{ backgroundColor: activePeriod.hue }}
               />
               <div className="flex items-center gap-1.5 text-stone-gray">
@@ -135,12 +135,12 @@ export default function VibeTracker() {
                   `}
                 >
                   <div
-                    className="w-3.5 h-3.5 rounded-full flex-shrink-0 ring-1 ring-black/10"
+                    className="w-3.5 h-3.5 rounded-full shrink-0 ring-1 ring-black/10"
                     style={{ backgroundColor: period.hue }}
                   />
                   <span className="capitalize truncate">{period.name}</span>
                   {isActive && (
-                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-moss-green flex-shrink-0" />
+                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-moss-green shrink-0" />
                   )}
                 </button>
               );

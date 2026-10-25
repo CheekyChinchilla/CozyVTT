@@ -12,7 +12,7 @@ import {
   ensureDirectory,
   getTempDirectory,
 } from '../utils/fileUtils';
-import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { MULTIPART_FIELD_LIMITS, MULTIPART_NAME_CHARSET } from '../utils/multipartLimits';
 import type { UploadMetadata } from '../validators/assets';
 
 /**
@@ -83,6 +83,7 @@ const storage = multer.diskStorage({
  * validateFileSize() in middleware/fileValidation.ts.
  */
 export const uploadGeneric = multer({
+  ...MULTIPART_NAME_CHARSET,
   storage,
   limits: {
     fileSize: MAX_UPLOAD_BYTES, // Largest MAX_<TYPE>_SIZE_MB configured

@@ -38,8 +38,30 @@ export function copyController(
   controlledBy: string | null | undefined,
   memberships: readonly Pick<CampaignMembership, 'userId' | 'role'>[] | undefined
 ): string | null {
-  if (!controlledBy) return null;
-  return memberships?.some((m) => m.userId === controlledBy && m.role === CampaignRole.PLAYER) ? controlledBy : null;
+  return controlledBy && tokenControllerStanding(controlledBy, memberships).kind === 'player' ? controlledBy : null;
+}
+
+/** Where a token's controller stands in the campaign now. */
+export type TokenControllerStanding =
+  | { kind: 'nobody' }
+  | { kind: 'player'; name: string }
+  /** `name` is null for someone who has left the campaign. */
+  | { kind: 'not a player'; name: string | null };
+
+/**
+ * Where a token's controller stands: a player, who may move the token, or
+ * someone who no longer is (a spectator, the DM, or a member who left), who
+ * may not. `controlledBy` is not cleared when that changes, so everything
+ * that names a token's controller asks here, as a copy does.
+ */
+export function tokenControllerStanding(
+  controlledBy: string | null | undefined,
+  memberships: readonly (Pick<CampaignMembership, 'userId' | 'role'> & { user?: { displayName?: string } })[] | undefined
+): TokenControllerStanding {
+  if (!controlledBy) return { kind: 'nobody' };
+  const member = memberships?.find((m) => m.userId === controlledBy);
+  if (member?.role === CampaignRole.PLAYER) return { kind: 'player', name: member.user?.displayName ?? controlledBy };
+  return { kind: 'not a player', name: member?.user?.displayName ?? null };
 }
 
 /**

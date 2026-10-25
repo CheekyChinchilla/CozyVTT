@@ -132,8 +132,10 @@ info:
       `POST /api/campaigns/import` and `GET /api/campaigns/{campaignId}/export`):
       20 of each per hour per user, counted apart (configurable via
       `CAMPAIGN_ARCHIVE_RATE_LIMIT`), and one archive operation at a time per
-      user across all three. Past either, the route answers 429; a request
-      refused for overlapping another is not counted against the hour
+      user across all three and the Universal VTT map export
+      (`GET /api/campaigns/{campaignId}/maps/{id}/export-uvtt`). Past either,
+      the route answers 429; a request refused for overlapping another is not
+      counted against the hour
     - All the notes of a campaign you have left
       (`GET /api/campaigns/left/{campaignId}/notes`): 60 per hour per user,
       answering 429 `Too Many Requests` past that
@@ -178,6 +180,10 @@ info:
       and the setup-gate 403, as described above and below.
     - **413** `{ error: 'Payload Too Large' }` for a JSON body over 1 MB, and
       **400** `{ error: 'Bad Request' }` for a body that is not valid JSON.
+    - **415** `{ error: 'Unsupported Media Type', message }` for a body in a
+      charset or `Content-Encoding` the server cannot read, such as
+      `Content-Type: application/json; charset=foo` (`message`
+      `unsupported charset "FOO"`).
     - **500** `{ error, message }` on an unexpected error, whatever a route
       throws. In production the message does not describe the failure. A
       route that fails after its answer has started, such as a download part
@@ -217,7 +223,7 @@ info:
     Real-time campaign features (token movement, dice, chat, initiative, etc.) use Socket.io.
     The event reference is `backend/docs/WEBSOCKET_DOCUMENTATION.md`.
 
-  version: 1.5.3
+  version: 1.5.4
   contact:
     name: CozyVTT
     url: https://cozyvtt.com
@@ -488,11 +494,11 @@ paths:
                     failing setup, which can only be run once.
                 timezone:
                   type: string
-                  default: UTC
+                  deprecated: true
                   description: >-
-                    Stored, and used by nothing; the wizard no longer sends it.
-                    Accepted so an older client is not refused. Treated like
-                    `instanceName`, cut off at 50 characters.
+                    Ignored, and not stored. Nothing used it, and the wizard no
+                    longer sends it; a request that has it is answered as one
+                    without it.
                 allowRegistration:
                   type: boolean
                   default: false
@@ -545,6 +551,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   # ============================================
   # AUTHENTICATION
@@ -561,7 +571,8 @@ paths:
         default), the account is created unapproved and no session is started
         (201 with `pendingApproval: true` and no `user`); otherwise the account
         is approved and signed in on a fresh session. The email is lowercased
-        and has angle brackets removed before it is stored. Should no account
+        before it is stored; one holding `<` or `>` is refused with 400
+        `Invalid email format`. Should no account
         exist at all (setup normally creates the first), the account becomes
         ADMIN, approved and signed in, and the registration and approval
         settings are not consulted. Rate limited to 10 requests per hour per
@@ -632,7 +643,8 @@ paths:
             the email is over 254 or the password over 1,024 characters
             (`message` names the field: `Email is required`, `Password must
             be text`). Otherwise `Registration Failed`, with the reason as
-            `message`: an invalid email, a password that does not meet the
+            `message`: an invalid email (`Invalid email format`, also for
+            one holding `<` or `>`), a password that does not meet the
             strength rule (the unmet rules joined with ", ", with no `errors`
             array), a refused display name, or `Email already registered`.
             The `Validation Error` check runs before the 403; the others
@@ -665,6 +677,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/login:
     post:
@@ -672,7 +686,7 @@ paths:
         - Authentication
       summary: Login
       description: |
-        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts, answers and takes as long as a wrong password (it is checked against a dummy hash).
+        Authenticate user and create a session on a fresh session id. Rate limited twice: 5 wrong passwords per 15 minutes per address, shared with the other credential endpoints, and 10 wrong passwords per hour for the email, from every address together (then 429 `Too many failed sign-ins for this account, please try again later`, and a line in the admins' activity log). Only a 401 counts for either; a 400, a 403, a correct sign-in and a 429 do not, and an email with no account counts, answers and takes as long as a wrong password (it is checked against a dummy hash). The `RateLimit-*` headers describe the per-address allowance of 5.
         If MFA is enabled, returns `{ mfaRequired: true }` and the client must call `/api/auth/mfa/verify-login` within 5 minutes; the session is not signed in until then, and after 5 minutes the pending sign-in ends and the password step starts again. A pending sign-in also ends when the account's password is changed or reset, or its sessions are ended for any other reason.
         If `mustChangePassword` is true in response, frontend should redirect to password change.
       operationId: loginUser
@@ -784,6 +798,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/logout:
     post:
@@ -867,7 +883,7 @@ paths:
         - Authentication
       summary: Request password reset
       description: |
-        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the email to be sent, and a failed send is only logged. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
+        Request a password reset email. Always returns 200 regardless of whether the email exists (prevents enumeration). The response does not wait for the link to be issued or the email to be sent, so a known address answers as quickly as an unknown one, and a failed send is only logged. A request while the account's link is still being issued counts as one within the 5 minutes below. A failure while issuing the link for a known address (for example a database that cannot be written) is logged too and answers the same 200, so the answer never tells a known address from an unknown one.
         The address is matched case-insensitively. A link is valid for 1 hour.
         If SMTP is not configured, returns a message to contact the administrator.
         For a known address, the account's earlier unused links (a pending invitation included) stop working, so only the newest one does, and its used and expired link rows are removed. This happens even when SMTP is not configured and no email is sent.
@@ -942,7 +958,10 @@ paths:
         `mustChangePassword`, forgets the wrong passwords counted against the
         account by the per-account sign-in limit, and ends every login session
         and live WebSocket connection of the account; the request itself does
-        not sign anyone in. Rate limited: 5 wrong answers per 15 minutes per address, shared
+        not sign anyone in. An invitation link (one that lasts longer than
+        the hour of a reset link) setting the password of an administrator
+        account nobody has signed in to starts its 7 days to set up two-factor
+        authentication from now, written to the activity log. Rate limited: 5 wrong answers per 15 minutes per address, shared
         with the other credential endpoints, where a link that does not exist,
         has been used or has expired is a wrong answer and a password too weak
         to take is not.
@@ -1003,6 +1022,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: An unexpected error occurred
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/change-password:
     post:
@@ -1079,8 +1100,10 @@ paths:
             passwords, please try again later`, with `Retry-After`), or the
             request waited 15 seconds behind other password checks for the
             account (`Other attempts are still being checked. Please try again
-            in a moment.`, with `Retry-After: 5`; not counted). Nothing was
-            changed.
+            in a moment.`, with `Retry-After: 5`; not counted), or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). Nothing
+            was changed.
           content:
             application/json:
               schema:
@@ -1088,6 +1111,8 @@ paths:
               example:
                 error: Rate Limited
                 message: Too many wrong passwords, please try again later
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   # ============================================
   # MFA
@@ -1163,6 +1188,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/verify:
     post:
@@ -1235,6 +1262,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/verify-login:
     post:
@@ -1316,6 +1345,8 @@ paths:
                 message: Invalid authentication code. Please try again.
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/disable:
     post:
@@ -1397,6 +1428,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/mfa/backup-codes:
     post:
@@ -1466,6 +1499,8 @@ paths:
                 message: User not found
         '429':
           $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/account:
     delete:
@@ -1482,7 +1517,13 @@ paths:
         `AVATAR`, and any other that nothing names (no map, token, character,
         template, creature or campaign setting) and that no campaign has
         shared. A personal asset something still names, or one shared into a
-        campaign, stays. Their chat messages, dice rolls, campaign assets and
+        campaign, stays. One whose every use (leaving out the user's own
+        characters, which go with them, and counting each campaign it is
+        shared into) is in a single campaign the user was in becomes that
+        campaign's: `scope` `CAMPAIGN` and its `campaignId`, in the deletion's
+        transaction. One used in several campaigns, in a campaign the user
+        was not in, or outside a campaign, stays `USER` and an activity log
+        line names it. Their chat messages, dice rolls, campaign assets and
         the personal assets that stay are kept with the user field set to
         null, and documents they shared into a campaign stay shared (the
         share passes to the campaign's DM, or its owner). Character
@@ -1584,8 +1625,10 @@ paths:
             later`, with `Retry-After`), or the request waited 15 seconds
             behind other password checks for the account that were still
             running (`Other attempts are still being checked. Please try again
-            in a moment.`, with `Retry-After: 5`; not counted). The general
-            API limit answers 429 too. Nothing was changed.
+            in a moment.`, with `Retry-After: 5`; not counted), or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). The
+            general API limit answers 429 too. Nothing was changed.
           content:
             application/json:
               schema:
@@ -1595,6 +1638,8 @@ paths:
                 message: Too many wrong passwords, please try again later
         '500':
           $ref: '#/components/responses/ServerError'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/auth/registration-status:
     get:
@@ -1692,7 +1737,14 @@ paths:
       tags:
         - Users
       summary: List all users
-      description: Get list of all users, newest account first, including unapproved ones (Admin only)
+      description: >-
+        Get list of all users, newest account first, including unapproved ones
+        (Admin only). Each user also has `signInLockedUntil`: when the
+        account's sign-in lock ends (10 wrong passwords within an hour, or 5
+        wrong sign-in codes within 15 minutes, whichever ends later), or
+        `null` when it is not locked. The locks are kept in memory, so a
+        restart clears them. `DELETE /api/admin/users/{id}/sign-in-lock`
+        clears one.
       operationId: listUsers
       security:
         - cookieAuth: []
@@ -1707,7 +1759,14 @@ paths:
                   users:
                     type: array
                     items:
-                      $ref: '#/components/schemas/User'
+                      allOf:
+                        - $ref: '#/components/schemas/User'
+                        - type: object
+                          properties:
+                            signInLockedUntil:
+                              type: string
+                              format: date-time
+                              nullable: true
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -1901,8 +1960,10 @@ paths:
             (`Too many wrong passwords, please try again later`, with
             `Retry-After`), or the request waited 15 seconds behind other
             password checks for the account (`Other attempts are still being
-            checked. Please try again in a moment.`, with `Retry-After: 5`).
-            Nothing was changed.
+            checked. Please try again in a moment.`, with `Retry-After: 5`),
+            or the address already had two password checks running (`Too many
+            password checks from your address at once. Please try again in a
+            moment.`, with `Retry-After: 2`; not counted). Nothing was changed.
           content:
             application/json:
               schema:
@@ -1919,6 +1980,8 @@ paths:
               example:
                 error: Internal Server Error
                 message: Failed to update user
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
     delete:
       tags:
@@ -1961,8 +2024,11 @@ paths:
                       Count of the user's personal-scope assets, taken before
                       deletion. Their avatar and the ones nothing uses or
                       shares are deleted with the account; the rest stay,
-                      owned by no one, readable by admins only. Assets of
-                      other scopes also stay but are not counted.
+                      owned by no one. One used only in a single campaign the
+                      user was in becomes that campaign's, as for `DELETE
+                      /api/auth/account`; the others are readable by admins
+                      only. Assets of other
+                      scopes also stay but are not counted.
         '400':
           description: >-
             The calling admin named their own id. Checked after the admin
@@ -2056,11 +2122,15 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Bad Request
-                message: You cannot reset your own password from here. Use Change password on your profile, which asks for your current password.
+                message: You cannot reset your own password from here. Use Change Password on your profile, which asks for your current password.
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/users/{id}/preferences:
     get:
@@ -2427,7 +2497,8 @@ paths:
         such as `Invalid input: expected string, received number`.
         Unknown fields are ignored. Changing `gameSystem` after characters
         have been created logs a warning, but the change is still allowed.
-        Nothing is broadcast; open pages see the change on their next fetch.
+        Nothing is broadcast, except for `vibeSettings` (below); open pages
+        see the other changes on their next fetch.
       operationId: updateCampaign
       security:
         - cookieAuth: []
@@ -2450,7 +2521,16 @@ paths:
                   nullable: true
                 status:
                   type: string
-                  enum: [PREPARATION, ACTIVE, PAUSED, INACTIVE, COMPLETED, ARCHIVED]
+                  enum: [PREPARATION, COMPLETED, ARCHIVED]
+                  description: >-
+                    Set between sessions only. ACTIVE, PAUSED and INACTIVE are
+                    set by starting, pausing and ending a session, and a value
+                    outside this list answers 400 with `Invalid status. Must be
+                    one of: PREPARATION, COMPLETED, ARCHIVED; starting, pausing
+                    and ending a session set the others`. While a session is
+                    running or paused, any `status` answers 400 with `End the
+                    session before changing the campaign status` and nothing
+                    in the request is stored.
                 gameSystem:
                   type: string
                   enum: [DND_5E, PATHFINDER_2E, SHADOWRUN_6E, CALL_OF_CTHULHU_7E]
@@ -2459,30 +2539,30 @@ paths:
                 vibeSettings:
                   type: object
                   description: >-
-                    Replaces the campaign's atmosphere settings. Validated more
-                    loosely than `PUT /api/campaigns/{campaignId}/vibe`: only
-                    `periods` is required (0 to 20 entries), `enabled` and any
-                    other top-level field are stored as sent without a check,
-                    a period needs no `audio` field, names need not be unique,
-                    and a period `audio` is not checked against the asset
-                    library (switching to a period whose track the DM may not
-                    open plays nothing). Unknown fields inside a period are
-                    dropped. `atmosphereAudio` is ignored and the stored value
-                    kept. The current period is not cleared when it disappears
-                    from the list, unlike on the dedicated vibe route.
+                    Replaces the campaign's atmosphere settings, checked and
+                    saved exactly as `PUT /api/campaigns/{campaignId}/vibe`
+                    does (see there): the same rules for the periods, the
+                    same check of each period's track, the current period
+                    kept or cleared, and `vibe.settings.updated` sent to the
+                    table. They are saved after the other fields; a track the
+                    DM may not play to the table refuses the whole request
+                    with 400 before anything is written.
                   required: [periods]
                   properties:
                     periods:
                       type: array
+                      minItems: 1
                       maxItems: 20
+                      description: At least one period; names must be unique ignoring case.
                       items:
                         type: object
                         required: [name, hue, filter]
                         properties:
                           name:
                             type: string
-                            maxLength: 100
-                            description: May be empty here; the dedicated vibe route requires 1 to 50 characters.
+                            minLength: 1
+                            maxLength: 50
+                            description: Trimmed; must contain something other than whitespace.
                           hue:
                             type: string
                             pattern: '^#[0-9A-Fa-f]{6}$'
@@ -2632,7 +2712,8 @@ paths:
       description: |
         Searches, by part of the display name and ignoring case, the users who
         are *not* already a member of the campaign, have no pending
-        invitation to it (one past its `expiresAt` included), and are not
+        invitation to it that is still in date (one past its `expiresAt`
+        does not count), and are not
         waiting for an administrator's
         approval. Used by the DM-side invite picker. DM only.
 
@@ -2707,8 +2788,8 @@ paths:
         not text, `expiresInDays` is not a whole number up to 365, the user is
         already a member, or they already have a pending invitation ("User
         already has a pending invitation to this campaign"). One whose
-        `expiresAt` has passed is still pending until the invitee declines it.
-        A user whose earlier invitation was accepted or declined (and who is
+        `expiresAt` has passed does not count: the user is invited again.
+        A user whose earlier invitation was accepted, declined or ran out (and who is
         no longer a member) gets that same invitation back as PENDING, with a
         new `createdAt` and expiry. The invited user's open connections
         receive `invitation.received` (`{ invitationId, campaignId,
@@ -2807,6 +2888,77 @@ paths:
               example:
                 error: Too Many Requests
                 message: You have sent 20 invitation emails in the last hour, the most this server allows. Send this invitation without the email, or try again in 42 minutes.
+
+  /api/campaigns/{campaignId}/invitations:
+    get:
+      tags:
+        - Campaigns
+      summary: List the campaign's invitations that still stand
+      description: >-
+        The campaign's pending invitations that have not passed their
+        `expiresAt`, newest first (DM only). Invitations sent from the web app
+        expire after 14 days.
+      operationId: listCampaignInvitations
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+      responses:
+        '200':
+          description: The invitations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invitations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        userId: { type: string, format: uuid }
+                        createdAt: { type: string, format: date-time }
+                        expiresAt: { type: string, format: date-time, nullable: true }
+                        user:
+                          type: object
+                          properties:
+                            displayName: { type: string }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/campaigns/{campaignId}/invitations/{invitationId}:
+    delete:
+      tags:
+        - Campaigns
+      summary: Withdraw a pending invitation
+      description: >-
+        Deletes a pending invitation of this campaign (DM only), so the invited
+        user no longer has it and can be invited again. An invitation of
+        another campaign, one already accepted or declined, or an unknown id
+        answers 404 (`Invitation not found`).
+      operationId: withdrawCampaignInvitation
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CampaignId'
+        - name: invitationId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Withdrawn
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Invitation withdrawn }
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /api/campaigns/{campaignId}/members/{userId}:
     delete:
@@ -2939,8 +3091,11 @@ paths:
         open connections take their new roles at once; `campaign.dm.transferred`
         and a `roster.updated` for each go to the campaign, and the initiative
         order and the map on screen are sent again as each new role sees it.
-        The caller need not be a member, so an unknown campaign is a 404 here,
-        as is a `userId` that is not a member; naming the sitting DM is a 400.
+        The caller need not be a member when they own the campaign or are an
+        admin, so the route answers for itself: a campaign that does not exist,
+        or one the caller is neither a member of, its owner nor an admin,
+        answers 404, as does a `userId` that is not a member; naming the
+        sitting DM is a 400.
         Who may hand the seat over, who holds it and the change are read and
         made as one serializable transaction, so of two hand-overs at the same
         moment the second sees the first: a sitting DM whose seat was handed
@@ -2996,7 +3151,9 @@ paths:
                 error: Bad Request
                 message: That member is already the Dungeon Master
         '403':
-          description: The caller is not the sitting DM, the campaign owner or a platform admin.
+          description: >-
+            The caller is a member of the campaign but not the sitting DM, the
+            campaign owner or a platform admin.
           content:
             application/json:
               schema:
@@ -3006,9 +3163,10 @@ paths:
                 message: Only the DM, the campaign owner, or an admin can transfer the DM role
         '404':
           description: >-
-            The campaign does not exist ("Campaign not found"), checked before
-            who the caller is, or `userId` is not a member of it ("That user
-            is not a member of this campaign").
+            The campaign does not exist, or the caller is neither a member, its
+            owner nor a platform admin ("Campaign not found", answered alike
+            for both), or `userId` is not a member of it ("That user is not a
+            member of this campaign").
           content:
             application/json:
               schema:
@@ -3027,17 +3185,30 @@ paths:
         period is *current* is done over the socket (`vibe.update`), not here.
         Each period's `hue` must be a `#RRGGBB` colour and its `filter` may use
         only `brightness()`, `saturate()`, `contrast()` and `hue-rotate()`,
-        the functions the atmosphere editor produces; anything else is a 400.
-        A period's `audio` must be present: null for no track, or the id of
-        an audio asset the DM can read (their admin rights are not counted)
-        that does not belong to another campaign. Anything else is a 400
-        naming the period. Switching to a period plays its track for
+        the functions the atmosphere editor produces. A period's `audio` is
+        null (or absent) for no track, or the id of an audio asset the DM can
+        read (their admin rights are not counted) that does not belong to
+        another campaign; anything else is a 400 naming the period. Other
+        problems answer 400 with each one led by its field, such as
+        `vibeSettings.periods.0.name: A period needs a name`. Switching to a period plays its track for
         everyone; a period without one silences the table. Period names must
-        be unique ignoring case. If the current period no longer exists in
-        the new list it is cleared (matched ignoring case). Other fields, at
-        the top level or in a period, are stored as sent, except
-        `atmosphereAudio`, which is ignored in favour of the stored value.
-        Nothing is broadcast.
+        be unique ignoring case. The current period stays current when the new
+        list still has it, matched ignoring case, and takes the spelling it is
+        saved with; otherwise (renamed or deleted) it is cleared. Other
+        top-level fields are stored as sent, and unknown fields in a period
+        are dropped, except `atmosphereAudio` and `atmosphereEffect` (the
+        ambient track and the weather), which are ignored and kept as stored
+        at the moment of the save: a track or weather set meanwhile stands.
+
+        Every connected member is then sent `vibe.settings.updated` with
+        `campaignId`, the stored `vibeSettings`, the `currentVibe` the save
+        left, `updatedBy` and `timestamp`. The current period is written only
+        while it is still the one the save read, so a switch made meanwhile
+        stands. When the current period's track changes, the table is sent
+        `atmosphere.audio.updated` with the new one, if it is playing the old
+        one or nothing; when the save clears the current period while its
+        track plays, with none. A track the DM put on over the vibe is left
+        playing.
       operationId: updateVibe
       security:
         - cookieAuth: []
@@ -3054,10 +3225,11 @@ paths:
               properties:
                 vibeSettings:
                   type: object
-                  required: [enabled, periods]
+                  required: [periods]
                   properties:
                     enabled:
                       type: boolean
+                      description: Stored as sent; absent is read as on.
                     periods:
                       type: array
                       minItems: 1
@@ -3065,7 +3237,7 @@ paths:
                       description: At least one period; names must be unique ignoring case.
                       items:
                         type: object
-                        required: [name, hue, filter, audio]
+                        required: [name, hue, filter]
                         properties:
                           name:
                             type: string
@@ -3086,7 +3258,7 @@ paths:
                             description: >-
                               The id of an audio asset to play for the whole
                               table while this period is the vibe, or null
-                              for no audio.
+                              (or absent) for no audio.
       responses:
         '200':
           description: Atmosphere settings updated
@@ -3103,6 +3275,7 @@ paths:
                   currentVibe:
                     type: string
                     nullable: true
+                    description: The current period as saved, or null when the save cleared it.
         '400':
           $ref: '#/components/responses/BadRequest'
         '403':
@@ -3165,8 +3338,8 @@ paths:
         Returns the authenticated user's pending campaign invitations (status
         `PENDING`), ordered newest first, with the inviting campaign's summary
         info included so the UI can render an invitation card without
-        additional fetches. An invitation whose `expiresAt` has passed is
-        still listed; accepting it answers 400.
+        additional fetches. An invitation whose `expiresAt` has passed is not
+        listed; accepting it answers 400.
 
         The errors this route and `/accept` and `/decline` below send
         themselves (400, 403, 404 and 500) carry only `message`, without the
@@ -3214,6 +3387,14 @@ paths:
                           description: >-
                             The campaign's owner. After a DM handover this need
                             not be the member who holds the DM seat.
+                          properties:
+                            displayName: { type: string }
+                        dm:
+                          type: object
+                          nullable: true
+                          description: >-
+                            The member who holds the DM seat, which the app
+                            shows as the campaign's DM; null if nobody does.
                           properties:
                             displayName: { type: string }
         '401':
@@ -3302,16 +3483,11 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 message: Invitation expired
-        '403':
-          description: The invitation does not belong to the authenticated user.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                message: Not authorized
         '404':
-          description: No invitation with that id exists.
+          description: >-
+            No invitation with that id addressed to the caller. Someone else's
+            is answered the same way, so the answer cannot confirm that an id
+            exists.
           content:
             application/json:
               schema:
@@ -3360,16 +3536,11 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 message: Invitation already processed
-        '403':
-          description: The invitation does not belong to the authenticated user.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                message: Not authorized
         '404':
-          description: No invitation with that id exists.
+          description: >-
+            No invitation with that id addressed to the caller. Someone else's
+            is answered the same way, so the answer cannot confirm that an id
+            exists.
           content:
             application/json:
               schema:
@@ -3511,8 +3682,9 @@ paths:
         sharing cannot be used to grant a table access to a stranger's private
         file from nothing but its id. A document the caller can read but did
         not upload answers 403: being shared into one campaign does not let a
-        member who runs another pass it on. Admins may share anything. An
-        asset that is not a document answers 404. Sharing a document that is
+        member who runs another pass it on. The same holds for an admin: an
+        admin can read every file, and may still share only their own or a
+        global one. An asset that is not a document answers 404. Sharing a document that is
         already shared answers 201 with the existing link, unchanged.
       operationId: linkCampaignDocument
       security:
@@ -3640,9 +3812,12 @@ paths:
       summary: Save a macro
       description: >
         The expression is rolled once and the result discarded, to prove it can be
-        rolled at all. An expression that only looks like dice — `2d6+`, `dddd` —
-        is refused here, with 400, and does not become a button that fails every
-        time it is pressed. Both fields are trimmed and must not be empty. Any
+        rolled at all. An expression that only looks like dice — `2d6+`, `dddd`,
+        `1d20 5` with no operator between the terms — is refused here, with 400,
+        and does not become a button that fails every time it is pressed; so is
+        one that could divide by zero (`1d20/0`) or whose total could pass a
+        32-bit integer for any roll of its dice (`9999*9999*9999`). Both fields
+        are trimmed and must not be empty. Any
         member, spectators included, may save macros. A player may keep 50 per
         campaign; saving another answers 400.
       operationId: createDiceMacro
@@ -4326,10 +4501,13 @@ paths:
         past the highest session number so far. Sets the campaign ACTIVE and
         its `lastPlayedAt` to now, posts a "Session N has started!" system
         message to chat, and broadcasts `session.started` (`{ sessionId,
-        sessionNumber, startedAt }`) to the campaign. Refused only while the
-        campaign's status is ACTIVE. A PAUSED campaign is not refused: the
-        paused session is left without an end time and the new one becomes
-        the campaign's `activeSession`.
+        sessionNumber, startedAt }`) to the campaign. Refused while a session
+        is running or paused (one with no end time), whatever the campaign's
+        status says; a paused session is resumed or ended first. Start,
+        pause, end, resume and a `status` change in
+        `PUT /api/campaigns/{campaignId}` run one at a time for each
+        campaign, so two Starts at once make one session and the other is
+        refused.
       operationId: startSession
       security:
         - cookieAuth: []
@@ -4352,7 +4530,9 @@ paths:
                       sessionNumber: { type: integer }
                       startedAt: { type: string, format: date-time }
         '400':
-          description: The campaign's status is already ACTIVE
+          description: >-
+            A session is running or paused: `A session is already active or
+            paused. Resume or end it first.`
           content:
             application/json:
               schema:
@@ -4371,9 +4551,9 @@ paths:
         layer setting into the session's saved state (replacing any earlier
         snapshot), sets the campaign PAUSED, posts a "Session N has been
         paused" system message, and broadcasts `session.paused`
-        (`{ sessionId, sessionNumber }`). The campaign's status is not
-        checked. The session keeps no end time, so `PUT .../resume` reopens
-        it. 400 when the session has already ended.
+        (`{ sessionId, sessionNumber }`). The session keeps no end time, so
+        `PUT .../resume` reopens it. 400 with `Session has already ended`,
+        or `Session is already paused` while the campaign is PAUSED.
       operationId: pauseSession
       security:
         - cookieAuth: []
@@ -4399,7 +4579,7 @@ paths:
                     type: boolean
                     description: Always true.
         '400':
-          description: The session has already ended
+          description: The session has already ended, or is already paused
           content:
             application/json:
               schema:
@@ -4425,9 +4605,11 @@ paths:
         `session.ended` (`{ sessionId, sessionNumber }`). With `saveState`
         the current game state (the current map's tokens and annotations,
         map id, vibe and spirit layer setting) is captured into the session;
-        without it the session's saved state is set to null, discarding any
-        snapshot taken at pause. The body is not schema-validated. 400 when
-        the session has already ended.
+        with `saveState: false` the saved state is left as it was, so a
+        snapshot taken at pause stays. 400 with `Session has already ended`,
+        or when the body does not match the schema below (`saveState must be
+        true or false`, `Session notes must be text`, `Session notes are
+        limited to 2000 characters`).
       operationId: endSession
       security:
         - cookieAuth: []
@@ -4449,16 +4631,15 @@ paths:
                 saveState:
                   type: boolean
                   default: true
-                  description: Any truthy value saves the state, and so does omitting the field.
                 notes:
                   type: string
+                  maxLength: 2000
+                  nullable: true
                   description: >-
-                    The session recap. Any truthy value is converted to a
-                    string and cut to its first 2000 characters, without
-                    trimming; an empty or missing value leaves the existing
+                    The session recap, at most 2000 characters, stored
+                    trimmed. Empty, blank, null or missing leaves the existing
                     notes alone. Editing them afterwards uses
-                    `PUT .../sessions/{sessionId}/notes`, which refuses an
-                    over-long recap instead of cutting it.
+                    `PUT .../sessions/{sessionId}/notes`, with the same limit.
       responses:
         '200':
           description: Session ended
@@ -4473,7 +4654,7 @@ paths:
                     type: boolean
                     description: The `saveState` value as sent (true when omitted).
         '400':
-          description: The session has already ended
+          description: The session has already ended, or the body is invalid
           content:
             application/json:
               schema:
@@ -4556,17 +4737,18 @@ paths:
     put:
       tags:
         - Sessions
-      summary: Resume last session
+      summary: Resume the paused session
       description: >
-        Reopen the campaign's most recently started session (DM only), whether
-        it was paused or ended: its end time is cleared, the campaign is set
-        ACTIVE with `lastPlayedAt` now, a "Session N has been resumed!"
-        system message is posted, and `session.resumed` (`{ sessionId,
-        sessionNumber, startedAt }`) is broadcast. The campaign's current
-        status is not checked, so a call while a session is running succeeds
-        too and posts another "resumed" message. The table is left exactly
-        as it is: everything is stored as it is played, and the snapshot taken
-        at pause is a record kept with the session, never written back.
+        Carry on with the paused session (DM only): the campaign is set ACTIVE
+        with `lastPlayedAt` now, a "Session N has been resumed!" system
+        message is posted, and `session.resumed` (`{ sessionId,
+        sessionNumber, startedAt }`) is broadcast, `startedAt` being when the
+        session first started. An ended session is not reopened. 400 with
+        `There is no paused session to resume` when no session is open, or
+        `The session is not paused` while it is running. The table is left
+        exactly as it is: everything is stored as it is played, and the
+        snapshot taken at pause is a record kept with the session, never
+        written back.
       operationId: resumeSession
       security:
         - cookieAuth: []
@@ -4590,14 +4772,17 @@ paths:
                         format: uuid
                       sessionNumber:
                         type: integer
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: The campaign has never had a session
+                      startedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: No session is paused
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '403':
+          $ref: '#/components/responses/Forbidden'
 
   # ============================================
   # CHARACTERS
@@ -4657,10 +4842,11 @@ paths:
         - `name` is trimmed and must be 1 to 200 characters.
         - If `campaignId` is provided and `gameSystem` is omitted or null, the
           character inherits the campaign's `gameSystem`. A `gameSystem`
-          sent together with `campaignId` is not checked against the
-          campaign's own system, so a character can be created straight into a
-          campaign it does not match; `POST /api/characters/{id}/assign`
-          refuses that combination, but this endpoint does not.
+          sent together with `campaignId` must be the campaign's own, as
+          `POST /api/characters/{id}/assign` requires: a typed character only
+          in a campaign of the same system, none in a Flexible campaign.
+          Otherwise the answer is 400 `Game System Mismatch` with the assign
+          route's message, and nothing is created.
         - For a typed game system, `name` is written into the sheet's own name
           field (`characterName`, or `investigatorName` for
           `CALL_OF_CTHULHU_7E`) and the caller's display name into
@@ -4681,11 +4867,13 @@ paths:
         - With no game system (a Flexible character), `data` must be an
           object matching `FlexibleCharacterData`; null, a string, a number or
           an array answers 400. An omitted `data` is stored as `{}`.
-        - If `campaignId` is provided, the campaign must exist (404) and the
-          caller must already be a member of it (403); otherwise nothing is
-          created. The character is added to the caller's membership as well
+        - If `campaignId` is provided, it must be a campaign the caller is
+          already a member of; one that does not exist and one they are not in
+          both answer 404 `Campaign not found`, and nothing is created. The character is added to the caller's membership as well
           as carrying the `campaignId` column, in one transaction, because the
-          campaign roster and the token permission checks read the membership.
+          campaign roster and the token permission checks read the membership;
+          the campaign is then sent `roster.updated` with `action`
+          `character.assigned`, `characterId`, `userId` and `campaignId`.
         - `tokenImageUrl` is optional and nullable; an empty string is stored
           as null. A bare asset id is stored as `/api/assets/tokens/<id>`; any
           other value must be an asset's exact address,
@@ -4725,7 +4913,7 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `DND_5E` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `PATHFINDER_2E` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `PATHFINDER_2E` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `PATHFINDER_2E` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`); every list on a `CALL_OF_CTHULHU_7E` sheet (`skills.fighting.custom`, `skills.firearms.custom`, `skills.languageOther`, `skills.science`, `skills.customSkills`, `combat.weapons`, `spellsAndMythos.spells`, `pulpTalents`, `possessions`, `contacts`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; every list on a `SHADOWRUN_6E` sheet at most 500 entries, and the `firingModes` of one ranged weapon and the `licenses` of one fake ID at most 50; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `DND_5E` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `PATHFINDER_2E` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `PATHFINDER_2E` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `PATHFINDER_2E` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`), and no more `expended` than its `total` (`Used slots cannot be more than the total`); `PATHFINDER_2E` `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` are whole numbers with no minimum; every list on a `CALL_OF_CTHULHU_7E` sheet (`skills.fighting.custom`, `skills.firearms.custom`, `skills.languageOther`, `skills.science`, `skills.customSkills`, `combat.weapons`, `spellsAndMythos.spells`, `pulpTalents`, `possessions`, `contacts`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; every list on a `SHADOWRUN_6E` sheet at most 500 entries, and the `firingModes` of one ranged weapon and the `licenses` of one fake ID at most 50; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
                 tokenImageUrl:
                   type: string
                   nullable: true
@@ -4752,7 +4940,11 @@ paths:
             `FlexibleCharacterData` layout (message `Character data does not
             match the Flexible sheet layout`), answered with
             `validationErrors` listing each problem; or the caller already
-            owns 1,000 characters.
+            owns 1,000 characters; or the `gameSystem` sent does not match the
+            `campaignId`'s (error `Game System Mismatch`, message `Cannot
+            assign a <system> character to a <system> campaign. Character and
+            campaign game systems must match.`, with `flexible` for no
+            system).
           content:
             application/json:
               schema:
@@ -4776,11 +4968,13 @@ paths:
                           type: string
         '403':
           description: >
-            The caller is not a member of the campaign named by `campaignId`,
-            or `tokenImageUrl` names a picture the caller may not use. Nothing
+            `tokenImageUrl` names a picture the caller may not use. Nothing
             is created.
         '404':
-          description: No campaign exists with the id given in `campaignId`
+          description: >-
+            No campaign the caller is a member of has the id given in
+            `campaignId` (`Campaign not found`): one that exists and one that
+            does not are answered alike. Nothing is created.
 
   /api/characters/{id}:
     get:
@@ -4790,7 +4984,8 @@ paths:
       description: >-
         The owner can always read it. If it is in a campaign, any member of
         that campaign (DM, player or spectator) can read it too, as long as
-        the owner is still a member there; otherwise anyone else gets 403.
+        the owner is still a member there; anyone else gets 404, as for an id
+        that names nothing.
         The response includes `campaign` (`id`, `name`) and the owner as
         `user` (`id`, `displayName`, `avatarUrl`). A Call of Cthulhu sheet's
         Keeper's Notes go to the campaign's DM alone (see `Character.data`).
@@ -4814,10 +5009,20 @@ paths:
                 properties:
                   character:
                     $ref: '#/components/schemas/Character'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
 
     put:
       tags:
@@ -4832,8 +5037,9 @@ paths:
           current value: the same value is accepted and ignored, a different
           one (or null on a typed character) answers 400. A character's game
           system cannot change. This comparison happens after the permission
-          check, so a caller who may not edit the character gets 403 for any
-          of the four values or null. The body's shape is checked before the
+          check, so a caller who may not edit the character gets the same
+          answer (404 for one they may not read, 403 for one they may) for
+          any of the four values or null. The body's shape is checked before the
           character is looked up: a `name` that is empty or over 200
           characters, a `gameSystem` that is not one of the four values or
           null, a `tokenImageUrl` that is not text, or a malformed `updatedAt`
@@ -4898,7 +5104,7 @@ paths:
                 data:
                   type: object
                   description: |
-                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `DND_5E` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `PATHFINDER_2E` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `PATHFINDER_2E` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `PATHFINDER_2E` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`); every list on a `CALL_OF_CTHULHU_7E` sheet (`skills.fighting.custom`, `skills.firearms.custom`, `skills.languageOther`, `skills.science`, `skills.customSkills`, `combat.weapons`, `spellsAndMythos.spells`, `pulpTalents`, `possessions`, `contacts`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; every list on a `SHADOWRUN_6E` sheet at most 500 entries, and the `firingModes` of one ranged weapon and the `licenses` of one fake ID at most 50; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
+                    The character sheet. When `gameSystem` is set it is validated against that system's sheet schema and stored as parsed, so keys the schema does not declare are dropped. `themeColor` is accepted on every system: either empty, `#` followed by 6 hex digits, or a name starting with a letter and up to 39 more letters, digits or spaces. Without a `gameSystem` it is a Flexible sheet, checked against `FlexibleCharacterData`. Limits on typed sheets: the sheet's own name field (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`) is at most 200 characters, the limit of the character's `name`; notes, descriptions, backstories, personality fields, features and the `alliesAndOrganizations` name (which holds a whole paragraph in a sheet from before 1.3.0) at most 100,000; a `DND_5E` proficiency box, and each entry of `proficienciesAndLanguages`, at most 2,000; every other text field at most 1,000; every list on a `DND_5E` sheet (`inventory`, `attacks`, `hitDice`, `conditions`, `featuresAndTraits`, `proficiencies`, `proficienciesAndLanguages`, `spellcasting.spells`, `spellcasting.cantrips`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; a `DND_5E` spell slot level holds a `total` of 0 to 20 and an `expended` of no more than its `total`; every list on a `PATHFINDER_2E` sheet (`perception.senses`, `loreSkills`, `speed.other`, `hp.resistances`, `hp.immunities`, `hp.weaknesses`, `conditions`, `strikes`, `inventory`, `languages`, `feats.ancestryAndHeritage`, `feats.class`, `feats.skill`, `feats.general`, `feats.bonus`, `classFeatures`, `spellcasting.cantrips`, `spellcasting.spells`, `spellcasting.focusSpells.spells`, `spellcasting.innateSpells`, `spellcasting.rituals`) at most 500 entries and the `traits` of one strike at most 50, refused with the list's path and `Can hold at most 500 entries` (or 50); every `PATHFINDER_2E` `itemBonus` a whole number from -30 to 30 (`Must be from -30 to 30`); a `PATHFINDER_2E` spell slot rank holds a `total` and an `expended` of 0 to 20 (`Must be from 0 to 20`), and no more `expended` than its `total` (`Used slots cannot be more than the total`); `PATHFINDER_2E` `armorClass.total`, `classDC.total` and `spellcasting.spellDC.dc` are whole numbers with no minimum; every list on a `CALL_OF_CTHULHU_7E` sheet (`skills.fighting.custom`, `skills.firearms.custom`, `skills.languageOther`, `skills.science`, `skills.customSkills`, `combat.weapons`, `spellsAndMythos.spells`, `pulpTalents`, `possessions`, `contacts`) at most 500 entries, refused with the list's path and `Can hold at most 500 entries`; every list on a `SHADOWRUN_6E` sheet at most 500 entries, and the `firingModes` of one ranged weapon and the `licenses` of one fake ID at most 50; `DND_5E` `initiativeBonus`, `passivePerceptionBonus`, `spellcasting.spellSaveDCOtherBonus` and `spellcasting.spellAttackOtherBonus` are whole numbers from -30 to 30.
                 tokenImageUrl:
                   type: string
                   nullable: true
@@ -4960,12 +5166,23 @@ paths:
                           type: string
         '403':
           description: >-
-            The caller is neither the owner nor the DM of the character's
-            campaign (or is that DM but the owner has left the campaign), or is
-            a spectator in the character's campaign, or `tokenImageUrl` names a
-            picture the caller may not use.
+            The caller may read the character but is neither its owner nor the
+            DM of its campaign, or is a spectator in that campaign, or
+            `tokenImageUrl` names a picture the caller may not use.
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
         '409':
           description: The character changed after the `updatedAt` sent. Nothing was saved; load the character again and reapply the change.
           content:
@@ -4987,8 +5204,10 @@ paths:
         - Characters
       summary: Delete character
       description: >-
-        Owner only. Deletes the character row. No event is broadcast, and map
-        tokens placed from the character stay on their maps.
+        Owner only. Deletes the character, takes it off every membership's
+        list of characters, and sends the campaign it was in `roster.updated`
+        with `action` `character.deleted`, `characterId`, `userId` and
+        `campaignId`. Map tokens placed from the character stay on their maps.
       operationId: deleteCharacter
       security:
         - cookieAuth: []
@@ -5010,9 +5229,28 @@ paths:
                   message:
                     type: string
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may read the character but does not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Forbidden
+                message: Only the character owner can delete this character
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
 
   /api/characters/{id}/assign:
     post:
@@ -5020,15 +5258,21 @@ paths:
         - Characters
       summary: Assign character to campaign, or unassign it
       description: |
-        Owner only. A `campaignId` that is not a string or null answers 400
-        (`Validation Error`) before anything is looked up.
+        Assigning is the owner's alone. Unassigning is the owner's, or the
+        campaign DM's: the DM of the campaign the character is in may take it
+        out of that campaign while its owner is still a member, and it stays
+        with its owner. Anyone else who may read the character answers
+        403 (`Only the character owner can assign this character to a
+        campaign`, or `Only the character owner, or the DM of its campaign, can
+        take it out of a campaign`); anyone who may not answers 404. A `campaignId` that is not a string or null
+        answers 400 (`Validation Error`) before anything is looked up.
         - Omitting `campaignId`, or sending it as `null` or `""`, unassigns the
           character: its `campaignId` column is cleared and it is removed from
-          the caller's membership `characterIds` in its previous campaign, if
-          it had one. No campaign membership is needed for this.
-        - Sending a `campaignId` assigns the character to that campaign. The
-          campaign must exist (404 otherwise) and the caller must already be a
-          member of it (403 otherwise). The character's `gameSystem` must
+          its owner's membership `characterIds` in its previous campaign, if
+          it had one. The owner needs no campaign membership for this.
+        - Sending a `campaignId` assigns the character to that campaign, which
+          must be one the caller is already a member of (404 `Campaign not
+          found` otherwise, whether or not it exists). The character's `gameSystem` must
           match the campaign's (both flexible, or the same typed system), or
           the request answers 400 and nothing changes. If the character was
           assigned to another campaign, it is removed from the caller's
@@ -5037,9 +5281,10 @@ paths:
           `Character.data`).
         - Assigning broadcasts `roster.updated` to the new campaign, with
           `action` set to `character.assigned` and `characterId`, `userId`
-          and `campaignId`. Unassigning a character that had a campaign
+          and `campaignId`, and, for a character coming from another campaign,
+          `character.unassigned` to that one. Unassigning a character that had a campaign
           broadcasts `roster.updated` to that campaign, with `action` set to
-          `character.unassigned` and `characterId` and `userId`.
+          `character.unassigned` and `characterId`, `userId` and `campaignId`.
       operationId: assignCharacterToCampaign
       security:
         - cookieAuth: []
@@ -5094,12 +5339,15 @@ paths:
                     example: Cannot assign a DND_5E character to a flexible campaign. Character and campaign game systems must match.
         '403':
           description: >-
-            The caller does not own the character, or (when assigning) is not
-            a member of the target campaign.
+            The caller may read the character but does not own it (when
+            unassigning, the DM of its campaign may also take it out).
         '404':
           description: >-
-            The character does not exist, or (when assigning) no campaign
-            exists with the given `campaignId`.
+            No character with this id that the caller may read (`Character
+            not found`), or, when assigning, no campaign the caller is a member
+            of with the given `campaignId` (`Campaign not found`). A record the
+            caller may not read is answered the same way as an id that names
+            nothing.
 
   /api/characters/{id}/validate:
     get:
@@ -5108,9 +5356,10 @@ paths:
       summary: Validate character data against its game system schema
       description: |
         Re-runs the Zod schema for the character's `gameSystem` against its
-        current `data` blob. Useful after editing a character to surface fields
-        that no longer satisfy the schema (e.g. missing required ability
-        scores after a game-system update).
+        current `data` blob, or for a Flexible character (no `gameSystem`)
+        the `FlexibleCharacterData` layout. Useful after editing a character
+        to surface fields that no longer satisfy the schema (e.g. missing
+        required ability scores after a game-system update).
 
         Returns `200 OK` with `isValid: false` and a list of field-level errors
         even when validation fails — this is not an error condition for the
@@ -5152,26 +5401,26 @@ paths:
                       - path: 'stats.strength'
                         message: 'Invalid input: expected number, received string'
                         code: 'invalid_type'
-        '400':
-          description: Character has no game system assigned.
+        '403':
+          description: The caller may read the character but does not own it.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  isValid: { type: boolean, example: false }
-                  errors:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        path: { type: string }
-                        message: { type: string }
-                        code: { type: string }
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5186,7 +5435,9 @@ paths:
         and `tokenImageUrl`. The copy is unassigned
         (`campaignId: null`), its name is the original's followed by a space
         and `(Copy)`, the original cut short first so the whole is at most 200
-        characters, and the response carries no `campaign` object. Only the
+        characters, written into the sheet's own name field too
+        (`characterName`, or `investigatorName` for `CALL_OF_CTHULHU_7E`),
+        and the response carries no `campaign` object. Only the
         character's owner may copy it. A copy counts towards the 1,000
         characters one account may own; past that it answers 400 with the same
         message as `POST /api/characters`.
@@ -5213,9 +5464,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: The caller may read the character but does not own it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No character with this id that the caller may read. The caller
+            may read their own characters, and those of a campaign they are a
+            member of while the character's owner is too; anyone else's is
+            answered the same way as an id that names nothing, so the answer
+            cannot confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Character not found
         '500':
           $ref: '#/components/responses/ServerError'
 
@@ -5277,7 +5544,10 @@ paths:
             format: uuid
         - name: search
           in: query
-          description: Filter by name (case-insensitive partial match)
+          description: >-
+            Assets whose name holds it (case-insensitive; `%` and `_` match
+            only themselves), or that have it as a whole tag, whatever its
+            case.
           schema:
             type: string
         - name: uploadedBy
@@ -5309,6 +5579,14 @@ paths:
             Ignored when `campaignId` is given.
           schema:
             type: boolean
+        - name: sort
+          in: query
+          description: >-
+            `date`, newest first, when left out; `name`, A to Z; or `size`,
+            largest first. Anything else answers 400.
+          schema:
+            type: string
+            enum: [date, name, size]
       responses:
         '200':
           description: List of assets
@@ -5351,7 +5629,9 @@ paths:
                       totalPages:
                         type: integer
         '400':
-          description: A `type` or `scope` outside its enum, or sent more than once.
+          description: >-
+            A `type` or `scope` outside its enum, or any parameter sent more
+            than once (`Send search once, as text`).
           content:
             application/json:
               schema:
@@ -5410,6 +5690,16 @@ paths:
 
         An animated PNG is identified as `image/apng` and refused (`Invalid
         file type`) for every type that takes PNG.
+
+        **Picture limits.** A MAP, TOKEN or AVATAR picture may be at most
+        16,384 pixels wide and 16,384 pixels tall (a WebP at most 16,383,
+        the most WebP allows; a GIF's size is its logical screen, or its
+        first frame where that reaches past it). An animated
+        one, a GIF or WebP of more than one frame, may have at most 1,000
+        frames and at most 200,000,000 pixels across all of them (width by
+        height by frames) for a MAP, 50,000,000 for a TOKEN or AVATAR. They
+        are read from the picture's header, without unpacking a frame, and
+        apply to uploads only: pictures already stored are not checked.
 
         The original filename's extension matters only where the bytes
         cannot be identified: an
@@ -5520,7 +5810,19 @@ paths:
             `campaignId` missing for a CAMPAIGN upload; no file; a file in a
             part not named `file`; content that cannot be identified ("Could
             not determine file type...") or is not accepted for the declared
-            `type` ("Invalid file type..."); a `name` over 200 characters
+            `type` ("Invalid file type..."); a MAP, TOKEN or AVATAR picture
+            over the picture limits above, with the limit in words ("This
+            picture is 20,000 pixels wide. A picture can be at most 16,384
+            pixels on each side.", or for a WebP "A WebP picture can be at
+            most 16,383 pixels on each side.", "This animation has 1,200 frames. An
+            animated picture can have at most 1,000.", for a WebP, whose
+            frames are counted only as far as the limit, "This animation has
+            more than 1,000 frames. An animated picture can have at most
+            1,000.", "This animation is 400
+            million pixels across its frames. An animated map can be at most
+            200 million.") or whose size cannot be read ("CozyVTT could not
+            read the size of this picture, so it cannot be checked. Save it
+            again in an image editor and try once more."); a `name` over 200 characters
             ("The asset name must be 200 characters or fewer"), a
             `description` over 1,000 ("The asset description must be 1000
             characters or fewer"), more than 50 tags ("An asset can have at
@@ -5528,7 +5830,8 @@ paths:
             characters or fewer"); or `name`, `description` or `tags` sent
             more than once ("Send the name once, as text.", and so on; this
             answered 500 before). `error` is `File Too Large` when
-            the file exceeds its type's limit. Other multipart problems, such
+            the file exceeds its type's limit, which is checked before its
+            content, so a file over it gets this answer whatever it holds. Other multipart problems, such
             as more than one file, a body that is cut off or malformed, more
             than 100 text fields, a field name longer than 100 bytes, a field
             value longer than 16 KB, or
@@ -5562,15 +5865,16 @@ paths:
         - Assets
       summary: Get asset metadata
       description: >-
-        This route checks access on its own terms, not the shared read rule
-        the file-serving routes below use: a USER-scoped asset only to its
-        uploader or an admin, a CAMPAIGN-scoped one only to a member of that
-        campaign (with the spirit-layer check for a non-DM member), GLOBAL to
-        anyone signed in. It does not extend access to a caller whose
-        campaign merely *uses* the asset (a DM's personal map shown to the
-        table, a document shared with the campaign, the atmosphere track), so
-        the metadata can answer 403 for an asset whose file the same caller
-        may read.
+        Decided by the same read rule as the file-serving routes below, so a
+        caller who may load the file may read its details: its uploader, an
+        admin, a member of its campaign (with the spirit-layer check for a
+        non-DM member), or a member of a campaign that uses it (a DM's
+        personal map the table is showing, a token's art, a document shared
+        with the campaign, the atmosphere track); GLOBAL to anyone signed in.
+        A campaign asset with no campaign recorded is its uploader's and an
+        admin's alone. `campaign` and `campaignId` name the asset's campaign
+        only to that campaign's members and to admins; anyone else is sent
+        both as `null`.
       operationId: getAssetById
       security:
         - cookieAuth: []
@@ -5591,17 +5895,18 @@ paths:
                 properties:
                   asset:
                     $ref: '#/components/schemas/Asset'
-        '403':
-          description: The caller may not read this asset.
+        '404':
+          description: >-
+            No asset with this id that the caller may read. One they may not
+            read is answered the same way, so the answer cannot confirm that an
+            id exists.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: Forbidden
-                message: You do not have access to this asset
-        '404':
-          $ref: '#/components/responses/NotFound'
+                error: Not Found
+                message: Asset not found
 
     delete:
       tags:
@@ -5666,7 +5971,7 @@ paths:
                     example: Asset deleted successfully
         '403':
           description: >-
-            The caller may not delete this asset. The message names the rule
+            The caller may read this asset but may not delete it. The message names the rule
             for its scope: "Only admins or the uploading global asset manager
             can delete global assets", "Only the owner can delete personal
             assets" or "Only the uploader while a member of the campaign, its
@@ -5679,7 +5984,9 @@ paths:
                 error: Forbidden
                 message: Only the owner can delete personal assets
         '404':
-          description: No asset with this id.
+          description: >-
+            No asset with this id that the caller may read. One they may not
+            read is answered the same way.
           content:
             application/json:
               schema:
@@ -5750,6 +6057,9 @@ paths:
         Move an asset between the three scopes (`GLOBAL`, `USER`, `CAMPAIGN`).
         A platform admin may make any move; the rules below are for everyone
         else, and combine when a move touches more than one of their cases.
+        An admin moving another user's `USER` asset to `CAMPAIGN` or `GLOBAL`
+        writes a line to the activity log naming the asset, its owner and
+        where it went.
 
         **Permission matrix (non-admin):**
         | Case | Requirement |
@@ -5823,12 +6133,24 @@ paths:
                     type: string
                     example: Asset scope updated successfully
                   asset:
-                    $ref: '#/components/schemas/Asset'
+                    allOf:
+                      - $ref: '#/components/schemas/Asset'
+                      - type: object
+                        required: [canChange]
+                        properties:
+                          canChange:
+                            type: boolean
+                            description: >-
+                              Whether the caller may still delete or move the
+                              asset where it now is, as the list says of each
+                              asset.
         '400':
           description: >-
             "scope must be GLOBAL, USER, or CAMPAIGN", "campaignId must be a
-            campaign id" (any scope), or "campaignId is required when scope is
-            CAMPAIGN".
+            campaign id" (any scope), "campaignId is required when scope is
+            CAMPAIGN", or, for `scope: USER` on an asset whose uploader's
+            account was deleted, "This asset has no uploader, so it has no
+            personal library to go to".
           content:
             application/json:
               schema:
@@ -5845,9 +6167,12 @@ paths:
             admins or the uploading global asset manager can move a global
             asset out of the library", "Only the asset owner can move personal
             assets" or "Only the asset owner or campaign DM can move this
-            asset"); or a move into a campaign the caller may not upload this
-            type to ("You do not have access to this campaign" or "Only the
-            Dungeon Master can upload campaign assets").
+            asset"); a move to USER by anyone but the asset's uploader or an
+            admin ("Only the asset's uploader can move it to their personal
+            library"), since the asset would land in the uploader's library;
+            or a move into a campaign the caller may not upload this type to
+            ("You do not have access to this campaign" or "Only the Dungeon
+            Master can upload campaign assets").
           content:
             application/json:
               schema:
@@ -5856,7 +6181,12 @@ paths:
                 error: Forbidden
                 message: Only the asset owner can move personal assets
         '404':
-          description: '"Asset not found", or, for `scope: CAMPAIGN`, "Campaign not found".'
+          description: >-
+            "Asset not found" for an asset that does not exist or that the
+            caller may not read; or, for `scope: CAMPAIGN`, "Campaign not
+            found" for a campaign that does not exist or that the caller (not
+            an admin) is not a member of. Each is answered alike, so the answer
+            cannot confirm that an id exists.
           content:
             application/json:
               schema:
@@ -5900,17 +6230,18 @@ paths:
               schema:
                 type: string
                 format: binary
-        '403':
-          description: The caller may not read this asset.
+        '404':
+          description: >-
+            No asset with this id that the caller may read. One they may not
+            read is answered the same way, so the answer cannot confirm that an
+            id exists.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
               example:
-                error: Forbidden
-                message: You do not have access to this asset
-        '404':
-          $ref: '#/components/responses/NotFound'
+                error: Not Found
+                message: Asset not found
 
   /api/assets/documents:
     post:
@@ -6141,7 +6472,10 @@ paths:
               schema:
                 type: string
         '304':
-          description: Unchanged since the ETag in `If-None-Match`. No body.
+          description: >-
+            Unchanged since the ETag in `If-None-Match`. No body; the same
+            `Content-Security-Policy` and `X-Content-Type-Options` as the 200,
+            since a browser replaces the headers it kept with these.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
@@ -6172,7 +6506,8 @@ paths:
         member counts only the one the campaign is currently showing. A document
         shared with one of the caller's campaigns is also readable.
 
-        A refused read answers 403 here and on the token route. The file is
+        A refused read answers 404 here and on the token route, as for an id
+        that names nothing. The file is
         served with its content type chosen from its stored extension
         (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, or
         `application/pdf`, for a map stored as a PDF before PDFs were refused
@@ -6204,17 +6539,11 @@ paths:
                 format: binary
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
-        '403':
-          description: The caller may not read this asset.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-              example:
-                error: Forbidden
-                message: You do not have access to this asset
         '404':
-          description: No MAP asset with this id, or its file is missing from disk.
+          description: >-
+            No MAP asset with this id that the caller may read (`Map asset not
+            found`; one they may not read is answered the same way), or its
+            file is missing from disk.
           content:
             application/json:
               schema:
@@ -6226,8 +6555,9 @@ paths:
         - Assets
       summary: Serve token image
       description: >-
-        Serves a TOKEN asset's file, with the same read rule, 403, content
-        types, caching and 304 as `GET /api/assets/maps/{id}`.
+        Serves a TOKEN asset's file, with the same read rule, 404 for a
+        refused read, content types, caching and 304 as
+        `GET /api/assets/maps/{id}`.
       operationId: serveToken
       security:
         - cookieAuth: []
@@ -6248,17 +6578,97 @@ paths:
                 format: binary
         '304':
           description: Unchanged since the ETag in `If-None-Match`. No body.
-        '403':
-          description: The caller may not read this asset.
+        '404':
+          description: >-
+            No TOKEN asset with this id that the caller may read (`Token asset
+            not found`; one they may not read is answered the same way), or
+            its file is missing from disk.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
-              example:
-                error: Forbidden
-                message: You do not have access to this asset
+
+  /api/assets/maps/{id}/thumbnail:
+    get:
+      tags:
+        - Assets
+      summary: Serve map thumbnail
+      description: >-
+        Serves the thumbnail of a MAP asset's picture, at most 512 pixels on
+        its longer side, made at upload, for the Asset Library's cards and the
+        pickers. The same read rule, 404 for a refused read, content types,
+        `nosniff` and caching as `GET /api/assets/maps/{id}`, with an ETag
+        of its own. An asset with no thumbnail (one imported from a campaign
+        archive, or uploaded before thumbnails were made) is sent its full
+        picture, with the full picture's ETag.
+      operationId: serveMapThumbnail
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The thumbnail, or the full picture where there is none.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
         '404':
-          description: No TOKEN asset with this id, or its file is missing from disk.
+          description: >-
+            No MAP asset with this id that the caller may read
+            (`Map asset not found`; one they may not read is answered the same way),
+            or neither the thumbnail nor the picture is on disk.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/assets/tokens/{id}/thumbnail:
+    get:
+      tags:
+        - Assets
+      summary: Serve token thumbnail
+      description: >-
+        Serves the thumbnail of a TOKEN asset's picture, at most 512 pixels on
+        its longer side, made at upload, for the Asset Library's cards and the
+        pickers. The same read rule, 404 for a refused read, content types,
+        `nosniff` and caching as `GET /api/assets/tokens/{id}`, with an ETag
+        of its own. An asset with no thumbnail (one imported from a campaign
+        archive, or uploaded before thumbnails were made) is sent its full
+        picture, with the full picture's ETag.
+      operationId: serveTokenThumbnail
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: The thumbnail, or the full picture where there is none.
+          content:
+            image/*:
+              schema:
+                type: string
+                format: binary
+        '304':
+          description: Unchanged since the ETag in `If-None-Match`. No body.
+        '404':
+          description: >-
+            No TOKEN asset with this id that the caller may read
+            (`Token asset not found`; one they may not read is answered the same way),
+            or neither the thumbnail nor the picture is on disk.
           content:
             application/json:
               schema:
@@ -6424,9 +6834,9 @@ paths:
       responses:
         '200':
           description: >-
-            List of maps. Each item is a summary of 14 fields, not the full
-            Map object: no tokens, annotations, walls, lights, fog, spirit
-            layer or `campaignId`.
+            List of maps. Each item is a summary of 14 fields, and for the DM
+            a 15th, `spiritLayerUrl`; not the full Map object: no tokens,
+            annotations, walls, lights, fog or `campaignId`.
           content:
             application/json:
               schema:
@@ -6449,6 +6859,10 @@ paths:
                         fogEnabled: { type: boolean }
                         globalIllumination: { type: boolean }
                         explorationEnabled: { type: boolean }
+                        spiritLayerUrl:
+                          type: string
+                          nullable: true
+                          description: The DM's alone; absent for anyone else.
                         createdAt: { type: string, format: date-time }
                         updatedAt: { type: string, format: date-time }
         '403':
@@ -6575,8 +6989,9 @@ paths:
 
         A player or spectator may fetch only the campaign's current map; any
         other map of the campaign answers 404 for them, as does everything
-        under it (walls, lights). A map of another campaign answers 404
-        (`Map not found in this campaign`) for everyone.
+        under it (walls, lights). A map of another campaign answers 404 for
+        everyone. Both are answered `Map not found`, as an id that names
+        nothing is, on every map route.
       operationId: getMapById
       security:
         - cookieAuth: []
@@ -6639,19 +7054,31 @@ paths:
         A request carrying any of the four per-map flags broadcasts
         `map:settings:updated` with all four, to every member for the map the
         campaign is showing and to the DM's connections for any other. When
-        `lightingEnabled` or `globalIllumination` actually changes, and the map
-        is the one the campaign is showing, every member is also sent the map
-        as they can now see it (`map.changed`), since those two decide which
-        tokens a player is sent; editing another map in the library sends no
-        `map.changed`.
+        `lightingEnabled` or `globalIllumination` actually changes, since
+        those two decide which tokens a player is sent, or anything the map is
+        drawn from (`name`, `imageUrl`, `baseLayerUrl`, `width`, `height`,
+        `gridSize`, `feetPerSquare`, `diagonalRule`, `spiritLayerUrl`), and
+        the map is the one the campaign is showing, every member is also sent
+        the map as they can now see it (`map.changed`); editing another map in
+        the library sends no `map.changed`.
 
         Turning `fogEnabled` on from off also pushes the map's fog at once,
         as a fog operation does: `fog:updated` with the whole grid to the DM,
         `fog:cells` with the revealed cells to everyone else who may read the
-        map. Changing `gridSize`, `width` or `height` pushes nothing, but the
-        stored fog no longer matches the map's grid, so from then on it is
-        read as a fresh, fully hidden grid, and the next fog operation
-        overwrites it.
+        map. Changing `width` or `height` pushes nothing, but the stored fog
+        no longer matches the map's squares, so from then on it is read as a
+        fresh, fully hidden grid, and the next fog operation overwrites it.
+        Changing only `gridSize` keeps the stored fog and explored areas: the
+        squares are the same, drawn larger or smaller.
+
+        Walls, doors and lights are stored in map pixels and the picture is
+        drawn across `width` × `gridSize` by `height` × `gridSize`, so a change
+        to either side of that moves every wall end and light by the same
+        factor on that axis, rounded to whole pixels, under the map's lock.
+        Light radii are in squares and do not change, nor do token positions.
+        Every member who may read the map is then sent `walls:replaced` and
+        `lights:replaced`, as for a bulk replace and with no `opId`, so open
+        pages draw them where they now are.
 
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
         address (`/api/assets/<kind>/<id>`); a bare id is stored as
@@ -6794,9 +7221,9 @@ paths:
         Set a map as the current map for the campaign (DM only). Which plane
         each player is on, and which combatants they are sent, follows the
         current map, so while anything is in the initiative order it is sent
-        again to every connected member (`initiative.state`). The route sends
-        no map event of its own, so open pages are not moved to the new map
-        by it.
+        again to every connected member (`initiative.state`). Every connected
+        member is sent the new map as they may see it (`map.changed`), so
+        every open page moves onto it, whoever made the request.
       operationId: setCurrentMap
       security:
         - cookieAuth: []
@@ -6833,7 +7260,12 @@ paths:
         - Maps
       summary: Add token to map
       description: |
-        Add a new token to the map (DM only). Every field is checked against
+        Add a new token to the map (DM only). When the map is the one the
+        campaign is showing, every connected member is then sent
+        `map.changed` with the map as they may see it, as `map.change` sends
+        it; a map the DM has not switched to sends nothing. The map goes up to
+        100 ms later, at most once in that time for each map, as it stands
+        then, so a burst of token changes is sent as one map. Every field is checked against
         the token schema and stored as parsed: a position keeps only `x` and
         `y`, `rotation` is 0 to 360, the flags are booleans and the ids are
         UUIDs. A `characterId` must name a character of this campaign, or the
@@ -6868,9 +7300,7 @@ paths:
 
         While anything is in the initiative order it is sent again to every
         connected member (`initiative.state`), since a player's spirit-layer
-        token placed on the current map moves them to the spirit plane. No
-        map event is sent: other open pages see the new token only on their
-        next map update or reload.
+        token placed on the current map moves them to the spirit plane.
       operationId: addToken
       security:
         - cookieAuth: []
@@ -6915,7 +7345,10 @@ paths:
         - Maps
       summary: Update token
       description: |
-        Update a token. The DM may update any token and any field. A player may
+        Update a token. When the map is the one the campaign is showing, every
+        connected member is then sent `map.changed` with the map as they may
+        see it, a player's own change included, up to 100 ms later and at most
+        once in that time for each map (as for adding a token). The DM may update any token and any field. A player may
         update only a token that names them in `controlledBy`, and only its
         `position`, `rotation` and `conditions`; every other field of the body
         below, `size` and `sightRadius` included, answers 403 for a player
@@ -6962,8 +7395,7 @@ paths:
         again to every connected member (`initiative.state`), each as they
         may see it, whenever anything is in the order, whether or not this
         token is a combatant. Any other update sends the order again only if
-        this token is in it. No map event is sent: other open pages see the
-        change only on their next map update or reload.
+        this token is in it.
       operationId: updateToken
       security:
         - cookieAuth: []
@@ -7130,13 +7562,14 @@ paths:
         - Maps
       summary: Delete token
       description: >-
-        Remove a token from the map (DM only). If it is a combatant, it
+        Remove a token from the map (DM only). When the map is the one the
+        campaign is showing, every connected member is then sent
+        `map.changed` without it (up to 100 ms later, as for adding a token).
+        If it is a combatant, it
         leaves the initiative order and the order is sent again to every
         connected member (`initiative.state`), even when that empties it.
         Otherwise the order is sent again only while anything is in it, since
         removing a player's spirit-layer token can move them between planes.
-        No map event is sent: other open pages see the token go only on their
-        next map update or reload.
       operationId: deleteToken
       security:
         - cookieAuth: []
@@ -7737,8 +8170,9 @@ paths:
       description: |
         Returns the full `FogState` for the map, one cell per grid square,
         whether or not fog of war is on for it. A map with no stored fog, or
-        whose stored fog no longer matches its `width`, `height` and
-        `gridSize`, answers a fresh, fully hidden grid. Players do not see the
+        whose stored fog no longer matches its `width` and `height`, answers a
+        fresh, fully hidden grid; stored fog of the right size is answered at
+        the map's `gridSize`. Players do not see the
         raw fog state; they receive the revealed cells over WebSocket
         (`fog:cells`) as the DM reveals areas. DM only.
 
@@ -7910,7 +8344,7 @@ paths:
           in: query
           schema:
             type: string
-          description: Filter by name (case-insensitive partial match)
+          description: Filter by name (case-insensitive partial match; `%` and `_` match only themselves)
         - name: source
           in: query
           schema:
@@ -7965,7 +8399,9 @@ paths:
                   offset:
                     type: integer
         '400':
-          description: A `gameSystem` outside the enum.
+          description: >-
+            A `gameSystem` outside the enum, or any parameter sent more than
+            once (`Send search once, as text`).
           content:
             application/json:
               schema:
@@ -8074,7 +8510,10 @@ paths:
         '400':
           description: >-
             `error` is `Validation Error`; `message` joins every validation
-            problem with `; `.
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
           content:
             application/json:
               schema:
@@ -8123,8 +8562,8 @@ paths:
       description: >-
         Update a campaign-specific custom creature template (DM only). A
         field left out keeps its value; `null` clears a nullable one. An SRD
-        creature, or a creature of another campaign, answers 403 (not 404,
-        unlike the read routes); only an unknown id answers 404. The body is
+        creature answers 403; a creature of another campaign answers 404, as
+        an unknown id does and as the read routes do. The body is
         validated before the creature is looked up. `imageUrl` is normalised
         and checked as on create, and `""` or `null` clears it; the address
         already stored may be sent back unchanged.
@@ -8212,7 +8651,10 @@ paths:
         '400':
           description: >-
             `error` is `Validation Error`; `message` joins every validation
-            problem with `; `. An empty body is refused.
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`. An empty body is refused.
           content:
             application/json:
               schema:
@@ -8220,23 +8662,32 @@ paths:
         '403':
           description: >-
             Not the campaign's DM; an SRD creature ("Cannot edit SRD
-            creatures. Duplicate it first to create a custom version."); a
-            creature of another campaign; or an image the caller may not
-            reference.
+            creatures. Duplicate it first to create a custom version."); or an
+            image the caller may not reference.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No creature with this id that this campaign can see. Another
+            campaign's creature is answered the same way, so the answer cannot
+            confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Creature template not found
 
     delete:
       tags: [Creatures]
       summary: Delete custom creature
       description: >-
         Delete a campaign-specific custom creature template (DM only). An SRD
-        creature, or a creature of another campaign, answers 403; only an
-        unknown id answers 404. Everyone's favourites of it are removed with
+        creature answers 403; a creature of another campaign answers 404, as
+        an unknown id does. Everyone's favourites of it are removed with
         it. Tokens already placed from it are not changed.
       operationId: deleteCreature
       security:
@@ -8262,7 +8713,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No creature with this id that this campaign can see. Another
+            campaign's creature is answered the same way, so the answer cannot
+            confirm that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Creature template not found
 
   /api/campaigns/{campaignId}/creatures/{creatureId}/duplicate:
     post:
@@ -8524,7 +8985,7 @@ paths:
         - $ref: '#/components/parameters/CampaignId'
         - name: search
           in: query
-          description: Filter by name (case-insensitive partial match)
+          description: Filter by name (case-insensitive partial match; `%` and `_` match only themselves)
           schema:
             type: string
         - name: type
@@ -8578,8 +9039,9 @@ paths:
         otherwise), unless this campaign already stores that exact address
         somewhere, as a copy of a token, template or creature does; an address
         naming an asset that no longer exists is accepted. `imageUrl` is
-        stored exactly as sent, not normalised: a bare asset id is checked as
-        that asset, and an address on another site is accepted unchecked.
+        normalised as the creature routes normalise it: a bare asset id is
+        stored as `/api/assets/tokens/<id>`, and any other address that is
+        not an asset's is refused with 403.
       operationId: createTokenTemplate
       security:
         - cookieAuth: []
@@ -8599,7 +9061,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -8612,7 +9083,8 @@ paths:
       summary: Get token template
       description: >-
         Campaign DM only, like the list. A template of another campaign
-        answers 403 ("Token template belongs to another campaign").
+        answers 404, as an unknown id does, so the answer cannot confirm that
+        an id exists.
       operationId: getTokenTemplate
       security:
         - cookieAuth: []
@@ -8626,22 +9098,33 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way, so the answer cannot confirm
+            that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
     put:
       tags: [Token Templates]
       summary: Update token template
       description: >-
         Update a token template (DM only). A field left out keeps its value.
-        An unknown id answers 404 and another campaign's template 403, both
-        before the body is validated. An image address on this server must be
+        An unknown id and another campaign's template both answer 404, before
+        the body is validated. An image address on this server must be
         an asset's exact address (`/api/assets/<kind>/<id>`), and one naming
         an existing asset must name one the caller can read (403 otherwise),
         unless this campaign already stores that exact address somewhere, as a
         copy of a token, template or creature does; an address naming an asset
         that no longer exists is accepted. The address already stored may be
-        sent back unchanged. `imageUrl` is stored exactly as sent, not
-        normalised: a bare asset id is checked as that asset, and an address
-        on another site is accepted unchecked.
+        sent back unchanged. `imageUrl` is normalised as the creature
+        routes normalise it: a bare asset id is stored as
+        `/api/assets/tokens/<id>`, and any other address that is not an
+        asset's is refused with 403.
       operationId: updateTokenTemplate
       security:
         - cookieAuth: []
@@ -8658,11 +9141,30 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way, so the answer cannot confirm
+            that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
     delete:
       tags: [Token Templates]
       summary: Delete token template
@@ -8682,7 +9184,17 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          $ref: '#/components/responses/NotFound'
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way, so the answer cannot confirm
+            that an id exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not Found
+                message: Token template not found
 
   /api/campaigns/{campaignId}/token-templates/from-token:
     post:
@@ -8697,9 +9209,10 @@ paths:
         name one the caller can read (403 otherwise), unless this campaign
         already stores that exact address somewhere, as a copy of a token,
         template or creature does; an address naming an asset that no longer
-        exists is accepted. `imageUrl` is stored exactly as sent, not
-        normalised: a bare asset id is checked as that asset, and an address
-        on another site is accepted unchecked.
+        exists is accepted. `imageUrl` is normalised as the creature
+        routes normalise it: a bare asset id is stored as
+        `/api/assets/tokens/<id>`, and any other address that is not an
+        asset's is refused with 403.
       operationId: saveTokenAsTemplate
       security:
         - cookieAuth: []
@@ -8719,7 +9232,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/TokenTemplate'
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: >-
+            `error` is `Validation Error`; `message` joins every validation
+            problem with `; `, each starting with the field it is about, such as
+            `statBlock.traits.0.description: Too big: expected string to
+            have <=5000 characters` or `statBlock: Stat block is too large
+            (64 KB maximum)`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '403':
           $ref: '#/components/responses/Forbidden'
 
@@ -8737,8 +9259,8 @@ paths:
         not already use, answers 403 and nothing is copied.
 
         Checked in this order: the same campaign as source and target (400);
-        DM of the target (403); the template exists (404); it belongs to the
-        source campaign (403); the picture (403).
+        DM of the target (403); the template exists in the source campaign
+        (404, for one of another campaign too); the picture (403).
       operationId: copyTokenTemplate
       security:
         - cookieAuth: []
@@ -8767,7 +9289,9 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
         '404':
-          description: The template does not exist.
+          description: >-
+            No template with this id in this campaign. Another campaign's
+            template is answered the same way.
           content:
             application/json:
               schema:
@@ -8832,7 +9356,17 @@ paths:
                 type: string
                 format: binary
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller is not the campaign's DM, or the browser marked the
+            request as loading part of a page (`Sec-Fetch-Dest` present and
+            not `empty` or `document`): `An export is downloaded by the app
+            or opened directly, not loaded into a page`. The app's own fetch,
+            a direct visit and a script, which sends no `Sec-Fetch-Dest`, are
+            served.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           description: >-
             The campaign was deleted after the DM check passed and before the
@@ -8844,9 +9378,12 @@ paths:
                 $ref: '#/components/schemas/Error'
         '422':
           description: >-
-            The archive would be larger than the size setting. The message
-            gives its size and the limit, and says whether leaving out audio
-            would bring it under.
+            The archive would be one an import refuses: larger than the size
+            setting (the message gives its size and the limit, and says whether
+            leaving out audio would bring it under), more than 1,000 files (one
+            for each map and each picture or sound file), more than 2,000 custom
+            creatures or 2,000 token templates, or with a data file
+            over 10 MB (all the creatures, say).
           content:
             application/json:
               schema:
@@ -8888,8 +9425,10 @@ paths:
       summary: Preview import archive
       description: >-
         Upload a .cozyvtt archive and return its manifest without creating
-        anything. Only `manifest.json` is read and validated. Any signed-in
-        user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
+        anything. Only `manifest.json` is read and validated. The app's import
+        window reads the manifest in the browser and calls this only for an
+        archive it cannot read there, so that the server says what is wrong
+        with it. Any signed-in user may call it, 20 times an hour (`CAMPAIGN_ARCHIVE_RATE_LIMIT`),
         and one archive operation at a time. The upload is one file in the `file` field, at most
         500 MB, accepted when its MIME type is `application/zip`,
         `application/x-zip-compressed` or `application/octet-stream`, or its
@@ -8995,12 +9534,13 @@ paths:
         previews and exports, and run one archive operation at a time.
 
         The manifest is checked before anything is created. An archive whose
-        manifest gives more than 50 maps, 200 creatures, 500 token templates
-        or 500 assets is refused whole with 400 (`Import Failed`), as is one
-        whose asset manifest lists more than 500 assets; the preview route
-        refuses the same manifest with `Invalid Archive`. A creatures or
-        token templates file holding more than 200 or 500 entries keeps the
-        first ones and lists the rest in `skipped`.
+        manifest gives more than 1,000 maps or assets is refused whole with
+        400 (`Import Failed`), as is one whose asset manifest lists more than
+        1,000 assets; the preview route refuses the same manifest with
+        `Invalid Archive`. An archive carries up to 2,000 creatures and 2,000
+        token templates, each list one data file held to 10 MB; those past
+        the first 2,000 are left out and listed in `skipped` as one entry
+        (`name` like `50 creatures`), and are never parsed.
 
         Every file in the archive is unpacked through a counter and stopped
         as soon as it passes its limit. Each JSON file may unpack to 10 MB,
@@ -9015,7 +9555,12 @@ paths:
         any codec (Opus included) as `audio/ogg` and `.ogg`; its
         `originalName` is
         kept unless that name's extension is not allowed for the type, when
-        the detected extension replaces it. Any other asset is skipped.
+        the detected extension replaces it. Any other asset is skipped, and
+        so is a picture over the picture limits `POST /api/assets/upload`
+        holds a MAP or TOKEN to (at most 16,384 pixels on a side; animated,
+        at most 1,000 frames and 200,000,000 pixels across them for a MAP,
+        50,000,000 for a TOKEN) or whose size cannot be read, listed in
+        `skipped` with the upload's message as its `reason`.
         A map's picture and spirit layer keep only an asset imported as MAP:
         one naming a TOKEN or AUDIO asset is dropped from the map, the asset
         is still imported, and `warnings` says so (`Map "<name>": left out
@@ -9332,6 +9877,10 @@ paths:
                         type: string
                       timezone:
                         type: string
+                        deprecated: true
+                        description: >-
+                          `UTC`, or what an earlier version stored. Nothing uses
+                          it, and nothing changes it any more.
                       allowRegistration:
                         type: boolean
                       requireAdminApproval:
@@ -9377,11 +9926,10 @@ paths:
       description: |
         Every field is optional; only the ones present are changed, and fields not
         listed here are ignored. A field of the wrong type answers 400.
-        `instanceName` and `timezone` are trimmed, stripped of `<` and `>`, then cut
-        to their max length rather than rejected for being too long. `instanceName`
-        is the browser tab's title and is used in emails. `timezone` is stored and
-        used by nothing; the Admin Panel no longer offers it, and it is accepted so
-        an older client is not refused.
+        `instanceName` is trimmed, stripped of `<` and `>`, then cut to its max
+        length rather than rejected for being too long; it is the browser tab's
+        title and is used in emails. `timezone` is ignored like any other field
+        not listed: nothing used it, and the Admin Panel no longer offers it.
 
         `themeId` and `fontId` must name one of the app's themes (or `custom`) and
         fonts, the same lists `PUT /api/users/{id}/preferences` accepts.
@@ -9418,7 +9966,8 @@ paths:
                   maxLength: 100
                 timezone:
                   type: string
-                  maxLength: 50
+                  deprecated: true
+                  description: Ignored, and not stored or logged.
                 allowRegistration:
                   type: boolean
                 requireAdminApproval:
@@ -9766,6 +10315,10 @@ paths:
           description: >-
             `Email is already in use`, including when another request created an
             account with the address after the check (this answered 500 before 1.5.2).
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
+        '503':
+          $ref: '#/components/responses/ServerBusy'
 
   /api/admin/users/invite:
     post:
@@ -9848,8 +10401,13 @@ paths:
             account with the address after the check.
         '502':
           description: The invitation email could not be delivered; no account was created
+        '429':
+          $ref: '#/components/responses/HashingAtOnce'
         '503':
-          description: SMTP is not configured on this instance
+          description: >-
+            SMTP is not configured on this instance, or the server is too busy
+            to hash a password (the message is then `The server is busy, try
+            again in a moment.`, with a `Retry-After` of 5 seconds)
 
   /api/admin/users/{id}/resend-invite:
     post:
@@ -9898,7 +10456,7 @@ paths:
                 $ref: '#/components/schemas/Error'
               example:
                 error: Conflict
-                message: This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.
+                message: This account has already signed in, so there is no invitation to resend. Use Send Reset Link to email them a link to set a new password.
         '500':
           description: The invitation email could not be sent
         '503':
@@ -9971,6 +10529,49 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/admin/users/{id}/sign-in-lock:
+    delete:
+      tags: [Admin]
+      summary: Clear an account's sign-in lock
+      description: >-
+        Forgets the account's wrong passwords (10 within an hour lock it for
+        every address) and wrong sign-in codes (5 within 15 minutes), so its
+        next correct password signs in at once. Named by user id, so it says
+        nothing about whether an address has an account. Answers 200 whether
+        or not the account was locked. Written to the admins' activity log as
+        `Cleared the sign-in lock on <email>`, with `targetUserId`. The
+        per-address limits are not changed.
+      operationId: adminClearUserSignInLock
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Cleared
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Sign-in lock cleared.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: No account has this id (`User not found`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
   /api/admin/smtp/test:
     post:
       tags: [Admin]
@@ -10009,7 +10610,8 @@ paths:
         second are both kept) to the server's backup directory (`backend/backups/` on the host under Docker, `BACKUP_DIR`
         on an install without Docker), holding `database.sql`, a `pg_dump` of the
         database without its ownership and privilege statements and without the
-        login sessions, and the `uploads/` tree. Needs `pg_dump` in the backend
+        login sessions (of the one schema `DATABASE_URL` names with `?schema=`,
+        when it names one), and the `uploads/` tree. Needs `pg_dump` in the backend
         image, which the Docker image provides; answers 500 when it is missing or
         the dump fails. The archive can be fetched with the download route and
         loaded back with the restore route. Refused with 409 while a restore
@@ -10313,7 +10915,7 @@ paths:
       parameters:
         - name: search
           in: query
-          description: Case-insensitive substring match on the template's name.
+          description: Case-insensitive substring match on the template's name; `%` and `_` match only themselves.
           schema:
             type: string
         - name: gameSystem
@@ -10401,7 +11003,9 @@ paths:
         system schema`, with `validationErrors`, otherwise; an omitted `data`
         is checked as `{}` and so fails), and is stored as the schema's parsed
         output, so a key the schema does not declare is dropped, as it is
-        for a character. Sheet
+        for a character. A typed sheet is stored without `playerName`, and a
+        `CALL_OF_CTHULHU_7E` one without its top-level `notes` (Keeper's
+        Notes), whoever sends it. Sheet
         fields from before version 1.3.0 are moved to their current names
         first, as they are for a character. Without
         a `gameSystem`, `data` must be an object
@@ -10486,6 +11090,10 @@ paths:
       tags: [Character Templates]
       summary: Get one shared character sheet
       operationId: getCharacterTemplate
+      description: |
+        Any signed-in user may read a template. Its `data` is sent without
+        `playerName` and a `CALL_OF_CTHULHU_7E` sheet's top-level `notes`
+        (Keeper's Notes), even when a template stored before 1.5.4 holds them.
       security:
         - cookieAuth: []
       parameters:
@@ -10539,10 +11147,18 @@ paths:
         whole sheet; it is checked against the template's game system (after
         moving sheet fields from before version 1.3.0 to their current names),
         or against `FlexibleCharacterData` if it has none, and stored as
-        parsed; a refused sheet answers 400 with `validationErrors` and the
-        message the create route gives.
+        parsed, without `playerName` or a `CALL_OF_CTHULHU_7E` sheet's
+        top-level `notes`, as on create; a refused sheet answers 400 with
+        `validationErrors` and the message the create route gives.
         `tokenImageUrl` follows the
-        rule on create, and null or an empty string removes the image.
+        rule on create, and null or an empty string removes the image. Send
+        `updatedAt` exactly as the template was loaded with, as a UTC ISO
+        timestamp ending in `Z`, to have the save refused with 409 if the
+        template has changed since; of two saves sent with the same
+        `updatedAt`, only one goes through. Without it the save is made
+        whatever changed in between. `updatedAt` alone does not count as a
+        field to change. A 200 response carries the new `updatedAt` for the
+        next save.
       operationId: updateCharacterTemplate
       security:
         - cookieAuth: []
@@ -10574,6 +11190,11 @@ paths:
                   type: string
                   nullable: true
                   maxLength: 500
+                updatedAt:
+                  type: string
+                  format: date-time
+                  description: |
+                    The template's `updatedAt` as the caller loaded it, as a UTC ISO timestamp ending in `Z`. Optional. When sent and the template has changed since, the save is refused with 409 and nothing is written. A value that is not such a timestamp answers 400 `updatedAt must be the ISO timestamp the template was loaded with`.
       responses:
         '200':
           description: Template updated
@@ -10610,6 +11231,22 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '409':
+          description: The template changed after the `updatedAt` sent. Nothing was saved; load the template again and reapply the change.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Conflict
+                  code:
+                    type: string
+                    example: TEMPLATE_CHANGED
+                  message:
+                    type: string
+                    example: This template was changed after you loaded it. Load it again and make your change on the new version.
     delete:
       tags: [Character Templates]
       summary: Delete a shared character sheet
@@ -10658,7 +11295,8 @@ paths:
         system has `blank`, plus `fighter` for `DND_5E` and `PATHFINDER_2E`,
         `streetsamurai` for `SHADOWRUN_6E`, and `privateinvestigator` (or
         `pi`) for `CALL_OF_CTHULHU_7E`; any other name returns that system's
-        `blank` template with 200.
+        `blank` template with 200. The flexible `basic` sheet carries new
+        section and field ids in each answer.
       operationId: getBuiltInCharacterTemplate
       security:
         - cookieAuth: []
@@ -10711,8 +11349,10 @@ paths:
         ordered by id, so the order is the same on every request and page.
         Secret rolls are filtered server-side before anything is
         sent: a player receives public rolls plus their own secret ones, a DM
-        receives everything. Rolls older than the last history clear are
-        omitted; the rows themselves are kept, so a DM can still audit them.
+        receives everything. Initiative rolls that threw dice are included,
+        as a secret roll when the token was not sent to every player. Rolls
+        older than the last history clear are omitted; the rows themselves
+        are kept, so a DM can still audit them.
       operationId: getCampaignDiceRolls
       security:
         - cookieAuth: []
@@ -10872,7 +11512,12 @@ paths:
         claims: anything that is not a PNG, JPEG or WebP (a PDF cannot be
         drawn as a map) is refused with 400, as is one over the
         `MAX_MAP_SIZE_MB` limit, which is checked from the length of its base64
-        text before it is decoded. It is saved as a new campaign map asset
+        text before it is decoded, and one over the picture limits
+        `POST /api/assets/upload` holds a MAP to (at most 16,384 pixels on a
+        side; animated, at most 1,000 frames and 200,000,000 pixels across
+        them) or whose size cannot be read, with `The picture inside this
+        file cannot be used as a map. ` followed by the upload's message.
+        Nothing is saved for a refused picture. It is saved as a new campaign map asset
         tagged `uvtt-import`, with a thumbnail. The route counts against the
         upload rate limit (429), since it writes a file to disk exactly as an
         upload does, and a user may run one import at a time: a second sent
@@ -11164,11 +11809,34 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
+          description: >-
+            The caller is not the campaign's DM, or the browser marked the
+            request as loading part of a page (`Sec-Fetch-Dest` present and
+            not `empty` or `document`): `An export is downloaded by the app
+            or opened directly, not loaded into a page`. The app's own fetch,
+            a direct visit and a script, which sends no `Sec-Fetch-Dest`, are
+            served.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
+        '429':
+          description: >-
+            The caller already has a campaign export, import or preview, or
+            another map export, running. The picture is read whole and encoded
+            in memory, so a map export takes the same one-at-a-time slot as a
+            campaign archive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Too Many Requests
+                message: Another campaign import or export of yours is still running. Wait for it to finish, then try again.
 
   /api/admin/backups/restore:
     post:
@@ -11190,7 +11858,9 @@ paths:
         database.sql is
         checked before anything runs: it must be a complete pg_dump of a
         CozyVTT database (pg_dump's closing line present, the User and
-        _prisma_migrations tables created) holding nothing but SQL; a line
+        _prisma_migrations tables created in the schema the instance keeps
+        its data in, and on an instance whose `DATABASE_URL` names a schema,
+        no table in any other) holding nothing but SQL; a line
         that starts with a psql backslash command, a COPY that is not table
         data, or a transaction statement makes the archive invalid. These
         checks are not a sandbox: the SQL runs with the database owner's full
@@ -11199,8 +11869,9 @@ paths:
         trust. A refused archive answers 400 with the reason and changes
         nothing. A database-only backup of the current
         database is then written to the backup list, named in the response as
-        safetyBackup, so the restore can be undone. The public schema is
-        dropped and recreated from the archive in a single transaction that
+        safetyBackup, so the restore can be undone. The instance's schema
+        (`public`, or the one `?schema=` names) is dropped and recreated
+        from the archive, every other schema left alone, in a single transaction that
         stops at the first failed statement, in psql's restricted mode, so an
         archive that cannot be applied in full leaves the existing database
         unchanged and answers 500. The transaction_timeout setting a newer
@@ -11248,15 +11919,21 @@ paths:
         '400':
           description: >-
             `Bad Request` `No backup file provided` when the request holds no
-            file. Every other refusal is `Invalid Backup`: a filename not
+            file. A multipart body the parser cannot read (cut off, or with
+            no boundary) is `Upload Error` `The upload could not be read.
+            Nothing was changed.`; it answered 500 before 1.5.4. Every other
+            refusal is `Invalid Backup`: a filename not
             ending in `.zip`; a multipart body over the field limits every
             upload route shares (more than 100 text fields, a field name over
             100 bytes, a field value over 16 KB, 16,384 bytes), a file sent
             under a name other than `backup`, or a second file, answered `The
             upload could not be read: <reason>. Nothing was changed.`; a file
             that is not a ZIP archive; an archive listing more than 100,000
-            entries or holding an unsafe path; or a ZIP that is not a complete
-            CozyVTT backup. A ZIP without `database.sql` answers `This file
+            entries or holding an unsafe path; a ZIP that is not a complete
+            CozyVTT backup; or a backup of a database schema other than the
+            one the instance keeps its data in (the one `?schema=` in
+            `DATABASE_URL` names, `public` without it), which names both
+            schemas. A ZIP without `database.sql` answers `This file
             does not appear to be a valid CozyVTT backup (database.sql not
             found inside ZIP)`; the other `Invalid Backup` messages give the
             reason and end "Nothing was changed." None of these changes
@@ -11690,9 +12367,17 @@ components:
         description:
           type: string
           nullable: true
+        filename:
+          type: string
+          example: 0f3c9a1e-2b7d-4c55-9e1a-7d2f6b8c4a10.pdf
+          description: >-
+            The stored file's name. Its extension, which the upload sets from
+            what the file's bytes are, decides what the document is served as
+            (`.pdf`, `.txt` or `.md`), so it is the one to go by.
         originalName:
           type: string
           example: players-handbook.pdf
+          description: The name it was uploaded or written under, which may not match what it is.
         mimeType:
           type: string
           description: >-
@@ -12678,7 +13363,8 @@ components:
           description: >
             Machine-readable code, sent only where a client has to act on it:
             PASSWORD_CHANGE_REQUIRED, MFA_ENROLMENT_REQUIRED, SIGN_IN_EXPIRED,
-            CHARACTER_CHANGED, ASSET_IN_USE, UVTT_IMPORT_NEEDS_CONFIRMATION.
+            CHARACTER_CHANGED, TEMPLATE_CHANGED, ASSET_IN_USE,
+            UVTT_IMPORT_NEEDS_CONFIRMATION.
         validationErrors:
           type: array
           description: Per-field problems with a character sheet or template.
@@ -13000,7 +13686,10 @@ components:
         with JSON `{ error, message }`, where `message` says what was limited
         and when to try again. The sign-in, password, two-factor and
         registration limiters send `error: "Rate Limited"`; the others send
-        `Too Many Requests`.
+        `Too Many Requests`. A route that hashes or checks a password also
+        answers 429 `Too many password checks from your address at once.
+        Please try again in a moment.` with `Retry-After: 2` while the
+        address already has two such requests running (HashingAtOnce).
       headers:
         Retry-After:
           schema: { type: integer }
@@ -13021,6 +13710,42 @@ components:
           example:
             error: Too Many Requests
             message: Upload rate limit reached. Please slow down and try again in a minute.
+
+    HashingAtOnce:
+      description: >-
+        Too Many Requests - The address already has two requests running that
+        hash or check a password, on any of the routes that do. Counted
+        against nothing; try again once one has been answered.
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before trying again (2)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Rate Limited
+            message: Too many password checks from your address at once. Please try again in a moment.
+
+    ServerBusy:
+      description: >-
+        Service Unavailable - Too many password hashes or checks are running
+        or waiting (2 run at once, 50 may wait, each for at most 10
+        seconds). Never counted as a wrong password by the sign-in limits.
+        One address may have two such requests running at once, and a third
+        is answered 429 (HashingAtOnce).
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds to wait before trying again (5)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: Service Unavailable
+            message: The server is busy, try again in a moment.
 
     ServerError:
       description: Internal Server Error - Something went wrong on the server.

@@ -156,7 +156,8 @@ describe('running setup', () => {
     expect(before).toBeDefined();
 
     const res = await init(
-      { email: 'Admin@Example.com', password: PASSWORD, displayName: 'First Admin', instanceName: 'Tuesday Table', allowRegistration: true },
+      // The wizard once asked for a timezone. Nothing used it, and it is no longer stored.
+      { email: 'Admin@Example.com', password: PASSWORD, displayName: 'First Admin', instanceName: 'Tuesday Table', allowRegistration: true, timezone: 'Europe/London' },
       agent
     );
 
@@ -176,6 +177,7 @@ describe('running setup', () => {
     expect(settings.setupCompleted).toBe(true);
     expect(settings.instanceName).toBe('Tuesday Table');
     expect(settings.allowRegistration).toBe(true);
+    expect(settings.timezone).toBe('UTC');
   });
 
   it('opens the API once it has run', async () => {
@@ -213,9 +215,12 @@ describe('two setups at once', () => {
   beforeAll(freshInstance);
 
   it('make exactly one admin, with exactly one 201, and apply only the winner\'s settings', async () => {
+    // Each from an address of its own: one address may have only two
+    // password hashes running at once.
     const answers = await Promise.all(
       Array.from({ length: 4 }, (_, i) =>
         init({ email: `racer${i}@example.com`, password: PASSWORD, displayName: `Racer ${i}`, instanceName: `Table ${i}`, allowRegistration: i % 2 === 0 })
+          .set('X-Forwarded-For', `10.78.0.${i + 1}`)
       )
     );
     const won = answers.filter((res) => res.status === 201);

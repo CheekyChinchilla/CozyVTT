@@ -50,11 +50,6 @@ updates:
       # release writes m, t, p again.
       - dependency-name: argon2
         versions: ["0.45.x"]
-      # zod 4.6.6 and 4.6.7 change the message a list over its limit gives
-      # inside a union. The fix (https://github.com/colinhacks/zod/pull/6662)
-      # is not in a release yet. Remove once a release carries it.
-      - dependency-name: zod
-        versions: ["4.6.6", "4.6.7"]
 
   - package-ecosystem: npm
     directory: /frontend
@@ -69,10 +64,6 @@ updates:
       frontend-minor-and-patch:
         update-types: [minor, patch]
     ignore:
-      # Tailwind CSS 4 changes how the styles are configured and built, a
-      # move of its own. Remove when that work starts.
-      - dependency-name: tailwindcss
-        update-types: [version-update:semver-major]
       # TypeScript 7 cannot run under typescript-eslint yet. Remove once it
       # supports it.
       - dependency-name: typescript

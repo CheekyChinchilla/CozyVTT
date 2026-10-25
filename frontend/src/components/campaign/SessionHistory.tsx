@@ -20,6 +20,7 @@ import { ScrollText, ChevronDown, ChevronRight, RefreshCw, Pencil, Check, X } fr
 import { useCampaign } from '@/contexts/CampaignContext';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
+import { formatDuration } from '@/utils/format';
 import type { SessionSummary } from '@/types';
 
 /** Matches the server's cap on a session recap. */
@@ -40,14 +41,11 @@ function formatDate(iso: string): string {
  * Anything under a minute reads "<1m" rather than "0m" — a session ended by
  * accident right after starting is a real thing, and "0m" looks like a bug.
  */
-function formatDuration(startedAt: string, endedAt: string | null): string | null {
+function sessionLength(startedAt: string, endedAt: string | null): string | null {
   if (!endedAt) return null;
   const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
   if (!Number.isFinite(ms) || ms <= 0) return null;
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 1) return '<1m';
-  const hours = Math.floor(minutes / 60);
-  return hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+  return formatDuration(ms, 'hoursMinutes');
 }
 
 export default function SessionHistory() {
@@ -121,7 +119,7 @@ export default function SessionHistory() {
           ) : (
             <ChevronRight className="w-3.5 h-3.5 text-stone-gray" />
           )}
-          <ScrollText className="w-4 h-4 text-warm-amber" />
+          <ScrollText className="w-4 h-4 text-accent-ink" />
           <h3 className="text-sm font-semibold text-brand-ink">Past Sessions</h3>
           {past.length > 0 && (
             <span className="text-xs text-stone-gray">({past.length})</span>
@@ -151,7 +149,7 @@ export default function SessionHistory() {
           )}
 
           {past.map((session) => {
-            const duration = formatDuration(session.startedAt, session.endedAt);
+            const duration = sessionLength(session.startedAt, session.endedAt);
             return (
               <article
                 key={session.id}
@@ -172,7 +170,7 @@ export default function SessionHistory() {
                           setEditingId(session.id);
                           setDraft(session.notes ?? '');
                         }}
-                        className="p-1 rounded hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink"
+                        className="p-1 rounded-sm hover:bg-moss-green/10 text-stone-gray hover:text-brand-ink"
                         title="Edit these notes"
                         aria-label={`Edit notes for session ${session.sessionNumber}`}
                       >
@@ -191,7 +189,7 @@ export default function SessionHistory() {
                       rows={5}
                       aria-label={`Notes for session ${session.sessionNumber}`}
                       placeholder="What happened this session? Leave empty to clear these notes."
-                      className="w-full px-2 py-1.5 text-xs border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-y focus:outline-none focus:ring-2 focus:ring-warm-amber"
+                      className="w-full px-2 py-1.5 text-xs border border-warm-amber/30 rounded-cozy bg-parchment/60 resize-y focus:outline-hidden focus:ring-2 focus:ring-warm-amber"
                     />
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[11px] text-warm-gray">
@@ -203,7 +201,7 @@ export default function SessionHistory() {
                         <button
                           onClick={() => { setEditingId(null); setDraft(''); }}
                           disabled={savingNotes}
-                          className="p-1 rounded border border-warm-amber/30 text-stone-gray hover:text-brand-ink disabled:opacity-50"
+                          className="p-1 rounded-sm border border-warm-amber/30 text-stone-gray hover:text-brand-ink disabled:opacity-50"
                           title="Cancel"
                           aria-label="Cancel editing"
                         >
@@ -212,7 +210,7 @@ export default function SessionHistory() {
                         <button
                           onClick={() => void saveNotes(session.id)}
                           disabled={savingNotes}
-                          className="p-1 rounded border border-moss-green/40 bg-moss-green/10 text-moss-green hover:bg-moss-green/20 disabled:opacity-50"
+                          className="p-1 rounded-sm border border-moss-green/40 bg-moss-green/10 text-brand-ink hover:bg-moss-green/15 disabled:opacity-50"
                           title="Save"
                           aria-label="Save notes"
                         >
@@ -224,7 +222,7 @@ export default function SessionHistory() {
                 ) : session.notes ? (
                   // `whitespace-pre-wrap` so the DM's own line breaks survive —
                   // these are usually written as a short list of what happened.
-                  <p className="text-xs text-brand-ink whitespace-pre-wrap break-words">
+                  <p className="text-xs text-brand-ink whitespace-pre-wrap wrap-break-word">
                     {session.notes}
                   </p>
                 ) : (

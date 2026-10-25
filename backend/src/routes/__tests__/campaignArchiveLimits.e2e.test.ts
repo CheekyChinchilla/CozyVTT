@@ -213,4 +213,76 @@ describe('one archive at a time', () => {
     }
     expect(after).toBe(200);
   }, 30_000);
+
+  // The slot was given back when the caller hung up, while the picture was
+  // still being read and encoded, so hanging up and asking again ran many.
+  it('keeps a map export\'s slot until its work is done, even if the caller hangs up', async () => {
+    const { user, cookie } = await signedIn('map-export-hangup');
+    const campaignId = (await createTestCampaign(user.id, { name: 'Map export hang-up' })).id;
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+    const picturePath = path.join(SCRATCH, 'hangup.png');
+    fs.writeFileSync(picturePath, Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082', 'hex'));
+    const art = await prisma.asset.create({
+      data: {
+        type: 'MAP', scope: 'USER', uploadedById: user.id, filename: 'hangup.png', originalName: 'hangup.png', mimeType: 'image/png',
+        fileSize: 67, filePath: picturePath, name: 'Hang-up',
+      },
+    });
+    const mapId = (await prisma.map.create({
+      data: { campaignId, name: 'Room', imageUrl: `/api/assets/maps/${art.id}`, baseLayerUrl: '', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+    })).id;
+
+    // The picture read waits until released, as a large one on a slow disk.
+    const fsp = jest.requireActual<typeof import('fs/promises')>('fs/promises');
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => { release = resolve; });
+    const realRead = fsp.readFile.bind(fsp);
+    const spy = jest.spyOn(fsp, 'readFile').mockImplementation((async (file: never, ...rest: never[]) => {
+      if (String(file) === picturePath) await held;
+      return realRead(file, ...rest);
+    }) as never);
+    try {
+      const route = `/api/campaigns/${campaignId}/maps/${mapId}/export-uvtt`;
+      const first = http.request({ host: '127.0.0.1', port, path: route, method: 'GET', headers: { Cookie: cookie } });
+      first.on('error', () => undefined);
+      first.end();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      first.destroy();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Refused at once; let in, it would wait on the held read like the first.
+      const second = await Promise.race([
+        send(cookie, 'GET', route).then((r) => r.status),
+        new Promise<string>((resolve) => setTimeout(() => resolve('let in, still working'), 2000)),
+      ]);
+      expect(second).toBe(429);
+      release();
+      let after = 429;
+      for (let waited = 0; after === 429 && waited < 3000; waited += 100) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        after = (await send(cookie, 'GET', route)).status;
+      }
+      expect(after).toBe(200);
+    } finally {
+      release();
+      spy.mockRestore();
+    }
+  }, 30_000);
+
+  it('counts a map export as an archive', async () => {
+    const { user, cookie } = await signedIn('map-export');
+    const campaignId = (await createTestCampaign(user.id, { name: 'Map export slot' })).id;
+    await prisma.campaignMembership.create({ data: { userId: user.id, campaignId, role: 'DM', characterIds: [] } });
+    const mapId = (await prisma.map.create({
+      data: { campaignId, name: 'Room', imageUrl: '', baseLayerUrl: '', width: 10, height: 10, gridSize: 50, annotations: [], tokens: [] },
+    })).id;
+    const slow = startSlowUpload(cookie);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      const refused = await send(cookie, 'GET', `/api/campaigns/${campaignId}/maps/${mapId}/export-uvtt`);
+      expect(refused.status).toBe(429);
+    } finally {
+      slow.destroy();
+    }
+  }, 30_000);
 });

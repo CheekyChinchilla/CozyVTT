@@ -180,10 +180,12 @@ describe('a character template written before 1.3.0', () => {
     expect(stored.proficienciesAndLanguages).toEqual(['All armor', 'Simple weapons', 'Common']);
   });
 
-  it('moves a Call of Cthulhu player name where the sheet reads it when it is published', async () => {
+  // A template carries no player's name, under either the old field or the
+  // one the sheet reads now: everyone can read a template.
+  it('drops a Call of Cthulhu player name, under its old field too, when it is published', async () => {
     const { stored } = await publish('CALL_OF_CTHULHU_7E', coc122());
 
-    expect(stored.playerName).toBe('Pat');
+    expect(stored).not.toHaveProperty('playerName');
     expect(stored).not.toHaveProperty('player');
   });
 

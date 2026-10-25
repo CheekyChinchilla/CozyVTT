@@ -38,18 +38,19 @@ const pf2eBase = {
 };
 
 describe('Pathfinder 2e', () => {
-  // A skill stores its total modifier as `bonus`. The extractor used to read
-  // `total`, which is not a field, so every skill came out at +0.
-  it('offers a skill at the bonus the sheet stores, not +0', () => {
+  // The extractor used to read `total`, which is not a field, so every skill
+  // came out at +0. It now works the total out from the skill's parts, as the
+  // sheet shows it, so a stored total that is out of date is not rolled.
+  it('offers a skill at the total its parts give, not +0', () => {
     const data = {
       ...pf2eBase,
       skills: {
         athletics: {
           attribute: 'strength',
           proficiencyRank: 'expert',
-          armorPenalty: 0,
-          itemBonus: 0,
-          bonus: 11,
+          armorPenalty: -1,
+          itemBonus: 1,
+          bonus: 0,
         },
       },
     } as unknown as CharacterData;
@@ -57,9 +58,10 @@ describe('Pathfinder 2e', () => {
     const { skills } = getCharacterRolls('PATHFINDER_2E', data);
     const athletics = skills.find((s) => s.label.startsWith('Athletics'));
 
+    // Strength +4, level 5 expert +9, item +1, check penalty -1.
     expect(athletics).toBeDefined();
-    expect(athletics!.expression).toBe('1d20+11');
-    expect(athletics!.label).toBe('Athletics +11');
+    expect(athletics!.expression).toBe('1d20+13');
+    expect(athletics!.label).toBe('Athletics +13');
   });
 
   // Lore skills are stored at the top level of the sheet, which is where the
@@ -319,5 +321,74 @@ describe('D&D 5e skills and saves with an other bonus', () => {
 
     expect(rolls.skills.find((s) => s.label.startsWith('Stealth'))?.expression).toBe('1d20+3');
     expect(rolls.savingThrows.find((s) => s.label.startsWith('Dexterity'))?.expression).toBe('1d20+5');
+  });
+});
+
+// The built-in template names a lore "Warfare Lore" and the Core Rulebook
+// writes them so ("Sailing Lore"), but the roll added " Lore" to every name,
+// so it read "Warfare Lore Lore".
+describe('Pathfinder 2e lore names', () => {
+  const lore = (name: string) => ({
+    ...pf2eBase,
+    loreSkills: [{ name, attribute: 'intelligence', proficiencyRank: 'trained', itemBonus: 0, bonus: 0 }],
+  }) as unknown as CharacterData;
+
+  it('adds Lore to a name without it', () => {
+    const [sailing] = getCharacterRolls('PATHFINDER_2E', lore('Sailing')).skills;
+    expect(sailing.purpose).toBe('Sailing Lore Check');
+    expect(sailing.label).toBe('Sailing Lore +7');
+  });
+
+  it('leaves a name that already ends in Lore as it is', () => {
+    const [warfare] = getCharacterRolls('PATHFINDER_2E', lore('Warfare lore')).skills;
+    expect(warfare.purpose).toBe('Warfare lore Check');
+    expect(warfare.label).toBe('Warfare lore +7');
+  });
+});
+
+// The Call of Cthulhu roll menu skipped the Fighting and Firearms
+// specialisations a player adds, and any Firearms skill at 0.
+describe('Call of Cthulhu specialisations in the roll menu', () => {
+  const skill = (value: number, extra: Record<string, unknown> = {}) => ({ baseValue: value, currentValue: value, improvementChecked: false, ...extra });
+  const data = {
+    skills: {
+      fighting: { brawl: skill(25), custom: [skill(40, { specialization: 'Sword' })] },
+      firearms: { handgun: skill(20), rifle: skill(25), shotgun: skill(0), custom: [skill(30, { specialization: 'Bow' })] },
+    },
+  } as unknown as CharacterData;
+
+  it('offers each one by its name', () => {
+    const labels = getCharacterRolls('CALL_OF_CTHULHU_7E', data).skills.map((s) => s.label);
+    expect(labels).toEqual(expect.arrayContaining([
+      'Fighting (Sword) — target: 40%',
+      'Firearms (Bow) — target: 30%',
+      'Firearms (Shotgun) — target: 0%',
+    ]));
+  });
+});
+
+// A Call of Cthulhu weapon's damage written with DB was left out of the menu,
+// which cannot roll text, and its skill was the value stored with the weapon.
+describe('Call of Cthulhu weapons in the roll menu', () => {
+  const data = {
+    // STR 80 + SIZ 65: a damage bonus of +1D4.
+    characteristics: { STR: { regular: 80 }, SIZ: { regular: 65 } },
+    skills: { firearms: { handgun: { baseValue: 20, currentValue: 60, improvementChecked: false }, rifle: { currentValue: 25 }, shotgun: { currentValue: 25 }, custom: [] } },
+    combat: {
+      weapons: [
+        { name: 'Fist', skill: 'Brawl', skillValue: 25, damage: '1d3+DB' },
+        { name: '.38 Revolver', skill: 'Handgun', skillValue: 20, damage: '1d10' },
+      ],
+    },
+  } as unknown as CharacterData;
+
+  it('rolls the damage bonus in place of DB', () => {
+    const fist = getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat.find((c) => c.label.startsWith('Fist Damage'));
+    expect(fist?.expression).toBe('1d3+1d4');
+  });
+
+  it('takes the skill value from the skill the weapon names', () => {
+    const labels = getCharacterRolls('CALL_OF_CTHULHU_7E', data).combat.map((c) => c.label);
+    expect(labels).toContain('.38 Revolver (Handgun, target: 60%)');
   });
 });

@@ -6,7 +6,7 @@
  */
 
 import path from 'path';
-import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension, isAllowedMimeType, getUploadsDirectory } from './fileUtils';
+import { resolveFileSizeLimits, DEFAULT_FILE_SIZE_LIMITS_MB, isAllowedExtension, isAllowedMimeType, getUploadsDirectory, uploadsDirectorySetting, getFilePath, getTempDirectory } from './fileUtils';
 import { parseProxyBodySize } from './proxyLimits';
 
 const MB = 1024 * 1024;
@@ -254,5 +254,34 @@ describe('getUploadsDirectory', () => {
   it('is the uploads folder in the working directory when UPLOAD_DIR is not set', () => {
     delete process.env.UPLOAD_DIR;
     expect(getUploadsDirectory()).toBe(path.resolve('uploads'));
+  });
+
+  it('reads the environment it is given', () => {
+    expect(getUploadsDirectory({ UPLOAD_DIR: '/srv/media' })).toBe('/srv/media');
+    expect(getUploadsDirectory({})).toBe(path.resolve('uploads'));
+  });
+});
+
+// The file paths stored for assets start with the folder as it is set, so a
+// relative UPLOAD_DIR, the default among them, gives relative stored paths.
+describe('uploadsDirectorySetting', () => {
+  const saved = process.env.UPLOAD_DIR;
+  afterEach(() => {
+    if (saved === undefined) delete process.env.UPLOAD_DIR;
+    else process.env.UPLOAD_DIR = saved;
+  });
+
+  it('is UPLOAD_DIR as written, or uploads', () => {
+    expect(uploadsDirectorySetting({ UPLOAD_DIR: 'some/where' })).toBe('some/where');
+    expect(uploadsDirectorySetting({})).toBe('uploads');
+  });
+
+  it('begins the folders an upload and the temporary files are put in', () => {
+    delete process.env.UPLOAD_DIR;
+    expect(getFilePath('MAP', 'GLOBAL')).toBe(path.join('uploads', 'maps', 'global'));
+    expect(getTempDirectory()).toBe(path.join('uploads', 'temp'));
+    process.env.UPLOAD_DIR = '/srv/media';
+    expect(getFilePath('TOKEN', 'CAMPAIGN', 'c1')).toBe('/srv/media/tokens/campaigns/c1');
+    expect(getTempDirectory()).toBe('/srv/media/temp');
   });
 });

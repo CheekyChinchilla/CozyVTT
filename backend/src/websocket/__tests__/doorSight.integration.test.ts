@@ -36,11 +36,19 @@ const NEAR: Wall = { id: randomUUID(), x1: 300, y1: 400, x2: 300, y2: 450, type:
 const FAR: Wall = { id: randomUUID(), x1: 800, y1: 400, x2: 800, y2: 450, type: 'door-closed' };
 const FAR_LOCKED: Wall = { id: randomUUID(), x1: 800, y1: 600, x2: 800, y2: 650, type: 'door-locked' };
 
-async function newMap(lightingEnabled: boolean): Promise<string> {
+/** Manual fog for a map: on, with these cells revealed (row * 20 + column, from the top left). */
+type Fog = { revealed: number[] };
+
+async function newMap(lightingEnabled: boolean, fog?: Fog): Promise<string> {
+  const revealed = new Array(400).fill(false);
+  for (const cell of fog?.revealed ?? []) revealed[cell] = true;
   const map = await prisma.map.create({
     data: {
       campaignId, name: 'Doors', imageUrl: '/api/assets/maps/x', baseLayerUrl: '/api/assets/maps/x',
       width: 20, height: 20, gridSize: 50, annotations: [], lightingEnabled, globalIllumination: true,
+      // Off unless a test asks for it, so the sight tests are about sight.
+      fogEnabled: fog !== undefined,
+      fogData: fog ? toJson({ fogCols: 20, fogRows: 20, cellPx: 50, revealed }) : undefined,
       wallSegments: toJson([SPLIT, NEAR, FAR, FAR_LOCKED]), lights: toJson([]),
       tokens: toJson([{
         id: 'player-token', name: 'Hero', imageUrl: '', position: { x: 2, y: 10 }, size: { width: 1, height: 1 },
@@ -110,6 +118,55 @@ describe('on a lit map', () => {
     player.emit('wall:update', { mapId, segment: { ...FAR_LOCKED, type: 'door-open' } });
     expect((await refused).message).toBe('You cannot see that door');
     player.disconnect();
+  });
+});
+
+/**
+ * Manual fog. A door the player's screen covers, with no revealed square on
+ * either side of its middle, was theirs to open, and its answer told them a
+ * door was there. NEAR's middle is (300, 425): the squares beside it are
+ * columns 5 and 6 of row 8, cells 165 and 166.
+ */
+describe('under manual fog', () => {
+  it('opens a door beside a revealed square', async () => {
+    const mapId = await newMap(false, { revealed: [165] });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const opened = waitForEvent<{ segment: Wall }>(player, 'wall:updated');
+    player.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+    expect((await opened).segment.type).toBe('door-open');
+    expect(await stored(mapId, NEAR.id)).toBe('door-open');
+    player.disconnect();
+  });
+
+  it('refuses a door wholly under fog, and puts it back on the player\'s page', async () => {
+    const mapId = await newMap(false, { revealed: [0, 1, 2] });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    const back = waitForEvent<{ segment: Wall }>(player, 'wall:updated');
+    player.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+    expect((await refused).message).toBe('You cannot see that door');
+    expect((await back).segment).toEqual(NEAR);
+    expect(await stored(mapId, NEAR.id)).toBe('door-closed');
+    player.disconnect();
+  });
+
+  it('says nothing of a lock on a door under fog', async () => {
+    const mapId = await newMap(false, { revealed: [] });
+    const player = await server.connectAndAuth(playerCookie, campaignId);
+    const refused = waitForEvent<{ message: string }>(player, 'error');
+    player.emit('wall:update', { mapId, segment: { ...FAR_LOCKED, type: 'door-open' } });
+    expect((await refused).message).toBe('You cannot see that door');
+    player.disconnect();
+  });
+
+  it('leaves the DM free to open any door', async () => {
+    const mapId = await newMap(false, { revealed: [] });
+    const dmCookie = await server.loginAs(dmId);
+    const dm = await server.connectAndAuth(dmCookie, campaignId);
+    const opened = waitForEvent<{ segment: Wall }>(dm, 'wall:updated');
+    dm.emit('wall:update', { mapId, segment: { ...NEAR, type: 'door-open' } });
+    expect((await opened).segment.type).toBe('door-open');
+    dm.disconnect();
   });
 });
 

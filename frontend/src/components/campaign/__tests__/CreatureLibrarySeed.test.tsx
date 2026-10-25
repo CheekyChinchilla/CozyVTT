@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { waitForDialogFocus } from '@/test/dialogFocus';
 import userEvent from '@testing-library/user-event';
 import CreatureLibrary from '../CreatureLibrary';
 
@@ -63,6 +64,7 @@ describe('the SRD import in an empty library', () => {
       response: { status: 502, data: { error: 'Bad Gateway', message: 'api.open5e.com did not answer within 15 seconds.' } },
     });
     render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
 
     await userEvent.click(await screen.findByRole('button', { name: 'Import D&D 5e SRD Creatures' }));
     expect(await screen.findByText('api.open5e.com did not answer within 15 seconds.')).toBeInTheDocument();
@@ -89,9 +91,26 @@ describe('loading the library', () => {
   it('loads it again with the search once typing stops', async () => {
     api.getSeedStatus.mockResolvedValue({ srdCount: 0, customCount: 0, seedInProgress: false, canSeed: false });
     render(<CreatureLibrary isOpen onClose={() => {}} />);
+    await waitForDialogFocus();
     await waitFor(() => expect(api.listCreatures).toHaveBeenCalledTimes(1));
 
     await userEvent.type(screen.getByPlaceholderText('Search creatures...'), 'gob');
     await waitFor(() => expect(api.listCreatures).toHaveBeenLastCalledWith('campaign-1', expect.objectContaining({ search: 'gob' })), { timeout: 2000 });
+  });
+});
+
+describe('the Creature Library as a dialog', () => {
+  it('opens from the left, is announced by name, and Escape and its Close button close it', async () => {
+    const onClose = vi.fn();
+    render(<CreatureLibrary isOpen onClose={onClose} />);
+    const dialog = screen.getByRole('dialog', { name: 'Creature Library' });
+    expect(dialog.className).toMatch(/\bleft-0\b/);
+    await waitFor(() => expect(api.listCreatures).toHaveBeenCalled());
+
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

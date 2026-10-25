@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { BookText, User, Heart, MapPin, Package, Sparkles, Activity, Ghost } from 'lucide-react';
+import { SHEET_LONG_TEXT_MAX } from '@/constants/sheetLimits';
 
 interface BackstoryData {
   description?: string;
@@ -132,9 +133,9 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center space-x-2 pb-2 border-b-2 border-sepia-400">
-        <BookText className="w-5 h-5 text-sepia-700" />
-        <h3 className="text-lg font-bold text-sepia-900">Investigator Background</h3>
+      <div className="flex items-center space-x-2 pb-2 border-b-2 border-ink/20">
+        <BookText className="w-5 h-5 text-ink-secondary" />
+        <h3 className="text-lg font-bold text-ink">Investigator Background</h3>
       </div>
 
       {/* Fields */}
@@ -147,8 +148,8 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
             <div key={field.key} className="space-y-2">
               {/* Field Label */}
               <div className="flex items-center space-x-2">
-                <Icon className="w-4 h-4 text-sepia-600" />
-                <label className="text-sm font-semibold text-sepia-900">
+                <Icon className="w-4 h-4 text-ink-secondary" />
+                <label htmlFor={`coc-backstory-${field.key}`} className="text-sm font-semibold text-ink">
                   {field.label}
                 </label>
               </div>
@@ -156,18 +157,20 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
               {/* Field Input/Display */}
               {editable ? (
                 <textarea
+                  id={`coc-backstory-${field.key}`}
+                  maxLength={SHEET_LONG_TEXT_MAX}
                   value={value}
                   onChange={(e) => onChange?.(field.key, e.target.value)}
                   placeholder={field.placeholder}
                   rows={field.rows || 3}
-                  className="w-full bg-white/50 border border-sepia-400 rounded-md px-3 py-2 text-sm text-sepia-900 placeholder:text-sepia-400 focus:outline-none focus:ring-2 focus:ring-sepia-500 resize-y"
+                  className="w-full bg-paper border border-ink/20 rounded-md px-3 py-2 text-sm text-ink placeholder:text-ink-muted focus:outline-hidden focus:ring-2 focus:ring-brand resize-y"
                 />
               ) : (
-                <div className="bg-parchment-light/50 border border-sepia-300 rounded-md px-3 py-2 min-h-[60px]">
+                <div className="bg-ink/5 border border-ink/20 rounded-md px-3 py-2 min-h-[60px]">
                   {value ? (
-                    <p className="text-sm text-sepia-900 whitespace-pre-wrap">{value}</p>
+                    <p className="text-sm text-ink whitespace-pre-wrap">{value}</p>
                   ) : (
-                    <p className="text-sm text-sepia-500 italic">No information provided</p>
+                    <p className="text-sm text-ink-muted italic">No information provided</p>
                   )}
                 </div>
               )}
@@ -177,9 +180,9 @@ export const BackstorySection: React.FC<BackstorySectionProps> = ({
       </div>
 
       {/* Keeper Notes */}
-      <div className="bg-amber-50 border border-amber-300 rounded-md p-4">
-        <h4 className="text-sm font-semibold text-amber-900 mb-2">Keeper's Note</h4>
-        <p className="text-xs text-amber-800 leading-relaxed">
+      <div className="bg-warning/10 border border-warning/30 rounded-md p-4">
+        <h4 className="text-sm font-semibold text-warning-ink mb-2">Keeper's Note</h4>
+        <p className="text-xs text-warning-ink leading-relaxed">
           In Call of Cthulhu, backstory elements often become central to the narrative. The Keeper may use
           significant people, meaningful locations, or treasured possessions as plot hooks. Phobias and manias
           can be gained during play through traumatic sanity losses. Encounters with strange entities may

@@ -18,7 +18,7 @@ import DnD5eCharacterEditor from '../character-sheets/dnd5e/DnD5eCharacterEditor
 import Pathfinder2eCharacterEditor from '../character-sheets/pathfinder2e/Pathfinder2eCharacterEditor';
 import CallOfCthulhu7eCharacterEditor from '../character-sheets/call-of-cthulhu-7e/CallOfCthulhu7eCharacterEditor';
 import { FlexibleCharacterSheetEdit } from '../character-sheets/flexible/FlexibleCharacterSheetEdit';
-import { apiErrorMessage, apiValidationIssues } from '@/utils/errors';
+import { apiErrorMessage, apiValidationIssues, errorSummary } from '@/utils/errors';
 import { refusedSaveMessage } from '@/utils/sheetSaveRefusal';
 import { isStaleCharacterSave } from '@/utils/staleCharacter';
 import { useStaleSaveReapply } from './StaleSaveDialog';
@@ -99,7 +99,7 @@ export default function CharacterSheetEditorModal({
         onSaved();
       }
     } catch (error) {
-      console.error('Error saving character:', error);
+      console.error('Error saving character:', errorSummary(error));
 
       // Signed out meanwhile: the editor stays open with the changes, and the
       // notice says how to save them.
@@ -190,7 +190,7 @@ export default function CharacterSheetEditorModal({
               </p>
               <button
                 onClick={onClose}
-                className="px-6 py-2 rounded-lg bg-moss-green text-white hover:bg-moss-green/90 transition-colors"
+                className="px-6 py-2 rounded-lg bg-moss-green text-brand-text hover:bg-brand-hover transition-colors"
               >
                 Close
               </button>
@@ -213,7 +213,7 @@ export default function CharacterSheetEditorModal({
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
       <div
         ref={modalRef}
         role="dialog"
@@ -228,7 +228,7 @@ export default function CharacterSheetEditorModal({
             would fix that but drop it straight onto the sheet's own palette
             button, which sits at the same offset inside the sheet header. A
             flow row keeps it clear of the sheet's controls at every width. */}
-        <div className="flex justify-end px-3 py-2 border-b border-moss-green/20 flex-shrink-0">
+        <div className="flex justify-end px-3 py-2 border-b border-moss-green/20 shrink-0">
           <button
             onClick={handleCancel}
             aria-label="Close dialog"
@@ -240,7 +240,7 @@ export default function CharacterSheetEditorModal({
         </div>
 
         {signedOut && (
-          <div className="px-4 pt-4 flex-shrink-0">
+          <div className="px-4 pt-4 shrink-0">
             <SignedOutNotice />
           </div>
         )}

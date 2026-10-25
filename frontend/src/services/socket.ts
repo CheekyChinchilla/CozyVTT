@@ -3,7 +3,7 @@ import { socketTarget } from '@/utils/socketTarget';
 import { api } from '@/services/api';
 import { apiErrorStatus, errorMessage } from '@/utils/errors';
 import type {
-  Map as CampaignMap,
+  CampaignMap,
   TokenMoveStartEvent,
   TokenMoveEvent,
   TokenMoveEndEvent,
@@ -12,9 +12,11 @@ import type {
   DiceRolledEvent,
   DiceRolledSecretEvent,
   ChatMessageEvent,
+  ChatMessageAck,
+  DiceRollAck,
+  DoneAck,
   ChatMessageBroadcast,
   ChatSystemBroadcast,
-  SessionStartEvent,
   SessionStartedBroadcast,
   SessionPausedBroadcast,
   VibeUpdateEvent,
@@ -58,6 +60,11 @@ const { origin: SOCKET_ORIGIN, path: SOCKET_PATH } = socketTarget(
 );
 
 type EventCallback<T = unknown> = (data: T) => void;
+
+/** How long a chat message waits for the server's answer before it counts as not sent. */
+const CHAT_ANSWER_TIMEOUT_MS = 10_000;
+/** How long a roll, or a clear of the dice history, waits for its answer. */
+const ROLL_ANSWER_TIMEOUT_MS = 10_000;
 
 /**
  * A listener as the registry holds it, once its payload type has been erased.
@@ -223,6 +230,10 @@ class SocketClient {
         path: SOCKET_PATH,
         withCredentials: true,
         transports: ['websocket', 'polling'],
+        // Polling when the WebSocket is refused, as by a proxy that does not
+        // pass the browser's host name, which the page's policy names for it:
+        // a slower table, where without this there was none.
+        tryAllTransports: true,
         reconnection: true,
         reconnectionDelay: this.reconnectDelay,
         reconnectionDelayMax: 30000,       // Cap backoff at 30s
@@ -271,6 +282,8 @@ class SocketClient {
 
       // Connection error
       this.socket.on('connect_error', (error) => {
+        // Logged whole: socket.io's error carries no request, and its transport
+        // detail is what shows a proxy that does not pass the socket through.
         console.error('[Socket] Connection error:', error);
         clearTimeout(connectionTimeout);
         this.isConnecting = false;
@@ -296,26 +309,9 @@ class SocketClient {
         this.reconnect(this.refusedBeforeJoin);
       });
 
-      // Reconnection attempt
-      // TODO(play): socket.io-client 4 emits reconnect_attempt, reconnect and
-      // reconnect_failed on the manager (this.socket.io), never on the socket, so
-      // these three never run; move them there or remove them.
-      this.socket.on('reconnect_attempt', (attemptNumber) => {
-        this.reconnectAttempts = attemptNumber;
-      });
-
-      // Reconnection successful
-      this.socket.on('reconnect', () => {
-        this.reconnectAttempts = 0;
-        // Re-authentication happens automatically when backend emits 'connected' event
-      });
-
-      // Reconnection failed
-      this.socket.on('reconnect_failed', () => {
-        console.error('[Socket] Reconnection failed after max attempts');
-        clearTimeout(connectionTimeout);
-        reject(new Error('Failed to reconnect after maximum attempts'));
-      });
+      // socket.io's own reconnecting is reported on the manager
+      // (this.socket.io), where WebSocketContext listens; `authenticated`
+      // above resets the count on every rejoin.
 
       // The connection's access has ended, with the reason: the page shows
       // it (useAccessRevoked), and the disconnect that may follow is final.
@@ -325,6 +321,7 @@ class SocketClient {
 
       // Error events from server
       this.socket.on('error', (error) => {
+        // The server's own `{ message }`, logged whole.
         console.error('[Socket] Server error event:', error);
         if (isSignInRefusal(error)) this.signInRefused = true;
         if (!this.joined) this.refusedBeforeJoin = true;
@@ -441,27 +438,17 @@ class SocketClient {
     return this.socket?.connected ?? false;
   }
 
-  // ============================================
-  // State Synchronization
-  // ============================================
-
-  requestSync(lastEventId?: string) {
-    if (!this.socket?.connected) {
-      return;
-    }
-
-    this.socket.emit('sync.request', {
-      lastEventId,
-    });
+  /** Whether the current socket has joined its campaign at least once. */
+  hasJoined(): boolean {
+    return this.joined;
   }
 
-  // `never` rather than the `unknown` default: this event has no payload type
-  // declared yet, and `EventCallback<unknown>` would reject a handler that names
-  // its own payload — forcing the next subscriber into a cast. Same
-  // contravariance the registry relies on. Replace with a real payload type when
-  // `sync.state` gains one.
-  onSyncState(callback: EventCallback<never>) {
-    this.addListener('sync.state', callback);
+  /**
+   * A refusal from the server: `{ message }`, for a request sent without an
+   * acknowledgement. One sent with one is answered through it instead.
+   */
+  onServerRefusal(callback: EventCallback<{ message?: string }>) {
+    this.addListener('error', callback);
   }
 
   // ============================================
@@ -488,8 +475,13 @@ class SocketClient {
   // Dice Rolling Events
   // ============================================
 
-  emitDiceRoll(data: DiceRollEvent) {
-    this.socket?.emit('dice.roll', data);
+  /**
+   * Roll at the table and wait for the server's answer: the stored roll's id,
+   * or why it was refused. With no connection, or no answer in
+   * ROLL_ANSWER_TIMEOUT_MS, it counts as not made.
+   */
+  rollDice(data: DiceRollEvent): Promise<DiceRollAck> {
+    return this.askFor<DiceRollAck>('dice.roll', data, ROLL_ANSWER_TIMEOUT_MS, "That roll didn't come back. Check your connection and try again.");
   }
 
   onDiceRolled(callback: EventCallback<DiceRolledEvent>) {
@@ -500,8 +492,24 @@ class SocketClient {
     this.addListener('dice.rolled.secret', callback);
   }
 
-  emitClearDiceHistory() {
-    this.socket?.emit('dice.clearHistory');
+  /** Clear the dice history for everyone (the DM's), and wait for the answer. */
+  clearDiceHistory(): Promise<DoneAck> {
+    return this.askFor<DoneAck>('dice.clearHistory', undefined, ROLL_ANSWER_TIMEOUT_MS, 'No answer from the server');
+  }
+
+  /**
+   * Send an event with an acknowledgement and resolve with the server's
+   * answer, or with a refusal saying `noAnswer` when none comes in time, or
+   * at once with no connection.
+   */
+  private askFor<T extends { ok: boolean }>(event: string, data: unknown, timeoutMs: number, noAnswer: string): Promise<T | { ok: false; error: string }> {
+    const socket = this.socket;
+    if (!socket?.connected) return Promise.resolve({ ok: false, error: 'Not connected to server' });
+    return new Promise((resolve) => {
+      const answered = (err: Error | null, answer?: T) => resolve(err || !answer ? { ok: false, error: noAnswer } : answer);
+      if (data === undefined) socket.timeout(timeoutMs).emit(event, answered);
+      else socket.timeout(timeoutMs).emit(event, data, answered);
+    });
   }
 
   onDiceHistoryCleared(callback: EventCallback<void>) {
@@ -532,8 +540,20 @@ class SocketClient {
   // Chat Events
   // ============================================
 
-  emitChatMessage(data: ChatMessageEvent) {
-    this.socket?.emit('chat.message', data);
+  /**
+   * Send a chat message and wait for the server's answer: the stored id, or
+   * why it was refused. With no connection, or no answer in
+   * CHAT_ANSWER_TIMEOUT_MS, it counts as not sent; a resend with the same
+   * `clientId` cannot post it twice.
+   */
+  sendChatMessage(data: ChatMessageEvent): Promise<ChatMessageAck> {
+    const socket = this.socket;
+    if (!socket?.connected) return Promise.resolve({ ok: false, error: 'Not connected' });
+    return new Promise((resolve) => {
+      socket.timeout(CHAT_ANSWER_TIMEOUT_MS).emit('chat.message', data, (err: Error | null, answer?: ChatMessageAck) => {
+        resolve(err || !answer ? { ok: false, error: 'No answer from the server' } : answer);
+      });
+    });
   }
 
   onChatMessage(callback: EventCallback<ChatMessageBroadcast>) {
@@ -548,10 +568,6 @@ class SocketClient {
   // Map Events
   // ============================================
 
-  emitMapChange(mapId: string) {
-    this.socket?.emit('map.change', { mapId });
-  }
-
   onMapChanged(callback: EventCallback<{ mapId: string; mapData: CampaignMap; spiritVisible?: boolean }>) {
     this.addListener('map.changed', callback);
   }
@@ -559,18 +575,6 @@ class SocketClient {
   // ============================================
   // Session Events
   // ============================================
-
-  emitSessionStart(data: SessionStartEvent) {
-    this.socket?.emit('session.start', data);
-  }
-
-  emitSessionPause() {
-    this.socket?.emit('session.pause', {});
-  }
-
-  emitSessionEnd(saveState: boolean = true) {
-    this.socket?.emit('session.end', { saveState });
-  }
 
   onSessionStarted(callback: EventCallback<SessionStartedBroadcast>) {
     this.addListener('session.started', callback);
@@ -677,7 +681,7 @@ class SocketClient {
   }
 
   /**
-   * Spend one hit die. The roll goes through emitDiceRoll like any other; this
+   * Spend one hit die. The roll goes through rollDice like any other; this
    * is only the decrement, which the server applies so the count cannot be
    * kept up by a client that declines to send it.
    */
@@ -739,28 +743,6 @@ class SocketClient {
 
   onMapPinged(callback: EventCallback<MapPingedBroadcast>) {
     this.addListener('map.pinged', callback);
-  }
-
-  // ============================================
-  // Heartbeat
-  // ============================================
-
-  startHeartbeat(interval: number = 30000) {
-    if (!this.socket) return;
-
-    const heartbeatInterval = setInterval(() => {
-      if (this.socket?.connected) {
-        this.socket.emit('ping');
-      } else {
-        clearInterval(heartbeatInterval);
-      }
-    }, interval);
-
-    this.socket.on('pong', () => {
-      // Connection is healthy
-    });
-
-    return () => clearInterval(heartbeatInterval);
   }
 
   // ============================================

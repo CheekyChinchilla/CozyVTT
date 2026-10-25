@@ -34,11 +34,12 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
   };
 
   const onEnter = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') submit();
+    // Enter while an input method is composing confirms the candidate.
+    if (e.key === 'Enter' && !e.nativeEvent.isComposing) submit();
   };
 
   return (
-    <div className="flex-shrink-0 border-t border-moss-green/20 bg-parchment/30 px-3 py-2 space-y-1.5">
+    <div className="shrink-0 border-t border-moss-green/20 bg-parchment/30 px-3 py-2 space-y-1.5">
       <div className="text-xs font-semibold uppercase tracking-wider text-warm-gray">
         Custom Roll
       </div>
@@ -53,7 +54,7 @@ export default function CustomRollFooter({ onRoll }: CustomRollFooterProps) {
         />
         <button
           onClick={submit}
-          className="flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/20 transition-colors"
+          className="flex items-center gap-1 px-2 py-1 text-xs rounded-cozy bg-moss-green/10 text-brand-ink border border-moss-green/30 hover:bg-moss-green/15 transition-colors"
           title="Roll"
         >
           <Plus className="w-3 h-3" /> Roll

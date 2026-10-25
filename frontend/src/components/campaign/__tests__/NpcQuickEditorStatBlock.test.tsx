@@ -2,9 +2,9 @@
  * The token editor saves a stat block once typing stops, not on every
  * keystroke.
  *
- * Each keystroke in the stat block was a token save and then a `map.change`,
- * which rebuilds and resends the whole map to every player at the table, so
- * a sixty-letter trait was sixty saves and sixty map resends. The saves could
+ * Each keystroke in the stat block was a token save, and each save resends
+ * the whole map to every player at the table, so a sixty-letter trait was
+ * sixty saves and sixty map resends. The saves could
  * also finish out of order and leave an earlier keystroke stored.
  *
  * Now the edit is saved once typing pauses, or at once when focus leaves the
@@ -27,6 +27,8 @@ vi.mock('framer-motion', () => {
     return <div {...(plain as Record<string, unknown>)}>{children as never}</div>;
   };
   return {
+    useReducedMotionConfig: () => false,
+    useIsPresent: () => true,
     motion: new Proxy({}, { get: () => MotionDiv }),
     AnimatePresence: ({ children }: { children?: unknown }) => <>{children as never}</>,
   };
@@ -76,14 +78,14 @@ beforeEach(() => {
 });
 
 describe('editing a stat block in the token editor', () => {
-  it('saves once typing stops, with what was typed last, and tells the table once', async () => {
+  it('saves once typing stops, with what was typed last, and leaves telling the table to the server', async () => {
     render(<NpcQuickEditor token={goblin} campaignId="campaign-1" mapId="map-1" onClose={() => {}} onTokenUpdate={() => {}} />);
     typeSpeed('40 ft., climb 20 ft.');
 
     expect(updateToken).not.toHaveBeenCalled();
     await waitFor(() => expect(updateToken).toHaveBeenCalledTimes(1), { timeout: 3000 });
     expect(savedStatBlocks()[0]?.speed).toBe('40 ft., climb 20 ft.');
-    await waitFor(() => expect(emitMapChange).toHaveBeenCalledTimes(1));
+    expect(emitMapChange).not.toHaveBeenCalled();
   });
 
   it('saves at once when focus leaves the stat block', async () => {

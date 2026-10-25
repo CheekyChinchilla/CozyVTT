@@ -23,7 +23,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAssetDelete } from '@/hooks/useAssetDelete';
 import api from '@/services/api';
 import { apiErrorMessage } from '@/utils/errors';
-import { AssetType, AssetScope, PlatformRole, type Asset, type CampaignDocument } from '@/types';
+import { AssetType, AssetScope, type Asset, type CampaignDocument } from '@/types';
+import { listEveryAsset } from '@/services/assetPages';
 
 interface CampaignDocumentsModalProps {
   isOpen: boolean;
@@ -50,7 +51,6 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
   const [showNew, setShowNew] = useState(false);
 
   const { user } = useAuth();
-  const isAdmin = user?.platformRole === PlatformRole.ADMIN;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,8 +59,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
       const { documents } = await api.listCampaignDocuments(campaignId);
       setShared(documents);
       if (isDM) {
-        const { assets } = await api.listAssets({ type: AssetType.DOCUMENT, limit: 100 });
-        setMine(assets);
+        setMine(await listEveryAsset({ type: AssetType.DOCUMENT }));
       }
     } catch (err) {
       setError(apiErrorMessage(err) ?? 'Could not load the documents.');
@@ -76,10 +75,11 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
   }, [isOpen, load]);
 
   // The asset list includes documents from other campaigns the DM belongs to
-  // and documents other people uploaded. The server only lets a DM share their
-  // own or a global one, so only those are offered.
+  // and documents other people uploaded, and for an admin everyone's. The
+  // server only lets a DM share their own or a global one, admin or not, so
+  // only those are offered.
   const ownOrGlobal = mine.filter(
-    (a) => isAdmin || a.scope === AssetScope.GLOBAL || a.uploadedById === user?.id
+    (a) => a.scope === AssetScope.GLOBAL || a.uploadedById === user?.id
   );
   const sharedIds = new Set(shared.map((d) => d.id));
   const shareable = ownOrGlobal.filter((a) => !sharedIds.has(a.id));
@@ -178,7 +178,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                       {doc.name}
                     </button>
                     <p className="text-[11px] text-ink-secondary truncate">
-                      {FORMAT_LABEL[documentFormat(doc.originalName)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
+                      {FORMAT_LABEL[documentFormat(doc.filename)]} · shared by {doc.linkedBy?.displayName ?? 'a deleted account'}
                     </p>
                   </div>
                   <Button
@@ -281,8 +281,8 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
                         className="flex items-center gap-2 p-2 rounded-lg border border-dashed border-moss-green/30"
                       >
                         <span className="flex-1 min-w-0 truncate text-sm text-ink">{asset.name}</span>
-                        <span className="text-[11px] text-ink-secondary flex-shrink-0">
-                          {FORMAT_LABEL[documentFormat(asset.originalName)]}
+                        <span className="text-[11px] text-ink-secondary shrink-0">
+                          {FORMAT_LABEL[documentFormat(asset.filename)]}
                         </span>
                         <Button
                           type="button"
@@ -307,7 +307,7 @@ export default function CampaignDocumentsModal({ isOpen, onClose, campaignId, is
         onClose={() => setReading(null)}
         documentId={reading?.id ?? null}
         name={reading?.name ?? ''}
-        originalName={reading?.originalName ?? ''}
+        filename={reading?.filename ?? ''}
         layer="overlay"
         // Edit rights follow the rule for deleting, which turns on facts this
         // page does not have, so the list says, per document, whether the

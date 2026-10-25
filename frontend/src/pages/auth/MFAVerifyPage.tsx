@@ -135,7 +135,7 @@ export default function MFAVerifyPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
       <div className="glass-panel max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -169,7 +169,7 @@ export default function MFAVerifyPage() {
         {/* Error Alert */}
         {error && (
           <div className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 

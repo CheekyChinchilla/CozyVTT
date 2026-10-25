@@ -15,10 +15,12 @@ import Toast, { useToast } from '@/components/Toast';
 import api from '@/services/api';
 import type { Asset, VibePeriod, VibeSettings } from '@/types';
 import { Button, Modal } from '@/components/ui';
-import { apiErrorMessage } from '@/utils/errors';
+import { apiErrorMessage, errorSummary } from '@/utils/errors';
 import { assetScopeLabel } from '@/utils/assetUrl';
 import { settableAudioAssets } from '@/utils/audioAssets';
+import { listEveryAsset } from '@/services/assetPages';
 import { vibePeriodAudioAssetId } from '@/utils/vibeAudio';
+import { CAMPAIGN_LIMITS } from '@/constants/campaignLimits';
 
 // ============================================
 // Default presets (mirrors backend vibe-presets.ts)
@@ -96,7 +98,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
           <input
             type="text"
             value={period.name}
-            maxLength={50}
+            maxLength={CAMPAIGN_LIMITS.maxVibePeriodNameLength}
             onChange={(e) => onChange(index, { ...period, name: e.target.value })}
             className="input-cozy w-full"
             placeholder="e.g. dawn, midday, twilight..."
@@ -208,7 +210,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
         </div>
 
         {/* Computed filter string */}
-        <p className="text-xs font-mono text-stone-gray bg-parchment px-2 py-1 rounded border border-moss-green/20 truncate">
+        <p className="text-xs font-mono text-stone-gray bg-parchment px-2 py-1 rounded-sm border border-moss-green/20 truncate">
           {period.filter || 'brightness(1.0) saturate(1.0)'}
         </p>
       </div>
@@ -219,7 +221,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
         <div className="relative h-16 rounded-lg overflow-hidden ring-1 ring-moss-green/20">
           {/* Simulated map background */}
           <div
-            className="absolute inset-0 bg-gradient-to-br from-success via-success to-warning"
+            className="absolute inset-0 bg-linear-to-br/srgb from-success via-success to-warning"
             style={{ filter: period.filter || undefined }}
           />
           {/* Hue overlay */}
@@ -227,7 +229,7 @@ function PeriodEditor({ period, index, canDelete, audioAssets, audioLoading, onC
             className="absolute inset-0"
             style={{ backgroundColor: period.hue, opacity: 0.15, mixBlendMode: 'multiply' }}
           />
-          <span className="absolute bottom-1 right-2 text-xs text-white/80 drop-shadow capitalize">
+          <span className="absolute bottom-1 right-2 text-xs text-white/80 drop-shadow-sm capitalize">
             {period.name}
           </span>
         </div>
@@ -292,9 +294,9 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
   useEffect(() => {
     if (!campaign) return;
     let cancelled = false;
-    api.listAssets({ type: 'AUDIO' })
-      .then((r) => {
-        if (!cancelled) setAudioAssets(settableAudioAssets(r.assets || [], user?.id, campaign.id));
+    listEveryAsset({ type: 'AUDIO' })
+      .then((assets) => {
+        if (!cancelled) setAudioAssets(settableAudioAssets(assets, user?.id, campaign.id));
       })
       .catch(() => {
         if (!cancelled) setAudioListFailed(true);
@@ -338,11 +340,11 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
 
   const validate = (): string | null => {
     if (periods.length === 0) return 'At least one period is required.';
-    if (periods.length > 20) return 'Maximum 20 periods allowed.';
+    if (periods.length > CAMPAIGN_LIMITS.maxVibePeriods) return `Maximum ${CAMPAIGN_LIMITS.maxVibePeriods} periods allowed.`;
     const names = periods.map((p) => p.name.trim().toLowerCase());
     for (const name of names) {
       if (!name) return 'All period names must be non-empty.';
-      if (name.length > 50) return 'Period names must be 50 characters or fewer.';
+      if (name.length > CAMPAIGN_LIMITS.maxVibePeriodNameLength) return `Period names must be ${CAMPAIGN_LIMITS.maxVibePeriodNameLength} characters or fewer.`;
     }
     const unique = new Set(names);
     if (unique.size !== names.length) return 'Period names must be unique.';
@@ -393,11 +395,11 @@ export default function ConfigureVibeModal({ onClose }: ConfigureVibeModalProps)
     try {
       const result = await api.updateVibeSettings(campaign.id, newSettings);
       // Patch local context so VibeTracker reflects new periods immediately
-      updateVibeSettings(result.vibeSettings);
+      updateVibeSettings(result.vibeSettings, result.currentVibe);
       showToast('Vibe periods saved!', 'success');
       setTimeout(onClose, 900);
     } catch (err) {
-      console.error('Failed to save vibe settings:', err);
+      console.error('Failed to save vibe settings:', errorSummary(err));
       showToast(apiErrorMessage(err) || 'Failed to save vibe settings', 'error');
     } finally {
       setIsSaving(false);

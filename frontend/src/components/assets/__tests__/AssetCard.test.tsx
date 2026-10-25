@@ -14,13 +14,10 @@ import AssetCard from '../AssetCard';
 import type { Asset } from '@/types';
 import { AssetType, AssetScope } from '@/types';
 
-vi.mock('../../../contexts/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'u1', platformRole: 'USER' } }),
-}));
-
 vi.mock('../../../services/api', () => ({
   api: {
     getAssetUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}`,
+    getAssetThumbnailUrl: (id: string, dir: string) => `/api/assets/${dir}/${id}/thumbnail`,
     getAssetDownloadUrl: (id: string) => `https://api.example.com/api/assets/${id}/download`,
   },
 }));
@@ -48,10 +45,10 @@ describe('AssetCard', () => {
   it.each([
     [AssetType.MAP, 'maps'],
     [AssetType.TOKEN, 'tokens'],
-  ])('shows a %s as a picture from its serving route', (type, dir) => {
+  ])('shows a %s as its thumbnail, not the full picture', (type, dir) => {
     const { container } = renderCard(asset(type, 'thing.png'));
     const img = container.querySelector('img');
-    expect(img?.getAttribute('src')).toBe(`/api/assets/${dir}/a1`);
+    expect(img?.getAttribute('src')).toBe(`/api/assets/${dir}/a1/thumbnail`);
   });
 
   it('shows an avatar as a picture keyed by its owner', () => {
@@ -79,5 +76,97 @@ describe('AssetCard', () => {
     } finally {
       open.mockRestore();
     }
+  });
+});
+
+// The card offered Delete to the uploader or an admin by a rule of its own,
+// though the server also lets a campaign's DM delete its assets and refuses
+// an uploader who has left the campaign. It now goes by what the asset list
+// says the server will allow (canChange).
+describe('AssetCard Delete', () => {
+  it('is offered where the server will allow it, whoever uploaded the asset', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), uploadedById: 'someone-else', scope: AssetScope.CAMPAIGN, canChange: true }, 'list');
+    expect(screen.getByRole('button', { name: 'Delete Thing' })).toBeInTheDocument();
+  });
+
+  it('is not offered where the server would refuse it, even to the uploader', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), scope: AssetScope.CAMPAIGN, canChange: false }, 'list');
+    expect(screen.queryByRole('button', { name: 'Delete Thing' })).not.toBeInTheDocument();
+  });
+});
+
+// With transition-all the card's CSS transition also covered its opacity, so
+// in Firefox each card faded in twice: once by framer-motion, then again as
+// the CSS transition replayed the final opacity it wrote. Hover changes only
+// the shadow, so only the shadow is transitioned.
+describe('AssetCard transitions', () => {
+  it.each(['grid', 'list'] as const)('transitions only the shadow in %s view', (viewMode) => {
+    const { container } = renderCard(asset(AssetType.MAP, 'm.png'), viewMode);
+    const card = container.firstElementChild as HTMLElement;
+    expect(card.className).toMatch(/\btransition-shadow\b/);
+    expect(card.className).not.toMatch(/\btransition-all\b/);
+  });
+});
+
+// The fallback hid the picture and appended an empty element of its own to a
+// node React owns, so the card showed nothing at all where the picture was.
+describe('AssetCard picture that fails to load', () => {
+  it.each(['grid', 'list'] as const)('is replaced by the asset type\'s icon in %s view', (viewMode) => {
+    const { container } = renderCard(asset(AssetType.MAP, 'm.png'), viewMode);
+    fireEvent.error(container.querySelector('img')!);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('svg.lucide-map-pin')).not.toBeNull();
+  });
+});
+
+// The grid card drew View, Download and Delete only once the mouse entered
+// it, so Tab could not reach them and a touch screen showed them only after a
+// tap. They are always there now, shown on hover, while one has keyboard
+// focus, and always on a screen with no hover.
+describe('AssetCard grid actions', () => {
+  it('are reachable by name without hovering the card', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), canChange: true });
+    expect(screen.getByRole('button', { name: 'View Thing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download Thing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete Thing' })).toBeInTheDocument();
+  });
+
+  it('are shown on hover, while one has keyboard focus, and on a screen with no hover', () => {
+    renderCard(asset(AssetType.MAP, 'm.png'));
+    const overlay = screen.getByRole('button', { name: 'View Thing' }).parentElement as HTMLElement;
+    const classes = overlay.className.split(/\s+/);
+    expect(classes).toContain('opacity-0');
+    expect(classes).toContain('group-hover:opacity-100');
+    expect(classes).toContain('focus-within:opacity-100');
+    expect(classes).toContain('[@media(hover:none)]:opacity-100');
+    // Hidden, it does not catch a click meant for the card.
+    expect(classes).toContain('pointer-events-none');
+    expect(classes).toContain('group-hover:pointer-events-auto');
+  });
+
+  // On a touch screen they were always over the whole picture, dimmed and
+  // blurred, so no thumbnail in the library could be seen.
+  it('sit in a strip in a corner on a screen with no hover, leaving the picture clear', () => {
+    renderCard({ ...asset(AssetType.MAP, 'm.png'), canChange: true });
+    const overlay = screen.getByRole('button', { name: 'View Thing' }).parentElement as HTMLElement;
+    const classes = overlay.className.split(/\s+/);
+    for (const touch of ['inset-auto', 'bottom-2', 'right-2', 'gap-2', 'bg-transparent', 'backdrop-blur-none']) {
+      expect(classes).toContain(`[@media(hover:none)]:${touch}`);
+    }
+    // With a mouse, hovering or focusing still covers the picture as before.
+    for (const hover of ['inset-0', 'bg-black/50', 'backdrop-blur-xs', 'gap-3']) {
+      expect(classes).toContain(hover);
+    }
+    for (const name of ['View Thing', 'Download Thing', 'Delete Thing']) {
+      const button = screen.getByRole('button', { name });
+      expect(button.className.split(/\s+/)).toContain('[@media(hover:none)]:p-2');
+      expect(button.className.split(/\s+/)).toContain('p-3');
+    }
+  });
+
+  it('name View and Download in list view too', () => {
+    renderCard(asset(AssetType.MAP, 'm.png'), 'list');
+    expect(screen.getByRole('button', { name: 'View Thing' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download Thing' })).toBeInTheDocument();
   });
 });

@@ -40,20 +40,21 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **Multi-campaign** — one server, unlimited campaigns, isolated from each other
 - **Role-based access control** — Platform Admin, Campaign DM, Player, and Spectator roles; the DM seat can be handed to another member without losing ownership of the campaign
 - **Setup wizard** — guided first-run initialization; no manual database seeding required. It asks for a one-time setup token printed in the backend log, so only the person running the server can create the first administrator
-- **Admin dashboard** — user management, system settings, activity logs, uploaded files, database backups
+- **Admin dashboard** — user management, system settings, activity logs, uploaded files, instance backups (database and uploaded files)
+- **Keyboard and screen reader support** — dialogs and side panels are named, keep focus and close on Escape; the dice and chat logs announce new entries; initiative runs from the keyboard; reduced-motion settings are honoured
 
 ### Campaign Tools
 - **Interactive map canvas** — upload map images, place tokens, click a token to pick it up and click a square to put it down, with every move shown to the table in real time
-- **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); colored-letter placeholders for tokens without images; the DM can hide a token from players or obscure what it is, and players are sent only what they may see of each token
+- **Token system** — player, NPC, and object token types with disposition (friendly/neutral/hostile), HP bars, conditions, stat blocks, and notes; three display modes (pog, top-down, full-art); tokens turn to face any direction; colored-letter placeholders for tokens without images; the DM can hide a token from players or obscure what it is, and players are sent only what they may see of each token
 - **Creature library** — browse, search, and place creatures from the SRD bestiary (imported from Open5e by an administrator, with one button) or custom campaign-specific templates; per-campaign favorites with star toggle; duplicate SRD creatures to customize; edit custom creatures in-place; save token images back to templates
 - **Token templates** — save reusable token configurations (image, stats, HP, size, disposition, full NPC stat block); place from library or save from map context menu; copy templates between campaigns the DM owns
-- **NPC right-click rolls** — DMs right-click any NPC token to roll abilities, saves, skills, attacks, and damage parsed from its stat block; advantage/disadvantage selector for d20 systems; free-form custom roll fallback for non-5e systems
+- **NPC right-click rolls** — DMs right-click any NPC token to roll abilities, saves, skills, attacks, and damage parsed from its stat block; advantage/disadvantage selector for d20 systems; free-form custom roll fallback for systems whose stat blocks have nothing to parse
 - **Campaign export/import** — export campaigns as portable `.cozyvtt` archives; import on any CozyVTT instance; includes maps, tokens, creatures, templates, and assets; multi-step preview flow; optional audio toggle; secured against path traversal, zip bombs, and malicious files
 - **Walls & dynamic lighting** — DM-drawn wall segments (walls, doors, windows) with raycasting visibility; draw, polygon, and brush drawing modes; snap-to-grid and snap-to-endpoint; split, select, erase, and merge point tools; multi-select with Shift, a drag-box or Ctrl+A, then move or delete the lot together; snap-to-wall door/window placement (auto-splits existing walls); players only see what their character can: bright light clearly, dim light and the token's darkvision at half, nothing beyond, and light never reveals through a wall — a lit room is visible only to someone with line of sight into it; per-map Global Illumination lights everything in line of sight for tables that prefer it; explored areas are remembered per player and shown in grey until seen again; door interactions for both DM and players; bright/dim light radii matching D&D 5e and PF2e rules; named light presets (Candle, Torch, Lamp, Lantern, Campfire); overlapping dim zones combine to bright
 - **Universal VTT import/export** — bring in a `.uvtt`, `.dd2vtt` or `.df2vtt` map from Dungeondraft, Dungeon Alchemist, Czepeku and others, with its walls, doors and lights already placed, and export any map back out. One file is one map, as the format intends; if a file's walls reach outside its own picture, CozyVTT says so before importing rather than leaving you to wonder
 - **Fog of war** — drag a box to reveal or hide chunks of the map; the selection snaps to whole grid squares, with animated fade transitions
 - **Spirit layer** — a second canvas layer for ethereal / astral / out-of-body scenes, hidden from players by default
-- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Players see every combatant the DM has not hidden, on the map the table is looking at and on their own plane, even one they cannot yet find in the dark or under fog, and a creature's hit points only when the DM turns its HP bar on. The acting token is ringed on the map for everyone, and hovering a name highlights its token (and vice versa)
+- **Initiative tracker** — real-time combat turn order that follows each token; the DM runs it and players roll their own initiative. Players see every combatant the DM has not hidden, on the map the table is looking at and on their own plane, even one they cannot yet find in the dark or under fog, and a creature's hit points only when the DM turns its HP bar on. The acting token is ringed on the map for everyone, hovering a name highlights its token (and vice versa), and right-clicking a combatant opens their sheet and rolls
 - **Map pings** — press Tab to mark a spot for the whole table; a dot with radiating rings in your own colour, labelled with your name
 - **Vibe tracker** — time-of-day periods (dawn, day, dusk and night by default, all editable) that tint the map with a colour filter
 - **Ambient atmosphere** — six visual effects (rain, mist, leaves, sparkles, snow, wind) and ambient audio independently per campaign
@@ -84,6 +85,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 - **16 built-in color themes** — warm, cool, dark, neutral, and vibrant palettes
 - **Per-user themes** — each account picks its own theme and font from the profile page; preferences persist across logout/login
 - **Custom theme** — pick primary, accent, background, and text colors to create a unique look
+- **Character sheets follow the theme** — every sheet takes the theme's paper, text, and colors, so a sheet reads as well in a dark theme as the rest of the app
 - **8 font families** — open-source typefaces including medieval, elegant, modern, handwritten, and scholarly options, served by your own instance: visitors' browsers never fetch them from another site, and they work on a network with no internet access
 - **Live preview** — theme and font changes preview instantly before saving
 - **Default theme** — admin selects the theme shown on the login page and applied to brand-new users
@@ -132,7 +134,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 **Frontend**
 - React 19 + TypeScript (strict mode)
 - Vite build tooling
-- Tailwind CSS with custom design tokens
+- Tailwind CSS 4 with custom design tokens
 - Zustand for live session state; TanStack Query (React Query) for REST data
 - Socket.io client
 - Axios for REST API calls
@@ -148,7 +150,7 @@ If you find a security issue, please report it privately per [SECURITY.md](SECUR
 
 - Docker 24+ with Docker Compose v2, for the recommended install below
 - Node.js 26+ and PostgreSQL 14+, only to install without Docker (see [Manual Deployment](docs/DEPLOYMENT.md#manual-deployment))
-- A browser from 2023 or later: Chrome or Edge 111, Firefox 114, Safari 16.4 (iPadOS 16.4 on an iPad) or newer. An older browser does not load the app
+- Chrome or Edge 111, Firefox 128 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer: Chrome, Edge and Safari from 2023, Firefox from 2024. An older browser may not load the app, or may draw parts of it wrongly
 - SMTP server (optional — required for password reset and invitation emails)
 
 ### Docker (Recommended)
@@ -214,6 +216,8 @@ Instance branding (logo, mascot, favicon) is **not** set from the dashboard yet 
 | Documents (PDF, text, Markdown) | 50 MB | `MAX_DOCUMENT_SIZE_MB` |
 
 Set these in `.env` and apply them with `docker compose up -d`; no rebuild is needed, but `docker compose restart` keeps the old values. If you raise one, raise your reverse proxy's body limit to match (`NGINX_MAX_BODY_SIZE` for the bundled Nginx). See [Upload Size Limits](docs/DEPLOYMENT.md#upload-size-limits).
+
+Pictures also have fixed limits: at most 16,384 pixels on each side, and for an animated GIF or WebP at most 1,000 frames and 200 million pixels across them for a map, 50 million for a token or an avatar.
 
 ---
 

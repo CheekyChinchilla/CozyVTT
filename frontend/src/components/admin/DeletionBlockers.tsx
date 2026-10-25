@@ -66,7 +66,7 @@ export default function DeletionBlockers({ campaigns, onCleared, onError }: Dele
                   type="button"
                   onClick={() => act(c.id, () => api.transferDM(c.id, heir), 'Failed to hand over the campaign')}
                   disabled={busy || heir === ''}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium bg-moss-green text-white disabled:opacity-50"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg font-medium bg-moss-green text-brand-text disabled:opacity-50"
                 >
                   {busy && <Loader2 className="w-3 h-3 animate-spin" />}
                   Make DM
@@ -82,7 +82,7 @@ export default function DeletionBlockers({ campaigns, onCleared, onError }: Dele
                   type="button"
                   onClick={() => act(c.id, () => api.deleteCampaign(c.id), 'Failed to delete the campaign')}
                   disabled={busy}
-                  className="px-3 py-1.5 rounded-lg font-medium bg-danger text-white disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg font-medium bg-danger-fill text-white disabled:opacity-50"
                 >
                   {`Delete ${c.name} for good`}
                 </button>

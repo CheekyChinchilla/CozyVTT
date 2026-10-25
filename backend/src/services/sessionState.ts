@@ -10,10 +10,12 @@
  * - Map annotations
  */
 
+import type { CampaignStatus, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import logger from '../utils/logger';
 import type { Token } from '../websocket/shared';
 import { readJsonArray, readTokens } from '../utils/prisma-json';
+import { createTurnQueue } from '../utils/turnQueue';
 
 /**
  * Game State Interface
@@ -35,15 +37,19 @@ export interface GameState {
  *
  * @param campaignId - Campaign ID
  * @param sessionId - Optional session ID to include in state
+ * @param db - The transaction a session step holds, so the snapshot is read
+ *   on its connection: read through the shared client, it needed a second
+ *   connection while holding one.
  * @returns GameState object
  */
 export async function captureGameState(
   campaignId: string,
-  sessionId?: string
+  sessionId?: string,
+  db: Prisma.TransactionClient = prisma
 ): Promise<GameState> {
   try {
     // Get campaign with current map
-    const campaign = await prisma.campaign.findUnique({
+    const campaign = await db.campaign.findUnique({
       where: { id: campaignId },
       include: {
         currentMap: {
@@ -79,16 +85,56 @@ export async function captureGameState(
   }
 }
 
+/** Session steps waiting their turn for each campaign in this process (see utils/turnQueue.ts). */
+const sessionTurns = createTurnQueue();
+
 /**
- * Get the most recent session for a campaign
- * Useful for resuming the last session
- *
- * @param campaignId - Campaign ID
- * @returns Session record or null
+ * How many session steps in this process are waiting their turn for a
+ * campaign, not counting the one under way. A test reads it to know a step
+ * is waiting before it goes on.
  */
-export async function getLastSession(campaignId: string) {
-  return await prisma.session.findFirst({
-    where: { campaignId },
+export function sessionStepsWaitingFor(campaignId: string): number {
+  return sessionTurns.waitingFor(campaignId);
+}
+
+/**
+ * Run `work` holding the campaign's row, so that the session steps for one
+ * campaign (start, pause, end, resume, and a status change in settings) run
+ * one at a time, each seeing what the one before it left. Without it two
+ * Starts both found no session running and made two, and a Pause beside an
+ * End marked the ended session PAUSED.
+ *
+ * A step waits its turn in this process first, holding no connection: one
+ * waiting on the row lock inside its transaction held a pooled connection,
+ * and a burst of steps on one campaign could take the whole pool. Everything
+ * `work` reads goes through `tx`, for the same reason.
+ *
+ * `campaign` is null when the campaign does not exist.
+ */
+export async function withSessionsHeld<T>(
+  campaignId: string,
+  work: (tx: Prisma.TransactionClient, campaign: { status: CampaignStatus } | null) => Promise<T>,
+): Promise<T> {
+  const release = await sessionTurns.turnFor(campaignId);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const [campaign] = await tx.$queryRaw<{ status: CampaignStatus }[]>`
+        SELECT status FROM "Campaign" WHERE id = ${campaignId} FOR UPDATE`;
+      return work(tx, campaign ?? null);
+    });
+  } finally {
+    release();
+  }
+}
+
+/**
+ * The session that has started and not ended, running or paused. There is at
+ * most one while every step goes through `withSessionsHeld`; older versions
+ * could leave two, and the newest is the one the campaign page shows.
+ */
+export async function openSession(tx: Prisma.TransactionClient, campaignId: string) {
+  return tx.session.findFirst({
+    where: { campaignId, endedAt: null },
     orderBy: { startedAt: 'desc' },
   });
 }
@@ -100,8 +146,8 @@ export async function getLastSession(campaignId: string) {
  * @param campaignId - Campaign ID
  * @returns Next session number
  */
-export async function getNextSessionNumber(campaignId: string): Promise<number> {
-  const lastSession = await prisma.session.findFirst({
+export async function getNextSessionNumber(campaignId: string, db: Prisma.TransactionClient = prisma): Promise<number> {
+  const lastSession = await db.session.findFirst({
     where: { campaignId },
     orderBy: { sessionNumber: 'desc' },
     select: { sessionNumber: true },

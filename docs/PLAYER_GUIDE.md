@@ -54,10 +54,10 @@ Either way you end up with a password only you know. Pick something you'll actua
 Your DM invites you by typing part of your display name into a search and picking your account from the people who match. Two people can have the same display name, and your profile picture is how your DM tells you apart. Here's what happens next:
 
 1. **Log in** to CozyVTT
-2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards
-3. Each invitation shows the campaign name and, after **DM:**, the campaign's owner (usually the DM)
+2. On your **Dashboard**, a **Pending Invitations** section appears below the Your Characters, Asset Library, Documents and Character Templates cards. An invitation sent while the dashboard is open shows up when you come back to the tab, or within a minute
+3. Each invitation shows the campaign name and, after **DM:**, who runs the campaign
 4. Click **View Invitation →** to open it. Tick the characters you want to bring, if you have any created already, then click **Accept Invitation**. Only characters of the campaign's game system are offered, and only ones not already in a campaign: a D&D 5e campaign takes D&D 5e characters, and a campaign set to Flexible takes Flexible characters
-5. Or click **Decline** if it's not for you
+5. Or click **Decline** if it's not for you. An invitation runs out after 14 days, and the DM can withdraw it before you answer; either way it leaves your dashboard
 
 *Screenshot pending — Pending invitations section.*
 
@@ -132,7 +132,7 @@ The page has three main areas:
 - Campaign name and description at the top
 - The **Campaign Roster** showing all players and their characters
 - A small dot beside each person shows whether they're **in session** right now — green if they're connected, grey if not. Handy for telling "thinking" apart from "their internet fell over"
-- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character
+- A character with hit points on its sheet shows a bar on its card, with the current and maximum beside it. On your own character you also get a row of buttons to change them: **−5**, **−** (one down), **+** (one up) and **+5**. Your DM has them on every character. The minus buttons are damage, so in D&D 5e and Pathfinder 2e your temporary hit points go first
 - Click a character to read its sheet. Right-click one for a menu: **View Character Sheet** for anyone's character, and for your own **Roll...**, **Edit Character Sheet** and **Remove from Campaign**, which takes the character out of the campaign and keeps it in your library
 - If you're curious about your fellow adventurers, it's all here
 
@@ -160,7 +160,7 @@ The top bar shows:
 
 ### Rulebooks and Handouts
 
-Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Some browsers will not show a PDF inside the reader and leave a blank space or a notice that the page is blocked; use the arrow, or the **Open this PDF in a new tab** link above the document.
+Press the **book icon** in the header to see what your DM has shared with the campaign: a rulebook, a page of house rules, a handout for the scene. **Read** opens it in a full-screen reader over the map, and the arrow beside it opens it in a new browser tab, handy for keeping the rules up on a second screen while you play. Only Firefox on a computer shows a PDF inside the reader. In Chrome, Edge, Safari and on a phone the reader offers **Open this PDF in a new tab** instead, as the arrow does.
 
 You can read everything on that list and nothing that is not on it. Sharing is the DM's to do, so if a rulebook you expected is missing, ask them. If your DM edits a shared document, you see the new text the next time you open it.
 
@@ -208,12 +208,13 @@ Chat is for everything: in-character dialogue, out-of-character coordination, qu
 - **System messages** (gray, slightly different style) announce session events like a session starting, pausing or ending
 - **Dice results** appear in the **Dice** panel, the tab beside chat, not in the conversation itself
 - Scroll up to read the history — the full session log is preserved
+- A message that doesn't get through, because the connection dropped or the chat cooldown is still running, is marked **Not sent**. **Retry** sends it again, and a message that did get through after all is not posted twice if you retry within ten minutes; **Discard** removes it
 
 ### The Dice Roller
 
 *Screenshot pending — Dice roller panel.*
 
-Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it.
+Under **Quick Roll**, click **d4**, **d6**, **d8**, **d10**, **d12**, **d20** or **d100** to roll that die. **Adv** and **Dis** roll a d20 with advantage or disadvantage, and **4d6kh3** rolls four d6 and keeps the highest three. Your result appears in the **Dice** panel immediately, where everyone at the table can see it. A roll you make from your sheet, the roster or the map's **Roll...** menu lands there too; if one doesn't go through, a message says why.
 
 **Rolling custom expressions:**
 Type directly into the expression input and press **Enter** or **Roll**. The optional **Character** and **Purpose** boxes under it put a name and a note on the roll for everyone to read, such as "Goblin" and "Scimitar damage", and the circular-arrow button beside **Roll** (**Clear all fields**) empties all the boxes. Supported notation:
@@ -229,7 +230,7 @@ Type directly into the expression input and press **Enter** or **Roll**. The opt
 | `4d6kl3` | Four d6s, keep lowest three |
 | `4d6dl1` | Four d6s, drop the lowest one |
 
-One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Anything over those limits is refused with a message saying which.
+One roll can hold up to 100 dice in all, dice of up to 1,000 sides, and numbers up to 9,999, and the expression can be 200 characters long. Its total must stay within about 2.1 billion either way, however the dice land, and it can never divide by something that could be zero, so `1d20/0` and `9999*9999*9999` are refused. Spaces are fine around `+`, `-`, `*` and `/`, but two terms need an operator between them: `1d20 5` is refused, where `1d20+5` is meant. Anything over those limits is refused with a message saying which, and a roll made while the session is paused follows exactly the same rules.
 
 *GIF pending — Typing a dice expression and seeing the result in the Dice panel.*
 
@@ -238,12 +239,15 @@ homebrew subsystem your table invented, a recurring `2d6+3` for a house rule,
 `4d6kh3` for rolling up a new character, an attack the sheet can't describe.
 Rather than retyping those every session, save them: press **Saved** under the
 dice buttons, give the roll a name and an expression, and it becomes a button of
-its own. Click it and it rolls exactly as if you had typed it.
+its own. Click it and it rolls, with its name as the roll's purpose, so the
+**Dice** panel shows "Longsword" and not just `1d20+5`. Whatever is in the
+**Character** box goes with it, as for a typed roll.
 
 If you have just typed something into the expression box, opening **Saved**
 carries it across, so naming it is the only thing left to do.
 
-Saved rolls are **yours alone** — not even your DM can see them — and they stay
+Your list of saved rolls is **yours alone** — not even your DM can see it, only
+the name of one you roll — and saved rolls stay
 with the campaign you made them in, so one table's homebrew doesn't clutter
 another game. You can rename, edit or delete them from the same **Saved** button,
 and you can keep up to 50 per campaign. If an expression can't be rolled, CozyVTT
@@ -258,17 +262,19 @@ that never works.
 
 Nobody else's secret rolls ever reach you. Not hidden in the page — never sent to your browser at all.
 
-One thing to know: if the DM has **paused** the session, your rolls are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh.
+One thing to know: if the DM has **paused** the session, your rolls from the **Dice** tab are worked out in your own browser and aren't sent anywhere. Handy for messing about between scenes, but those rolls vanish if you refresh. A roll from your sheet, the roster or the map's **Roll...** menu still goes to the table as usual.
 
 ---
 
 ## Moving Your Token
 
-When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
+When the DM has placed your character's token on the map, you can move it: click the token to pick it up, move the pointer to where you want it, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can't move it while the session is paused or has ended.
 
 *GIF pending — Picking up a player token and placing it across the map.*
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
+
+**Turning your token.** To show which way you're facing, right-click your token and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Everyone sees it turn. You can turn any token the DM has made yours to control.
 
 **When you can't move your token:**
 - If the session is **Paused**, token movement is disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
@@ -324,7 +330,7 @@ Two things worth knowing:
 
 - **Creatures standing in hidden areas are invisible to you** — including their tokens, and including their turn marker during combat. If the initiative tracker shows a creature you can't find on the map, that's deliberate. Something is out there. A creature the DM has hidden is not listed at all until they reveal it, and neither is one on a map the DM hasn't switched to, or on the other plane when your DM uses the spirit realm.
 - **You can't reveal fog yourself.** Only the DM can, so there's nothing you can accidentally break by moving around.
-- **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. A locked door looks like any closed door until you try it, and then you are told it is locked.
+- **You open and close the doors you can see.** Click a door to open or close it, or right-click it for **Open Door** or **Close Door**. With dynamic lighting on, that means a door your character can see: one in the dark, or behind a wall, can't be clicked until you can see it. With fog of war on, it means a door beside a square the DM has revealed to you. A locked door looks like any closed door until you try it, and then you are told it is locked.
 
 ### Sound and weather on the map
 
@@ -340,7 +346,7 @@ Two tools in the toolbar above the map answer "can I actually reach that?" befor
 
 **Ruler** (the ruler icon) — measures from **your own token**, so there's nothing to click: turn it on and move the cursor, and the distance in feet follows, using the map's scale and its diagonal rule. If your DM hasn't placed your token on the map yet, the ruler has nothing to measure from and won't draw.
 
-**AoE Shape** (the lightning icon) — draws a spell area. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet or use one of the presets, and move the cursor to position it.
+**AoE Shape** (the lightning icon) — draws a spell area. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet or use one of the presets, and move the cursor to position it. A cone has your game's shape: in D&D 5e as wide at its far end as it is long, in Pathfinder 2e a quarter circle.
 
 For a cone or a line, **click your own token first**. That square becomes the pivot, and moving the cursor swings the shape around it — the point it comes out of slides around the square's edge to follow your aim, so it always leaves on the side you're pointing and never cuts back across you. Keep turning until you can see what the attack catches.
 
@@ -365,16 +371,18 @@ You'll see:
 
 When it's your turn, your name is highlighted. Describe your actions in chat and move your token on the map.
 
+**Sheets and rolls from the tracker.** Right-click a character's name in the tracker and choose **View Character Sheet** to read their sheet, or, on your own character, **Roll...** for the same rolls as right-clicking your token on the map. Double-clicking a character's name opens their sheet straight away. From the keyboard, press **Tab** until the name has the focus and press **Enter** for the menu. Creatures have nothing to open here, and neither does a character whose token is on a map the DM hasn't switched to.
+
 ### Rolling Your Own Initiative
 
 Once the DM has added your token to the tracker, you roll for yourself — you don't have to wait for the DM to do it for you. There are two ways, and they do the same thing:
 
-- **In the tracker** — a dice icon 🎲 appears beside your own name. You'll only ever see it on your own row; you can't roll for other players or for the DM's monsters
+- **In the tracker** — a dice icon 🎲 appears beside your own name. You'll only ever see it on your own row; you can't roll for other players or for the DM's monsters. Right-clicking your name there and choosing **Roll...** offers **Roll Initiative** too
 - **On the map** — right-click your token, choose **Roll...**, and pick **Roll Initiative** at the top of the menu
 
 Either way the result drops straight into the turn order and the roll appears in the **Dice** panel, so everyone can see what you got.
 
-Roll before the DM clicks **Start Combat**. Once combat has started, the dice icon and **Roll Initiative** are no longer offered to you, and the server refuses a roll; if your initiative needs changing, ask your DM.
+Roll once, before the DM clicks **Start Combat**: a second roll is refused, and once combat has started the dice icon and **Roll Initiative** are no longer offered to you. If your initiative needs changing, ask your DM. Your roll stays in the **Dice** panel after a reload. If your token's identity is obscured, the roll comes in under your token's name for you and as *Unknown creature* for everyone else; the history keeps it as *Unknown creature*, so that is how it reads after a reload.
 
 **What you actually roll depends on your game system**, and it's worked out from your sheet:
 
@@ -387,6 +395,10 @@ Roll before the DM clicks **Start Combat**. Once combat has started, the dice ic
 **D&D 5e players — the "other bonus" box.** Your Dexterity is added automatically, but plenty of things add to initiative beyond it: the **Alert** feat's flat +5, a Bard's Jack of All Trades or a Champion's Remarkable Athlete, subclasses that let you use a different ability. Put the total of those in **Initiative — other bonus** on the Combat tab and it's included every time; the box takes anything from -30 to +30. The Initiative number itself is worked out for you now, so there's nothing to keep in step by hand.
 
 If something gives you **advantage** on initiative (a Sentinel Shield, say), that isn't handled automatically yet — roll `2d20kh1` in the dice panel and ask your DM to enter it.
+
+### Levelling up (D&D 5e)
+
+Change **Level** at the top of the editor and **Proficiency Bonus** moves with it: +2 at levels 1 to 4, +3 at 5 to 8, +4 at 9 to 12, +5 at 13 to 16 and +6 at 17 to 20. Every save, skill and spell number worked out from it follows. If your table uses a different bonus, type it in the box and it stays as you set it; the sheet shows what your level gives under the box, with a button to switch back to it.
 
 ### Bonuses the sheet can't work out (D&D 5e)
 
@@ -406,7 +418,7 @@ Your own skills show up with the rest on your sheet and in the right-click roll 
 
 At the end of a short rest you can spend hit dice to get hit points back. Your pool is on the **Combat** tab — `3/5 d10` means you have five d10 hit dice and three of them are unspent.
 
-**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**.
+**Click the pool to spend one.** It rolls a single die plus your Constitution modifier and puts the result in the roll history like any other roll, and the count goes down by one. You can also reach it by right-clicking your token and choosing **Roll...**, where it sits under **Hit Dice**. If the roll doesn't go through (the connection dropped, or too many rolls at once), a message says why and the die is not spent.
 
 It rolls **one** die, not the whole pool — spending is one die at a time, and the rules let you decide whether to spend another after seeing each result. So click again if you want a second.
 
@@ -470,7 +482,7 @@ The DM controls when initiative advances — after your turn, they'll click **Ne
 
 ## The Vibe Tracker
 
-The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one.
+The **Vibe Tracker**, in the **Session** tab, shows the time of day your DM has set for the scene: dawn, day, dusk and night unless your DM has named their own. When it changes, the whole map shifts colour to match over a few seconds, and the header shows the current one. If your DM edits or removes the current period, your view follows at once.
 
 *Screenshot pending — Vibe tracker showing the current period.*
 
@@ -577,7 +589,7 @@ The **Appearance** section of your profile lets you pick the color theme and fon
 |--------|--------------|
 | Preparation | No session has been run yet — you can move your token |
 | 🟢 Live | Session is active — you can move your token |
-| 🟡 Paused | DM paused — token movement disabled, and your rolls stay in your own browser: the DM and other players don't see them |
+| 🟡 Paused | DM paused — token movement disabled, and your rolls from the Dice tab stay in your own browser: the DM and other players don't see them. Rolls from your sheet or a **Roll...** menu still reach the table |
 | ⚫ Inactive | The last session has ended — token movement disabled |
 
 The campaign card on the dashboard calls a **Live** campaign **Active**.
@@ -598,7 +610,7 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 **I can't move my token.** Check that the session isn't Paused or Inactive, and that the token is yours to move (your DM sets that in **Edit Token**).
 
-**CozyVTT won't open on my tablet or old computer.** It needs a browser from 2023 or later: Chrome or Edge 111, Firefox 114 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer. An older browser does not load the app, so update the browser or use another device.
+**CozyVTT won't open on my tablet or old computer.** It needs Chrome or Edge 111, Firefox 128 or Safari 16.4 (iPadOS 16.4 on an iPad), or newer: Chrome, Edge and Safari from 2023, Firefox from 2024. An older browser may not load the app, or may draw parts of it wrongly, so update the browser or use another device.
 
 **I lost connection.** CozyVTT reconnects by itself; **Retry** beside the connection indicator in the header tries at once. Your session state is saved on the server.
 

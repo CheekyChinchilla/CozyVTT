@@ -1,6 +1,10 @@
 import { test, expect, type Page } from '@playwright/test';
 import { ADMIN, PRODUCTION } from './instance';
 
+/** How far the page reaches past the screen's right edge. A phone widens its
+ * layout to whatever overflows, so the window's width would hide it. */
+const sidewaysOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - screen.width);
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/auth/login');
   await page.getByLabel('Email').fill(ADMIN.email);
@@ -36,6 +40,15 @@ test('creates a campaign and opens its table, with a live connection through the
   await expect(page.getByRole('heading', { name, level: 1 })).toBeVisible();
   const socket = await live;
   expect(socket.isClosed()).toBe(false);
+
+  // On a phone the table opens behind a notice; past it, the table fits the
+  // screen. The session rail's tab names (hidden text) once sat 200 pixels
+  // past the edge there, so the whole page scrolled sideways.
+  if (testInfo.project.name === 'phone') {
+    await page.getByRole('button', { name: 'Continue anyway' }).click();
+    await expect(page.getByRole('heading', { name: 'Desktop Required' })).toBeHidden();
+    expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
+  }
 });
 
 test('answers the API with JSON, and serves the page with its security headers', async ({ page }) => {
@@ -52,11 +65,9 @@ test('answers the API with JSON, and serves the page with its security headers',
 
 test('fits the sign-in page and the dashboard on a phone without sideways scrolling', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'phone', 'A phone-sized check.');
-  const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-
   await page.goto('/auth/login');
-  expect(await overflow()).toBeLessThanOrEqual(0);
+  expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
   await signIn(page);
   await expect(page.getByRole('heading', { name: 'Your Campaigns' })).toBeVisible();
-  expect(await overflow()).toBeLessThanOrEqual(0);
+  expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
 });

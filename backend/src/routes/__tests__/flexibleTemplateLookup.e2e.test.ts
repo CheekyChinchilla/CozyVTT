@@ -43,6 +43,18 @@ describe('GET /api/characters/templates/null/:templateName', () => {
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body.data.sections)).toBe(true);
   });
+
+  // Every character made from the Basic sheet used to get the same section and
+  // field ids, made once when the server started.
+  it('gives each Basic sheet ids of its own', async () => {
+    const ids = (body: { data: { sections: { id: string; fields?: { id: string }[] }[] } }) =>
+      body.data.sections.flatMap((s) => [s.id, ...(s.fields ?? []).map((f) => f.id)]);
+    const first = ids((await agent.get('/api/characters/templates/null/basic')).body);
+    const second = ids((await agent.get('/api/characters/templates/null/basic')).body);
+    expect(first.length).toBeGreaterThan(4);
+    expect(new Set(first).size).toBe(first.length);
+    expect(second.filter((id) => first.includes(id))).toEqual([]);
+  });
 });
 
 describe('GET /api/characters/templates/:gameSystem/:templateName', () => {

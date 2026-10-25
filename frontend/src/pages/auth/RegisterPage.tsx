@@ -13,7 +13,9 @@ import {
   getPasswordStrength,
 } from '@/utils/validation';
 import Button from '@/components/ui/Button';
+import PasswordStrengthIndicator from '@/components/PasswordStrengthIndicator';
 import { apiErrorMessage, apiErrorStatus, apiErrorText } from '@/utils/errors';
+import { DISPLAY_NAME_MIN_LENGTH, DISPLAY_NAME_MAX_LENGTH } from '@/constants/accountLimits';
 
 export default function RegisterPage() {
   const { register, authenticated } = useAuth();
@@ -57,14 +59,10 @@ export default function RegisterPage() {
     } = {};
 
     // Validate display name
-    if (!displayName) {
+    if (displayName.trim().length < DISPLAY_NAME_MIN_LENGTH) {
       errors.displayName = 'Display name is required';
-    } else if (displayName.length < 2) {
-      // TODO(accounts): the server accepts names of 1 to 50 characters
-      // (displayNameSchema), and Invite Player finds one-letter names; use its limits.
-      errors.displayName = 'Display name must be at least 2 characters';
-    } else if (displayName.length > 50) {
-      errors.displayName = 'Display name must be less than 50 characters';
+    } else if (displayName.trim().length > DISPLAY_NAME_MAX_LENGTH) {
+      errors.displayName = `Display name must be ${DISPLAY_NAME_MAX_LENGTH} characters or fewer`;
     }
 
     // Validate email
@@ -138,7 +136,7 @@ export default function RegisterPage() {
 
   if (pendingApproval) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
         <div className="glass-panel max-w-md w-full p-8 space-y-4 text-center">
           <div className="w-16 h-16 rounded-full bg-warning/10 flex items-center justify-center mx-auto">
             <span className="text-3xl">&#9203;</span>
@@ -147,7 +145,7 @@ export default function RegisterPage() {
           <p className="text-warm-gray text-sm">
             Your account has been created and is <strong>pending admin approval</strong>. You will be able to log in once an administrator approves your account.
           </p>
-          <Link to="/auth/login" className="btn-primary inline-block mt-4">
+          <Link to="/auth/login" className="btn-primary inline-block">
             Back to Login
           </Link>
         </div>
@@ -156,7 +154,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-soft-cream via-parchment to-warm-amber/20 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-linear-to-br/srgb from-soft-cream via-parchment to-warm-amber/20 px-4">
       <div className="glass-panel max-w-md w-full p-8 space-y-6">
         {/* Header */}
         <div className="text-center">
@@ -171,7 +169,7 @@ export default function RegisterPage() {
         {/* Error Alert */}
         {error && (
           <div role="alert" className="bg-spirit-red/10 border border-spirit-red/30 rounded-lg p-4">
-            <p className="text-sm text-spirit-red font-medium">{error}</p>
+            <p className="text-sm text-danger-ink font-medium">{error}</p>
           </div>
         )}
 
@@ -201,13 +199,13 @@ export default function RegisterPage() {
               }`}
               placeholder="Your name"
               disabled={loading}
-              maxLength={50}
+              maxLength={DISPLAY_NAME_MAX_LENGTH}
               aria-required="true"
               aria-invalid={!!fieldErrors.displayName}
               aria-describedby={fieldErrors.displayName ? 'displayName-error' : undefined}
             />
             {fieldErrors.displayName && (
-              <p id="displayName-error" role="alert" className="mt-1 text-xs text-spirit-red">
+              <p id="displayName-error" role="alert" className="mt-1 text-xs text-danger-ink">
                 {fieldErrors.displayName}
               </p>
             )}
@@ -240,7 +238,7 @@ export default function RegisterPage() {
               aria-describedby={fieldErrors.email ? 'reg-email-error' : undefined}
             />
             {fieldErrors.email && (
-              <p id="reg-email-error" role="alert" className="mt-1 text-xs text-spirit-red">{fieldErrors.email}</p>
+              <p id="reg-email-error" role="alert" className="mt-1 text-xs text-danger-ink">{fieldErrors.email}</p>
             )}
           </div>
 
@@ -276,44 +274,12 @@ export default function RegisterPage() {
               ].filter(Boolean).join(' ') || undefined}
             />
             {fieldErrors.password && (
-              <p id="reg-password-error" role="alert" className="mt-1 text-xs text-spirit-red">
+              <p id="reg-password-error" role="alert" className="mt-1 text-xs text-danger-ink">
                 {fieldErrors.password}
               </p>
             )}
 
-            {/* Password Strength Indicator */}
-            {password && passwordStrength && (
-              <div id="password-strength" className="mt-2" aria-live="polite">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-warm-gray">
-                    Password Strength:
-                  </span>
-                  <span
-                    className={`text-xs font-medium ${
-                      passwordStrength.color === 'green'
-                        ? 'text-success-ink'
-                        : passwordStrength.color === 'yellow'
-                        ? 'text-warning-ink'
-                        : 'text-danger-ink'
-                    }`}
-                  >
-                    {passwordStrength.label}
-                  </span>
-                </div>
-                <div className="w-full bg-warm-gray/20 rounded-full h-1.5">
-                  <div
-                    className={`h-1.5 rounded-full transition-all ${
-                      passwordStrength.color === 'green'
-                        ? 'bg-success'
-                        : passwordStrength.color === 'yellow'
-                        ? 'bg-warning'
-                        : 'bg-danger'
-                    }`}
-                    style={{ width: `${passwordStrength.percent}%` }}
-                  ></div>
-                </div>
-              </div>
-            )}
+            <PasswordStrengthIndicator id="password-strength" aria-live="polite" password={password} strength={passwordStrength} />
           </div>
 
           {/* Confirm Password Input */}
@@ -345,7 +311,7 @@ export default function RegisterPage() {
               disabled={loading}
             />
             {fieldErrors.confirmPassword && (
-              <p className="mt-1 text-xs text-spirit-red">
+              <p className="mt-1 text-xs text-danger-ink">
                 {fieldErrors.confirmPassword}
               </p>
             )}
@@ -355,7 +321,7 @@ export default function RegisterPage() {
           <Button
             type="submit"
             disabled={loading}
-            className="w-full mt-6"
+            className="w-full"
           >
             {loading ? (
               <span className="flex items-center justify-center">

@@ -9,13 +9,14 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { Character, CampaignMembership } from '@/types';
 import CharacterSheetViewerModal from '../CharacterSheetViewerModal';
 
-const emitDiceRoll = vi.fn();
+const rollDice = vi.fn().mockResolvedValue({ ok: true, id: 'r' });
 
+vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: () => undefined }) }));
 vi.mock('@/contexts/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'dm', platformRole: 'USER' } }),
 }));
 vi.mock('@/contexts/WebSocketContext', () => ({
-  useOptionalWebSocket: () => ({ socket: { emitDiceRoll, emitHitDiceSpend: vi.fn(), on: vi.fn(), off: vi.fn() } }),
+  useOptionalWebSocket: () => ({ socket: { rollDice, emitHitDiceSpend: vi.fn(), on: vi.fn(), off: vi.fn() } }),
 }));
 vi.mock('@/services/api', () => ({
   api: { getUser: vi.fn().mockResolvedValue({ user: { displayName: 'Owner' } }) },
@@ -33,14 +34,14 @@ const membership = { userId: 'dm', campaignId: 'camp-1', role: 'DM', characterId
 
 describe('CharacterSheetViewerModal rolls', () => {
   it('names the character when no public name is given', () => {
-    emitDiceRoll.mockClear();
+    rollDice.mockClear();
     render(<CharacterSheetViewerModal character={character} campaignId="camp-1" membership={membership} onClose={() => {}} />);
     fireEvent.click(screen.getByText('Stealth'));
-    expect(emitDiceRoll).toHaveBeenCalledWith(expect.objectContaining({ characterName: 'Shadow Assassin' }));
+    expect(rollDice).toHaveBeenCalledWith(expect.objectContaining({ characterName: 'Shadow Assassin' }));
   });
 
   it('files the roll under the public name it was opened with', () => {
-    emitDiceRoll.mockClear();
+    rollDice.mockClear();
     render(
       <CharacterSheetViewerModal
         character={character}
@@ -51,6 +52,6 @@ describe('CharacterSheetViewerModal rolls', () => {
       />
     );
     fireEvent.click(screen.getByText('Stealth'));
-    expect(emitDiceRoll).toHaveBeenCalledWith(expect.objectContaining({ characterName: 'Unknown creature' }));
+    expect(rollDice).toHaveBeenCalledWith(expect.objectContaining({ characterName: 'Unknown creature' }));
   });
 });

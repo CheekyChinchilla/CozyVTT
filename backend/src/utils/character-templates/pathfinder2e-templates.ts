@@ -35,11 +35,12 @@ export const pf2eBlankTemplate: CharacterTemplate = {
       wisdom: { score: 10, modifier: 0 },
       charisma: { score: 10, modifier: 0 },
     },
+    // A Human (8) Fighter (10) with Constitution +0.
     hp: {
-      maximum: 10,
-      ancestryHp: 0,
-      classHpPerLevel: 0,
-      current: 10,
+      maximum: 18,
+      ancestryHp: 8,
+      classHpPerLevel: 10,
+      current: 18,
       temporary: 0,
       resistances: [],
       immunities: [],
@@ -172,10 +173,10 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       charisma: { score: 8, modifier: -1 },
     },
     hp: {
-      maximum: 21,
+      maximum: 22,
       ancestryHp: 10,
       classHpPerLevel: 10,
-      current: 21,
+      current: 22,
       temporary: 0,
       resistances: [],
       immunities: [],
@@ -214,7 +215,10 @@ export const pf2eFighterTemplate: CharacterTemplate = {
     strikes: [
       {
         name: 'Warhammer',
-        attackBonus: 7,
+        attackBonus: 8,
+        attributeModifier: 'strength',
+        proficiencyRank: 'expert',
+        itemBonus: 0,
         damageRoll: '1d8+3',
         damageType: 'bludgeoning',
         traits: ['Dwarf', 'Shove'],
@@ -223,7 +227,10 @@ export const pf2eFighterTemplate: CharacterTemplate = {
       },
       {
         name: 'Crossbow',
-        attackBonus: 5,
+        attackBonus: 6,
+        attributeModifier: 'dexterity',
+        proficiencyRank: 'expert',
+        itemBonus: 0,
         damageRoll: '1d8',
         damageType: 'piercing',
         traits: ['Range 120ft', 'Reload 1'],
@@ -347,10 +354,13 @@ export const pf2eFighterTemplate: CharacterTemplate = {
         notes: 'Contains adventuring gear',
       },
     ],
+    // Strength +3: encumbered above 8, at most 13. The two light items count
+    // as no Bulk until there are ten, and 5 gp as none until there are 1,000
+    // coins.
     bulk: {
-      current: 5.3,
-      encumbered: 10,
-      maximum: 15,
+      current: 5,
+      encumbered: 8,
+      maximum: 13,
     },
     currency: {
       cp: 0,

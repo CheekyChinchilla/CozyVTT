@@ -153,17 +153,3 @@ export function readJSONFile(file: File): Promise<unknown> {
     reader.readAsText(file);
   });
 }
-
-/**
- * Export multiple characters as a ZIP archive
- * (This will require a ZIP library like JSZip)
- */
-export async function downloadMultipleCharactersZIP(characters: Character[]): Promise<void> {
-  // For now, download each character individually
-  // TODO: Implement ZIP archive download using JSZip library
-  for (const character of characters) {
-    downloadCharacterJSON(character);
-    // Add small delay to prevent browser from blocking multiple downloads
-    await new Promise(resolve => setTimeout(resolve, 300));
-  }
-}

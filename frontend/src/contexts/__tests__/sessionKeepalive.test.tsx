@@ -32,7 +32,6 @@ vi.mock('@/services/socket', () => ({
     getSocket: () => fakeSocket,
     on: vi.fn(),
     off: vi.fn(),
-    startHeartbeat: () => () => {},
   },
 }));
 

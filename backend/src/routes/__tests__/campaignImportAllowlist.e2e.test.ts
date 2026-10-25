@@ -18,9 +18,10 @@ import path from 'path';
 const SCRATCH = fs.mkdtempSync(path.join(os.tmpdir(), 'cozyvtt-import-allowlist-'));
 process.env.UPLOAD_DIR = path.join(SCRATCH, 'uploads');
 
-// The fixtures here are a format's first bytes and no more. The real
-// file-type does not identify the PNG one, and takes the Ogg one for an Ogg
-// file that is not sound, so this answers as it does for whole files.
+// The fixtures here are a format's first bytes and no more, apart from the
+// PNG, which is whole because a picture's size is read before it is kept.
+// The real file-type takes the Ogg one for an Ogg file that is not sound, so
+// this answers as it does for whole files.
 jest.mock('file-type', () => {
   const sniff = (head: Buffer) => {
     if (head.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex'))) return { ext: 'png', mime: 'image/png' };
@@ -47,7 +48,10 @@ import { writeZip } from '../../__tests__/helpers/zipFixtures';
 const app = createTestApp();
 
 const BYTES = {
-  png: Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), Buffer.alloc(64)]),
+  png: Buffer.from(
+    '89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c63000100000500010d0a2db40000000049454e44ae426082',
+    'hex'
+  ),
   exe: Buffer.concat([Buffer.from('MZ', 'latin1'), Buffer.alloc(64)]),
   tiff: Buffer.concat([Buffer.from('49492a00', 'hex'), Buffer.alloc(64)]),
   pdf: Buffer.from('%PDF-1.7\n%%EOF\n', 'latin1'),
@@ -149,5 +153,20 @@ describe('an imported asset', () => {
   ])('is accepted when it is %s, as an upload would be', async (_label, asset, mime) => {
     const [stored] = await importOne(asset);
     expect(stored?.mimeType).toBe(mime);
+  });
+});
+
+// The archive may give a name of up to 500 characters, and the import stored
+// it as it was: a name past the 200 an upload allows, and an original name
+// past the 255 a download name can be on most file systems. It is cut as an
+// upload's is, keeping the extension.
+describe('an imported asset with a very long name', () => {
+  it('is stored with its names cut to an upload\'s limits', async () => {
+    const long = `${'A very long map name '.repeat(20)}.png`;
+    const [stored] = await importOne({ type: 'MAP', mimeType: 'image/png', originalName: long, bytes: BYTES.png });
+    expect(stored.originalName.length).toBeLessThanOrEqual(255);
+    expect(stored.originalName).toMatch(/\.png$/);
+    expect(stored.name.length).toBeLessThanOrEqual(200);
+    expect(stored.name.startsWith('A very long map name')).toBe(true);
   });
 });

@@ -14,6 +14,8 @@
  * - Malicious files: every asset must be a MAP, TOKEN or AUDIO file whose
  *   bytes are a format the upload route allows for that type, and is stored
  *   under the format and extension its bytes show
+ * - Pictures that unpack to gigabytes in a browser: a map or token picture
+ *   over the picture limits (utils/pictureLimits.ts) is left out
  * - JSON injection: size limits, Zod schema validation, and a limit on how
  *   deeply a data file nests (IMPORT_LIMITS.MAX_JSON_DEPTH), checked on its
  *   text before it is parsed
@@ -28,6 +30,9 @@
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import path from 'path';
+import { shortenFileName, MAX_ORIGINAL_NAME_LENGTH } from '../validators/assets';
+import { ASSET_LIMITS } from '../validators/assetLimits';
+import { cutText } from '../utils/cutText';
 import fs from 'fs';
 import type { File as ArchiveEntry } from 'unzipper';
 import { Prisma } from '@prisma/client';
@@ -63,13 +68,15 @@ import {
   ArchiveRefusedError,
   UnpackedTotal,
 } from '../utils/archive';
-import { getFileSizeLimit, getTempDirectory, isAllowedMimeType, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS } from '../utils/fileUtils';
+import { getFileSizeLimit, getTempDirectory, isAcceptedContent, isAllowedExtension, storedFileType, ALLOWED_EXTENSIONS, uploadsDirectorySetting } from '../utils/fileUtils';
 import { errorMessage } from '../utils/errors';
 import { startsWithMp3Header } from '../middleware/fileValidation';
+import { isPictureAssetType, pictureLimitProblem } from '../utils/pictureLimits';
 import { getCampaignArchiveSizeLimit, megabytes } from '../utils/campaignArchiveSize';
 import logger from '../utils/logger';
 
-const UPLOADS_BASE = process.env.UPLOAD_DIR || 'uploads';
+// Unresolved: the paths built from it are stored (utils/fileUtils.ts).
+const UPLOADS_BASE = uploadsDirectorySetting();
 
 type ImportableAssetType = (typeof IMPORTABLE_ASSET_TYPES)[number];
 
@@ -146,7 +153,7 @@ export interface ImportResult {
  * Unpack one of the archive's data files and parse it, within the data-file
  * limit and the archive's running total.
  */
-async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
+async function readEntryText(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<string> {
   let bytes: Buffer;
   try {
     bytes = await readArchiveEntry(archivePath, entry, { maxEntryBytes: IMPORT_LIMITS.MAX_JSON_SIZE_BYTES, total });
@@ -158,11 +165,22 @@ async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: Un
   // later, the validation or the database's own encoder, then meets more
   // levels than an export ever writes.
   if (jsonNestsDeeperThan(text, IMPORT_LIMITS.MAX_JSON_DEPTH)) throw new NestedTooDeepError(entry.path);
+  return text;
+}
+
+function parseEntryText(text: string, entry: ArchiveEntry): unknown {
   try {
     return JSON.parse(text);
   } catch {
     throw new ArchiveRefusedError(`${entry.path} in the archive is damaged: it is not readable data.`);
   }
+}
+
+/** Why a map holding more values than an export ever writes is left out. */
+const TOO_MANY_VALUES_REASON = `It holds more than ${IMPORT_LIMITS.MAX_MAP_VALUES.toLocaleString('en-US')} values, far more than CozyVTT ever writes for one map.`;
+
+async function readJsonEntry(archivePath: string, entry: ArchiveEntry, total: UnpackedTotal): Promise<unknown> {
+  return parseEntryText(await readEntryText(archivePath, entry, total), entry);
 }
 
 /** Why an item whose data nests too deeply is left out. */
@@ -207,8 +225,78 @@ export function jsonNestsDeeperThan(text: string, max: number): boolean {
 }
 
 /**
+ * Whether JSON text holds more than `max` values and members, read without
+ * parsing it: each comma outside a string separates two, so the count stops
+ * as soon as it passes `max`.
+ */
+export function jsonHoldsMoreValuesThan(text: string, max: number): boolean {
+  let separators = 0;
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // a backslash escapes the next character
+      else if (c === 0x22) inString = false;
+    } else if (c === 0x22) {
+      inString = true;
+    } else if (c === 0x2c && ++separators >= max) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * How many items JSON text's top-level list holds, and where the `max`th one
+ * ends (the comma after it), when there are more; null when the text is not a
+ * list. Read without parsing, as jsonNestsDeeperThan reads: a list of tens of
+ * thousands of items costs far more parsed than its text.
+ */
+export function jsonListCut(text: string, max: number): { items: number; cutAt: number | null } | null {
+  let i = 0;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (text.charCodeAt(i) !== 0x5b) return null;
+  let depth = 0;
+  let inString = false;
+  let items = 0;
+  let holdsValue = false;
+  let cutAt: number | null = null;
+  for (; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inString) {
+      if (c === 0x5c) i++; // a backslash escapes the next character
+      else if (c === 0x22) inString = false;
+      continue;
+    }
+    if (c === 0x22) {
+      inString = true;
+      holdsValue = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      depth++;
+      if (depth > 1) holdsValue = true;
+    } else if (c === 0x7d || c === 0x5d) {
+      depth--;
+      if (depth === 0) {
+        if (holdsValue) items++;
+        break;
+      }
+    } else if (depth === 1) {
+      if (c === 0x2c) {
+        items++;
+        holdsValue = false;
+        if (items === max && cutAt === null) cutAt = i;
+      } else if (c !== 0x20 && c !== 0x0a && c !== 0x0d && c !== 0x09) {
+        holdsValue = true;
+      }
+    }
+  }
+  return { items, cutAt: items > max ? cutAt : null };
+}
+
+/**
  * Read the archive's creatures or templates, or nothing, listed as left
- * out, when the file nests deeper than an export ever writes.
+ * out, when the file nests deeper than an export ever writes. Only the first
+ * `max` items are parsed; the rest are listed as left out.
  */
 async function readListEntry(
   archivePath: string,
@@ -216,15 +304,26 @@ async function readListEntry(
   total: UnpackedTotal,
   kind: SkippedKind,
   what: string,
-  report: ImportReport
+  report: ImportReport,
+  limit: { max: number; one: string; many: string }
 ): Promise<unknown> {
+  let text: string;
   try {
-    return await readJsonEntry(archivePath, entry, total);
+    text = await readEntryText(archivePath, entry, total);
   } catch (error) {
     if (!(error instanceof NestedTooDeepError)) throw error;
     report.skip(kind, `${what} in the archive`, NESTED_TOO_DEEP_REASON);
     return [];
   }
+  const cut = jsonListCut(text, limit.max);
+  if (cut?.cutAt == null) return parseEntryText(text, entry);
+  const over = cut.items - limit.max;
+  report.skip(
+    kind,
+    `${over.toLocaleString('en-US')} ${over === 1 ? limit.one : limit.many}`,
+    `An archive can carry ${limit.max.toLocaleString('en-US')} ${limit.many}. These were the last in its list.`
+  );
+  return parseEntryText(`${text.slice(0, cut.cutAt)}]`, entry);
 }
 
 /** Say in words which limit an archive passed, or pass any other error on. */
@@ -262,9 +361,10 @@ async function checkArchiveSize(archivePath: string, maxSize: number): Promise<v
 /**
  * What an imported asset file is, by its bytes, when that is a format the
  * upload route accepts for its type; null otherwise. The same rule as an
- * upload (middleware/fileValidation.ts): the detected type must be on the
- * type's allowlist, and an MP3 the detector does not know is accepted on its
- * header when its name says it is one.
+ * upload (middleware/fileValidation.ts): the detected type, and the extension
+ * it is stored under, must be ones the type allows (isAcceptedContent), and
+ * an MP3 the detector does not know is accepted on its header when its name
+ * says it is one.
  */
 async function identifyAsset(
   filePath: string,
@@ -274,7 +374,7 @@ async function identifyAsset(
   const found = await fileTypeFromFile(filePath);
   if (found) {
     const detected = storedFileType(found);
-    return isAllowedMimeType(type, detected.mime) ? detected : null;
+    return isAcceptedContent(type, detected) ? detected : null;
   }
   const named = path.extname(originalName).toLowerCase();
   if (type === 'AUDIO' && named === '.mp3' && (await startsWithMp3Header(filePath))) return { mime: 'audio/mpeg', ext: 'mp3' };
@@ -288,9 +388,42 @@ async function identifyAsset(
  * `rules.png`.
  */
 function displayName(originalName: string, type: ImportableAssetType, ext: string): string {
-  if (isAllowedExtension(type, path.extname(originalName))) return originalName;
+  // Cut to what an upload keeps, extension kept: the archive allows longer.
+  if (isAllowedExtension(type, path.extname(originalName))) return shortenFileName(originalName, MAX_ORIGINAL_NAME_LENGTH);
   const base = originalName.replace(/\.[^.]*$/, '') || 'asset';
-  return `${base}.${ext}`;
+  return shortenFileName(`${base}.${ext}`, MAX_ORIGINAL_NAME_LENGTH);
+}
+
+/** Rows written to the database in one statement, so a long list is never held as one. */
+const WRITE_BATCH = 500;
+
+/**
+ * Prepare each item and write the rows in batches, returning how many were
+ * written. Written whole, a list as long as its 10 MB file allows (some
+ * 65,000 creatures) took the heap to about a gigabyte in one createMany and
+ * stopped the server.
+ */
+export async function inBatches<Row>(
+  items: unknown[],
+  prepare: (item: unknown) => Row | null,
+  write: (rows: Row[]) => Promise<unknown>
+): Promise<number> {
+  let written = 0;
+  let batch: Row[] = [];
+  for (const item of items) {
+    const row = prepare(item);
+    if (row) batch.push(row);
+    if (batch.length === WRITE_BATCH) {
+      await write(batch);
+      written += batch.length;
+      batch = [];
+    }
+  }
+  if (batch.length > 0) {
+    await write(batch);
+    written += batch.length;
+  }
+  return written;
 }
 
 // ── Preview ───────────────────────────────────────────────────────
@@ -431,7 +564,8 @@ function folderFor(type: ImportableAssetType): StagedAsset['typeDir'] {
 /**
  * Unpack every asset the manifest lists into `staging`, identify each by its
  * bytes, and name it after what it is. An asset that is missing, over its
- * type's upload limit, or not a format its type allows is left out.
+ * type's upload limit, not a format its type allows, or a picture over the
+ * picture limits (utils/pictureLimits.ts) is left out.
  */
 async function stageAssets(
   archivePath: string,
@@ -496,6 +630,13 @@ async function stageAssets(
         label(assetInfo.originalName, oldId),
         `Its content is not a format ${ASSET_KIND_WORDS[assetInfo.type]} can be (${ALLOWED_EXTENSIONS[assetInfo.type].join(', ')}).`
       );
+      await fs.promises.rm(unpackedPath, { force: true });
+      continue;
+    }
+    // A picture is held to the limits an upload of its kind is.
+    const tooLarge = isPictureAssetType(assetInfo.type) ? await pictureLimitProblem(unpackedPath, assetInfo.type) : null;
+    if (tooLarge) {
+      report.skip('asset', label(assetInfo.originalName, oldId), tooLarge);
       await fs.promises.rm(unpackedPath, { force: true });
       continue;
     }
@@ -688,7 +829,7 @@ export async function importCampaign(
                 mimeType: a.mimeType,
                 fileSize: a.fileSize,
                 filePath: a.finalPath.replace(/\\/g, '/'),
-                name: a.originalName.replace(/\.[^.]+$/, ''),
+                name: cutText(a.originalName.replace(/\.[^.]+$/, ''), ASSET_LIMITS.maxNameLength),
                 createdAt: new Date(importedAt + i),
               })),
             });
@@ -707,7 +848,14 @@ export async function importCampaign(
             }
             let mapRaw: unknown;
             try {
-              mapRaw = await readJsonEntry(archivePath, mapEntry, total);
+              // Counted on the text first: 10 MB of tiny walls costs several
+              // times what the largest real map does to parse.
+              const mapText = await readEntryText(archivePath, mapEntry, total);
+              if (jsonHoldsMoreValuesThan(mapText, IMPORT_LIMITS.MAX_MAP_VALUES)) {
+                report.skip('map', `Map ${i + 1}`, TOO_MANY_VALUES_REASON);
+                continue;
+              }
+              mapRaw = parseEntryText(mapText, mapEntry);
             } catch (error) {
               if (!(error instanceof NestedTooDeepError)) throw error;
               report.skip('map', `Map ${i + 1}`, NESTED_TOO_DEEP_REASON);
@@ -733,22 +881,13 @@ export async function importCampaign(
           let creatureCount = 0;
           const creaturesEntry = directory.files.find((f) => f.path === 'creatures/creatures.json');
           if (creaturesEntry) {
-            const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report);
+            const creaturesRaw = await readListEntry(archivePath, creaturesEntry, total, 'creature', 'Creatures', report,
+              { max: IMPORT_LIMITS.MAX_CREATURES, one: 'creature', many: 'creatures' });
             if (Array.isArray(creaturesRaw)) {
-              const creatures: Prisma.CreatureTemplateCreateManyInput[] = [];
-              if (creaturesRaw.length > IMPORT_LIMITS.MAX_CREATURES) {
-                report.skip(
-                  'creature',
-                  `${(creaturesRaw.length - IMPORT_LIMITS.MAX_CREATURES).toLocaleString('en-US')} creatures`,
-                  `An archive can carry ${IMPORT_LIMITS.MAX_CREATURES} creatures. These were the last in its list.`
-                );
-              }
-              for (const raw of creaturesRaw.slice(0, IMPORT_LIMITS.MAX_CREATURES)) {
+              creatureCount = await inBatches(creaturesRaw, (raw) => {
                 const row = prepareCreature(raw, { remapAsset, report });
-                if (row) creatures.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
-              }
-              if (creatures.length > 0) await tx.creatureTemplate.createMany({ data: creatures });
-              creatureCount = creatures.length;
+                return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
+              }, (data: Prisma.CreatureTemplateCreateManyInput[]) => tx.creatureTemplate.createMany({ data }));
             }
           }
 
@@ -756,22 +895,13 @@ export async function importCampaign(
           let tokenTemplateCount = 0;
           const templatesEntry = directory.files.find((f) => f.path === 'token-templates/templates.json');
           if (templatesEntry) {
-            const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report);
+            const templatesRaw = await readListEntry(archivePath, templatesEntry, total, 'tokenTemplate', 'Token templates', report,
+              { max: IMPORT_LIMITS.MAX_TOKEN_TEMPLATES, one: 'token template', many: 'token templates' });
             if (Array.isArray(templatesRaw)) {
-              const templates: Prisma.TokenTemplateCreateManyInput[] = [];
-              if (templatesRaw.length > IMPORT_LIMITS.MAX_TOKEN_TEMPLATES) {
-                report.skip(
-                  'tokenTemplate',
-                  `${(templatesRaw.length - IMPORT_LIMITS.MAX_TOKEN_TEMPLATES).toLocaleString('en-US')} token templates`,
-                  `An archive can carry ${IMPORT_LIMITS.MAX_TOKEN_TEMPLATES} token templates. These were the last in its list.`
-                );
-              }
-              for (const raw of templatesRaw.slice(0, IMPORT_LIMITS.MAX_TOKEN_TEMPLATES)) {
+              tokenTemplateCount = await inBatches(templatesRaw, (raw) => {
                 const row = prepareTokenTemplate(raw, { remapAsset, report });
-                if (row) templates.push({ ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId });
-              }
-              if (templates.length > 0) await tx.tokenTemplate.createMany({ data: templates });
-              tokenTemplateCount = templates.length;
+                return row ? { ...row, id: randomUUID(), createdById: importingUserId, campaignId: newCampaignId } : null;
+              }, (data: Prisma.TokenTemplateCreateManyInput[]) => tx.tokenTemplate.createMany({ data }));
             }
           }
 

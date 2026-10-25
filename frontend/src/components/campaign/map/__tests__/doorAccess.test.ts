@@ -35,6 +35,24 @@ describe('offeredDoorAt', () => {
     expect(asked).toEqual([[125, 100]]);
   });
 
+  // Under manual fog a door wholly under fog was the player's to open, and the
+  // answer told them it was there. The door's middle is (125, 100): the
+  // squares beside it are cells 22 and 42 on a 20-wide grid of 50 px squares.
+  describe('under manual fog', () => {
+    const grid = { fogCols: 20, fogRows: 20, cellPx: 50 };
+
+    it('offers a player a door beside a revealed square, and not one wholly under fog', () => {
+      const player = (revealed: number[]) => ({ role: 'PLAYER', lightingEnabled: false, canSee: seesAll, fog: { grid, isRevealed: (cell: number) => revealed.includes(cell) } });
+      expect(offeredDoorAt(walls, 125, 102, 12, player([42]))).toBe(door);
+      expect(offeredDoorAt(walls, 125, 102, 12, player([22]))).toBe(door);
+      expect(offeredDoorAt(walls, 125, 102, 12, player([0, 41, 43]))).toBeUndefined();
+    });
+
+    it('offers the DM every door', () => {
+      expect(offeredDoorAt(walls, 125, 102, 12, { role: 'DM', lightingEnabled: false, canSee: seesAll, fog: { grid, isRevealed: () => false } })).toBe(door);
+    });
+  });
+
   it('offers a player any door on a map without dynamic lighting', () => {
     expect(offeredDoorAt(walls, 125, 102, 12, { role: 'PLAYER', lightingEnabled: false, canSee: seesNothing })).toBe(door);
   });

@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import {
   ABILITY_KEYS,
+  carryingCapacity,
   DND5E_SKILLS,
   abilityModifier,
   decomposeBonus,
@@ -249,6 +250,20 @@ describe('skills of the player\'s own', () => {
   });
 });
 
+// Basic Rules, "Lifting and Carrying": Strength times 15, and twice that to
+// push, drag or lift.
+describe('carryingCapacity', () => {
+  it('is fifteen pounds a point of Strength, and twice that to push, drag or lift', () => {
+    expect(carryingCapacity(10)).toEqual({ carry: 150, pushDragLift: 300 });
+    expect(carryingCapacity(18)).toEqual({ carry: 270, pushDragLift: 540 });
+  });
+
+  it('is nothing for a score that is not a number or below 0', () => {
+    expect(carryingCapacity(Number.NaN)).toEqual({ carry: 0, pushDragLift: 0 });
+    expect(carryingCapacity(-3)).toEqual({ carry: 0, pushDragLift: 0 });
+  });
+});
+
 describe('parity with the frontend copy', () => {
   // No shared package exists between the two projects, so this module is
   // duplicated. Drift would mean the editor derives one number while the server
@@ -271,6 +286,18 @@ describe('parity with the frontend copy', () => {
     const backendCopy = readFileSync(path.resolve(__dirname, '../pathfinder2e.ts'), 'utf8');
     const frontendCopy = readFileSync(
       path.resolve(__dirname, '../../../../../frontend/src/utils/rules/pathfinder2e.ts'),
+      'utf8'
+    );
+
+    expect(backendCopy).toBe(frontendCopy);
+  });
+
+  // The Call of Cthulhu derived attributes, which the sheets work out and the
+  // template checks hold the built-in investigators to.
+  it('rules/callOfCthulhu7e.ts is byte-for-byte identical to the frontend copy', () => {
+    const backendCopy = readFileSync(path.resolve(__dirname, '../callOfCthulhu7e.ts'), 'utf8');
+    const frontendCopy = readFileSync(
+      path.resolve(__dirname, '../../../../../frontend/src/utils/rules/callOfCthulhu7e.ts'),
       'utf8'
     );
 

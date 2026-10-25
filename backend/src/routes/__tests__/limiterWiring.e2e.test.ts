@@ -44,9 +44,8 @@ import {
   accountCreationLimiter,
   mfaSetupLimiter,
   mfaLoginLimiter,
-  mfaAccountLimiter,
 } from '../auth';
-import { passwordCheckLimiter, accountLoginLimiter } from '../../middleware/authLimiters';
+import { passwordCheckLimiter, accountLoginLimiter, mfaAccountLimiter } from '../../middleware/authLimiters';
 import { uploadLimiter } from '../assets';
 import {
   campaignPreviewLimiter,

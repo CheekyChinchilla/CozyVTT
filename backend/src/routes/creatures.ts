@@ -15,10 +15,12 @@ import { seedSrdCreatures, getSrdSeedStatus, SeedSourceError } from '../services
 import { normalizeAssetUrl } from '../utils/asset-urls';
 import { canReferenceAsset } from '../services/permissions';
 import { CreateCreatureSchema, UpdateCreatureSchema } from '../validators/creatures';
+import { issueMessages } from '../validators/issueMessages';
 import { toJson } from '../utils/prisma-json';
-import { readEnumQuery } from '../utils/queryEnum';
+import { readEnumQuery, readStringQueries } from '../utils/queryEnum';
 import { GameSystem } from '../game-systems';
 import logger from '../utils/logger';
+import { escapeLikePattern } from '../utils/likePattern';
 
 const router = Router({ mergeParams: true });
 
@@ -114,18 +116,19 @@ router.post('/seed', requireAuth, adminToSeed, async (_req: AuthenticatedRequest
 router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { campaignId } = req.params;
-    // TODO(assets): a `search`, `source` or `cr` sent twice arrives as an array,
-    // which the casts below hand to Prisma, so the list answers 500. Refuse a
-    // repeated parameter with 400, as invitable-users does.
-    const { search, source, cr, limit = '50', offset = '0' } = req.query;
+    const text = readStringQueries(req.query, ['search', 'source', 'cr', 'limit', 'offset'] as const);
+    if (!text.ok) {
+      return res.status(400).json({ error: 'Validation Error', message: text.message });
+    }
+    const { search, source, cr, limit = '50', offset = '0' } = text.values;
     const system = readEnumQuery(req.query.gameSystem, 'gameSystem', Object.values(GameSystem));
     if (!system.ok) {
       return res.status(400).json({ error: 'Validation Error', message: system.message });
     }
     const gameSystem = system.value;
 
-    const take = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
-    const skip = Math.max(0, parseInt(offset as string, 10) || 0);
+    const take = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = Math.max(0, parseInt(offset, 10) || 0);
 
     // Two independent scopes, so they are ANDed rather than sharing one OR:
     //  - visibility: global creatures (campaignId null) plus this campaign's own
@@ -144,14 +147,14 @@ router.get('/', campaignDM, async (req: AuthenticatedRequest, res: Response) => 
     const where: Prisma.CreatureTemplateWhereInput = { AND: scopes };
 
     if (search) {
-      // TODO(ui): `search` reaches PostgreSQL as an unescaped LIKE pattern, so a % or _ in it matches any text; pass it through escapeLikePattern (utils/likePattern) so it matches only itself.
-      where.name = { contains: search as string, mode: 'insensitive' };
+      // Matched as typed: a % or _ in it is not a wildcard.
+      where.name = { contains: escapeLikePattern(search), mode: 'insensitive' };
     }
     if (source) {
-      where.source = source as string;
+      where.source = source;
     }
     if (cr) {
-      where.challengeRating = cr as string;
+      where.challengeRating = cr;
     }
 
     const [templates, total] = await Promise.all([
@@ -232,7 +235,7 @@ router.post('/', campaignDM, async (req: AuthenticatedRequest, res: Response) =>
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
     const data = parsed.data;
@@ -284,7 +287,7 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
     if (!parsed.success) {
       return res.status(400).json({
         error: 'Validation Error',
-        message: parsed.error.issues.map((i) => i.message).join('; '),
+        message: issueMessages(parsed.error),
       });
     }
     const data = parsed.data;
@@ -293,7 +296,9 @@ router.put('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res: Re
       where: { id: creatureId },
     });
 
-    if (!existing) {
+    // Another campaign's creature answers as one that is not there, as the
+    // GET does.
+    if (!existing || !isVisibleFromCampaign(existing, campaignId)) {
       return res.status(404).json({ error: 'Not Found', message: 'Creature template not found' });
     }
 
@@ -353,7 +358,7 @@ router.delete('/:creatureId', campaignDM, async (req: AuthenticatedRequest, res:
       where: { id: creatureId },
     });
 
-    if (!existing) {
+    if (!existing || !isVisibleFromCampaign(existing, campaignId)) {
       return res.status(404).json({ error: 'Not Found', message: 'Creature template not found' });
     }
 
@@ -473,22 +478,18 @@ router.post('/:creatureId/favorite', campaignDM, async (req: AuthenticatedReques
       },
     });
 
+    // Each write leaves the state it means whatever another click did between
+    // the read and here: a second remove finds nothing, a second add finds
+    // the favourite already there. Both answered 500.
     if (existing) {
-      // Unfavorite
-      await prisma.creatureFavorite.delete({ where: { id: existing.id } });
+      await prisma.creatureFavorite.deleteMany({ where: { campaignId, userId, creatureId } });
       return res.json({ favorited: false });
-    } else {
-      // Favorite
-      await prisma.creatureFavorite.create({
-        data: {
-          id: randomUUID(),
-          campaignId,
-          userId,
-          creatureId,
-        },
-      });
-      return res.json({ favorited: true });
     }
+    await prisma.creatureFavorite.createMany({
+      data: [{ id: randomUUID(), campaignId, userId, creatureId }],
+      skipDuplicates: true,
+    });
+    return res.json({ favorited: true });
   } catch (error) {
     logger.error('Error toggling creature favorite:', error);
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to toggle favorite' });

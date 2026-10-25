@@ -191,7 +191,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // refresh branding, but not stomp the user's chosen palette).
   const userOverlayRef = useRef<UserPreferences | null>(null);
 
-  const refreshAppearance = useCallback(async () => {
+  /** Fetch and apply the system appearance; true when the server answered. */
+  const loadAppearance = useCallback(async (): Promise<boolean> => {
     try {
       const data = await api.getAppearance();
       setAppearance(data);
@@ -207,14 +208,35 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (!userOverlayRef.current) {
         applySystemAppearance(data);
       }
+      return true;
     } catch {
       // Defaults already applied via CSS — public pages remain usable offline.
+      return false;
     }
   }, []);
 
+  const refreshAppearance = useCallback(async () => {
+    await loadAppearance();
+  }, [loadAppearance]);
+
+  // A page loaded while the server is restarting gets no answer: ask again,
+  // at 5 seconds and then less often, up to every minute, until it answers,
+  // so the instance's name and branding arrive without a reload.
   useEffect(() => {
-    refreshAppearance();
-  }, [refreshAppearance]);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let delay = 5_000;
+    const load = async () => {
+      if ((await loadAppearance()) || cancelled) return;
+      timer = setTimeout(load, delay);
+      delay = Math.min(delay * 2, 60_000);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [loadAppearance]);
 
   const applyUserPreferences = useCallback(
     (prefs: UserPreferences | null) => {

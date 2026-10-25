@@ -79,7 +79,9 @@ describe('errorSummary', () => {
   });
 
   it('falls back to the error\'s own message', () => {
-    expect(errorSummary(new Error('Network Error'))).toBe('Network Error');
+    // A request that got no answer: the API client's error carries the
+    // request, so only the message is logged.
+    expect(errorSummary(Object.assign(new Error('Network Error'), { config: {}, request: {} }))).toBe('Network Error');
     expect(errorSummary('something odd')).toBe('Unknown error');
   });
 });

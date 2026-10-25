@@ -10,9 +10,11 @@ import logger from '../utils/logger';
 /**
  * Query parameters a Prisma database address may carry that the pg driver
  * does not understand. `schema` and `connection_limit` are translated below;
- * the rest only tuned Prisma's own connection engine, which is gone.
+ * the rest only tuned Prisma's own connection engine, which is gone. libpq,
+ * which pg_dump and psql connect with, refuses every one of them, so a backup
+ * or restore leaves them out too (utils/pgRestore.ts).
  */
-const PRISMA_ONLY_PARAMETERS = [
+export const PRISMA_ONLY_PARAMETERS: readonly string[] = [
   'schema',
   'connection_limit',
   'pool_timeout',
@@ -84,9 +86,25 @@ export function databaseConnectionSettings(url: string): DatabaseConnectionSetti
  * touch the database still load.
  */
 class MissingDatabaseUrl extends PrismaPg {
-  async connect(): Promise<never> {
+  override async connect(): Promise<never> {
     throw new Error('DATABASE_URL is not set, so there is no database to connect to.');
   }
+}
+
+/**
+ * PostgreSQL refusing a transaction for overlapping another, as Prisma
+ * reports it: 40001 (a serialization failure) or 40P01 (a deadlock) from a
+ * raw statement, and P2034's message from a query Prisma built.
+ */
+const CONFLICT_REPORT = /Code: `40001`|Code: `40P01`|Transaction failed due to a write conflict or a deadlock/;
+
+/**
+ * The level Prisma's error report `message` is logged at. A conflict is run
+ * again by utils/serializable.ts, which logs if the runs are used up, so each
+ * one is debug; anything else is an error.
+ */
+export function prismaErrorLevel(message: string): 'error' | 'debug' {
+  return CONFLICT_REPORT.test(message) ? 'debug' : 'error';
 }
 
 /**
@@ -123,7 +141,7 @@ export function createPrismaClient(url: string | undefined = process.env.DATABAS
       { emit: 'event', level: 'warn' },
     ],
   });
-  client.$on('error', (e) => logger.error('Database error', { target: e.target, detail: e.message }));
+  client.$on('error', (e) => logger.log(prismaErrorLevel(e.message), 'Database error', { target: e.target, detail: e.message }));
   client.$on('warn', (e) => logger.warn('Database warning', { target: e.target, detail: e.message }));
   return client;
 }

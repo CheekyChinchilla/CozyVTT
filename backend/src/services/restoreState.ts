@@ -11,6 +11,7 @@
  * wait behind the load and write its change over the restored rows.
  *
  * Kept in memory: a backend stopped mid-restore starts with none running.
+ * A shutdown lets a running restore end first (utils/shutdown.ts).
  */
 
 import crypto from 'crypto';
@@ -21,6 +22,7 @@ import logger from '../utils/logger';
 type RestorePhase = 'none' | 'preparing' | 'replacing';
 
 let phase: RestorePhase = 'none';
+let waiting: (() => void)[] = [];
 
 /** What a refused request or connection is told while the database is replaced. */
 export const RESTORING_MESSAGE = 'The instance is being restored from a backup. Try again in a minute; everyone signs in again once it has finished.';
@@ -40,7 +42,25 @@ export function startReplacingDatabase(): void {
 /** The restore has ended, however it went. */
 export function endRestore(): void {
   phase = 'none';
+  const settled = waiting;
+  waiting = [];
+  for (const resolve of settled) resolve();
 }
+
+/** The running restore, in the shape a shutdown waits on, as backupsInProgress. */
+export const restoresInProgress = {
+  get count(): number {
+    return phase === 'none' ? 0 : 1;
+  },
+
+  /** Settles once no restore is running: at once when none is. */
+  finished(): Promise<void> {
+    if (phase === 'none') return Promise.resolve();
+    return new Promise((resolve) => {
+      waiting.push(resolve);
+    });
+  },
+};
 
 export function restoreRunning(): boolean {
   return phase !== 'none';

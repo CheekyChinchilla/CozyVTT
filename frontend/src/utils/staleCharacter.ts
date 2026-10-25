@@ -5,7 +5,8 @@
  * answers 409 when the character has changed since: the DM took hit points at
  * the table, say. Saving anyway would put the old values back, so the save is
  * refused, and the editor carries the user's changes onto the newest version
- * for them to confirm (components/character/StaleSaveDialog).
+ * for them to confirm (components/character/StaleSaveDialog). A template save
+ * is refused the same way when someone else saved the template meanwhile.
  */
 
 import { apiErrorStatus } from './errors';

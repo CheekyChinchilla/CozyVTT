@@ -9,39 +9,11 @@ import { Sparkles, Circle, CircleDot, BookOpen, Zap } from 'lucide-react';
 import { dnd5eSpellSaveDC, dnd5eSpellAttackBonus } from '@/utils/rules/dnd5e';
 import { SPELL_SLOTS_MAX } from '@/constants/sheetLimits';
 
-interface SpellSlot {
-  total: number;
-  expended: number;
-}
-
-interface Spell {
-  level: number;
-  name: string;
-  prepared: boolean;
-  ritual: boolean;
-  concentration: boolean;
-}
-
-/** The stored block. The lists are optional there, so they are here. */
-interface Spellcasting {
-  class: string;
-  ability: string;
-  spellSaveDC: number;
-  spellAttackBonus: number;
-  cantrips?: string[];
-  slots?: {
-    '1': SpellSlot;
-    '2': SpellSlot;
-    '3': SpellSlot;
-    '4': SpellSlot;
-    '5': SpellSlot;
-    '6': SpellSlot;
-    '7': SpellSlot;
-    '8': SpellSlot;
-    '9': SpellSlot;
-  };
-  spells?: Spell[];
-}
+import type {
+  DnD5eSpellcasting as Spellcasting,
+  DnD5eSpell as Spell,
+  DnD5eSpellSlot as SpellSlot,
+} from '@/types/game-systems';
 
 interface SpellcastingBlockProps {
   spellcasting: Spellcasting;
@@ -70,13 +42,13 @@ const SpellSlotIndicator: React.FC<{ slot: SpellSlot }> = ({ slot }) => {
         Array.from({ length: total }).map((_, idx) => (
           <div key={idx} data-slot>
             {idx < remaining ? (
-              <CircleDot className="w-3 h-3 text-blue-600" />
+              <CircleDot className="w-3 h-3 text-info-ink" />
             ) : (
-              <Circle className="w-3 h-3 text-stone-500" />
+              <Circle className="w-3 h-3 text-ink-muted" />
             )}
           </div>
         ))}
-      <span className="text-xs text-stone-600 ml-1">
+      <span className="text-xs text-ink-secondary">
         {remaining}/{total}
       </span>
     </div>
@@ -96,23 +68,23 @@ function readSlot(value: unknown): SpellSlot | null {
  */
 const SpellRow: React.FC<{ spell: Spell }> = ({ spell }) => {
   return (
-    <div className="flex items-center justify-between py-1 px-2 hover:bg-stone-50 rounded">
+    <div className="flex items-center justify-between py-1 px-2 hover:bg-ink/5 rounded-sm">
       <div className="flex items-center space-x-2">
         {spell.prepared ? (
-          <BookOpen className="w-4 h-4 text-blue-600" />
+          <BookOpen className="w-4 h-4 text-info-ink" />
         ) : (
-          <BookOpen className="w-4 h-4 text-stone-500" />
+          <BookOpen className="w-4 h-4 text-ink-muted" />
         )}
-        <span className={`text-sm ${spell.prepared ? 'text-stone-800 font-medium' : 'text-stone-500'}`}>
+        <span className={`text-sm ${spell.prepared ? 'text-ink font-medium' : 'text-ink-muted'}`}>
           {spell.name}
         </span>
         {spell.ritual && (
-          <span className="px-1.5 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">
+          <span className="px-1.5 py-0.5 text-xs bg-spirit/15 text-spirit-ink rounded-sm">
             R
           </span>
         )}
         {spell.concentration && (
-          <span className="px-1.5 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">
+          <span className="px-1.5 py-0.5 text-xs bg-warning/15 text-warning-ink rounded-sm">
             C
           </span>
         )}
@@ -138,7 +110,7 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
   const saveDC = character ? dnd5eSpellSaveDC(character) : spellcasting.spellSaveDC;
   const attackBonus = character
     ? dnd5eSpellAttackBonus(character)
-    : spellcasting.spellAttackBonus;
+    : (spellcasting.spellAttackBonus ?? 0);
 
   // Every list is optional on the stored sheet: a block can name an ability
   // and hold nothing else, and reading the missing lists threw.
@@ -161,10 +133,10 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
   return (
     <div className="space-y-4">
       {/* Spellcasting Header */}
-      <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 border-2 border-blue-200 rounded-lg">
+      <div className="p-4 bg-info/10 border-2 border-info/30 rounded-lg">
         <div className="flex items-center space-x-2 mb-3">
-          <Sparkles className="w-5 h-5 text-blue-600" />
-          <h4 className="font-semibold text-stone-800">
+          <Sparkles className="w-5 h-5 text-info-ink" />
+          <h4 className="font-semibold text-ink">
             {/* Without a class recorded this used to render " Spellcasting"
                 with a leading gap — or, from the templates, "Wizard" on a sheet
                 belonging to anything but a wizard. */}
@@ -173,16 +145,16 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
         </div>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div>
-            <div className="text-xs text-stone-500">Spellcasting Ability</div>
-            <div className="text-lg font-bold text-blue-700">{spellcasting.ability}</div>
+            <div className="text-xs text-ink-muted">Spellcasting Ability</div>
+            <div className="text-lg font-bold text-info-ink">{spellcasting.ability}</div>
           </div>
           <div>
-            <div className="text-xs text-stone-500">Spell Save DC</div>
-            <div className="text-lg font-bold text-blue-700">{saveDC}</div>
+            <div className="text-xs text-ink-muted">Spell Save DC</div>
+            <div className="text-lg font-bold text-info-ink">{saveDC}</div>
           </div>
           <div>
-            <div className="text-xs text-stone-500">Spell Attack</div>
-            <div className="text-lg font-bold text-blue-700">
+            <div className="text-xs text-ink-muted">Spell Attack</div>
+            <div className="text-lg font-bold text-info-ink">
               {formatBonus(attackBonus)}
             </div>
           </div>
@@ -191,16 +163,16 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
 
       {/* Cantrips */}
       {cantrips.length > 0 && (
-        <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
+        <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
           <div className="flex items-center space-x-2 mb-2">
-            <Zap className="w-4 h-4 text-yellow-600" />
-            <h5 className="font-semibold text-stone-800">Cantrips</h5>
+            <Zap className="w-4 h-4 text-warning-ink" />
+            <h5 className="font-semibold text-ink">Cantrips</h5>
           </div>
           <div className="flex flex-wrap gap-2">
             {cantrips.map((cantrip, idx) => (
               <span
                 key={idx}
-                className="px-2 py-1 text-sm bg-yellow-100 text-yellow-800 rounded border border-yellow-300"
+                className="px-2 py-1 text-sm bg-warning/15 text-warning-ink rounded-sm border border-warning/30"
               >
                 {cantrip}
               </span>
@@ -210,12 +182,12 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
       )}
 
       {/* Spell Slots */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg p-4">
-        <h5 className="font-semibold text-stone-800 mb-3">Spell Slots</h5>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg p-4">
+        <h5 className="font-semibold text-ink mb-3">Spell Slots</h5>
         <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
           {slots.map(([level, slot]) => (
             <div key={level} className="text-center">
-              <div className="text-xs text-stone-500 mb-1">Level {level}</div>
+              <div className="text-xs text-ink-muted mb-1">Level {level}</div>
               <SpellSlotIndicator slot={slot} />
             </div>
           ))}
@@ -223,17 +195,17 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
       </div>
 
       {/* Spells by Level */}
-      <div className="bg-stone-50 border border-stone-200 rounded-lg overflow-hidden">
-        <div className="p-3 bg-stone-100 border-b border-stone-200">
-          <h5 className="font-semibold text-stone-800">Spell List</h5>
+      <div className="bg-ink/5 border border-ink/10 rounded-lg overflow-hidden">
+        <div className="p-3 bg-ink/10 border-b border-ink/10">
+          <h5 className="font-semibold text-ink">Spell List</h5>
         </div>
-        <div className="divide-y divide-stone-100">
+        <div className="divide-y divide-ink/10">
           {Object.keys(spellsByLevel)
             .map(Number)
             .sort((a, b) => a - b)
             .map((level) => (
               <div key={level} className="p-3">
-                <h6 className="text-sm font-semibold text-stone-700 mb-2">
+                <h6 className="text-sm font-semibold text-ink-secondary mb-2">
                   {level === 0 ? 'Cantrips' : `Level ${level}`}
                 </h6>
                 <div className="space-y-1">
@@ -247,17 +219,17 @@ export const SpellcastingBlock: React.FC<SpellcastingBlockProps> = ({
       </div>
 
       {/* Legend */}
-      <div className="text-xs text-stone-600 space-y-1 px-2">
+      <div className="text-xs text-ink-secondary space-y-1 px-2">
         <div className="flex items-center space-x-2">
-          <BookOpen className="w-3 h-3 text-blue-600" />
+          <BookOpen className="w-3 h-3 text-info-ink" />
           <span>Prepared spell</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded">R</span>
+          <span className="px-1.5 py-0.5 bg-spirit/15 text-spirit-ink rounded-sm">R</span>
           <span>Ritual</span>
         </div>
         <div className="flex items-center space-x-2">
-          <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded">C</span>
+          <span className="px-1.5 py-0.5 bg-warning/15 text-warning-ink rounded-sm">C</span>
           <span>Concentration</span>
         </div>
       </div>

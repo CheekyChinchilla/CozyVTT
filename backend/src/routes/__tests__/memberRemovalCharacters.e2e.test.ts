@@ -51,7 +51,10 @@ beforeAll(async () => {
       { userId: stayerId, campaignId, role: 'PLAYER', characterIds: [] },
     ],
   });
-  [dm, stayer, leaver] = await Promise.all([login(dmUser.email), login(stayerUser.email), login(leaverUser.email)]);
+  // One at a time: one address may have only two sign-ins checked at once.
+  dm = await login(dmUser.email);
+  stayer = await login(stayerUser.email);
+  leaver = await login(leaverUser.email);
   server = await createWsTestServer();
 });
 
@@ -74,8 +77,8 @@ it("takes the removed member's characters out of the campaign", async () => {
   expect((await dm.delete(`/api/campaigns/${campaignId}/members/${leaverId}`)).status).toBe(200);
 
   expect((await prisma.character.findUniqueOrThrow({ where: { id: character.id } })).campaignId).toBeNull();
-  expect((await stayer.get(`/api/characters/${character.id}`)).status).toBe(403);
-  expect((await dm.put(`/api/characters/${character.id}`).send({ name: 'Renamed' })).status).toBe(403);
+  expect((await stayer.get(`/api/characters/${character.id}`)).status).toBe(404);
+  expect((await dm.put(`/api/characters/${character.id}`).send({ name: 'Renamed' })).status).toBe(404);
 });
 
 // Characters left behind by removals before this was fixed still name the
@@ -85,8 +88,8 @@ it("keeps a character that still names the campaign from its owner's former tabl
   const orphan = await sheet(dmId, 'placeholder');
   await prisma.character.update({ where: { id: orphan.id }, data: { userId: leaverId, name: 'Left Behind' } });
 
-  expect((await stayer.get(`/api/characters/${orphan.id}`)).status).toBe(403);
-  expect((await dm.put(`/api/characters/${orphan.id}`).send({ name: 'Renamed' })).status).toBe(403);
+  expect((await stayer.get(`/api/characters/${orphan.id}`)).status).toBe(404);
+  expect((await dm.put(`/api/characters/${orphan.id}`).send({ name: 'Renamed' })).status).toBe(404);
   const listed = await dm.get(`/api/campaigns/${campaignId}`);
   expect(listed.status).toBe(200);
   expect(JSON.stringify(listed.body)).not.toContain('Left Behind');

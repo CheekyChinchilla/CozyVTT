@@ -25,14 +25,16 @@ import {
 import { sanitizeInput, validateEmail, isSameOriginPath } from '../utils/validation';
 import { UpdateSystemSettingsSchema } from '../validators/systemSettings';
 import { parseDisplayName, MAX_DISPLAY_NAME_LENGTH } from '../validators/users';
-import { hashPassword, sanitizeUser } from '../services/auth';
+import { hashPassword, sanitizeUser, answeredBusy } from '../services/auth';
 import { isSmtpConfigured, sendTestEmail, sendWelcomeEmail, sendInvitationEmail } from '../services/email';
 import { voidOutstandingResetLinks, issueResetToken } from '../services/passwordResetTokens';
 import { writeAdminLog } from '../services/systemLog';
+import { clearSignInLock } from '../middleware/authLimiters';
+import { hashingPerAddress } from '../middleware/hashingPerAddress';
 import { toJson } from '../utils/prisma-json';
 import { restartAdminMfaGrace } from '../services/adminMfaPolicy';
 import { buildDumpArgs, buildRestoreArgs, prepareDumpForRestore, pgConnection, type PreparedDump } from '../utils/pgRestore';
-import { SERVER_BUILT_PATH, UPLOAD_LIMITS } from '../utils/fileUtils';
+import { SERVER_BUILT_PATH, UPLOAD_LIMITS, getUploadsDirectory } from '../utils/fileUtils';
 import { sessionMaxAge, rememberMeMaxAge } from '../config/sessionDurations';
 import { extractArchiveSafely, openArchiveFile, ArchiveRefusedError, ArchiveLimitError } from '../utils/archive';
 import {
@@ -44,7 +46,7 @@ import {
   removeLeftoverRestoreUploads,
 } from '../services/restoreState';
 import { resolveBackupDir, ensureBackupDir } from '../utils/backupDir';
-import { MULTIPART_FIELD_LIMITS } from '../utils/multipartLimits';
+import { MULTIPART_FIELD_LIMITS, MULTIPART_NAME_CHARSET } from '../utils/multipartLimits';
 import { endEveryLiveSocket, getSocketInstance } from '../websocket/utils';
 import { clearAllState as clearAllCombatState } from '../websocket/initiativeState';
 import { forgetSetupComplete } from '../middleware/setup';
@@ -53,7 +55,7 @@ import { uploadsDiskUsage } from '../services/uploadsDisk';
 import logger from '../utils/logger';
 
 const execFileAsync = promisify(execFile);
-const UPLOADS_DIR = process.env.UPLOAD_DIR || 'uploads';
+const UPLOADS_DIR = getUploadsDirectory();
 // Outside uploads/, which self-hosters are told to sync off-site as media. See utils/backupDir.ts.
 const BACKUP_DIR = resolveBackupDir();
 const BACKUP_FILENAME_RE = /^backup-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(?:-\d+)?\.zip$/;
@@ -85,6 +87,7 @@ const restoreStorage = multer.diskStorage({
   },
 });
 const restoreUpload = multer({
+  ...MULTIPART_NAME_CHARSET,
   storage: restoreStorage,
   limits: { fileSize: 4 * 1024 * 1024 * 1024, ...MULTIPART_FIELD_LIMITS }, // 4 GB max
   fileFilter: (_req, file, cb) => {
@@ -277,7 +280,7 @@ router.put('/settings', async (req, res) => {
   }
   try {
     const {
-      instanceName, timezone, allowRegistration, requireAdminApproval,
+      instanceName, allowRegistration, requireAdminApproval,
       themeId, customThemeColors, fontId,
       customLogoUrl, customFaviconUrl, customMascotUrl,
     } = parsed.data;
@@ -286,9 +289,6 @@ router.put('/settings', async (req, res) => {
 
     if (instanceName !== undefined) {
       updateData.instanceName = sanitizeInput(instanceName).slice(0, 100);
-    }
-    if (timezone !== undefined) {
-      updateData.timezone = sanitizeInput(timezone).slice(0, 50);
     }
     if (allowRegistration !== undefined) {
       updateData.allowRegistration = allowRegistration;
@@ -313,10 +313,6 @@ router.put('/settings', async (req, res) => {
     } satisfies Record<string, string | null | undefined>;
     for (const [field, value] of Object.entries(branding)) {
       if (value === undefined) continue;
-      // TODO(accounts): isSameOriginPath accepts a protocol-relative address
-      // such as //other.example/logo.png, which names another server; the
-      // page's img-src 'self' blocks it, so it shows broken. Accept only a path
-      // on this host: refuse a leading // and a backslash too.
       if (typeof value === 'string' && value !== '' && !isSameOriginPath(value)) {
         return res.status(400).json({
           error: 'Validation Error',
@@ -357,7 +353,7 @@ router.put('/settings', async (req, res) => {
 // POST /api/admin/users
 // Creates a new user account with a temporary password.
 // ============================================
-router.post('/users', async (req, res) => {
+router.post('/users', hashingPerAddress, async (req, res) => {
   try {
     const { platformRole } = req.body;
     const fields = newAccountFields(req.body.email, req.body.displayName);
@@ -421,6 +417,7 @@ router.post('/users', async (req, res) => {
       ...(emailSent ? {} : { temporaryPassword }),
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error creating user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to create user' });
   }
@@ -433,7 +430,7 @@ router.post('/users', async (req, res) => {
 // so there is nothing to hand over manually.
 // ============================================
 
-router.post('/users/invite', async (req, res) => {
+router.post('/users/invite', hashingPerAddress, async (req, res) => {
   try {
     if (!isSmtpConfigured()) {
       return res.status(503).json({
@@ -521,6 +518,7 @@ router.post('/users/invite', async (req, res) => {
       expiresInDays: INVITE_EXPIRY_DAYS,
     });
   } catch (error) {
+    if (answeredBusy(res, error)) return;
     logger.error('Error inviting user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to invite user' });
   }
@@ -551,11 +549,9 @@ router.post('/users/:id/resend-invite', async (req, res) => {
     // Admin Panel offers it. Anyone else has a password of their own, and a
     // reset link (POST /api/users/:id/send-reset-link) lasts an hour, not 7 days.
     if (user.lastLoginAt !== null) {
-      // TODO(accounts): the button this names reads "Send Reset Link" in the
-      // Admin Panel; the message should spell it the same way.
       return res.status(409).json({
         error: 'Conflict',
-        message: 'This account has already signed in, so there is no invitation to resend. Use Send reset link to email them a link to set a new password.',
+        message: 'This account has already signed in, so there is no invitation to resend. Use Send Reset Link to email them a link to set a new password.',
       });
     }
 
@@ -630,6 +626,30 @@ router.post('/users/:id/approve', async (req, res) => {
   } catch (error) {
     logger.error('Error approving user', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to approve user' });
+  }
+});
+
+// ============================================
+// DELETE /api/admin/users/:id/sign-in-lock
+// Clears an account's sign-in lock: its wrong passwords and wrong codes are
+// forgotten, so the right ones sign in at once. By user id, so it never says
+// whether an address has an account.
+// ============================================
+router.delete('/users/:id/sign-in-lock', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true, email: true } });
+    if (!target) {
+      return res.status(404).json({ error: 'Not Found', message: 'User not found' });
+    }
+
+    clearSignInLock(target);
+    await writeAdminLog(req.session.userId!, `Cleared the sign-in lock on ${target.email}`, 'INFO', { targetUserId: target.id });
+
+    return res.json({ message: 'Sign-in lock cleared.' });
+  } catch (error) {
+    logger.error('Error clearing a sign-in lock', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to clear the sign-in lock' });
   }
 });
 
@@ -997,12 +1017,10 @@ async function writeBackupZip(dbUrl: string, withUploads: boolean): Promise<{ fi
       archive.pipe(output);
       archive.file(sqlPath, { name: 'database.sql' });
       if (withUploads) {
-        // Under an "uploads/" prefix, skipping the backups subdir older installs had there
-        // TODO(backups): the folder's own entry is named "backups", with no
-        // slash, so the filter keeps it and every backup holds an empty
-        // uploads/backups/ folder. Leave out entry.name === 'backups' too.
+        // Under an "uploads/" prefix, skipping the backups folder older
+        // installs had there: its own entry is named "backups", with no slash.
         archive.directory(UPLOADS_DIR, 'uploads', (entry) => {
-          return entry.name.startsWith('backups/') ? false : entry;
+          return entry.name === 'backups' || entry.name.startsWith('backups/') ? false : entry;
         });
       }
       archive.finalize();
@@ -1182,7 +1200,13 @@ const takeRestoreUpload: RequestHandler = (req, res, next) => {
       return res.status(400).json({ error: 'Invalid Backup', message: `The upload could not be read: ${error.message}. Nothing was changed.` });
     }
     const folderError = inBackupsFolder(error);
-    if (!(folderError instanceof BackupFolderUnusable)) return next(error);
+    if (!(folderError instanceof BackupFolderUnusable)) {
+      // The disk failing in some other way is the server's fault; anything
+      // else is the multipart parser refusing a body it cannot read.
+      if (errorCode(error)?.startsWith('E')) return next(error);
+      logger.warn('Restore refused an upload it could not read', { reason: errorMessage(error) });
+      return res.status(400).json({ error: 'Upload Error', message: 'The upload could not be read. Nothing was changed.' });
+    }
     logger.error('Uploaded backup could not be saved to the backups folder', { code: folderError.code, dir: BACKUP_DIR });
     const reply = backupFolderReply('The uploaded backup could not be saved');
     return res.status(500).json({ error: 'Restore Failed', message: `${reply.message} Nothing was changed.` });
@@ -1244,7 +1268,7 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     // with 400, or 413 for a size limit.
     try {
       const directory = await openArchiveFile(uploadedZip, RESTORE_MAX_FILES);
-      await extractArchiveSafely(directory, tempDir, {
+      await extractArchiveSafely(uploadedZip, directory, tempDir, {
         maxFiles: RESTORE_MAX_FILES,
         maxTotalBytes: RESTORE_MAX_TOTAL_BYTES,
       });
@@ -1285,7 +1309,7 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
     const restorePath = path.join(tempDir, 'restore.sql');
     let prepared: PreparedDump;
     try {
-      prepared = await prepareDumpForRestore(sqlPath, restorePath);
+      prepared = await prepareDumpForRestore(sqlPath, restorePath, dbUrl);
     } catch (error) {
       logger.error('Restore could not write the file psql loads', { code: errorCode(error), tmpdir: os.tmpdir() });
       return res.status(500).json({
@@ -1398,9 +1422,12 @@ router.post('/backups/restore', oneRestoreAtATime, takeRestoreUpload, async (req
       await execFileAsync('node_modules/.bin/prisma', ['migrate', 'deploy']);
     } catch (execError: unknown) {
       logger.error('Migrations after restore failed', { stderr: errorStderr(execError), code: errorCode(execError) });
-      // TODO(restore): this return skips step 9, so a restore whose migrations
-      // failed leaves no entry in the admin log although the database was
-      // replaced. It should write the same best-effort entry before answering.
+      // The database was replaced all the same, so the restore is logged as
+      // in step 9 (best-effort: the restored tables may not take the row).
+      await writeAdminLog(req.session.userId!, 'Restored instance from backup', 'WARNING', {
+        safetyBackup,
+        migrationsFailed: true,
+      }).catch(() => {});
       return res.status(500).json({
         error: 'Restore Incomplete',
         message:

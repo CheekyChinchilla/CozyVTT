@@ -14,23 +14,51 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
+import { createTurnQueue } from './turnQueue';
+
+/**
+ * Writers in line for each map in this process (see utils/turnQueue.ts): a
+ * writer waits for the one before it, holding nothing, and only then opens its
+ * transaction, so a burst of edits to one map cannot take the whole pool.
+ */
+const mapTurns = createTurnQueue();
+
+/**
+ * How many writers in this process are waiting their turn for a map, not
+ * counting the one whose turn it is. A test reads it to know a write has
+ * reached the lock before it goes on.
+ */
+export function writersWaitingFor(mapId: string): number {
+  return mapTurns.waitingFor(mapId);
+}
 
 /**
  * Run `fn` inside a transaction that holds a lock on each of the given maps
  * for its duration. The locks are taken in one order whoever asks, so two
  * moves between the same pair of maps cannot wait on each other. A caller
  * reads the tokens it changes through `tx`, after the lock, never before.
+ *
+ * Writers in this process take their turn for each map first (mapTurns), so
+ * only one of them per map holds a connection; the advisory lock still
+ * covers any other process writing the same database.
  */
 export async function withMapsLocked<T>(
   mapIds: string[],
   fn: (tx: Prisma.TransactionClient) => Promise<T>
 ): Promise<T> {
-  return prisma.$transaction(async (tx) => {
-    for (const mapId of [...new Set(mapIds)].sort()) {
-      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}))`;
-    }
-    return fn(tx);
-  });
+  const ids = [...new Set(mapIds)].sort();
+  const releases: Array<() => void> = [];
+  try {
+    for (const mapId of ids) releases.push(await mapTurns.turnFor(mapId));
+    return await prisma.$transaction(async (tx) => {
+      for (const mapId of ids) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${mapId}))`;
+      }
+      return fn(tx);
+    });
+  } finally {
+    for (const release of releases.reverse()) release();
+  }
 }
 
 /**

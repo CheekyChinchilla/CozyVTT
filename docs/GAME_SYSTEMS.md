@@ -13,8 +13,8 @@ CozyVTT currently ships three systems you can choose: **D&D 5e**, **Pathfinder 2
 3. [Reference systems](#reference-systems)
 4. [Naming conventions](#naming-conventions)
 5. [Step 1 — Prisma enum + migration](#step-1--prisma-enum--migration)
-6. [Step 2 — Backend character type](#step-2--backend-character-type)
-7. [Step 3 — Backend type index (`game-systems/index.ts`)](#step-3--backend-type-index-game-systemsindexts)
+6. [Step 2 — Backend character type (from the schema)](#step-2--backend-character-type-from-the-schema)
+7. [Step 3 — Backend enum (nothing to edit)](#step-3--backend-enum-nothing-to-edit)
 8. [Step 4 — Zod schema](#step-4--zod-schema)
 9. [Step 5 — Validator index (`validators/game-systems/index.ts`)](#step-5--validator-index-validatorsgame-systemsindexts)
 10. [Step 6 — Character templates](#step-6--character-templates)
@@ -37,14 +37,14 @@ So a "game system" in CozyVTT is really six coordinated pieces:
 
 | # | Piece | Location |
 |---|-------|----------|
-| 1 | Enum value | `backend/prisma/schema.prisma` + both `GameSystem` TS enums |
-| 2 | Character **type** (the data shape) | `backend/src/game-systems/` + `frontend/src/types/game-systems/` |
+| 1 | Enum value | `backend/prisma/schema.prisma` (the backend re-exports Prisma's) + the frontend enum in `frontend/src/types/gameSystem.ts` |
+| 2 | Character **type** (the data shape) | Decided by the Zod schema (piece 3); described for the frontend in `frontend/src/types/game-systems/`, which a test compares with the schema |
 | 3 | **Zod schema** (validation on save) | `backend/src/validators/game-systems/` |
-| 4 | **Templates** (blank + example starting data) | `backend/src/utils/character-templates/` and a blank factory in the validator index |
+| 4 | **Templates** (blank + example starting data) | `backend/src/utils/character-templates/` |
 | 5 | **Sheet component** (the UI) | `frontend/src/components/character-sheets/{system}/` |
 | 6 | **Display metadata + registration** (labels, the creation dropdown, the router) | `frontend/src/constants/game-systems.ts` + `CharacterSheetRouter.tsx` |
 
-Each of pieces 2–4 has a per-system file **and** an `index.ts` with a `switch` you extend. TypeScript will not compile until every switch handles the new enum value, which is your safety net — follow the compiler errors and you can't miss a spot.
+Pieces 3 and 4 each have a per-system file **and** an `index.ts` with a `switch` you extend. TypeScript will not compile until every switch handles the new enum value, which is your safety net — follow the compiler errors and you can't miss a spot.
 
 ### Design principle: almost everything is optional
 
@@ -62,8 +62,9 @@ A sheet is shown to the whole table, so the schemas hold it to sizes a page can 
 | The name in Allies & Organizations (D&D 5e and Pathfinder 2e): the paragraph limit, since a sheet written before 1.3.0 had its whole allies paragraph moved into it | `SHEET_LONG_TEXT_MAX` | `alliesAndOrganizations.schema.ts`, imported by both schemas |
 | A list on a D&D 5e, Pathfinder 2e, Call of Cthulhu or Shadowrun 6e sheet (inventory or possessions, attacks, strikes or weapons, spells, cantrips, conditions, hit dice, features, feats, languages, contacts and the rest): at most 500 entries, five times what the longest real list holds | `SHEET_LIST_MAX` | `sheetList` in `sheetLists.ts`; `listLimits.test.ts` walks every system's schema and fails on a list without a maximum. The editor turns each add button off at the limit and says why (`ListLimitNote`); a comma-separated box (`ListField`, the cantrips box) turns away the entry that would pass it |
 | Entries in a list inside one row (the traits of one Pathfinder 2e strike, the firing modes of one Shadowrun weapon): at most 50, because it multiplies by the rows around it | `SHEET_ROW_TAGS_MAX` | `pathfinder2e.schema.ts` and `shadowrun6e.schema.ts`; the strike's traits box turns away the 51st |
+| D&D 5e: skills of the player's own, at most 30; further damage lines on one attack, at most 10 | `DND5E_CUSTOM_SKILLS_MAX`, `DND5E_ATTACK_DAMAGE_ROLLS_MAX` | `dnd5e.schema.ts`; the editor's **+ Add Skill** and **+ Add Damage Roll** stop there, as above |
 | Pathfinder 2e item bonus (saving throws, Perception, skills, lore skills, armor class, strikes, spell attack and spell DC): -30 to +30. The Core Rulebook's run from +4 down to -2 | `PF2E_ITEM_BONUS_MIN`, `PF2E_ITEM_BONUS_MAX` | `itemBonusSchema` in `pathfinder2e.schema.ts`; the editor's boxes clamp to the range when left |
-| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count (D&D 5e: and no more used than the total) | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20 |
+| D&D 5e and Pathfinder 2e spell slots of one rank or level: 0 to 20 for the total and for the used count, and no more used than the total | `SPELL_SLOTS_MAX` | `dnd5e.schema.ts` and `pathfinder2e.schema.ts`; the D&D editor clamps a stored sheet's slots when it opens and on save, and the Spells tab writes a larger stored total as a count; the Pathfinder editor's boxes stop at 20, and it brings the used count within the total when a sheet opens and when the total is lowered |
 | D&D 5e manual bonuses (initiative, passive Perception, the two spellcasting adjustments): -30 to +30 | `MIN_BONUS_OVERRIDE`, `MAX_BONUS_OVERRIDE` in `utils/rules/dnd5e.ts` | `dnd5e.schema.ts`; the D&D editor stops its boxes there and brings a stored or read-back value within the range when it opens |
 
 A sheet stored before a limit existed still loads, with every entry; its next save is refused, with the path of each field over a limit in `validationErrors`, until the list is shortened. The two sheet editors, the Character Editor page and the editor that opens over a sheet at the table or on the Characters page, turn that into one message through `refusedSaveMessage` in `frontend/src/utils/sheetSaveRefusal.ts`: "Not saved." and the first five paths with their reasons, then a count of the rest.
@@ -75,6 +76,7 @@ A sheet is read by the whole table, its player included, so a field meant for th
 - **Reading.** Only the DM of the character's campaign (the Keeper) is sent it, on `GET /api/characters/:id`, every save's reply and every `character.updated` event (the character list, `GET /api/characters`, carries no sheets). The Keeper is always sent it, as an empty string when nothing is written, and the editor offers the box exactly when the field arrives; anyone else, the character's owner included, never gets the key.
 - **Writing.** Only the Keeper can change it. A save by anyone else (the owner, a script) keeps the stored value, whatever it sent for the field. A character created by anyone but the DM of the campaign it is created in is stored without it.
 - **Moving.** A character entering a campaign it was not in (assigned to another campaign, or brought in when its owner accepts an invitation) loses it, and so does a copy. The notes were the last campaign's Keeper's, and a player who moved their investigator into a campaign they run would otherwise be its Keeper and read them.
+- **Templates.** A template is read by every user, so publishing or saving one stores it without the field, whoever saves it, the Keeper and a template editor included. A template also never keeps the sheet's `playerName`: a character made from it is given its own owner's.
 
 The notes stay inside the stored sheet, so an instance backup keeps them. A campaign export carries no character sheets at all, and a character's JSON export, made from `GET /api/characters/:id`, holds the notes only when the person exporting is the character's Keeper. To give another system such a field, add it to `KEEPER_ONLY_FIELD`; every route already goes through the helpers.
 
@@ -148,7 +150,13 @@ question, and getting it wrong invents numbers the designers never intended.
 
   **Player characters are different.** A PF2e character sheet records the parts
   — proficiency rank, item bonus, Dex cap, key attribute — so Armor Class, Class
-  DC and initiative *are* derivable, and `rules/pathfinder2e.ts` derives them.
+  DC, saving throws, Perception, skills (a check penalty always a penalty),
+  initiative, spell attack and spell DC *are* derivable (one spellcasting rank
+  for both, each its own item bonus), and `rules/pathfinder2e.ts` derives them
+  for the editor, the read-only sheet, the roll menu and the server's
+  initiative roll alike,
+  with the Bulk an inventory and purse carry (ten light items or a thousand
+  coins to 1 Bulk, the rest rounded down) and its limits.
   The distinction is where the number comes from: a creature's is printed by
   Paizo, a character's is built from their own sheet.
 - **Call of Cthulhu 7e and Shadowrun 6e have no equivalent.** Percentile and
@@ -163,7 +171,13 @@ question, and getting it wrong invents numbers the designers never intended.
   as its floor, and when DEX changes in the editor the points above the old
   base stay above the new one. `derivedStats.dodge.value` is a copy kept for
   older readers and follows the skill on save; the sheet shows and rolls the
-  skill. The helpers are in
+  skill. Language (Own) works the same way with EDU as its base ("automatically
+  starts as equal to the investigator's EDU"). The base is `cocDodgeBase` in `rules/callOfCthulhu7e.ts`, with the
+  sheet's other derived attributes (hit points, magic points, maximum Sanity,
+  half and fifth, damage bonus and build, move rate) and the skill bases
+  (`COC_SKILL_BASES`, `cocBlankSkills`, from which both the blank template and
+  the editor fill a sheet), mirrored in both projects like the other rules
+  modules; keeping the points above the base is `settleSkillBase` in
   `components/character-sheets/call-of-cthulhu-7e/dodge.ts`.
 
 **Where a number is derived, give it a manual bonus alongside.** The 5e sheet
@@ -268,7 +282,7 @@ viewer and the free-form custom roll input. See
 
 Copy from a system that's shaped like the one you're adding:
 
-- **Backend (all of steps 2–6): copy Shadowrun 6e.** It is fully wired through every backend registration point, so it shows the whole backend side of a system from start to finish. Files: `game-systems/shadowrun6e.ts`, `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in all three backend `index.ts` files.
+- **Backend (steps 4–6): copy Shadowrun 6e.** It is fully wired through every backend registration point, so it shows the whole backend side of a system from start to finish. Files: `validators/game-systems/shadowrun6e.schema.ts`, `utils/character-templates/shadowrun6e-templates.ts`, plus its entries in both backend `index.ts` files.
 - **Frontend sheet (step 9): copy D&D 5e or Call of Cthulhu 7e.** These are the complete sheet implementations, split into `…CharacterSheet.tsx` (mode switcher) + `…CharacterView.tsx` + `…CharacterEditor.tsx` + a `components/` folder. (Shadowrun 6e's sheet is intentionally a single "not yet implemented" placeholder, so don't copy it for the UI — but it *is* the reference for the minimal single-file sheet shape.)
 
 > **Note on Shadowrun 6e:** it is deliberately **not listed in the character-creation dropdown** — its entry in `GAME_SYSTEM_OPTIONS` (`frontend/src/constants/game-systems.ts`) is commented out because its sheet isn't finished. That commented block is a perfect illustration of [Step 8](#step-8--frontend-display-metadata): a system is only selectable once it's in `GAME_SYSTEM_OPTIONS`.
@@ -315,109 +329,19 @@ npx prisma migrate dev --name add_my_system
 npx prisma generate
 ```
 
-`prisma generate` regenerates the Prisma client so `@prisma/client`'s `GameSystem` enum (used by the template layer) includes your value. Since Prisma 7, `migrate dev` no longer does that itself.
+`prisma generate` regenerates the Prisma client so `@prisma/client`'s `GameSystem` enum, which the whole backend imports through `game-systems/index.ts`, includes your value. Since Prisma 7, `migrate dev` no longer does that itself.
 
 ---
 
-## Step 2 — Backend character type
+## Step 2 — Backend character type (from the schema)
 
-Create `backend/src/game-systems/mySystem.ts` describing the data shape. Keep required fields minimal; everything else optional.
-
-```typescript
-// backend/src/game-systems/mySystem.ts
-
-export interface MySystemCharacterData {
-  // Identity — the only genuinely required field
-  characterName: string;
-  playerName?: string;
-
-  // Core stats (optional — filled in over time)
-  stats?: {
-    strength?: number;
-    dexterity?: number;
-    // …
-  };
-
-  hp?: { current?: number; maximum?: number; temporary?: number };
-
-  skills?: MySystemSkill[];
-  inventory?: MySystemItem[];
-  notes?: string;
-}
-
-export interface MySystemSkill {
-  name: string;
-  value?: number;
-  proficient?: boolean;
-}
-
-export interface MySystemItem {
-  name: string;
-  quantity?: number;
-  description?: string;
-}
-```
+There is no separate backend type to write. The Zod schema you write in Step 4 decides what a sheet holds, and the backend takes its TypeScript type from it (`export type MySystemCharacterData = z.infer<typeof mySystemCharacterDataSchema>`), so the two cannot drift. Keep required fields minimal there; everything else optional.
 
 ---
 
-## Step 3 — Backend type index (`game-systems/index.ts`)
+## Step 3 — Backend enum (nothing to edit)
 
-Open `backend/src/game-systems/index.ts` and make **five** edits (the TS enum lives here too):
-
-```typescript
-// 1. Re-export your module
-export * from './mySystem';
-
-// 2. Import the type (near the other data-type imports)
-import { MySystemCharacterData } from './mySystem';
-
-// 3. Add the enum value (must match Prisma + the frontend enum)
-export enum GameSystem {
-  DND_5E = 'DND_5E',
-  PATHFINDER_2E = 'PATHFINDER_2E',
-  SHADOWRUN_6E = 'SHADOWRUN_6E',
-  CALL_OF_CTHULHU_7E = 'CALL_OF_CTHULHU_7E',
-  MY_SYSTEM = 'MY_SYSTEM',          // ← add
-}
-
-// 4. Add to the mapped type and the union
-export type CharacterDataBySystem = {
-  // …existing…
-  [GameSystem.MY_SYSTEM]: MySystemCharacterData;   // ← add
-};
-
-export type GameSystemCharacterData =
-  | DnD5eCharacterData
-  | PF2eCharacterData
-  | SR6CharacterData
-  | CoC7eCharacterData
-  | MySystemCharacterData;                          // ← add
-
-// 5. Add a structural type guard, then a case in BOTH switches below it
-export function isMySystemData(
-  data: unknown,
-  gameSystem?: string
-): data is MySystemCharacterData {
-  if (gameSystem && gameSystem !== GameSystem.MY_SYSTEM) return false;
-  const c = data as MySystemCharacterData;
-  return (
-    typeof c === 'object' &&
-    c !== null &&
-    'characterName' in c
-    // …add a couple more distinctive keys so the guard is meaningful…
-  );
-}
-```
-
-Then add a `case` to **`getTypedCharacterData`** and to the structural **`validateCharacterData`** (the boolean one in this file — distinct from the Zod one in Step 5):
-
-```typescript
-case GameSystem.MY_SYSTEM:
-  return isMySystemData(data) ? (data as CharacterDataBySystem[T]) : null;   // getTypedCharacterData
-// …
-case GameSystem.MY_SYSTEM:
-  return isMySystemData(data, gameSystem);                                    // validateCharacterData
-```
+`backend/src/game-systems/index.ts` re-exports Prisma's `GameSystem`, so the value you added in Step 1 reaches every backend file through `prisma generate`. `backend/src/__tests__/keepInStep.test.ts` checks that the frontend enum (Step 7) names the same values.
 
 ---
 
@@ -490,20 +414,7 @@ case GameSystem.MY_SYSTEM: {
 }
 ```
 
-Second, provide a **blank-character factory** and wire it into `getBlankCharacterTemplate`. This returns the minimal valid data object used to seed a brand-new character:
-
-```typescript
-case GameSystem.MY_SYSTEM:
-  return createBlankMySystemCharacter();
-
-// …lower in the file, next to the other createBlank* functions:
-function createBlankMySystemCharacter(): MySystemCharacterData {
-  return {
-    characterName: 'New Character',
-    // …minimal valid defaults…
-  };
-}
-```
+`getBlankCharacterTemplate`, which the tests build their sheets on, needs nothing of its own: it returns your system's `blank` starter sheet (Step 6) parsed by the schema, and throws if that sheet does not pass it. So the tests use the sheet players actually start from.
 
 ---
 
@@ -577,15 +488,15 @@ export function getMySystemTemplate(templateName?: string): CharacterTemplate {
 }
 ```
 
-Then wire both getters into `backend/src/utils/character-templates/index.ts` — import them, then add a `case GameSystem.MY_SYSTEM:` to **`getTemplatesForGameSystem`** and **`getCharacterTemplate`**, and an entry in the **`getAllTemplates`** object. (`CharacterTemplate` is `{ name, description, gameSystem, data }`.)
+Then wire both getters in: import `getMySystemTemplate` into `backend/src/utils/character-templates/index.ts` and add a `case GameSystem.MY_SYSTEM:` to **`getCharacterTemplate`**, and add `getMySystemTemplates` to the list in `backend/src/__tests__/helpers/builtInTemplates.ts`, which the template tests check every template from (the type check fails until it is there). (`CharacterTemplate` is `{ name, description, gameSystem, data }`.)
 
 ---
 
 ## Step 7 — Frontend enum + character type
 
-The frontend keeps its own copy of the types (TypeScript doesn't cross the front/back boundary).
+The frontend keeps its own copy of the types: its image is built from `frontend/` alone, so it cannot import the backend's. Tests keep the copies in step.
 
-1. **Enum** — add your value to the `GameSystem` enum in `frontend/src/types/index.ts` (it must exactly mirror the backend enum):
+1. **Enum** — add your value to the `GameSystem` enum in `frontend/src/types/gameSystem.ts`, the frontend's one copy (`types/index.ts` and `types/game-systems/index.ts` re-export it). It must name exactly the values in `schema.prisma`; `keepInStep.test.ts` fails otherwise:
 
    ```typescript
    export enum GameSystem {
@@ -597,7 +508,7 @@ The frontend keeps its own copy of the types (TypeScript doesn't cross the front
    }
    ```
 
-2. **Character type** — create `frontend/src/types/game-systems/mySystem.ts` mirroring the backend data shape, and export it from `frontend/src/types/game-systems/index.ts`. Keep it in sync with the backend type by hand.
+2. **Character type** — create `frontend/src/types/game-systems/mySystem.ts` describing what the system's Zod schema accepts, export it from `frontend/src/types/game-systems/index.ts`, and have the sheet interface extend `SheetChrome`. A field the schema lets be absent, or fills in by default, is optional in the type: the server sends a sheet as it was stored, so a sheet saved before the field existed arrives without it. Add the pair to the sheet check at the end of `backend/src/__tests__/keepInStep.test.ts`, which compares the type with the schema field by field and fails on any difference in names, optionality, `null` or values. Inside a union it compares each object member field by field too; when a union has several objects, give them a field holding a different string in each (the Flexible sections' `type`), which the check pairs them by. A field the schema runs through `z.preprocess` takes anything, so it is not compared.
 
 ---
 
@@ -743,6 +654,12 @@ character's ability scores and level instead of going stale the way a stored
 `passivePerception` did. The `otherBonus` field is the escape hatch for what the
 rules cannot derive, matching initiative and passive Perception. Storing a total
 here would have reintroduced exactly the drift those two were fixed for.
+A number nobody adjusts need not be stored at all: the 5e view works carrying
+capacity out from Strength (`carryingCapacity`: the score times 15, and twice
+that to push, drag or lift) each time it draws. The proficiency bonus stays a
+stored box, since a table may use another, and the editor moves it with
+**Level** when it was the old level's bonus, offering the level's beside one
+set otherwise.
 
 **They must also agree on what a stored value *means*.** Agreeing a field exists
 is not enough if each end interprets it differently. The 5e sheet's four
@@ -759,7 +676,10 @@ one shared function rather than one per component.
 - Inputs: the `input-cozy` class (or the `<Input>` / `<Field>` components in `frontend/src/components/ui/`).
 - Numbers: `<NumberField>`, so a box can be cleared and retyped. Lists typed as text ("Common, Elven", or one per line): `<ListField>`, which keeps the text as typed while the box is in use. Splitting and joining the text on every keystroke throws away the comma, space or new line typed after a word.
 - Buttons: the `<Button>` component (`frontend/src/components/ui/Button.tsx`).
-- Text/surfaces: theme tokens — `text-ink`, `text-ink-muted`, `bg-surface`, `bg-paper`, `border-ink/10`, panels via `glass-panel`. **Do not** hardcode `gray-`/`slate-`/`stone-` colors or a fixed hex — those break the non-default themes. (The `sepia-*` scale is the one intentional exception, used only by the Call of Cthulhu sheet for its 1920s look.)
+- Text/surfaces: theme tokens — `text-ink`, `text-ink-secondary`, `text-ink-muted`, the card `bg-paper`, inset panels a wash of ink (`bg-ink/5`, `bg-ink/10`: darker on a light paper, lighter on a dark one; the `surface` tokens invert on dark themes, so keep them off the card), borders `border-ink/10` and `border-ink/20`, focus rings `ring-brand`. **Do not** hardcode `gray-`/`slate-`/`stone-`/`sepia-` colors or a fixed hex — those break the non-default themes. This holds for every sheet, Call of Cthulhu's included, and `themeTokens.test.ts` checks it.
+- Colour that means something takes its token: `danger` (hit points, damage, errors, remove), `spirit` (sanity, magic), `info`, `success`, `warning`. Text on the page uses the `-ink` variant (`text-danger-ink`), never the fill token. A panel or chip with text in it is a tint, `bg-danger/10 text-danger-ink`, with `border border-danger/30` where it needs an edge: white text fails on most of the state fills in some theme. A solid token fill is for things with no text on them, such as a bar; the one solid fill that carries text is the accent with its own label colour, `bg-accent text-accent-text`. A checkbox takes its colour from `accent-danger` and the like, not from a text colour.
+- A system's own colour (D&D's red, Pathfinder's blue) is not a meaning: its buttons are `<Button>`, a selected toggle `bg-accent text-accent-text`.
+- The header is the one exception: its colour is the player's (`colorPresets.ts`, or a custom hex), so its classes and the text on it do not follow the theme. Write every preset class out in full; Tailwind generates only class names it finds whole, and the test refuses one joined at runtime.
 
 The editor calls `onSave(data, showToast?, tokenImageUrl?)`; the generic save chain (CharacterEditorPage → API) handles persistence — you don't wire anything else.
 
@@ -865,17 +785,15 @@ The exhaustive `switch`/`Record` types mean a missed backend registration point 
 
 **Backend**
 - [ ] `prisma/schema.prisma` — `GameSystem` enum value added; `prisma migrate dev` run
-- [ ] `game-systems/mySystem.ts` — character-data interface(s)
-- [ ] `game-systems/index.ts` — `export *`, type import, enum value, `CharacterDataBySystem`, `GameSystemCharacterData`, `isMySystemData` guard, cases in `getTypedCharacterData` + structural `validateCharacterData`
 - [ ] `validators/game-systems/mySystem.schema.ts` — Zod schema + inferred type
-- [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`, `createBlankMySystemCharacter()` + case in `getBlankCharacterTemplate`
+- [ ] `validators/game-systems/index.ts` — import/re-export, case in Zod `validateCharacterData`
 - [ ] `utils/character-templates/mySystem-templates.ts` — templates + `getMySystemTemplates` / `getMySystemTemplate`
-- [ ] `utils/character-templates/index.ts` — cases in `getTemplatesForGameSystem`, `getCharacterTemplate`, and `getAllTemplates`
+- [ ] `utils/character-templates/index.ts` — a case in `getCharacterTemplate`; `__tests__/helpers/builtInTemplates.ts` — `getMySystemTemplates` in its list
 - [ ] Schema (and template) tests written and passing
 
 **Frontend**
-- [ ] `types/index.ts` — `GameSystem` enum value (mirrors backend)
-- [ ] `types/game-systems/mySystem.ts` — character-data type; exported from `types/game-systems/index.ts`
+- [ ] `types/gameSystem.ts` — `GameSystem` enum value (the same values as `schema.prisma`)
+- [ ] `types/game-systems/mySystem.ts` — character-data type, extending `SheetChrome`; exported from `types/game-systems/index.ts`, and paired with its schema in the sheet check in `backend/src/__tests__/keepInStep.test.ts`
 - [ ] `constants/game-systems.ts` — `GAME_SYSTEM_LABELS`, `GAME_SYSTEM_SHORT_LABELS`, `GAME_SYSTEM_DESCRIPTIONS`, **and `GAME_SYSTEM_OPTIONS`**
 - [ ] `components/character-sheets/mySystem/MySystemCharacterSheet.tsx` (+ View/Editor/components if using the full pattern)
 - [ ] `CharacterSheetRouter.tsx` — lazy import + `case`
