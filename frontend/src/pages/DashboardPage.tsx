@@ -78,7 +78,9 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="bg-moss-green/10 border-b border-moss-green/20 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-6">
+          {/* Wraps so the actions drop below the title on a phone narrower
+              than both: an administrator's four buttons need about 230 px. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 py-6">
             {/* Left: Logo + Title */}
             <div className="flex items-center gap-4">
               <div className="p-1 rounded-lg bg-moss-green/10" aria-hidden="true">
