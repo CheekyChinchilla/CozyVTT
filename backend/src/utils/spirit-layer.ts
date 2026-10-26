@@ -1,6 +1,6 @@
 import { createHash } from 'crypto';
 // Aliased: `Map` is also JavaScript's own, which this file uses.
-import type { Map as MapRow } from '@prisma/client';
+import type { Map as MapRow, Prisma } from '@prisma/client';
 import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible, type VisibilityPolygon } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
@@ -749,9 +749,10 @@ export function lightRemovalSentTo(
 /**
  * What a member is sent of a map, decided column by column. filterMapData
  * builds the map from these three lists and nothing else, so a column in none
- * of them reaches nobody. Every column of the Map model is in exactly one, and
- * keepInStep.test.ts fails otherwise, so a column added later fails the suite
- * until someone decides who may see it and puts it in one.
+ * of them reaches nobody; the map list and the campaign fetch select the first
+ * (MAP_SELECT_SENT_TO_EVERYONE). Every column of the Map model is in exactly
+ * one, and keepInStep.test.ts fails otherwise, so a column added later fails
+ * the suite until someone decides who may see it and puts it in one.
  *
  * Sent to everyone, as stored: what every member needs to draw the map.
  */
@@ -767,7 +768,8 @@ export const MAP_FIELDS_DECIDED_PER_RECIPIENT = [
 
 /**
  * Never sent to a member. This describes the map members are sent
- * (filterMapData). Four replies to the DM alone return the stored row whole:
+ * (filterMapData, and the selects built from the first list). Four replies to
+ * the DM alone return the stored row whole:
  * `POST /maps`, `POST /maps/import-uvtt`, `PUT /maps/:id` and
  * `POST /maps/:id/tokens`.
  */
@@ -775,6 +777,15 @@ export const MAP_FIELDS_NEVER_SENT = [] as const satisfies readonly (keyof MapRo
 
 type MapFieldSentToEveryone = (typeof MAP_FIELDS_SENT_TO_EVERYONE)[number];
 type MapFieldDecidedPerRecipient = (typeof MAP_FIELDS_DECIDED_PER_RECIPIENT)[number];
+
+/**
+ * The columns sent to everyone, as a Prisma select. The map list and the
+ * campaign fetch read each map's metadata with it, leaving out its tokens,
+ * walls, lights and fog, and decide the spirit layer address themselves.
+ */
+export const MAP_SELECT_SENT_TO_EVERYONE = Object.fromEntries(
+  MAP_FIELDS_SENT_TO_EVERYONE.map((field) => [field, true])
+) as { [K in MapFieldSentToEveryone]: true } satisfies Prisma.MapSelect;
 
 /** Each field decided for a recipient, as it is sent. */
 interface MapFieldsDecided {

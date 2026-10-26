@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '../middleware/rbac';
 import { authenticated, campaignMember, campaignDM, adminOnly } from '../middleware/compose';
 import { prisma } from '../config/database';
 import { canDeleteCampaign, canTransferDM, canReadMap } from '../services/permissions';
-import { getSpiritVisibility } from '../utils/spirit-layer';
+import { getSpiritVisibility, MAP_SELECT_SENT_TO_EVERYONE } from '../utils/spirit-layer';
 import { captureGameState, getNextSessionNumber, withSessionsHeld, openSession } from '../services/sessionState';
 import { resendInitiative } from '../websocket/handlers/initiative';
 import { sendSystemMessage, broadcastToUser, broadcastToCampaign, applyRoleToLiveSockets, clearCampaignFromLiveSockets, clearDeletedCampaignFromLiveSockets, announceRosterChange, getSocketInstance } from '../websocket/utils';
@@ -302,27 +302,9 @@ router.get('/:campaignId', campaignMember, async (req: AuthenticatedRequest, res
         // GET /api/campaigns/:campaignId/maps/:id (spirit-filtered) and character
         // sheets via GET /api/characters/:id. Frontend only reads ids + a few
         // metadata fields from these arrays (map move-to-map, token ownership).
-        maps: {
-          select: {
-            id: true,
-            campaignId: true,
-            name: true,
-            imageUrl: true,
-            width: true,
-            height: true,
-            gridSize: true,
-            feetPerSquare: true,
-            diagonalRule: true,
-            baseLayerUrl: true,
-            spiritLayerUrl: true,
-            lightingEnabled: true,
-            fogEnabled: true,
-            globalIllumination: true,
-            explorationEnabled: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        },
+        // The fields everyone is sent of a map, and the spirit layer address,
+        // blanked below for a member who may not have it.
+        maps: { select: { ...MAP_SELECT_SENT_TO_EVERYONE, spiritLayerUrl: true } },
         characters: {
           select: {
             id: true,

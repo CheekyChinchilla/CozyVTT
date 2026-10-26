@@ -2,6 +2,10 @@
  * What a member is sent of a map is built from the lists in
  * utils/spirit-layer.ts, on every path that sends one.
  *
+ * The map list and the campaign fetch send every map's metadata without its
+ * tokens, walls, lights or fog: the fields everyone is sent, and the spirit
+ * layer address where its reader may have it.
+ *
  * A map's annotations are sent to nobody. Nothing in the app reads them, and
  * a campaign import stores whatever array its archive held, which every
  * member was then sent with the map.
@@ -15,6 +19,7 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupCampaigns, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import type { Socket as ClientSocket } from 'socket.io-client';
+import { MAP_FIELDS_SENT_TO_EVERYONE } from '../../utils/spirit-layer';
 
 jest.setTimeout(30000);
 
@@ -88,6 +93,28 @@ describe('a map with a stored annotation', () => {
       }
     } finally {
       for (const s of sockets) s.disconnect();
+    }
+  });
+});
+
+describe('the map list and the campaign fetch', () => {
+  const everyone = [...MAP_FIELDS_SENT_TO_EVERYONE].sort();
+  const withSpiritLayer = [...MAP_FIELDS_SENT_TO_EVERYONE, 'spiritLayerUrl'].sort();
+
+  it('list each map with the fields everyone is sent, and its spirit layer for the DM alone', async () => {
+    const mine = await dm.get(`/api/campaigns/${campaignId}/maps`);
+    expect(mine.status).toBe(200);
+    expect(Object.keys(mine.body.maps[0]).sort()).toEqual(withSpiritLayer);
+    const theirs = await player.get(`/api/campaigns/${campaignId}/maps`);
+    expect(theirs.status).toBe(200);
+    expect(Object.keys(theirs.body.maps[0]).sort()).toEqual(everyone);
+  });
+
+  it("give each of the campaign's maps the fields everyone is sent and its spirit layer", async () => {
+    for (const agent of [dm, player]) {
+      const res = await agent.get(`/api/campaigns/${campaignId}`);
+      expect(res.status).toBe(200);
+      expect(Object.keys(res.body.campaign.maps[0]).sort()).toEqual(withSpiritLayer);
     }
   });
 });

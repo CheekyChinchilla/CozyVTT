@@ -6834,9 +6834,9 @@ paths:
       responses:
         '200':
           description: >-
-            List of maps. Each item is a summary of 14 fields, and for the DM
-            a 15th, `spiritLayerUrl`; not the full Map object: no tokens,
-            annotations, walls, lights, fog or `campaignId`.
+            List of maps. Each item is a summary of 16 fields, and for the DM
+            a 17th, `spiritLayerUrl`; not the full Map object: no tokens,
+            annotations, walls, lights or fog.
           content:
             application/json:
               schema:
@@ -6848,8 +6848,10 @@ paths:
                       type: object
                       properties:
                         id: { type: string, format: uuid }
+                        campaignId: { type: string, format: uuid }
                         name: { type: string }
                         imageUrl: { type: string }
+                        baseLayerUrl: { type: string }
                         width: { type: integer }
                         height: { type: integer }
                         gridSize: { type: integer }

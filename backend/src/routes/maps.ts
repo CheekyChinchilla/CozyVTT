@@ -10,7 +10,7 @@ import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middlewar
 import { prisma } from '../config/database';
 import {
   canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
-  lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo, lightsReplacedSentTo, lightsSentTo,
+  lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo, lightsReplacedSentTo, lightsSentTo, MAP_SELECT_SENT_TO_EVERYONE,
   wallChangeReachesPlayers, wallChangeSentTo, wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo,
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
@@ -426,23 +426,10 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
     const maps = await prisma.map.findMany({
       where: role === 'DM' ? { campaignId } : { campaignId, id: currentMapId ?? '' },
       select: {
-        id: true,
-        name: true,
-        imageUrl: true, // Thumbnail reference
-        width: true,
-        height: true,
-        gridSize: true,
-        feetPerSquare: true,
-        diagonalRule: true,
-        lightingEnabled: true,
-        fogEnabled: true,
-        globalIllumination: true,
-        explorationEnabled: true,
+        ...MAP_SELECT_SENT_TO_EVERYONE,
         // The DM's alone, for Edit Map; a player is sent it with the map,
         // when the spirit layer is theirs to see (filterMapData).
         spiritLayerUrl: role === 'DM',
-        createdAt: true,
-        updatedAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
