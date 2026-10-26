@@ -6977,14 +6977,14 @@ paths:
         - Maps
       summary: Get map
       description: |
-        Get a map with its tokens, annotations, walls and lights. The DM gets
-        the stored map whole. Anyone else gets it filtered as the Map schema
-        describes: only the tokens on their plane that are not hidden (and on
-        a lit map only those in their sight plus their own), each cut down to
-        the fields they may see; `spiritLayerUrl` null unless the spirit layer
-        is visible to them; `fogData` always null; every wall, with a
-        `door-locked` door sent as `door-closed`; and only the lights whose
-        `enabled` is true. Annotations are sent to everyone.
+        Get a map with its tokens, walls and lights. The DM gets the stored
+        map whole, except `annotations`, which is sent empty to everyone.
+        Anyone else gets it filtered as the Map schema describes: only the
+        tokens on their plane that are not hidden (and on a lit map only those
+        in their sight plus their own), each cut down to the fields they may
+        see; `spiritLayerUrl` null unless the spirit layer is visible to them;
+        `fogData` always null; every wall, with a `door-locked` door sent as
+        `door-closed`; and only the lights whose `enabled` is true.
 
 
         A player or spectator may fetch only the campaign's current map; any
@@ -12720,6 +12720,12 @@ components:
           type: array
           items:
             type: object
+          description: >
+            Empty for everyone in a map a member is sent: the map fetch, a
+            token update's reply and `map.changed`. The DM's replies to
+            `PUT .../maps/{id}` and `POST .../maps/{id}/tokens` return the
+            stored row, which can hold what a campaign import brought in.
+            Nothing in the app reads them.
         lightingEnabled:
           type: boolean
           description: Dynamic lighting on this map (default off)

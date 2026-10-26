@@ -146,18 +146,17 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
       // Find and update the token, in the list as it is under the map's
       // lock, like every other write to a map's tokens: a move or an add
       // landing meanwhile used to be written away.
-      const updatedTokens = await withMapsLocked([mapId], async (tx) => {
+      const updated = await withMapsLocked([mapId], async (tx) => {
         const fresh = await tx.map.findUniqueOrThrow({ where: { id: mapId }, select: { tokens: true } });
         const tokens = readTokens(fresh.tokens);
         const index = tokens.findIndex((t) => t.id === tokenId);
         if (index === -1) return null;
         tokens[index] = { ...tokens[index], visible };
-        await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } });
-        return tokens;
+        return { tokens, row: await tx.map.update({ where: { id: mapId }, data: { tokens: toJson(tokens) } }) };
       });
-      const token: Token | undefined = updatedTokens?.find((t) => t.id === tokenId);
+      const token: Token | undefined = updated?.tokens.find((t) => t.id === tokenId);
 
-      if (!updatedTokens || !token) {
+      if (!updated || !token) {
         socket.emit('error', { message: 'Token not found' });
         return;
       }
@@ -179,7 +178,7 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         // client onto the map it carries.
         const campaign = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
         if (campaign?.currentMapId === mapId) {
-          await broadcastMapData(io, campaignId, { ...map, tokens: toJson(updatedTokens) });
+          await broadcastMapData(io, campaignId, updated.row);
         }
         // Any token: revealing or hiding a player's own spirit-plane token
         // moves them between planes, which changes what they are sent of the

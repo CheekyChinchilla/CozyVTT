@@ -22,35 +22,6 @@ import type { Token } from '../websocket/shared';
 // copy of it, looser than both others (`type` and `disposition` as bare
 // strings). See the note there.
 
-// Map data as returned from Prisma
-export interface MapData {
-  id: string;
-  campaignId: string;
-  name: string;
-  imageUrl: string;
-  width: number;
-  height: number;
-  gridSize: number;
-  feetPerSquare: number;
-  diagonalRule: string;
-  baseLayerUrl: string;
-  spiritLayerUrl: string | null;
-  tokens: unknown;
-  annotations: unknown;
-  wallSegments: unknown;
-  fogData: unknown;
-  lightingEnabled: boolean;
-  /** Manual fog of war applies on this map. Off: players see the whole map (lighting still applies). */
-  fogEnabled: boolean;
-  /** Everything in line of sight is lit. Off: lights and darkvision decide what a player sees. */
-  globalIllumination: boolean;
-  /** Players' explored areas are remembered and greyed in on this map. */
-  explorationEnabled: boolean;
-  lights: unknown;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
 /** The tokens on a map's spirit plane that are shown, out of its stored tokens JSON. */
 function shownSpiritTokens(tokens: unknown): Token[] {
   return ((Array.isArray(tokens) ? tokens : []) as Token[]).filter((t) => t.layer === 'spirit' && t.visible);
@@ -776,10 +747,11 @@ export function lightRemovalSentTo(
 }
 
 /**
- * What a member is sent of a map, decided column by column. Every column of
- * the Map model is in exactly one of these three lists, and keepInStep.test.ts
- * fails otherwise, so a column added later fails the suite until someone
- * decides who may see it and puts it in one.
+ * What a member is sent of a map, decided column by column. filterMapData
+ * builds the map from these three lists and nothing else, so a column in none
+ * of them reaches nobody. Every column of the Map model is in exactly one, and
+ * keepInStep.test.ts fails otherwise, so a column added later fails the suite
+ * until someone decides who may see it and puts it in one.
  *
  * Sent to everyone, as stored: what every member needs to draw the map.
  */
@@ -788,7 +760,7 @@ export const MAP_FIELDS_SENT_TO_EVERYONE = [
   'lightingEnabled', 'fogEnabled', 'globalIllumination', 'explorationEnabled', 'createdAt', 'updatedAt',
 ] as const satisfies readonly (keyof MapRow)[];
 
-/** Decided for each recipient by filterMapData: the DM is sent more of these than anyone else. */
+/** Decided for each recipient by filterMapData; MapFieldsDecided says what each may be. */
 export const MAP_FIELDS_DECIDED_PER_RECIPIENT = [
   'tokens', 'wallSegments', 'lights', 'fogData', 'spiritLayerUrl', 'annotations',
 ] as const satisfies readonly (keyof MapRow)[];
@@ -801,23 +773,48 @@ export const MAP_FIELDS_DECIDED_PER_RECIPIENT = [
  */
 export const MAP_FIELDS_NEVER_SENT = [] as const satisfies readonly (keyof MapRow)[];
 
+type MapFieldSentToEveryone = (typeof MAP_FIELDS_SENT_TO_EVERYONE)[number];
+type MapFieldDecidedPerRecipient = (typeof MAP_FIELDS_DECIDED_PER_RECIPIENT)[number];
+
+/** Each field decided for a recipient, as it is sent. */
+interface MapFieldsDecided {
+  /** The DM's every token; anyone else's as filterTokensByRole and, on a lit map, filterTokensByLighting leave them. */
+  tokens: Token[];
+  /** Every wall; for anyone but the DM a locked door as a closed one (wallsSentTo). */
+  wallSegments: WallSegment[];
+  /** Every light for the DM; only those that are on for anyone else (lightsSentTo). */
+  lights: LightSource[];
+  /** The DM's alone; anyone else is sent the revealed cells by their own event. */
+  fogData: MapRow['fogData'];
+  /** Null for anyone who cannot see the spirit layer. */
+  spiritLayerUrl: string | null;
+  /** Empty for everyone: nothing reads them, and a campaign import stores whatever its archive held. */
+  annotations: [];
+}
+
+/** The fields decided for one recipient, every one of the list's and nothing else. */
+type DecidedForRecipient = { [K in MapFieldDecidedPerRecipient]: MapFieldsDecided[K] };
+
+/** A map as one member is sent it: the columns sent to everyone, and those decided for them. */
+export type MapSent = Pick<MapRow, MapFieldSentToEveryone> & DecidedForRecipient;
+
+function mapFieldsSentToEveryone(map: MapRow): Pick<MapRow, MapFieldSentToEveryone> {
+  return Object.fromEntries(MAP_FIELDS_SENT_TO_EVERYONE.map((field) => [field, map[field]])) as Pick<MapRow, MapFieldSentToEveryone>;
+}
+
 /**
- * Filter entire map data based on user role and spirit layer visibility.
+ * A map as one member is sent it, built from the lists above: the columns
+ * everyone is sent as stored, then each one decided for this recipient.
  *
- * This filters:
- * - Tokens (via filterTokensByRole)
- * - Spirit layer URL (hidden from non-DMs when spirit layer is not visible)
- *
- * 
  * - CRITICAL: Never send spirit layer data to non-privileged users
  *
- * @param mapData - Raw map data from Prisma
+ * @param mapData - The stored map row, read whole
  * @param userRole - The user's campaign role
  * @param spiritVisible - Whether the spirit layer is visible to this user
- * @returns Filtered map data safe to send to the client
+ * @returns The map safe to send to this user
  */
 export function filterMapData(
-  mapData: MapData,
+  mapData: MapRow,
   userRole: string,
   spiritVisible: boolean,
   /**
@@ -830,7 +827,7 @@ export function filterMapData(
    * exactly like "this user has no lighting restrictions".
    */
   userId: string | undefined
-): MapData & { tokens: Token[] } {
+): MapSent {
   let filteredTokens = filterTokensByRole(mapData.tokens, userRole, spiritVisible, userId);
 
   // Apply dynamic lighting filter for non-DM members when lighting is enabled.
@@ -850,8 +847,7 @@ export function filterMapData(
     );
   }
 
-  return {
-    ...mapData,
+  const decided: DecidedForRecipient = {
     tokens: filteredTokens,
     // Remove spirit layer URL if user shouldn't see it
     spiritLayerUrl: (userRole === 'DM' || spiritVisible) ? mapData.spiritLayerUrl : null,
@@ -863,6 +859,7 @@ export function filterMapData(
     lights: lightsSentTo(userRole, mapData.lights),
     // Fog data is DM-only (full state); players receive derived revealed-cells via WebSocket
     fogData: userRole === 'DM' ? mapData.fogData : null,
-    lightingEnabled: mapData.lightingEnabled,
+    annotations: [],
   };
+  return { ...mapFieldsSentToEveryone(mapData), ...decided };
 }

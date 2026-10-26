@@ -217,6 +217,14 @@ rule. **A new token field a player must not read goes into
 `tokenForRecipient`**, for the same reason a new field a player must not
 write goes into `restrictedFields`.
 
+The map itself is built from lists the same way. `filterMapData` sends each
+member the columns in `MAP_FIELDS_SENT_TO_EVERYONE` as stored, decides each
+column in `MAP_FIELDS_DECIDED_PER_RECIPIENT` for them (tokens, walls, lights,
+fog, the spirit layer, and the annotations, which go to nobody), and sends
+nothing else. **A new map column goes into one of the three lists in
+`spirit-layer.ts`**, `MAP_FIELDS_NEVER_SENT` being the third; the suite fails
+until it is in one (`keepInStep.test.ts`).
+
 #### Check Campaign Deletion Permission
 ```typescript
 const canDelete = await canDeleteCampaign(userId, campaignId, platformRole);

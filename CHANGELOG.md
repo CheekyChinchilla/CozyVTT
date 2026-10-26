@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Changed
+
+- **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.
+  - *Maps.* A map's `annotations` is an empty array for everyone, the DM included, in `GET /api/campaigns/:campaignId/maps/:id`, the reply to `PUT .../maps/:id/tokens/:tokenId` and `map.changed`. It carried whatever a campaign import had stored from its archive. Nothing in the app reads it.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3
