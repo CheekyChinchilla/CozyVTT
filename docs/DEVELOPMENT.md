@@ -472,14 +472,15 @@ Tests live alongside the components they test in `__tests__/` subdirectories or 
 ### Browser smoke tests (Playwright)
 
 `frontend/e2e/` holds a handful of end-to-end tests that drive a real browser
-(Chromium, at a desktop and a phone size) through a running instance: the
+(Chromium at a desktop and a Pixel 10 phone size, WebKit on an iPhone 15 and
+an iPad Pro 11 in landscape) through a running instance: the
 setup wizard on a fresh one, signing in and out, creating a campaign and
 opening it with its live connection, and nothing wider than the screen on a
 phone. CI runs them against the production stack it has just built. To run
 them yourself, start an instance, then from `frontend/`:
 
 ```bash
-npx playwright install chromium     # once, to fetch the browser (add --with-deps on Linux, as CI does)
+npx playwright install chromium webkit   # once, to fetch both browsers (add --with-deps on Linux, as CI does)
 E2E_BASE_URL=http://localhost:3000 E2E_SETUP_TOKEN=<the setup token> npm run test:e2e
 ```
 
@@ -488,6 +489,16 @@ can throw away; on one already set up, it is skipped and the others sign in
 as `E2E_ADMIN_EMAIL` with `E2E_ADMIN_PASSWORD`. The settings are listed in
 `frontend/e2e/instance.ts`. One test's check of the page's security headers
 runs only with `E2E_PRODUCTION=1`, since the development server sends none.
+On Linux, WebKit needs system libraries that `--with-deps` installs with
+`sudo`; without them its projects fail to launch.
+
+**On a phone or tablet.** The four projects are `desktop`, `phone` (Pixel 10),
+`iphone` (iPhone 15) and `ipad` (iPad Pro 11, landscape); `setup` runs first.
+Run one with `npx playwright test --project=iphone`. The phone checks apply to
+any project whose screen is narrower than the 1024 px layout split, so the
+iPad takes the desktop path. WebKit here is Playwright's build, not Safari:
+it catches layout and engine differences, but final checks on iOS belong on a
+real device.
 
 ### Checking sign-in by hand
 

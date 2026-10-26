@@ -5,6 +5,14 @@ import { ADMIN, PRODUCTION } from './instance';
  * layout to whatever overflows, so the window's width would hide it. */
 const sidewaysOverflow = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - screen.width);
 
+/** The width below which the app uses its phone layout (the lg breakpoint). */
+const LAYOUT_SPLIT = 1024;
+
+/** Whether this project's screen is narrower than that split, whatever the
+ * device: the phone and iphone projects are, the desktop and an iPad in
+ * landscape are not. */
+const onPhone = (page: Page) => (page.viewportSize()?.width ?? Infinity) < LAYOUT_SPLIT;
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/auth/login');
   await page.getByLabel('Email').fill(ADMIN.email);
@@ -31,7 +39,8 @@ test('creates a campaign and opens its table, with a live connection through the
   const dialog = page.getByRole('dialog', { name: 'Create Campaign' });
   await dialog.getByLabel('Campaign Name').fill(name);
   await dialog.getByRole('button', { name: 'Create Campaign' }).click();
-  await expect(dialog).toBeHidden();
+  // WebKit on a small runner has taken over five seconds to finish the create.
+  await expect(dialog).toBeHidden({ timeout: 15_000 });
 
   const live = page.waitForEvent('websocket', (socket) => socket.url().includes('/socket.io/'));
   await page.getByRole('button', { name: new RegExp(name) }).click();
@@ -44,7 +53,7 @@ test('creates a campaign and opens its table, with a live connection through the
   // On a phone the table opens behind a notice; past it, the table fits the
   // screen. The session rail's tab names (hidden text) once sat 200 pixels
   // past the edge there, so the whole page scrolled sideways.
-  if (testInfo.project.name === 'phone') {
+  if (onPhone(page)) {
     await page.getByRole('button', { name: 'Continue anyway' }).click();
     await expect(page.getByRole('heading', { name: 'Desktop Required' })).toBeHidden();
     expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
@@ -63,8 +72,8 @@ test('answers the API with JSON, and serves the page with its security headers',
   expect(headers['x-content-type-options']).toBe('nosniff');
 });
 
-test('fits the sign-in page and the dashboard on a phone without sideways scrolling', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'phone', 'A phone-sized check.');
+test('fits the sign-in page and the dashboard on a phone without sideways scrolling', async ({ page }) => {
+  test.skip(!onPhone(page), 'A phone-sized check.');
   await page.goto('/auth/login');
   expect(await sidewaysOverflow(page)).toBeLessThanOrEqual(0);
   await signIn(page);
