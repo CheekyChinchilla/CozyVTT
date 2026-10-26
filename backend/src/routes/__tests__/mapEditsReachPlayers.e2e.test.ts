@@ -18,6 +18,8 @@ import { createTestApp } from '../../__tests__/helpers/test-app';
 import { prisma, createTestUser, createTestCampaign, cleanupCampaigns, cleanupUsers, TEST_PASSWORD } from '../../__tests__/helpers/db';
 import { createWsTestServer, waitForEvent, expectNoEvent, WsTestServer } from '../../__tests__/helpers/websocket-test-server';
 import type { Socket as ClientSocket } from 'socket.io-client';
+import { MAP_FIELDS_SENT_TO_EVERYONE } from '../../utils/spirit-layer';
+import { MAP_FIELDS_THAT_RESEND_THE_MAP, MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP } from '../maps';
 
 jest.setTimeout(30000);
 
@@ -91,6 +93,16 @@ describe('an edit to the map on screen', () => {
     expect((await put(shownId, { fogEnabled: false })).status).toBe(200);
     await quiet;
     await put(shownId, { fogEnabled: true });
+  });
+});
+
+// A field everyone is sent that an edit changes without the map going out
+// again leaves every member drawing it as it was.
+describe('the fields whose change sends the map on screen again', () => {
+  it('are every field everyone is sent, but those named with a reason they need not be', () => {
+    const named: string[] = [...MAP_FIELDS_THAT_RESEND_THE_MAP, ...Object.keys(MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP)];
+    expect(MAP_FIELDS_SENT_TO_EVERYONE.filter((field) => !named.includes(field))).toEqual([]);
+    expect(MAP_FIELDS_THAT_RESEND_THE_MAP.filter((field) => field in MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP)).toEqual([]);
   });
 });
 
