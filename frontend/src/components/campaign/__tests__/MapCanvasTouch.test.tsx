@@ -415,6 +415,28 @@ describe('one finger', () => {
   });
 });
 
+describe('a finger dragging a wall', () => {
+  // The drag's down and first move arrive in one event, and the first move
+  // carried the walls selected before the down: another wall jumped.
+  it('moves the wall it grabbed from the first move, leaving the one selected before', () => {
+    const WALL_B = seg('a2', 300, 100, 400, 100);
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, WALL_B] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+    mouse.down(surface(), px(350, 100));
+    mouse.up(surface(), px(350, 100));
+
+    const finger = contact('touch', 1);
+    finger.down(surface(), px(150, 100));
+    finger.move(surface(), px(150, 150));
+    mouse.move(surface(), px(350, 100), 0);
+    expect(surface().className).toContain('cursor-pointer');
+
+    finger.up(surface(), px(150, 150));
+    expect(sentOf('walls:replace')).toEqual([expect.objectContaining({ segments: [{ ...WALL_A, y1: 150, y2: 150 }, WALL_B] })]);
+  });
+});
+
 describe('a second finger', () => {
   /**
    * A second finger lands and lifts: a pinch, which draws nothing itself.
