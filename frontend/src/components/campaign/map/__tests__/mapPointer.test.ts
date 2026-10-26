@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createElement } from 'react';
 import { render, fireEvent } from '@testing-library/react';
-import { fromMouseEvent, fromPointerEvent, pointerKind, type MapPointer } from '../mapPointer';
+import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, pointerKind, type MapPointer } from '../mapPointer';
 
 /** A canvas that records what each handler made of its event. */
 function canvas(options: { preventDown?: boolean; preventMove?: boolean } = {}) {
@@ -79,5 +79,31 @@ describe('fromMouseEvent', () => {
     el.dispatchEvent(new PointerEvent('contextmenu', { bubbles: true, cancelable: true, pointerType: 'touch', clientX: 5, clientY: 6 }));
 
     expect(seen[0]).toEqual(expect.objectContaining({ kind: 'touch', clientX: 5, clientY: 6 }));
+  });
+});
+
+describe('the click count', () => {
+  it('counts downs of one kind within 500 ms and 4 pixels of the last as one more click', () => {
+    const clicks = createClickCounter();
+    expect(clicks.count('mouse', 0, 100, 100)).toBe(1);
+    expect(clicks.count('mouse', 300, 103, 102)).toBe(2);
+    expect(clicks.count('mouse', 790, 103, 102)).toBe(3);
+  });
+
+  it('starts again after 500 ms, past 4 pixels, for another kind of pointer, and after another button', () => {
+    const clicks = createClickCounter();
+    clicks.count('mouse', 0, 100, 100);
+    expect(clicks.count('mouse', 501, 100, 100)).toBe(1);
+    expect(clicks.count('mouse', 600, 105, 100)).toBe(1);
+    expect(clicks.count('touch', 700, 105, 100)).toBe(1);
+    clicks.reset();
+    expect(clicks.count('touch', 800, 105, 100)).toBe(1);
+  });
+});
+
+describe('buttonBit', () => {
+  it('gives the bit each button holds in buttons', () => {
+    expect([0, 1, 2, 3, 4, 5].map(buttonBit)).toEqual([1, 4, 2, 8, 16, 32]);
+    expect(buttonBit(-1)).toBe(0);
   });
 });

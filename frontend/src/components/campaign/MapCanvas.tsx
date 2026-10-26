@@ -63,7 +63,7 @@ import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';
-import { fromMouseEvent } from './map/mapPointer';
+import { buttonBit, createClickCounter, fromMouseEvent, fromPointerEvent, type MapPointer } from './map/mapPointer';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
@@ -1996,16 +1996,48 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   };
 
   /**
-   * The tools a click or a move is offered to, in this order, until one takes
+   * The tools a press or a move is offered to, in this order, until one takes
    * it: a DM tool first, then doors, the fog boxes, the measuring tools, and
    * tokens and panning last. The order is what decides a click when two tools
-   * are up at once. On mouse up each finishes what it holds, in the same order.
+   * are up at once. When the button lifts each finishes what it holds, in the
+   * same order.
    */
   const pointerTools: MapTool[] = [wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
 
-  const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
+  // A mouse and a pen reach the tools as they happen. The mouse is never
+  // captured, so a press that leaves the canvas behaves as it always has: a
+  // pan stops at the edge, a stroke or a box gets no moves past it, and the
+  // window hears the release. A pen or a finger is captured from down to
+  // lift, so its moves and its lift come here wherever it goes.
+  const clickCounterRef = useRef(createClickCounter());
+
+  /** Where a pointer is in the canvas's, the map's and the grid's spaces. */
+  const pointerAt = (e: MapPointer, via: PointerAt['via']): PointerAt | undefined => {
+    if (!canvasRef.current) return undefined;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const screenX = e.clientX - rect.left;
+    const screenY = e.clientY - rect.top;
+    const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
+    return { e, via, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
+  };
+
+  /**
+   * A press at time `t` with its click count. A pointer event's own count is
+   * always 0, so the downs are counted here, for the double-click that ends
+   * a wall line. Another button starts the count again.
+   */
+  const withClickCount = (e: MapPointer, t: number): MapPointer => {
+    const clicks = clickCounterRef.current;
+    if (e.button !== 0) {
+      clicks.reset();
+      return { ...e, detail: Math.max(e.detail, 1) };
+    }
+    return { ...e, detail: Math.max(e.detail, clicks.count(e.kind, t, e.clientX, e.clientY)) };
+  };
+
+  /** A button pressed: the right one pans under a DM tool, the left one goes to the tools. */
+  const pressButton = (e: MapPointer, via: PointerAt['via']) => {
     if (!canvasRef.current || !currentMap) return;
-    const e = fromMouseEvent(event);
 
     // Right-button while a tool is active: start panning (left-click is reserved for tools).
     // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
@@ -2018,31 +2050,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
 
     if (e.button !== 0) return; // Only left click for everything else
 
-    // Get grid coordinates of click
-    const rect = canvasRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
-    const at: PointerAt = { e, via: 'mouse', screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
-
+    const at = pointerAt(e, via);
+    if (!at) return;
     for (const tool of pointerTools) {
       if (tool.down?.(at)) return;
     }
   };
 
   /**
-   * Handle mouse move (pan + hover coordinates + token drag)
+   * A pointer moved (pan + hover coordinates + token drag)
    */
-  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!canvasRef.current || !currentMap) return;
-    const e = fromMouseEvent(event);
-
-    const rect = canvasRef.current.getBoundingClientRect();
-    const screenX = e.clientX - rect.left;
-    const screenY = e.clientY - rect.top;
-    const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
-    const at: PointerAt = { e, via: 'mouse', screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
-
+  const movePointer = (at: PointerAt) => {
     // Track raw map-px position (unquantised) for accurate ghost line in free-draw mode
     hoverMapPxRef.current = at.mapPx;
 
@@ -2051,6 +2069,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     // Update hover coordinates
     // Only when the pointer reaches another square: a new object on every
     // pixel of movement re-rendered the whole canvas.
+    const { gridCoords } = at;
     if (mapControls.isWithinBounds(gridCoords)) {
       setHoverCoords((prev) => (prev && prev.x === gridCoords.x && prev.y === gridCoords.y ? prev : gridCoords));
     } else {
@@ -2063,50 +2082,115 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   };
 
   /**
-   * Handle mouse up (stop map panning)
-   * Note: a held token is put down by the token tool's mouse down, on the second click
+   * A button let go: the right one ends its pan; any other has every tool
+   * finish what it holds and stops the pan. A held token is put down by the
+   * token tool's down, on the second click.
    */
-  const handleMouseUp = (e?: { button: number }) => {
+  const releaseButton = (button: number, at?: PointerAt) => {
     // Release right-button pan
-    if (e?.button === 2) {
+    if (button === 2) {
       rightPanActiveRef.current = false;
       mapControls.stopDrag();
       return;
     }
-    for (const tool of pointerTools) tool.up?.();
+    for (const tool of pointerTools) tool.up?.(at);
     // Stop map panning
     mapControls.stopDrag();
   };
 
-  // A button let go outside the canvas never reaches its onMouseUp, which left
-  // an erase or brush stroke, a box, a drag or a right-button pan going. The
-  // window hears every release; one over the canvas is the canvas's own.
-  const handleMouseUpRef = useRef(handleMouseUp);
-  handleMouseUpRef.current = handleMouseUp;
+  /** The browser took the pointer: every tool drops what the press holds, and a pan stops. */
+  const cancelPointer = () => {
+    for (const tool of pointerTools) tool.cancel?.();
+    rightPanActiveRef.current = false;
+    mapControls.stopDrag();
+  };
+
+  const capturePointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // The pointer is already gone; its lift or cancel still arrives.
+    }
+  };
+
+  const releasePointer = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = event.currentTarget;
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    if (e.kind !== 'mouse') capturePointer(event);
+    pressButton(withClickCount(e, event.timeStamp), 'mouse');
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    // A second button pressed or let go while another is held fires no
+    // pointerdown or pointerup: it is a move whose button is the one that
+    // changed. A right press during a left fog drag cancels the box and pans.
+    if (e.button !== -1) {
+      if (e.buttons & buttonBit(e.button)) pressButton(withClickCount(e, event.timeStamp), 'mouse');
+      else releaseButton(e.button, pointerAt(e, 'mouse'));
+      return;
+    }
+    if (!currentMap) return;
+    const at = pointerAt(e, 'mouse');
+    if (at) movePointer(at);
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    if (e.kind !== 'mouse') releasePointer(event);
+    releaseButton(e.button, pointerAt(e, 'mouse'));
+  };
+
+  const handlePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (fromPointerEvent(event).kind !== 'mouse') releasePointer(event);
+    cancelPointer();
+  };
+
+  // The mouse is never captured, so a button let go outside the canvas never
+  // reaches its pointerup, which left an erase or brush stroke, a box, a drag
+  // or a right-button pan going. The window hears every release, a second
+  // button's included; one over the canvas is the canvas's own.
+  const onWindowPointer = useEffectEvent((event: PointerEvent) => {
+    if (event.target === canvasRef.current) return;
+    const e = fromPointerEvent(event);
+    if (e.kind !== 'mouse') return;
+    const released = event.type === 'pointerup' || (e.button !== -1 && !(e.buttons & buttonBit(e.button)));
+    if (released) releaseButton(e.button, pointerAt(e, 'mouse'));
+  });
   useEffect(() => {
-    const onWindowMouseUp = (e: MouseEvent) => {
-      if (e.target === canvasRef.current) return;
-      handleMouseUpRef.current(e);
+    const listener = (event: PointerEvent) => onWindowPointer(event);
+    window.addEventListener('pointerup', listener);
+    window.addEventListener('pointermove', listener);
+    return () => {
+      window.removeEventListener('pointerup', listener);
+      window.removeEventListener('pointermove', listener);
     };
-    window.addEventListener('mouseup', onWindowMouseUp);
-    return () => window.removeEventListener('mouseup', onWindowMouseUp);
   }, []);
 
   /**
-   * Handle mouse leave (stop pan, clear hover, cancel token drag)
+   * The pointer left the canvas.
    */
-  const handleMouseLeave = () => {
-    // Cancel token drag if in progress
-    if (draggedToken) cancelHold();
+  const handlePointerLeave = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const e = fromPointerEvent(event);
+    // A mouse leaving puts a held token back and stops a pan, as it always
+    // has. A finger leaves after every lift and a pen when it goes out of
+    // range, and a token they picked up with a tap stays held.
+    if (e.kind === 'mouse') {
+      if (draggedToken) cancelHold();
+      mapControls.stopDrag();
+    }
 
-    // Stop map panning
-    mapControls.stopDrag();
-
-    // Clear hover state
-    setHoverCoords(null);
-    setHoverToken(null);
-    setHoveredDoorId(null);
-    hoverMapPxRef.current = null;
+    // Clear hover state, unless a finger or a pen is still pressing
+    if (e.kind === 'mouse' || e.buttons === 0) {
+      setHoverCoords(null);
+      setHoverToken(null);
+      setHoveredDoorId(null);
+      hoverMapPxRef.current = null;
+    }
   };
 
   /**
@@ -2242,7 +2326,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     });
   };
 
-  const handleContextMenu = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    const e = fromMouseEvent(event);
     e.preventDefault();
     if (!canvasRef.current || !currentMap) return;
     // The right button pans while a wall, fog or light tool is up, so no menu
@@ -2362,10 +2447,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       {/* Three stacked canvases. The vibe CSS filter is applied to
           the wrapper so it tints the composite of all three, matching the old
           single-canvas behaviour. The wrapper is also the CSS-transform target
-          for pan gestures. Only the top canvas takes input. */}
+          for pan gestures. Only the top canvas takes input. A press on the
+          map selects no text and a long-press opens no callout; the panels
+          over it keep theirs. */}
       <div
         ref={layersRef}
-        className="absolute inset-0"
+        className="absolute inset-0 select-none [-webkit-touch-callout:none]"
         style={{
           // Re-checked here as well as on the server: a filter is CSS.
           filter: activeVibeEffect && isSafeVibeFilter(activeVibeEffect.filter) ? activeVibeEffect.filter : undefined,
@@ -2388,7 +2475,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           ref={canvasRef}
           width={canvasSize.width}
           height={canvasSize.height}
-          className={`absolute inset-0 ${
+          className={`absolute inset-0 touch-none ${
             draggedToken ? 'cursor-grabbing' :
             wallMode === 'wall-draw' ? 'cursor-crosshair' :
             wallMode === 'wall-polygon' ? 'cursor-crosshair' :
@@ -2401,10 +2488,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             (hoverToken || hoveredDoorId) ? 'cursor-pointer' :
             'cursor-move'
           }`}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerLeave}
           onContextMenu={handleContextMenu}
         />
       </div>

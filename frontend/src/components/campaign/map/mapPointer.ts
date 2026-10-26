@@ -87,3 +87,40 @@ export function fromMouseEvent(e: React.MouseEvent<HTMLCanvasElement>): MapPoint
     preventDefault: () => e.preventDefault(),
   };
 }
+
+const BUTTON_BITS: Record<number, number> = { 0: 1, 1: 4, 2: 2, 3: 8, 4: 16, 5: 32 };
+
+/** The bit a button holds in `buttons`; 0 for -1, a move's. */
+export function buttonBit(button: number): number {
+  return BUTTON_BITS[button] ?? 0;
+}
+
+/**
+ * Downs this close in time and place count as one more click. A page cannot
+ * read the system's double-click settings; these are the usual ones.
+ */
+export const CLICK_COUNT_MS = 500;
+export const CLICK_COUNT_PX = 4;
+
+export interface ClickCounter {
+  /** A primary-button down or a tap at time `t`: its click count, 1 for the first. */
+  count(kind: PointerKind, t: number, x: number, y: number): number;
+  /** The next down counts from 1, after another button or a drag. */
+  reset(): void;
+}
+
+export function createClickCounter(): ClickCounter {
+  let last: { kind: PointerKind; t: number; x: number; y: number; count: number } | null = null;
+  return {
+    count(kind, t, x, y) {
+      const again = last !== null && last.kind === kind && t - last.t <= CLICK_COUNT_MS
+        && Math.hypot(x - last.x, y - last.y) <= CLICK_COUNT_PX;
+      const count = again && last ? last.count + 1 : 1;
+      last = { kind, t, x, y, count };
+      return count;
+    },
+    reset() {
+      last = null;
+    },
+  };
+}
