@@ -2,9 +2,11 @@
 // The shape every map tool's input handling takes.
 //
 // MapCanvas owns the canvas and its pointer and keyboard listeners; each tool
-// owns what it does with them. A tool is asked in a fixed order, so the order
-// in MapCanvas decides which tool a click goes to when two are up at once
-// (a measuring tool can sit beside a DM tool).
+// owns what it does with them. A mouse or a pen reaches the tools as it
+// happens; a finger through the gesture recogniser (map/gestures.ts), a tap
+// as a down and an up and a drag as a down, moves and an up. A tool is asked
+// in a fixed order, so the order in MapCanvas decides which tool a click goes
+// to when two are up at once (a measuring tool can sit beside a DM tool).
 // ============================================
 
 import type { useMapControls } from '@/hooks/useMapControls';

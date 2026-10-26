@@ -9,9 +9,10 @@
  * screen pixel (x, y) is map pixel (x, y), and a square is 50 pixels.
  */
 
-import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
-import { render, act } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { CampaignMap, Token } from '@/types';
+import type { LightSource, WallSegment } from '@/types/walls';
 import { contact, mouse } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
@@ -117,6 +118,12 @@ vi.mock('@/services/api', () => {
 import MapCanvas from '../MapCanvas';
 import { useGameStore } from '@/stores/gameStore';
 
+const seg = (id: string, x1: number, y1: number, x2: number, y2: number, type: WallSegment['type'] = 'wall'): WallSegment =>
+  ({ id, x1, y1, x2, y2, type });
+
+/** A plain wall along y 100 from x 100 to 200. */
+const WALL_A = seg('a1', 100, 100, 200, 100);
+
 function mapWith(extra: Partial<CampaignMap> = {}): CampaignMap {
   return {
     id: 'map-a',
@@ -162,6 +169,37 @@ function sentOf(event: string): unknown[] {
 
 function show(...tokens: Token[]) {
   act(() => { useGameStore.getState().setTokens(tokens); });
+}
+
+function fire(event: string, payload: unknown) {
+  act(() => {
+    h.handlers.get(event)?.forEach((fn) => (fn as (data: unknown) => void)(payload));
+  });
+}
+
+function wallTool(label: string) {
+  fireEvent.click(screen.getByText('Walls'));
+  fireEvent.click(screen.getByLabelText(label));
+}
+
+const readout = () => screen.queryByText(/^\(-?\d+, -?\d+\)$/)?.textContent ?? null;
+const zoom = () => screen.getByText(/^\d+%$/).textContent;
+
+/** A finger's tap: down and up at one place, then the leave a lift brings. */
+function tap(id: number, at: { clientX: number; clientY: number }) {
+  const finger = contact('touch', id);
+  finger.down(surface(), at);
+  finger.up(surface(), at);
+  finger.leave(surface());
+}
+
+/** A finger pressed at `from`, moved through `to`, and lifted at the last point. */
+function swipe(id: number, from: { clientX: number; clientY: number }, ...to: Array<{ clientX: number; clientY: number }>) {
+  const finger = contact('touch', id);
+  finger.down(surface(), from);
+  for (const p of to) finger.move(surface(), p);
+  finger.up(surface(), to[to.length - 1] ?? from);
+  finger.leave(surface());
 }
 
 beforeAll(() => {
@@ -243,5 +281,255 @@ describe('a token picked up by a tap', () => {
     second.down(surface(), square(3, 19));
     second.up(surface(), square(3, 19));
     expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 19 }]);
+  });
+});
+
+describe('two fingers', () => {
+  // In the app the canvas sits beside the sidebar and under the header, so
+  // the fingers' page position is not the canvas's.
+  const original = HTMLCanvasElement.prototype.getBoundingClientRect;
+  beforeEach(() => {
+    HTMLCanvasElement.prototype.getBoundingClientRect = () =>
+      ({ left: 100, top: 50, right: 1100, bottom: 1050, width: 1000, height: 1000, x: 100, y: 50, toJSON: () => ({}) }) as DOMRect;
+  });
+  afterEach(() => {
+    HTMLCanvasElement.prototype.getBoundingClientRect = original;
+  });
+  const onPage = (x: number, y: number) => px(x + 100, y + 50);
+
+  it('spread apart double the zoom about their centre, and the finger left behind does not pan', () => {
+    render(<MapCanvas />);
+    mouse.move(surface(), onPage(250, 300), 0);
+    expect(readout()).toBe('(5, 13)');
+
+    const a = contact('touch', 1);
+    const b = contact('touch', 2, false);
+    a.down(surface(), onPage(200, 300));
+    b.down(surface(), onPage(300, 300));
+    a.move(surface(), onPage(150, 300));
+    b.move(surface(), onPage(350, 300));
+    a.up(surface(), onPage(150, 300));
+    b.move(surface(), onPage(600, 700));
+    b.up(surface(), onPage(600, 700));
+
+    expect(zoom()).toBe('200%');
+    mouse.move(surface(), onPage(250, 300), 0);
+    expect(readout()).toBe('(5, 13)');
+  });
+
+  it('keep the map under them while their centre moves', () => {
+    render(<MapCanvas />);
+
+    const a = contact('touch', 1);
+    const b = contact('touch', 2, false);
+    a.down(surface(), onPage(200, 300));
+    b.down(surface(), onPage(300, 300));
+    a.move(surface(), onPage(250, 350));
+    b.move(surface(), onPage(450, 350));
+    a.up(surface(), onPage(250, 350));
+    b.up(surface(), onPage(450, 350));
+
+    expect(zoom()).toBe('200%');
+    // Map pixel (250, 300), square (5, 13), began under their centre.
+    mouse.move(surface(), onPage(350, 350), 0);
+    expect(readout()).toBe('(5, 13)');
+  });
+
+  it('zoom no further than 300%', () => {
+    render(<MapCanvas />);
+
+    const a = contact('touch', 1);
+    const b = contact('touch', 2, false);
+    a.down(surface(), onPage(490, 500));
+    b.down(surface(), onPage(510, 500));
+    a.move(surface(), onPage(0, 500));
+    b.move(surface(), onPage(1000, 500));
+
+    expect(zoom()).toBe('300%');
+  });
+});
+
+describe('one finger', () => {
+  it('pans the map by its movement on empty ground', () => {
+    render(<MapCanvas />);
+
+    swipe(1, px(500, 500), px(520, 500), px(550, 500));
+
+    mouse.move(surface(), px(60, 10), 0);
+    expect(readout()).toBe('(0, 19)');
+  });
+
+  it('draws a fog box from where it landed', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
+    fireEvent.click(screen.getByText('Fog of War'));
+    fireEvent.click(screen.getByLabelText('Fog reveal box'));
+
+    swipe(1, px(60, 60), px(120, 90), px(160, 110));
+
+    expect(sentOf('fog:operation')).toEqual([{
+      mapId: 'map-a',
+      operation: { op: 'reveal', cells: expect.arrayContaining([21, 22, 23, 41, 42, 43]) },
+    }]);
+    expect((sentOf('fog:operation')[0] as { operation: { cells: number[] } }).operation.cells).toHaveLength(6);
+  });
+
+  it('ends a wall line with a double tap', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    tap(1, px(100, 300));
+    tap(2, px(200, 300));
+    tap(3, px(200, 300));
+    tap(4, px(400, 400));
+
+    expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  it('opens a door with a tap, and never with a drag that starts beside it', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [seg('d1', 100, 100, 200, 100, 'door-closed')] }) });
+    render(<MapCanvas />);
+
+    swipe(1, px(150, 104), px(150, 160), px(150, 104));
+    expect(sentOf('wall:update')).toEqual([]);
+
+    tap(2, px(150, 104));
+    expect(sentOf('wall:update')).toHaveLength(1);
+  });
+});
+
+describe('a second finger', () => {
+  /**
+   * A second finger lands and lifts: a pinch, which draws nothing itself.
+   * Moving it zooms the map.
+   */
+  function secondFinger({ moving = false } = {}) {
+    const second = contact('touch', 2, false);
+    second.down(surface(), px(800, 800));
+    if (moving) second.move(surface(), px(850, 800));
+    second.up(surface(), px(moving ? 850 : 800, 800));
+  }
+
+  it('cancels a brush stroke: nothing is sent', () => {
+    render(<MapCanvas />);
+    wallTool('Brush wall mode');
+
+    const first = contact('touch', 1);
+    first.down(surface(), px(100, 300));
+    first.move(surface(), px(150, 300));
+    first.move(surface(), px(200, 300));
+    secondFinger({ moving: true });
+    first.up(surface(), px(200, 300));
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+
+  it('puts a dragged wall back where it was', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    const first = contact('touch', 1);
+    first.down(surface(), px(150, 100));
+    first.move(surface(), px(150, 130));
+    first.move(surface(), px(150, 150));
+    secondFinger();
+    first.up(surface(), px(150, 150));
+    expect(sentOf('walls:replace')).toEqual([]);
+
+    // The wall is where it began: a mouse drag from there moves it.
+    mouse.down(surface(), px(150, 100));
+    mouse.move(surface(), px(150, 120), 1);
+    mouse.up(surface(), px(150, 120));
+    expect(sentOf('walls:replace')).toEqual([expect.objectContaining({ segments: [{ ...WALL_A, y1: 120, y2: 120 }] })]);
+  });
+
+  it('puts a dragged light back where it was, sending nothing', () => {
+    const lamp: LightSource = { id: 'l1', x: 250, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
+    h.set({ currentMap: mapWith({ lights: [lamp] }) });
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Select'));
+
+    const first = contact('touch', 1);
+    first.down(surface(), px(250, 250));
+    first.move(surface(), px(300, 310));
+    secondFinger();
+    first.up(surface(), px(300, 310));
+    expect(sentOf('light:update')).toEqual([]);
+
+    // The light is where it began: a click there picks it up again.
+    mouse.down(surface(), px(250, 250));
+    mouse.up(surface(), px(250, 250));
+    expect(sentOf('light:update')).toEqual([expect.objectContaining({ light: expect.objectContaining({ id: 'l1', x: 250, y: 250 }) })]);
+  });
+});
+
+describe('a pen', () => {
+  it('reaches the tools at once, with no slop: a light moves by 4 pixels', () => {
+    const lamp: LightSource = { id: 'l1', x: 250, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
+    h.set({ currentMap: mapWith({ lights: [lamp] }) });
+    render(<MapCanvas />);
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Select'));
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), px(250, 250));
+    pen.move(surface(), px(254, 250));
+    pen.up(surface(), px(254, 250));
+
+    expect(sentOf('light:update')).toEqual([expect.objectContaining({ light: expect.objectContaining({ x: 254, y: 250 }) })]);
+  });
+
+  it('keeps its stroke while a palm rests on the glass, and the palm does not pan', () => {
+    render(<MapCanvas />);
+    wallTool('Brush wall mode');
+
+    const pen = contact('pen', 5);
+    const palm = contact('touch', 1, false);
+    pen.down(surface(), px(100, 300));
+    pen.move(surface(), px(200, 300));
+    palm.down(surface(), px(600, 600));
+    palm.move(surface(), px(700, 600));
+    pen.move(surface(), px(300, 300));
+    palm.up(surface(), px(700, 600));
+    pen.up(surface(), px(300, 300));
+
+    expect(sentOf('walls:replace')).toEqual([expect.objectContaining({
+      mapId: 'map-a',
+      segments: [expect.objectContaining({ x1: 100, y1: 300, x2: 300, y2: 300, type: 'wall' })],
+    })]);
+    mouse.move(surface(), px(10, 10), 0);
+    expect(readout()).toBe('(0, 19)');
+  });
+
+  it('does nothing with its eraser end', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A] }) });
+    render(<MapCanvas />);
+    wallTool('Wall erase mode');
+
+    const pen = contact('pen', 5);
+    pen.down(surface(), px(150, 100), { button: 5, buttons: 32 });
+    pen.move(surface(), px(160, 100), { buttons: 32 });
+    pen.up(surface(), px(160, 100), { button: 5 });
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+});
+
+describe('the window losing focus', () => {
+  it("drops a finger's stroke under way", () => {
+    render(<MapCanvas />);
+    wallTool('Brush wall mode');
+
+    const finger = contact('touch', 1);
+    finger.down(surface(), px(100, 300));
+    finger.move(surface(), px(200, 300));
+    act(() => { window.dispatchEvent(new Event('blur')); });
+    finger.move(surface(), px(300, 300));
+    finger.up(surface(), px(300, 300));
+
+    expect(sentOf('walls:replace')).toEqual([]);
   });
 });

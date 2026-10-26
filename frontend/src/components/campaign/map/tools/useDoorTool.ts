@@ -1,7 +1,7 @@
 // ============================================
-// Doors, when no wall, fog or light tool is up: a click opens or closes one,
-// hovering one shows the pointer, and a right-click opens its menu (which
-// MapCanvas draws). Only a door the map offers this viewer counts
+// Doors, when no wall, fog or light tool is up: a click or a tap opens or
+// closes one, hovering one shows the pointer, and a right-click opens its menu
+// (which MapCanvas draws). Only a door the map offers this viewer counts
 // (doorAccess.ts): the DM any, a player one they can see, a spectator none,
 // as the server's wall:update checks.
 // ============================================
@@ -61,9 +61,10 @@ export function useDoorTool({
   }, [mapId, socket, carryWallHistory, ownEdits]);
 
   const tool: MapTool = {
-    // Click near a door segment to toggle open/closed.
+    // Click or tap near a door segment to toggle open/closed. A finger's drag
+    // that starts beside one pans or picks up a token, and leaves it alone.
     down(at: PointerAt) {
-      if (wallMode || fogMode || lightMode || tokenTakesClick(at)) return false;
+      if (at.via === 'drag' || wallMode || fogMode || lightMode || tokenTakesClick(at)) return false;
       const door = doorAt(at.mapPx);
       if (!door) return false;
       if (door.type === 'door-locked') {

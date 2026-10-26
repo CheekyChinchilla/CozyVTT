@@ -172,6 +172,35 @@ export function useMapControls(config: MapControlsConfig) {
     [zoomTo]
   );
 
+  // The zoom a two-finger pinch began at, which each step of it scales.
+  const pinchZoomRef = useRef(1);
+
+  /** A pinch begins: its scale is measured from the zoom now. */
+  const pinchStart = useCallback(() => {
+    pinchZoomRef.current = viewRef.current.zoom;
+  }, []);
+
+  /**
+   * A step of a pinch: the pan follows the fingers' centre by `dx`, `dy`, then
+   * the zoom becomes the pinch's starting zoom times `scale`, about `centre`,
+   * clamped as the wheel's is. Moving the pan first keeps the map under the
+   * fingers; zooming about the new centre first would drift by the centre's
+   * move times the change in zoom. All in canvas pixels.
+   */
+  const pinchBy = useCallback(
+    (scale: number, centre: ScreenCoordinates, dx: number, dy: number) => {
+      const { zoom: current, pan } = viewRef.current;
+      const panned = { x: pan.x + dx, y: pan.y + dy };
+      const next = clampZoom(pinchZoomRef.current * scale);
+      const ratio = next / current;
+      setView(next, {
+        x: centre.x + (panned.x - centre.x) * ratio,
+        y: centre.y + (panned.y - centre.y) * ratio,
+      });
+    },
+    [clampZoom, setView]
+  );
+
   /**
    * Start dragging (pan) from a pointer's page position
    */
@@ -295,6 +324,8 @@ export function useMapControls(config: MapControlsConfig) {
 
     // Event handlers
     handleWheel,
+    pinchStart,
+    pinchBy,
 
     // Bounds
     minZoom,

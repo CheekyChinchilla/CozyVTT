@@ -88,6 +88,9 @@ export function fromMouseEvent(e: React.MouseEvent<HTMLCanvasElement>): MapPoint
   };
 }
 
+/** A pen's eraser end, which the map ignores. */
+export const PEN_ERASER_BUTTON = 5;
+
 const BUTTON_BITS: Record<number, number> = { 0: 1, 1: 4, 2: 2, 3: 8, 4: 16, 5: 32 };
 
 /** The bit a button holds in `buttons`; 0 for -1, a move's. */
