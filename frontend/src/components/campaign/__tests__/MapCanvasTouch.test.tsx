@@ -375,6 +375,22 @@ describe('one finger', () => {
     expect((sentOf('fog:operation')[0] as { operation: { cells: number[] } }).operation.cells).toHaveLength(6);
   });
 
+  // A tap's down and up arrive in one event, so the box's far corner must
+  // not come from what the page last drew: a mouse hover had left it there.
+  it('reveals the one square it taps, wherever a mouse last hovered', () => {
+    h.set({ currentMap: mapWith({ fogEnabled: true }) });
+    render(<MapCanvas />);
+    fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
+    fireEvent.click(screen.getByText('Fog of War'));
+    fireEvent.click(screen.getByLabelText('Fog reveal box'));
+    mouse.move(surface(), px(510, 510), 0);
+    mouse.leave(surface());
+
+    tap(1, px(60, 60));
+
+    expect(sentOf('fog:operation')).toEqual([{ mapId: 'map-a', operation: { op: 'reveal', cells: [21] } }]);
+  });
+
   it('ends a wall line with a double tap', () => {
     render(<MapCanvas />);
     wallTool('Wall draw mode');
