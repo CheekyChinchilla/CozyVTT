@@ -173,10 +173,10 @@ export function useMapControls(config: MapControlsConfig) {
   );
 
   /**
-   * Start dragging (pan)
+   * Start dragging (pan) from a pointer's page position
    */
   const startDrag = useCallback(
-    (e: MouseEvent | React.MouseEvent) => {
+    (e: { clientX: number; clientY: number }) => {
       isDraggingRef.current = true;
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       panStartRef.current = { ...viewRef.current.pan };
@@ -187,7 +187,7 @@ export function useMapControls(config: MapControlsConfig) {
   /**
    * Handle drag movement (pan)
    */
-  const handleDrag = useCallback((e: MouseEvent | React.MouseEvent) => {
+  const handleDrag = useCallback((e: { clientX: number; clientY: number }) => {
     if (!isDraggingRef.current) return;
 
     const deltaX = e.clientX - dragStartRef.current.x;

@@ -42,7 +42,8 @@ export function useLightTool({
   const [lightPlacementDefaults, setLightPlacementDefaults] = useState<LightPlacementDefaults>({
     brightRadius: 4, dimRadius: 8, color: '#ffcc66',
   });
-  // Drag-to-move state for lights in select mode
+  // Drag-to-move state for lights in select mode: the light, and where it
+  // stood when it was picked up, to put it back if the drag is cancelled.
   const draggingLightRef = useRef<{ id: string; startX: number; startY: number } | null>(null);
 
   // A new map has none of the last one's lights to have selected or in hand.
@@ -88,7 +89,7 @@ export function useLightTool({
       if (closest) {
         setSelectedLightId(closest.id);
         // Start drag-to-move
-        draggingLightRef.current = { id: closest.id, startX: mapPx.x, startY: mapPx.y };
+        draggingLightRef.current = { id: closest.id, startX: closest.x, startY: closest.y };
       } else {
         setSelectedLightId(null);
       }
@@ -120,6 +121,14 @@ export function useLightTool({
           socketInstance.emit('light:update', ownEdits.tag({ mapId, light: movedLight }));
         }
       }
+    },
+    // A cancelled drag puts the light back where it was; nothing was sent.
+    cancel() {
+      const drag = draggingLightRef.current;
+      if (!drag) return;
+      draggingLightRef.current = null;
+      setLightSources((prev) => prev.map((l) => (l.id === drag.id ? { ...l, x: drag.startX, y: drag.startY } : l)));
+      markDirty('overlay');
     },
     escape() {
       if (!lightMode) return false;

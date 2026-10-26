@@ -739,6 +739,26 @@ export function useWallTool({
         markDirty('overlay');
       }
     },
+    // The browser or a second finger took the pointer: a drag puts the walls
+    // back as they were before it, and a box or a stroke is dropped unsent.
+    // Points already placed on a line or a polygon stay.
+    cancel() {
+      const moving = wallMoveRef.current;
+      wallMoveRef.current = null;
+      if (moving?.hasDragged) replaceWallHistory(moving.preDragState);
+      const endpoint = wallDragEndpointRef.current;
+      wallDragEndpointRef.current = null;
+      if (endpoint?.hasDragged && endpoint.preDragState) replaceWallHistory(endpoint.preDragState);
+      if (wallMarqueeRef.current) {
+        wallMarqueeRef.current = null;
+        setWallMarquee(null);
+      }
+      wallEraseBrushActiveRef.current = false;
+      wallErasedIdsRef.current = new Set();
+      wallBrushActiveRef.current = false;
+      wallBrushPointsRef.current = [];
+      markDirty('overlay');
+    },
     escape() {
       // Polygon mode: clear in-progress polygon first
       if (polygonPoints.length > 0) {

@@ -108,6 +108,10 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
         commitFogDrag(end.x, end.y);
       }
     },
+    // The browser or a second finger took the pointer: the box is abandoned.
+    cancel() {
+      cancelFogDrag();
+    },
     // A fog box being dragged is abandoned before any other Escape action
     escape() {
       if (!fogDragAnchorRef.current) return false;

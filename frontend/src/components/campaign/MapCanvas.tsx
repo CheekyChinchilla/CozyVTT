@@ -63,6 +63,7 @@ import { useMeasureTools } from './map/tools/useMeasureTools';
 import { useDoorTool } from './map/tools/useDoorTool';
 import { useWallTool } from './map/tools/useWallTool';
 import type { MapTool, PointerAt } from './map/tools/types';
+import { fromMouseEvent } from './map/mapPointer';
 import {
   previewOwnFor, previewControlsFor, previewMemoryUser, previewOptions, defaultPreviewSelection, reconcilePreviewSelection, previewPlane,
   encodePreviewSelection, decodePreviewSelection, type PreviewSelection,
@@ -1942,6 +1943,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         }
       return true;
     },
+    // The browser or a second finger took the pointer: a pan stops. A token
+    // held by a click stays held.
+    cancel() {
+      mapControls.stopDrag();
+    },
     move({ e, gridCoords }: PointerAt) {
       if (!currentMap) return false;
         // Handle token dragging
@@ -1997,8 +2003,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    */
   const pointerTools: MapTool[] = [wallTool, lightTool, doorTool, fogTool, measuring, tokenTool];
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseDown = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !currentMap) return;
+    const e = fromMouseEvent(event);
 
     // Right-button while a tool is active: start panning (left-click is reserved for tools).
     // In normal pan mode, right-click is the context menu — handled by handleContextMenu.
@@ -2016,7 +2023,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
-    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
+    const at: PointerAt = { e, via: 'mouse', screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
     for (const tool of pointerTools) {
       if (tool.down?.(at)) return;
@@ -2026,14 +2033,15 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   /**
    * Handle mouse move (pan + hover coordinates + token drag)
    */
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleMouseMove = (event: React.MouseEvent<HTMLCanvasElement>) => {
     if (!canvasRef.current || !currentMap) return;
+    const e = fromMouseEvent(event);
 
     const rect = canvasRef.current.getBoundingClientRect();
     const screenX = e.clientX - rect.left;
     const screenY = e.clientY - rect.top;
     const gridCoords = mapControls.screenToGrid({ x: screenX, y: screenY });
-    const at: PointerAt = { e, screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
+    const at: PointerAt = { e, via: 'mouse', screenX, screenY, mapPx: screenToMapPx(screenX, screenY), gridCoords };
 
     // Track raw map-px position (unquantised) for accurate ghost line in free-draw mode
     hoverMapPxRef.current = at.mapPx;
