@@ -490,8 +490,9 @@ describe('a second finger', () => {
     fireEvent.click(screen.getByText('Lights'));
     fireEvent.click(screen.getByText('Select'));
 
+    // Pressed off the light's centre, so putting it back at the press would show.
     const first = contact('touch', 1);
-    first.down(surface(), px(250, 250));
+    first.down(surface(), px(260, 255));
     first.move(surface(), px(300, 310));
     secondFinger();
     first.up(surface(), px(300, 310));
@@ -553,6 +554,49 @@ describe('a pen', () => {
     pen.up(surface(), px(160, 100), { button: 5 });
 
     expect(sentOf('walls:replace')).toEqual([]);
+  });
+});
+
+describe('choosing another DM tool', () => {
+  // Leaving Select keeps a wall being moved, so the finger's lift under the
+  // new tool dropped the wall where it was.
+  it("drops a finger's drag under way, putting a moved wall back", () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    const finger = contact('touch', 1);
+    finger.down(surface(), px(150, 100));
+    finger.move(surface(), px(150, 130));
+    finger.move(surface(), px(150, 150));
+    fireEvent.click(screen.getByLabelText('Wall draw mode'));
+    finger.move(surface(), px(150, 170));
+    finger.up(surface(), px(150, 170));
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+});
+
+describe('the square under the pointer', () => {
+  // A finger or a pen still pressing keeps it as it leaves the map; a mouse
+  // clears it on any leave, as it always has.
+  it('stays shown while a pen presses as it leaves, and goes when it lifts', () => {
+    render(<MapCanvas />);
+    const pen = contact('pen', 5);
+
+    pen.move(surface(), px(60, 10), { buttons: 0 });
+    expect(readout()).toBe('(1, 19)');
+    pen.down(surface(), px(60, 10));
+    pen.leave(surface(), 1);
+    expect(readout()).toBe('(1, 19)');
+    pen.up(surface(), px(60, 10));
+    pen.leave(surface());
+    expect(readout()).toBeNull();
+
+    mouse.move(surface(), px(60, 10), 0);
+    mouse.down(surface(), px(60, 10));
+    mouse.leave(surface(), 1);
+    expect(readout()).toBeNull();
   });
 });
 

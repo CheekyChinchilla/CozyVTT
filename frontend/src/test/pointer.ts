@@ -42,6 +42,6 @@ export function contact(kind: 'touch' | 'pen', pointerId: number, isPrimary = tr
     up: (el: Element, at: At, extra: Extra = {}) => fireEvent.pointerUp(el, { ...base, ...at, button: 0, buttons: 0, ...extra }),
     cancel: (el: Element) => fireEvent.pointerCancel(el, { ...base, button: 0, buttons: 0 }),
     /** After a lift a finger leaves the element; a pen leaves when it is out of range. */
-    leave: (el: Element) => fireEvent.pointerLeave(el, { ...base, button: -1, buttons: 0 }),
+    leave: (el: Element, buttons = 0) => fireEvent.pointerLeave(el, { ...base, button: -1, buttons }),
   };
 }
