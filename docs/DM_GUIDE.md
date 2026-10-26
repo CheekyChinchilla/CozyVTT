@@ -948,7 +948,7 @@ To toggle a single square, just click it without dragging. Before you start a dr
 Some details worth knowing:
 
 - **Drag in any direction.** Right-to-left and bottom-to-top work exactly like dragging forward.
-- **Cancel a drag** with **Esc**, or by right-dragging (which pans the map instead). Neither reveals anything.
+- **Cancel a drag** with **Esc**, or by right-dragging (which pans the map instead). On a touch screen, put a second finger down: the box is dropped and the two fingers zoom the map. None of these reveals anything.
 - **Dragging off the edge is fine** — the box clamps to the map.
 - Only the DM sees the fog controls and the selection box. Players just see areas appear.
 
@@ -1000,6 +1000,8 @@ Open the **Walls** panel, one of the DM tool panels stacked at the top right of 
 - **Erase** — Click and drag to brush-erase wall segments.
 - **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
+
+On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 

@@ -636,16 +636,18 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 
 | Control | What it does |
 |---|---|
-| **Zoom Out**, **Zoom In** | Change the zoom, from 10% to 300%, keeping the middle of the map view where it is. The current zoom is shown between them, and the mouse wheel zooms too, towards the pointer |
+| **Zoom Out**, **Zoom In** | Change the zoom, from 10% to 300%, keeping the middle of the map view where it is. The current zoom is shown between them. The mouse wheel zooms too, towards the pointer, and on a touch screen so does pinching two fingers on the map, about your fingers |
 | **Fit to Screen** | Shows the whole map in the space available |
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
 
-To move the view, drag an empty part of the map.
+To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 
 ### Moving Your Token
 
 When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, press **Esc**, or move the pointer off the map, to put it back where it was.
+
+On a touch screen, tap the token, then tap the square to put it down. Lifting your finger leaves the token in your hand; to put it back, tap the square it came from.
 
 *GIF pending — Moving a player token.*
 
