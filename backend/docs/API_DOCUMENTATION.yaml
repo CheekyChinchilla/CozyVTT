@@ -2443,17 +2443,17 @@ paths:
                                 id: { type: string, format: uuid }
                                 campaignId: { type: string, format: uuid }
                                 name: { type: string }
-                                imageUrl: { type: string, nullable: true }
-                                width: { type: number }
-                                height: { type: number }
-                                gridSize: { type: number }
-                                feetPerSquare: { type: number }
-                                diagonalRule: { type: string }
-                                baseLayerUrl: { type: string, nullable: true }
+                                imageUrl: { type: string }
+                                width: { type: integer }
+                                height: { type: integer }
+                                gridSize: { type: integer }
+                                feetPerSquare: { type: integer }
+                                diagonalRule: { type: string, enum: [flat, alternating] }
+                                baseLayerUrl: { type: string }
                                 spiritLayerUrl: { type: string, nullable: true }
                                 lightingEnabled: { type: boolean }
                                 fogEnabled: { type: boolean }
-                                globalIllumination: { type: number }
+                                globalIllumination: { type: boolean }
                                 explorationEnabled: { type: boolean }
                                 createdAt: { type: string, format: date-time }
                                 updatedAt: { type: string, format: date-time }
