@@ -34,6 +34,15 @@ interface PanOffset {
   y: number;
 }
 
+/**
+ * The pan that keeps the map point under the screen point `about` where it
+ * is when the zoom is multiplied by `ratio`:
+ * (about - pan) / zoom = (about - newPan) / newZoom.
+ */
+function panKeeping(about: ScreenCoordinates, pan: PanOffset, ratio: number): PanOffset {
+  return { x: about.x + (pan.x - about.x) * ratio, y: about.y + (pan.y - about.y) * ratio };
+}
+
 export function useMapControls(config: MapControlsConfig) {
   const {
     gridSize,
@@ -84,10 +93,7 @@ export function useMapControls(config: MapControlsConfig) {
         setView(next, pan);
         return;
       }
-      // The world point under `about` must stay fixed:
-      // (about - pan) / zoom = (about - newPan) / newZoom
-      const scale = next / current;
-      setView(next, { x: about.x + (pan.x - about.x) * scale, y: about.y + (pan.y - about.y) * scale });
+      setView(next, panKeeping(about, pan, next / current));
     },
     [clampZoom, setView]
   );
@@ -172,11 +178,35 @@ export function useMapControls(config: MapControlsConfig) {
     [zoomTo]
   );
 
+  // The zoom a two-finger pinch began at, which each step of it scales.
+  const pinchZoomRef = useRef(1);
+
+  /** A pinch begins: its scale is measured from the zoom now. */
+  const pinchStart = useCallback(() => {
+    pinchZoomRef.current = viewRef.current.zoom;
+  }, []);
+
   /**
-   * Start dragging (pan)
+   * A step of a pinch: the pan follows the fingers' centre by `dx`, `dy`, then
+   * the zoom becomes the pinch's starting zoom times `scale`, about `centre`,
+   * clamped as the wheel's is. Moving the pan first keeps the map under the
+   * fingers; zooming about the new centre first would drift by the centre's
+   * move times the change in zoom. All in canvas pixels.
+   */
+  const pinchBy = useCallback(
+    (scale: number, centre: ScreenCoordinates, dx: number, dy: number) => {
+      const { zoom: current, pan } = viewRef.current;
+      const next = clampZoom(pinchZoomRef.current * scale);
+      setView(next, panKeeping(centre, { x: pan.x + dx, y: pan.y + dy }, next / current));
+    },
+    [clampZoom, setView]
+  );
+
+  /**
+   * Start dragging (pan) from a pointer's page position
    */
   const startDrag = useCallback(
-    (e: MouseEvent | React.MouseEvent) => {
+    (e: { clientX: number; clientY: number }) => {
       isDraggingRef.current = true;
       dragStartRef.current = { x: e.clientX, y: e.clientY };
       panStartRef.current = { ...viewRef.current.pan };
@@ -187,7 +217,7 @@ export function useMapControls(config: MapControlsConfig) {
   /**
    * Handle drag movement (pan)
    */
-  const handleDrag = useCallback((e: MouseEvent | React.MouseEvent) => {
+  const handleDrag = useCallback((e: { clientX: number; clientY: number }) => {
     if (!isDraggingRef.current) return;
 
     const deltaX = e.clientX - dragStartRef.current.x;
@@ -295,6 +325,8 @@ export function useMapControls(config: MapControlsConfig) {
 
     // Event handlers
     handleWheel,
+    pinchStart,
+    pinchBy,
 
     // Bounds
     minZoom,

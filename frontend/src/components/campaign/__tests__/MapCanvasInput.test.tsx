@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
+import { mouse } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -160,8 +161,8 @@ function show(...tokens: Token[]) {
 
 /** A left click as the canvas sees it: down, then up, at one place. */
 function click(point: { clientX: number; clientY: number }) {
-  fireEvent.mouseDown(surface(), { ...point, button: 0, buttons: 1 });
-  fireEvent.mouseUp(surface(), { ...point, button: 0 });
+  mouse.down(surface(), point);
+  mouse.up(surface(), point);
 }
 
 const readout = () => screen.queryByText(/^\(-?\d+, -?\d+\)$/)?.textContent ?? null;
@@ -183,18 +184,18 @@ describe('the square under the pointer', () => {
   it('is shown in the corner, counting columns from the left and rows up from the bottom', () => {
     render(<MapCanvas />);
 
-    fireEvent.mouseMove(surface(), { clientX: 10, clientY: 10 });
+    mouse.move(surface(), { clientX: 10, clientY: 10 });
     expect(readout()).toBe('(0, 19)');
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 });
     expect(readout()).toBe('(1, 19)');
-    fireEvent.mouseMove(surface(), { clientX: 10, clientY: 960 });
+    mouse.move(surface(), { clientX: 10, clientY: 960 });
     expect(readout()).toBe('(0, 0)');
   });
 
   it('is not shown off the edge of the map', () => {
     render(<MapCanvas />);
 
-    fireEvent.mouseMove(surface(), { clientX: 1010, clientY: 10 });
+    mouse.move(surface(), { clientX: 1010, clientY: 10 });
 
     expect(readout()).toBeNull();
   });
@@ -207,7 +208,7 @@ describe('zooming', () => {
 
     fireEvent.wheel(surface(), { deltaY: -100, clientX: 260, clientY: 260 });
     expect(zoom()).toBe('110%');
-    fireEvent.mouseMove(surface(), { clientX: 260, clientY: 260 });
+    mouse.move(surface(), { clientX: 260, clientY: 260 });
     expect(readout()).toBe('(5, 14)');
 
     fireEvent.wheel(surface(), { deltaY: 100, clientX: 260, clientY: 260 });
@@ -238,12 +239,12 @@ describe('panning', () => {
   it('drags the map with the left button held on an empty square', () => {
     render(<MapCanvas />);
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 0, buttons: 1 });
-    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 1 });
-    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 0 });
+    mouse.down(surface(), { clientX: 500, clientY: 500 });
+    mouse.move(surface(), { clientX: 550, clientY: 500 }, 1);
+    mouse.up(surface(), { clientX: 550, clientY: 500 });
 
     // The map moved one square right, so the first column is now under x 60.
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 });
     expect(readout()).toBe('(0, 19)');
   });
 });
@@ -256,7 +257,7 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     click(at(0, 19));
     expect(sentOf('token.move.start')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a' }]);
 
-    fireEvent.mouseMove(surface(), at(3, 19));
+    mouse.move(surface(), at(3, 19));
     expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 3, y: 19 }]);
 
     click(at(3, 19));
@@ -268,9 +269,9 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     render(<MapCanvas />);
     show(goblin());
     click(at(0, 19));
-    fireEvent.mouseMove(surface(), at(3, 19));
+    mouse.move(surface(), at(3, 19));
 
-    fireEvent.mouseLeave(surface());
+    mouse.leave(surface());
 
     expect(lastOf('token.move')).toEqual({ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 });
     expect(sentOf('token.move.end')).toEqual([]);
@@ -281,7 +282,7 @@ describe('moving a token: click to pick it up, click again to put it down', () =
     render(<MapCanvas />);
     show(goblin());
     click(at(0, 19));
-    fireEvent.mouseMove(surface(), at(3, 19));
+    mouse.move(surface(), at(3, 19));
 
     fireEvent.contextMenu(surface(), at(3, 19));
 

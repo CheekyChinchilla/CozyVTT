@@ -300,9 +300,9 @@ export function useWallTool({
     if (next !== null) sendWalls(next);
   };
 
-  /** The walls with the selection carried by (dx, dy). */
-  const selectionMovedBy = (walls: WallSegment[], dx: number, dy: number) =>
-    walls.map((seg) => (selectedWallIds.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg));
+  /** The walls with those selected carried by (dx, dy). */
+  const selectionMovedBy = (walls: WallSegment[], selection: ReadonlySet<string>, dx: number, dy: number) =>
+    walls.map((seg) => (selection.has(seg.id) ? translateWallSegments([seg], dx, dy)[0] : seg));
 
   const tool: MapTool = {
     down({ e, mapPx, screenX, screenY }: PointerAt) {
@@ -469,6 +469,7 @@ export function useWallTool({
             startX: mapPx.x,
             startY: mapPx.y,
             preDragState: [...wallSegments],
+            selection,
             hasDragged: false,
           };
           return true;
@@ -559,7 +560,7 @@ export function useWallTool({
           // Previewed against where the drag began, so the offset never
           // compounds. Changes from others reach preDragState (carryIntoDrags).
           move.offset = { dx, dy };
-          replaceWallHistory(selectionMovedBy(move.preDragState, dx, dy));
+          replaceWallHistory(selectionMovedBy(move.preDragState, move.selection, dx, dy));
           markDirty('overlay');
           return true;
         }
@@ -653,13 +654,13 @@ export function useWallTool({
     up() {
       // Commit a move of the selection
       if (wallMoveRef.current) {
-        const { hasDragged, preDragState: preDrag, offset } = wallMoveRef.current;
+        const { hasDragged, preDragState: preDrag, selection, offset } = wallMoveRef.current;
         wallMoveRef.current = null;
         if (hasDragged) {
           // Built again from where the drag began: a change from someone else
           // since the last pointer move reached preDragState, but put its own
           // unmoved copy on screen.
-          const finalSegments = offset ? selectionMovedBy(preDrag, offset.dx, offset.dy) : wallSegments;
+          const finalSegments = offset ? selectionMovedBy(preDrag, selection, offset.dx, offset.dy) : wallSegments;
           // Put the pre-drag state back on the stack, then the result, so undo
           // returns the walls where they started.
           replaceWallHistory(preDrag);
@@ -738,6 +739,26 @@ export function useWallTool({
         }
         markDirty('overlay');
       }
+    },
+    // The browser or a second finger took the pointer: a drag puts the walls
+    // back as they were before it, and a box or a stroke is dropped unsent.
+    // Points already placed on a line or a polygon stay.
+    cancel() {
+      const moving = wallMoveRef.current;
+      wallMoveRef.current = null;
+      if (moving?.hasDragged) replaceWallHistory(moving.preDragState);
+      const endpoint = wallDragEndpointRef.current;
+      wallDragEndpointRef.current = null;
+      if (endpoint?.hasDragged && endpoint.preDragState) replaceWallHistory(endpoint.preDragState);
+      if (wallMarqueeRef.current) {
+        wallMarqueeRef.current = null;
+        setWallMarquee(null);
+      }
+      wallEraseBrushActiveRef.current = false;
+      wallErasedIdsRef.current = new Set();
+      wallBrushActiveRef.current = false;
+      wallBrushPointsRef.current = [];
+      markDirty('overlay');
     },
     escape() {
       // Polygon mode: clear in-progress polygon first

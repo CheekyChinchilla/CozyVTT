@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Pinch to zoom and drag to pan the map on a touch screen.** On a tablet, pinching two fingers on the map zooms it about them, from 10% to 300% as the buttons do, and dragging one finger over empty ground moves the view; the page itself no longer zooms or scrolls under the map. A tap works as a click and a double tap finishes a wall line, and with a DM tool up one finger draws a fog box or a wall stroke, or moves a wall or a light. A second finger cancels what the first began. A stylus works as a mouse, and a hand resting beside it does nothing. A mouse works as before. Dragging tokens and opening the menus by touch follow in the same release.
+
 ### Changed
 
 - **For scripts and integrations, such as MCP bridges: what the API does differently.** The HTTP routes and live-table events are not a versioned public API, but programs do drive them with a signed-in account. These are the changes such a program may notice; the entries below explain each one for everyone else.

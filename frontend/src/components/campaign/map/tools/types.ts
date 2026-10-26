@@ -1,21 +1,29 @@
 // ============================================
 // The shape every map tool's input handling takes.
 //
-// MapCanvas owns the canvas and its mouse and keyboard listeners; each tool
-// owns what it does with them. A tool is asked in a fixed order, so the order
-// in MapCanvas decides which tool a click goes to when two are up at once
-// (a measuring tool can sit beside a DM tool).
+// MapCanvas owns the canvas and its pointer and keyboard listeners; each tool
+// owns what it does with them. A mouse or a pen reaches the tools as it
+// happens; a finger through the gesture recogniser (map/gestures.ts), a tap
+// as a down and an up and a drag as a down, moves and an up. A tool is asked
+// in a fixed order, so the order in MapCanvas decides which tool a click goes
+// to when two are up at once (a measuring tool can sit beside a DM tool).
 // ============================================
 
-import type React from 'react';
 import type { useMapControls } from '@/hooks/useMapControls';
+import type { MapPointer } from '../mapPointer';
 
 /** Zoom, pan and the screen-to-grid conversion, as `useMapControls` gives them. */
 export type MapControls = ReturnType<typeof useMapControls>;
 
-/** Where a mouse event landed, in the three spaces the tools work in. */
+/** Where a pointer was, in the three spaces the tools work in, and what brought it. */
 export interface PointerAt {
-  e: React.MouseEvent<HTMLCanvasElement>;
+  e: MapPointer;
+  /**
+   * A mouse or a pen ('mouse'), or a finger's tap or drag. A finger's input
+   * arrives once the gesture is known: a drag's down at the point the finger
+   * landed, with the moves after it.
+   */
+  via: 'mouse' | 'tap' | 'drag';
   /** Canvas pixels from its top-left corner. */
   screenX: number;
   screenY: number;
@@ -27,14 +35,21 @@ export interface PointerAt {
 
 /**
  * One tool's share of the canvas's input. `down` and `move` return true when
- * the tool took the event, and no later tool is asked. On mouse up every tool
- * finishes whatever it holds. `escape` returns true when it let go of
- * something, which ends that key press.
+ * the tool took the event, and no later tool is asked. When the button or
+ * finger lifts, every tool finishes whatever it holds. `escape` returns true
+ * when it let go of something, which ends that key press.
  */
 export interface MapTool {
   down?(at: PointerAt): boolean;
   move?(at: PointerAt): boolean;
-  up?(): void;
+  /** `at` is where the pointer lifted, when the page knows. */
+  up?(at?: PointerAt): void;
+  /**
+   * The browser or a second finger took the pointer: drop what the current
+   * press holds and put back what it changed, leaving work that spans clicks
+   * (a half-drawn line), selections and the mode alone. Every tool is told.
+   */
+  cancel?(): void;
   escape?(): boolean;
 }
 

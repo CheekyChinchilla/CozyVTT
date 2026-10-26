@@ -29,7 +29,15 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
   // cursor. Both in map pixels — the fog raster is top-left origin like map
   // pixels, so the box never touches the bottom-left grid convention.
   const fogDragAnchorRef = useRef<{ x: number; y: number } | null>(null);
-  const [fogDragCurrent, setFogDragCurrent] = useState<{ x: number; y: number } | null>(null);
+  const [fogDragCurrent, setFogDragCurrentState] = useState<{ x: number; y: number } | null>(null);
+  // The same point as it is now, for the release. A tap's down and up arrive
+  // in one event, before the state is drawn, and it still held where a mouse
+  // last hovered.
+  const fogDragCurrentRef = useRef<{ x: number; y: number } | null>(null);
+  const setFogDragCurrent = useCallback((point: { x: number; y: number } | null) => {
+    fogDragCurrentRef.current = point;
+    setFogDragCurrentState(point);
+  }, []);
 
   /**
    * Apply a set of fog cells: optimistic local update plus one server op.
@@ -66,13 +74,13 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
     const rect = fogRectFromDrag(fogState, anchor.x, anchor.y, endX, endY);
     if (!rect) return; // Entirely off the map
     applyFogCells(fogCellsInRect(fogState, rect));
-  }, [fogState, applyFogCells]);
+  }, [fogState, applyFogCells, setFogDragCurrent]);
 
   /** Abandon a drag without changing anything (Escape, right-click, map change). */
   const cancelFogDrag = useCallback(() => {
     fogDragAnchorRef.current = null;
     setFogDragCurrent(null);
-  }, []);
+  }, [setFogDragCurrent]);
 
   // Leaving fog mode, or switching maps, drops any drag in progress.
   useEffect(() => {
@@ -104,9 +112,13 @@ export function useFogTool({ isDM, mapId, fogMode, fogState, setFogState, socket
     // Commit the fog selection box on mouse release — one operation per drag.
     up() {
       if (fogMode && fogDragAnchorRef.current) {
-        const end = fogDragCurrent ?? fogDragAnchorRef.current;
+        const end = fogDragCurrentRef.current ?? fogDragAnchorRef.current;
         commitFogDrag(end.x, end.y);
       }
+    },
+    // The browser or a second finger took the pointer: the box is abandoned.
+    cancel() {
+      cancelFogDrag();
     },
     // A fog box being dragged is abandoned before any other Escape action
     escape() {

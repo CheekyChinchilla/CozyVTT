@@ -19,6 +19,7 @@ import { Profiler } from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { TokenType, type CampaignMap, type Token } from '@/types';
 import type { LightSource, WallSegment } from '@/types/walls';
+import { mouse } from '@/test/pointer';
 
 const h = vi.hoisted(() => {
   const listeners = new Set<() => void>();
@@ -185,11 +186,11 @@ function surface(): HTMLCanvasElement {
 }
 
 const down = (p: { clientX: number; clientY: number }, extra: Record<string, unknown> = {}) =>
-  fireEvent.mouseDown(surface(), { ...p, button: 0, buttons: 1, detail: 1, ...extra });
+  mouse.down(surface(), p, 0, extra);
 const move = (p: { clientX: number; clientY: number }, buttons = 1) =>
-  fireEvent.mouseMove(surface(), { ...p, buttons });
+  mouse.move(surface(), p, buttons);
 const up = (p: { clientX: number; clientY: number }, button = 0) =>
-  fireEvent.mouseUp(surface(), { ...p, button });
+  mouse.up(surface(), p, button);
 function click(p: { clientX: number; clientY: number }, extra: Record<string, unknown> = {}) {
   down(p, extra);
   up(p);
@@ -269,10 +270,38 @@ describe('the wall draw tool', () => {
 
     click(px(100, 300));
     click(px(200, 300));
-    click(px(200, 300), { detail: 2 });
+    click(px(200, 300));
     click(px(400, 400));
 
     expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // A pointer event's own click count is always 0; the page counts them.
+  it('takes a second click more than 4 pixels from the first as a click of its own', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+
+    click(px(100, 300));
+    click(px(200, 300));
+    click(px(205, 300));
+
+    expect(sentOf('wall:add')).toHaveLength(2);
+  });
+
+  it('takes a second click more than half a second after the first as a click of its own', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      click(px(100, 300));
+      click(px(200, 300));
+      vi.setSystemTime(Date.now() + 501);
+      click(px(200, 300));
+    } finally {
+      vi.useRealTimers();
+    }
+
+    expect(sentOf('wall:add')).toHaveLength(2);
   });
 
   it('drops a half-drawn line on the first Escape and puts the tool away on the second', () => {
@@ -316,7 +345,7 @@ describe('the polygon tool', () => {
     click(px(500, 500));
     click(px(700, 500));
     click(px(700, 700));
-    click(px(700, 700), { detail: 2 });
+    click(px(700, 700));
 
     expect(lastWalls()).toEqual([
       WALL_A, WALL_B,
@@ -347,7 +376,7 @@ describe('the polygon tool', () => {
     click(px(900, 500));
     press('z', { ctrlKey: true });
     click(px(700, 700));
-    click(px(700, 700), { detail: 2 });
+    click(px(700, 700));
     expect(lastWalls().slice(2)).toEqual([
       { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
       { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
@@ -359,7 +388,7 @@ describe('the polygon tool', () => {
     click(px(300, 500));
     click(px(300, 700));
     press('Escape');
-    click(px(300, 700), { detail: 2 });
+    click(px(300, 700));
     expect(sentOf('walls:replace')).toEqual([]);
   });
 });
@@ -608,12 +637,40 @@ describe('the fog box tools', () => {
   it('pans with the right button, sending nothing', () => {
     fogTool('Fog reveal box');
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
-    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 2 });
-    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 2 });
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.move(surface(), { clientX: 550, clientY: 500 }, 2);
+    mouse.up(surface(), { clientX: 550, clientY: 500 }, 2);
 
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10, buttons: 0 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
     expect(readout()).toBe('(0, 19)');
+    expect(sentOf('fog:operation')).toEqual([]);
+  });
+
+  // Two buttons held at once send one pointerdown and one pointerup; the
+  // second button's press and release arrive as moves.
+  it('drops a box when the right button is pressed during it, and pans instead', () => {
+    fogTool('Fog reveal box');
+
+    down(px(60, 60));
+    move(px(160, 110));
+    mouse.chord(surface(), px(160, 110), 2, 3);
+    move(px(210, 110), 3);
+    mouse.chord(surface(), px(210, 110), 2, 1);
+    up(px(210, 110));
+
+    mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
+    expect(readout()).toBe('(0, 19)');
+    expect(sentOf('fog:operation')).toEqual([]);
+  });
+
+  it('abandons a box when the browser cancels the pointer', () => {
+    fogTool('Fog reveal box');
+
+    down(px(60, 60));
+    move(px(160, 110));
+    mouse.cancel(surface());
+    up(px(160, 110));
+
     expect(sentOf('fog:operation')).toEqual([]);
   });
 
@@ -745,12 +802,25 @@ describe('the right button', () => {
     render(<MapCanvas />);
     wallTool('Wall draw mode');
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
-    fireEvent.mouseMove(surface(), { clientX: 550, clientY: 500, buttons: 2 });
-    fireEvent.mouseUp(surface(), { clientX: 550, clientY: 500, button: 2 });
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.move(surface(), { clientX: 550, clientY: 500 }, 2);
+    mouse.up(surface(), { clientX: 550, clientY: 500 }, 2);
 
-    fireEvent.mouseMove(surface(), { clientX: 60, clientY: 10, buttons: 0 });
+    mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
     expect(readout()).toBe('(0, 19)');
+  });
+
+  it('stops panning when it is let go, even with the left button let go last', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.chord(surface(), { clientX: 500, clientY: 500 }, 0, 3);
+    mouse.chord(surface(), { clientX: 500, clientY: 500 }, 2, 1);
+    mouse.up(surface(), { clientX: 500, clientY: 500 }, 0);
+    mouse.move(surface(), px(150, 102), 0);
+
+    expect(surface().className).toContain('cursor-pointer');
   });
 
   it('opens no token menu while a wall tool is up', () => {
@@ -965,7 +1035,7 @@ describe("a player's right-click on a token", () => {
 });
 
 describe('letting go of the mouse outside the map', () => {
-  const releaseOutside = (button = 0) => fireEvent.mouseUp(document.body, { button });
+  const releaseOutside = (button = 0) => mouse.up(document.body, px(1200, 300), button);
 
   it('finishes an erase stroke', () => {
     render(<MapCanvas />);
@@ -973,12 +1043,12 @@ describe('letting go of the mouse outside the map', () => {
 
     down(px(150, 110));
     move(px(350, 110));
-    fireEvent.mouseLeave(surface());
+    mouse.leave(surface(), 1);
     releaseOutside();
 
     expect(lastWalls()).toEqual([]);
     h.sent.length = 0;
-    fireEvent.mouseMove(surface(), { ...px(150, 110), buttons: 0 });
+    mouse.move(surface(), px(150, 110), 0);
     expect(sentOf('walls:replace')).toEqual([]);
   });
 
@@ -989,10 +1059,31 @@ describe('letting go of the mouse outside the map', () => {
     down(px(100, 300));
     move(px(200, 300));
     move(px(300, 300));
-    fireEvent.mouseLeave(surface());
+    mouse.leave(surface(), 1);
     releaseOutside();
 
     expect(lastWalls().slice(2)).toEqual([{ x1: 100, y1: 300, x2: 300, y2: 300, type: 'wall' }]);
+  });
+
+  // The mouse is never captured: a pan stops at the map's edge, as it
+  // always has, and does not start again when the pointer comes back.
+  it('stops a pan at the edge of the map', () => {
+    const capture = vi.spyOn(Element.prototype, 'setPointerCapture');
+    try {
+      render(<MapCanvas />);
+
+      down({ clientX: 500, clientY: 500 });
+      move({ clientX: 550, clientY: 500 });
+      mouse.leave(surface(), 1);
+      move({ clientX: 600, clientY: 500 });
+      releaseOutside();
+
+      mouse.move(surface(), { clientX: 60, clientY: 10 }, 0);
+      expect(readout()).toBe('(0, 19)');
+      expect(capture).not.toHaveBeenCalled();
+    } finally {
+      capture.mockRestore();
+    }
   });
 
   // A right-button pan left on blocked the select tool's hover, so a wall
@@ -1001,10 +1092,24 @@ describe('letting go of the mouse outside the map', () => {
     render(<MapCanvas />);
     wallTool('Wall select mode');
 
-    fireEvent.mouseDown(surface(), { clientX: 500, clientY: 500, button: 2, buttons: 2 });
-    fireEvent.mouseLeave(surface());
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.leave(surface(), 2);
     releaseOutside(2);
-    fireEvent.mouseMove(surface(), { ...px(150, 102), buttons: 0 });
+    mouse.move(surface(), px(150, 102), 0);
+
+    expect(surface().className).toContain('cursor-pointer');
+  });
+
+  it('ends a right-button pan when the right button is let go out there before the left', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    mouse.down(surface(), { clientX: 500, clientY: 500 }, 2);
+    mouse.chord(surface(), { clientX: 500, clientY: 500 }, 0, 3);
+    mouse.leave(surface(), 3);
+    mouse.chord(document.body, px(1200, 300), 2, 1);
+    releaseOutside(0);
+    mouse.move(surface(), px(150, 102), 0);
 
     expect(surface().className).toContain('cursor-pointer');
   });
@@ -1046,7 +1151,7 @@ describe('switching maps', () => {
 
     switchMap();
     click(px(700, 700));
-    click(px(700, 700), { detail: 2 });
+    click(px(700, 700));
 
     expect(sentOf('walls:replace')).toEqual([]);
   });
@@ -1233,13 +1338,13 @@ describe('moving the pointer', () => {
   it('renders again only when the pointer reaches another square', () => {
     let commits = 0;
     render(<Profiler id="map" onRender={() => { commits += 1; }}><MapCanvas /></Profiler>);
-    fireEvent.mouseMove(surface(), { ...px(110, 110), buttons: 0 });
+    mouse.move(surface(), px(110, 110), 0);
     // React may render once more right after a state change before it can
     // skip an update that leaves the state as it is; a second move settles it.
-    fireEvent.mouseMove(surface(), { ...px(111, 110), buttons: 0 });
+    mouse.move(surface(), px(111, 110), 0);
     const before = commits;
 
-    for (const x of [112, 115, 120, 130, 140]) fireEvent.mouseMove(surface(), { ...px(x, 110), buttons: 0 });
+    for (const x of [112, 115, 120, 130, 140]) mouse.move(surface(), px(x, 110), 0);
 
     expect(commits).toBe(before);
   });
@@ -1248,7 +1353,7 @@ describe('moving the pointer', () => {
     const attach = vi.spyOn(HTMLCanvasElement.prototype, 'addEventListener');
     try {
       render(<MapCanvas />);
-      for (const x of [60, 160, 260, 360]) fireEvent.mouseMove(surface(), { ...px(x, 110), buttons: 0 });
+      for (const x of [60, 160, 260, 360]) mouse.move(surface(), px(x, 110), 0);
       expect(attach.mock.calls.filter(([type]) => type === 'wheel')).toHaveLength(1);
     } finally {
       attach.mockRestore();
