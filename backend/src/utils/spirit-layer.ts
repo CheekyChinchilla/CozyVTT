@@ -1,4 +1,6 @@
 import { createHash } from 'crypto';
+// Aliased: `Map` is also JavaScript's own, which this file uses.
+import type { Map as MapRow } from '@prisma/client';
 import { prisma } from '../config/database';
 import { computeVisibility, isPointVisible, type VisibilityPolygon } from './raycasting';
 import { isSeen, type Viewer, type Lit, type InsideFn } from './visibilityRule';
@@ -772,6 +774,32 @@ export function lightRemovalSentTo(
   if (role !== 'DM' && !lightReachesPlayers(removed)) return null;
   return { event: 'light:removed', data: { mapId, lightId, ...extra } };
 }
+
+/**
+ * What a member is sent of a map, decided column by column. Every column of
+ * the Map model is in exactly one of these three lists, and keepInStep.test.ts
+ * fails otherwise, so a column added later fails the suite until someone
+ * decides who may see it and puts it in one.
+ *
+ * Sent to everyone, as stored: what every member needs to draw the map.
+ */
+export const MAP_FIELDS_SENT_TO_EVERYONE = [
+  'id', 'campaignId', 'name', 'imageUrl', 'baseLayerUrl', 'width', 'height', 'gridSize', 'feetPerSquare', 'diagonalRule',
+  'lightingEnabled', 'fogEnabled', 'globalIllumination', 'explorationEnabled', 'createdAt', 'updatedAt',
+] as const satisfies readonly (keyof MapRow)[];
+
+/** Decided for each recipient by filterMapData: the DM is sent more of these than anyone else. */
+export const MAP_FIELDS_DECIDED_PER_RECIPIENT = [
+  'tokens', 'wallSegments', 'lights', 'fogData', 'spiritLayerUrl', 'annotations',
+] as const satisfies readonly (keyof MapRow)[];
+
+/**
+ * Never sent to a member. This describes the map members are sent
+ * (filterMapData). Four replies to the DM alone return the stored row whole:
+ * `POST /maps`, `POST /maps/import-uvtt`, `PUT /maps/:id` and
+ * `POST /maps/:id/tokens`.
+ */
+export const MAP_FIELDS_NEVER_SENT = [] as const satisfies readonly (keyof MapRow)[];
 
 /**
  * Filter entire map data based on user role and spirit layer visibility.
