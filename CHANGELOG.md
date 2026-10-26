@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - *Maps.* A map's `annotations` is an empty array for everyone, the DM included, in `GET /api/campaigns/:campaignId/maps/:id`, the reply to `PUT .../maps/:id/tokens/:tokenId` and `map.changed`. It carried whatever a campaign import had stored from its archive. Nothing in the app reads it.
   - *Maps.* `GET /api/campaigns/:campaignId/maps` gives each map its `campaignId` and `baseLayerUrl` as well, the fields `GET /api/campaigns/:campaignId` already gave each of its maps.
 
+### Fixed
+
+- **The dashboard fits a phone narrower than 400 pixels when you are an administrator.** The header's Refresh, Admin, Logout and profile buttons stayed on one line beside the title, so on a Pixel 10 or an iPhone the whole page scrolled sideways. They now move below the title when the line is too narrow for both.
+
 ## [1.5.4] - 2026-10-25
 
 ### Upgrading from 1.5.3
