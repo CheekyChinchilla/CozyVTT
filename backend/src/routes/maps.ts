@@ -10,7 +10,7 @@ import { oneCampaignArchiveAtATime, whileHoldingArchiveSlot } from '../middlewar
 import { prisma } from '../config/database';
 import {
   canActOnTokenPlane, filterMapData, filterTokensByRole, getSpiritVisibility, lightChangeReachesPlayers, lightChangeSentTo,
-  lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo, lightsReplacedSentTo, lightsSentTo,
+  lightListChangeReachesPlayers, lightReachesPlayers, lightRemovalSentTo, lightsReplacedSentTo, lightsSentTo, MAP_SELECT_SENT_TO_EVERYONE,
   wallChangeReachesPlayers, wallChangeSentTo, wallListChangeReachesPlayers, wallSentTo, wallsReplacedSentTo, wallsSentTo,
 } from '../utils/spirit-layer';
 import { emitToMapReaders, emitToMapReadersAs, getSocketInstance } from '../websocket/utils';
@@ -43,7 +43,7 @@ import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
 import { readTokens, toJson } from '../utils/prisma-json';
-import type { Prisma } from '@prisma/client';
+import type { Map as MapRow, Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
 
@@ -426,23 +426,10 @@ router.get('/', campaignMember, async (req: AuthenticatedRequest, res: Response)
     const maps = await prisma.map.findMany({
       where: role === 'DM' ? { campaignId } : { campaignId, id: currentMapId ?? '' },
       select: {
-        id: true,
-        name: true,
-        imageUrl: true, // Thumbnail reference
-        width: true,
-        height: true,
-        gridSize: true,
-        feetPerSquare: true,
-        diagonalRule: true,
-        lightingEnabled: true,
-        fogEnabled: true,
-        globalIllumination: true,
-        explorationEnabled: true,
+        ...MAP_SELECT_SENT_TO_EVERYONE,
         // The DM's alone, for Edit Map; a player is sent it with the map,
         // when the spirit layer is theirs to see (filterMapData).
         spiritLayerUrl: role === 'DM',
-        createdAt: true,
-        updatedAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -956,6 +943,29 @@ router.get('/:id', campaignMember, async (req: AuthenticatedRequest, res: Respon
 });
 
 /**
+ * The columns whose change by PUT /maps/:id sends every member the map on
+ * screen again: what the canvas draws from the row itself (the picture, the
+ * size, the grid and its scale, the name and the spirit layer), and Lighting
+ * and Global Illumination, which decide which tokens each player is sent. The
+ * flags alone would leave a player holding a token the server would no longer
+ * send, or missing one it now would.
+ */
+export const MAP_FIELDS_THAT_RESEND_THE_MAP = [
+  'name', 'imageUrl', 'baseLayerUrl', 'width', 'height', 'gridSize', 'feetPerSquare', 'diagonalRule', 'spiritLayerUrl',
+  'lightingEnabled', 'globalIllumination',
+] as const satisfies readonly (keyof MapRow)[];
+
+/** The columns everyone is sent whose change does not send the map again, each with the reason. */
+export const MAP_FIELDS_THAT_DO_NOT_RESEND_THE_MAP = {
+  id: 'never changes',
+  campaignId: 'never changes',
+  createdAt: 'never changes',
+  updatedAt: 'changes with every edit, and tells a member nothing the edit does not',
+  fogEnabled: 'reaches every reader in map:settings:updated, and decides no token',
+  explorationEnabled: 'reaches every reader in map:settings:updated, and decides no token',
+} as const satisfies Partial<Record<keyof MapRow, string>>;
+
+/**
  * PUT /api/campaigns/:campaignId/maps/:id
  * Update a map
  * Requires: DM role
@@ -1180,15 +1190,9 @@ router.put('/:id', campaignDM, async (req: AuthenticatedRequest, res: Response) 
       } catch { /* non-fatal */ }
     }
 
-    // Lighting and Global Illumination decide which tokens each player is
-    // sent, so when either changes every client gets the map again as they
-    // can now see it. The flags alone would leave a player holding a token the
-    // server would no longer send, or missing one it now would. So does a
-    // change to what the canvas draws from the row itself: the picture, the
-    // size, the grid and its scale, the name and the spirit layer.
-    const drawn = ['name', 'imageUrl', 'baseLayerUrl', 'width', 'height', 'gridSize', 'feetPerSquare', 'diagonalRule', 'spiritLayerUrl'] as const;
-    const drawnChanged = drawn.some((key) => updatedMap[key] !== existingMap[key]);
-    if (drawnChanged || updatedMap.lightingEnabled !== existingMap.lightingEnabled || updatedMap.globalIllumination !== existingMap.globalIllumination) {
+    // Every client gets the map again as they can now see it when the edit
+    // changes what it draws or which tokens a player is sent.
+    if (MAP_FIELDS_THAT_RESEND_THE_MAP.some((key) => updatedMap[key] !== existingMap[key])) {
       // Only for the map the table is on. A map being edited in the library is
       // nobody's canvas, and map.changed would put every client onto it.
       await resendIfCurrent(campaignId, updatedMap);

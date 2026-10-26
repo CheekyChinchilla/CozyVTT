@@ -8,6 +8,7 @@
 
 import { filterTokensByLighting, filterMapData, filterTokensByRole } from './spirit-layer';
 import type { WallSegment } from '../types/walls';
+import type { Map as MapRow } from '@prisma/client';
 
 // Minimal token factory
 function makeToken(
@@ -480,6 +481,104 @@ describe('filterTokensByRole', () => {
 
     it('reaches the DM as stored', () => {
       expect(filterTokensByRole([veiled], 'DM', false, 'dm')[0]).toBe(veiled);
+    });
+  });
+});
+
+/**
+ * What each member is sent of a whole map, every column of it. The map
+ * exercises every decision: a hidden token, a token on each plane, a lit map
+ * with a wall between tokens, a locked door, a light that is off, fog data, a
+ * spirit layer picture and a stored annotation. Each member is sent the stored
+ * row, the old spread of it, except where a decision says otherwise, and the
+ * annotations never: nothing reads them, and a campaign import stores
+ * whatever its archive held.
+ */
+describe('filterMapData on a whole map', () => {
+  const base = { imageUrl: '', size: { width: 1, height: 1 }, visible: true, rotation: 0, conditions: [], metadata: {} };
+  // Each token as a player is sent it (tokenMask.ts), then as stored: the
+  // DM's notes and stat block never go to a player, and sight, the template
+  // link and, while the bar is off, hit points only to the token's controller.
+  const fighterSent = { ...base, id: 'fighter', name: 'Fighter', position: { x: 2, y: 5 }, layer: 'token', controlledBy: 'player-a', type: 'player', hp: { current: 20, max: 20, temp: 0 }, showHpBar: false, sightRadius: 12 };
+  const fighter = { ...fighterSent, notes: 'Owes the DM a favour' };
+  const goblinSent = { ...base, id: 'goblin', name: 'Goblin', position: { x: 4, y: 5 }, layer: 'token', controlledBy: null, type: 'npc', showHpBar: false };
+  const goblin = { ...goblinSent, hp: { current: 7, max: 7, temp: 0 }, notes: 'Carries the key', statBlock: { ac: 15 }, creatureTemplateId: 'template-goblin', sightRadius: 12 };
+  const assassin = { ...base, id: 'assassin', name: 'Assassin', position: { x: 3, y: 5 }, layer: 'token', controlledBy: null, visible: false };
+  const ogre = { ...base, id: 'ogre', name: 'Ogre', position: { x: 15, y: 5 }, layer: 'token', controlledBy: null };
+  const ghostSent = { ...base, id: 'ghost', name: 'Ghost', position: { x: 2, y: 2 }, layer: 'spirit', controlledBy: 'player-b' };
+  const ghost = { ...ghostSent, notes: 'Bound to the crypt' };
+  const wisp = { ...base, id: 'wisp', name: 'Wisp', position: { x: 4, y: 2 }, layer: 'spirit', controlledBy: null };
+  const wraith = { ...base, id: 'wraith', name: 'Wraith', position: { x: 15, y: 2 }, layer: 'spirit', controlledBy: null };
+
+  // The wall runs the map's full height between the left and right halves.
+  const wall = { id: 'wall', x1: 500, y1: 0, x2: 500, y2: 500, type: 'wall' };
+  const lockedDoor = { id: 'door', x1: 0, y1: 0, x2: 50, y2: 0, type: 'door-locked' };
+  const torch = { id: 'torch', x: 100, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
+  const lantern = { id: 'lantern', x: 800, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: false };
+
+  const row: MapRow = {
+    id: 'map-1',
+    campaignId: 'campaign-1',
+    name: 'The Crypt',
+    imageUrl: '/api/assets/maps/crypt',
+    baseLayerUrl: '/api/assets/maps/crypt',
+    width: 20,
+    height: 10,
+    gridSize: 50,
+    feetPerSquare: 5,
+    diagonalRule: 'alternating',
+    spiritLayerUrl: '/api/assets/maps/crypt-spirit',
+    tokens: [fighter, goblin, assassin, ogre, ghost, wisp, wraith],
+    annotations: [{ id: 'note', type: 'circle', position: { x: 1, y: 1 }, color: '#ff0000', text: 'The trap' }],
+    wallSegments: [wall, lockedDoor],
+    fogData: { fogCols: 2, fogRows: 1, cellPx: 500, revealed: [true, false] },
+    lightingEnabled: true,
+    fogEnabled: true,
+    globalIllumination: true,
+    explorationEnabled: true,
+    lights: [torch, lantern],
+    createdAt: new Date('2026-10-01T10:00:00Z'),
+    updatedAt: new Date('2026-10-02T10:00:00Z'),
+  };
+
+  // Anyone but the DM: a locked door as a closed one, only the lights that
+  // are on, and no fog data.
+  const asPlayersHaveIt = {
+    wallSegments: [wall, { ...lockedDoor, type: 'door-closed' }],
+    lights: [torch],
+    fogData: null,
+  };
+
+  it('sends the DM the stored map, without its annotations', () => {
+    expect(filterMapData(row, 'DM', true, 'dm-user')).toStrictEqual({ ...row, annotations: [] });
+  });
+
+  it('sends a player on the material plane what they see of it there, and no spirit layer', () => {
+    expect(filterMapData(row, 'PLAYER', false, 'player-a')).toStrictEqual({
+      ...row,
+      ...asPlayersHaveIt,
+      tokens: [fighterSent, goblinSent],
+      spiritLayerUrl: null,
+      annotations: [],
+    });
+  });
+
+  it('sends a player on the spirit plane what they see of it there, and its picture', () => {
+    expect(filterMapData(row, 'PLAYER', true, 'player-b')).toStrictEqual({
+      ...row,
+      ...asPlayersHaveIt,
+      tokens: [ghostSent, wisp],
+      annotations: [],
+    });
+  });
+
+  it('sends a spectator no tokens on a lit map, and the rest as a player has it', () => {
+    expect(filterMapData(row, 'SPECTATOR', false, 'spectator-c')).toStrictEqual({
+      ...row,
+      ...asPlayersHaveIt,
+      tokens: [],
+      spiritLayerUrl: null,
+      annotations: [],
     });
   });
 });

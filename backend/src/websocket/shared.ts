@@ -10,7 +10,8 @@ import type { FogState, FogOperation } from '../types/walls';
 import type { Server } from 'socket.io';
 import type { AuthenticatedSocket } from './auth';
 import type { SocketAck } from './ack';
-import { getSpiritVisibilityBatch, filterMapData, type MapData } from '../utils/spirit-layer';
+import type { Map as MapRow } from '@prisma/client';
+import { getSpiritVisibilityBatch, filterMapData } from '../utils/spirit-layer';
 import { campaignSockets, stillInCampaign } from './utils';
 import { prisma } from '../config/database';
 import { canReadMap } from '../services/permissions';
@@ -468,7 +469,7 @@ export interface HandlerContext {
 export async function broadcastMapData(
   io: Server,
   campaignId: string,
-  map: MapData,
+  map: MapRow,
   audience: 'everyone' | 'players' = 'everyone'
 ): Promise<void> {
   const members = await campaignSockets(io, campaignId);

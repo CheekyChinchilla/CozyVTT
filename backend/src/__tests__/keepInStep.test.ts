@@ -142,6 +142,14 @@
  * prisma/schema.prisma), the backend re-exports Prisma's, and the frontend
  * declares its own enum, which has to name the same values.
  *
+ * The columns of a map. What a member is sent of a map is built from three
+ * lists in utils/spirit-layer.ts: the columns sent to everyone as stored, the
+ * ones decided for each recipient, and the ones never sent. Every column of
+ * the Map model is in exactly one, so a column added later fails here until
+ * someone decides who may see it. The frontend's CampaignMap and the API
+ * document's Map schema describe what the first two lists send, and the API
+ * document's map list and campaign fetch what the first list selects.
+ *
  * The Universal VTT import's longest wait. An import waits for its turn and
  * then runs, each up to a limit (services/uvttImportQueue.ts), so the DM is
  * told why it failed before the bundled nginx gives up on the request and
@@ -163,6 +171,8 @@ import { flexibleBasicTemplate } from '../utils/character-templates/flexible-tem
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
+import { Prisma } from '@prisma/client';
+import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
 
 const root = path.resolve(__dirname, '../../..');
 const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
@@ -873,6 +883,47 @@ describe('the game systems', () => {
       return m[2];
     });
     expect(frontend).toEqual(prisma);
+  });
+});
+
+describe('the columns of a map and who is sent them', () => {
+  const listed: string[] = [...MAP_FIELDS_SENT_TO_EVERYONE, ...MAP_FIELDS_DECIDED_PER_RECIPIENT, ...MAP_FIELDS_NEVER_SENT];
+  const sent: string[] = [...MAP_FIELDS_SENT_TO_EVERYONE, ...MAP_FIELDS_DECIDED_PER_RECIPIENT].sort();
+
+  it('are each in one of the three lists in utils/spirit-layer.ts, and the lists name nothing else', () => {
+    expect([...new Set(listed)].sort()).toEqual(Object.values(Prisma.MapScalarFieldEnum).sort());
+  });
+
+  it('are in one list each', () => {
+    expect(listed.filter((field, i) => listed.indexOf(field) !== i)).toEqual([]);
+  });
+
+  it('are the fields of the frontend\'s CampaignMap, as far as a member is sent them', () => {
+    const declared = interfaceFields(read('frontend/src/types/index.ts'), 'CampaignMap').map((line) => {
+      const m = /^(\w+)\??:/.exec(line);
+      if (!m) throw new Error(`CampaignMap has a line this test cannot read: ${line}`);
+      return m[1];
+    });
+    expect(declared.sort()).toEqual(sent);
+  });
+
+  it('are the properties of the Map schema in the API document, as far as a member is sent them', () => {
+    const m = /\n {4}Map:\n {6}type: object\n {6}properties:\n([\s\S]*?)\n {4}\w+:\n/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer has the Map schema where this test looks; update this test with the file');
+    expect([...m[1].matchAll(/^ {8}(\w+):/gm)].map((p) => p[1]).sort()).toEqual(sent);
+  });
+
+  /** The fields the API document gives each map in the `maps` array of an operation's reply. */
+  function documentedMapItemFields(operationId: string): string[] {
+    const doc = read('backend/docs/API_DOCUMENTATION.yaml');
+    const at = doc.indexOf(`operationId: ${operationId}\n`);
+    const m = at === -1 ? null : /\n( *)maps:\n(?:\1 .*\n)*?(\1 +)properties:\n((?:\2 {2}.*\n)+)/.exec(doc.slice(at));
+    if (!m) throw new Error(`the API document no longer lists the maps of ${operationId} where this test looks; update this test with the file`);
+    return [...m[3].matchAll(new RegExp(`^${m[2]} {2}(\\w+):`, 'gm'))].map((p) => p[1]).sort();
+  }
+
+  it.each(['listMaps', 'getCampaignById'])('are the fields the API document gives each map %s sends, with the spirit layer', (operationId) => {
+    expect(documentedMapItemFields(operationId)).toEqual([...MAP_FIELDS_SENT_TO_EVERYONE, 'spiritLayerUrl'].sort());
   });
 });
 
