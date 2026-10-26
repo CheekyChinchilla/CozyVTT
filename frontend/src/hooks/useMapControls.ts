@@ -34,6 +34,15 @@ interface PanOffset {
   y: number;
 }
 
+/**
+ * The pan that keeps the map point under the screen point `about` where it
+ * is when the zoom is multiplied by `ratio`:
+ * (about - pan) / zoom = (about - newPan) / newZoom.
+ */
+function panKeeping(about: ScreenCoordinates, pan: PanOffset, ratio: number): PanOffset {
+  return { x: about.x + (pan.x - about.x) * ratio, y: about.y + (pan.y - about.y) * ratio };
+}
+
 export function useMapControls(config: MapControlsConfig) {
   const {
     gridSize,
@@ -84,10 +93,7 @@ export function useMapControls(config: MapControlsConfig) {
         setView(next, pan);
         return;
       }
-      // The world point under `about` must stay fixed:
-      // (about - pan) / zoom = (about - newPan) / newZoom
-      const scale = next / current;
-      setView(next, { x: about.x + (pan.x - about.x) * scale, y: about.y + (pan.y - about.y) * scale });
+      setView(next, panKeeping(about, pan, next / current));
     },
     [clampZoom, setView]
   );
@@ -190,13 +196,8 @@ export function useMapControls(config: MapControlsConfig) {
   const pinchBy = useCallback(
     (scale: number, centre: ScreenCoordinates, dx: number, dy: number) => {
       const { zoom: current, pan } = viewRef.current;
-      const panned = { x: pan.x + dx, y: pan.y + dy };
       const next = clampZoom(pinchZoomRef.current * scale);
-      const ratio = next / current;
-      setView(next, {
-        x: centre.x + (panned.x - centre.x) * ratio,
-        y: centre.y + (panned.y - centre.y) * ratio,
-      });
+      setView(next, panKeeping(centre, { x: pan.x + dx, y: pan.y + dy }, next / current));
     },
     [clampZoom, setView]
   );

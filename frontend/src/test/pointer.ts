@@ -1,4 +1,5 @@
 import { fireEvent } from '@testing-library/react';
+import { buttonBit } from '@/components/campaign/map/mapPointer';
 
 /**
  * Pointer events as a browser sends them, for the map's tests.
@@ -13,14 +14,11 @@ import { fireEvent } from '@testing-library/react';
 type At = { clientX: number; clientY: number };
 type Extra = Record<string, unknown>;
 
-/** The bit each button holds in `buttons`. */
-const BIT: Record<number, number> = { 0: 1, 1: 4, 2: 2 };
-
 const MOUSE = { pointerType: 'mouse', pointerId: 1, isPrimary: true };
 
 export const mouse = {
   down: (el: Element, at: At, button = 0, extra: Extra = {}) =>
-    fireEvent.pointerDown(el, { ...MOUSE, ...at, button, buttons: BIT[button] ?? 0, ...extra }),
+    fireEvent.pointerDown(el, { ...MOUSE, ...at, button, buttons: buttonBit(button), ...extra }),
   move: (el: Element, at: At, buttons = 0, extra: Extra = {}) =>
     fireEvent.pointerMove(el, { ...MOUSE, ...at, button: -1, buttons, ...extra }),
   /** The last button let go: `buttons` is what is still held, so 0. */
