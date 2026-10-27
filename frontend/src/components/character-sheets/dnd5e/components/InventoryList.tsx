@@ -36,7 +36,7 @@ const CurrencyDisplay: React.FC<{ currency: Currency }> = ({ currency }) => {
         <Coins className="w-5 h-5 text-ink-secondary" />
         <h4 className="font-semibold text-ink">Currency</h4>
       </div>
-      <div className="grid grid-cols-5 gap-2">
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
         {coins.map(({ label, value }) => (
           <div key={label} className="text-center">
             <div className="text-xs text-ink-muted mb-1">{label}</div>
@@ -155,7 +155,7 @@ export const InventoryList: React.FC<InventoryListProps> = ({ inventory, currenc
       {/* Inventory Items */}
       <div className="bg-ink/5 border border-ink/10 rounded-lg overflow-hidden">
         <div className="p-3 bg-ink/10 border-b border-ink/10">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 sm:flex-nowrap">
             <h4 className="font-semibold text-ink">Equipment & Items</h4>
             <span className="text-sm text-ink-secondary">
               Total Weight: <span className="font-semibold">{totalWeight.toFixed(1)} lb</span>
