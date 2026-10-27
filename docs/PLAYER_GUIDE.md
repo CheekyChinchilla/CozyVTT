@@ -272,11 +272,13 @@ When the DM has placed your character's token on the map, you can move it: click
 
 **Selecting a token.** Clicking a token also selects it, and a dashed light-blue ring marks it until you click empty ground or select another; dragging the map leaves it selected. You can select any token you can see, yours or not, by clicking it; a right-click selects the token too when its menu opens for you. A token that isn't yours is only selected, never picked up. A screen reader says which token is selected and on which square.
 
+**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then a token you're holding, then the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
+
 *GIF pending — Picking up a player token and placing it across the map.*
 
 Your movement is visible to everyone in real time — your party can watch you creep around the corner (or run straight into danger).
 
-**Turning your token.** To show which way you're facing, right-click your token and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Everyone sees it turn. You can turn any token the DM has made yours to control.
+**Turning your token.** To show which way you're facing, right-click your token and choose **Rotate Left** or **Rotate Right**: each turns it 45 degrees, and the menu stays open so you can keep turning. Or select it and press **[** to turn it anticlockwise or **]** clockwise. Everyone sees it turn. You can turn any token the DM has made yours to control.
 
 **When you can't move your token:**
 - If the session is **Paused**, token movement is disabled until the DM resumes. If the DM pauses while you are holding your token, it goes back to where it was
@@ -466,6 +468,7 @@ A few things worth knowing:
 
 - **Your mouse has to be over the map.** Tab does nothing if the cursor is over the chat panel or the sidebar.
 - **Tab still works normally everywhere else.** If you're typing in chat, or you've tabbed your way to a button, Tab keeps moving between controls as usual — it only pings when you're not in the middle of something.
+- **Shift+Tab leaves the map.** Once you've clicked the map, Tab pings while the pointer is over it; **Shift+Tab** takes the keyboard back to the page's controls.
 - **Anyone can ping**, players and DM alike. Your colour is assigned automatically and stays the same every session.
 - Pings are just a gesture. They don't move anything, don't reveal anything, and vanish on their own.
 
@@ -598,13 +601,27 @@ The campaign card on the dashboard calls a **Live** campaign **Active**.
 
 ### Keyboard Shortcuts
 
+On the map, once you've clicked it:
+
+| Action | Shortcut |
+|--------|---------|
+| Select the previous or next token you can act on | `,` `.` (or `<` `>`) |
+| Move the selected token one square | `Arrow keys` |
+| Move the selected token five squares | `Shift + arrow keys` |
+| Turn the selected token 45 degrees anticlockwise or clockwise | `[` `]` |
+| Open the selected token's menu | `Enter` |
+| Let go of one thing: the menu, a held token, the tool, then the selection | `Esc` |
+| Ping the map | `Tab` (cursor over the map) |
+| Place a spell area off the grid | `Alt + click` (AoE tool) |
+
+**Shift+Tab** moves the keyboard from the map back to the page's controls.
+
+In the chat box:
+
 | Action | Shortcut |
 |--------|---------|
 | Send chat message | Enter |
 | New line in chat without sending | Shift + Enter |
-| Ping the map | Tab (cursor over the map) |
-| Place a spell area off the grid | Alt + click (AoE tool) |
-| Drop a placement / close the tool | Esc |
 
 ### Common Questions
 

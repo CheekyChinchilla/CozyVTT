@@ -242,6 +242,8 @@ Everything except a character dragged from the roster lands in the middle of the
 
 Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, the ruler or the area template is up, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
 
+**From the keyboard.** Once you have clicked the map, the arrow keys move the selected token a square, or five with **Shift**, with the view following it, and **[** and **]** turn it 45 degrees. **,** and **.** (or **<** and **>**) step through every token the map shows you, hidden ones included: in the turn order during a fight, the rest row by row from the top, and the view pans to keep the selection in sight. **Enter** opens the token's menu at the token, panning it into view first and keeping the menu inside the map. **Esc** lets go of one thing a press: the menu, a held token, your tool, then the selection. While the wall **Select** tool holds walls, the arrow keys move the walls instead (see [Selecting and Moving Walls](#selecting-and-moving-walls)). The keys go to the map only while it has the keyboard: a click anywhere else, such as on the chat or a panel, gives them to that, a window open over the map takes them, and **Shift+Tab** takes the keyboard back to the page. A selected token your screen no longer draws, such as one in a preview that the previewed player cannot see, stays selected and the keys leave it alone.
+
 *GIF pending — Placing a token and moving it into position.*
 
 ### Token Display Modes
@@ -281,6 +283,7 @@ If a change cannot be saved, for example while the connection is down, a message
 A token can face any direction, to show which way a creature is looking or a cart is pointing ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)):
 
 - **Right-click the token** and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees. The menu stays open, so press again to keep turning.
+- **Select the token and press [ or ]** to turn it 45 degrees anticlockwise or clockwise, held or not.
 - **For an exact angle,** open **Edit Token** and type it in **Facing**, in degrees clockwise: 0 is the picture as uploaded, 90 a quarter turn to the right. A full turn wraps round, so 405 becomes 45.
 
 The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
@@ -901,7 +904,7 @@ This works for combatants on the map you are showing. One whose token is on anot
 Put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
 
 - The cursor has to be over the map; Tab does nothing over the sidebar or chat.
-- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface.
+- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface. Once you have clicked the map, **Shift+Tab** leaves it.
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.

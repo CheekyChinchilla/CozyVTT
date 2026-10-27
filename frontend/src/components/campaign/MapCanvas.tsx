@@ -3,7 +3,7 @@
 // HTML Canvas-based map viewer with zoom/pan controls
 // ============================================
 
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
+import { useEffect, useEffectEvent, useId, useLayoutEffect, useRef, useState, useCallback, useMemo, type ReactNode } from 'react';
 import { ZoomIn, ZoomOut, Maximize2, Grid3x3, Palette, Ghost, Ruler, Zap } from 'lucide-react';
 import { useCampaign } from '@/contexts/CampaignContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
@@ -79,6 +79,9 @@ import { releaseHeldToken } from './map/tokenHold';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
 import { isTypingInto } from './map/typingTarget';
+import { keyBelongsToMap, mapKeyAction, createRepeatPacer, ARROW_REPEAT_MS } from './map/keyboard';
+import { selectableTokens, nextSelectedId, squareFromArrow, panToKeepInView, settleArrowEcho, type ArrowKey, type StepDirection } from './map/selection';
+import { tokenCentre } from '@/utils/tokenCentre';
 import { createOwnEdits } from './map/ownEdits';
 import mapService from '@/services/map.service';
 import { isHexColor, isSafeVibeFilter, parseSpiritStyle } from '@/utils/styleAllowlists';
@@ -176,7 +179,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const terrainCanvasRef = useRef<HTMLCanvasElement>(null); // map image, grid, fog, spirit
   const tokenCanvasRef = useRef<HTMLCanvasElement>(null);   // tokens + drag ghost
   const containerRef = useRef<HTMLDivElement>(null);
-  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; carries the vibe filter
+  const layersRef = useRef<HTMLDivElement>(null);           // wraps the 3 canvases; carries the vibe filter and the keyboard focus
+  const mapHintId = useId();
   // One vision-polygon cache for this map instance.
   const visionCacheRef = useRef(createVisionCache());
   // Lazily-created AudioContext for spirit layer transition sound, closed
@@ -216,11 +220,12 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   /** Initiative of the token being pointed at — for the details panel. */
   const hoverInitiative = useTokenInitiative(hoverToken?.id ?? null);
 
-  // Context menu state
+  // Context menu state. One opened by Enter is held inside the map.
   const [contextMenu, setContextMenu] = useState<{
     token: Token;
     x: number;
     y: number;
+    fromKeyboard?: boolean;
   } | null>(null);
 
   // Door context menu state (right-click on a door segment)
@@ -233,6 +238,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   const [isMovingTokenLayer, setIsMovingTokenLayer] = useState(false);
   const [contextMenuMoveToMapOpen, setContextMenuMoveToMapOpen] = useState(false);
+  /**
+   * Close the token menu. Focus that was in it goes back to the map, so the
+   * keys keep working after a choice from the menu; focus a click has taken
+   * elsewhere stays there.
+   */
+  const closeTokenMenu = useCallback(() => {
+    const hadFocus = contextMenuRef.current?.contains(document.activeElement) ?? false;
+    setContextMenu(null);
+    setContextMenuMoveToMapOpen(false);
+    if (hadFocus) layersRef.current?.focus({ preventScroll: true });
+  }, []);
   // The token whose Remove from Map is waiting for confirmation.
   const [removingToken, setRemovingToken] = useState<Token | null>(null);
   const [isMoveToMapLoading, setIsMoveToMapLoading] = useState(false);
@@ -746,6 +762,28 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   // ============================================
 
   /**
+   * The squares this page has sent by arrow key for each token, oldest
+   * first, that the server has not echoed back yet. While a token has any,
+   * its next arrow works from the last one (map/selection.ts,
+   * settleArrowEcho). A refusal, a map switch or a rejoin ends every wait.
+   */
+  const arrowSentRef = useRef(new Map<string, Position[]>());
+  // The handlers below are registered once and read the viewer's id here.
+  const userIdRef = useRef(user?.id);
+  userIdRef.current = user?.id;
+  useEffect(() => {
+    arrowSentRef.current.clear();
+  }, [currentMap?.id, joinedEpoch]);
+  useEffect(() => {
+    if (!socket) return;
+    const handleRefusal = () => arrowSentRef.current.clear();
+    socket.onServerRefusal(handleRefusal);
+    return () => {
+      socket.off('error', handleRefusal);
+    };
+  }, [socket]);
+
+  /**
    * Listen for token.moved events from other clients
    */
   useEffect(() => {
@@ -757,6 +795,16 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       const store = useGameStore.getState();
       const token = store.tokens[event.tokenId];
       if (!token) return;
+      // A drop while this page waits to hear back about arrow moves of the
+      // token: its own echo of an earlier square is not drawn
+      // (map/selection.ts).
+      const sent = event.dragging ? undefined : arrowSentRef.current.get(event.tokenId);
+      if (sent) {
+        const settled = settleArrowEcho(sent, event, userIdRef.current);
+        if (settled.sent.length > 0) arrowSentRef.current.set(event.tokenId, settled.sent);
+        else arrowSentRef.current.delete(event.tokenId);
+        if (!settled.draw) return;
+      }
       // Glide from where it is drawn, which is where it is held while someone
       // carries it.
       const from = store.heldAt[event.tokenId] ?? token.position;
@@ -1210,7 +1258,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [currentMap?.id]);
 
   // ============================================
-  // Keyboard: Escape, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
+  // Keyboard: Tab (ping), Escape, the token keys (map/keyboard.ts), and for
+  // the DM the wall keys, Ctrl+Z (undo), Ctrl+Y / Ctrl+Shift+Z (redo)
   // ============================================
   // The listener is added once and reads the tools as they are at the key
   // press, so a tool chosen since is the one Escape asks.
@@ -1244,28 +1293,42 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     if (e.key === 'Escape') {
       // A picker, a menu or a dialog that closed on this press has used it.
       if (e.defaultPrevented) return;
-      // A held token is put back first: it is the most transient thing.
+      // Each press lets go of one thing, the most transient first: a menu
+      // open on the map, then a held token, then the tools, then the
+      // selection.
+      if (contextMenu || doorContextMenu) {
+        closeTokenMenu();
+        setDoorContextMenu(null);
+        focusMap();
+        return;
+      }
       if (draggedToken) {
         cancelHold();
         return;
       }
-      // Each press lets go of one thing, asking the tools in this order. The
-      // measuring tools come last on purpose: the AoE template is not
-      // mutually exclusive with the wall and light tools, so it can sit armed
-      // while a wall is half-drawn. Esc has to cancel the more transient
-      // thing first, or it would quietly close the template instead.
+      // The tools are asked in this order. The measuring tools come last on
+      // purpose: the AoE template is not mutually exclusive with the wall
+      // and light tools, so it can sit armed while a wall is half-drawn.
+      // Esc has to cancel the more transient thing first, or it would
+      // quietly close the template instead.
       for (const tool of [fogTool, wallTool, lightTool, measuring]) {
         if (tool.escape?.()) return;
       }
+      if (selectedTokenId) useGameStore.getState().selectToken(null);
       return;
     }
+
+    // A DM's arrows, Ctrl+A, Delete and Backspace go to the wall selection
+    // first, so the walls keep the arrows while the select tool holds some.
+    if (isDM && currentMap && wallSelectKey(e)) return;
+
+    // The keys that act on the selected token, behind their own guard.
+    if (tokenKey(e)) return;
 
     // Only handle undo/redo for DM with active map
     if (!isDM || !currentMap) return;
 
     const isCtrl = e.ctrlKey || e.metaKey;
-
-    if (wallSelectKey(e)) return;
 
     if (isCtrl && e.key === 'z' && !e.shiftKey) {
       e.preventDefault();
@@ -1953,15 +2016,18 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const groundPressRef = useRef<{ x: number; y: number; panned: boolean; clears: boolean } | null>(null);
 
   /**
-   * Put a token down on `square`: what a click does with a held token. A
-   * player may not end a move where another creature stands, which is
-   * checked here and nowhere else (see `blockingTokensAt`): the move is
-   * refused with a note and a held token goes back. Otherwise the table is
-   * told, the token is drawn there at once, it stays selected, and a hold of
-   * it ends.
+   * Put a token down on `square`: what a click does with a held token, and
+   * an arrow key with the selected one. A player may not end a move where
+   * another creature stands, which is checked here and nowhere else (see
+   * `blockingTokensAt`): the move is refused with a note and a held token
+   * goes back. Otherwise the table is told, the token is drawn there at
+   * once, it stays selected, and a hold of it ends. `start` sends the
+   * pick-up first, for a token that was not held, so the move is a drag's
+   * pair and a drop the server refuses is put back on this screen. True when
+   * the drop was sent.
    */
-  const putDown = (token: Token, square: Position) => {
-    if (!currentMap) return;
+  const putDown = (token: Token, square: Position, { start = false }: { start?: boolean } = {}): boolean => {
+    if (!currentMap) return false;
     // Two creatures do not share a square. The Basic Rules are blunt about it
     // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
     // friend or an enemy, you can't willingly end your move in its space."
@@ -1984,12 +2050,17 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
         if (draggedToken?.id === token.id) cancelHold();
         markDirty('tokens');
-        return;
+        return false;
       }
     }
 
     // Emit token.move.end event
-    if (canEmit() && currentMap.id) {
+    const sendable = canEmit() && !!currentMap.id;
+    if (sendable) {
+      if (start) {
+        const pickUp: TokenMoveStartEvent = { tokenId: token.id, mapId: currentMap.id };
+        socket!.emitTokenMoveStart(pickUp);
+      }
       const event: TokenMoveEndEvent = {
         tokenId: token.id,
         mapId: currentMap.id,
@@ -2011,6 +2082,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
       setDragOffset(null);
     }
     console.log('✅ Token placed, state cleared');
+    return sendable;
   };
 
   /**
@@ -2352,6 +2424,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   }, [gestures]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    // A press on the map gives it the keys; one on a panel over it does not.
+    focusMap();
     const e = fromPointerEvent(event);
     if (e.kind !== 'mouse') capturePointer(event);
     if (e.kind === 'touch') {
@@ -2554,9 +2628,146 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     try {
       await api.updateToken(campaign.id, currentMap.id, tokenId, { rotation });
     } catch (err) {
+      // TODO(play): two turns refused in quick succession are put back as their answers arrive, so the
+      // second puts back the first's turn and the token shows a facing the server never stored. On a
+      // refusal, once no turn of that token is still waiting, put back the last facing the server
+      // confirmed (from a successful reply or the next map resend). And two successful turns sent close
+      // together are separate requests that can be written out of order, leaving the earlier facing.
       useGameStore.getState().patchToken(tokenId, { rotation: before });
       showToast(apiErrorMessage(err) || 'Could not turn the token', 'error');
     }
+  };
+
+  // ============================================
+  // The token keys (map/keyboard.ts, map/selection.ts)
+  // ============================================
+
+  /** Give the keys back to the map: its focus stop takes focus, without scrolling the page. */
+  const focusMap = () => {
+    layersRef.current?.focus({ preventScroll: true });
+  };
+
+  /** Held arrow keys move a token at most once in ARROW_REPEAT_MS; each fresh press moves it. */
+  const [arrowPacer] = useState(() => createRepeatPacer(ARROW_REPEAT_MS));
+
+  /**
+   * The selected token, as the store holds it, while the screen draws it.
+   * Under fog, hidden on the spirit layer or left out of a preview, the keys
+   * leave it alone and the screen reader is told nothing of it.
+   */
+  const selectedShown = (): Token | undefined =>
+    selectedTokenId && drawnIds.has(selectedTokenId) ? useGameStore.getState().tokens[selectedTokenId] : undefined;
+
+  /**
+   * Pan just enough to bring a token's centre a square inside the view, and
+   * say how far it panned, in canvas pixels.
+   */
+  const keepInView = (token: Token): { dx: number; dy: number } => {
+    if (!currentMap) return { dx: 0, dy: 0 };
+    const centre = tokenCentre(token, currentMap.gridSize, currentMap.height);
+    const onScreen = {
+      x: centre.x * mapControls.zoom + mapControls.panOffset.x,
+      y: centre.y * mapControls.zoom + mapControls.panOffset.y,
+    };
+    const pan = panToKeepInView(onScreen, canvasSize, currentMap.gridSize * mapControls.zoom);
+    if (pan.dx !== 0 || pan.dy !== 0) mapControls.panBy(pan.dx, pan.dy);
+    return pan;
+  };
+
+  /**
+   * Select the next token along (`.`) or the one before (`,`): for the DM
+   * any token the map draws, for anyone else their own, paused or not; in
+   * the turn order during a fight, then by row from the top and by column.
+   * False when there is nothing to step to. A key held down steps once.
+   */
+  const stepSelection = (direction: StepDirection, repeat: boolean): boolean => {
+    if (!currentMap) return false;
+    const ordered = selectableTokens(drawnTokens, isDM ? () => true : isOwnToken, useGameStore.getState().combat);
+    if (ordered.length === 0) return false;
+    if (repeat) return true;
+    const nextId = nextSelectedId(ordered, selectedTokenId, direction);
+    const next = ordered.find((t) => t.id === nextId);
+    if (!next) return false;
+    useGameStore.getState().selectToken(next.id);
+    keepInView(next);
+    return true;
+  };
+
+  /**
+   * Move a token by an arrow key, by the same put-down a click makes, from
+   * the last square sent by arrow while the server's echoes are still on
+   * their way, and pan it into view. A token this viewer may not move now
+   * is left where it is, and a move that goes nowhere (the token at the
+   * edge) sends nothing unless the token is held, whose hold then ends
+   * where it stands.
+   */
+  const moveByArrow = (token: Token, key: ArrowKey, squares: number) => {
+    if (!currentMap || !canMoveToken(token)) return;
+    const held = draggedToken?.id === token.id;
+    const sent = arrowSentRef.current.get(token.id) ?? [];
+    const from = sent[sent.length - 1] ?? token.position;
+    const square = squareFromArrow(from, token.size, key, squares, currentMap);
+    if (!held && square.x === from.x && square.y === from.y) return;
+    if (!putDown(token, square, { start: !held })) return;
+    arrowSentRef.current.set(token.id, [...sent, square]);
+    keepInView({ ...token, position: square });
+  };
+
+  /** Whether the next token menu to open puts the cursor on its first item. */
+  const focusMenuOnOpenRef = useRef(false);
+
+  /**
+   * Open a token's menu at its centre on screen, as Enter does, with the
+   * cursor on its first item: the token is panned into view first, and the
+   * menu is held inside the map once its size is known.
+   */
+  const openTokenMenuAt = (token: Token) => {
+    if (!canvasRef.current || !currentMap) return;
+    const { dx, dy } = keepInView(token);
+    const rect = canvasRef.current.getBoundingClientRect();
+    const centre = tokenCentre(token, currentMap.gridSize, currentMap.height);
+    focusMenuOnOpenRef.current = true;
+    setDoorContextMenu(null);
+    setContextMenuMoveToMapOpen(false);
+    setContextMenu({
+      token,
+      x: rect.left + centre.x * mapControls.zoom + mapControls.panOffset.x + dx,
+      y: rect.top + centre.y * mapControls.zoom + mapControls.panOffset.y + dy,
+      fromKeyboard: true,
+    });
+  };
+
+  /**
+   * The keys that act on the selected token: the arrows move it, [ and ]
+   * turn it, , and . step the selection, Enter opens its menu. True when the
+   * map used the key; only then is the browser kept from doing anything with
+   * it. A held [, ], , or . acts once per press, and a held arrow at the
+   * pacer's rate.
+   */
+  const tokenKey = (e: KeyboardEvent): boolean => {
+    if (!currentMap) return false;
+    const action = mapKeyAction(e);
+    if (!action || !keyBelongsToMap(e, layersRef.current, contextMenuRef.current)) return false;
+    const selected = selectedShown();
+    switch (action.kind) {
+      case 'move':
+        if (!selected || !canMoveToken(selected)) return false;
+        if (arrowPacer.allow(e.repeat, Date.now())) moveByArrow(selected, action.key, action.squares);
+        break;
+      case 'turn':
+        if (!selected || !canRotateToken(selected)) return false;
+        if (!e.repeat) void rotateToken(selected.id, action.step * ROTATION_STEP);
+        break;
+      case 'step':
+        if (!stepSelection(action.direction, e.repeat)) return false;
+        break;
+      case 'menu':
+        if (!selected || !tokenMenuHasItems(selected)) return false;
+        if (!e.repeat) openTokenMenuAt(selected);
+        break;
+    }
+    e.preventDefault();
+    return true;
   };
 
   const canRollInitiativeFor = (token: Token): boolean => {
@@ -2663,14 +2874,11 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
    * Close context menu when clicking elsewhere
    */
   useEffect(() => {
-    const handleClick = () => {
-      setContextMenu(null);
-      setContextMenuMoveToMapOpen(false);
-    };
+    const handleClick = () => closeTokenMenu();
     if (!contextMenu) return;
     window.addEventListener('click', handleClick);
     return () => window.removeEventListener('click', handleClick);
-  }, [contextMenu]);
+  }, [contextMenu, closeTokenMenu]);
 
   // Close door context menu on any left-click outside it
   useEffect(() => {
@@ -2689,16 +2897,31 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     const rect = contextMenuRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
     const vh = window.innerHeight;
-    const adjustedX = contextMenu.x + rect.width > vw ? Math.max(0, contextMenu.x - rect.width) : contextMenu.x;
-    const adjustedY = contextMenu.y + rect.height > vh ? Math.max(0, contextMenu.y - rect.height) : contextMenu.y;
+    let adjustedX = contextMenu.x + rect.width > vw ? Math.max(0, contextMenu.x - rect.width) : contextMenu.x;
+    let adjustedY = contextMenu.y + rect.height > vh ? Math.max(0, contextMenu.y - rect.height) : contextMenu.y;
+    // A menu opened by Enter sits at a token, which may be near any edge of
+    // the map: it is held inside the map on all four.
+    const area = contextMenu.fromKeyboard ? canvasRef.current?.getBoundingClientRect() : undefined;
+    if (area && area.width > 0 && area.height > 0) {
+      adjustedX = Math.max(area.left, Math.min(contextMenu.x, area.right - rect.width));
+      adjustedY = Math.max(area.top, Math.min(contextMenu.y, area.bottom - rect.height));
+    }
     setContextMenuPos({ x: adjustedX, y: adjustedY });
   }, [contextMenu]);
+
+  // A menu opened from the keyboard puts the cursor on its first item once
+  // it is placed, and so visible: a hidden button cannot take focus.
+  useEffect(() => {
+    if (!contextMenuPos || !focusMenuOnOpenRef.current) return;
+    focusMenuOnOpenRef.current = false;
+    contextMenuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+  }, [contextMenuPos]);
 
   // (Token tween + fog reveal rAF loops live in ./map/useMapAnimations)
 
   // What a screen reader hears of the selection: the token and its square,
   // said again as it moves. Nothing for a token the screen does not draw.
-  const selectedToken = selectedTokenId && drawnIds.has(selectedTokenId) ? tokens.find((t) => t.id === selectedTokenId) : undefined;
+  const selectedToken = selectedShown();
   const selectionAnnouncement = selectedToken
     ? `Selected ${tokenDisplayName(selectedToken)}, square ${selectedToken.position.x}, ${selectedToken.position.y}`
     : '';
@@ -2723,7 +2946,13 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           over it keep theirs. */}
       <div
         ref={layersRef}
-        className="absolute inset-0 select-none [-webkit-touch-callout:none]"
+        // The map's focus stop: it takes the token keys, and holds only the
+        // canvases, so the panels over the map keep their own roles.
+        tabIndex={0}
+        role="application"
+        aria-label="Map"
+        aria-describedby={mapHintId}
+        className="absolute inset-0 select-none [-webkit-touch-callout:none] outline-hidden focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
         style={{
           // Re-checked here as well as on the server: a filter is CSS.
           filter: activeVibeEffect && isSafeVibeFilter(activeVibeEffect.filter) ? activeVibeEffect.filter : undefined,
@@ -2762,6 +2991,9 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
         />
       </div>
 
+      <p id={mapHintId} className="sr-only">
+        Click a token, or press full stop or comma, to select one. Arrow keys move it, square brackets turn it, and Enter opens its menu. Escape lets go. Shift+Tab leaves the map.
+      </p>
       <p role="status" aria-live="polite" className="sr-only">{selectionAnnouncement}</p>
 
       {/* Vibe hue tint overlay — color tint layered on top of canvas */}
@@ -3406,6 +3638,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
             visibility: contextMenuPos ? 'visible' : 'hidden',
           }}
           onClick={(e) => e.stopPropagation()}
+          // A held Enter that opened the menu must not press its first item.
+          onKeyDown={(e) => { if (e.key === 'Enter' && e.repeat) e.preventDefault(); }}
         >
           {contextMenu.token.characterId && (
             <>
@@ -3419,7 +3653,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   onClick={async () => {
                     const characterId = contextMenu.token.characterId!;
                     const tokenId = contextMenu.token.id;
-                    setContextMenu(null);
+                    closeTokenMenu();
                     try {
                       const { character } = await api.getCharacter(characterId);
                       setViewingSheet({ character, tokenId });
@@ -3444,7 +3678,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       x: contextMenu.x,
                       y: contextMenu.y,
                     };
-                    setContextMenu(null);
+                    closeTokenMenu();
                     setRollPicker(picker);
                   }}
                 >
@@ -3493,7 +3727,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                     const tokenId = cmToken.id;
                     const x = contextMenu.x;
                     const y = contextMenu.y;
-                    setContextMenu(null);
+                    closeTokenMenu();
                     setNpcRollPicker({ tokenId, x, y });
                   }}
                 >
@@ -3508,7 +3742,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 <button
                   className="w-full px-4 py-2 text-left text-sm text-brand-ink font-medium hover:bg-moss-green/10 transition-colors"
                   onClick={() => {
-                    setContextMenu(null);
+                    closeTokenMenu();
                     onEditToken?.(cmToken);
                   }}
                 >
@@ -3522,7 +3756,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   className="w-full px-4 py-2 text-left text-sm text-accent-ink hover:bg-warm-amber/10 transition-colors"
                   onClick={() => {
                     const token = contextMenu.token;
-                    setContextMenu(null);
+                    closeTokenMenu();
                     socket?.emitInitiativeAdd({ tokenId: token.id, mapId: currentMap.id });
                   }}
                 >
@@ -3536,7 +3770,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 onClick={async () => {
                   if (!campaign?.id || !currentMap?.id) return;
                   const token = contextMenu.token;
-                  setContextMenu(null);
+                  closeTokenMenu();
                   try {
                     // Place the copy one cell along, clamped to the map
                     const position = clampTokenPosition(
@@ -3571,7 +3805,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 onClick={async () => {
                   if (!campaign?.id) return;
                   const token = contextMenu.token;
-                  setContextMenu(null);
+                  closeTokenMenu();
                   try {
                     await api.saveTokenAsTemplate(campaign.id, {
                       name: token.name,
@@ -3602,7 +3836,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   onClick={async () => {
                     if (!campaign?.id || !currentMap?.id) return;
                     const token = contextMenu.token;
-                    setContextMenu(null);
+                    closeTokenMenu();
                     try {
                       await setTokenFlag(campaign.id, currentMap.id, token, 'visible', !token.visible);
                     } catch (err) {
@@ -3621,7 +3855,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                   onClick={async () => {
                     if (!campaign?.id || !currentMap?.id) return;
                     const token = contextMenu.token;
-                    setContextMenu(null);
+                    closeTokenMenu();
                     try {
                       await setTokenFlag(campaign.id, currentMap.id, token, 'obscured', !token.obscured);
                     } catch (err) {
@@ -3643,7 +3877,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
                       const token = contextMenu.token;
-                      setContextMenu(null);
+                      closeTokenMenu();
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.SPIRIT });
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.SPIRIT });
@@ -3664,7 +3898,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                       if (!campaign?.id || !currentMap?.id) return;
                       setIsMovingTokenLayer(true);
                       const token = contextMenu.token;
-                      setContextMenu(null);
+                      closeTokenMenu();
                       try {
                         await api.updateToken(campaign.id, currentMap.id, token.id, { layer: TokenLayer.TOKEN });
                         useGameStore.getState().patchToken(token.id, { layer: TokenLayer.TOKEN });
@@ -3709,7 +3943,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                               onClick={async () => {
                                 if (!campaign?.id || !currentMap?.id) return;
                                 const token = contextMenu.token;
-                                setContextMenu(null);
+                                closeTokenMenu();
                                 setContextMenuMoveToMapOpen(false);
                                 setIsMoveToMapLoading(true);
                                 try {
@@ -3740,7 +3974,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
                 className="w-full px-4 py-2 text-left text-sm text-danger-ink hover:bg-danger/10 transition-colors"
                 onClick={() => {
                   setRemovingToken(contextMenu.token);
-                  setContextMenu(null);
+                  closeTokenMenu();
                 }}
               >
                 Remove from Map

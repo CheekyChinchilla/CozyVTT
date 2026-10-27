@@ -103,3 +103,24 @@ export function panToKeepInView(
   };
   return { dx: along(point.x, canvas.width), dy: along(point.y, canvas.height) };
 }
+
+/**
+ * What to do with the server's word on where a token stands, a `token.moved`
+ * drop, while this page is waiting to hear back about squares it sent by
+ * arrow key (`sent`, oldest first). On a slow connection the echo of one
+ * move arrives after the next has been shown, and drawing it put the token
+ * back a square. So the page's own echo of an earlier square is not drawn;
+ * the echo of the last square sent is, and ends the wait; so does a put-back
+ * (`movedBy` null) or anyone else's move, which stands where they say. `me`
+ * is this viewer's user id.
+ */
+export function settleArrowEcho(
+  sent: readonly Position[],
+  echo: { x: number; y: number; movedBy: string | null },
+  me: string | undefined
+): { draw: boolean; sent: Position[] } {
+  if (sent.length === 0 || echo.movedBy === null || echo.movedBy !== me) return { draw: true, sent: [] };
+  const at = sent.findIndex((p) => p.x === echo.x && p.y === echo.y);
+  if (at === sent.length - 1) return { draw: true, sent: [] };
+  return { draw: false, sent: at === -1 ? [...sent] : sent.slice(at + 1) };
+}

@@ -11,6 +11,7 @@ import {
   squareFromArrow,
   isArrowKey,
   panToKeepInView,
+  settleArrowEcho,
   type ArrowKey,
 } from '../selection';
 import type { CombatState, Token } from '@/types';
@@ -178,5 +179,31 @@ describe('the pan that keeps a point in sight', () => {
 
   it('is none for a view with no size yet', () => {
     expect(panToKeepInView({ x: 900, y: 900 }, { width: 0, height: 0 }, 50)).toEqual({ dx: 0, dy: 0 });
+  });
+});
+
+describe("what the page does with the server's word on a token it moved by arrow", () => {
+  const sent = [{ x: 1, y: 4 }, { x: 2, y: 4 }, { x: 3, y: 4 }];
+
+  it('does not draw its own echo of an earlier square, and stops waiting for it', () => {
+    expect(settleArrowEcho(sent, { x: 1, y: 4, movedBy: 'me' }, 'me')).toEqual({ draw: false, sent: sent.slice(1) });
+    expect(settleArrowEcho(sent, { x: 2, y: 4, movedBy: 'me' }, 'me')).toEqual({ draw: false, sent: sent.slice(2) });
+  });
+
+  it('draws its own echo of the last square sent, which ends the run', () => {
+    expect(settleArrowEcho(sent, { x: 3, y: 4, movedBy: 'me' }, 'me')).toEqual({ draw: true, sent: [] });
+  });
+
+  it('does not draw an echo of its own from before the run', () => {
+    expect(settleArrowEcho([{ x: 8, y: 4 }], { x: 1, y: 10, movedBy: 'me' }, 'me')).toEqual({ draw: false, sent: [{ x: 8, y: 4 }] });
+  });
+
+  it("draws a put-back or someone else's move, and ends the run", () => {
+    expect(settleArrowEcho(sent, { x: 0, y: 4, movedBy: null }, 'me')).toEqual({ draw: true, sent: [] });
+    expect(settleArrowEcho(sent, { x: 7, y: 7, movedBy: 'dm-user' }, 'me')).toEqual({ draw: true, sent: [] });
+  });
+
+  it('draws everything while nothing is waiting', () => {
+    expect(settleArrowEcho([], { x: 1, y: 4, movedBy: 'me' }, 'me')).toEqual({ draw: true, sent: [] });
   });
 });
