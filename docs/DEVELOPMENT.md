@@ -636,6 +636,9 @@ Some of those deserve a note:
   (`backend/docs/WEBSOCKET_DOCUMENTATION.md`) differs from the one the server
   applies (`SOCKET_CEILINGS` in `backend/src/websocket/shared.ts`), when
   `campaign.access.revoked` has different fields or reasons on the two sides,
+  when `chat.message` has different fields on the two sides (the handler's
+  `ChatMessageBroadcast` against the frontend's), when the kinds of chat
+  message differ between `schema.prisma` and the frontend's `MessageType`,
   when `tokenCentre.ts` differs between them, when a `SESSION_SECRET=`
   example in an example file or a guide would start a production server,
   when the themes and fonts the server accepts differ from those the app

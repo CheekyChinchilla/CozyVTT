@@ -59,6 +59,7 @@ export enum MessageType {
   SYSTEM = 'SYSTEM',
   DICE_ROLL = 'DICE_ROLL',
   CHARACTER_ACTION = 'CHARACTER_ACTION',
+  WHISPER = 'WHISPER',
 }
 
 export enum TokenLayer {
@@ -1406,6 +1407,7 @@ export interface ChatSystemBroadcast {
   timestamp: string;
 }
 
+/** The `chat.message` the server sends; its fields are held to the server's by keepInStep.test.ts. */
 export interface ChatMessageBroadcast {
   id: string;
   userId: string;
@@ -1413,6 +1415,9 @@ export interface ChatMessageBroadcast {
   content: string;
   type: MessageType;
   timestamp: string;
+  /** On a whisper: the one member it is for, beside its sender, and their name. */
+  recipientId?: string;
+  recipientName?: string;
   /** On the sender's own copy only: the `clientId` it was sent with. */
   clientId?: string;
 }

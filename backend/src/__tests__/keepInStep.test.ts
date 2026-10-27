@@ -72,6 +72,11 @@
  * same list, and refused Ogg, WAV and Markdown files the server takes while
  * its own list differed. The file is kept identical in both packages.
  *
+ * The chat message the server sends and the client reads, and the kinds of
+ * chat message: the database names them, and the frontend declares its own
+ * enum, which has to name the same values. A whisper added a type and two
+ * fields to both.
+ *
  * The campaign archive format version. The import window reads an archive's
  * manifest in the browser and shows it only for the version the server
  * imports; for any other it asks the server, sending the archive twice.
@@ -390,6 +395,28 @@ describe('campaign.access.revoked, which the server sends and the client reads',
   it('has the same fields and reasons on both sides', () => {
     expect(interfaceFields(client, 'AccessRevoked')).toEqual(interfaceFields(server, 'AccessRevoked'));
     expect(reasons(client)).toBe(reasons(server));
+  });
+});
+
+describe('chat.message, which the server sends and the client reads', () => {
+  it('has the same fields on both sides', () => {
+    expect(interfaceFields(read('frontend/src/types/index.ts'), 'ChatMessageBroadcast')).toEqual(
+      interfaceFields(read('backend/src/websocket/handlers/chat.ts'), 'ChatMessageBroadcast')
+    );
+  });
+});
+
+describe('the kinds of chat message', () => {
+  it('are the same in the database schema and the frontend', () => {
+    const prismaBlock = /enum MessageType \{([^}]*)\}/.exec(read('backend/prisma/schema.prisma'));
+    const frontendBlock = /export enum MessageType \{([^}]*)\}/.exec(read('frontend/src/types/index.ts'));
+    if (!prismaBlock || !frontendBlock) throw new Error('a MessageType enum moved; update this test');
+    const database = prismaBlock[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
+    const frontend = [...frontendBlock[1].matchAll(/(\w+)\s*=\s*'(\w+)'/g)].map((m) => {
+      expect(m[1]).toBe(m[2]);
+      return m[2];
+    });
+    expect(frontend).toEqual(database);
   });
 });
 

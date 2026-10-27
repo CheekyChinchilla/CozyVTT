@@ -5,7 +5,10 @@
  * WebSocket guide and the tests match its refusals word for word. The schema
  * keeps each of them: a payload that is not an object and a message that is
  * blank once trimmed are both "Message content required", the length is
- * counted before trimming, and the message is stored trimmed.
+ * counted before trimming, and the message is stored trimmed. A whisper's
+ * `recipientId` that is not a user id is refused as a recipient who is not
+ * in the campaign is, so a script learns nothing more from the one than the
+ * other.
  */
 
 import { ChatMessageSchema } from '../chat';
@@ -17,6 +20,22 @@ function refusal(payload: unknown): string | null {
 }
 
 describe('ChatMessageSchema', () => {
+  // The schema is checked before anything is read, so loading it loads no
+  // database client: the module that makes one is replaced, in a registry of
+  // this test's own, by one that says when it is loaded.
+  it('loads no database client', () => {
+    let loaded = false;
+    jest.isolateModules(() => {
+      jest.doMock('../../config/database', () => {
+        loaded = true;
+        return {};
+      });
+      jest.requireActual('../chat');
+    });
+    jest.dontMock('../../config/database');
+    expect(loaded).toBe(false);
+  });
+
   it.each([
     ['nothing', undefined],
     ['null', null],
@@ -61,9 +80,20 @@ describe('ChatMessageSchema', () => {
     expect(refusal({ content: 'Hi', clientId: `${'A-_9'.repeat(16)}` })).toBeNull();
   });
 
+  it.each([['mara'], [''], [5], [null], ['00000000-0000-0000-0000-00000000000g']])('refuses the recipientId %p as a recipient who is not in the campaign', (recipientId) => {
+    expect(refusal({ content: 'Hi', recipientId })).toBe('That person is not in this campaign');
+  });
+
+  it('takes a recipientId that is a user id, or none', () => {
+    const parsed = ChatMessageSchema.parse({ content: 'Hi', recipientId: '6c83a363-b51d-4d9c-a3a6-9edd72b24c83' });
+    expect(parsed.recipientId).toBe('6c83a363-b51d-4d9c-a3a6-9edd72b24c83');
+    expect(ChatMessageSchema.parse({ content: 'Hi' }).recipientId).toBeUndefined();
+  });
+
   it('refuses the first thing wrong, in the order the handler checked them', () => {
     expect(refusal({ content: '', type: 'SYSTEM', clientId: '' })).toBe('Message content required');
     expect(refusal({ content: 'x'.repeat(2001), type: 'SYSTEM' })).toBe('Message too long. Maximum 2000 characters.');
     expect(refusal({ content: 'Hi', type: 'SYSTEM', clientId: '' })).toBe('Invalid message type. Must be PLAYER or DM.');
+    expect(refusal({ content: 'Hi', clientId: '', recipientId: 'mara' })).toBe('clientId must be 1 to 64 letters, digits, hyphens or underscores');
   });
 });
