@@ -8,3 +8,4 @@ export * from './drawLights';
 export * from './drawWalls';
 export * from './drawOverlays';
 export * from './drawPings';
+export * from './drawDrawings';
