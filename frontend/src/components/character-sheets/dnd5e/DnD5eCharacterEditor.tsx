@@ -1275,16 +1275,18 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       {/* From sm up, pr-64 reserves the strip the absolutely-positioned
           Save/Cancel cluster and palette button occupy above. Without it the
           Experience Points field sits underneath them. On a phone the cluster
-          is in the flow above this row instead, where a tap reaches it. */}
-      <div className="flex items-start justify-between sm:pr-64">
+          is in the flow above this row instead, where a tap reaches it, and
+          the portrait, the name and the experience are one column. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-64">
         {/* min-w-0 so this column can shrink. Flex children default to
             min-width:auto, which lets the character-name input push out past
             the reserved padding on a narrow window and back under the
             buttons. */}
-        <div className="flex items-start space-x-4 min-w-0">
-          {/* Token Image Upload */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start min-w-0">
+          {/* Token Image Upload. As wide as the portrait, so its caption
+              wraps under it on a phone. */}
           {allowTokenPicture && (
-          <div className="shrink-0 relative group">
+          <div className="shrink-0 relative group w-24 sm:w-40">
             <input
               type="file"
               id="token-upload"
@@ -1300,24 +1302,24 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
                 <img
                   src={tokenImagePreview}
                   alt={formData.characterName || 'Character'}
-                  className="w-40 h-40 rounded-full border-4 border-white/20 object-cover"
+                  className="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white/20 object-cover"
                 />
               ) : (
-                <div className="w-40 h-40 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
-                  <User className="w-20 h-20 text-white/40" />
+                <div className="w-24 h-24 sm:w-40 sm:h-40 rounded-full border-4 border-white/20 bg-black/70 flex items-center justify-center">
+                  <User className="w-12 h-12 sm:w-20 sm:h-20 text-white/40" />
                 </div>
               )}
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <Upload className="w-12 h-12 text-white" />
+                <Upload className="w-8 h-8 sm:w-12 sm:h-12 text-white" />
               </div>
             </label>
             {errors.tokenImage && (
-              <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
+              <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
                 {errors.tokenImage}
               </div>
             )}
             {!character.campaignId && (
-              <div className={`absolute top-full mt-1 text-xs ${headerHintColor} whitespace-nowrap`}>
+              <div className={`mt-1 text-xs ${headerHintColor} sm:absolute sm:top-full sm:whitespace-nowrap`}>
                 Saves as personal token
               </div>
             )}
@@ -1394,7 +1396,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
           </div>
         </div>
 
-        <div className="text-right space-y-1">
+        <div className="sm:text-right space-y-1">
           <label htmlFor="dnd5e-experience" className="block text-xs opacity-70">Experience Points</label>
           <NumberField
             id="dnd5e-experience"

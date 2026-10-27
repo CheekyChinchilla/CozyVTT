@@ -650,11 +650,13 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       {/* sm:pr-64, matching the other sheets: from sm up the absolute
           Save/Cancel cluster is 203px wide and starts 64px in, so it needs
           more clearance than the pr-48 that was here. On a phone the cluster
-          is in the flow above this row instead. */}
-      <div className="flex items-start space-x-4 sm:pr-64">
-        {/* Token Image */}
+          is in the flow above this row instead, and the portrait is above the
+          name. */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:pr-64">
+        {/* Token Image, as wide as the portrait so its caption wraps under it
+            on a phone. */}
         {allowTokenPicture && (
-        <div className="shrink-0 relative">
+        <div className="shrink-0 relative w-24">
           <label htmlFor="token-upload" className="cursor-pointer group">
             {tokenImagePreview ? (
               <img
@@ -676,12 +678,12 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             className="hidden"
           />
           {errors.tokenImage && (
-            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
+            <div className={`mt-1 text-xs ${ink.soft} sm:absolute sm:top-full sm:whitespace-nowrap`}>
               {errors.tokenImage}
             </div>
           )}
           {!character.campaignId && (
-            <div className={`absolute top-full mt-1 text-xs ${ink.soft} whitespace-nowrap`}>
+            <div className={`mt-1 text-xs ${ink.soft} sm:absolute sm:top-full sm:whitespace-nowrap`}>
               Saves as personal token
             </div>
           )}
@@ -689,8 +691,9 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
         )}
 
         {/* Character Info — min-w-0 alongside flex-1 so the column can shrink
-            below its content width and stay inside the reserved padding. */}
-        <div className="flex-1 min-w-0 space-y-3">
+            below its content width and stay inside the reserved padding. In
+            the phone's column it simply takes the full width. */}
+        <div className="sm:flex-1 min-w-0 space-y-3">
           <input
             type="text"
             value={formData.investigatorName || ''}
@@ -701,7 +704,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             className={`text-3xl font-bold border-2 ${box} rounded-sm px-3 py-1 w-full ${ink.text} focus:outline-hidden focus:ring-2`}
           />
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Read-only: the player name is whoever owns this investigator,
                 filled from their display name at creation. */}
             <span className={`text-sm px-2 py-1 ${ink.text} self-center`}>
@@ -727,7 +730,7 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
             />
           </div>
 
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {/* TODO(typing): the age is stored as text and handed to this number box
                 as it is, which shows text that is not a number as blank. Right:
                 decide what such text should show, then pass the box a number. */}

@@ -103,7 +103,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
         {onEdit && (
           <button
             onClick={onEdit}
-            className={`absolute top-4 right-4 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
+            className={`ml-auto mb-3 w-fit sm:absolute sm:top-4 sm:right-4 sm:mb-0 px-4 py-2 ${ink.button} rounded-lg transition-colors flex items-center space-x-2 font-medium shadow-lg`}
             title="Edit investigator"
           >
             <Edit className="w-4 h-4" />
@@ -111,8 +111,10 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           </button>
         )}
 
-      <div className="flex items-start justify-between pr-24">
-        <div className="flex items-start space-x-4">
+      {/* Below sm, Edit is in the flow above this row and the player goes
+          under the name; from sm up the row clears the corner Edit sits in. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0 sm:pr-24">
+        <div className="flex items-start space-x-4 min-w-0">
           {/* Token Image */}
           <div className="shrink-0">
             {character.tokenImageUrl ? (
@@ -129,12 +131,12 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
           </div>
 
           {/* Character Info */}
-          <div>
+          <div className="min-w-0">
             <h2 className="text-3xl font-bold mb-2 drop-shadow-lg">
               {data.investigatorName || 'Unnamed Investigator'}
             </h2>
             <div className={`space-y-1 ${ink.softer}`}>
-              <div className="flex items-center space-x-4">
+              <div className="flex flex-wrap items-center gap-x-4">
                 <span className="font-medium">{data.occupation || 'No Occupation'}</span>
                 {data.era && <span>• {data.era}</span>}
               </div>
@@ -143,7 +145,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
                   <span className={ink.soft}>Residence:</span> {data.residence}
                 </div>
               )}
-              <div className="flex items-center space-x-4 text-sm">
+              <div className="flex flex-wrap items-center gap-x-4 text-sm">
                 {data.age && <span>Age {data.age}</span>}
                 {data.sex && <span>• {data.sex}</span>}
                 {data.birthplace && <span>• Born in {data.birthplace}</span>}
@@ -154,7 +156,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
 
         {/* Player Name */}
         {data.playerName && (
-          <div className="text-right">
+          <div className="sm:text-right">
             <div className={`text-xs ${ink.soft} uppercase tracking-wide`}>Player</div>
             <div className="text-lg font-semibold">{data.playerName}</div>
           </div>
