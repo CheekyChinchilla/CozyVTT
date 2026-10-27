@@ -3,9 +3,10 @@
 // subtracted (offscreen compositing: bright 1.0, dim 0.5, dim + dim =
 // bright), warm token/light glows, and the DM's light-source icons.
 //
-// Pure: no React. The two offscreen canvases persist between frames
+// Pure: no React. The offscreen canvases persist between frames
 // (allocating ~5MB per frame causes GC jank), so the caller passes
-// mutable holders that this module fills/reuses.
+// mutable holders that this module fills/reuses. The map-space ones are
+// drawn again only when what they are made from changes (compositeCache).
 // ============================================
 
 import type { Token } from '@/types';
@@ -14,6 +15,7 @@ import { gridYToCentrePx } from '../coords';
 import type { LightToolMode } from '@/components/campaign/DmLightControls';
 import { mapSizePx, type Viewport } from './types';
 import type { VisionSource } from '../vision';
+import { applyViewport, withinBackingLimit } from '../layerCanvas';
 import { BRIGHT, DIM } from '@/utils/visibilityRule';
 
 /** Mutable holder for a persistent offscreen canvas (a React ref works). */
@@ -35,7 +37,12 @@ export interface LightingDrawState {
   lightVision: readonly VisionSource[];
   /** Everything in line of sight counts as lit; the map's setting. */
   globalIllumination: boolean;
-  /** Persistent offscreen canvases (fog composite + light coverage + sight mask). */
+  /**
+   * Persistent offscreen canvases (fog composite + light coverage + sight
+   * mask), the size of the map in map pixels, or smaller on a map over
+   * MAX_BACKING_PIXELS (map/layerCanvas.ts). They are drawn into in map
+   * pixels through their scale, and drawn from at the map's size.
+   */
   lightingCanvas: CanvasHolder;
   coverageCanvas: CanvasHolder;
   lightCanvas: CanvasHolder;
@@ -50,15 +57,98 @@ export interface LightingDrawState {
   /** Two screen-sized scratch canvases for the memory pass, allocated on first use. */
   memoryMaskCanvas: CanvasHolder;
   memoryCanvas: CanvasHolder;
+  /**
+   * The ratio the visible canvases are drawn at (map/layerCanvas.ts). The
+   * memory pass works in their pixels, and the blur is measured in them.
+   */
+  dpr: number;
+  /**
+   * What the lighting canvases were last drawn from (a React ref works).
+   * While it matches, they are reused, so a pan, a ping or a ruler step
+   * repaints the overlay without drawing them again.
+   */
+  compositeCache: CompositeHolder;
 }
+
+/**
+ * What the map-space lighting composite is made from, compared by value from
+ * one frame to the next. Fog is drawn apart and is not part of it.
+ */
+export interface LightingComposite {
+  /** The three canvases it is drawn into; new ones start empty. */
+  canvases: readonly HTMLCanvasElement[];
+  /**
+   * Every sight, darkvision and light polygon, by identity: the vision cache
+   * keeps each one until its source moves or the walls change.
+   */
+  polygons: readonly VisionSource['poly'][];
+  /** Each enabled light's x, y, bright radius and dim radius. */
+  lights: readonly number[];
+  /** Each viewer token's position and size, for the square it always sees. */
+  viewers: readonly number[];
+  globalIllumination: boolean;
+  /** The explored raster, by identity: it is made again when the cells change. */
+  explored: HTMLCanvasElement | null;
+  /** The map's width and height in squares, and its grid size. */
+  map: readonly number[];
+}
+
+/** Mutable holder for the last composite's inputs (a React ref works). */
+export interface CompositeHolder {
+  current: LightingComposite | null;
+}
+
+/**
+ * Canvases the browser has given back blank. A 2D canvas whose GPU context
+ * was lost is empty once restored, and a cached darkness drawn from it would
+ * show a player the whole map, so the composite is drawn again.
+ */
+const blanked = new WeakSet<HTMLCanvasElement>();
 
 function ensureCanvas(holder: CanvasHolder, w: number, h: number): HTMLCanvasElement {
   if (!holder.current || holder.current.width !== w || holder.current.height !== h) {
-    holder.current = document.createElement('canvas');
-    holder.current.width = w;
-    holder.current.height = h;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    canvas.addEventListener('contextrestored', () => blanked.add(canvas));
+    holder.current = canvas;
   }
   return holder.current;
+}
+
+function compositeOf(state: LightingDrawState, viewport: Viewport, canvases: readonly HTMLCanvasElement[]): LightingComposite {
+  const polygons: VisionSource['poly'][] = [];
+  for (const sources of [state.tokenSight, state.tokenVision, state.lightVision]) {
+    for (const source of sources) polygons.push(source.poly);
+  }
+  const lights: number[] = [];
+  for (const light of state.enabledLights) lights.push(light.x, light.y, light.brightRadius, light.dimRadius);
+  const viewers: number[] = [];
+  for (const token of state.myTokens) viewers.push(token.position.x, token.position.y, token.size.width, token.size.height);
+  return {
+    canvases,
+    polygons,
+    lights,
+    viewers,
+    globalIllumination: state.globalIllumination,
+    explored: state.explored,
+    map: [viewport.mapWidth, viewport.mapHeight, viewport.gridSize],
+  };
+}
+
+function sameItems<T>(a: readonly T[], b: readonly T[]): boolean {
+  return a.length === b.length && a.every((item, i) => item === b[i]);
+}
+
+function sameComposite(a: LightingComposite | null, b: LightingComposite): boolean {
+  return a !== null
+    && sameItems(a.canvases, b.canvases)
+    && sameItems(a.polygons, b.polygons)
+    && sameItems(a.lights, b.lights)
+    && sameItems(a.viewers, b.viewers)
+    && a.globalIllumination === b.globalIllumination
+    && a.explored === b.explored
+    && sameItems(a.map, b.map);
 }
 
 /**
@@ -82,143 +172,30 @@ export function drawDynamicLighting(
     return;
   }
 
-  const offscreen = ensureCanvas(state.lightingCanvas, mapWidthPx, mapHeightPx);
-  const offCtx = offscreen.getContext('2d')!;
-  // Must clear before reuse — persists between frames
-  offCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+  // Each lighting canvas holds the map at one pixel per map pixel, or fewer
+  // on a map too big for one canvas; the scale makes them the same to draw.
+  const size = withinBackingLimit(mapWidthPx, mapHeightPx);
+  const offscreen = ensureCanvas(state.lightingCanvas, size.width, size.height);
+  const coverage = ensureCanvas(state.coverageCanvas, size.width, size.height);
+  const lightLayer = ensureCanvas(state.lightCanvas, size.width, size.height);
 
-  // ── Light coverage offscreen ────────────────────────────────────
-  // Per-pixel "light intensity" map: alpha 1.0 = bright, 0.5 = dim,
-  // 0 = dark. Token vision and bright zones contribute alpha 1.0; dim
-  // zones contribute 0.5. Alphas sum via 'lighter' compositing and are
-  // clamped at 1.0 — so two overlapping dim zones (0.5 + 0.5) become
-  // bright. This is the "dim overlap → bright" house rule.
-  const coverage = ensureCanvas(state.coverageCanvas, mapWidthPx, mapHeightPx);
-  const covCtx = coverage.getContext('2d')!;
-  covCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
-  covCtx.globalCompositeOperation = 'lighter';
-  covCtx.fillStyle = 'rgba(255, 255, 255, 1)';
-
-  /** Trace a visibility polygon as a path on the given context. */
-  const tracePoly = (c: CanvasRenderingContext2D, poly: VisionSource['poly']) => {
-    c.beginPath();
-    c.moveTo(poly.points[0].x, poly.points[0].y);
-    for (let i = 1; i < poly.points.length; i++) c.lineTo(poly.points[i].x, poly.points[i].y);
-    c.closePath();
-  };
-
-  // ── Light coverage, on its own canvas ───────────────────────────
-  // Built separately so it can be intersected with the viewer's line of sight
-  // before it joins the coverage mask.
-  //
-  // Clipping a light to its OWN polygon gives it wall shadows, which is
-  // necessary but not sufficient: it says where the light falls, not who can
-  // see where it falls. Adding that straight to the coverage mask meant any lit
-  // ground anywhere was subtracted from the fog, so a lamp inside a sealed room
-  // lit that room for a player standing outside it. Light reveals what you
-  // could already have seen; it never sees on your behalf.
-  const lightLayer = ensureCanvas(state.lightCanvas, mapWidthPx, mapHeightPx);
-  const lightCtx = lightLayer.getContext('2d')!;
-  lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
-  lightCtx.globalCompositeOperation = 'lighter';
-
-  for (let li = 0; li < state.enabledLights.length; li++) {
-    const light = state.enabledLights[li];
-    const poly = state.lightVision[li]?.poly;
-    if (!poly || poly.points.length < 3) continue;
-
-    const dimRadiusPx = light.dimRadius * viewport.gridSize;
-    const brightRadiusPx = light.brightRadius * viewport.gridSize;
-
-    lightCtx.save();
-    tracePoly(lightCtx, poly);
-    lightCtx.clip();
-
-    // Each zone adds half, so inside the bright radius the two make a whole.
-    // Its edge fades over a band centred on the radius, so bright blends into
-    // dim and dim into dark, where a hard circle read as a sticker on the map.
-    // Only the picture is feathered: which tokens are seen is decided by the
-    // radii themselves (visibilityRule).
-    const zone = (radiusPx: number) => {
-      const band = Math.min(viewport.gridSize * 0.6, radiusPx * 0.35);
-      const inner = radiusPx - band / 2;
-      const outer = radiusPx + band / 2;
-      const fade = lightCtx.createRadialGradient(light.x, light.y, inner, light.x, light.y, outer);
-      fade.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
-      fade.addColorStop(1, 'rgba(255, 255, 255, 0)');
-      lightCtx.fillStyle = fade;
-      lightCtx.beginPath();
-      lightCtx.arc(light.x, light.y, outer, 0, Math.PI * 2);
-      lightCtx.fill();
-    };
-    if (dimRadiusPx > 0) zone(dimRadiusPx);
-    if (brightRadiusPx > 0) zone(brightRadiusPx);
-    lightCtx.restore();
+  // The composite is in map space, so it stays as it is while the view moves;
+  // it is drawn again only when something it is made from changes.
+  const composite = compositeOf(state, viewport, [offscreen, coverage, lightLayer]);
+  let blank = false;
+  for (const canvas of composite.canvases) if (blanked.delete(canvas)) blank = true;
+  if (blank || !sameComposite(state.compositeCache.current, composite)) {
+    drawComposite(state, viewport, { offscreen, coverage, lightLayer }, size.width / mapWidthPx, size.height / mapHeightPx);
+    state.compositeCache.current = composite;
   }
-
-  // Keep only the lit ground the viewer actually has line of sight to.
-  //
-  // The union of the sight polygons is built on the coverage canvas first,
-  // borrowed as scratch — it is about to be cleared and rebuilt anyway, and a
-  // fourth full-map canvas would cost real memory on a large map. The union has
-  // to be assembled before the intersection rather than applied polygon by
-  // polygon: a second `destination-in` would erase what the first had kept,
-  // leaving only the overlap of two tokens' views instead of their sum.
-  covCtx.globalCompositeOperation = 'source-over';
-  for (const { poly } of state.tokenSight) {
-    if (poly.points.length >= 3) {
-      tracePoly(covCtx, poly);
-      covCtx.fill();
-    }
-  }
-  lightCtx.globalCompositeOperation = 'destination-in';
-  lightCtx.drawImage(coverage, 0, 0);
-  lightCtx.globalCompositeOperation = 'source-over';
-
-  // ── Coverage mask proper ────────────────────────────────────────
-  covCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
-  covCtx.globalCompositeOperation = 'lighter';
-
-  if (state.globalIllumination) {
-    // Everything in line of sight is as good as lit.
-    covCtx.fillStyle = `rgba(255, 255, 255, ${BRIGHT})`;
-    for (const { poly } of state.tokenSight) {
-      if (poly.points.length >= 3) {
-        tracePoly(covCtx, poly);
-        covCtx.fill();
-      }
-    }
-  } else {
-    // Darkvision shows the dark as dim, out to its reach...
-    covCtx.fillStyle = `rgba(255, 255, 255, ${DIM})`;
-    for (const { poly } of state.tokenVision) {
-      if (poly.points.length >= 3) {
-        tracePoly(covCtx, poly);
-        covCtx.fill();
-      }
-    }
-    // ...and a token always knows where it stands: its own square is dim
-    // even with no darkvision and no light, so it can see and drag itself.
-    for (const token of state.myTokens) {
-      const cx = (token.position.x + token.size.width / 2) * viewport.gridSize;
-      const cy = gridYToCentrePx(token.position.y, token.size.height, viewport.mapHeight, viewport.gridSize);
-      const selfPx = (Math.max(token.size.width, token.size.height) / 2) * viewport.gridSize;
-      covCtx.beginPath();
-      covCtx.arc(cx, cy, selfPx, 0, Math.PI * 2);
-      covCtx.fill();
-    }
-  }
-
-  // ...then the light the viewer can see, added on top.
-  covCtx.drawImage(lightLayer, 0, 0);
-  covCtx.globalCompositeOperation = 'source-over';
 
   // ── Explored memory: remembered ground as a grey, darker copy ───
   // Canvas blend modes act within one canvas, and this overlay is transparent
   // where the map is, so the remembered tier is a desaturated, darkened copy
   // of the terrain canvas, kept only where the viewer has been and cannot
-  // see now. Screen-sized, in screen space; skipped when nothing is
-  // remembered, which is every DM view and every unlit map.
+  // see now. Screen-sized, in the screen's pixels, so the mask is drawn
+  // through the same transform as the layers, on every frame; skipped when
+  // nothing is remembered, which is every DM view and every unlit map.
   if (state.explored && state.terrainCanvas) {
     const sw = state.terrainCanvas.width;
     const sh = state.terrainCanvas.height;
@@ -228,13 +205,12 @@ export function drawDynamicLighting(
     maskCtx.setTransform(1, 0, 0, 1, 0, 0);
     maskCtx.clearRect(0, 0, sw, sh);
     maskCtx.imageSmoothingEnabled = false;
-    maskCtx.translate(viewport.panOffset.x, viewport.panOffset.y);
-    maskCtx.scale(viewport.zoom, viewport.zoom);
+    applyViewport(maskCtx, viewport, state.dpr);
     maskCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
     // What is in sight now is not memory. Dim areas are 0.5 alpha, so three
     // subtractions leave 12.5%, visually nothing.
     maskCtx.globalCompositeOperation = 'destination-out';
-    for (let i = 0; i < 3; i++) maskCtx.drawImage(coverage, 0, 0);
+    for (let i = 0; i < 3; i++) maskCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
     maskCtx.globalCompositeOperation = 'source-over';
     maskCtx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -259,33 +235,11 @@ export function drawDynamicLighting(
     ctx.restore();
   }
 
-  // ── Build fog with coverage subtracted ──────────────────────────
-  offCtx.fillStyle = 'rgba(15, 12, 25, 1)';
-  offCtx.fillRect(0, 0, mapWidthPx, mapHeightPx);
-  offCtx.globalCompositeOperation = 'destination-out';
-  offCtx.drawImage(coverage, 0, 0);
-  if (state.explored) {
-    // Remembered ground out of sight is dimmed by the memory pass above, not
-    // blacked out here. Only out of sight: ground in sight is remembered too,
-    // and taking all of it out of the darkness left dim light as clear as
-    // bright. The light layer is spent by now and serves as scratch: the
-    // explored raster, less what is in sight, as the memory mask is built.
-    lightCtx.globalCompositeOperation = 'source-over';
-    lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
-    lightCtx.imageSmoothingEnabled = false;
-    lightCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
-    lightCtx.imageSmoothingEnabled = true;
-    lightCtx.globalCompositeOperation = 'destination-out';
-    for (let i = 0; i < 3; i++) lightCtx.drawImage(coverage, 0, 0);
-    lightCtx.globalCompositeOperation = 'source-over';
-    offCtx.drawImage(lightLayer, 0, 0);
-  }
-  offCtx.globalCompositeOperation = 'source-over';
-
-  // Composite onto main canvas with soft blur edge
+  // Composite onto main canvas with soft blur edge. A filter's length is in
+  // the canvas's own pixels, so the ratio keeps the edge 4 CSS pixels wide.
   ctx.save();
-  ctx.filter = 'blur(4px)';
-  ctx.drawImage(offscreen, 0, 0);
+  ctx.filter = `blur(${4 * state.dpr}px)`;
+  ctx.drawImage(offscreen, 0, 0, mapWidthPx, mapHeightPx);
   ctx.filter = 'none';
   ctx.restore();
 
@@ -367,6 +321,176 @@ export function drawDynamicLighting(
   ctx.globalCompositeOperation = 'source-over';
   ctx.restore(); // the sight clip around the light glows
   ctx.restore(); // the token torch-glow save
+}
+
+/**
+ * The map-space composite, in map pixels through each canvas's scale: the
+ * light the viewer can see, the coverage mask, and the darkness with the
+ * coverage and the remembered ground out of sight cut from it.
+ */
+function drawComposite(
+  state: LightingDrawState,
+  viewport: Viewport,
+  canvases: { offscreen: HTMLCanvasElement; coverage: HTMLCanvasElement; lightLayer: HTMLCanvasElement },
+  scaleX: number,
+  scaleY: number
+): void {
+  const { w: mapWidthPx, h: mapHeightPx } = mapSizePx(viewport);
+  const { offscreen, coverage, lightLayer } = canvases;
+
+  const offCtx = offscreen.getContext('2d')!;
+  offCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+  // Must clear before reuse — persists between frames
+  offCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+
+  // ── Light coverage offscreen ────────────────────────────────────
+  // Per-pixel "light intensity" map: alpha 1.0 = bright, 0.5 = dim,
+  // 0 = dark. Token vision and bright zones contribute alpha 1.0; dim
+  // zones contribute 0.5. Alphas sum via 'lighter' compositing and are
+  // clamped at 1.0 — so two overlapping dim zones (0.5 + 0.5) become
+  // bright. This is the "dim overlap → bright" house rule.
+  const covCtx = coverage.getContext('2d')!;
+  covCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+  covCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+  covCtx.globalCompositeOperation = 'lighter';
+  covCtx.fillStyle = 'rgba(255, 255, 255, 1)';
+
+  /** Trace a visibility polygon as a path on the given context. */
+  const tracePoly = (c: CanvasRenderingContext2D, poly: VisionSource['poly']) => {
+    c.beginPath();
+    c.moveTo(poly.points[0].x, poly.points[0].y);
+    for (let i = 1; i < poly.points.length; i++) c.lineTo(poly.points[i].x, poly.points[i].y);
+    c.closePath();
+  };
+
+  // ── Light coverage, on its own canvas ───────────────────────────
+  // Built separately so it can be intersected with the viewer's line of sight
+  // before it joins the coverage mask.
+  //
+  // Clipping a light to its OWN polygon gives it wall shadows, which is
+  // necessary but not sufficient: it says where the light falls, not who can
+  // see where it falls. Adding that straight to the coverage mask meant any lit
+  // ground anywhere was subtracted from the fog, so a lamp inside a sealed room
+  // lit that room for a player standing outside it. Light reveals what you
+  // could already have seen; it never sees on your behalf.
+  const lightCtx = lightLayer.getContext('2d')!;
+  lightCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
+  lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+  lightCtx.globalCompositeOperation = 'lighter';
+
+  for (let li = 0; li < state.enabledLights.length; li++) {
+    const light = state.enabledLights[li];
+    const poly = state.lightVision[li]?.poly;
+    if (!poly || poly.points.length < 3) continue;
+
+    const dimRadiusPx = light.dimRadius * viewport.gridSize;
+    const brightRadiusPx = light.brightRadius * viewport.gridSize;
+
+    lightCtx.save();
+    tracePoly(lightCtx, poly);
+    lightCtx.clip();
+
+    // Each zone adds half, so inside the bright radius the two make a whole.
+    // Its edge fades over a band centred on the radius, so bright blends into
+    // dim and dim into dark, where a hard circle read as a sticker on the map.
+    // Only the picture is feathered: which tokens are seen is decided by the
+    // radii themselves (visibilityRule).
+    const zone = (radiusPx: number) => {
+      const band = Math.min(viewport.gridSize * 0.6, radiusPx * 0.35);
+      const inner = radiusPx - band / 2;
+      const outer = radiusPx + band / 2;
+      const fade = lightCtx.createRadialGradient(light.x, light.y, inner, light.x, light.y, outer);
+      fade.addColorStop(0, 'rgba(255, 255, 255, 0.5)');
+      fade.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      lightCtx.fillStyle = fade;
+      lightCtx.beginPath();
+      lightCtx.arc(light.x, light.y, outer, 0, Math.PI * 2);
+      lightCtx.fill();
+    };
+    if (dimRadiusPx > 0) zone(dimRadiusPx);
+    if (brightRadiusPx > 0) zone(brightRadiusPx);
+    lightCtx.restore();
+  }
+
+  // Keep only the lit ground the viewer actually has line of sight to.
+  //
+  // The union of the sight polygons is built on the coverage canvas first,
+  // borrowed as scratch — it is about to be cleared and rebuilt anyway, and a
+  // fourth full-map canvas would cost real memory on a large map. The union has
+  // to be assembled before the intersection rather than applied polygon by
+  // polygon: a second `destination-in` would erase what the first had kept,
+  // leaving only the overlap of two tokens' views instead of their sum.
+  covCtx.globalCompositeOperation = 'source-over';
+  for (const { poly } of state.tokenSight) {
+    if (poly.points.length >= 3) {
+      tracePoly(covCtx, poly);
+      covCtx.fill();
+    }
+  }
+  lightCtx.globalCompositeOperation = 'destination-in';
+  lightCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
+  lightCtx.globalCompositeOperation = 'source-over';
+
+  // ── Coverage mask proper ────────────────────────────────────────
+  covCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+  covCtx.globalCompositeOperation = 'lighter';
+
+  if (state.globalIllumination) {
+    // Everything in line of sight is as good as lit.
+    covCtx.fillStyle = `rgba(255, 255, 255, ${BRIGHT})`;
+    for (const { poly } of state.tokenSight) {
+      if (poly.points.length >= 3) {
+        tracePoly(covCtx, poly);
+        covCtx.fill();
+      }
+    }
+  } else {
+    // Darkvision shows the dark as dim, out to its reach...
+    covCtx.fillStyle = `rgba(255, 255, 255, ${DIM})`;
+    for (const { poly } of state.tokenVision) {
+      if (poly.points.length >= 3) {
+        tracePoly(covCtx, poly);
+        covCtx.fill();
+      }
+    }
+    // ...and a token always knows where it stands: its own square is dim
+    // even with no darkvision and no light, so it can see and drag itself.
+    for (const token of state.myTokens) {
+      const cx = (token.position.x + token.size.width / 2) * viewport.gridSize;
+      const cy = gridYToCentrePx(token.position.y, token.size.height, viewport.mapHeight, viewport.gridSize);
+      const selfPx = (Math.max(token.size.width, token.size.height) / 2) * viewport.gridSize;
+      covCtx.beginPath();
+      covCtx.arc(cx, cy, selfPx, 0, Math.PI * 2);
+      covCtx.fill();
+    }
+  }
+
+  // ...then the light the viewer can see, added on top.
+  covCtx.drawImage(lightLayer, 0, 0, mapWidthPx, mapHeightPx);
+  covCtx.globalCompositeOperation = 'source-over';
+
+  // ── Build fog with coverage subtracted ──────────────────────────
+  offCtx.fillStyle = 'rgba(15, 12, 25, 1)';
+  offCtx.fillRect(0, 0, mapWidthPx, mapHeightPx);
+  offCtx.globalCompositeOperation = 'destination-out';
+  offCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
+  if (state.explored) {
+    // Remembered ground out of sight is dimmed by the memory pass, not
+    // blacked out here. Only out of sight: ground in sight is remembered too,
+    // and taking all of it out of the darkness left dim light as clear as
+    // bright. The light layer is spent by now and serves as scratch: the
+    // explored raster, less what is in sight, as the memory mask is built.
+    lightCtx.globalCompositeOperation = 'source-over';
+    lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.imageSmoothingEnabled = false;
+    lightCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.imageSmoothingEnabled = true;
+    lightCtx.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 3; i++) lightCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
+    lightCtx.globalCompositeOperation = 'source-over';
+    offCtx.drawImage(lightLayer, 0, 0, mapWidthPx, mapHeightPx);
+  }
+  offCtx.globalCompositeOperation = 'source-over';
 }
 
 export interface LightIconsDrawState {

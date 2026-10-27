@@ -44,7 +44,6 @@ _Nothing at present._
 
 ### Maps
 
-- `after 1.5.4` **A map picture that finishes loading while the canvas still measures 0 by 0 never fits to the view.** The fit runs once per map when the picture loads and does not watch the canvas size (`MapCanvas.tsx`).
 - `after 1.5.4` **Every wall, window and door on the map reaches every player, fog of war or not,** so a player who reads what their browser was sent can learn the layout of rooms their screen still covers. Their browser needs the walls to work out what their characters can see, so changing it is a design question: which walls a player is sent under fog, and what their line of sight does at the edge of what they were sent (`filterMapData` in `utils/spirit-layer.ts`). The DM guide's fog section already says the walls are sent. Since 1.5.4 a player cannot open or close a door wholly under fog.
 
 ### Accounts

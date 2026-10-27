@@ -9,7 +9,7 @@
  */
 
 import { TOKEN_HUES, hueColour } from '@/utils/tokenColours';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
 import { drawTokens, placeholderColor, type TokenDrawState } from '../layers/drawTokens';
@@ -19,6 +19,7 @@ import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from
 import { drawSpiritLayer } from '../layers/drawBackground';
 import { drawDynamicLighting, drawLightIcons } from '../layers/drawLights';
 import { computeVisionState } from '../vision';
+import { MAX_BACKING_PIXELS } from '../layerCanvas';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
 import { TokenDisposition, TokenLayer, TokenType } from '@/types';
@@ -725,7 +726,7 @@ describe('computeVisionState', () => {
  * which a refactor could otherwise drop in silence.
  */
 describe('drawDynamicLighting', () => {
-  interface OpCall { method: string; op: string; fillStyle: string; src?: unknown }
+  interface OpCall { method: string; op: string; fillStyle: string; filter: string; src?: unknown; args: unknown[] }
 
   /**
    * A context that records the composite operation and fill style in force at
@@ -739,11 +740,11 @@ describe('drawDynamicLighting', () => {
       globalCompositeOperation: 'source-over',
       fillStyle: '', filter: 'none', globalAlpha: 1, imageSmoothingEnabled: true,
       createRadialGradient: (...args: number[]) => { gradients.push(args); return gradient; },
-    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string };
+    } as unknown as CanvasRenderingContext2D & { globalCompositeOperation: string; fillStyle: string; filter: string };
     for (const m of ['save', 'restore', 'beginPath', 'closePath', 'moveTo', 'lineTo',
       'arc', 'fill', 'clip', 'fillRect', 'clearRect', 'drawImage', 'setTransform', 'translate', 'scale']) {
       (ctx as unknown as Record<string, unknown>)[m] = (...args: unknown[]) =>
-        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), src: args[0] });
+        ops.push({ method: m, op: ctx.globalCompositeOperation, fillStyle: String(ctx.fillStyle), filter: String(ctx.filter), src: args[0], args });
     }
     return { ctx, ops, gradients };
   }
@@ -753,11 +754,16 @@ describe('drawDynamicLighting', () => {
     current: { width: w, height: h, getContext: () => ctx } as unknown as HTMLCanvasElement,
   });
 
-  const viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 3, mapHeight: 3 };
+  const viewport: Viewport = { zoom: 1, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: 3, mapHeight: 3 };
   const W = 150, H = 150;
   const light = { id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true };
 
-  function run(opts: { withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean; withMemory?: boolean }) {
+  function run(opts: {
+    withLight: boolean; globalIllumination?: boolean; sightRadius?: number; noTokens?: boolean; withMemory?: boolean;
+    /** The screen's pixel ratio, and the view; 1 and the plain view by default. */
+    dpr?: number; view?: Pick<Viewport, 'zoom' | 'panOffset'>;
+  }) {
+    const at: Viewport = { ...viewport, ...opts.view };
     const main = makeOpRecorder();
     const lighting = makeOpRecorder();
     const coverage = makeOpRecorder();
@@ -770,7 +776,7 @@ describe('drawDynamicLighting', () => {
     const token = makeToken('a', { sightRadius: opts.sightRadius ?? 0 } as Partial<Token>);
     const myTokens = opts.noTokens ? [] : [token];
     const gi = opts.globalIllumination ?? false;
-    const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], viewport, { globalIllumination: gi });
+    const vision = computeVisionState(myTokens, opts.withLight ? [light] : [], [], at, { globalIllumination: gi });
 
     const lightHolder = holderFor(lightOnly.ctx, W, H);
     const coverageHolder = holderFor(coverage.ctx, W, H);
@@ -788,7 +794,9 @@ describe('drawDynamicLighting', () => {
       terrainCanvas,
       memoryMaskCanvas: holderFor(memoryMask.ctx, W, H),
       memoryCanvas: holderFor(memory.ctx, W, H),
-    }, viewport);
+      dpr: opts.dpr ?? 1,
+      compositeCache: { current: null },
+    }, at);
 
     return { main, lighting, lightOnly, coverage, memoryMask, memory, explored, lightCanvas: lightHolder.current, coverageCanvas: coverageHolder.current };
   }
@@ -833,6 +841,36 @@ describe('drawDynamicLighting', () => {
     expect(memory.ops.some((c) => c.method === 'fillRect' && c.op === 'source-over' && c.fillStyle === 'rgba(15, 12, 25, 0.65)')).toBe(true);
     expect(memory.ops.some((c) => c.method === 'drawImage' && c.op === 'destination-in')).toBe(true);
     expect(main.ops.filter((c) => c.method === 'drawImage')).toHaveLength(2); // memory, then the darkness
+  });
+
+  // The memory pass works on screen-sized canvases, whose pixels are the
+  // screen's: its mask is drawn through the same transform as the layers.
+  it('builds the memory mask through the world transform at the screen ratio', () => {
+    const view = { zoom: 1.5, panOffset: { x: 10, y: -4 } };
+    const { memoryMask } = run({ withLight: false, withMemory: true, dpr: 2, view });
+    const transforms = memoryMask.ops.filter((c) => c.method === 'setTransform').map((c) => c.args);
+    expect(transforms).toContainEqual([3, 0, 0, 3, 20, -8]);
+    expect(memoryMask.ops.some((c) => c.method === 'translate' || c.method === 'scale')).toBe(false);
+    // The explored raster and the three subtractions all go through it.
+    const set = memoryMask.ops.findIndex((c) => c.method === 'setTransform' && c.args[0] === 3);
+    const draws = memoryMask.ops.filter((c, i) => c.method === 'drawImage' && i > set);
+    expect(draws).toHaveLength(4);
+  });
+
+  it('builds the memory mask at ratio 1 as translate(pan) then scale(zoom) did', () => {
+    const view = { zoom: 1.5, panOffset: { x: 10, y: -4 } };
+    const { memoryMask } = run({ withLight: false, withMemory: true, dpr: 1, view });
+    const transforms = memoryMask.ops.filter((c) => c.method === 'setTransform').map((c) => c.args);
+    expect(transforms).toContainEqual([1.5, 0, 0, 1.5, 10, -4]);
+  });
+
+  // A canvas filter's length is in the canvas's own pixels.
+  it('softens the darkness edge over 4 CSS pixels at any ratio', () => {
+    const blurAt = (dpr: number) => {
+      const draws = run({ withLight: true, dpr }).main.ops.filter((c) => c.method === 'drawImage');
+      return draws[draws.length - 1]?.filter;
+    };
+    expect([blurAt(1), blurAt(2), blurAt(3)]).toEqual(['blur(4px)', 'blur(8px)', 'blur(12px)']);
   });
 
   it('runs no memory pass when nothing is remembered', () => {
@@ -892,6 +930,314 @@ describe('drawDynamicLighting', () => {
   it('leaves the light layer alone when there are no lights', () => {
     const { lightOnly } = run({ withLight: false });
     expect(lightOnly.ops.some((c) => c.method === 'arc')).toBe(false);
+  });
+
+  /**
+   * The three lighting canvases are the size of the map. Safari on an iPhone
+   * or iPad draws no canvas over MAX_BACKING_PIXELS, so on a bigger map they
+   * are made smaller, evenly, and everything drawn from them is drawn at the
+   * map's size.
+   */
+  describe('on a map over the canvas limit', () => {
+    /** Where a drawImage puts its picture: its own size, unless it was given one. */
+    const destination = (c: OpCall) => {
+      const src = c.src as { width: number; height: number };
+      return c.args.length >= 5 ? [c.args[3], c.args[4]] : [src.width, src.height];
+    };
+
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    /** Draws a map of cols by rows squares into holders that start empty. */
+    function drawLarge(cols: number, rows: number, withMemory = true) {
+      const view: Viewport = { zoom: 0.2, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: cols, mapHeight: rows };
+      const made = new Map<HTMLCanvasElement, ReturnType<typeof makeOpRecorder>>();
+      const create = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+        if (tag !== 'canvas') return create(tag);
+        const rec = makeOpRecorder();
+        const canvas = Object.assign(new EventTarget(), { width: 300, height: 150, getContext: () => rec.ctx }) as unknown as HTMLCanvasElement;
+        made.set(canvas, rec);
+        return canvas;
+      }) as unknown as typeof document.createElement);
+
+      const lamp = { id: 'l1', x: 2500, y: 1700, brightRadius: 4, dimRadius: 8, color: '#ffaa00', enabled: true };
+      const viewer = makeToken('a', { position: { x: 50, y: 34 }, sightRadius: 6 } as Partial<Token>);
+      const vision = computeVisionState([viewer], [lamp], [], view, { globalIllumination: false });
+      const main = makeOpRecorder();
+      const holders = {
+        lightingCanvas: { current: null as HTMLCanvasElement | null },
+        coverageCanvas: { current: null as HTMLCanvasElement | null },
+        lightCanvas: { current: null as HTMLCanvasElement | null },
+      };
+      drawDynamicLighting(main.ctx, {
+        myTokens: [viewer],
+        enabledLights: [lamp],
+        tokenVision: vision.tokenVision,
+        tokenSight: vision.tokenSight,
+        lightVision: vision.lightVision,
+        globalIllumination: false,
+        ...holders,
+        explored: withMemory ? ({ width: cols, height: rows } as unknown as HTMLCanvasElement) : null,
+        terrainCanvas: { width: 1200, height: 800 } as unknown as HTMLCanvasElement,
+        memoryMaskCanvas: { current: null },
+        memoryCanvas: { current: null },
+        dpr: 1,
+        compositeCache: { current: null },
+      }, view);
+
+      const canvases = [holders.lightingCanvas.current!, holders.coverageCanvas.current!, holders.lightCanvas.current!];
+      return { main, canvases, recorders: canvases.map((c) => made.get(c)!), made };
+    }
+
+    it('makes each lighting canvas smaller, evenly, to fit within the limit', () => {
+      // 100 by 68 squares of 50 pixels: 5,000 by 3,400, 17,000,000 pixels.
+      const { canvases } = drawLarge(100, 68);
+      const scale = Math.sqrt(MAX_BACKING_PIXELS / (5000 * 3400));
+      for (const canvas of canvases) {
+        expect([canvas.width, canvas.height]).toEqual([Math.floor(5000 * scale), Math.floor(3400 * scale)]);
+        expect(canvas.width * canvas.height).toBeLessThanOrEqual(MAX_BACKING_PIXELS);
+      }
+    });
+
+    it('draws into each lighting canvas in map pixels, through its scale', () => {
+      const { canvases, recorders } = drawLarge(100, 68);
+      canvases.forEach((canvas, i) => {
+        const transforms = recorders[i].ops.filter((c) => c.method === 'setTransform').map((c) => c.args);
+        expect(transforms).toContainEqual([canvas.width / 5000, 0, 0, canvas.height / 3400, 0, 0]);
+      });
+    });
+
+    it('draws every composite of the lighting canvases at the map size', () => {
+      const { main, canvases, made } = drawLarge(100, 68);
+      const lighting = new Set<unknown>(canvases);
+      const composites = [main, ...made.values()]
+        .flatMap((r) => r.ops)
+        .filter((c) => c.method === 'drawImage' && lighting.has(c.src));
+      // light into coverage, coverage into light, three into the memory mask,
+      // coverage into the darkness, three into the explored cut, the cut into
+      // the darkness, the darkness onto the map
+      expect(composites).toHaveLength(11);
+      for (const c of composites) expect(destination(c)).toEqual([5000, 3400]);
+    });
+
+    it('leaves the canvases of a map within the limit at the map size', () => {
+      // 80 by 60 squares of 50 pixels: 4,000 by 3,000.
+      const { main, canvases, made } = drawLarge(80, 60);
+      for (const canvas of canvases) expect([canvas.width, canvas.height]).toEqual([4000, 3000]);
+      const lighting = new Set<unknown>(canvases);
+      const composites = [main, ...made.values()]
+        .flatMap((r) => r.ops)
+        .filter((c) => c.method === 'drawImage' && lighting.has(c.src));
+      for (const c of composites) expect(destination(c)).toEqual([4000, 3000]);
+    });
+  });
+
+  /**
+   * The lighting canvases hold the map-space composite: the light, the line
+   * of sight, the coverage and the darkness cut from it. None of it moves
+   * with the view, and the overlay repaints on every pan frame, ping and
+   * ruler step, so it is drawn again only when something it is made from
+   * changes. The memory pass and the darkness on the map follow the view and
+   * are drawn every frame.
+   */
+  describe('the composite cache', () => {
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    const lamp = (over: Partial<LightSource> = {}): LightSource =>
+      ({ id: 'l1', x: 75, y: 75, brightRadius: 1, dimRadius: 2, color: '#ffaa00', enabled: true, ...over }) as LightSource;
+
+    /** A lit scene drawn frame after frame into the same canvases and cache. */
+    function scene() {
+      const main = makeOpRecorder();
+      const lighting = makeOpRecorder();
+      const coverage = makeOpRecorder();
+      const lightOnly = makeOpRecorder();
+      const memoryMask = makeOpRecorder();
+      const memory = makeOpRecorder();
+      const viewer = makeToken('a', { sightRadius: 2 } as Partial<Token>);
+      const light = lamp();
+      const vision = computeVisionState([viewer], [light], [], viewport, { globalIllumination: false });
+      const explored = { width: 3, height: 3 } as unknown as HTMLCanvasElement;
+      const base: Parameters<typeof drawDynamicLighting>[1] = {
+        myTokens: [viewer],
+        enabledLights: [light],
+        tokenVision: vision.tokenVision,
+        tokenSight: vision.tokenSight,
+        lightVision: vision.lightVision,
+        globalIllumination: false,
+        lightingCanvas: holderFor(lighting.ctx, W, H),
+        coverageCanvas: holderFor(coverage.ctx, W, H),
+        lightCanvas: holderFor(lightOnly.ctx, W, H),
+        explored,
+        terrainCanvas: { width: W, height: H } as unknown as HTMLCanvasElement,
+        memoryMaskCanvas: holderFor(memoryMask.ctx, W, H),
+        memoryCanvas: holderFor(memory.ctx, W, H),
+        dpr: 1,
+        compositeCache: { current: null },
+      };
+      const composite = [lighting, coverage, lightOnly];
+      /** The fills made on the lighting canvases so far. */
+      const fills = () => composite.flatMap((r) => r.ops).filter((c) => c.method === 'fill' || c.method === 'fillRect').length;
+      const draw = (patch: Partial<typeof base> = {}, view: Partial<Viewport> = {}) =>
+        drawDynamicLighting(main.ctx, { ...base, ...patch }, { ...viewport, ...view });
+      return { base, draw, fills, main, memoryMask, viewer, light, vision };
+    }
+
+    it('draws the composite once while nothing it is made from changes', () => {
+      const s = scene();
+      s.draw();
+      const first = s.fills();
+      expect(first).toBeGreaterThan(0);
+
+      s.draw({}, { panOffset: { x: 40, y: -10 } });
+      s.draw({}, { zoom: 2 });
+
+      expect(s.fills()).toBe(first);
+    });
+
+    it('still lays the darkness and the remembered ground over the map on every frame', () => {
+      const s = scene();
+      s.draw();
+      s.draw({}, { panOffset: { x: 40, y: -10 } });
+
+      const offscreen = s.base.lightingCanvas.current;
+      expect(s.main.ops.filter((c) => c.method === 'drawImage' && c.src === offscreen)).toHaveLength(2);
+      expect(s.memoryMask.ops.filter((c) => c.method === 'setTransform' && c.args[4] === 40)).toHaveLength(1);
+    });
+
+    // The canvas builds its light list afresh on every frame.
+    it('keeps the composite for a new list of lights with the same values', () => {
+      const s = scene();
+      s.draw();
+      const first = s.fills();
+
+      s.draw({ enabledLights: [lamp()] });
+
+      expect(s.fills()).toBe(first);
+    });
+
+    it.each([
+      ['x', { x: 80 }],
+      ['y', { y: 70 }],
+      ['bright radius', { brightRadius: 1.5 }],
+      ['dim radius', { dimRadius: 3 }],
+    ] as const)('draws the composite again when a light\'s %s changes', (_field, change) => {
+      const s = scene();
+      s.draw();
+      const first = s.fills();
+
+      s.draw({ enabledLights: [lamp(change)] });
+
+      expect(s.fills()).toBeGreaterThan(first);
+    });
+
+    it.each([
+      ['position', { position: { x: 1, y: 0 } }],
+      ['row', { position: { x: 0, y: 1 } }],
+      ['width', { size: { width: 2, height: 1 } }],
+      ['height', { size: { width: 1, height: 2 } }],
+    ] as const)('draws the composite again when a viewer token\'s %s changes', (_field, change) => {
+      const s = scene();
+      s.draw();
+      const first = s.fills();
+
+      s.draw({ myTokens: [{ ...s.viewer, ...change }] });
+
+      expect(s.fills()).toBeGreaterThan(first);
+    });
+
+    it('draws the composite again for a new line of sight, darkvision reach or light reach', () => {
+      const s = scene();
+      s.draw();
+      for (const field of ['tokenSight', 'tokenVision', 'lightVision'] as const) {
+        const before = s.fills();
+        const again = computeVisionState([s.viewer], [s.light], [], viewport, { globalIllumination: false });
+        s.draw({ [field]: again[field] });
+        expect(s.fills()).toBeGreaterThan(before);
+      }
+    });
+
+    it('draws the composite again when Global Illumination or the explored ground changes', () => {
+      const s = scene();
+      s.draw();
+      let before = s.fills();
+      s.draw({ globalIllumination: true });
+      expect(s.fills()).toBeGreaterThan(before);
+
+      before = s.fills();
+      s.draw({ globalIllumination: true, explored: { width: 3, height: 3 } as unknown as HTMLCanvasElement });
+      expect(s.fills()).toBeGreaterThan(before);
+    });
+
+    // 3 by 3 squares of 50, 5 by 5 of 30 and 6 by 6 of 25 are all 150 by 150
+    // pixels: the same canvases and polygons, and only the map is different.
+    // Its height and grid size place the square a viewer always sees.
+    it('draws the composite again for another map or grid size of the same pixel size', () => {
+      const s = scene();
+      s.draw();
+      let before = s.fills();
+      s.draw({}, { mapWidth: 5, mapHeight: 5, gridSize: 30 });
+      expect(s.fills()).toBeGreaterThan(before);
+
+      before = s.fills();
+      s.draw({}, { mapWidth: 6, mapHeight: 6, gridSize: 25 });
+      expect(s.fills()).toBeGreaterThan(before);
+
+      before = s.fills();
+      s.draw({}, { mapWidth: 6, mapHeight: 6, gridSize: 25 });
+      expect(s.fills()).toBe(before);
+    });
+
+    it('draws the composite again into a new set of canvases', () => {
+      const made: Array<ReturnType<typeof makeOpRecorder>> = [];
+      const create = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+        if (tag !== 'canvas') return create(tag);
+        const rec = makeOpRecorder();
+        made.push(rec);
+        return Object.assign(new EventTarget(), { width: 300, height: 150, getContext: () => rec.ctx });
+      }) as unknown as typeof document.createElement);
+      const s = scene();
+      const builds = () => made.flatMap((r) => r.ops).filter((c) => c.method === 'fill' || c.method === 'fillRect').length + s.fills();
+
+      s.draw();
+      // A map switch drops the canvases.
+      const before = builds();
+      s.base.lightingCanvas.current = null;
+      s.base.coverageCanvas.current = null;
+      s.base.lightCanvas.current = null;
+      s.draw();
+      expect(builds()).toBeGreaterThan(before);
+    });
+
+    // A lost GPU context leaves a canvas blank, and a blank darkness would
+    // show a player the whole map.
+    it('draws the composite again once the browser restores a lost canvas', () => {
+      const create = document.createElement.bind(document);
+      const made: Array<ReturnType<typeof makeOpRecorder>> = [];
+      vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+        if (tag !== 'canvas') return create(tag);
+        const rec = makeOpRecorder();
+        made.push(rec);
+        return Object.assign(new EventTarget(), { width: 300, height: 150, getContext: () => rec.ctx });
+      }) as unknown as typeof document.createElement);
+      const s = scene();
+      s.base.lightingCanvas.current = null;
+      s.base.coverageCanvas.current = null;
+      s.base.lightCanvas.current = null;
+      const builds = () => made.flatMap((r) => r.ops).filter((c) => c.method === 'fillRect').length;
+
+      s.draw();
+      s.draw();
+      const before = builds();
+      (s.base.coverageCanvas.current as unknown as EventTarget).dispatchEvent(new Event('contextrestored'));
+      s.draw();
+
+      expect(builds()).toBeGreaterThan(before);
+      const after = builds();
+      s.draw();
+      expect(builds()).toBe(after);
+    });
   });
 });
 
