@@ -20,6 +20,7 @@ import type {
   TokenMoveEndEvent,
   TokenMovedEvent,
   CampaignMap,
+  Position,
   SpiritLayerToggledBroadcast,
   SpiritLayerTokenToggledBroadcast,
   VibeUpdatedBroadcast,
@@ -1952,6 +1953,67 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
   const groundPressRef = useRef<{ x: number; y: number; panned: boolean; clears: boolean } | null>(null);
 
   /**
+   * Put a token down on `square`: what a click does with a held token. A
+   * player may not end a move where another creature stands, which is
+   * checked here and nowhere else (see `blockingTokensAt`): the move is
+   * refused with a note and a held token goes back. Otherwise the table is
+   * told, the token is drawn there at once, it stays selected, and a hold of
+   * it ends.
+   */
+  const putDown = (token: Token, square: Position) => {
+    if (!currentMap) return;
+    // Two creatures do not share a square. The Basic Rules are blunt about it
+    // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
+    // friend or an enemy, you can't willingly end your move in its space."
+    // A token at zero hit points is treated as no longer holding its space,
+    // so a body can be stood on — that part is a house rule, not something
+    // the rulebook spells out.
+    //
+    // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
+    // swarm, scenery being arranged — is ordinary DM work, and refusing it
+    // would be an obstacle rather than a rule.
+    //
+    // Checked here on the client and nowhere else, deliberately: see
+    // `blockingTokensAt`, which explains why enforcing this server-side would
+    // turn a refused move into a way to find hidden creatures.
+    if (userRole !== 'DM') {
+      const blockedBy = blockingTokensAt(tokens, token, square, characterHpCache);
+      if (blockedBy.length > 0) {
+        // TODO(play): blockingTokensAt counts tokens under manual fog, so this note names a creature the
+        // player cannot see; name only a token the viewer's screen draws, and an unseen one as "Someone".
+        showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
+        if (draggedToken?.id === token.id) cancelHold();
+        markDirty('tokens');
+        return;
+      }
+    }
+
+    // Emit token.move.end event
+    if (canEmit() && currentMap.id) {
+      const event: TokenMoveEndEvent = {
+        tokenId: token.id,
+        mapId: currentMap.id,
+        x: square.x,
+        y: square.y,
+      };
+      socket!.emitTokenMoveEnd(event);
+    } else {
+      console.warn('⚠️ Cannot emit token.move.end - socket not connected');
+    }
+
+    // Update local token position; the token put down stays selected
+    useGameStore.getState().applyTokenMove(token.id, square);
+    useGameStore.getState().selectToken(token.id);
+
+    // Clear drag state
+    if (draggedToken?.id === token.id) {
+      setDraggedToken(null);
+      setDragOffset(null);
+    }
+    console.log('✅ Token placed, state cleared');
+  };
+
+  /**
    * Tokens and panning, when no other tool took the event: a click picks a
    * token up or puts the held one down, and a drag on empty ground pans.
    */
@@ -1963,60 +2025,7 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
           // Finalize token position (snap to grid)
           const finalX = Math.max(0, Math.min(gridCoords.x - dragOffset.x, currentMap.width - draggedToken.size.width));
           const finalY = Math.max(0, Math.min(gridCoords.y - dragOffset.y, currentMap.height - draggedToken.size.height));
-
-          // Two creatures do not share a square. The Basic Rules are blunt about it
-          // (p. 74, "Moving Around Other Creatures"): "whether a creature is a
-          // friend or an enemy, you can't willingly end your move in its space."
-          // A token at zero hit points is treated as no longer holding its space,
-          // so a body can be stood on — that part is a house rule, not something
-          // the rulebook spells out.
-          //
-          // The DM is exempt. Stacking tokens on purpose — a rider on a mount, a
-          // swarm, scenery being arranged — is ordinary DM work, and refusing it
-          // would be an obstacle rather than a rule.
-          //
-          // Checked here on the client and nowhere else, deliberately: see
-          // `blockingTokensAt`, which explains why enforcing this server-side would
-          // turn a refused move into a way to find hidden creatures.
-          if (userRole !== 'DM') {
-            const blockedBy = blockingTokensAt(
-              tokens,
-              draggedToken,
-              { x: Math.floor(finalX), y: Math.floor(finalY) },
-              characterHpCache
-            );
-            if (blockedBy.length > 0) {
-              showToast(`${tokenDisplayName(blockedBy[0])} is already standing there.`, 'info');
-              cancelHold();
-              markDirty('tokens');
-              return true;
-            }
-          }
-
-          // Emit token.move.end event
-          if (canEmit() && currentMap.id) {
-            const event: TokenMoveEndEvent = {
-              tokenId: draggedToken.id,
-              mapId: currentMap.id,
-              x: Math.floor(finalX),
-              y: Math.floor(finalY),
-            };
-            socket!.emitTokenMoveEnd(event);
-          } else {
-            console.warn('⚠️ Cannot emit token.move.end - socket not connected');
-          }
-
-          // Update local token position
-          useGameStore.getState().applyTokenMove(draggedToken.id, {
-            x: Math.floor(finalX),
-            y: Math.floor(finalY),
-          });
-
-          // Clear drag state; the token put down stays selected
-          useGameStore.getState().selectToken(draggedToken.id);
-          setDraggedToken(null);
-          setDragOffset(null);
-          console.log('✅ Token placed, state cleared');
+          putDown(draggedToken, { x: Math.floor(finalX), y: Math.floor(finalY) });
           return true;
         }
 
