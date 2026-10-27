@@ -42,6 +42,20 @@ import type {
   MapPingEvent,
   MapPingedBroadcast,
 } from '@/types';
+import type {
+  DrawingAddEvent,
+  DrawingAddAck,
+  DrawingRemoveEvent,
+  DrawingClearMineEvent,
+  DrawingClearEvent,
+  DrawingPreviewEvent,
+  DrawingsRequestEvent,
+  DrawingAddedBroadcast,
+  DrawingRemovedBroadcast,
+  DrawingsClearedBroadcast,
+  DrawingPreviewedBroadcast,
+  DrawingsStateBroadcast,
+} from '@/types/drawings';
 
 // ============================================
 // WebSocket Client Configuration
@@ -65,6 +79,8 @@ type EventCallback<T = unknown> = (data: T) => void;
 const CHAT_ANSWER_TIMEOUT_MS = 10_000;
 /** How long a roll, or a clear of the dice history, waits for its answer. */
 const ROLL_ANSWER_TIMEOUT_MS = 10_000;
+/** How long a drawing, an erase or a clear waits for its answer. */
+const DRAWING_ANSWER_TIMEOUT_MS = 10_000;
 
 /**
  * A listener as the registry holds it, once its payload type has been erased.
@@ -743,6 +759,65 @@ class SocketClient {
 
   onMapPinged(callback: EventCallback<MapPingedBroadcast>) {
     this.addListener('map.pinged', callback);
+  }
+
+  // ============================================
+  // Drawings on the map
+  // ============================================
+
+  /**
+   * Draw on a map and wait for the answer: the stored drawing's id, or why
+   * it was refused. The page's own `drawing:added` comes first, carrying the
+   * `opId` sent. With no connection, or no answer in
+   * DRAWING_ANSWER_TIMEOUT_MS, it counts as not drawn.
+   */
+  addDrawing(data: DrawingAddEvent): Promise<DrawingAddAck> {
+    return this.askFor<DrawingAddAck>('drawing:add', data, DRAWING_ANSWER_TIMEOUT_MS, "That drawing didn't reach the table. Check your connection and try again.");
+  }
+
+  /** Erase one drawing, and wait for the answer. */
+  removeDrawing(data: DrawingRemoveEvent): Promise<DoneAck> {
+    return this.askFor<DoneAck>('drawing:remove', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
+  }
+
+  /** Erase every drawing of this member's on a map, and wait for the answer. */
+  clearMyDrawings(data: DrawingClearMineEvent): Promise<DoneAck> {
+    return this.askFor<DoneAck>('drawing:clear_mine', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
+  }
+
+  /** Erase every drawing on a map (the DM's), and wait for the answer. */
+  clearDrawings(data: DrawingClearEvent): Promise<DoneAck> {
+    return this.askFor<DoneAck>('drawing:clear', data, DRAWING_ANSWER_TIMEOUT_MS, 'No answer from the server');
+  }
+
+  /** One frame of a stroke on its way; nothing is answered. */
+  sendDrawingPreview(data: DrawingPreviewEvent) {
+    this.socket?.emit('drawing:preview', data);
+  }
+
+  /** Ask for a map's drawings; `drawings:state` answers. */
+  requestDrawings(data: DrawingsRequestEvent) {
+    this.socket?.emit('drawings:request', data);
+  }
+
+  onDrawingAdded(callback: EventCallback<DrawingAddedBroadcast>) {
+    this.addListener('drawing:added', callback);
+  }
+
+  onDrawingRemoved(callback: EventCallback<DrawingRemovedBroadcast>) {
+    this.addListener('drawing:removed', callback);
+  }
+
+  onDrawingsCleared(callback: EventCallback<DrawingsClearedBroadcast>) {
+    this.addListener('drawings:cleared', callback);
+  }
+
+  onDrawingPreviewed(callback: EventCallback<DrawingPreviewedBroadcast>) {
+    this.addListener('drawing:previewed', callback);
+  }
+
+  onDrawingsState(callback: EventCallback<DrawingsStateBroadcast>) {
+    this.addListener('drawings:state', callback);
   }
 
   // ============================================

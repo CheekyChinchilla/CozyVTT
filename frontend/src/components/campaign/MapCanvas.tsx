@@ -50,6 +50,10 @@ import {
   drawFogSelection,
   drawPings,
   PING_DURATION_MS,
+  drawDrawings,
+  drawDrawingPreviews,
+  drawMarkupLayer,
+  createDrawingCache,
   type ActivePing,
   type AoEShape,
   type LightingComposite,
@@ -77,6 +81,7 @@ import {
 import { useExploredMemory } from './map/useExploredMemory';
 import { useFogStateRequest } from './map/useFogStateRequest';
 import { useWallLightRequest } from './map/useWallLightRequest';
+import { useMapDrawings } from './map/useMapDrawings';
 import { releaseHeldToken, carriedSquare, heldDrawnAt } from './map/tokenHold';
 import type { DoorViewer } from './map/doorAccess';
 import { fogCellIndex, gridXToFogCol, gridYToFogRow } from './map/coords';
@@ -545,6 +550,14 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   const { tool: fogTool, fogDragAnchorRef, fogDragCurrent, cancelFogDrag } = useFogTool({
     isDM, mapId: currentMap?.id, fogMode, fogState, setFogState, socket, mapControls, rightPanActiveRef, markDirty,
   });
+
+  // The map's drawings and the strokes on their way (map/useMapDrawings.ts),
+  // and the traced outline of each, kept for every repaint.
+  const mapDrawings = useMapDrawings({
+    socket, mapId: currentMap?.id, joinedEpoch, role: userRole, userId: user?.id, markDirty,
+    onRefused: (message) => showToast(message, 'error'),
+  });
+  const [drawingCache] = useState(createDrawingCache);
 
   // ============================================
   // Helper Functions
@@ -1582,6 +1595,19 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       dmViewBothPlanes,
     }, viewport);
 
+    // The part of the map on screen, which the drawings are culled to.
+    const visible = canvasSize.width > 0 && canvasSize.height > 0
+      ? {
+        minX: -mapControls.panOffset.x / mapControls.zoom,
+        minY: -mapControls.panOffset.y / mapControls.zoom,
+        maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+        maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+      }
+      : null;
+    // 1b. The ground layer's drawings, under the grid. Only the DM may draw
+    //     there, and nothing does yet: the place is kept for a DM's map art.
+    drawDrawings(ctx, { drawings: mapDrawings.drawings, layer: 'GROUND', showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+
     // 2. Grid overlay
     if (showGrid) {
       drawGrid(ctx, { gridColor }, viewport);
@@ -1612,7 +1638,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     }
 
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.panOffset, mapControls.zoom, dpr, userRole, campaign?.spiritLayerEnabled, playerSpiritVisible, dmViewBothPlanes, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, isDM, revealOpacityRef, canvasSize.width, canvasSize.height, mapDrawings.drawings, drawingCache]);
 
   /**
    * Draw the TOKENS layer (middle canvas): every token + the drag ghost.
@@ -1896,13 +1922,42 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       }, viewport);
     }
 
+    // 13. The drawings, the topmost layer of the map: over the tokens, a
+    //     player's fog and the lit darkness, so a table can plan over
+    //     ground it cannot see. A drawing for the DM alone shows in the
+    //     DM's own view only, never in a preview. They are kept as pixels
+    //     and copied on, drawn again only when they or the view change, so
+    //     a repaint for a ping or a stroke on its way strokes none of them.
+    //     Then the strokes on their way, and the laser pointer and the
+    //     pings on top.
+    const visible = canvasSize.width > 0 && canvasSize.height > 0
+      ? {
+        minX: -mapControls.panOffset.x / mapControls.zoom,
+        minY: -mapControls.panOffset.y / mapControls.zoom,
+        maxX: (canvasSize.width - mapControls.panOffset.x) / mapControls.zoom,
+        maxY: (canvasSize.height - mapControls.panOffset.y) / mapControls.zoom,
+      }
+      : null;
+    drawMarkupLayer(ctx, { drawings: mapDrawings.drawings, showDmOnly: renderIsDM, visible, cache: drawingCache }, viewport);
+    const previewNow = Date.now();
+    const shownPreviews = [...mapDrawings.previews.current.values()];
+    if (shownPreviews.length > 0) {
+      drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: false }, viewport);
+    }
+
+    // The laser pointer goes over everything, with the pings: pointing is
+    // a signal from someone at the table, as a ping is.
+    if (shownPreviews.length > 0) {
+      drawDrawingPreviews(ctx, { previews: shownPreviews, now: previewNow, reducedMotion: prefersReducedMotion, showDmOnly: renderIsDM, laser: true }, viewport);
+    }
+
     if (pings.length > 0) {
       drawPings(ctx, { pings, now: Date.now(), reducedMotion: prefersReducedMotion }, viewport);
     }
 
     // Restore context state (back to screen-space)
     ctx.restore();
-  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef]);
+  }, [currentMap, imageLoaded, mapImage, mapControls.zoom, mapControls.panOffset, dpr, campaign?.gameSystem, tokens, lightSources, selectedLightId, lightMode, wallSegments, wallColor, hoveredWallId, selectedWallIds, hoveredDoorId, wallMode, selectedEndpoint, wallInProgress, wallType, brushSize, splitHoverPoint, polygonPoints, showRuler, rulerColor, effectiveRulerOrigin, rulerEnd, rulerStartByTouch, showAoE, aoeConfig, aoeAnchor, aoeSnap, hoverCoords, fogMode, isDM, fogState, viewerRevealed, viewerOwn, previewing, ruleFor, ownTokenCells, explorationEnabled, exploringAs, exploredCells, exploredRaster, socket, fogDragCurrent, wallMarquee, pings, prefersReducedMotion, POLYGON_CLOSE_RADIUS, WALL_ERASE_RADIUS, addExplored, aoeAimRef, aoeAltHeldRef, findWallAtPoint, fogDragAnchorRef, revealOpacityRef, snapPoint, wallBrushPointsRef, wallDragEndpointRef, wallErasedIdsRef, mapDrawings.previews, mapDrawings.drawings, drawingCache, canvasSize.width, canvasSize.height]);
 
   // ── Layer draw dispatch + dirty-flag scheduling ──────────
   // A single rAF coalesces every repaint request; only the dirty layers
@@ -1924,7 +1979,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Terrain-only content.
   useEffect(() => {
     markDirty('terrain');
-  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity]);
+  }, [markDirty, showGrid, gridColor, effectiveFogState, previewing, previewedPlane, spiritLayerImage, spiritLayerOpacity, mapDrawings.drawings]);
 
   // Spirit flags affect the base/spirit images (terrain) and spirit-token
   // alpha (tokens).
@@ -1956,7 +2011,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   // Overlay content — walls, lights, DM tools, measurement, pings, fog cursor.
   useEffect(() => {
     markDirty('overlay');
-  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings]);
+  }, [markDirty, wallSegments, wallMode, wallInProgress, hoveredWallId, selectedWallIds, hoveredDoorId, splitHoverPoint, selectedEndpoint, wallType, snapToGrid, brushSize, lightSources, selectedLightId, lightMode, dmPreviewPlayerView, showRuler, rulerOrigin, rulerEnd, rulerStartByTouch, rulerColor, effectiveRulerOrigin, showAoE, aoeConfig, aoeAnchor, aoeSnap, fogMode, fogDragCurrent, fogState, viewerRevealed, previewing, ownTokenCells, exploredRaster, pings, mapDrawings.drawings]);
 
   // ============================================
   // Token Hit Testing

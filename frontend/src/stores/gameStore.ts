@@ -10,8 +10,11 @@
 // BOUNDARY RULE (do not blur it):
 //   - zustand (this store) owns LIVE SESSION STATE fed by sockets:
 //     token positions, token lists, combat/initiative, characters' hit
-//     points and who is online today; walls / fog / lights may move here in future (they are
-//     currently MapCanvas-local state with their own undo/redo history).
+//     points, who is online today and the current map's drawings; walls /
+//     fog / lights may move here in future (they are currently
+//     MapCanvas-local state with their own undo/redo history). The
+//     previews of strokes on their way are not here: they change every
+//     frame, and live in a ref the overlay reads (map/useMapDrawings.ts).
 //   - react-query owns SERVER RESOURCES fetched over REST (campaign
 //     lists, characters, assets, map metadata).
 //   - CampaignContext owns campaign-level metadata and low-frequency
@@ -32,6 +35,8 @@ import { create } from 'zustand';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import type { CombatState, Position, Token } from '@/types';
 import type { CharacterHpInfo } from '@/utils/characterHp';
+import type { Drawing } from '@/types/drawings';
+import { drawingOrder } from '@/components/campaign/map/drawingGeometry';
 
 /** Combat is inactive until the DM starts it; matches the server's default. */
 /** The same record without `key`, or the same record when it has none. */
@@ -96,6 +101,15 @@ interface GameState {
    * Read by the roster's dots and the chat's To list.
    */
   onlineUserIds: ReadonlySet<string>;
+  /**
+   * The drawings on the map on screen, as this member is sent them, in
+   * drawing order (`drawingOrder`), with this page's own adds still on their
+   * way (an id starting `pending:`). Replaced whole by `drawings:state` and
+   * on a map switch.
+   */
+  drawings: Drawing[];
+  /** The map `drawings` are for. */
+  drawingsMapId: string | null;
 
   // ---- Actions (named after the events that drive them) ----
   /** Wholesale replace — map load, map change, reconnect resync. */
@@ -126,6 +140,18 @@ interface GameState {
   seedCharacterHp: (entries: { id: string; hp: CharacterHpInfo | null }[]) => void;
   /** `presence.state`: the whole set of who is online. */
   setOnlineUserIds: (userIds: readonly string[]) => void;
+  /** `drawings:state`, or a map switch: a map's drawings, whole. */
+  setDrawings: (mapId: string | null, drawings: Drawing[]) => void;
+  /**
+   * `drawing:added`, or this page's own add: the drawing in its place in the
+   * order, in place of the one with its id, or of `replacing` (this page's
+   * drawing while it was on its way).
+   */
+  putDrawing: (drawing: Drawing, replacing?: string) => void;
+  /** `drawing:removed`, or this page's own erase. */
+  removeDrawing: (drawingId: string) => void;
+  /** `drawings:cleared`, or a role that may not have some of them. */
+  removeDrawings: (match: (drawing: Drawing) => boolean) => void;
   /** Session teardown. */
   clearGameState: () => void;
 }
@@ -140,6 +166,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedTokenId: null,
   characterHp: {},
   onlineUserIds: new Set(),
+  drawings: [],
+  drawingsMapId: null,
 
   setTokens: (list) =>
     set((s) => ({
@@ -236,8 +264,25 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setOnlineUserIds: (userIds) => set({ onlineUserIds: new Set(userIds) }),
 
+  setDrawings: (mapId, drawings) => set({ drawingsMapId: mapId, drawings: [...drawings].sort(drawingOrder) }),
+
+  putDrawing: (drawing, replacing) =>
+    set((s) => {
+      const rest = s.drawings.filter((d) => d.id !== drawing.id && d.id !== replacing);
+      // Most arrive last in the order; look for the place from the end.
+      let at = rest.length;
+      while (at > 0 && drawingOrder(rest[at - 1], drawing) > 0) at -= 1;
+      return { drawings: [...rest.slice(0, at), drawing, ...rest.slice(at)] };
+    }),
+
+  removeDrawing: (drawingId) =>
+    set((s) => (s.drawings.some((d) => d.id === drawingId) ? { drawings: s.drawings.filter((d) => d.id !== drawingId) } : s)),
+
+  removeDrawings: (match) =>
+    set((s) => (s.drawings.some(match) ? { drawings: s.drawings.filter((d) => !match(d)) } : s)),
+
   clearGameState: () =>
-    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null, characterHp: {}, onlineUserIds: new Set() }),
+    set({ tokens: {}, tokenOrder: [], heldAt: {}, combat: EMPTY_COMBAT, peekTokenId: null, peekSource: null, selectedTokenId: null, characterHp: {}, onlineUserIds: new Set(), drawings: [], drawingsMapId: null }),
 }));
 
 // ============================================
@@ -301,6 +346,11 @@ export function useTokenListIgnoringMovement(): Token[] {
 /** Characters' hit points by character id, for the roster and the map's HP bars. */
 export function useCharacterHp(): Record<string, CharacterHpInfo> {
   return useGameStore((s) => s.characterHp);
+}
+
+/** The current map's drawings, in drawing order: the map's layer and the draw tool. */
+export function useDrawings(): Drawing[] {
+  return useGameStore((s) => s.drawings);
 }
 
 /** Who has a live connection to the campaign, by user id: the roster's dots and the chat's To list. */
