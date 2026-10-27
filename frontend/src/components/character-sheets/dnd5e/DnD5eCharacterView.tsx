@@ -48,6 +48,7 @@ import { readProficiencyGroups } from '../../../utils/proficiencies';
 import { isHexColor } from '@/utils/styleAllowlists';
 import { COLOR_PRESETS } from './colorPresets';
 import { headerInk } from '@/utils/themeColor';
+import { SheetTabs, type SheetTab } from '../SheetTabs';
 
 interface DnD5eCharacterViewProps {
   character: Character;
@@ -71,13 +72,7 @@ interface RollPopupState {
 
 type TabId = 'stats' | 'combat' | 'spells' | 'inventory' | 'features' | 'bio';
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
   { id: 'spells', label: 'Spells', icon: Sparkles },
@@ -218,34 +213,6 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
     </div>
     );
   };
-
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${isActive
-                ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : themeColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   // Render Stats & Skills tab
   const renderStatsTab = () => (
@@ -812,7 +779,7 @@ export const DnD5eCharacterView: React.FC<DnD5eCharacterViewProps> = ({ characte
   return (
     <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
       {renderHeader()}
-      {renderTabs()}
+      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       <div className="p-6">{renderTabContent()}</div>
 
       {/* Advantage / Disadvantage popup (shown on right-click of any rollable stat) */}

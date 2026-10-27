@@ -79,6 +79,7 @@ import {
 } from '@/constants/sheetLimits';
 import { COLOR_PRESETS } from './colorPresets';
 import Button from '@/components/ui/Button';
+import { SheetTabs, type SheetTab } from '../SheetTabs';
 
 /**
  * The sheet as this editor holds it.
@@ -127,13 +128,7 @@ function tabOfError(key: string): TabId | null {
  */
 const NOT_IN_SUMMARY = new Set(['submit', 'tokenImage', 'themeColor']);
 
-interface Tab {
-  id: TabId;
-  label: string;
-  icon: React.ElementType;
-}
-
-const TABS: Tab[] = [
+const TABS: SheetTab<TabId>[] = [
   { id: 'stats', label: 'Stats & Skills', icon: Target },
   { id: 'combat', label: 'Combat', icon: Swords },
   { id: 'spells', label: 'Spells', icon: Sparkles },
@@ -1414,35 +1409,6 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
     </div>
     );
   };
-
-  // Render tabs
-  const renderTabs = () => (
-    <div className="flex space-x-1 border-b-2 border-ink/10 bg-ink/5 px-4">
-      {TABS.map((tab) => {
-        const Icon = tab.icon;
-        const isActive = activeTab === tab.id;
-        return (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            aria-current={isActive ? 'page' : undefined}
-            className={`
-              flex items-center space-x-2 px-4 py-3 font-medium transition-colors
-              ${isActive
-                ? 'text-ink border-b-2 -mb-0.5 bg-paper'
-                : 'text-ink-secondary hover:text-ink hover:bg-ink/10'
-              }
-            `}
-            // The underline in the header colour; the label in the theme's text.
-            style={isActive ? { borderBottomColor: isCustomColor ? customColorHex : selectedColor.hex } : undefined}
-          >
-            <Icon className="w-4 h-4" />
-            <span>{tab.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
 
   // Render Stats & Skills tab
   const renderStatsTab = () => (
@@ -3318,7 +3284,7 @@ export const DnD5eCharacterEditor: React.FC<DnD5eCharacterEditorProps> = ({
       onPointerDownCapture={noteInteraction}
     >
       {renderHeader()}
-      {renderTabs()}
+      <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : selectedColor.hex} />
       {refusals.length > 0 && (
         <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
