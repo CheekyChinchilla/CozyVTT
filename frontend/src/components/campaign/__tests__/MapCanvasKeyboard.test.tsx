@@ -425,3 +425,36 @@ describe('the selection and the map', () => {
     expect(selected()).toBeNull();
   });
 });
+
+describe('an Escape something else on the page used', () => {
+  it('closes the creature roll picker and leaves the area template up', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    fireEvent.click(screen.getByTitle('AoE Shape — area of effect overlay'));
+    fireEvent.contextMenu(surface(), at(0, 19));
+    fireEvent.click(screen.getByText('Roll...'));
+    expect(screen.getByPlaceholderText('e.g. 2d6+3')).toBeInTheDocument();
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    expect(screen.queryByPlaceholderText('e.g. 2d6+3')).not.toBeInTheDocument();
+    expect(screen.getByText('AoE Shape')).toBeInTheDocument();
+  });
+
+  it('leaves a held token held', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    click(at(0, 19));
+    const usesEscape = (e: KeyboardEvent) => { if (e.key === 'Escape') e.preventDefault(); };
+    document.addEventListener('keydown', usesEscape);
+    try {
+      fireEvent.keyDown(document.body, { key: 'Escape' });
+    } finally {
+      document.removeEventListener('keydown', usesEscape);
+    }
+
+    expect(sentOf('token.move')).toEqual([]);
+    click(at(2, 19));
+    expect(sentOf('token.move.end')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 2, y: 19 }]);
+  });
+});

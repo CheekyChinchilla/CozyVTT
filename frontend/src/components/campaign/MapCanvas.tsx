@@ -1241,6 +1241,8 @@ export default function MapCanvas({ onEditToken }: MapCanvasProps) {
     }
 
     if (e.key === 'Escape') {
+      // A picker, a menu or a dialog that closed on this press has used it.
+      if (e.defaultPrevented) return;
       // A held token is put back first: it is the most transient thing.
       if (draggedToken) {
         cancelHold();
