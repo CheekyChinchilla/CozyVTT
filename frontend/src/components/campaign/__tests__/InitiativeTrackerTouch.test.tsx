@@ -195,6 +195,33 @@ describe("a combatant's row, pressed and held by a finger", () => {
     expect(menuLabels()).toEqual([]);
   });
 
+  it('opens the menu on a tap on the name, as a click does', () => {
+    render(<InitiativeTracker />);
+    const finger = contact('touch', 1);
+    const name = screen.getByRole('button', { name: 'Goblin' });
+
+    finger.down(name, at(40, 40));
+    finger.up(name, at(40, 40));
+    fireEvent.click(name, { detail: 1 });
+
+    expect(menuLabels()).toEqual(['Roll...']);
+  });
+
+  it('keeps the menu where a finger held the name, through the click the lift brings', () => {
+    render(<InitiativeTracker />);
+    const finger = contact('touch', 1);
+    const name = screen.getByRole('button', { name: 'Goblin' });
+
+    finger.down(name, at(40, 40));
+    wait(500);
+    finger.up(name, at(40, 40));
+    fireEvent.mouseDown(name);
+    fireEvent.click(name, { detail: 1 });
+
+    const menu = document.querySelector<HTMLElement>('div.fixed.z-50');
+    expect(menu?.style.left).toBe('40px');
+  });
+
   it('selects no text and opens no callout on the row, but lets an input be typed in', () => {
     render(<InitiativeTracker />);
 

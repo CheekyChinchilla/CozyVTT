@@ -926,8 +926,8 @@ This works for players too, and it's read-only — hovering never selects, moves
 
 You can roll for a combatant, or look something up on their sheet, straight from the tracker, without finding their token on the map ([#90](https://github.com/CheekyChinchilla/CozyVTT/issues/90)):
 
-- **Right-click a combatant's row** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block.
-- **Double-click a player character's row** to open their sheet at once. Double-clicking a creature does nothing.
+- **Click or tap a combatant's name, or right-click its row,** for the same sheet and roll choices as right-clicking their token on the map: **View Character Sheet** for a player's character, and **Roll...**, which opens the character's rolls or, for a creature, the rolls from its stat block. On a touch screen you can also press and hold the row. The menu opens under the name.
+- **Double-click a player character's row** to open their sheet at once; on the name, the menu its first click opened closes as the sheet opens. Double-clicking a creature does nothing.
 - **From the keyboard**, press **Tab** until the combatant's name has the focus and press **Enter** to open the same menu.
 
 This works for combatants on the map you are showing. One whose token is on another map offers nothing until you switch to that map. Players get the same menu: any character's sheet, and rolls for their own character.

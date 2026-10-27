@@ -5,7 +5,9 @@
  * offers about its character: View Character Sheet to any member, Roll... to
  * whoever may roll that character, and the DM a creature's Roll.... Double-
  * clicking a character's row opens its sheet. The name is a button, so the
- * menu opens from the keyboard too.
+ * menu opens from the keyboard too, and from a click or a tap on it: a
+ * single click on the name used to do nothing, which left a touch screen
+ * no way to the menu.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -193,11 +195,36 @@ describe('the menu from the keyboard', () => {
     expect(document.activeElement).toBe(name);
   });
 
-  it('does not open on a single mouse click', () => {
+});
+
+describe('the menu from a click on the name', () => {
+  it('opens on a single click, under the name, leaving the cursor where it was', () => {
     render(<InitiativeTracker />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Alice' }), { detail: 1 });
 
+    expect(menuItem('View Character Sheet')).toBeInTheDocument();
+    expect(document.activeElement).not.toBe(menuItem('View Character Sheet'));
+  });
+
+  it('says so in its tooltip', () => {
+    render(<InitiativeTracker />);
+
+    expect(screen.getByRole('button', { name: 'Alice' })).toHaveAttribute('title', 'Click for the sheet and rolls, or double-click to open the sheet');
+  });
+
+  it('gives way to a double-click, which closes the menu its first click opened and opens the sheet', async () => {
+    render(<InitiativeTracker />);
+    const name = screen.getByRole('button', { name: 'Alice' });
+
+    fireEvent.mouseDown(name);
+    fireEvent.click(name, { detail: 1 });
+    expect(menuItem('View Character Sheet')).toBeInTheDocument();
+    fireEvent.mouseDown(name);
+    fireEvent.click(name, { detail: 2 });
+    fireEvent.doubleClick(name);
+
+    expect(await screen.findByRole('dialog', { name: 'Sheet of char-alice' })).toBeInTheDocument();
     expect(menuItem('View Character Sheet')).not.toBeInTheDocument();
   });
 });

@@ -331,17 +331,18 @@ function CombatantRow({
           before the die and bin go to a line of their own. */}
       <div className="flex-1 min-w-0 pointer-coarse:basis-20">
         {hasMenu ? (
-          // A button so that the menu opens from the keyboard: Enter or Space
-          // is a click with no mouse button count. A mouse opens it with the
-          // right button, and a single left click does nothing.
+          // A button, so the menu opens from a click, a tap or the keyboard,
+          // under the name. From the keyboard (a click with no mouse button
+          // count) the cursor goes into the menu. The second click of a
+          // double-click opens nothing: the double-click opens the sheet.
           <button
             type="button"
             data-combatant-name={entry.tokenId}
-            title={hasSheet ? 'Double-click to open the sheet, or right-click for the sheet and rolls' : 'Right-click for rolls'}
+            title={hasSheet ? 'Click for the sheet and rolls, or double-click to open the sheet' : 'Click for rolls'}
             onClick={(e) => {
-              if (e.detail !== 0) return;
+              if (e.detail > 1) return;
               const rect = e.currentTarget.getBoundingClientRect();
-              onOpenMenu(entry.tokenId, rect.left, rect.bottom, true);
+              onOpenMenu(entry.tokenId, rect.left, rect.bottom, e.detail === 0);
             }}
             className={`block max-w-full text-left text-sm font-medium truncate rounded-sm focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand/50 ${isActive ? 'text-accent-ink' : 'text-brand-ink'}`}
           >
@@ -745,7 +746,11 @@ export default function InitiativeTracker() {
                       menuOpenings.current += 1;
                       setMenu({ tokenId, x, y, byKeyboard, opening: menuOpenings.current });
                     }}
-                    onOpenSheet={openSheet}
+                    onOpenSheet={(tokenId) => {
+                      // A double-click on the name: its first click opened the menu.
+                      setMenu(null);
+                      void openSheet(tokenId);
+                    }}
                   />
                 ))}
               </div>
