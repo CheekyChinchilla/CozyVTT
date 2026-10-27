@@ -118,6 +118,7 @@ const TESTED: Record<string, string> = {
   'POST /api/campaigns/:campaignId/maps/:id/tokens/move': 'routes/__tests__/mapTokenLimits.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/maps/:id/tokens/:tokenId': 'websocket/__tests__/initiativeResend.integration.test.ts',
   'GET /api/campaigns/:campaignId/maps/:id/walls': 'routes/__tests__/preparedMapsDmOnly.e2e.test.ts',
+  'GET /api/campaigns/:campaignId/maps/:id/drawings': 'routes/__tests__/mapDrawingsRead.e2e.test.ts',
   'PUT /api/campaigns/:campaignId/maps/:id/walls': 'routes/__tests__/wallLightBounds.e2e.test.ts',
   'POST /api/campaigns/:campaignId/maps/:id/walls': 'routes/__tests__/wallRestBroadcast.e2e.test.ts',
   'DELETE /api/campaigns/:campaignId/maps/:id/walls/:sid': 'routes/__tests__/mapEditLocking.e2e.test.ts',

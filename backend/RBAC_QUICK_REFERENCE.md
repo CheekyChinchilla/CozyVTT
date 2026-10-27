@@ -124,6 +124,9 @@ import {
   canControlToken,
   canMoveTokensNow,
   canReadMap,
+  canDraw,
+  canEraseDrawing,
+  drawingSentTo,
   canDeleteCampaign,
   canTransferDM,
   canRollDice,
@@ -174,6 +177,49 @@ by that alone. A token created with a `characterId` and no `controlledBy` is
 given the character's owner as controller, provided the character belongs to
 the campaign and its owner is a `PLAYER` member of it (`canHoldTokens`). A
 character owned by the DM or a spectator gives its token no controller.
+
+#### Who may draw on a map
+
+```typescript
+// The DM always; a player while Players may draw is on and the session is
+// live; never a spectator. Read under the map's lock, with the map.
+if (!canDraw(role, map.campaign)) return { refused: drawRefusal(role, map.campaign) };
+// The DM any drawing; a player their own; never a spectator.
+if (!canEraseDrawing(role, userId, drawing)) return { refused: eraseRefusal(role) };
+```
+
+The drawing rules live in `utils/drawingRules.ts`, a file kept byte for byte
+identical in the frontend (`visionParity.test.ts`), so the draw tool offers
+what the server takes; `services/permissions.ts` re-exports them, and
+`canMoveTokensNow` asks the same `sessionLetsPlayersAct` for the pause.
+
+- `canDraw(role, { status, playersMayDraw })` decides `drawing:add` and
+  `drawing:preview`, the laser pointer included: the DM always; a `PLAYER`
+  while the campaign's **Players may draw** is on and the session is not
+  paused or ended (`PAUSED`, `INACTIVE`), the move rule's statuses; nobody
+  else. `canMoveTokensNow` alone lets a spectator through, which is why
+  `canDraw` tests the role itself. `drawRefusal` gives the reason.
+- `canDrawOnLayer(role, layer)`: the ground layer is the DM's. The validators
+  take only the markup layer so far, so nothing reaches it yet.
+- `canEraseDrawing(role, userId, drawing)` decides `drawing:remove` and
+  `drawing:clear_mine`: the DM any drawing, one whose author's account is
+  gone included; a `PLAYER` their own whose `audience` is `ALL`, at any
+  time, a pause or the setting being off included; a spectator none, their
+  own from before a demotion included. A drawing for the DM alone goes with
+  the seat: a DM who hands it over, or has it taken by the owner or an
+  administrator, keeps no way to erase the ones they wrote in it, and
+  `drawing:clear_mine` leaves them as `drawing:remove` does. `drawing:clear`,
+  every drawing on a layer, is the DM's alone.
+- `drawingSentTo(role, drawing)` decides every send: the DM every drawing,
+  anyone else those whose `audience` is `ALL`. A player's drawing is stored
+  with `audience` `ALL` whatever they send, and their preview frames go to
+  everyone. A drawing the sender is not sent is answered `Drawing not found`
+  by `drawing:remove`, as an id that names nothing is.
+
+Every drawing write runs under `withMapsLocked([mapId])` and reads the map,
+its campaign's status, `playersMayDraw` and `currentMapId` there; the author
+is `socket.userId`, never a field of the payload. **A new drawing event asks
+these rules, and sends through `drawingSentTo`.**
 
 #### Who may read a whisper
 
@@ -378,17 +424,19 @@ the DM may read any map of the campaign; a player or spectator only the one the
 campaign is showing. It gates `GET /api/campaigns/:campaignId/maps` (a player's
 list holds the current map alone), `GET .../maps/:id` and its `walls` and
 `lights` (404 for any other map), the `maps` array of
-`GET /api/campaigns/:campaignId`, and the `walls:request`, `lights:request`,
-`fog:request_state` and `exploration:request` socket events (answered with
-nothing). It gates writes too: a player's `PUT .../maps/:id/tokens/:tokenId`
+`GET /api/campaigns/:campaignId`, `GET .../maps/:id/drawings` (404), and the
+`walls:request`, `lights:request`, `fog:request_state`, `exploration:request`
+and `drawings:request` socket events (answered with nothing). It gates writes
+too: a player's `PUT .../maps/:id/tokens/:tokenId`
 (404), `token.move.start`, `token.move` and `token.move.end`, a door
-toggled with `wall:update`, `exploration:reveal` and `initiative.roll`
-(answered with `error`, frames dropped) all refuse
+toggled with `wall:update`, `exploration:reveal`, `initiative.roll` and the
+drawing events (answered with `error`, frames dropped) all refuse
 any map but the current one, even a token the player controls on it. And it
-gates what is broadcast: a map's live wall, light, fog, settings, ping and
-explored-memory-reset events go through `emitToMapReaders` in
-`websocket/utils.ts`, which sends them to the whole campaign for the current
-map and to the DM's sockets for any other. A map the DM has prepared but not
+gates what is broadcast: a map's live wall, light, fog, settings, ping,
+drawing and explored-memory-reset events go through `emitToMapReaders` in
+`websocket/utils.ts`, or its per-role form `emitToMapReadersAs`, which send
+them to the whole campaign for the current map and to the DM's sockets for any
+other. A map the DM has prepared but not
 switched to is therefore the DM's alone, tokens left visible on it included.
 
 ## Reading an asset: access follows use

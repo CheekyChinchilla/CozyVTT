@@ -73,6 +73,9 @@
  * kept identical in both packages, and its audiences and layers are the
  * database's two enums.
  *
+ * The fields of a drawing: what the schema takes, what the server sends,
+ * the API document's Drawing schema and the WebSocket guide's table of them.
+ *
  * The files each kind of asset may be uploaded as. The server decides by a
  * file's bytes; the Upload Asset dialog checks a file's extension against the
  * same list, and refused Ogg, WAV and Markdown files the server takes while
@@ -186,7 +189,8 @@ import { flexibleBasicTemplate } from '../utils/character-templates/flexible-tem
 import { IMPORT_LIMITS } from '../validators/campaignImport';
 import { WallSegmentSchema, LightSourceSchema } from '../validators/walls';
 import { ChatMessageSchema } from '../validators/chat';
-import { DRAWING_AUDIENCES, DRAWING_LAYERS } from '../validators/drawingLimits';
+import { DRAWING_AUDIENCES, DRAWING_KINDS, DRAWING_LAYERS } from '../validators/drawingLimits';
+import { NewDrawingSchema } from '../validators/drawings';
 import { UVTT_IMPORT_MAX_WAIT_MS, UVTT_IMPORT_TIME_LIMIT_MS } from '../services/uvttImportQueue';
 import { Prisma } from '@prisma/client';
 import { MAP_FIELDS_SENT_TO_EVERYONE, MAP_FIELDS_DECIDED_PER_RECIPIENT, MAP_FIELDS_NEVER_SENT } from '../utils/spirit-layer';
@@ -466,6 +470,50 @@ describe('the drawing limits', () => {
     if (!block) throw new Error(`no enum ${name} in the schema; update this test`);
     const database = block[1].split('\n').map((l) => l.replace(/\/\/.*$/, '').trim()).filter(Boolean);
     expect([...values]).toEqual(database);
+  });
+});
+
+// A drawing is declared in several places: the schema that decides what is
+// stored (NewDrawingSchema), the shape every path sends (DrawingSent), the
+// API document's Drawing schema and the WebSocket guide's table of fields.
+// A field added to one and not the others is one a script is told nothing
+// of, or one the server drops.
+describe('the fields of a drawing', () => {
+  const taken = Object.keys(NewDrawingSchema.shape).sort();
+  const sentFields = interfaceFields(read('backend/src/services/mapDrawings.ts'), 'DrawingSent').map((line) => {
+    const m = /^(\w+)\??:/.exec(line);
+    if (!m) throw new Error(`DrawingSent has a line this test cannot read: ${line}`);
+    return m[1];
+  });
+  const drawingSchema = () => {
+    const m = /\n {4}Drawing:\n[\s\S]*?\n {6}properties:\n([\s\S]*?)\n {6}required: \[([^\]]*)\]/.exec(read('backend/docs/API_DOCUMENTATION.yaml'));
+    if (!m) throw new Error('the API document no longer has the Drawing schema where this test looks; update this test with the file');
+    return { properties: m[1], required: m[2].split(',').map((f) => f.trim()) };
+  };
+
+  it('are sent as the schema takes them, with the id, the author and the time the server sets', () => {
+    expect([...sentFields].sort()).toEqual([...taken, 'authorId', 'createdAt', 'id'].sort());
+  });
+
+  it('are the properties of the Drawing schema in the API document, every one required', () => {
+    const { properties, required } = drawingSchema();
+    expect([...properties.matchAll(/^ {8}(\w+):/gm)].map((p) => p[1]).sort()).toEqual([...sentFields].sort());
+    expect([...required].sort()).toEqual([...sentFields].sort());
+  });
+
+  it('take the kinds of drawing the limits file names, in the API document', () => {
+    const kinds = /^ {8}kind:\n {10}type: string\n {10}enum: \[([^\]]*)\]/m.exec(drawingSchema().properties);
+    if (!kinds) throw new Error('the Drawing schema no longer lists its kinds where this test looks; update this test with the file');
+    expect(kinds[1].split(',').map((k) => k.trim())).toEqual([...DRAWING_KINDS]);
+  });
+
+  it('are the rows of the WebSocket guide\'s table of what a drawing is', () => {
+    const guide = read('backend/docs/WEBSOCKET_DOCUMENTATION.md');
+    const at = guide.indexOf('**What a drawing is.**');
+    if (at === -1) throw new Error('the WebSocket guide no longer has "What a drawing is"; update this test with the file');
+    const table = guide.slice(at).split('\n\n')[1] ?? '';
+    const rows = table.split('\n').filter((l) => /^\| `\w+` \|/.test(l)).map((l) => /^\| `(\w+)`/.exec(l)![1]);
+    expect(rows.sort()).toEqual(taken);
   });
 });
 

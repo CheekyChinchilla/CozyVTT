@@ -201,3 +201,81 @@ export const DrawingPreviewSchema = z.object(
 );
 
 export type DrawingPreview = z.infer<typeof DrawingPreviewSchema>;
+
+// ── What a map's markup layer holds ─────────────────────────────────────────
+
+/**
+ * What an add answers when the map's markup layer holds as many drawings, or
+ * as many points, as it may (DRAWING_LIMITS). Neither says how many: the
+ * count takes in drawings a player is not sent.
+ */
+export const MARKUP_FULL_MESSAGE = 'This map holds as many drawings as it can. Erase some first.';
+export const MARKUP_POINTS_FULL_MESSAGE = 'This map holds as much drawing as it can. Erase some first.';
+
+/**
+ * What a map's markup layer holds: its drawings, and the points they have
+ * between them, or null where they were not counted because they cannot
+ * matter (pointsCanMatter).
+ */
+export interface MarkupHeld {
+  drawings: number;
+  points: number | null;
+}
+
+/**
+ * Which of the markup layer's limits one more drawing of `adding` points
+ * would pass, or null when it fits. The one place the limits are applied,
+ * by an add and by an import alike: a share of them by member, if it
+ * comes, is a change here and in the counts handed to it.
+ */
+export function markupLimitReached(held: MarkupHeld, adding: number): 'drawings' | 'points' | null {
+  if (held.drawings >= DRAWING_LIMITS.maxMarkupPerMap) return 'drawings';
+  if (held.points !== null && held.points + adding > DRAWING_LIMITS.maxMarkupPointsPerMap) return 'points';
+  return null;
+}
+
+/**
+ * Whether the points on a layer holding `drawings` drawings could decide an
+ * add of `adding` more: not when the layer holds as many drawings as it
+ * may, which refuses the add whatever the points, and not while every
+ * drawing holding the most points one may still leaves room. Counting
+ * them reads every drawing's points whole.
+ */
+export function pointsCanMatter(drawings: number, adding: number): boolean {
+  if (drawings >= DRAWING_LIMITS.maxMarkupPerMap) return false;
+  return drawings * DRAWING_LIMITS.maxPoints + adding > DRAWING_LIMITS.maxMarkupPointsPerMap;
+}
+
+// ── The live table's drawing events ─────────────────────────────────────────
+
+/** A map id: one that is not an id is answered as a map that is not there. */
+const MapIdSchema = z.uuid({ error: 'Map not found' });
+/** A short label a client gives its own stroke; anything else is left off. */
+const LabelSchema = z.string().regex(CLIENT_LABEL).optional().catch(undefined);
+
+/** `drawing:add`: a drawing for a map, with the preview it ends, if any. */
+export const DrawingAddEventSchema = z.object(
+  { mapId: MapIdSchema, drawing: NewDrawingSchema, previewId: LabelSchema },
+  { error: 'Map not found' }
+);
+
+/** `drawing:remove`: one drawing, by its id. */
+export const DrawingRemoveEventSchema = z.object(
+  { mapId: MapIdSchema, drawingId: z.uuid({ error: 'Drawing not found' }) },
+  { error: 'Map not found' }
+);
+
+/** `drawing:clear_mine`: the sender's drawings on a map's markup layer. */
+export const DrawingClearMineEventSchema = z.object({ mapId: MapIdSchema }, { error: 'Map not found' });
+
+/** `drawing:clear`: every drawing on one layer of a map, MARKUP so far. */
+export const DrawingClearEventSchema = z.object(
+  { mapId: MapIdSchema, layer: z.enum(['MARKUP'], { error: DRAWING_LAYER_REFUSAL }).default('MARKUP') },
+  { error: 'Map not found' }
+);
+
+/** `drawing:preview`: one frame of a stroke on its way, for a map. */
+export const DrawingPreviewEventSchema = z.object({ mapId: MapIdSchema, preview: DrawingPreviewSchema });
+
+/** `drawings:request`: a map's drawings, as the sender may be sent them. */
+export const DrawingsRequestEventSchema = z.object({ mapId: MapIdSchema });

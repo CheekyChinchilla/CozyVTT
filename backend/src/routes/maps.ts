@@ -42,7 +42,9 @@ import logger from '../utils/logger';
 import { errorMessage } from '../utils/errors';
 import { getState as getCombatState, setState as setCombatState, removeCombatants } from '../websocket/initiativeState';
 import { sendInitiativeState, resendInitiative } from '../websocket/handlers/initiative';
+import { currentMapChanged } from '../websocket/handlers/drawings';
 import { readTokens, toJson } from '../utils/prisma-json';
+import { drawingsFor } from '../services/mapDrawings';
 import type { Map as MapRow, Prisma } from '@prisma/client';
 import { loadFogState, applyWsFogOperation, broadcastFogState, type Token, broadcastMapData, resendSightAfterChange, fogFits, FogTooLargeError } from '../websocket/shared';
 import { MapSideSchema, GridSizeSchema, FeetPerSquareSchema, MAP_LIMITS, MAP_NAME_TOO_LONG_MESSAGE, MAP_IMAGE_NOT_A_MAP_PICTURE_MESSAGE, SPIRIT_LAYER_NOT_A_MAP_PICTURE_MESSAGE, dimensionProblem, wallOutsideMap, lightOutsideMap, WALL_OUTSIDE_MAP_MESSAGE, LIGHT_OUTSIDE_MAP_MESSAGE, GEOMETRY_MARGIN_SQUARES, tooManyTokensMessage } from '../validators/maps';
@@ -1339,6 +1341,8 @@ router.put('/:id/set-current', campaignDM, async (req: AuthenticatedRequest, res
     if (!updatedCampaign) {
       return res.status(404).json({ error: 'Not Found', message: 'Map not found' });
     }
+    // Strokes under way on the map the table has left are decided again.
+    currentMapChanged(campaignId);
 
     // Every page goes onto the new map, each member's as they may see it,
     // whoever asked: the DM's page, another tab or a script.
@@ -2106,6 +2110,25 @@ router.get('/:id/walls', campaignMember, async (req: AuthenticatedRequest, res: 
   } catch (error) {
     logger.error('Error fetching wall segments', { err: error });
     return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch wall segments' });
+  }
+});
+
+/**
+ * GET /api/campaigns/:campaignId/maps/:id/drawings
+ * The map's drawings as the caller may be sent them, in drawing order: the
+ * DM every one, anyone else those for everyone (all roles). A map the caller
+ * may not read is answered as one that is not there.
+ */
+router.get('/:id/drawings', campaignMember, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { campaignId, id } = req.params;
+    const role = req.campaignMembership!.role;
+    const map = await findMapInCampaign(campaignId, id, res, role);
+    if (!map) return;
+    return res.status(200).json({ drawings: await drawingsFor(id, role) });
+  } catch (error) {
+    logger.error('Error fetching drawings', { err: error });
+    return res.status(500).json({ error: 'Internal Server Error', message: 'Failed to fetch drawings' });
   }
 });
 

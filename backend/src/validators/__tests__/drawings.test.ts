@@ -15,7 +15,7 @@ import {
   DRAWING_KIND_REFUSAL, DRAWING_LAYER_REFUSAL, DRAWING_AUDIENCE_REFUSAL, DRAWING_COLOR_REFUSAL, DRAWING_WIDTH_REFUSAL,
   DRAWING_ROTATION_REFUSAL, DRAWING_SORT_KEY_REFUSAL, DRAWING_POINT_REFUSAL, DRAWING_POINT_COUNT_REFUSAL,
   DRAWING_TEXT_REFUSAL, DRAWING_TEXT_ON_SHAPE_REFUSAL, DRAWING_FILL_REFUSAL, DRAWING_PREVIEW_ID_REFUSAL,
-  DRAWING_PREVIEW_POINTS_REFUSAL,
+  DRAWING_PREVIEW_POINTS_REFUSAL, markupLimitReached, pointsCanMatter,
 } from '../drawings';
 
 const line = { kind: 'line', color: '#3d8bd9', width: 4, points: [[0, 0], [100, 50]] };
@@ -225,5 +225,44 @@ describe('DrawingPreviewSchema', () => {
   ])('refuses %s', (_what, change, message) => {
     const parsed = DrawingPreviewSchema.safeParse({ ...frame, ...change });
     expect(parsed.success ? null : parsed.error.issues[0]?.message).toBe(message);
+  });
+});
+
+// One decision for what a map's markup layer has room for, which the add
+// and the import both ask, so a share of the limits by member, if it comes,
+// is a change here and in the counts handed to it.
+describe('markupLimitReached', () => {
+  const { maxMarkupPerMap: most, maxMarkupPointsPerMap: budget } = DRAWING_LIMITS;
+
+  it('has room below both limits, and at the budget exactly', () => {
+    expect(markupLimitReached({ drawings: most - 1, points: budget - 2 }, 2)).toBeNull();
+    expect(markupLimitReached({ drawings: 0, points: null }, 2000)).toBeNull();
+  });
+
+  it('names the limit an add would pass', () => {
+    expect(markupLimitReached({ drawings: most, points: 0 }, 1)).toBe('drawings');
+    expect(markupLimitReached({ drawings: 1, points: budget - 1 }, 2)).toBe('points');
+  });
+});
+
+// Adding up the points reads every drawing's points whole, under the map's
+// lock. While a map holds too few drawings for any number of points to reach
+// the budget, they need not be read.
+describe('pointsCanMatter', () => {
+  const { maxPoints, maxMarkupPointsPerMap: budget } = DRAWING_LIMITS;
+  const fewest = budget / maxPoints;
+
+  it('is false while even drawings of the most points each leave room for the add', () => {
+    expect(pointsCanMatter(0, maxPoints)).toBe(false);
+    expect(pointsCanMatter(fewest - 1, maxPoints)).toBe(false);
+  });
+
+  it('is true once they might not', () => {
+    expect(pointsCanMatter(fewest - 1, maxPoints + 1)).toBe(true);
+    expect(pointsCanMatter(fewest, 1)).toBe(true);
+  });
+
+  it('is false on a layer that holds as many drawings as it may, which refuses whatever the points', () => {
+    expect(pointsCanMatter(DRAWING_LIMITS.maxMarkupPerMap, 1)).toBe(false);
   });
 });

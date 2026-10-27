@@ -7926,6 +7926,46 @@ paths:
         '500':
           $ref: '#/components/responses/ServerError'
 
+  /api/campaigns/{campaignId}/maps/{id}/drawings:
+    parameters:
+      - $ref: '#/components/parameters/CampaignId'
+      - $ref: '#/components/parameters/MapId'
+    get:
+      tags:
+        - Maps
+      summary: List the drawings on a map
+      description: |
+        The map's drawings as the caller may be sent them, in the order they
+        are drawn: by `sortKey`, then the time each was made, then `id`. The
+        DM is given every drawing; a player or spectator only those whose
+        `audience` is `ALL`. Available to the DM for any map of the
+        campaign, and to other members for the campaign's current map only
+        (404 otherwise, the answer for a map that does not exist).
+        Drawings are made, erased and cleared over the live table
+        (`drawing:add`, `drawing:remove`, `drawing:clear_mine`,
+        `drawing:clear`; see the WebSocket guide).
+      operationId: listDrawings
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: The drawings the caller may be sent.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  drawings:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Drawing'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
   /api/campaigns/{campaignId}/maps/{id}/lights:
     parameters:
       - $ref: '#/components/parameters/CampaignId'
@@ -13459,6 +13499,82 @@ components:
             * `door-locked` — blocks vision; only DM can unlock.
             * `window` — does not block vision.
       required: [id, x1, y1, x2, y2, type]
+
+    Drawing:
+      type: object
+      description: |
+        One drawing on a map: a stroke, a shape or a text label. Made over
+        the live table with `drawing:add`, which takes the same fields but
+        `id`, `authorId` and `createdAt`, the server's to set.
+      properties:
+        id:
+          type: string
+          format: uuid
+        authorId:
+          type: string
+          format: uuid
+          nullable: true
+          description: Who drew it; null once that account is deleted.
+        audience:
+          type: string
+          enum: [ALL, DM]
+          description: Who is sent it. A player's drawing is always `ALL`.
+        layer:
+          type: string
+          enum: [MARKUP]
+          description: Drawings are made on the markup layer, over the grid.
+        kind:
+          type: string
+          enum: [pen, line, arrow, rect, ellipse, polygon, text]
+        color:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+        fillColor:
+          type: string
+          pattern: '^#[0-9A-Fa-f]{6}$'
+          nullable: true
+          description: The fill of a `rect`, an `ellipse` or a `polygon`; null for none.
+        width:
+          type: integer
+          minimum: 1
+          maximum: 64
+          description: The stroke's width in map pixels.
+        rotation:
+          type: integer
+          minimum: 0
+          maximum: 359
+        sortKey:
+          type: integer
+          minimum: -1000000
+          maximum: 1000000
+          description: The drawing's place in its layer's order; drawings with the same one are drawn in the order they were made.
+        points:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          description: |
+            `[x, y]` pairs in whole map pixels from the map's top-left
+            corner, each within 250,000 of it and 500 grid squares of the
+            map's edges. A `pen` has 2 or more, a `polygon` 3 or more, a
+            `line`, `arrow`, `rect` and `ellipse` exactly 2, a `text` label 1.
+          items:
+            type: array
+            minItems: 2
+            maxItems: 2
+            items:
+              type: integer
+              minimum: -250000
+              maximum: 250000
+          example: [[120, 80], [340, 80]]
+        text:
+          type: string
+          nullable: true
+          maxLength: 200
+          description: A `text` label's words, without control characters; null for every other kind.
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, authorId, audience, layer, kind, color, fillColor, width, rotation, sortKey, points, text, createdAt]
 
     WallInput:
       type: object

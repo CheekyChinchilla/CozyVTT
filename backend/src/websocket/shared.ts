@@ -148,6 +148,13 @@ export const MAP_EDITS_PER_SECOND = 40;
 // the drag/edit streams above. Over-limit pings are dropped silently — an error
 // toast for pressing the ping key too often is worse than nothing happening.
 export const pingLimiter = new RateLimiter();      // Max 10 pings/10s per user
+// Preview frames of a drawing on its way, and the laser pointer: the draw
+// tool sends at most 20 a second while a stroke is drawn. Over-limit frames
+// are dropped silently, as drag frames are; the stroke itself is a
+// drawing:add, under SOCKET_CEILINGS below.
+export const drawingPreviewLimiter = new RateLimiter();
+/** Preview frames one user may send a second, every stroke and socket together. */
+export const DRAWING_PREVIEWS_PER_SECOND = 60;
 // Explored-memory reveals arrive as a player's vision moves; a client sends
 // at most a few a second. Over-limit reveals are dropped silently.
 export const explorationRevealLimiter = new RateLimiter(); // Max REVEALS_PER_SECOND (40) reveals/second per user
@@ -192,6 +199,11 @@ const dmEvent = (what: string): SocketCeiling => ({
   windows: [{ limit: 50, windowMs: SECOND }],
   refusal: `Too many ${what} at once. Wait a moment, then try again.`,
 });
+/** Clearing drawings: a click and a confirmation each. */
+const drawingClears: SocketCeiling = {
+  windows: [{ limit: 5, windowMs: 10 * SECOND }],
+  refusal: 'Too many clears of the drawings at once. Wait a few seconds, then try again.',
+};
 const atmosphere = dmEvent('atmosphere changes');
 const spiritLayer = dmEvent('spirit layer changes');
 const initiative = dmEvent('initiative changes');
@@ -259,6 +271,18 @@ export const SOCKET_CEILINGS = {
   'initiative.roll': initiative,
   'dice.clearHistory': dmEvent('requests to clear the dice log'),
   'exploration:reset': dmEvent('explored-area resets'),
+  // Drawing on the map: one add per stroke, shape or label, which is a
+  // write under the map's lock, and one remove per tap of the eraser.
+  'drawing:add': {
+    windows: [{ limit: 20, windowMs: SECOND }, { limit: 300, windowMs: MINUTE }],
+    refusal: 'Too many drawings at once. Wait a moment, then draw again.',
+  },
+  'drawing:remove': {
+    windows: [{ limit: 20, windowMs: SECOND }],
+    refusal: 'Too many drawings erased at once. Wait a moment, then try again.',
+  },
+  'drawing:clear_mine': drawingClears,
+  'drawing:clear': drawingClears,
 } satisfies Record<string, SocketCeiling>;
 
 export type CeilingEvent = keyof typeof SOCKET_CEILINGS;
