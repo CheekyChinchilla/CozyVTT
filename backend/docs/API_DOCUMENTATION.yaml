@@ -7095,6 +7095,14 @@ paths:
         `lights:replaced`, as for a bulk replace and with no `opId`, so open
         pages draw them where they now are.
 
+        Drawings are stored in map pixels too, and are scaled under the same
+        lock, every drawing on the map in one statement: each point by the
+        same factor on each axis, rounded to whole pixels and kept within 500
+        squares of the resized map's edges, and each width by the mean of
+        the two factors, kept to 1 to 64. Every member who may read the map
+        is then sent `drawings:state` with the drawings they may have, read
+        under the map's lock.
+
         `imageUrl` and `spiritLayerUrl` take an asset id or an asset's exact
         address (`/api/assets/<kind>/<id>`); a bare id is stored as
         `/api/assets/maps/<id>`, and anything else, an outside URL included,

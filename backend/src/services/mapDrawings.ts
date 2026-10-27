@@ -1,8 +1,9 @@
 /**
  * Drawings on a map as they are read and sent.
  *
- * One shape for every path that sends a drawing: the live table's events
- * and the REST read. Each reader is given what `drawingSentTo` allows their
+ * One shape for every path that sends a drawing: the live table's events,
+ * the REST read, and the lists sent again after a map is resized or a
+ * member's role changes. Each reader is given what `drawingSentTo` allows their
  * role (utils/drawingRules.ts), so a drawing for the DM alone never leaves
  * the server for anyone else, whichever path it takes.
  */
@@ -10,6 +11,11 @@
 import type { MapDrawing, Prisma } from '@prisma/client';
 import { pointsCanMatter, type MarkupHeld } from '../validators/drawings';
 import { prisma } from '../config/database';
+import { getSocketInstance, emitToMapReadersAs } from '../websocket/utils';
+import { drawingSentTo } from '../utils/drawingRules';
+import { DRAWING_LIMITS } from '../validators/drawingLimits';
+import { withMapsLocked } from '../utils/mapTokens';
+import logger from '../utils/logger';
 
 /** A drawing as the server sends it. */
 export interface DrawingSent {
@@ -96,3 +102,56 @@ export async function markupHeld(tx: Prisma.TransactionClient, mapId: string, ad
   return { drawings, points: summed?.points ?? 0 };
 }
 
+
+/**
+ * Scale every drawing on a map, on every layer, as Edit Map scales its walls
+ * when the map's drawn size changes: each point across by `kx` and down by
+ * `ky`, rounded to whole pixels as walls are (half up), and kept inside
+ * `region`, the box the resized map's drawings may lie in; each width by the
+ * mean of the two, kept to DRAWING_LIMITS' 1 to 64. One statement for the
+ * whole map, so the most drawing a map holds is scaled in one round trip
+ * inside the map's lock. Returns how many drawings it changed.
+ */
+export async function scaleDrawings(
+  tx: Prisma.TransactionClient,
+  mapId: string,
+  kx: number,
+  ky: number,
+  region: { minX: number; minY: number; maxX: number; maxY: number }
+): Promise<number> {
+  const kw = (kx + ky) / 2;
+  return tx.$executeRaw`
+    UPDATE "MapDrawing" SET
+      points = COALESCE((
+        SELECT jsonb_agg(jsonb_build_array(
+          LEAST(GREATEST(floor((e.p->>0)::float8 * ${kx}::float8 + 0.5), ${region.minX}::float8), ${region.maxX}::float8)::int,
+          LEAST(GREATEST(floor((e.p->>1)::float8 * ${ky}::float8 + 0.5), ${region.minY}::float8), ${region.maxY}::float8)::int
+        ) ORDER BY e.ord)
+        FROM jsonb_array_elements(points) WITH ORDINALITY AS e(p, ord)
+      ), '[]'::jsonb),
+      width = LEAST(GREATEST(floor(width * ${kw}::float8 + 0.5), ${DRAWING_LIMITS.minWidth}::float8), ${DRAWING_LIMITS.maxWidth}::float8)::int
+    WHERE "mapId" = ${mapId}`;
+}
+
+/**
+ * Send everyone who may read a map its drawings again, as each may be sent
+ * them, as `drawings:state`: after Edit Map has scaled them, and after a
+ * role change that alters which of them a member may have. The list is read
+ * and sent under the map's lock, so a drawing added or erased while it is
+ * read is in it or is sent after it, and never undone on a page by an older
+ * list; the caller must not hold the lock. Best-effort: the change is saved
+ * by then, so a failure is logged and nothing else.
+ */
+export async function resendDrawings(campaignId: string, mapId: string): Promise<void> {
+  try {
+    const io = getSocketInstance();
+    await withMapsLocked([mapId], async (tx) => {
+      const all = await drawingsFor(mapId, 'DM', tx);
+      await emitToMapReadersAs(io, campaignId, mapId, 'drawings:state', (role) => ({
+        event: 'drawings:state', data: { mapId, drawings: all.filter((d) => drawingSentTo(role, d)) },
+      }));
+    });
+  } catch (error) {
+    logger.warn('Drawings not sent again; the change stands', { err: error, mapId });
+  }
+}

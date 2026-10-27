@@ -861,7 +861,7 @@ A field outside these is refused with a message saying what is wrong, such as `A
 
 **Previews and the laser pointer.** While a stroke is drawn, the draw tool sends `drawing:preview` with `mapId` and `preview`: `previewId` (1 to 64 letters, digits, hyphens or underscores, the stroke's own label), `kind`, `color`, `width`, `audience`, `laser` (true for the laser pointer, whose stroke is never stored), `points` (at most 64 a frame; a stroke sends the points it added since its last frame) and `end` (true on a stroke's last frame, kept or cancelled, so other screens drop it at once). Nothing is stored. `drawing:previewed` (`mapId`, the sender's `userId`, `preview`) goes to every other socket that may read the map, never back to the socket that sent it (the sender's other tabs are sent it); a player's frames and the laser pointer's are for everyone, the DM's for the DM alone when its `audience` says so. Whether the sender may draw there, and which map the campaign is showing, is decided at most once a second for each stroke, so a pause or **Players may draw** turned off reaches a stroke already under way within a second; a map switch reaches it at its next frame. A frame past the 60 a second one user may send, a refused one and a malformed one are dropped without an answer. An add may carry its stroke's `previewId`, which `drawing:added` echoes, so the other screens put the stored drawing in the preview's place.
 
-**Asking for a map's drawings.** `drawings:request` with `mapId` is answered with `drawings:state` (`mapId`, `drawings` in drawing order), the drawings the sender may be sent, for a map they may read; for any other map it answers nothing, as `walls:request` does.
+**Asking for a map's drawings.** `drawings:request` with `mapId` is answered with `drawings:state` (`mapId`, `drawings` in drawing order), the drawings the sender may be sent, for a map they may read; for any other map it answers nothing, as `walls:request` does. The server also sends `drawings:state` by itself, to every socket that may read the map and with the drawings each may have, so a page replaces its list: after `PUT /api/campaigns/:campaignId/maps/:id` changes the map's drawn size and so scales its drawings (each point across and down by the map's own two changes, rounded to whole pixels and kept within 500 squares of the resized map's edges, each width by their mean, kept to 1 to 64), and, for the map the campaign is showing, after a member's role changes or the DM's seat is handed over, so a page never keeps a drawing for the DM alone once its role may not have it. That list is read and sent under the map's lock, so a drawing added or erased meanwhile is in it or arrives after it.
 
 ## Error Handling
 
@@ -1345,7 +1345,7 @@ _Sent to: map readers are every member while the map is the one the campaign is 
 | `drawing:previewed` | Members the handler picks | `drawings.ts` |
 | `drawing:removed` | Map readers, as their role sees it | `drawings.ts` |
 | `drawings:cleared` | Map readers, as their role sees it | `drawings.ts` |
-| `drawings:state` | The sender | `drawings.ts` |
+| `drawings:state` | Map readers, as their role sees it; the sender | `drawings.ts` |
 | `exploration:state` | Map readers; members the handler picks; the sender | `exploration.ts` |
 | `fog:cells` | Members the handler picks; the sender | `fog.ts` |
 | `fog:updated` | Members the handler picks; the sender | `fog.ts` |

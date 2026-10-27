@@ -48,6 +48,7 @@ import {
 import { randomUUID } from 'crypto';
 import path from 'path';
 import fsp from 'fs/promises';
+import { resendDrawings } from '../services/mapDrawings';
 const router = Router();
 
 /**
@@ -1042,8 +1043,8 @@ router.delete('/:campaignId/members/:userId', campaignDM, async (req: Authentica
  * What the open pages need after members' roles change, the new roles
  * already applied to their live connections: the roster panel regroups
  * (it groups by role from its own list), and each copy of the initiative
- * order and of the map the table is on is sent again as the new roles see
- * it. A spectator on a lit map is sent no tokens, a player their own and
+ * order, of the map the table is on and of its drawings is sent again as
+ * the new roles see it. A spectator on a lit map is sent no tokens, a player their own and
  * what they see, a DM every hidden creature and its notes.
  */
 async function followNewRoles(campaignId: string, userIds: string[]): Promise<void> {
@@ -1051,7 +1052,11 @@ async function followNewRoles(campaignId: string, userIds: string[]): Promise<vo
   await resendInitiative(campaignId);
   const shown = await prisma.campaign.findUnique({ where: { id: campaignId }, select: { currentMapId: true } });
   const map = shown?.currentMapId ? await prisma.map.findUnique({ where: { id: shown.currentMapId } }) : null;
-  if (map) await broadcastMapData(getSocketInstance(), campaignId, map);
+  if (!map) return;
+  await broadcastMapData(getSocketInstance(), campaignId, map);
+  // A drawing for the DM alone goes with the seat: the new DM's page is sent
+  // it, and the old DM's page is sent the list without it.
+  await resendDrawings(campaignId, map.id);
 }
 
 /**
