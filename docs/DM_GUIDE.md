@@ -1034,14 +1034,14 @@ Walls define the physical boundaries of your map — they block line of sight an
 
 Open the **Walls** panel, one of the DM tool panels stacked at the top right of the map. While a wall, fog or light tool is up, the right mouse button pans the map and no right-click menu opens; press **Esc** to put the tool away first. The panel has six tool modes:
 
-- **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click to finish. Each pair of consecutive points creates a wall segment.
+- **Draw** — Click to place wall endpoints; click again to extend the polyline; double-click, or click **Done** in the panel, to finish. Each pair of consecutive points creates a wall segment.
 - **Select** — Click a wall segment to select it and change its type or delete it. Click an endpoint to select it; drag an endpoint to move it (all connected segments move together). Click **Merge point** to remove a bend point and join two segments into one.
 - **Split** — Click on a wall segment to add a midpoint, splitting it into two segments.
 - **Erase** — Click and drag to brush-erase wall segments.
-- **Polygon** — Click to place corners of a room; click near the starting point to close the shape and create all wall segments at once.
+- **Polygon** — Click to place corners of a room; click near the starting point, or click **Done** in the panel, to close the shape and create all wall segments at once.
 - **Brush** — Paint over the map to trace walls; the brush stroke is automatically simplified into straight wall segments. With **Snap to grid** enabled, segments align perfectly to grid intersections.
 
-On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
+On a touch screen every tool works with one finger: a tap is a click, a double tap finishes a line, and dragging a finger is dragging the mouse. Nothing needs a keyboard: the panel's **Done**, **Cancel**, **Add to selection**, **Delete** and **Undo** do what a double-click, **Esc**, **Shift**, the **Delete** key and **Ctrl+Z** do. A finger held still is never a long-press while a tool is up, so it can rest on a wall's end before it drags. A second finger cancels a drag in progress, putting a moved wall or light back, and pinches the zoom instead. A stylus works as a mouse, and while it touches the screen your hand resting beside it does nothing.
 
 Wall types are selected from the **Draw type** buttons in the Walls panel:
 
@@ -1065,9 +1065,9 @@ The **Polygon** tool lets you draw complex wall shapes by clicking corners:
 
 1. Select **Polygon** mode from the Walls panel
 2. Click to place each corner point — a preview line follows your cursor
-3. To close the shape, click near your starting point (within the snap radius) — all edges are committed as wall segments in one action
-4. Press **Escape** to cancel the polygon without placing any walls
-5. Press **Ctrl+Z** to remove the last point while drawing
+3. To close the shape, click near your starting point (within the snap radius), double-click, or click **Done** in the Walls panel once there are three corners — all edges are committed as wall segments in one action
+4. Press **Escape**, or click **Cancel** in the panel, to cancel the polygon without placing any walls
+5. Press **Ctrl+Z**, or click the panel's **Undo**, to remove the last point while drawing
 
 Polygon mode is great for tracing irregular room shapes without drawing each wall segment individually.
 
@@ -1121,12 +1121,12 @@ a wall set that does not line up with its artwork.
 | To do this | Do that |
 |---|---|
 | Select one wall | Click it |
-| Add or remove one | **Shift**+click |
-| Select an area | Drag a box over empty space; anything it touches comes with it |
+| Add or remove one | **Shift**+click, or tick **Add to selection** in the panel and click |
+| Select an area | Drag a box over empty space; anything it touches comes with it. With **Shift** held, or **Add to selection** ticked, it adds to what is already selected |
 | Select every wall | **Ctrl+A** (**Cmd+A** on a Mac) |
 | Move what is selected | Drag any of it, or nudge with the **arrow keys** |
 | Move by a whole square | **Shift** + an arrow key |
-| Delete what is selected | **Delete** or **Backspace** |
+| Delete what is selected | **Delete** or **Backspace**, or the panel's **Delete** button, which says how many walls it will delete, whatever their types |
 | Let go | **Escape** once clears the selection, again puts the tool away |
 
 These keys, like **Ctrl+Z** and **Ctrl+Y** below, act on the map only while you
@@ -1212,7 +1212,7 @@ A map whose picture is not a PNG, JPEG, WebP or GIF image, such as a map picture
 Wall edits support full undo/redo:
 - **Ctrl+Z** (or Cmd+Z) — Undo last wall change
 - **Ctrl+Y** / **Ctrl+Shift+Z** — Redo
-- The undo/redo buttons are also in the Walls panel
+- The undo/redo buttons are also in the Walls panel. Like **Ctrl+Z**, the panel's **Undo** takes back the last corner of a polygon you are drawing first, then a line you are drawing, and only then the last wall change
 
 Undo/redo applies to: placing walls, deleting walls, splitting, merging, moving walls and dragging endpoints. Opening or closing a door is not a wall edit and is not undone; click the door again. Nor is anything someone else changes: when a player opens a door, your map shows it at once, and undoing your own last edit leaves it open.
 

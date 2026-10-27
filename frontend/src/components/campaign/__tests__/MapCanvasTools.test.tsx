@@ -540,6 +540,169 @@ describe('the wall select tool', () => {
   });
 });
 
+describe("the Walls panel's buttons, which do what a key or a double-click does", () => {
+  // Each is named by what it shows, so a voice command that says the word
+  // finds it; the longer wording is its tooltip.
+  const button = (name: string) => screen.queryByRole('button', { name });
+
+  it('Done finishes a line as a double-click does, and shows only while one is being drawn', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    expect(button('Done')).toBeNull();
+
+    click(px(100, 300));
+    click(px(200, 300));
+    fireEvent.click(button('Done')!);
+    expect(button('Done')).toBeNull();
+    click(px(400, 400));
+
+    expect(sentOf('wall:add')).toHaveLength(1);
+  });
+
+  // On a short tablet the tool stack is capped and scrolls, and Done came
+  // in under the mode buttons, out of sight until the stack was scrolled.
+  it('brings Done, and Cancel with it, into view in the stack as they appear, and only then', () => {
+    const intoView = vi.fn();
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { value: intoView, configurable: true, writable: true });
+    try {
+      render(<MapCanvas />);
+      wallTool('Wall draw mode');
+      click(px(100, 300));
+      expect(intoView.mock.contexts).toEqual([button('Done')!.parentElement]);
+      expect(intoView).toHaveBeenLastCalledWith({ block: 'nearest' });
+      click(px(200, 300));
+      expect(intoView).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getByLabelText('Polygon wall mode'));
+      click(px(500, 500));
+      expect(intoView).toHaveBeenCalledTimes(2);
+      expect(intoView.mock.contexts[1]).toBe(button('Cancel')!.parentElement);
+      click(px(700, 500));
+      expect(intoView).toHaveBeenCalledTimes(2);
+    } finally {
+      delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it('Done closes a polygon as a double-click does, once it has three corners', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(500, 500));
+    click(px(700, 500));
+    expect(button('Done')).toBeDisabled();
+    click(px(700, 700));
+    fireEvent.click(button('Done')!);
+
+    expect(lastWalls()).toEqual([
+      WALL_A, WALL_B,
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  it('Cancel drops a polygon as Escape does, and keeps the tool', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(100, 500));
+    click(px(300, 500));
+    click(px(300, 700));
+    fireEvent.click(button('Cancel')!);
+    expect(button('Cancel')).toBeNull();
+    expect(sentOf('walls:replace')).toEqual([]);
+
+    click(px(500, 500));
+    click(px(700, 500));
+    click(px(700, 700));
+    fireEvent.click(button('Done')!);
+    expect(lastWalls().slice(2)).toEqual([
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  it('Undo takes back the last corner first, as Ctrl+Z does', () => {
+    render(<MapCanvas />);
+    wallTool('Polygon wall mode');
+
+    click(px(500, 500));
+    click(px(700, 500));
+    click(px(900, 500));
+    fireEvent.click(screen.getByLabelText('Undo wall edit'));
+    click(px(700, 700));
+    click(px(700, 700));
+
+    expect(lastWalls().slice(2)).toEqual([
+      { x1: 500, y1: 500, x2: 700, y2: 500, type: 'wall' },
+      { x1: 700, y1: 500, x2: 700, y2: 700, type: 'wall' },
+      { x1: 700, y1: 700, x2: 500, y2: 500, type: 'wall' },
+    ]);
+  });
+
+  it('Undo drops a half-drawn line, then undoes the last edit, as Ctrl+Z does', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    expect(screen.getByLabelText('Undo wall edit')).toBeDisabled();
+
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Undo wall edit'));
+    click(px(200, 300));
+    expect(sentOf('wall:add')).toEqual([]);
+
+    click(px(300, 300));
+    fireEvent.click(button('Done')!);
+    expect(sentOf('wall:add')).toHaveLength(1);
+    fireEvent.click(screen.getByLabelText('Undo wall edit'));
+    expect(lastWalls()).toEqual([WALL_A, WALL_B]);
+  });
+
+  it('Delete removes a selection of mixed types, as the Delete key does, and says how many', () => {
+    h.set({ currentMap: mapWith({ wallSegments: [WALL_A, seg('d1', 300, 100, 400, 100, 'door-closed')] }) });
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    press('a', { ctrlKey: true });
+    const del = screen.getByRole('button', { name: 'Delete 2 segments' });
+    expect(del).toHaveTextContent('Delete 2 segments');
+    fireEvent.click(del);
+
+    expect(lastWalls()).toEqual([]);
+  });
+
+  it('Add to selection adds a clicked wall as Shift does, and keeps the selection through a box', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    click(px(150, 100));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add to selection' }));
+    click(px(350, 100));
+    press('ArrowDown');
+    expect(lastWalls()).toEqual([{ ...WALL_A, y1: 101, y2: 101 }, { ...WALL_B, y1: 101, y2: 101 }]);
+
+    press('Escape');
+    click(px(150, 101));
+    drag(px(250, 50), px(350, 120), px(450, 150));
+    press('Delete');
+    expect(lastWalls()).toEqual([]);
+  });
+
+  it('Add to selection takes a clicked wall back out, as Shift does', () => {
+    render(<MapCanvas />);
+    wallTool('Wall select mode');
+
+    click(px(150, 100));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Add to selection' }));
+    click(px(350, 100));
+    click(px(150, 100));
+    press('Delete');
+
+    expect(lastWalls()).toEqual([WALL_A]);
+  });
+});
+
 describe('the light tools', () => {
   const lamp: LightSource = { id: 'l1', x: 250, y: 250, brightRadius: 4, dimRadius: 8, color: '#ffcc66', enabled: true };
 
