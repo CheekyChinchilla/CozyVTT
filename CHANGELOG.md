@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Upgrading from 1.5.4
+
+The upgrade is the usual one. Back up first, as always (see [Database Backups](docs/DEPLOYMENT.md#database-backups)), then rebuild and restart:
+
+```bash
+git pull origin main
+docker compose up -d --build
+```
+
+There is a database change, made by itself on the first start: chat messages get one new column, for the person a whisper is for, and one index, and the kinds of chat message gain one, the whisper. All three are added; no message you have is changed or removed. There is no new setting and no manual step. The backend and frontend containers are rebuilt with the new code.
+
+To go back to 1.5.4 after upgrading, restore the backup you took before the upgrade. Without the restore, 1.5.4 cannot read a whisper: the chat of a campaign where one was sent shows an error in place of its history. After going back, reload every open CozyVTT tab, since a page still open from this release would send a message meant as a whisper to the whole table.
+
 ### Added
 
 - **Pinch to zoom and drag to pan the map on a touch screen.** On a tablet, pinching two fingers on the map zooms it about them, from 10% to 300% as the buttons do, and dragging one finger over empty ground moves the view; the page itself no longer zooms or scrolls under the map. A tap works as a click and a double tap finishes a wall line, and with a DM tool up one finger draws a fog box or a wall stroke, or moves a wall or a light. A second finger cancels what the first began. A stylus works as a mouse, and a hand resting beside it does nothing. A mouse works as before. Dragging tokens and opening the menus by touch follow in the same release.

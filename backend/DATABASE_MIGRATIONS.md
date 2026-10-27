@@ -135,6 +135,18 @@ about; the list is not exhaustive.
   creature stays. It is safe to run twice: a second run finds nothing to clear,
   makes the index only if it is missing, and drops the key and adds the same
   one again.
+- `20261027065007_add_message_recipient` - `Message.recipientId`, the one
+  member a whisper is for, with a foreign key to `User` that sets it to null
+  when that account is deleted, an index on `campaignId`, `recipientId` and
+  `createdAt`, and `WHISPER` added to `MessageType`. One `ALTER TYPE ... ADD
+  VALUE`, one `ALTER TABLE ... ADD COLUMN` with no default (every existing
+  message gets null, as a message to everyone has), one index and one foreign
+  key. No existing row is changed or removed. Nothing else in it names
+  `WHISPER`: PostgreSQL does not let a new enum value be used in the
+  transaction that adds it. PostgreSQL cannot remove an enum value either, so
+  going back to 1.5.4 means restoring a backup taken before the upgrade:
+  1.5.4's client does not know `WHISPER`, and its chat history route answers
+  500 for any page that holds a whisper.
 
 ## Data migrations (one-off scripts)
 

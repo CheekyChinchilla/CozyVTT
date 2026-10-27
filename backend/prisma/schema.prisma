@@ -56,6 +56,7 @@ enum MessageType {
   SYSTEM
   DICE_ROLL
   CHARACTER_ACTION
+  WHISPER
 }
 
 enum LogLevel {
@@ -125,6 +126,7 @@ model User {
   campaignInvitations CampaignInvitation[]
   characters          Character[]
   messages            Message[]
+  receivedMessages    Message[]              @relation("MessageRecipient")
   diceRolls           DiceRoll[]
   uploadedAssets      Asset[]
   passwordResetTokens PasswordResetToken[]
@@ -594,6 +596,12 @@ model Message {
   userId String? // Null for system messages
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
+  // The one member a WHISPER is for. The type marks a message private, and
+  // this says who it is for: deleting the recipient's account empties it,
+  // and the whisper stays its sender's alone.
+  recipientId String?
+  recipient   User?   @relation("MessageRecipient", fields: [recipientId], references: [id], onDelete: SetNull)
+
   // Content
   type     MessageType
   content  String      @db.Text
@@ -603,6 +611,7 @@ model Message {
   createdAt DateTime @default(now())
 
   @@index([campaignId, createdAt])
+  @@index([campaignId, recipientId, createdAt])
 }
 
 model DiceRoll {

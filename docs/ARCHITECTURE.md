@@ -502,6 +502,7 @@ erDiagram
         string id PK
         string campaignId FK
         string userId FK
+        string recipientId FK
         MessageType type
         string content
         json metadata
@@ -625,6 +626,7 @@ erDiagram
     User ||--o{ MapExploration : "explores"
     Campaign ||--o{ Message : "has"
     User ||--o{ Message : "writes"
+    User ||--o{ Message : "receives whispers"
     Campaign ||--o{ DiceRoll : "has"
     User ||--o{ DiceRoll : "rolls"
     Campaign ||--o{ Session : "has"
