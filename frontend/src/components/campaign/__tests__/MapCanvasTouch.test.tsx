@@ -673,6 +673,62 @@ describe('where a held token is drawn', () => {
   });
 });
 
+// A finger landing on the map while the on-screen keyboard is up for the
+// chat would close the keyboard: the map takes the keys only once the
+// finger's gesture reaches it.
+describe('the keys and a finger', () => {
+  function withChatBox() {
+    render(<><input aria-label="Chat message" /><MapCanvas /></>);
+    const box = screen.getByLabelText('Chat message');
+    box.focus();
+    return box;
+  }
+  const theMap = () => screen.getByRole('application', { name: 'Map' });
+
+  it('stay in the chat box through a pinch on the map', () => {
+    const box = withChatBox();
+
+    const a = contact('touch', 1);
+    const b = contact('touch', 2, false);
+    a.down(surface(), px(400, 500));
+    expect(document.activeElement).toBe(box);
+    b.down(surface(), px(600, 500));
+    a.move(surface(), px(350, 500));
+    b.move(surface(), px(650, 500));
+    a.up(surface(), px(350, 500));
+    b.up(surface(), px(650, 500));
+
+    expect(document.activeElement).toBe(box);
+  });
+
+  it('go to the map on a tap', () => {
+    withChatBox();
+    tap(1, px(500, 500));
+    expect(document.activeElement).toBe(theMap());
+  });
+
+  it('go to the map as a drag starts', () => {
+    withChatBox();
+    const finger = contact('touch', 1);
+    finger.down(surface(), px(500, 500));
+    finger.move(surface(), px(560, 500));
+    expect(document.activeElement).toBe(theMap());
+  });
+
+  it('go to the map at once on a mouse or a pen press, as before', () => {
+    const box = withChatBox();
+    mouse.down(surface(), px(500, 500));
+    mouse.up(surface(), px(500, 500));
+    expect(document.activeElement).toBe(theMap());
+
+    box.focus();
+    const pen = contact('pen', 5);
+    pen.down(surface(), px(500, 500));
+    expect(document.activeElement).toBe(theMap());
+    pen.up(surface(), px(500, 500));
+  });
+});
+
 describe('two fingers', () => {
   // In the app the canvas sits beside the sidebar and under the header, so
   // the fingers' page position is not the canvas's.

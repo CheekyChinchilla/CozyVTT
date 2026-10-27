@@ -2449,6 +2449,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
     if (g.type === 'tap') {
       const down = fingerDownsRef.current.get(g.at.id);
       if (!down) return;
+      focusMap();
       // Built from the press, after the event: preventDefault has nothing to cancel.
       const press: MapPointer = { ...down, clientX: g.at.x, clientY: g.at.y, button: 0, buttons: 1, preventDefault: () => undefined };
       pressButton(withClickCount(press, g.at.t), 'tap');
@@ -2457,6 +2458,7 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
       if (g.phase === 'start') {
         const down = fingerDownsRef.current.get(g.from.id);
         if (!down) return;
+        focusMap();
         clickCounterRef.current.reset();
         fingerPressRef.current = true;
         // The down and the first move arrive in one event, so React state
@@ -2521,9 +2523,11 @@ export default function MapCanvas({ onEditToken, onShowShortcuts }: MapCanvasPro
   }, [gestures]);
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    // A press on the map gives it the keys; one on a panel over it does not.
-    focusMap();
     const e = fromPointerEvent(event);
+    // A press on the map gives it the keys; one on a panel over it does not.
+    // A finger's does once its gesture is known, a tap or a drag, so a
+    // pinch while typing in the chat keeps the on-screen keyboard.
+    if (e.kind !== 'touch') focusMap();
     if (e.kind !== 'mouse') capturePointer(event);
     if (e.kind === 'touch') {
       fingerDownsRef.current.set(e.pointerId, e);
