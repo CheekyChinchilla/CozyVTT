@@ -273,7 +273,7 @@ When the DM has placed your character's token on the map, you can move it: click
 
 **Selecting a token.** Clicking a token also selects it, and a dashed light-blue ring marks it until you click empty ground or select another; dragging the map leaves it selected. You can select any token you can see, yours or not, by clicking it; a right-click selects the token too when its menu opens for you. A token that isn't yours is only selected, never picked up. A screen reader says which token is selected and on which square.
 
-**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then a token you're holding, then the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
+**Moving from the keyboard.** Click the map first, so the keys go to it. With your token selected, the arrow keys move it one square, or five with **Shift**; if you're holding it, an arrow puts it down one square over from where it stood. **,** and **.** (or **<** and **>**) select your previous or next token, handy when you control more than one, and the map pans to keep it in sight. **Enter** opens the selected token's menu, and **Esc** lets go of one thing at a time: the menu, then the **Ping** button if you pressed it, then a token you're holding, then the ruler or the area template if you have one up, then the selection. The mouse's rules apply: no moving while the session is paused, and not onto a square someone else is standing on. The keys go to the map only while it has the keyboard: click anywhere else, such as on the chat, and they go there instead, and a window open over the map takes them too. Click the map again to take them back. A token you selected that the map no longer shows, because it has gone under fog, stays selected but the keys leave it alone. Every key is in [Keyboard Shortcuts](#keyboard-shortcuts).
 
 *GIF pending — Picking up a player token and placing it across the map.*
 
@@ -299,10 +299,11 @@ On a tablet, or a phone after **Continue anyway**, your finger does what the mou
 |---|---|
 | Move your token | Put your finger on it, slide it to the square and lift: it goes down where you lift, and stays selected. A second finger on the glass before you lift puts it back where it was. |
 | Move it in two taps | Tap your token, then tap the square. In between it stays in your hand, drawn faded on its own square with the selection ring, so you can move the map with one finger, or pinch, and keep hold of it. Slide the token from its own square to carry it, or tap the square it came from to put it back. |
+| Put back a token you are holding | Tap **Put back** in the bar at the top of the map, which names the token. It does what **Esc** does. |
 | Move the map | Slide one finger anywhere but on a token you can move. Pinch two fingers to zoom, about your fingers. |
 | Open a token's menu | Press and hold the token for half a second: the menu a right-click opens there opens, with the same items, and the token is selected. Lift your finger and tap an item. |
 | Open or close a door | Tap it, as you would click it. Press and hold it for its menu. |
-| Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. |
+| Point at the map | Press and hold the spot for half a second, on empty ground or on a token that has no menu for you: everyone sees your ping there, as with **Tab**. Or tap **Ping** in the map's toolbar, then tap the spot; you can move the map first. Tap **Ping** again to put it away. |
 
 A stylus works as a mouse, and opens no menu by holding: use a finger for that. Tap your token with it to pick it up and tap the square to put it down. On a tablet that can tell a stylus hovering just above it, the token follows the stylus meanwhile; take the stylus away and the token waits, faded, on its own square.
 
@@ -490,7 +491,7 @@ A few things worth knowing:
 
 If you ping repeatedly in quick succession, some will be quietly ignored — that's a spam guard, not a bug.
 
-On a touch screen, press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
+**Without a keyboard**, click or tap **Ping** in the map's toolbar, then the spot; click it again or press **Esc** to put it away without pinging. On a touch screen you can also press and hold the spot for half a second, on empty ground or on a token that has no menu for you (see [On a touch screen](#on-a-touch-screen)).
 
 The DM controls when initiative advances — after your turn, they'll click **Next Turn** and the focus moves to the next combatant.
 
@@ -628,7 +629,7 @@ On the map, once you've clicked it. Press `?` on the map, or click **Keyboard sh
 | Move the selected token five squares | `Shift + arrow keys` |
 | Turn the selected token 45 degrees anticlockwise or clockwise | `[` `]` |
 | Open the selected token's menu | `Enter` |
-| Let go of one thing: the menu, a held token, the tool, then the selection | `Esc` |
+| Let go of one thing: the menu, the armed **Ping**, a held token, the tool, then the selection | `Esc` |
 | Ping the map | `Tab` (cursor over the map) |
 | Place a spell area off the grid | `Alt + click` (AoE tool) |
 | Show these shortcuts | `?` |

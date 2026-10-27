@@ -662,7 +662,7 @@ still appears, marked as having no notes.
 
 ### Moving Around the Map
 
-The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. Nothing you do there changes anyone else's view.
+The toolbar at the top left of the map holds the controls for your own view; point at a button to see its name. Nothing you do there changes anyone else's view, except a **Ping**, which the whole table sees.
 
 | Control | What it does |
 |---|---|
@@ -670,6 +670,7 @@ The toolbar at the top left of the map holds the controls for your own view; poi
 | **Fit to Screen** | Shows the whole map in the space available |
 | **Toggle Grid** | Shows or hides the grid lines, which start shown. While they are shown, the **Grid Color** button beside it switches them between black and white |
 | **Ruler**, **AoE Shape** | Measure a distance and lay a spell area over the map (see [Measuring and Spell Areas](PLAYER_GUIDE.md#measuring-and-spell-areas)) |
+| **Ping** | The next click or tap on the map shows everyone that spot, as **Tab** does over the map (see [Pointing at the Map](PLAYER_GUIDE.md#pointing-at-the-map)). Click it again, or press **Esc**, to put it away without pinging |
 
 To move the view, drag an empty part of the map; on a touch screen, drag it with one finger.
 

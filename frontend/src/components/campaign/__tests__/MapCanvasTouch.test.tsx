@@ -1024,6 +1024,224 @@ describe('a long-press', () => {
   });
 });
 
+describe('Put back', () => {
+  const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
+  const putBack = () => screen.queryByRole('button', { name: 'Put back' });
+
+  it.each(['touch', 'pen'] as const)('shows while a %s holds a token, and puts it back as Esc does', (kind) => {
+    render(<MapCanvas />);
+    show(goblin());
+    expect(putBack()).toBeNull();
+
+    const pointer = contact(kind, 2);
+    pointer.down(surface(), square(0, 19));
+    pointer.up(surface(), square(0, 19));
+    pointer.leave(surface());
+    expect(screen.getByText('Goblin')).toBeInTheDocument();
+    fireEvent.click(putBack()!);
+
+    expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
+    expect(sentOf('token.move.end')).toEqual([]);
+    expect(putBack()).toBeNull();
+    // Nothing is held: a tap on empty ground puts nothing down.
+    tap(3, square(9, 9));
+    expect(sentOf('token.move.end')).toEqual([]);
+  });
+
+  // Leaving the map puts a mouse's hold back, so a bar beside it would go
+  // as the pointer reached it.
+  it("never shows for a mouse's hold", () => {
+    render(<MapCanvas />);
+    show(goblin());
+
+    mouse.down(surface(), square(0, 19));
+    mouse.up(surface(), square(0, 19));
+    mouse.move(surface(), square(2, 19));
+
+    expect(putBack()).toBeNull();
+  });
+
+  it('hides while a finger carries the token it holds, and shows again once it is held still', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+    expect(putBack()).not.toBeNull();
+
+    const finger = contact('touch', 2);
+    finger.down(surface(), square(0, 19));
+    finger.move(surface(), square(2, 19));
+    expect(putBack()).toBeNull();
+    finger.up(surface(), square(2, 19));
+
+    tap(3, square(2, 19));
+    expect(putBack()).not.toBeNull();
+  });
+
+  it('gives the map the keys back once it has put the token back', () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+
+    // A tap on the button gives it focus first, and then it goes.
+    putBack()!.focus();
+    fireEvent.click(putBack()!);
+
+    expect(document.activeElement).toBe(screen.getByRole('application', { name: 'Map' }));
+  });
+
+  // A shared screen in Player Preview shows only what the previewed player
+  // is sent.
+  it('names no token the preview does not draw', () => {
+    h.set({
+      currentMap: mapWith({ fogEnabled: true }),
+      memberships: [{ userId: 'alice', role: 'PLAYER', user: { displayName: 'Alice' } }],
+    });
+    render(<MapCanvas />);
+    show(token('tok-a', 'Alya', 2, 10, { type: TokenType.PLAYER, controlledBy: 'alice' }), token('tok-wolf', 'Dire Wolf', 4, 19, { visible: false }));
+    fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(true) } });
+    tap(1, square(4, 19));
+    expect(putBack()!.parentElement).toHaveTextContent('Holding Dire Wolf');
+
+    fireEvent.click(screen.getByLabelText('Toggle DM player view preview'));
+
+    expect(putBack()!.parentElement).not.toHaveTextContent('Dire Wolf');
+    expect(putBack()!.parentElement).toHaveTextContent('Holding Unknown creature');
+  });
+
+  it("does not show while a finger's drag carries a token, which its lift puts down", () => {
+    render(<MapCanvas />);
+    show(goblin());
+    const finger = contact('touch', 1);
+    finger.down(surface(), square(0, 19));
+    finger.move(surface(), square(2, 19));
+
+    expect(putBack()).toBeNull();
+    finger.up(surface(), square(2, 19));
+  });
+});
+
+describe('the Ping button', () => {
+  const pingButton = () => screen.getByRole('button', { name: /^Ping/ });
+  const goblin = () => token('tok-goblin', 'Goblin', 0, 19);
+
+  it('arms one ping: the next tap pings there and picks nothing up, and the one after works as usual', () => {
+    render(<MapCanvas />);
+    show(goblin());
+
+    fireEvent.click(pingButton());
+    expect(pingButton()).toHaveAttribute('aria-pressed', 'true');
+    tap(1, square(0, 19));
+
+    expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 25, y: 25 }]);
+    expect(sentOf('token.move.start')).toEqual([]);
+    expect(pingButton()).toHaveAttribute('aria-pressed', 'false');
+    tap(2, square(0, 19));
+    expect(sentOf('map.ping')).toHaveLength(1);
+    expect(sentOf('token.move.start')).toHaveLength(1);
+  });
+
+  // The button is a way to do what Tab does without a keyboard.
+  it('sends what Tab sends at the same point, by a click too', () => {
+    render(<MapCanvas />);
+    // Tab pings while the map has the keyboard and the pointer is over it.
+    screen.getByRole('application', { name: 'Map' }).focus();
+    mouse.move(surface(), px(510, 260));
+    fireEvent.keyDown(document.activeElement!, { key: 'Tab' });
+    const byTab = sentOf('map.ping');
+    h.sent.length = 0;
+
+    fireEvent.click(pingButton());
+    mouse.down(surface(), px(510, 260));
+    mouse.up(surface(), px(510, 260));
+
+    expect(byTab).toEqual([{ mapId: 'map-a', x: 510, y: 260 }]);
+    expect(sentOf('map.ping')).toEqual(byTab);
+  });
+
+  it('is put away by pressing it again, and pings nothing', () => {
+    render(<MapCanvas />);
+
+    fireEvent.click(pingButton());
+    fireEvent.click(pingButton());
+    tap(1, px(510, 260));
+
+    expect(pingButton()).toHaveAttribute('aria-pressed', 'false');
+    expect(sentOf('map.ping')).toEqual([]);
+  });
+
+  it('stays armed while one finger pans the map, and pings on the tap after', () => {
+    render(<MapCanvas />);
+
+    fireEvent.click(pingButton());
+    swipe(1, px(500, 500), px(520, 500), px(550, 500));
+    expect(sentOf('map.ping')).toEqual([]);
+    tap(2, px(560, 260));
+
+    // The map moved 50 pixels right.
+    expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 510, y: 260 }]);
+  });
+
+  it('is used up by a long-press that pings, and kept by one that opens a menu', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      render(<MapCanvas />);
+      show(goblin());
+      fireEvent.click(pingButton());
+
+      const onToken = contact('touch', 1);
+      onToken.down(surface(), square(0, 19));
+      act(() => { vi.advanceTimersByTime(500); });
+      onToken.up(surface(), square(0, 19));
+      expect(screen.getByText('Remove from Map')).toBeInTheDocument();
+      expect(pingButton()).toHaveAttribute('aria-pressed', 'true');
+      fireEvent.keyDown(window, { key: 'Escape' });
+
+      const onGround = contact('touch', 2);
+      onGround.down(surface(), px(510, 260));
+      act(() => { vi.advanceTimersByTime(500); });
+      onGround.up(surface(), px(510, 260));
+      expect(sentOf('map.ping')).toEqual([{ mapId: 'map-a', x: 510, y: 260 }]);
+      expect(pingButton()).toHaveAttribute('aria-pressed', 'false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('takes a tap off the map without pinging, and is spent', () => {
+    render(<MapCanvas />);
+
+    fireEvent.click(pingButton());
+    tap(1, px(1010, 400));
+    tap(2, px(510, 260));
+
+    expect(sentOf('map.ping')).toEqual([]);
+  });
+
+  // The Esc order: the menu open on the map, then the armed ping, then the
+  // held token, then the tools and the selection.
+  it('is put away by Esc after a menu open on the map, and before a held token is put back', async () => {
+    render(<MapCanvas />);
+    show(goblin());
+    tap(1, square(0, 19));
+    fireEvent.click(pingButton());
+    // The tap gave the map the keys; Enter opens the held token's menu.
+    fireEvent.keyDown(document.activeElement!, { key: 'Enter' });
+    expect(await screen.findByText('Remove from Map')).toBeInTheDocument();
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(screen.queryByText('Remove from Map')).toBeNull();
+    expect(pingButton()).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(pingButton()).toHaveAttribute('aria-pressed', 'false');
+    expect(sentOf('token.move')).toEqual([]);
+
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+    expect(sentOf('token.move')).toEqual([{ tokenId: 'tok-goblin', mapId: 'map-a', x: 0, y: 19 }]);
+    expect(sentOf('map.ping')).toEqual([]);
+  });
+});
+
 // A finger landing on the map while the on-screen keyboard is up for the
 // chat would close the keyboard: the map takes the keys only once the
 // finger's gesture reaches it.
