@@ -731,7 +731,7 @@ Two tools in the map toolbar help you work out what a spell or a move actually r
 
 **Your players have both tools too**, working the same way on their own screens, so a player can check their own spell's reach without asking you to measure it for them. The one difference is the ruler, below.
 
-**Ruler** (the ruler icon) — click a start point, then move the cursor to measure the distance between two squares in feet, using the map's own scale and its diagonal rule. For a player there's nothing to click: their ruler always measures from their own token.
+**Ruler** (the ruler icon) — click a start point, then move the cursor to measure the distance between two squares in feet, using the map's own scale and its diagonal rule. For a player there's nothing to click: their ruler always measures from their own token. On a touch screen, tap the start, which shows as a dot, and then the end, and the line stays; the third tap starts again. Or put your finger on the start and slide it to the end. While the ruler is up a finger measures and does not move the map; use two fingers for that. While you hold a token you tapped, a tap puts it down, as it would with the ruler away.
 
 **AoE Shape** (the lightning icon) — overlays a spell area on the map. Pick **Circle**, **Cone**, **Line** or **Cube**, set the size in feet (or use a preset), and move the cursor to position it. Click the map to pin the shape in place; with a shape pinned, moving the cursor aims cone and line templates. Press **Esc** to drop the placement, and again to put the tool away.
 
