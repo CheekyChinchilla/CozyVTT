@@ -133,9 +133,11 @@ export function registerSpiritHandlers(io: Server, socket: AuthenticatedSocket):
         return;
       }
 
-      // Fetch the map
+      // Whose map it is, and nothing else: what the table is sent is the
+      // row the locked write below returns.
       const map = await prisma.map.findUnique({
         where: { id: mapId },
+        select: { campaignId: true },
       });
 
       if (!map || map.campaignId !== socket.campaignId) {
