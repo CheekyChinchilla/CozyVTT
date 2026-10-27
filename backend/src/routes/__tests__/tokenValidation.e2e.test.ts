@@ -23,6 +23,7 @@ import { randomUUID } from 'crypto';
 import request from 'supertest';
 import { createTestApp } from '../../__tests__/helpers/test-app';
 import { readTokens, toJson } from '../../utils/prisma-json';
+import { PAUSED_MOVE_REFUSAL } from '../../services/permissions';
 import {
   prisma,
   createTestUser,
@@ -441,6 +442,39 @@ describe('map token validation', () => {
       it('lets the player move again once the session is live', async () => {
         await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
         expect((await playerUpdate({ position: { x: 4, y: 4 } })).status).toBe(200);
+      });
+
+      // Turning follows the move rule: a player turns their token only while
+      // the session is live; the DM turns any token at any time.
+      const rotationNow = async () => {
+        const after = await dm.get(`/api/campaigns/${campaignId}/maps/${mapId}`);
+        return after.body.map.tokens.find((t: { id: string }) => t.id === ownedTokenId).rotation;
+      };
+
+      it.each(['PAUSED', 'INACTIVE'] as const)("refuses the player's turn while %s, and the DM's goes through", async (status) => {
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
+        expect((await playerUpdate({ rotation: 45 })).status).toBe(200);
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status } });
+
+        const res = await playerUpdate({ rotation: 90 });
+        expect(res.status).toBe(403);
+        expect(res.body.message).toBe(PAUSED_MOVE_REFUSAL);
+        expect(await rotationNow()).toBe(45);
+        expect((await dm.put(url()).send({ rotation: 180 })).status).toBe(200);
+        expect(await rotationNow()).toBe(180);
+      });
+
+      it("still lets the player change their token's conditions while paused", async () => {
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'PAUSED' } });
+        const res = await playerUpdate({ conditions: ['prone'] });
+        expect(res.status).toBe(200);
+        expect(res.body.token.conditions).toEqual(['prone']);
+      });
+
+      it('lets the player turn again once the session is live', async () => {
+        await prisma.campaign.update({ where: { id: campaignId }, data: { status: 'ACTIVE' } });
+        expect((await playerUpdate({ rotation: 270 })).status).toBe(200);
+        expect(await rotationNow()).toBe(270);
       });
     });
 

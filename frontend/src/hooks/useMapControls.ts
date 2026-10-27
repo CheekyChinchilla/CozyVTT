@@ -202,6 +202,12 @@ export function useMapControls(config: MapControlsConfig) {
     [clampZoom, setView]
   );
 
+  /** Pan the view by `dx`, `dy` canvas pixels, keeping the zoom. */
+  const panBy = useCallback((dx: number, dy: number) => {
+    const { zoom: current, pan } = viewRef.current;
+    setView(current, { x: pan.x + dx, y: pan.y + dy });
+  }, [setView]);
+
   /**
    * Start dragging (pan) from a pointer's page position
    */
@@ -313,6 +319,7 @@ export function useMapControls(config: MapControlsConfig) {
     resetView,
 
     // Pan controls
+    panBy,
     startDrag,
     handleDrag,
     stopDrag,

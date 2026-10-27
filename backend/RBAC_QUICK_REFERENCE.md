@@ -158,8 +158,9 @@ if (!canControlToken(role, token.controlledBy, userId)) {
 `PUT /api/campaigns/:campaignId/maps/:id/tokens/:tokenId` and for the three
 `token.move*` socket events, so the two channels cannot disagree. Beside it,
 `canMoveTokensNow(role, campaign.status)` holds a player's move while the
-session is paused or has ended (`PAUSED`, `INACTIVE`), on the same four paths;
-the DM moves tokens at any time. The spectator
+session is paused or has ended (`PAUSED`, `INACTIVE`), on the same four paths,
+and their turn (`rotation`) on the REST one; the DM moves and turns tokens at
+any time. A player's `conditions` are not held. The spectator
 clause matters: `controlledBy` is set once and is not cleared when someone is
 demoted, so a spectator can still hold a token from their time as a player.
 Such a token is nobody's for what the spectator is sent, too: the

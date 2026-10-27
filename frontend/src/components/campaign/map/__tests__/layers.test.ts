@@ -144,6 +144,7 @@ function baseTokenState(overrides: Partial<TokenDrawState> = {}): TokenDrawState
     currentTurnTokenId: null,
     pulsePhase: 0.5,
     peekTokenId: null,
+    selectedTokenId: null,
     ...overrides,
   };
 }
@@ -603,6 +604,83 @@ describe('drawTokens', () => {
       const rings = arcRadii(ctx).filter((r) => r > 25);
       expect(rings).toEqual([36, 36, 42, 42]);
     });
+  });
+});
+
+describe('the selection ring', () => {
+  function arcRadii(ctx: MockCtx): number[] {
+    return ctx.calls.filter((c) => c.method === 'arc').map((c) => c.args[2] as number);
+  }
+
+  it('rings only the selected token, dashed so it reads apart from the other rings', () => {
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({
+      tokens: [makeToken('a'), makeToken('b', { position: { x: 2, y: 0 } })],
+      selectedTokenId: 'b',
+    }), viewport3x3);
+
+    expect(count(ctx, 'stroke')).toBe(2); // casing + core
+    expect(ctx.calls.some((c) => c.method === 'setLineDash' && (c.args[0] as number[]).length > 0)).toBe(true);
+    // Around b, whose centre is (125, 125) on a 3-square map.
+    const ring = ctx.calls.filter((c) => c.method === 'arc' && (c.args[2] as number) > 25);
+    expect(ring.map((c) => [c.args[0], c.args[1]])).toEqual([[125, 125], [125, 125]]);
+  });
+
+  it('draws nothing with no token selected', () => {
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({ tokens: [makeToken('a')] }), viewport3x3);
+
+    expect(count(ctx, 'stroke')).toBe(0);
+  });
+
+  it('sits outside the turn ring and the tracker ring, so all three show at once', () => {
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({
+      tokens: [makeToken('a')],
+      currentTurnTokenId: 'a',
+      peekTokenId: 'a',
+      selectedTokenId: 'a',
+      pulsePhase: 1,
+    }), viewport3x3);
+
+    expect(count(ctx, 'stroke')).toBe(6);
+    // The tracker ring's casing reaches 25+17+2 = 44; the selection's starts at 25+23-2 = 46.
+    expect(arcRadii(ctx).filter((r) => r > 25)).toEqual([36, 36, 42, 42, 48, 48]);
+  });
+
+  it('never shows where a token the player cannot see stands', () => {
+    const hidden = makeToken('h', { visible: false });
+    const fogged = makeToken('f', { position: { x: 2, y: 2 } });
+
+    const ctx = makeMockCtx();
+    drawTokens(ctx, baseTokenState({ tokens: [hidden], selectedTokenId: 'h' }), viewport3x3);
+    expect(count(ctx, 'stroke')).toBe(0);
+
+    // Fogged: only the middle cell (4) is revealed, and f stands in the top-right corner.
+    const inFog = makeMockCtx();
+    drawTokens(inFog, baseTokenState({ tokens: [fogged], selectedTokenId: 'f', revealedCells: new Set([4]) }), viewport3x3);
+    expect(count(inFog, 'stroke')).toBe(0);
+  });
+
+  it('follows a held token on its ghost, which faces the way the token now faces', () => {
+    const held = makeToken('a', { rotation: 0 });
+    const ctx = makeMockCtx() as MockCtx & { rotate: (r: number) => void };
+    ctx.rotate = (r: number) => { ctx.calls.push({ method: 'rotate', args: [r] }); };
+    drawTokens(ctx, baseTokenState({
+      // The store has turned it since it was picked up.
+      tokens: [{ ...held, rotation: 90 }],
+      draggedToken: held,
+      dragOffset: { x: 0, y: 0 },
+      hoverCoords: { x: 1, y: 1 },
+      selectedTokenId: 'a',
+    }), viewport3x3);
+
+    const rotations = ctx.calls.filter((c) => c.method === 'rotate').map((c) => c.args[0] as number);
+    expect(rotations).toHaveLength(1);
+    expect(rotations[0]).toBeCloseTo(Math.PI / 2);
+    // The ghost stands on the middle square, centre (75, 75), and carries the ring.
+    const ring = ctx.calls.filter((c) => c.method === 'arc' && (c.args[2] as number) > 25);
+    expect(ring.map((c) => [c.args[0], c.args[1], c.args[2]])).toEqual([[75, 75, 48], [75, 75, 48]]);
   });
 });
 

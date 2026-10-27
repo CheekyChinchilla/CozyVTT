@@ -195,3 +195,25 @@ describe('pinching', () => {
     expect(result.current.zoom).toBe(result.current.minZoom);
   });
 });
+
+// The keyboard pans a selected token back into sight.
+describe('panning by an amount', () => {
+  it('moves the view by that many canvas pixels, keeping the zoom', () => {
+    const { result } = setup();
+    act(() => result.current.zoomIn());
+    act(() => result.current.panBy(30, -20));
+
+    expect(result.current.panOffset).toEqual({ x: 30, y: -20 });
+    expect(result.current.zoom).toBe(1.25);
+  });
+
+  it('adds up two pans made before the next render', () => {
+    const { result } = setup();
+    act(() => {
+      result.current.panBy(10, 0);
+      result.current.panBy(5, 5);
+    });
+
+    expect(result.current.panOffset).toEqual({ x: 15, y: 5 });
+  });
+});

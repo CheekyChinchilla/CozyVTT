@@ -304,3 +304,59 @@ describe('cross-highlight peek', () => {
     expect(useGameStore.getState().peekSource).toBeNull();
   });
 });
+
+/**
+ * The token this page has selected, for the keyboard and the ring. A full
+ * resend of the map reaches every page after anyone's change to a token, so
+ * a new list keeps the selection while it still holds the token.
+ */
+describe('the selected token', () => {
+  it('is nothing until a token is selected, and can be cleared', () => {
+    useGameStore.getState().setTokens([makeToken('a')]);
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+
+    useGameStore.getState().selectToken('a');
+    expect(useGameStore.getState().selectedTokenId).toBe('a');
+
+    useGameStore.getState().selectToken(null);
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+  });
+
+  it('survives a new token list that still holds it', () => {
+    useGameStore.getState().setTokens([makeToken('a'), makeToken('b')]);
+    useGameStore.getState().selectToken('b');
+
+    useGameStore.getState().setTokens([makeToken('b', { rotation: 90 }), makeToken('c')]);
+
+    expect(useGameStore.getState().selectedTokenId).toBe('b');
+  });
+
+  it('goes with a new token list that does not hold it', () => {
+    useGameStore.getState().setTokens([makeToken('a')]);
+    useGameStore.getState().selectToken('a');
+
+    useGameStore.getState().setTokens([makeToken('b')]);
+
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+  });
+
+  it('goes when its token leaves the map, and stays when another does', () => {
+    useGameStore.getState().setTokens([makeToken('a'), makeToken('b')]);
+    useGameStore.getState().selectToken('a');
+
+    useGameStore.getState().removeToken('b');
+    expect(useGameStore.getState().selectedTokenId).toBe('a');
+
+    useGameStore.getState().removeToken('a');
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+  });
+
+  it('goes when the session is cleared', () => {
+    useGameStore.getState().setTokens([makeToken('a')]);
+    useGameStore.getState().selectToken('a');
+
+    useGameStore.getState().clearGameState();
+
+    expect(useGameStore.getState().selectedTokenId).toBeNull();
+  });
+});

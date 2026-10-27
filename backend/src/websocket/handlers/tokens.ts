@@ -502,6 +502,10 @@ export function registerTokenHandlers(io: Server, socket: AuthenticatedSocket): 
       const token = tokensArray[tokenIndex];
       // The drag is over; the next one is decided afresh. Who its frames
       // went to is kept for a refused drop, below.
+      // TODO(play): one socket's token.move.start and token.move.end run side by side, so the end can read
+      // `drags` before the start has recorded the drag, as an arrow key's pair can. `sawTheDrag` is then
+      // undefined and a drop refused for control or the plane is not put back on the mover's screen; the
+      // start then records a drag nothing ends. Answer the mover for a drop with no recorded drag.
       const sawTheDrag = drags.get(tokenId)?.deciding;
       drags.delete(tokenId);
       const campaignId = socket.campaignId;

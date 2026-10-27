@@ -1687,9 +1687,9 @@ router.put('/:id/tokens/:tokenId', campaignMember, async (req: AuthenticatedRequ
       });
     }
     // And the same session rule the socket move events apply: a player's
-    // move waits while the session is paused or ended. The DM sets the scene
-    // whenever they like.
-    if (updates.position !== undefined && !canMoveTokensNow(membership.role, map.campaign.status)) {
+    // move, or turn, waits while the session is paused or ended. The DM sets
+    // the scene whenever they like. Conditions stay open to a player.
+    if ((updates.position !== undefined || updates.rotation !== undefined) && !canMoveTokensNow(membership.role, map.campaign.status)) {
       return res.status(403).json({ error: 'Forbidden', message: PAUSED_MOVE_REFUSAL });
     }
 

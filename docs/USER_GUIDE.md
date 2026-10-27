@@ -257,7 +257,9 @@ Each token has:
 
 **Moving tokens:** During a session, click a token to pick it up, move the pointer to where it should go, and click that square to put it down. Letting go of the mouse button does not put it down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. Everyone connected sees the movement as it happens.
 
-**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces. The DM can turn any token, and set an exact angle in **Edit Token**; a player can turn the tokens they control.
+**Selecting and the keyboard:** Clicking a token also selects it, marked with a dashed light-blue ring, and the keyboard then acts on it: the arrow keys move it a square (five with **Shift**), **,** and **.** step to the previous or next token you can act on, and **Enter** opens its menu. Press **?** on the map for every key, or see [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts).
+
+**Turning tokens:** Right-click a token and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees, to show which way it faces, or select it and press **[** or **]**. The DM can turn any token at any time, and set an exact angle in **Edit Token**; a player can turn the tokens they control while the session is live, as they move them.
 
 *GIF pending — Picking up a token and putting it down across the map.*
 
@@ -674,6 +676,8 @@ To move the view, drag an empty part of the map; on a touch screen, drag it with
 ### Moving Your Token
 
 When the DM has placed your character's token on the map, you can move it: **click** the token to pick it up, move the pointer to where you want it, and **click** that square to put it down. Right-click, press **Esc**, or move the pointer off the map, to put it back where it was.
+
+Clicking the token also selects it. Then the arrow keys move it one square at a time, or five with **Shift**, and **[** and **]** turn it (see [Moving Your Token](PLAYER_GUIDE.md#moving-your-token) in the player guide).
 
 On a touch screen, tap the token, then tap the square to put it down. Lifting your finger leaves the token in your hand; to put it back, tap the square it came from.
 

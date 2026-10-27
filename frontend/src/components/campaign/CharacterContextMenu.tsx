@@ -65,10 +65,12 @@ export default function CharacterContextMenu({
     };
   }, [onClose]);
 
-  // Close on escape key
+  // Close on Escape, which is used up: the map hears keys after this and
+  // would otherwise also put its tool away on the same press.
   useEffect(() => {
     const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.preventDefault();
         onClose();
       }
     };

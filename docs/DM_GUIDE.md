@@ -240,6 +240,10 @@ Tokens aren't automatically placed on the map. Where they come from depends on w
 
 Everything except a character dragged from the roster lands in the middle of the current map. Move it where it belongs the way you move any token: **click** it to pick it up, move the pointer to the square, and **click** that square to put it down. Letting go of the mouse button does not put a token down, so there is no need to hold it. Right-click, press **Esc**, or move the pointer off the map, to put the token back where it was. You can move any token at any time, a paused or ended session included.
 
+Clicking a token also selects it, with a dashed light-blue ring, and right-clicking a token selects the one whose menu opens. A click on empty ground clears the selection; dragging the map leaves it alone. While a wall, fog or light tool, the ruler or the area template is up, a click goes to that tool, so the selection stays as it was. Switching maps starts with nothing selected.
+
+**From the keyboard.** Once you have clicked the map, the arrow keys move the selected token a square, or five with **Shift**, with the view following it, and **[** and **]** turn it 45 degrees. **,** and **.** (or **<** and **>**) step through every token the map shows you, hidden ones included: in the turn order during a fight, the rest row by row from the top, and the view pans to keep the selection in sight. **Enter** opens the token's menu at the token, panning it into view first and keeping the menu inside the map. **Esc** lets go of one thing a press: the menu, a held token, your tool, then the selection. While the wall **Select** tool holds walls, the arrow keys move the walls instead (see [Selecting and Moving Walls](#selecting-and-moving-walls)). The keys go to the map only while it has the keyboard: a click anywhere else, such as on the chat or a panel, gives them to that, a window open over the map takes them, and **Shift+Tab** takes the keyboard back to the page. A selected token your screen no longer draws, such as one in a preview that the previewed player cannot see, stays selected and the keys leave it alone.
+
 *GIF pending — Placing a token and moving it into position.*
 
 ### Token Display Modes
@@ -279,9 +283,10 @@ If a change cannot be saved, for example while the connection is down, a message
 A token can face any direction, to show which way a creature is looking or a cart is pointing ([#89](https://github.com/CheekyChinchilla/CozyVTT/issues/89)):
 
 - **Right-click the token** and choose **Rotate Left** or **Rotate Right** to turn it 45 degrees. The menu stays open, so press again to keep turning.
+- **Select the token and press [ or ]** to turn it 45 degrees anticlockwise or clockwise, held or not.
 - **For an exact angle,** open **Edit Token** and type it in **Facing**, in degrees clockwise: 0 is the picture as uploaded, 90 a quarter turn to the right. A full turn wraps round, so 405 becomes 45.
 
-The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
+The token's picture turns, or its letter when it has no picture. Its rings, hit point bar and condition badges stay upright so they stay readable. Everyone at the table sees the turn at once. A player can turn a token they control the same way, from its right-click menu or with **[** and **]**, while the session is live; during a pause, as with moving, they can't. Players who don't control an obscured token see it facing straight up, since which way it faces could give it away. **Duplicate Token**, **Move to Map…** and a campaign export keep the facing; a token placed from a token template starts facing up.
 
 #### Changing a Token's Image
 
@@ -761,7 +766,7 @@ When your players are ready, click **Start Session** in the right sidebar's **Se
 Need a break? Click **Pause Session**. This:
 
 - Changes the campaign status to **Paused**
-- Disables token movement for players
+- Disables token movement for players, turning included
 - Shows players a banner above the map: *Session is paused. Token movement is disabled, and rolls from the Dice tab stay on your own screen.*
 
 *Screenshot pending — Paused session indicator from player view.*
@@ -818,6 +823,23 @@ Switching the period as the story moves on, from a bright afternoon to a cold ni
 *GIF pending — DM changing the vibe and player view updating.*
 
 ---
+
+### Keyboard Shortcuts
+
+Every key in the player guide's [Keyboard Shortcuts](PLAYER_GUIDE.md#keyboard-shortcuts) works for you too, on every token the map shows you. Press `?` on the map, or click **Keyboard shortcuts** (the keyboard icon in the header, beside **Campaign documents**), to see them all on screen. These are yours alone, for the walls (see [Selecting and Moving Walls](#selecting-and-moving-walls)) and their undo:
+
+| Action | Shortcut |
+|--------|---------|
+| Nudge the selected walls one pixel | `Arrow keys` |
+| Nudge the selected walls one square | `Shift + arrow keys` |
+| Select every wall, in **Select** mode | `Ctrl + A` |
+| Add a wall to the selection, or take it out | `Shift + click` |
+| Delete the selected walls | `Delete` `Backspace` |
+| Finish a wall line | `Double-click` |
+| Undo the last wall change | `Ctrl + Z` |
+| Redo a wall change | `Ctrl + Y` `Ctrl + Shift + Z` |
+
+On a Mac, use **Cmd** where it says Ctrl. The arrows go to the walls only while the **Select** wall tool holds some; otherwise they move the selected token.
 
 ## Combat and Initiative
 
@@ -901,7 +923,7 @@ This works for combatants on the map you are showing. One whose token is on anot
 Put the cursor where you mean and press **Tab**. A dot with radiating rings appears there for everyone, in your colour with your name beside it — far quicker than describing a spot out loud.
 
 - The cursor has to be over the map; Tab does nothing over the sidebar or chat.
-- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface.
+- Tab still behaves normally when you're typing or navigating with the keyboard, so it won't interfere with the rest of the interface. Once you have clicked the map, **Shift+Tab** leaves it.
 - Everyone can ping, and each person's colour is assigned automatically and stays consistent.
 - Pings are drawn above dynamic lighting on purpose, so you can point into an unlit area and players will still see the mark — pointing at somewhere dark is exactly when you need it. Note this means a ping does **not** respect fog: it marks a spot, so don't use it to gesture at something your players aren't meant to know about yet.
 - Rapid repeat pings are rate-limited server-side and quietly dropped.
@@ -1280,11 +1302,13 @@ Switch to **Select** mode to click on a light. You can then drag it to repositio
 
 As DM you always see all walls, all tokens and the full map. To see what a player is actually seeing:
 
-- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on, and stays while you preview), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, or **All player tokens**
+- Click **Preview Player View** at the bottom-right of the map (it appears when dynamic lighting or fog of war is on, and stays while you preview), then pick whose eyes to look through in the box beside it: a **player**, a single **token**, **All player tokens**, or **Follow my selection** (below)
 - Your canvas switches to that view: the chosen tokens' darkvision, the lights they can see, the doors they can actually see (in their line of sight and lit, within their darkvision, or under Global Illumination), the fog exactly as it is revealed, and the ground that player remembers, kept up to date as their token moves. Tokens that view would not have been sent are not drawn
-- Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first
+- Your tool panels stay, so you can place lights and walls while watching the result. The light markers are hidden, as they are for players, so to select or move a light, return to your own view first. In the same way a click picks up only a token the preview shows, so to move a hidden creature, return to your own view
 - The preview is on the plane that viewer is on: a player whose token you have sent to the spirit layer is previewed in the spirit realm, with the spirit layer image, the spirit tint and only spirit-plane tokens, seeing through their spirit token, exactly as their own screen shows it. So is a single token on the spirit layer (the picker marks those *(spirit)*), and every view while the spirit layer is open to everyone. **All player tokens** stays on the material plane unless the spirit layer is open to everyone
 - The preview shows exactly what that viewer is sent, the hover card and a token being moved included: a creature's hit points only once its HP bar is on, and an obscured token as the grey shape. **All player tokens** masks every obscured token, since nobody at a shared screen is its sole controller
+
+**Follow my selection.** Pick it at the top of the box and the preview looks through whichever token you have selected, so clicking a token, or stepping with **,** and **.**, shows the table what that token sees. While you follow, **,** and **.** step through the party's tokens on the plane you are previewing, wherever each one stands, and through whatever else the preview shows, even before you have selected anything, so a split party is always in reach. A creature hidden from the players, or one the preview does not show, is never among them, and the view pans only to what the steps reach. Clearing the selection with **Esc** or a click on empty ground keeps the last token you followed on this map; until you select one, the preview shows what a player with no token would see. It never drops back to your own view, which would show the table every hidden token and the whole fog. Switching maps starts again with nothing followed.
 
 **Running the game in person, on one projected screen?** You move every token yourself, so there are no player accounts to preview as. Pick a token to show the table what that character can see, or **All player tokens** for the whole party's view with the monsters' sight left out. Previewing one token also shows what the player who controls it remembers, so you see that character's explored ground as well as what they can see now, and moving the token while you preview it adds to that memory, so a game you run alone still builds up each player's explored ground. **All player tokens** shows none, because it is several people at once and their memories laid over each other would describe nobody.
 

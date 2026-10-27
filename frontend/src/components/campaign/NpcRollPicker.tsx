@@ -126,9 +126,14 @@ export default function NpcRollPicker({
     return () => document.removeEventListener('mousedown', handler);
   }, [onClose]);
 
-  // Close on Escape
+  // Close on Escape, which is used up: the map hears keys after this and
+  // would otherwise also put its tool away on the same press.
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      onClose();
+    };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
   }, [onClose]);

@@ -30,6 +30,15 @@ const FOCUSABLE_SELECTORS = [
 const openTraps: symbol[] = [];
 
 /**
+ * Whether any dialog's focus trap is open. The map's keys stand aside while
+ * one is: the trap takes only Tab and Escape, so arrows and the rest would
+ * otherwise reach the map behind the dialog.
+ */
+export function isAnyTrapOpen(): boolean {
+  return openTraps.length > 0;
+}
+
+/**
  * Traps keyboard focus inside a dialog container.
  *
  * @param isOpen  Whether the modal is currently open
