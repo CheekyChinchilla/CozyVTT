@@ -15,6 +15,7 @@ import {
   clearLayer,
   effectiveDpr,
   sizeBackingStore,
+  withinBackingLimit,
 } from '../layerCanvas';
 
 describe('effectiveDpr', () => {
@@ -167,5 +168,27 @@ describe('clearLayer', () => {
       ['setTransform', [1, 0, 0, 1, 0, 0]],
       ['clearRect', [0, 0, 1625, 1201]],
     ]);
+  });
+});
+
+describe('withinBackingLimit', () => {
+  it('leaves a size within the limit as it is', () => {
+    expect(withinBackingLimit(4000, 3000)).toEqual({ width: 4000, height: 3000 });
+    expect(withinBackingLimit(4096, 4096)).toEqual({ width: 4096, height: 4096 });
+  });
+
+  it('makes a bigger size smaller by one factor on both sides, to fit', () => {
+    const { width, height } = withinBackingLimit(5000, 3400);
+    expect(width * height).toBeLessThanOrEqual(MAX_BACKING_PIXELS);
+    expect(width).toBe(4967);
+    expect(height).toBe(3377);
+    expect(width / height).toBeCloseTo(5000 / 3400, 3);
+  });
+
+  it('fits the largest map there can be', () => {
+    // 500 squares of 500 pixels a side
+    const { width, height } = withinBackingLimit(250_000, 250_000);
+    expect(width * height).toBeLessThanOrEqual(MAX_BACKING_PIXELS);
+    expect(width).toBe(4096);
   });
 });

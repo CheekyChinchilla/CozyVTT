@@ -14,7 +14,7 @@ import { gridYToCentrePx } from '../coords';
 import type { LightToolMode } from '@/components/campaign/DmLightControls';
 import { mapSizePx, type Viewport } from './types';
 import type { VisionSource } from '../vision';
-import { applyViewport } from '../layerCanvas';
+import { applyViewport, withinBackingLimit } from '../layerCanvas';
 import { BRIGHT, DIM } from '@/utils/visibilityRule';
 
 /** Mutable holder for a persistent offscreen canvas (a React ref works). */
@@ -36,7 +36,12 @@ export interface LightingDrawState {
   lightVision: readonly VisionSource[];
   /** Everything in line of sight counts as lit; the map's setting. */
   globalIllumination: boolean;
-  /** Persistent offscreen canvases (fog composite + light coverage + sight mask). */
+  /**
+   * Persistent offscreen canvases (fog composite + light coverage + sight
+   * mask), the size of the map in map pixels, or smaller on a map over
+   * MAX_BACKING_PIXELS (map/layerCanvas.ts). They are drawn into in map
+   * pixels through their scale, and drawn from at the map's size.
+   */
   lightingCanvas: CanvasHolder;
   coverageCanvas: CanvasHolder;
   lightCanvas: CanvasHolder;
@@ -88,8 +93,15 @@ export function drawDynamicLighting(
     return;
   }
 
-  const offscreen = ensureCanvas(state.lightingCanvas, mapWidthPx, mapHeightPx);
+  // Each lighting canvas holds the map at one pixel per map pixel, or fewer
+  // on a map too big for one canvas; the scale makes them the same to draw.
+  const size = withinBackingLimit(mapWidthPx, mapHeightPx);
+  const scaleX = size.width / mapWidthPx;
+  const scaleY = size.height / mapHeightPx;
+
+  const offscreen = ensureCanvas(state.lightingCanvas, size.width, size.height);
   const offCtx = offscreen.getContext('2d')!;
+  offCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
   // Must clear before reuse — persists between frames
   offCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
 
@@ -99,8 +111,9 @@ export function drawDynamicLighting(
   // zones contribute 0.5. Alphas sum via 'lighter' compositing and are
   // clamped at 1.0 — so two overlapping dim zones (0.5 + 0.5) become
   // bright. This is the "dim overlap → bright" house rule.
-  const coverage = ensureCanvas(state.coverageCanvas, mapWidthPx, mapHeightPx);
+  const coverage = ensureCanvas(state.coverageCanvas, size.width, size.height);
   const covCtx = coverage.getContext('2d')!;
+  covCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
   covCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
   covCtx.globalCompositeOperation = 'lighter';
   covCtx.fillStyle = 'rgba(255, 255, 255, 1)';
@@ -123,8 +136,9 @@ export function drawDynamicLighting(
   // ground anywhere was subtracted from the fog, so a lamp inside a sealed room
   // lit that room for a player standing outside it. Light reveals what you
   // could already have seen; it never sees on your behalf.
-  const lightLayer = ensureCanvas(state.lightCanvas, mapWidthPx, mapHeightPx);
+  const lightLayer = ensureCanvas(state.lightCanvas, size.width, size.height);
   const lightCtx = lightLayer.getContext('2d')!;
+  lightCtx.setTransform(scaleX, 0, 0, scaleY, 0, 0);
   lightCtx.clearRect(0, 0, mapWidthPx, mapHeightPx);
   lightCtx.globalCompositeOperation = 'lighter';
 
@@ -178,7 +192,7 @@ export function drawDynamicLighting(
     }
   }
   lightCtx.globalCompositeOperation = 'destination-in';
-  lightCtx.drawImage(coverage, 0, 0);
+  lightCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
   lightCtx.globalCompositeOperation = 'source-over';
 
   // ── Coverage mask proper ────────────────────────────────────────
@@ -216,7 +230,7 @@ export function drawDynamicLighting(
   }
 
   // ...then the light the viewer can see, added on top.
-  covCtx.drawImage(lightLayer, 0, 0);
+  covCtx.drawImage(lightLayer, 0, 0, mapWidthPx, mapHeightPx);
   covCtx.globalCompositeOperation = 'source-over';
 
   // ── Explored memory: remembered ground as a grey, darker copy ───
@@ -240,7 +254,7 @@ export function drawDynamicLighting(
     // What is in sight now is not memory. Dim areas are 0.5 alpha, so three
     // subtractions leave 12.5%, visually nothing.
     maskCtx.globalCompositeOperation = 'destination-out';
-    for (let i = 0; i < 3; i++) maskCtx.drawImage(coverage, 0, 0);
+    for (let i = 0; i < 3; i++) maskCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
     maskCtx.globalCompositeOperation = 'source-over';
     maskCtx.setTransform(1, 0, 0, 1, 0, 0);
 
@@ -269,7 +283,7 @@ export function drawDynamicLighting(
   offCtx.fillStyle = 'rgba(15, 12, 25, 1)';
   offCtx.fillRect(0, 0, mapWidthPx, mapHeightPx);
   offCtx.globalCompositeOperation = 'destination-out';
-  offCtx.drawImage(coverage, 0, 0);
+  offCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
   if (state.explored) {
     // Remembered ground out of sight is dimmed by the memory pass above, not
     // blacked out here. Only out of sight: ground in sight is remembered too,
@@ -282,9 +296,9 @@ export function drawDynamicLighting(
     lightCtx.drawImage(state.explored, 0, 0, mapWidthPx, mapHeightPx);
     lightCtx.imageSmoothingEnabled = true;
     lightCtx.globalCompositeOperation = 'destination-out';
-    for (let i = 0; i < 3; i++) lightCtx.drawImage(coverage, 0, 0);
+    for (let i = 0; i < 3; i++) lightCtx.drawImage(coverage, 0, 0, mapWidthPx, mapHeightPx);
     lightCtx.globalCompositeOperation = 'source-over';
-    offCtx.drawImage(lightLayer, 0, 0);
+    offCtx.drawImage(lightLayer, 0, 0, mapWidthPx, mapHeightPx);
   }
   offCtx.globalCompositeOperation = 'source-over';
 
@@ -292,7 +306,7 @@ export function drawDynamicLighting(
   // the canvas's own pixels, so the ratio keeps the edge 4 CSS pixels wide.
   ctx.save();
   ctx.filter = `blur(${4 * state.dpr}px)`;
-  ctx.drawImage(offscreen, 0, 0);
+  ctx.drawImage(offscreen, 0, 0, mapWidthPx, mapHeightPx);
   ctx.filter = 'none';
   ctx.restore();
 

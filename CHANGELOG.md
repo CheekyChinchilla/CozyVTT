@@ -18,6 +18,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - *Maps.* A map's `annotations` is an empty array for everyone, the DM included, in `GET /api/campaigns/:campaignId/maps/:id`, the reply to `PUT .../maps/:id/tokens/:tokenId` and `map.changed`. It carried whatever a campaign import had stored from its archive. Nothing in the app reads it.
   - *Maps.* `GET /api/campaigns/:campaignId/maps` gives each map its `campaignId` and `baseLayerUrl` as well, the fields `GET /api/campaigns/:campaignId` already gave each of its maps.
 
+- **Lighting on a very large map is worked out at a slightly lower resolution.** On a lit map of more than 16,777,216 pixels, such as 5,000 by 3,400, the darkness, light and line of sight a player sees are worked out on a slightly smaller picture, so their edges are a little softer. That is the largest canvas Safari on an iPhone or iPad can hold. Maps up to that size look as before.
+
 ### Fixed
 
 - **The map is drawn at your screen's resolution.** On phones, tablets and high-density displays the map, its tokens and its walls were drawn at one pixel per screen point and enlarged, so their edges looked soft. They are now drawn at the display's own density, up to three pixels per point.

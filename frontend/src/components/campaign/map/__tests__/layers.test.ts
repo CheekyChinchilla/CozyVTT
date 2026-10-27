@@ -9,7 +9,7 @@
  */
 
 import { TOKEN_HUES, hueColour } from '@/utils/tokenColours';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { drawGrid } from '../layers/drawGrid';
 import { drawFog } from '../layers/drawFog';
 import { drawTokens, placeholderColor, type TokenDrawState } from '../layers/drawTokens';
@@ -19,6 +19,7 @@ import { drawPings, PING_DURATION_MS, type ActivePing, type PingDrawState } from
 import { drawSpiritLayer } from '../layers/drawBackground';
 import { drawDynamicLighting, drawLightIcons } from '../layers/drawLights';
 import { computeVisionState } from '../vision';
+import { MAX_BACKING_PIXELS } from '../layerCanvas';
 import type { Viewport } from '../layers/types';
 import type { Token } from '@/types';
 import { TokenDisposition, TokenLayer, TokenType } from '@/types';
@@ -928,6 +929,105 @@ describe('drawDynamicLighting', () => {
   it('leaves the light layer alone when there are no lights', () => {
     const { lightOnly } = run({ withLight: false });
     expect(lightOnly.ops.some((c) => c.method === 'arc')).toBe(false);
+  });
+
+  /**
+   * The three lighting canvases are the size of the map. Safari on an iPhone
+   * or iPad draws no canvas over MAX_BACKING_PIXELS, so on a bigger map they
+   * are made smaller, evenly, and everything drawn from them is drawn at the
+   * map's size.
+   */
+  describe('on a map over the canvas limit', () => {
+    /** Where a drawImage puts its picture: its own size, unless it was given one. */
+    const destination = (c: OpCall) => {
+      const src = c.src as { width: number; height: number };
+      return c.args.length >= 5 ? [c.args[3], c.args[4]] : [src.width, src.height];
+    };
+
+    afterEach(() => { vi.restoreAllMocks(); });
+
+    /** Draws a map of cols by rows squares into holders that start empty. */
+    function drawLarge(cols: number, rows: number, withMemory = true) {
+      const view: Viewport = { zoom: 0.2, panOffset: { x: 0, y: 0 }, gridSize: 50, mapWidth: cols, mapHeight: rows };
+      const made = new Map<HTMLCanvasElement, ReturnType<typeof makeOpRecorder>>();
+      const create = document.createElement.bind(document);
+      vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => {
+        if (tag !== 'canvas') return create(tag);
+        const rec = makeOpRecorder();
+        const canvas = { width: 300, height: 150, getContext: () => rec.ctx } as unknown as HTMLCanvasElement;
+        made.set(canvas, rec);
+        return canvas;
+      }) as unknown as typeof document.createElement);
+
+      const lamp = { id: 'l1', x: 2500, y: 1700, brightRadius: 4, dimRadius: 8, color: '#ffaa00', enabled: true };
+      const viewer = makeToken('a', { position: { x: 50, y: 34 }, sightRadius: 6 } as Partial<Token>);
+      const vision = computeVisionState([viewer], [lamp], [], view, { globalIllumination: false });
+      const main = makeOpRecorder();
+      const holders = {
+        lightingCanvas: { current: null as HTMLCanvasElement | null },
+        coverageCanvas: { current: null as HTMLCanvasElement | null },
+        lightCanvas: { current: null as HTMLCanvasElement | null },
+      };
+      drawDynamicLighting(main.ctx, {
+        myTokens: [viewer],
+        enabledLights: [lamp],
+        tokenVision: vision.tokenVision,
+        tokenSight: vision.tokenSight,
+        lightVision: vision.lightVision,
+        globalIllumination: false,
+        ...holders,
+        explored: withMemory ? ({ width: cols, height: rows } as unknown as HTMLCanvasElement) : null,
+        terrainCanvas: { width: 1200, height: 800 } as unknown as HTMLCanvasElement,
+        memoryMaskCanvas: { current: null },
+        memoryCanvas: { current: null },
+        dpr: 1,
+      }, view);
+
+      const canvases = [holders.lightingCanvas.current!, holders.coverageCanvas.current!, holders.lightCanvas.current!];
+      return { main, canvases, recorders: canvases.map((c) => made.get(c)!), made };
+    }
+
+    it('makes each lighting canvas smaller, evenly, to fit within the limit', () => {
+      // 100 by 68 squares of 50 pixels: 5,000 by 3,400, 17,000,000 pixels.
+      const { canvases } = drawLarge(100, 68);
+      const scale = Math.sqrt(MAX_BACKING_PIXELS / (5000 * 3400));
+      for (const canvas of canvases) {
+        expect([canvas.width, canvas.height]).toEqual([Math.floor(5000 * scale), Math.floor(3400 * scale)]);
+        expect(canvas.width * canvas.height).toBeLessThanOrEqual(MAX_BACKING_PIXELS);
+      }
+    });
+
+    it('draws into each lighting canvas in map pixels, through its scale', () => {
+      const { canvases, recorders } = drawLarge(100, 68);
+      canvases.forEach((canvas, i) => {
+        const transforms = recorders[i].ops.filter((c) => c.method === 'setTransform').map((c) => c.args);
+        expect(transforms).toContainEqual([canvas.width / 5000, 0, 0, canvas.height / 3400, 0, 0]);
+      });
+    });
+
+    it('draws every composite of the lighting canvases at the map size', () => {
+      const { main, canvases, made } = drawLarge(100, 68);
+      const lighting = new Set<unknown>(canvases);
+      const composites = [main, ...made.values()]
+        .flatMap((r) => r.ops)
+        .filter((c) => c.method === 'drawImage' && lighting.has(c.src));
+      // light into coverage, coverage into light, three into the memory mask,
+      // coverage into the darkness, three into the explored cut, the cut into
+      // the darkness, the darkness onto the map
+      expect(composites).toHaveLength(11);
+      for (const c of composites) expect(destination(c)).toEqual([5000, 3400]);
+    });
+
+    it('leaves the canvases of a map within the limit at the map size', () => {
+      // 80 by 60 squares of 50 pixels: 4,000 by 3,000.
+      const { main, canvases, made } = drawLarge(80, 60);
+      for (const canvas of canvases) expect([canvas.width, canvas.height]).toEqual([4000, 3000]);
+      const lighting = new Set<unknown>(canvases);
+      const composites = [main, ...made.values()]
+        .flatMap((r) => r.ops)
+        .filter((c) => c.method === 'drawImage' && lighting.has(c.src));
+      for (const c of composites) expect(destination(c)).toEqual([4000, 3000]);
+    });
   });
 });
 

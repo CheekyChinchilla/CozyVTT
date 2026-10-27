@@ -42,6 +42,17 @@ export function effectiveDpr(devicePixelRatio: number | undefined, cssW: number,
 }
 
 /**
+ * The pixel size for a canvas meant to be w by h: as it is while it holds no
+ * more than MAX_BACKING_PIXELS, else smaller by one factor on both sides
+ * until it does. For the lighting canvases, which are the size of the map.
+ */
+export function withinBackingLimit(w: number, h: number): { width: number; height: number } {
+  if (!(w * h > MAX_BACKING_PIXELS)) return { width: w, height: h };
+  const scale = Math.sqrt(MAX_BACKING_PIXELS / (w * h));
+  return { width: Math.max(1, Math.floor(w * scale)), height: Math.max(1, Math.floor(h * scale)) };
+}
+
+/**
  * The ratio each canvas was last sized at here. Its pixel size and ratio
  * decide its CSS size, so when neither changed there is nothing to assign;
  * comparing the CSS strings instead would depend on how the browser writes a
