@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { CoordinateSchema } from './maps';
-import { MAP_LIMITS, MAX_EXPLORATION_REPORT_CELLS } from './mapLimits';
+import { MAP_LIMITS, MAX_EXPLORATION_REPORT_CELLS, MAX_FOG_CELLS } from './mapLimits';
 
 /** What an add answers when the id it names is already on the map. */
 export const DUPLICATE_WALL_ID_MESSAGE = 'A wall segment with that id is already on this map';
@@ -95,14 +95,23 @@ export const LightSourceUpdateSchema = z.object({
 
 // ── Fog Operations ───────────────────────────────────────────────────────────
 
+/**
+ * What a reveal or hide naming more cells than the largest map has answers.
+ * A cell is a grid square, so no box on any map names more.
+ */
+export const TOO_MANY_FOG_CELLS_MESSAGE =
+  `A fog operation can name at most ${MAX_FOG_CELLS.toLocaleString('en-US')} cells. Use reveal_all or hide_all for the whole map.`;
+
+const FogCellsSchema = z.array(z.number().int().nonnegative()).max(MAX_FOG_CELLS, TOO_MANY_FOG_CELLS_MESSAGE);
+
 export const FogOperationSchema = z.discriminatedUnion('op', [
   z.object({
     op: z.literal('reveal'),
-    cells: z.array(z.number().int().nonnegative()),
+    cells: FogCellsSchema,
   }),
   z.object({
     op: z.literal('hide'),
-    cells: z.array(z.number().int().nonnegative()),
+    cells: FogCellsSchema,
   }),
   z.object({ op: z.literal('reveal_all') }),
   z.object({ op: z.literal('hide_all') }),

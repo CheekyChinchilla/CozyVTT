@@ -8224,7 +8224,11 @@ paths:
         DM, and `fog:cells` with the revealed cells to every other member,
         for the map the campaign is showing; for any other map, only the DM's
         connections are told. The body is checked first, so one that is not
-        a valid operation answers 400 even while fog is off. A valid one is
+        a valid operation answers 400 even while fog is off. A `reveal` or
+        `hide` naming more than 250,000 cells, the most grid squares any map
+        has, is not valid: it answers 400 (`A fog operation can name at most
+        250,000 cells. Use reveal_all or hide_all for the whole map.`) and
+        nothing is stored. A valid one is
         then refused with 409 (`Fog of war is off for this map`) while
         `fogEnabled` is off for the map, and with 409 and nothing stored for
         a map with more than 250,000 grid squares, which is too large for
@@ -13547,7 +13551,8 @@ components:
             cells:
               type: array
               items: { type: integer, minimum: 0 }
-              description: Cell indices to flip
+              maxItems: 250000
+              description: Cell indices to flip, at most 250,000 (one per grid square of the largest map)
           required: [op, cells]
         - type: object
           properties:
