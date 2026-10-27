@@ -72,6 +72,8 @@ To go back to 1.5.4 after upgrading, restore the backup you took before the upgr
 
 - **Esc closes only the roll picker or the menu it is pressed in.** Pressing **Esc** to close a **Roll...** picker, from a token or from the initiative tracker, or a character's menu in the roster or the tracker, also reached the map and put the area template, or a wall, fog or light tool, away. It now closes just the picker or the menu.
 
+- **A wall line you had started no longer waits, unseen, in another tool.** If you clicked with the Walls panel's **Draw** and then chose another wall, fog or light tool, the half-drawn line was kept but not shown: the next **Esc** or **Ctrl+Z** there let go of it and seemed to do nothing, and choosing **Draw** again carried the line on from its last point. Choosing another tool now drops it, as it already dropped a half-drawn polygon. The walls its clicks placed stay.
+
 - **Tab moves on from a panel divider while the pointer rests on the map.** Tab pinged the map whenever the pointer was over it and focus was on anything but a form control, so on a panel divider, or after a click outside the map, the keyboard could not move on. Tab now pings only once the map has been clicked.
 
 - **The map is drawn at your screen's resolution.** On phones, tablets and high-density displays the map, its tokens and its walls were drawn at one pixel per screen point and enlarged, so their edges looked soft. They are now drawn at the display's own density, up to three pixels per point.

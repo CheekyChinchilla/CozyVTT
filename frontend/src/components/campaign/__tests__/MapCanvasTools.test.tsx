@@ -320,6 +320,47 @@ describe('the wall draw tool', () => {
     expect(sentOf('wall:add')).toEqual([]);
   });
 
+  // A line begun in Draw outlived the tool, unseen, since only Draw draws
+  // it: the next Escape, Ctrl+Z or Undo let go of it and did nothing to see,
+  // and Draw chosen again carried on from its point.
+  it('drops a half-drawn line when another wall tool is chosen, so the first Escape there clears the selection', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Wall select mode'));
+
+    click(px(150, 100));
+    press('Escape');
+    press('Delete');
+
+    expect(sentOf('walls:replace')).toEqual([]);
+  });
+
+  it('starts a new line when Draw is chosen again, after another wall tool or a light tool', () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Wall select mode'));
+    fireEvent.click(screen.getByLabelText('Wall draw mode'));
+    click(px(200, 300));
+    expect(sentOf('wall:add')).toEqual([]);
+
+    fireEvent.click(screen.getByText('Lights'));
+    fireEvent.click(screen.getByText('Place'));
+    fireEvent.click(screen.getByLabelText('Wall draw mode'));
+    click(px(300, 300));
+    expect(sentOf('wall:add')).toEqual([]);
+  });
+
+  it("leaves the panel's Undo off in another tool when there is nothing to undo", () => {
+    render(<MapCanvas />);
+    wallTool('Wall draw mode');
+    click(px(100, 300));
+    fireEvent.click(screen.getByLabelText('Wall select mode'));
+
+    expect(screen.getByLabelText('Undo wall edit')).toBeDisabled();
+  });
+
   it('turns a door drawn along a wall into a section of that wall', () => {
     render(<MapCanvas />);
     fireEvent.click(screen.getByText('Walls'));
@@ -1039,7 +1080,8 @@ describe('switching tools', () => {
     expect(sentOf('light:add')).toHaveLength(2);
   });
 
-  it('keeps a half-drawn wall across a switch to the fog tool and back (as it is)', () => {
+  // It kept the half-drawn wall, unseen, and Draw chosen again joined it.
+  it('drops a half-drawn wall when the fog tool is chosen, so Draw again starts a new line', () => {
     h.set({ currentMap: mapWith({ fogEnabled: true }) });
     render(<MapCanvas />);
     fire('fog:updated', { mapId: 'map-a', fogState: { fogCols: 20, fogRows: 20, cellPx: 50, revealed: new Array(400).fill(false) } });
@@ -1051,9 +1093,7 @@ describe('switching tools', () => {
     fireEvent.click(screen.getByLabelText('Wall draw mode'));
     click(px(200, 300));
 
-    expect(sentOf('wall:add').map((p) => (p as { segment: WallSegment }).segment)).toEqual([
-      expect.objectContaining({ x1: 100, y1: 300, x2: 200, y2: 300 }),
-    ]);
+    expect(sentOf('wall:add')).toEqual([]);
   });
 });
 

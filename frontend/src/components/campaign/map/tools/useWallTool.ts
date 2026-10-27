@@ -274,10 +274,16 @@ export function useWallTool({
     wallBrushPointsRef.current = [];
   }, [currentMap?.id, setSelectedWallIds, setSelectedEndpoint, setWallMarquee, wallMarqueeRef, wallMoveRef, wallDragEndpointRef]);
 
-  // Clear polygon when leaving polygon mode
+  // Clear polygon when leaving polygon mode, and a half-drawn line when
+  // leaving Draw: only its own tool draws it, and kept, it took the next
+  // Escape, Ctrl+Z or Undo in another tool, and Draw chosen again carried on
+  // from its point. Leaving by the light or fog tools comes here too.
   useEffect(() => {
     if (wallMode !== 'wall-polygon') {
       setPolygonPoints([]);
+    }
+    if (wallMode !== 'wall-draw') {
+      setWallInProgress([]);
     }
   }, [wallMode]);
 
