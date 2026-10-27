@@ -67,7 +67,7 @@ export const FlexibleCharacterSheetView: React.FC<FlexibleCharacterSheetViewProp
   };
 
   return (
-    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-3 sm:p-6">
       {/* Header; Edit goes under the name where the row is too narrow for both */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-moss-green/20 mb-6">
         <div className="flex items-center gap-3 min-w-0">

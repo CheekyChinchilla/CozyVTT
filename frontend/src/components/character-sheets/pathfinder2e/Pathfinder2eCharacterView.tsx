@@ -140,11 +140,11 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
 
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative`
-      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${ink.text} p-6 rounded-t-lg relative`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative`
+      : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Edit Button */}
         {onEdit && (
           <button
@@ -1051,7 +1051,7 @@ export const Pathfinder2eCharacterView: React.FC<Pathfinder2eCharacterViewProps>
     <div className="bg-paper border-2 border-ink/10 rounded-lg overflow-hidden shadow-lg">
       {renderHeader()}
 
-      <div className="p-6 space-y-6">
+      <div data-sheet-body className="p-3 sm:p-6 space-y-6">
         {renderAttributes()}
         {renderSavingThrows()}
         {renderPerception()}

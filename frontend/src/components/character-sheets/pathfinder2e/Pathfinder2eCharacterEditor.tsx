@@ -915,10 +915,10 @@ export const Pathfinder2eCharacterEditor: React.FC<Pathfinder2eCharacterEditorPr
     const ink = headerInk(isCustomColor ? customColorHex : selectedColor.hex);
     const headerTextColor = ink.text;
     const headerHintColor = ink.soft;
-    const headerClasses = isCustomColor ? `${headerTextColor} p-6 rounded-t-lg relative` : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-6 rounded-t-lg relative`;
+    const headerClasses = isCustomColor ? `${headerTextColor} p-3 sm:p-6 rounded-t-lg relative` : `bg-linear-to-r/srgb ${selectedColor.from} ${selectedColor.to} ${headerTextColor} p-3 sm:p-6 rounded-t-lg relative`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Save and Cancel Buttons */}
         <div className="flex justify-end items-center space-x-2 mb-4 mr-12 sm:absolute sm:top-4 sm:right-16 sm:mb-0 sm:mr-0">
           {/* Fixed colours: the header is the player's colour, not the theme's. */}
@@ -1961,7 +1961,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
       {renderHeader()}
       <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : selectedColor.hex} />
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+        <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -1971,12 +1971,12 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
         </div>
       )}
       {openingChanges.length > 0 && (
-        <p role="status" className="mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
+        <p role="status" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-warning-ink bg-warning/10 border border-warning/30 rounded-lg">
           Some numbers on this sheet changed to follow the rules as it opened: {openingChanges.join(', ')}. Saving
           keeps the new values.
         </p>
       )}
-      <div className="p-6">
+      <div data-sheet-body className="p-3 sm:p-6">
         {activeTab === 'stats' && renderStatsTab()}
         {activeTab === 'combat' && renderCombatTab()}
         {activeTab === 'spells' && renderSpellsTab()}
@@ -1985,7 +1985,7 @@ aria-label={`Level of ${word} feat ${index + 1}`} min={1} max={20} value={feat.l
         {activeTab === 'bio' && renderBioTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
+        <div className="px-3 sm:px-6 pb-4 text-sm text-danger-ink">{errors.submit}</div>
       )}
     </div>
   );

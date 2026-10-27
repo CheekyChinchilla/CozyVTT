@@ -201,7 +201,7 @@ export const FlexibleCharacterSheetEdit: React.FC<FlexibleCharacterSheetEditProp
   };
 
   return (
-    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-6">
+    <div className="bg-paper border border-ink/10 rounded-cozy shadow-lg p-3 sm:p-6">
       {/* Header with Save/Cancel, which go under the name where the row is
           too narrow for both */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-moss-green/20 mb-6">

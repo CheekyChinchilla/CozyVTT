@@ -94,11 +94,11 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     // Pathfinder 2e sheets choose it.
     const ink = headerInk(isCustomColor ? customColorHex : themeColor.hex);
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Edit Button */}
         {onEdit && (
           <button
@@ -538,7 +538,7 @@ export const CallOfCthulhu7eCharacterView: React.FC<CallOfCthulhu7eCharacterView
     <div className="bg-paper rounded-lg shadow-lg overflow-hidden">
       {renderHeader()}
       <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
-      <div className="p-6 bg-paper">
+      <div data-sheet-body className="p-3 sm:p-6 bg-paper">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}

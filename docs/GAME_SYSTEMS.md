@@ -685,6 +685,7 @@ one shared function rather than one per component.
   - A button in the header's corner (the read-only sheet's **Edit**) is in the flow below `sm` (`ml-auto mb-3 w-fit sm:absolute sm:top-4 sm:right-4`), and the row it would cover pads clear of it from `sm` only (`sm:pr-24`).
   - A block beside the name (experience, hero points, the player) goes under it: `flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-0`. An editor's portrait goes above the name too, at 96 px (`w-24 h-24 sm:w-40 sm:h-40`, on a holder of the same width), with its caption in the flow under it (`mt-1 sm:absolute sm:top-full sm:whitespace-nowrap`).
   - A line of details wraps: `flex flex-wrap gap-x-4`. Do not space a row that may wrap with `space-x-*`, which leaves wrapped rows with no gap between them.
+  - The header and the body pad `p-3 sm:p-6`, and anything between them or under the body lines up with it (`mx-3 sm:mx-6`). Give the header `data-sheet-header` and the body `data-sheet-body`, which the tests find them by.
 
 The editor calls `onSave(data, showToast?, tokenImageUrl?)`; the generic save chain (CharacterEditorPage → API) handles persistence — you don't wire anything else.
 

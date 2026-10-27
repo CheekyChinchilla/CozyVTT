@@ -540,11 +540,11 @@ export const CallOfCthulhu7eCharacterEditor: React.FC<CallOfCthulhu7eCharacterEd
       : 'bg-white/10 border-white/30 placeholder:text-white/50 focus:ring-white/60';
     const refusedBox = dark ? 'border-2 border-black' : 'border-2 border-white';
     const headerClasses = isCustomColor
-      ? `${ink.text} p-6 rounded-t-lg relative border-b-4 ${ink.border}`
-      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
+      ? `${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${ink.border}`
+      : `bg-linear-to-r/srgb ${themeColor.from} ${themeColor.via} ${themeColor.to} ${ink.text} p-3 sm:p-6 rounded-t-lg relative border-b-4 ${themeColor.border}`;
 
     return (
-      <div className={headerClasses} style={headerStyle}>
+      <div data-sheet-header className={headerClasses} style={headerStyle}>
         {/* Color Picker Button */}
         <button
           onClick={() => setShowColorPicker(!showColorPicker)}
@@ -1335,7 +1335,7 @@ value={formData.wealth?.cash}
       {renderHeader()}
       <SheetTabs tabs={TABS} active={activeTab} onSelect={setActiveTab} underline={isCustomColor ? customColorHex : themeColor.hex} />
       {refusals.length > 0 && (
-        <div role="alert" className="mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
+        <div role="alert" className="mx-3 sm:mx-6 mt-4 px-3 py-2 text-sm text-danger-ink bg-danger/10 border border-danger/30 rounded-lg">
           <p className="font-semibold">This sheet can&apos;t be saved yet:</p>
           <ul className="list-disc pl-5">
             {refusals.map((message) => (
@@ -1344,7 +1344,7 @@ value={formData.wealth?.cash}
           </ul>
         </div>
       )}
-      <div className="p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
+      <div data-sheet-body className="p-3 sm:p-6 bg-paper max-h-[calc(100vh-200px)] overflow-y-auto">
         {activeTab === 'overview' && renderOverviewTab()}
         {activeTab === 'skills' && renderSkillsTab()}
         {activeTab === 'combat' && renderCombatTab()}
@@ -1352,7 +1352,7 @@ value={formData.wealth?.cash}
         {activeTab === 'backstory' && renderBackstoryTab()}
       </div>
       {errors.submit && (
-        <div className="px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
+        <div className="px-3 sm:px-6 py-3 text-sm text-danger-ink bg-paper">{errors.submit}</div>
       )}
     </div>
   );
